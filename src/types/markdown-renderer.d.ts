@@ -9,7 +9,33 @@ declare module 'markdown-it' {
 }
 
 declare module 'markdown-it-texmath' {
-  const texmath: unknown;
+  interface TexmathRule {
+    name: string;
+    rex: RegExp;
+    tmpl: string;
+    tag: string;
+    displayMode?: boolean;
+  }
+
+  interface TexmathRules {
+    brackets: {
+      inline: TexmathRule[];
+      block: TexmathRule[];
+    };
+    dollars: {
+      inline: TexmathRule[];
+      block: TexmathRule[];
+    };
+    beg_end: {
+      block: TexmathRule[];
+    };
+  }
+
+  interface Texmath {
+    rules: TexmathRules;
+  }
+
+  const texmath: Texmath;
   export = texmath;
 }
 

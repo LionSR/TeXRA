@@ -13,6 +13,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
 // Local imports - shared styles
+import { designTokens } from '@shared/styles';
 import { selectStyles } from '@shared/styles/selectStyles';
 
 // Local imports - shared utils
@@ -20,7 +21,7 @@ import {
   renderAgentOptions,
   renderModelOptions,
 } from '@shared/utils/selectTemplates';
-import { resolveTextareaTarget } from '@shared/utils/textarea';
+import { getTextareaValue } from '@shared/utils/textarea';
 
 // Local imports - main view
 import { MainViewEvents } from '../events';
@@ -34,6 +35,7 @@ import {
 @customElement('instruction-panel')
 export class InstructionPanel extends LitElement {
   static override styles = [
+    designTokens,
     selectStyles,
     css`
       :host {
@@ -221,11 +223,10 @@ export class InstructionPanel extends LitElement {
     if (!this.instructionTextarea) return;
     const handled = await handleImagePaste(event, this.instructionTextarea);
     if (handled) {
-      // Get updated value from textarea after image paste
-      const { textarea } = resolveTextareaTarget(this.instructionTextarea);
-      const updatedValue = textarea?.value ?? '';
       this.dispatchEvent(
-        MainViewEvents.instructionInput({ value: updatedValue }),
+        MainViewEvents.instructionInput({
+          value: getTextareaValue(this.instructionTextarea),
+        }),
       );
       // Dispatch additional event so parent can save state
       this.dispatchEvent(MainViewEvents.instructionPaste());

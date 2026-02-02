@@ -12,7 +12,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - main view
-import { codiconStyles } from '@shared/styles';
+import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
 import { COMMAND_LINKS } from '@shared/utils/uiConstants';
 import { MainViewEvents } from '../events';
 
@@ -26,7 +26,9 @@ import type {
 @customElement('banner-group')
 export class BannerGroup extends LitElement {
   static override styles = [
+    designTokens,
     codiconStyles,
+    commonViewStyles,
     css`
       :host {
         display: block;

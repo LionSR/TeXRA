@@ -1,5 +1,12 @@
 // Shared imports
 import { sortStreams } from '@shared/streams/streamSort';
+import {
+  isToolUseState,
+  isWorkflowState,
+  type ProgressState,
+  type ToolUseStreamState,
+  type WorkflowStreamState,
+} from './store';
 import type {
   InstructionUpdate,
   LogMessageData,
@@ -10,13 +17,6 @@ import type {
 } from '@shared/schemas';
 
 // Local imports
-import {
-  isToolUseState,
-  isWorkflowState,
-  type ProgressState,
-  type ToolUseStreamState,
-  type WorkflowStreamState,
-} from './store';
 import type { FrontendEventHandlerContext } from './eventHandlers';
 
 /**
@@ -45,8 +45,8 @@ export function updateNestedRounds<T>(
   if (!rounds) return current;
 
   // Merge rounds into the run
-  const base = reset ? {} : current;
-  const existingRounds = base[runId] ?? {};
+  const base = reset ? { ...current } : current;
+  const existingRounds = reset ? {} : (base[runId] ?? {});
   return {
     ...base,
     [runId]: { ...existingRounds, ...rounds },

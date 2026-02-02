@@ -1,10 +1,14 @@
 /**
  * Main entry point for progress view formatters.
- * Provides the LogEntryFormatter class for log message formatting.
+ * Provides log message formatting functions for the progress view.
  */
 
 // Local imports - formatter helpers
-import { safeFormat, resolveOpenState } from './baseLogFormatter';
+import {
+  safeFormat,
+  shouldBeOpen,
+  type FormatOptions,
+} from './baseLogFormatter';
 import {
   formatBannerContentTemplate,
   formatContextManagementTemplate,
@@ -27,126 +31,90 @@ import { html, type TemplateResult, type FormatResult } from './litTemplates';
 // Local imports - shared schemas
 import type { LogMessageData, MessageType } from '@shared/schemas';
 
-type LogFormatOptions = {
-  preservedOpen?: boolean;
-  defaultOpen?: boolean;
-};
-
 type TemplateFormatterFn = (
   message: LogMessageData,
   options?: { defaultOpen?: boolean },
 ) => FormatResult;
-type TemplateFormatterMap = Record<
-  string,
-  TemplateFormatterFn | null | undefined
->;
 
-/**
- * Handles log entry formatting with markdown support.
- * This class composes specialized formatters for different message types.
- */
-export class LogEntryFormatter {
-  private _templateFormatters: TemplateFormatterMap = {};
-  private _autoExpandedTypes: Set<MessageType> = new Set();
-  private _nullableTypes: Set<MessageType> = new Set();
+/** Message types that auto-expand when defaultOpen is set. */
+const AUTO_EXPANDED_TYPES: Set<MessageType> = new Set([
+  'thinking',
+  'scratchpad',
+]);
 
-  constructor() {
-    this._templateFormatters = this._buildTemplateFormatterMap();
-    this._autoExpandedTypes = new Set(['thinking', 'scratchpad']);
-    // Message types that return null when their formatter produces no result
-    this._nullableTypes = new Set([
-      'thinking',
-      'scratchpad',
-      'modelResponse',
-      'contextState',
-    ]);
-  }
+/** Message types that return empty template when formatter produces no result. */
+const NULLABLE_TYPES: Set<MessageType> = new Set([
+  'thinking',
+  'scratchpad',
+  'modelResponse',
+  'contextState',
+]);
 
-  _buildTemplateFormatterMap(): TemplateFormatterMap {
-    // Wrap formatter functions with error handling for graceful degradation
-    const safe =
-      (
-        fn: (
-          m: LogMessageData,
-          opts?: { defaultOpen?: boolean },
-        ) => FormatResult,
-        label: string,
-      ): TemplateFormatterFn =>
-      (m, opts): FormatResult =>
-        safeFormat(() => fn(m, opts), label);
-
-    return {
-      // Collapsible content banners
-      thinking: safe(formatBannerContentTemplate, 'thinking'),
-      scratchpad: safe(formatBannerContentTemplate, 'scratchpad'),
-
-      // Tool/search results
-      toolUse: safe(formatToolUseTemplate, 'tool use'),
-      webSearch: safe(formatWebSearchTemplate, 'web search'),
-
-      // Model response
-      modelResponse: safe(formatModelResponseTemplate, 'Assistant'),
-
-      // Data formatters
-      fileList: safe(formatFileListTemplate, 'file list'),
-      missingOutputs: safe(formatMissingOutputsTemplate, 'missing outputs'),
-      latexdiff: safe(formatLatexdiffTemplate, 'latexdiff'),
-      statistics: safe(formatStatisticsTemplate, 'statistics'),
-      contextManagement: safe(
-        formatContextManagementTemplate,
-        'context management',
-      ),
-
-      // Special cases
-      contextState: () => null, // Displayed in footer
-      userMessage: safe(formatUserMessageTemplate, 'user message'),
-      progressStatus: safe(formatProgressStatusTemplate, 'progress status'),
-      error: safe(formatErrorTemplate, 'error'),
-    };
-  }
-
-  /** Format a log entry as a TemplateResult for direct Lit rendering. */
-  formatTemplate(
-    logMessage: LogMessageData,
-    options: LogFormatOptions = {},
-  ): TemplateResult {
-    const { messageType } = logMessage;
-
-    // Determine if details should be open
-    // Pass undefined (not false) so formatters can use their own defaults
-    const shouldBeOpen = resolveOpenState(
-      messageType ?? '',
-      options,
-      this._autoExpandedTypes,
-    );
-    const templateOptions = { defaultOpen: shouldBeOpen };
-
-    const formatter = messageType
-      ? this._templateFormatters[messageType]
-      : null;
-
-    if (messageType && typeof formatter === 'function') {
-      const result = formatter(logMessage, templateOptions);
-      if (result) {
-        return result;
-      }
-
-      if (this._nullableTypes.has(messageType)) {
-        return html``;
-      }
-    }
-
-    // Default formatting for regular log messages
-    return formatDefaultLogMessageTemplate(logMessage) ?? html``;
-  }
+/** Wrap a formatter function with error handling for graceful degradation. */
+function wrapWithErrorHandling(
+  fn: (m: LogMessageData, opts?: { defaultOpen?: boolean }) => FormatResult,
+  label: string,
+): TemplateFormatterFn {
+  return (message, options) => safeFormat(() => fn(message, options), label);
 }
 
-// Singleton instance
-let sharedLogEntryFormatter: LogEntryFormatter | null = null;
+/** Map of message types to their formatter functions. */
+const TEMPLATE_FORMATTERS: Record<string, TemplateFormatterFn | null> = {
+  // Collapsible content banners
+  thinking: wrapWithErrorHandling(formatBannerContentTemplate, 'thinking'),
+  scratchpad: wrapWithErrorHandling(formatBannerContentTemplate, 'scratchpad'),
 
-export const getSharedLogEntryFormatter = (): LogEntryFormatter => {
-  if (!sharedLogEntryFormatter) {
-    sharedLogEntryFormatter = new LogEntryFormatter();
-  }
-  return sharedLogEntryFormatter;
+  // Tool/search results
+  toolUse: wrapWithErrorHandling(formatToolUseTemplate, 'tool use'),
+  webSearch: wrapWithErrorHandling(formatWebSearchTemplate, 'web search'),
+
+  // Model response
+  modelResponse: wrapWithErrorHandling(
+    formatModelResponseTemplate,
+    'Assistant',
+  ),
+
+  // Data formatters
+  fileList: wrapWithErrorHandling(formatFileListTemplate, 'file list'),
+  missingOutputs: wrapWithErrorHandling(
+    formatMissingOutputsTemplate,
+    'missing outputs',
+  ),
+  latexdiff: wrapWithErrorHandling(formatLatexdiffTemplate, 'latexdiff'),
+  statistics: wrapWithErrorHandling(formatStatisticsTemplate, 'statistics'),
+  contextManagement: wrapWithErrorHandling(
+    formatContextManagementTemplate,
+    'context management',
+  ),
+
+  // Special cases
+  contextState: () => null, // Displayed in footer
+  userMessage: wrapWithErrorHandling(formatUserMessageTemplate, 'user message'),
+  progressStatus: wrapWithErrorHandling(
+    formatProgressStatusTemplate,
+    'progress status',
+  ),
+  error: wrapWithErrorHandling(formatErrorTemplate, 'error'),
 };
+
+/** Format a log entry as a TemplateResult for direct Lit rendering. */
+export function formatLogEntry(
+  logMessage: LogMessageData,
+  options: FormatOptions = {},
+): TemplateResult {
+  const { messageType } = logMessage;
+
+  // Determine if details should be open (undefined means no preference)
+  const isOpen = shouldBeOpen(messageType ?? '', options, AUTO_EXPANDED_TYPES);
+  const templateOptions = { defaultOpen: isOpen };
+
+  const formatter = messageType ? TEMPLATE_FORMATTERS[messageType] : null;
+
+  if (messageType && typeof formatter === 'function') {
+    const result = formatter(logMessage, templateOptions);
+    if (result) return result;
+    if (NULLABLE_TYPES.has(messageType)) return html``;
+  }
+
+  return formatDefaultLogMessageTemplate(logMessage) ?? html``;
+}

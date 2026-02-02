@@ -23,11 +23,6 @@ export const ConversationRoundStateSnapshotSchema = z.object({
   normalizedUsage: NormalizedUsageSchema.nullable().prefault(null),
 });
 
-/** Parsed defaults for ConversationRoundState - derived from schema */
-const ROUND_STATE_DEFAULTS = ConversationRoundStateSnapshotSchema.parse({
-  roundIndex: 0,
-});
-
 /**
  * Single source of truth for ConversationRoundState serialization format.
  * Uses z.output<> to get the type after parsing (all fields required).
@@ -38,15 +33,12 @@ export type ConversationRoundStateSnapshot = z.output<
 
 export class ConversationRoundState {
   public roundIndex: number;
-  public continuationCount: number;
-  public responseTimeMs: number;
-  public normalizedUsage: NormalizedUsage | null;
+  public continuationCount = 0;
+  public responseTimeMs = 0;
+  public normalizedUsage: NormalizedUsage | null = null;
 
   constructor(roundIndex: number) {
     this.roundIndex = roundIndex;
-    this.continuationCount = ROUND_STATE_DEFAULTS.continuationCount;
-    this.responseTimeMs = ROUND_STATE_DEFAULTS.responseTimeMs;
-    this.normalizedUsage = ROUND_STATE_DEFAULTS.normalizedUsage;
   }
 
   /** Deserialize from a snapshot. Validates and applies schema defaults. */
@@ -76,10 +68,6 @@ export class ConversationRoundState {
   addResponseTime(durationMs: number): void {
     this.responseTimeMs += durationMs;
   }
-
-  setNormalizedUsage(usage: NormalizedUsage): void {
-    this.normalizedUsage = usage;
-  }
 }
 
 /**
@@ -95,9 +83,6 @@ export const AgentRunStateSnapshotSchema = z.object({
   }),
 });
 
-/** Parsed defaults for AgentRunState - derived from schema */
-const RUN_STATE_DEFAULTS = AgentRunStateSnapshotSchema.parse({});
-
 /**
  * Single source of truth for AgentRunState serialization format.
  * Uses z.output<> to get the type after parsing (all fields required).
@@ -107,13 +92,11 @@ export type AgentRunStateSnapshot = z.output<
 >;
 
 export class AgentRunState {
-  public totalRounds: number;
-  public totalResponseTimeMs: number;
+  public totalRounds = 0;
+  public totalResponseTimeMs = 0;
   public readonly usageAccumulator: RunUsageAccumulator;
 
   constructor(accumulator?: RunUsageAccumulator) {
-    this.totalRounds = RUN_STATE_DEFAULTS.totalRounds;
-    this.totalResponseTimeMs = RUN_STATE_DEFAULTS.totalResponseTimeMs;
     this.usageAccumulator = accumulator ?? new RunUsageAccumulator();
   }
 

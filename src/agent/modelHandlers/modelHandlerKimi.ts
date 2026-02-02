@@ -1,8 +1,12 @@
 // Local imports - agent
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import type { ToolDefinition } from '@model';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
+
+// Type imports
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
@@ -46,5 +50,26 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
       return { type: 'disabled' };
     }
     return undefined;
+  }
+
+  protected override buildChatBaseParams(
+    messages: ChatCompletionMessageParam[],
+    _temperature?: number,
+    systemPrompt?: string,
+    endTag?: string,
+    tools?: ToolDefinition[],
+  ) {
+    // Kimi K2.5 with thinking enabled requires temperature=1 exactly.
+    // The Moonshot API rejects any other value with HTTP 400.
+    const temperature = this.config.fullName.startsWith('kimi-k2.5')
+      ? 1
+      : _temperature;
+    return super.buildChatBaseParams(
+      messages,
+      temperature,
+      systemPrompt,
+      endTag,
+      tools,
+    );
   }
 }
