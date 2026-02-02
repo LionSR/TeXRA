@@ -5,7 +5,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-import { designTokens } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view constants
@@ -17,6 +17,7 @@ const MAX_MESSAGE_LENGTH = 200;
 export class QueuedFollowUps extends LitElement {
   static override styles = [
     designTokens,
+    commonViewStyles,
     codiconIconClasses,
     css`
       :host {
@@ -27,16 +28,22 @@ export class QueuedFollowUps extends LitElement {
         display: none;
       }
 
-      .queued-follow-ups-collapsible {
-        border-radius: var(--border-radius);
-        background-color: var(--vscode-inputValidation-infoBackground);
+      /* Info-style collapsible for queued messages */
+      .queued-collapsible {
         border: var(--border-thin) solid
           var(--vscode-inputValidation-infoBorder);
+        border-radius: var(--border-radius);
+        background-color: var(--vscode-inputValidation-infoBackground);
       }
 
-      .queued-follow-ups-collapsible::part(header) {
+      .queued-collapsible::part(header) {
+        padding: var(--spacing-small) var(--spacing-medium);
         font-weight: 500;
         background-color: transparent;
+      }
+
+      .queued-collapsible::part(body) {
+        padding: 0 var(--spacing-small) var(--spacing-small);
       }
 
       .queued-follow-ups-list {
@@ -94,7 +101,7 @@ export class QueuedFollowUps extends LitElement {
     return html`
       <vscode-collapsible
         id=${ELEMENT_IDS.QUEUED_FOLLOW_UPS_COLLAPSIBLE}
-        class="queued-follow-ups-collapsible progress-collapsible"
+        class="queued-collapsible"
         title="Queued Messages"
         ?open=${visible}
         ?hidden=${!visible}

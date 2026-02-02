@@ -12,6 +12,7 @@ import { live } from 'lit/directives/live.js';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
+import { commonViewStyles } from '@shared/styles/commonViewStyles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared utils
@@ -59,26 +60,16 @@ export type FollowupOptions = Omit<SetFollowupOptionsMessage, 'command'>;
 export class FollowupSection extends LitElement {
   static override styles = [
     designTokens,
+    commonViewStyles,
     codiconIconClasses,
     css`
       :host {
         display: block;
+        margin-top: var(--spacing-medium);
       }
 
       :host([hidden]) {
         display: none;
-      }
-
-      .followup-collapsible {
-        margin-top: var(--spacing-medium);
-      }
-
-      .followup-collapsible::part(header) {
-        background-color: var(
-          --vscode-sideBarSectionHeader-background,
-          transparent
-        );
-        color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
       }
 
       .followup-section {
@@ -223,7 +214,7 @@ export class FollowupSection extends LitElement {
     return html`
       <vscode-collapsible
         id=${ELEMENT_IDS.FOLLOWUP_COLLAPSIBLE}
-        class="followup-collapsible progress-collapsible"
+        class="panel-collapsible"
         title="Followup"
         @vsc-collapsible-toggle=${this.handleToggle}
       >
