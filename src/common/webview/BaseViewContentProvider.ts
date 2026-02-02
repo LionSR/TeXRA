@@ -120,12 +120,6 @@ export abstract class BaseViewContentProvider {
         BaseViewContentProvider.NODE_MODULE_DESCRIPTORS,
         ['node_modules'],
       ),
-      tokensStyleUri: this.buildUri(webview, [
-        'src',
-        'shared',
-        'styles',
-        'tokens.css',
-      ]),
     };
   }
 }

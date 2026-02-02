@@ -4,8 +4,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
-// Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
-import { commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared controllers
@@ -20,6 +19,7 @@ import type { InstructionUpdate } from '@shared/schemas';
 @customElement('instruction-panel')
 export class InstructionPanel extends LitElement {
   static override styles = [
+    designTokens,
     commonViewStyles,
     codiconIconClasses,
     css`

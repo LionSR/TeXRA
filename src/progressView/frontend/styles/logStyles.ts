@@ -4,6 +4,7 @@
 
 // Third-party imports
 import { css } from 'lit';
+import katexStyles from 'katex/dist/katex.min.css?inline';
 
 // Shared styles
 import { animationStyles } from '@shared/styles/litStyles';
@@ -15,6 +16,9 @@ import { groupStyles } from './groupStyles';
 import { codeBlockStyles } from './codeBlockStyles';
 import { toolUseStyles } from './toolUseStyles';
 import { markdownStyles } from './markdownStyles';
+
+const katexStyleSheet = new CSSStyleSheet();
+katexStyleSheet.replaceSync(katexStyles);
 
 export {
   logEntryStyles,
@@ -59,6 +63,7 @@ export const layoutStyles = css`
 export const logStyles = [
   animationStyles,
   commonViewStyles,
+  katexStyleSheet,
   layoutStyles,
   logEntryStyles,
   groupStyles,

@@ -38,21 +38,40 @@ const BaseStreamStateSchema = z.object({
   contextState: ContextStateSchema.optional(),
 });
 
+// Tool-Use UI State (frontend-only, preserved during backend updates)
+
+export const ToolUseUIStateSchema = z.object({
+  followUpText: z.string().prefault(''),
+  polishedText: z.string().nullable().prefault(null),
+  polishRevision: z.int().prefault(0),
+  transcribedText: z.string().nullable().prefault(null),
+  recording: z.boolean().prefault(false),
+  shouldFocusFollowUp: z.boolean().prefault(false),
+});
+
+export type ToolUseUIState = z.infer<typeof ToolUseUIStateSchema>;
+
 // Tool-Use Stream State
 
 export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   kind: z.literal(AGENT_CATEGORY.TOOL_USE),
+  // Backend-owned fields
   todos: z.array(TodoItemSchema).prefault([]),
   queuedFollowUps: z.array(z.string()).prefault([]),
-  followUpText: z.string().prefault(''),
   toolEditBypass: z.boolean().optional(),
-  shouldFocusFollowUp: z.boolean().prefault(false),
-  polishedText: z.string().nullable().prefault(null),
-  transcribedText: z.string().nullable().prefault(null),
-  recording: z.boolean().prefault(false),
+  // Frontend-owned (nested under ui)
+  ui: ToolUseUIStateSchema.prefault({}),
 });
 
 export type ToolUseStreamState = z.infer<typeof ToolUseStreamStateSchema>;
+
+// Workflow UI State (frontend-only, preserved during backend updates)
+
+export const WorkflowUIStateSchema = z.object({
+  selectedRunId: z.string().nullable().prefault(null),
+});
+
+export type WorkflowUIState = z.infer<typeof WorkflowUIStateSchema>;
 
 // Workflow Stream State
 
@@ -64,13 +83,15 @@ const RoundScopedRecord = <T extends z.ZodType>(valueSchema: T) =>
 
 export const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
   kind: z.literal(AGENT_CATEGORY.WORKFLOW),
+  // Backend-owned fields
   runInstructions: RunScopedRecord(InstructionUpdateSchema),
   runUsage: RunScopedRecord(TokenUsageStatsSchema),
   runFiles: RoundScopedRecord(OutputFileInfoSchema),
   runMissingOutputs: RoundScopedRecord(z.string()),
   activeRunId: z.string().nullable().prefault(null),
-  selectedRunId: z.string().nullable().prefault(null),
   followupMode: FollowupModeSchema.prefault(FOLLOWUP_MODE.CHAT),
+  // Frontend-owned (nested under ui)
+  ui: WorkflowUIStateSchema.prefault({}),
 });
 
 export type WorkflowStreamState = z.infer<typeof WorkflowStreamStateSchema>;

@@ -1,24 +1,11 @@
 /**
- * Types and utilities for tool-use flow context initialization.
+ * Tool resolution utilities for tool-use flow.
  */
 
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
-import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import type { ToolDefinition } from '@model';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
-
-import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
-
-/** Configuration for creating tool-use flow services. */
-export interface ToolUseFlowContextInit<
-  C = unknown,
-> extends BaseFlowContextInit<C> {
-  setting: AgentToolUseSetting;
-  toolRegistry?: IToolRegistry;
-  resumeSnapshot?: ToolUseSessionSnapshot | null;
-  onFollowUpConsumed?: () => void;
-}
 
 /**
  * Resolve tool definitions from agent settings, validating against registry.

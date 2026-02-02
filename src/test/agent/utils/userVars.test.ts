@@ -13,7 +13,7 @@ import * as configModule from '@utils/config';
 const baseSetting: AgentSetting = {
   agentCategory: AgentCategory.Workflow,
   documentTag: 'document',
-  temperature: 0,
+  temperature: 1,
   isRewrite: true,
   rounds: 1,
   prefills: [],
@@ -25,6 +25,7 @@ const baseSetting: AgentSetting = {
   isMultipleOutput: false,
   filePatternsContain: [],
   tools: [],
+  xmlStructureMode: 'scratchpadOnly',
 };
 
 const basePrompt: AgentPrompt = {

@@ -7,6 +7,7 @@ import { when } from 'lit/directives/when.js';
 // Local imports - shared
 import { AGENT_CATEGORY } from '@shared/schemas';
 import { getBasename } from '@shared/utils/path';
+import { getTextareaValue } from '@shared/utils/textarea';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { postMessage } from '@shared/vscode';
 import { designTokens } from '@shared/styles/litStyles';
@@ -159,7 +160,7 @@ export class PermissionCard extends LitElement {
 
   @property({ type: Object }) permission: PermissionState | null = null;
   @state() private showFeedback = false;
-  @query('.feedback-input') private feedbackInput?: HTMLTextAreaElement;
+  @query('.feedback-input') private feedbackInput?: HTMLElement;
 
   protected willUpdate(changed: Map<string, unknown>): void {
     if (changed.has('permission')) {
@@ -274,10 +275,11 @@ export class PermissionCard extends LitElement {
     return html`
       <div class="feedback-section">
         <label class="feedback-label">Rejection feedback (optional):</label>
-        <textarea
+        <vscode-textarea
           class="feedback-input"
           placeholder="Why are you rejecting?"
-        ></textarea>
+          rows="2"
+        ></vscode-textarea>
       </div>
     `;
   }
@@ -424,7 +426,7 @@ export class PermissionCard extends LitElement {
     }
 
     // Second click: submit with feedback
-    const feedback = this.feedbackInput?.value?.trim() || undefined;
+    const feedback = getTextareaValue(this.feedbackInput).trim() || undefined;
     this.emitAction(action, feedback);
     this.showFeedback = false;
   }

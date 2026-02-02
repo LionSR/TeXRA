@@ -67,7 +67,6 @@ export const searchHighlightStyles: CSSResult = css`
 `;
 
 export const emptyStateStyles: CSSResult = css`
-  .empty-state,
   .no-data,
   .no-agents,
   .history-none {

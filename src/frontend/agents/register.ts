@@ -134,7 +134,7 @@ export async function validateYamlAndPromptAdd(
   const workflowSettings = isWorkflow
     ? (settings as AgentWorkflowSetting)
     : undefined;
-  const hasMultipleDefaults = (settings.defaultOutputFiles ?? []).length > 1;
+  const hasMultipleDefaults = settings.defaultOutputFiles.length > 1;
   const isMultipleOutput =
     workflowSettings?.isMultipleOutput ?? (isWorkflow && hasMultipleDefaults);
 

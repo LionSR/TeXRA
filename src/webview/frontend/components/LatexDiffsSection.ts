@@ -12,7 +12,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
 // Local imports - main view
-import { codiconStyles } from '@shared/styles';
+import { designTokens, codiconStyles } from '@shared/styles';
 import { MainViewEvents } from '../events';
 import {
   fileSelectLayoutStyles,
@@ -22,6 +22,7 @@ import {
 @customElement('latexdiffs-section')
 export class LatexDiffsSection extends LitElement {
   static override styles = [
+    designTokens,
     codiconStyles,
     fileSelectLayoutStyles,
     toggleStyles,
