@@ -41,8 +41,41 @@ import type { FrontendEventHandlerContext } from './eventHandlers';
 import type { PermissionState } from './components/PermissionCard';
 
 // ============================================================
-// Helpers
+// Types
 // ============================================================
+
+/**
+ * Context passed to message handlers. Extends FrontendEventHandlerContext with
+ * prompt state accessors needed for handling approval/retry messages.
+ */
+export interface MessageHandlerContext extends FrontendEventHandlerContext {
+  getPermissions(): PermissionState[];
+  setPermissions(permissions: PermissionState[]): void;
+}
+
+// ============================================================
+// Internal state for pending log updates
+// ============================================================
+
+/**
+ * Stores pending log updates that arrive before their APPEND_LOG.
+ * When UPDATE_LOG arrives for a log that doesn't exist yet, we store it here.
+ * When APPEND_LOG arrives, we merge any pending update before rendering.
+ */
+const pendingLogUpdates = new Map<string, Partial<LogMessageData>>();
+
+// ============================================================
+// Helper functions
+// ============================================================
+
+/** Check if stream is tool-use based on streamInfo (source of truth for category). */
+function isToolUseStream(
+  ctx: MessageHandlerContext,
+  streamId: string,
+): boolean {
+  const streamInfo = ctx.getState().streams.find((s) => s.name === streamId);
+  return streamInfo?.agentCategory === 'toolUse';
+}
 
 /** Sum multiple usage stats into a single total. */
 function sumUsageStats(
@@ -70,34 +103,6 @@ function sumUsageStats(
     },
   );
 }
-
-// ============================================================
-// Types
-// ============================================================
-
-/**
- * Context passed to message handlers. Extends FrontendEventHandlerContext with
- * prompt state accessors needed for handling approval/retry messages.
- */
-export interface MessageHandlerContext extends FrontendEventHandlerContext {
-  getPermissions(): PermissionState[];
-  setPermissions(permissions: PermissionState[]): void;
-}
-
-// ============================================================
-// Internal state for pending log updates
-// ============================================================
-
-/**
- * Stores pending log updates that arrive before their APPEND_LOG.
- * When UPDATE_LOG arrives for a log that doesn't exist yet, we store it here.
- * When APPEND_LOG arrives, we merge any pending update before rendering.
- */
-const pendingLogUpdates = new Map<string, Partial<LogMessageData>>();
-
-// ============================================================
-// Helper functions
-// ============================================================
 
 function getPendingLogKey(streamId: string, logId: string): string {
   return `${streamId}:${logId}`;

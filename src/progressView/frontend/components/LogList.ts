@@ -88,6 +88,10 @@ export class LogList extends LitElement {
     return this.streamContext?.isToolUse ?? false;
   }
 
+  private get hasStreams(): boolean {
+    return this.streamContext?.hasStreams ?? false;
+  }
+
   /** Reference to child TaskGroupList for scroll operations */
   @query('task-group-list')
   private taskGroupList?: TaskGroupList;
@@ -134,6 +138,7 @@ export class LogList extends LitElement {
         .messages=${this.messages}
         .activeRunId=${this.activeRunId}
         ?isToolUse=${this.isToolUse}
+        ?hasStreams=${this.hasStreams}
         .toggleStates=${this.toggleStates}
       ></task-group-list>
     `;
