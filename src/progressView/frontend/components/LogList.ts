@@ -49,9 +49,11 @@ import type { TaskGroupList } from './TaskGroupList';
 // Local imports - shared schemas
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
 
-const LogListStateSchema = z.object({
-  groupToggleStates: z.array(z.tuple([z.string(), z.boolean()])).prefault([]),
-});
+const LogListStateSchema = z
+  .object({
+    groupToggleStates: z.array(z.tuple([z.string(), z.boolean()])).catch([]),
+  })
+  .catch({ groupToggleStates: [] });
 
 type LogListState = z.infer<typeof LogListStateSchema>;
 
