@@ -13,7 +13,7 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports - main view
 import { SortableController } from '@shared/controllers';
-import { codiconStyles } from '@shared/styles';
+import { designTokens, codiconStyles } from '@shared/styles';
 import { MainViewEvents } from '../events';
 import {
   fileStateContext,
@@ -28,6 +28,7 @@ import {
 @customElement('output-files-section')
 export class OutputFilesSection extends LitElement {
   static override styles = [
+    designTokens,
     codiconStyles,
     fileSelectLayoutStyles,
     toggleStyles,

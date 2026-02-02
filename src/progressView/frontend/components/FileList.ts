@@ -4,7 +4,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-import { commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 
 // Local imports - progress view constants
 import { COMMANDS, ELEMENT_IDS } from '../constants';
@@ -35,6 +35,7 @@ function parsePath(path: string): ParsedPath {
 @customElement('file-list')
 export class FileList extends LitElement {
   static override styles = [
+    designTokens,
     commonViewStyles,
     css`
       :host {

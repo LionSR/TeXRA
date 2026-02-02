@@ -128,5 +128,25 @@ export const commonViewStyles: CSSResult = css`
     text-align: center;
     margin-top: calc(var(--spacing-xlarge) * 2);
     color: var(--color-text-secondary);
+    font-style: italic;
+  }
+
+  /* Agent icon indicators (remote, multiple outputs) - fixed width for consistent sizing */
+  .agent-icon {
+    display: inline-block;
+    width: 1.2em;
+    text-align: center;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  .btn-secondary {
+    opacity: var(--opacity-normal);
+  }
+
+  .btn-secondary:hover {
+    opacity: var(--opacity-full);
   }
 `;
