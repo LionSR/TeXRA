@@ -123,23 +123,9 @@ function extractFrontendOnlyFields(
   existing: StreamState | undefined,
 ): Partial<ToolUseStreamState> {
   if (!existing || !isToolUseState(existing)) return {};
-  // Pick only the frontend-only fields from the existing state
-  const {
-    followUpText,
-    polishedText,
-    polishRevision,
-    transcribedText,
-    recording,
-    shouldFocusFollowUp,
-  } = existing;
-  return {
-    followUpText,
-    polishedText,
-    polishRevision,
-    transcribedText,
-    recording,
-    shouldFocusFollowUp,
-  };
+  return Object.fromEntries(
+    TOOL_USE_FRONTEND_ONLY_KEYS.map((key) => [key, existing[key]]),
+  ) as Partial<ToolUseStreamState>;
 }
 
 function updateStreamInfo(
