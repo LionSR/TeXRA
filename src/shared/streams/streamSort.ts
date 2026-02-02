@@ -18,8 +18,10 @@ function compareByInputFile(a: StreamTabInfo, b: StreamTabInfo): number {
 }
 
 function compareByTime(a: StreamTabInfo, b: StreamTabInfo): number {
-  const aTime = a.lastTimestamp ?? a.creationTimestamp ?? 0;
-  const bTime = b.lastTimestamp ?? b.creationTimestamp ?? 0;
+  // Treat streams without timestamps as newest (sort to top)
+  const now = Date.now();
+  const aTime = a.lastTimestamp ?? a.creationTimestamp ?? now;
+  const bTime = b.lastTimestamp ?? b.creationTimestamp ?? now;
   return bTime - aTime;
 }
 

@@ -310,20 +310,21 @@ async function runFlowWithLifecycle(
     }
     logger.debug(`Task completed with status: ${flowStatus}`);
   } catch (err) {
+    const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
+
+    // Log error BEFORE ending the group so it gets the correct groupId
+    await ctx.logger.logError(errorMsg, err, {
+      operation: `execute ${agentName}`,
+    });
+
     ctx.parentStage.end(END_GROUP_STATUS.ERROR);
     StreamStatusService.set(streamId, STREAM_STATUS.ERROR);
-
-    const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
     if (isApiKeyError(err)) {
       await showApiKeyErrorNotification();
     } else {
       vscode.window.showErrorMessage(errorMsg);
     }
-
-    await ctx.logger.logError(errorMsg, err, {
-      operation: `execute ${agentName}`,
-    });
 
     throw new Error(errorMsg);
   }
