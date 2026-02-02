@@ -378,6 +378,7 @@ export class ModelHandlerOpenAI<
       ? this.prepareNormalizedMessages(rawMessages, normOptions)
       : rawMessages;
 
+    // Phase 1: BUILD - Construct provider-specific request parameters
     const useStreaming = this.getStreamingConfig();
     const baseParams = this.buildChatBaseParams(
       messages,
