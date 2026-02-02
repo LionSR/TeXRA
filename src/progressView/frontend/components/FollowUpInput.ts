@@ -37,6 +37,7 @@ export class FollowUpInput extends LitElement {
 
       :host([visible]) {
         display: block;
+        margin-top: var(--spacing-medium);
       }
 
       :host([hidden]) {
@@ -46,8 +47,7 @@ export class FollowUpInput extends LitElement {
       .follow-up-container {
         display: grid;
         grid-template-columns: 1fr auto;
-        padding: var(--spacing-medium);
-        border-top: var(--border-thin) solid var(--color-border);
+        padding: var(--spacing-small) 0;
         gap: var(--spacing-small);
       }
 
@@ -179,64 +179,72 @@ export class FollowUpInput extends LitElement {
 
   override render(): TemplateResult | typeof nothing {
     return html`
-      <div id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER} class="follow-up-container">
-        <queued-follow-ups .messages=${this.queuedMessages}></queued-follow-ups>
+      <vscode-collapsible
+        class="panel-collapsible"
+        title="Follow-up Input"
+        open
+      >
+        <div id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER} class="follow-up-container">
+          <queued-follow-ups
+            .messages=${this.queuedMessages}
+          ></queued-follow-ups>
 
-        <div class="follow-up-input-row">
-          <vscode-textarea
-            id=${ELEMENT_IDS.FOLLOW_UP_INPUT}
-            placeholder="Send follow-up message"
-            rows="10"
-            resize="vertical"
-            .value=${live(this.value)}
-            @input=${this.handleInput}
-            @keydown=${this.handleKeydown}
-          ></vscode-textarea>
+          <div class="follow-up-input-row">
+            <vscode-textarea
+              id=${ELEMENT_IDS.FOLLOW_UP_INPUT}
+              placeholder="Send follow-up message"
+              rows="10"
+              resize="vertical"
+              .value=${live(this.value)}
+              @input=${this.handleInput}
+              @keydown=${this.handleKeydown}
+            ></vscode-textarea>
 
-          <div class="follow-up-actions">
-            <vscode-toolbar-button
-              id=${ELEMENT_IDS.POLISH_FOLLOW_UP_BTN}
-              icon="sparkle"
-              label="Polish follow-up"
-              title="Polish follow-up with AI"
-              @click=${this.emitPolish}
-            ></vscode-toolbar-button>
-            <vscode-progress-ring
-              id="polishFollowUpProgressContainer"
-              class=${classMap({
-                'polish-progress': true,
-                'is-visible': this.polishing,
-              })}
-              ?hidden=${!this.polishing}
-            ></vscode-progress-ring>
-            <vscode-toolbar-button
-              id=${ELEMENT_IDS.RECORD_FOLLOW_UP_BTN}
-              icon=${this.recordingController.state.icon}
-              label=${this.recordingController.state.title}
-              title=${this.recordingController.state.title}
-              class=${classMap({
-                [this.recordingController.state.recordingClass]:
-                  this.recordingController.state.recording,
-              })}
-              @click=${this.recordingController.handleClick}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id=${ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN}
-              icon="clear-all"
-              label="Clear input"
-              title="Clear input"
-              @click=${this.emitClear}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id=${ELEMENT_IDS.SEND_FOLLOW_UP_BTN}
-              icon="send"
-              label="Send"
-              title="Send follow-up message"
-              @click=${this.emitSend}
-            ></vscode-toolbar-button>
+            <div class="follow-up-actions">
+              <vscode-toolbar-button
+                id=${ELEMENT_IDS.POLISH_FOLLOW_UP_BTN}
+                icon="sparkle"
+                label="Polish follow-up"
+                title="Polish follow-up with AI"
+                @click=${this.emitPolish}
+              ></vscode-toolbar-button>
+              <vscode-progress-ring
+                id="polishFollowUpProgressContainer"
+                class=${classMap({
+                  'polish-progress': true,
+                  'is-visible': this.polishing,
+                })}
+                ?hidden=${!this.polishing}
+              ></vscode-progress-ring>
+              <vscode-toolbar-button
+                id=${ELEMENT_IDS.RECORD_FOLLOW_UP_BTN}
+                icon=${this.recordingController.state.icon}
+                label=${this.recordingController.state.title}
+                title=${this.recordingController.state.title}
+                class=${classMap({
+                  [this.recordingController.state.recordingClass]:
+                    this.recordingController.state.recording,
+                })}
+                @click=${this.recordingController.handleClick}
+              ></vscode-toolbar-button>
+              <vscode-toolbar-button
+                id=${ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN}
+                icon="clear-all"
+                label="Clear input"
+                title="Clear input"
+                @click=${this.emitClear}
+              ></vscode-toolbar-button>
+              <vscode-toolbar-button
+                id=${ELEMENT_IDS.SEND_FOLLOW_UP_BTN}
+                icon="send"
+                label="Send"
+                title="Send follow-up message"
+                @click=${this.emitSend}
+              ></vscode-toolbar-button>
+            </div>
           </div>
         </div>
-      </div>
+      </vscode-collapsible>
     `;
   }
 
