@@ -9,6 +9,107 @@ const webpack = require('webpack');
 //@ts-check
 /** @typedef {import('webpack').Configuration} WebpackConfig **/
 
+/**
+ * Externals configuration for webview bundles.
+ *
+ * Maps imports to the global WebviewCommons UMD library, reducing bundle size
+ * by sharing zod, lit, and @shared/* modules across all webviews.
+ *
+ * @type {import('webpack').ExternalsPlugin['externals']}
+ */
+const webviewExternals = {
+  // Third-party: Zod
+  zod: 'WebviewCommons',
+
+  // Third-party: Lit core
+  lit: 'WebviewCommons',
+  'lit/decorators.js': 'WebviewCommons',
+  'lit/directives/unsafe-html.js': 'WebviewCommons',
+  'lit/directives/class-map.js': 'WebviewCommons',
+  'lit/directives/style-map.js': 'WebviewCommons',
+  'lit/directives/if-defined.js': 'WebviewCommons',
+  'lit/directives/repeat.js': 'WebviewCommons',
+  'lit/directives/guard.js': 'WebviewCommons',
+  'lit/directives/cache.js': 'WebviewCommons',
+  'lit/directives/keyed.js': 'WebviewCommons',
+  'lit/directives/when.js': 'WebviewCommons',
+  'lit/directives/choose.js': 'WebviewCommons',
+  'lit/directives/map.js': 'WebviewCommons',
+  'lit/directives/join.js': 'WebviewCommons',
+  'lit/directives/range.js': 'WebviewCommons',
+  'lit/directives/live.js': 'WebviewCommons',
+  'lit/directives/ref.js': 'WebviewCommons',
+
+  // Third-party: @lit/context
+  '@lit/context': 'WebviewCommons',
+
+  // Shared modules
+  '@shared/BaseWebviewApp': 'WebviewCommons',
+  '@shared/vscode': 'WebviewCommons',
+  '@shared/schemas': 'WebviewCommons',
+  '@shared/schemas/index': 'WebviewCommons',
+  '@shared/schemas/commonViewMessages': 'WebviewCommons',
+  '@shared/schemas/historyViewMessages': 'WebviewCommons',
+  '@shared/schemas/memoryViewMessages': 'WebviewCommons',
+  '@shared/schemas/profileViewMessages': 'WebviewCommons',
+  '@shared/schemas/mainView': 'WebviewCommons',
+  '@shared/schemas/progressView': 'WebviewCommons',
+  '@shared/schemas/stream': 'WebviewCommons',
+  '@shared/schemas/streamState': 'WebviewCommons',
+  '@shared/schemas/output': 'WebviewCommons',
+  '@shared/schemas/log': 'WebviewCommons',
+  '@shared/schemas/taskGroup': 'WebviewCommons',
+  '@shared/schemas/todo': 'WebviewCommons',
+  '@shared/schemas/usage': 'WebviewCommons',
+  '@shared/schemas/errors': 'WebviewCommons',
+  '@shared/schemas/identifiers': 'WebviewCommons',
+  '@shared/schemas/agent': 'WebviewCommons',
+  '@shared/schemas/fileFields': 'WebviewCommons',
+  '@shared/schemas/toolConfig': 'WebviewCommons',
+  '@shared/schemas/storage': 'WebviewCommons',
+  '@shared/schemas/prompts': 'WebviewCommons',
+  '@shared/schemas/diffResult': 'WebviewCommons',
+  '@shared/schemas/proposalFields': 'WebviewCommons',
+  '@shared/schemas/contextManagement': 'WebviewCommons',
+  '@shared/styles': 'WebviewCommons',
+  '@shared/styles/index': 'WebviewCommons',
+  '@shared/styles/codiconStyles': 'WebviewCommons',
+  '@shared/styles/commonViewStyles': 'WebviewCommons',
+  '@shared/styles/litStyles': 'WebviewCommons',
+  '@shared/styles/selectStyles': 'WebviewCommons',
+  '@shared/styles/statusIndicatorStyles': 'WebviewCommons',
+  '@shared/styles/permissionCardStyles': 'WebviewCommons',
+  '@shared/styles/requestPanelStyles': 'WebviewCommons',
+  '@shared/styles/badgeStyles': 'WebviewCommons',
+  '@shared/state': 'WebviewCommons',
+  '@shared/state/index': 'WebviewCommons',
+  '@shared/state/PersistedState': 'WebviewCommons',
+  '@shared/state/ToggleStateStore': 'WebviewCommons',
+  '@shared/handlers/commonMessageHandlers': 'WebviewCommons',
+  '@shared/contexts/themeContext': 'WebviewCommons',
+  '@shared/controllers': 'WebviewCommons',
+  '@shared/controllers/index': 'WebviewCommons',
+  '@shared/controllers/CopyButtonController': 'WebviewCommons',
+  '@shared/controllers/RecordingButtonController': 'WebviewCommons',
+  '@shared/controllers/SortableController': 'WebviewCommons',
+  '@shared/utils/events': 'WebviewCommons',
+  '@shared/utils/uiConstants': 'WebviewCommons',
+  '@shared/utils/path': 'WebviewCommons',
+  '@shared/utils/string': 'WebviewCommons',
+  '@shared/utils/clipboard': 'WebviewCommons',
+  '@shared/utils/dispatcher': 'WebviewCommons',
+  '@shared/utils/dom': 'WebviewCommons',
+  '@shared/utils/icons': 'WebviewCommons',
+  '@shared/utils/selectTemplates': 'WebviewCommons',
+  '@shared/utils/textarea': 'WebviewCommons',
+  '@shared/streams/streamSort': 'WebviewCommons',
+  '@shared/streams/runSelection': 'WebviewCommons',
+  '@shared/files/pastedImageConstants': 'WebviewCommons',
+  '@shared/highlighting/hljs': 'WebviewCommons',
+  '@shared/components': 'WebviewCommons',
+  '@shared/components/index': 'WebviewCommons',
+};
+
 /** @type WebpackConfig */
 const extensionConfig = {
   target: 'node', // VS Code extensions run in a Node.js-context 📖 -> https://webpack.js.org/configuration/node/
@@ -90,6 +191,96 @@ const extensionConfig = {
 };
 
 /**
+ * Commons bundle configuration.
+ *
+ * Builds shared dependencies (zod, lit, @shared/*) as a UMD library
+ * that is loaded once by all webviews. Individual webview bundles
+ * reference this via externals, eliminating duplication.
+ *
+ * @type WebpackConfig
+ */
+const commonsConfig = {
+  name: 'commons',
+  target: 'web',
+  mode: 'none',
+  entry: './src/shared/commons/index.ts',
+  output: {
+    path: path.resolve(__dirname, 'dist/shared'),
+    filename: 'commons.js',
+    library: {
+      name: 'WebviewCommons',
+      type: 'umd',
+      export: undefined, // Export all named exports
+    },
+    globalObject: 'globalThis',
+  },
+  resolve: {
+    extensions: ['.ts', '.js'],
+    alias: extensionConfig.resolve.alias,
+    fallback: {
+      fs: false,
+      path: require.resolve('path-browserify'),
+    },
+  },
+  module: {
+    rules: [
+      {
+        test: /\.ts$/,
+        exclude: /node_modules/,
+        use: [
+          {
+            loader: 'ts-loader',
+          },
+        ],
+      },
+      {
+        // CSS as string with ?inline suffix (for Lit css`` templates)
+        test: /\.css$/,
+        resourceQuery: /inline/,
+        type: 'asset/source',
+      },
+      {
+        // Side-effect CSS imports
+        test: /\.css$/,
+        resourceQuery: { not: [/inline/] },
+        use: ['style-loader', 'css-loader'],
+      },
+    ],
+  },
+  plugins: [
+    new webpack.DefinePlugin({
+      'process.env.NODE_ENV': JSON.stringify(
+        process.env.NODE_ENV || 'production',
+      ),
+    }),
+  ],
+  devtool: 'nosources-source-map',
+  infrastructureLogging: {
+    level: 'log',
+  },
+  optimization: {
+    minimize: true,
+    minimizer: [
+      new TerserPlugin({
+        terserOptions: {
+          ecma: 2020,
+          compress: {
+            inline: 1,
+            keep_classnames: true,
+          },
+          mangle: {
+            properties: false,
+          },
+          format: {
+            comments: false,
+          },
+        },
+      }),
+    ],
+  },
+};
+
+/**
  * Webview configurations for Lit-based frontends.
  *
  * Lit-specific optimizations:
@@ -97,6 +288,7 @@ const extensionConfig = {
  * - Tree shaking via optimization.usedExports (NOT sideEffects: false,
  *   which would break @customElement decorator registrations)
  * - Terser configured to preserve template literal structure
+ * - Externals reference WebviewCommons for shared dependencies
  */
 const webviewConfigs = [
   'progressView',
@@ -113,6 +305,7 @@ const webviewConfigs = [
     path: path.resolve(__dirname, `dist/${name}`),
     filename: 'bundle.js',
   },
+  externals: webviewExternals,
   resolve: {
     extensions: ['.ts', '.js'],
     alias: extensionConfig.resolve.alias,
@@ -196,4 +389,4 @@ const webviewConfigs = [
   },
 }));
 
-module.exports = [extensionConfig, ...webviewConfigs];
+module.exports = [extensionConfig, commonsConfig, ...webviewConfigs];
