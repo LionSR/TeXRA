@@ -68,6 +68,9 @@ export class TaskGroupList extends LitElement {
   /** Whether this is a tool-use session (affects run filtering) */
   @property({ type: Boolean }) isToolUse = false;
 
+  /** Whether there are any streams in the current filter (controls placeholder) */
+  @property({ type: Boolean }) hasStreams = false;
+
   /** Toggle state store for persistence */
   @property({ type: Object }) toggleStates: ToggleStateStore | null = null;
 
@@ -124,9 +127,13 @@ export class TaskGroupList extends LitElement {
 
   /**
    * Build hierarchical tree from flat groups array.
-   * Returns [tree, ungroupedMessages] tuple.
+   * Returns [tree, userMessages, otherUngrouped] tuple.
+   *
+   * User messages are separated from other ungrouped messages to support
+   * the tool-use rendering order: user messages first, then groups, then
+   * other ungrouped messages (preserving chronological order for errors).
    */
-  private buildGroupTree(): [GroupTree[], LogMessageData[]] {
+  private buildGroupTree(): [GroupTree[], LogMessageData[], LogMessageData[]] {
     const groupMap = new Map<string, TaskGroup>();
     const childrenMap = new Map<string, TaskGroup[]>();
 
@@ -151,15 +158,19 @@ export class TaskGroupList extends LitElement {
       return (messageOrder.get(a.id) ?? 0) - (messageOrder.get(b.id) ?? 0);
     });
     const messagesByGroup = new Map<string, LogMessageData[]>();
-    const ungroupedMessages: LogMessageData[] = [];
+    const userMessages: LogMessageData[] = [];
+    const otherUngrouped: LogMessageData[] = [];
 
     for (const msg of sortedMessages) {
       if (msg.groupId && groupMap.has(msg.groupId)) {
         const bucket = messagesByGroup.get(msg.groupId) ?? [];
         bucket.push(msg);
         messagesByGroup.set(msg.groupId, bucket);
+      } else if (msg.messageType === 'userMessage') {
+        // Separate user messages for tool-use ordering (user messages first)
+        userMessages.push(msg);
       } else {
-        ungroupedMessages.push(msg);
+        otherUngrouped.push(msg);
       }
     }
 
@@ -188,7 +199,7 @@ export class TaskGroupList extends LitElement {
       })
       .map(buildNode);
 
-    return [tree, ungroupedMessages];
+    return [tree, userMessages, otherUngrouped];
   }
 
   /** Check if a root group should be visible */
@@ -285,10 +296,11 @@ export class TaskGroupList extends LitElement {
   }
 
   override render(): TemplateResult {
-    const [tree, ungroupedMessages] = this.buildGroupTree();
+    const [tree, userMessages, otherUngrouped] = this.buildGroupTree();
 
-    // Show placeholder if empty
-    if (tree.length === 0 && this.messages.length === 0) {
+    // Show placeholder only when there are no streams in the current filter
+    // (not when a specific stream is empty)
+    if (!this.hasStreams) {
       return html`
         <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
           <log-placeholder
@@ -299,11 +311,12 @@ export class TaskGroupList extends LitElement {
       `;
     }
 
-    // Tool-use: ungrouped messages first, then tree
-    // Workflow: tree first, then ungrouped messages
+    // Tool-use: user messages first, then tree, then other ungrouped (errors etc)
+    // This preserves chronological order for errors while ensuring user prompts appear first.
+    // Workflow: tree first, then all ungrouped messages
     const [ungroupedBefore, ungroupedAfter] = this.isToolUse
-      ? [ungroupedMessages, []]
-      : [[], ungroupedMessages];
+      ? [userMessages, otherUngrouped]
+      : [[], [...userMessages, ...otherUngrouped]];
 
     return html`
       <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
