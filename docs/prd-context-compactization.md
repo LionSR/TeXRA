@@ -134,18 +134,104 @@ Add a new configuration:
 
 ### 4.4 Structured Summary Prompt
 
-The compaction prompt must preserve:
+Adapted from [neu-translator's `COMPACT_INSTRUCTION`](https://github.com/neutree-ai/neu-translator/blob/main/packages/core/src/prompts/system.compact.ts), modified for TeXRA's XML conventions (output tag is `<conversation-summary>` instead of `<summary>`).
 
-| Section | Purpose |
-|---------|---------|
-| **Task Objective** | Original user request and constraints |
-| **Key Decisions** | Important choices made during execution |
-| **Tool Results Summary** | Condensed results from tool calls (file contents, search results) |
-| **Errors & Corrections** | What went wrong and how it was fixed |
-| **Current State** | Exact point of progress, including verbatim code/text being worked on |
-| **Pending Work** | What still needs to be done |
+**System prompt for compactor model:**
 
-The prompt should be defined in a dedicated file (`src/agent/modelHandlers/compactionPrompt.ts`) so it can be iterated on independently.
+```
+You are a helpful AI assistant tasked with summarizing conversations.
+```
+
+**Compaction instruction (sent as user message after the conversation history):**
+
+```
+Your task is to create a detailed summary of the conversation so far, paying close
+attention to the user's explicit requests and your previous actions.
+This summary should be thorough in capturing the details that would be essential for
+continuing work without losing context.
+
+Before providing your final summary, wrap your analysis in <analysis> tags to organize
+your thoughts and ensure you've covered all necessary points. In your analysis process:
+
+1. Chronologically analyze each message and section of the conversation. For each
+   section thoroughly identify:
+   - The user's explicit requests and intents
+   - Your approach to addressing the user's requests
+   - Key decisions
+   - Specific details
+   - Pay special attention to specific user feedback that you received, especially
+     if the user told you to do something differently.
+
+2. Double-check for accuracy and completeness, addressing each required element
+   thoroughly.
+
+Your summary should include the following sections:
+1. Primary Request and Intent: Capture all of the user's explicit requests and intents
+   in detail
+2. Key Concepts: List all important concepts and topics discussed.
+3. Errors and fixes: List all errors that you ran into, and how you fixed them. Pay
+   special attention to specific user feedback that you received, especially if the
+   user told you to do something differently.
+4. Problem Solving: Document problems solved and any ongoing troubleshooting efforts.
+5. All user messages: List ALL user messages that are not tool results. These are
+   critical for understanding the users' feedback and changing intent.
+6. Pending Tasks: Outline any pending tasks that you have explicitly been asked to
+   work on.
+7. Current Work: Describe in detail precisely what was being worked on immediately
+   before this summary request.
+8. Optional Next Step: List the next step that you will take that is related to the
+   most recent work you were doing. If your last task was concluded, then only list
+   next steps if they are explicitly in line with the users request. Do not start on
+   tangential requests without confirming with the user first.
+
+If there is a next step, include direct quotes from the most recent conversation
+showing exactly what task you were working on and where you left off. This should be
+verbatim to ensure there's no drift in task interpretation.
+
+Here's an example of how your output should be structured:
+
+<example>
+<analysis>
+[Your thought process, ensuring all points are covered thoroughly and accurately]
+</analysis>
+
+<conversation-summary>
+1. Primary Request and Intent:
+   [Detailed description]
+2. Key Concepts:
+   - [Concept 1]
+   - [Concept 2]
+   - [...]
+3. Errors and fixes:
+   - [Detailed description of error 1]:
+   - [How you fixed the error]
+   - [User feedback on the error if any]
+   - [...]
+4. Problem Solving:
+   [Description of solved problems and ongoing troubleshooting]
+5. All user messages:
+   - [Detailed non tool use user message]
+   - [...]
+   [Should ignore the user message that triggered this compaction]
+6. Pending Tasks:
+   - [Task 1]
+   - [Task 2]
+   - [...]
+7. Current Work:
+   [Precise description of current work]
+8. Optional Next Step:
+   [Optional next step to take]
+</conversation-summary>
+</example>
+
+Please provide your summary based on the conversation so far, following this structure
+and ensuring precision and thoroughness in your response.
+```
+
+**Notes:**
+- Output tag is `<conversation-summary>` (parsed via `extractTextFromTag()`)
+- The `<analysis>` block is discarded — only `<conversation-summary>` content is injected into the system prompt
+- The prompt is stored in `src/agent/modelHandlers/compactionPrompt.ts` so it can be iterated independently
 
 ### 4.5 Integration with ModelHandler Base Class
 
