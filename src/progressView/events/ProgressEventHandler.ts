@@ -6,7 +6,6 @@ import {
   type StreamStatus,
   type StreamTabId,
   type TaskGroup,
-  type UpdateTaskGroupPayload,
   type TokenUsageStats,
 } from '@shared/schemas';
 import { AgentCategory } from '@agent/core/AgentDataclass';
@@ -38,10 +37,6 @@ export type { UICallbacks };
 export class ProgressEventHandler {
   private readonly logger: AgentLogger;
   private readonly pendingTaskGroups = new Map<StreamTabId, TaskGroup[]>();
-  private readonly pendingTaskGroupUpdates = new Map<
-    StreamTabId,
-    Map<string, UpdateTaskGroupPayload[]>
-  >();
   private readonly ctx: EventHandlerContext;
 
   constructor(
@@ -212,7 +207,6 @@ export class ProgressEventHandler {
     }
 
     await addGroupPromise;
-    await this.applyPendingTaskGroupUpdates(streamId, id);
   }
 
   private handleUpdateTaskGroup = (
@@ -233,7 +227,11 @@ export class ProgressEventHandler {
   ): Promise<void> {
     const groups = this.state.taskGroups.getStreamGroups(data.streamId);
     if (!groups.has(data.id)) {
-      this.queueTaskGroupUpdate(data);
+      // StreamEventQueue serializes events per stream, so addTaskGroup always
+      // completes before updateTaskGroup. If we hit this, there's a bug.
+      this.logger.warn(
+        `updateTaskGroup for unknown group ${data.id} in stream ${data.streamId}`,
+      );
       return;
     }
 
@@ -326,7 +324,6 @@ export class ProgressEventHandler {
     ) as Record<string, TokenUsageStats>;
     const contextState = this.state.getContextState(stream);
     const todos = this.state.getTodos(stream) ?? [];
-    const status = StreamStatusService.get(stream) ?? STREAM_STATUS.READY;
 
     this.pendingTaskGroups.delete(stream);
 
@@ -422,44 +419,6 @@ export class ProgressEventHandler {
     this.pendingTaskGroups.set(streamId, pending);
   }
 
-  private queueTaskGroupUpdate(data: UpdateTaskGroupPayload): void {
-    const streamUpdates =
-      this.pendingTaskGroupUpdates.get(data.streamId) ?? new Map();
-    const updates = streamUpdates.get(data.id) ?? [];
-    updates.push(data);
-    streamUpdates.set(data.id, updates);
-    this.pendingTaskGroupUpdates.set(data.streamId, streamUpdates);
-  }
-
-  private async applyPendingTaskGroupUpdates(
-    streamId: StreamTabId,
-    groupId: string,
-  ): Promise<void> {
-    const streamUpdates = this.pendingTaskGroupUpdates.get(streamId);
-    if (!streamUpdates) return;
-
-    const updates = streamUpdates.get(groupId);
-    if (!updates || updates.length === 0) return;
-
-    streamUpdates.delete(groupId);
-    if (streamUpdates.size === 0) {
-      this.pendingTaskGroupUpdates.delete(streamId);
-    }
-
-    for (const update of updates) {
-      await this.state.taskGroups.updateGroup(update);
-    }
-
-    const latestUpdate = updates.at(-1);
-    if (
-      latestUpdate &&
-      this.webviewUpdater.isAvailable() &&
-      streamId === this.state.activeStream
-    ) {
-      this.webviewUpdater.updateTaskGroup(latestUpdate);
-    }
-  }
-
   private replayPendingTaskGroups(streamId: StreamTabId): void {
     const pending = this.pendingTaskGroups.get(streamId);
     if (!pending || pending.length === 0) {
@@ -499,12 +458,10 @@ export class ProgressEventHandler {
 
   clearPendingTaskGroups(streamId: StreamTabId): void {
     this.pendingTaskGroups.delete(streamId);
-    this.pendingTaskGroupUpdates.delete(streamId);
   }
 
   clearAllPendingTaskGroups(): void {
     this.pendingTaskGroups.clear();
-    this.pendingTaskGroupUpdates.clear();
   }
 
   resetRunningTasksToError(waitingStreams?: Set<StreamTabId>): StreamTabId[] {
