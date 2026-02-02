@@ -5,13 +5,7 @@ import { resolve } from 'path';
 // @ts-expect-error - .mjs import works at runtime via Vite's ESM handling
 import { aliases } from './scripts/aliases.mjs';
 
-const webviews = [
-  'progressView',
-  'memoryView',
-  'historyView',
-  'profileView',
-  'webview',
-] as const;
+const webviews = ['progressView', 'settingsView', 'webview'] as const;
 
 /**
  * Build configuration for a single webview.

@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { ProfileViewProvider } from '@profileView/ProfileViewProvider';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getConfig } from '@utils/config';
 import { SupabaseClient } from './SupabaseClient';
@@ -12,19 +11,7 @@ export const AUTH_COMMANDS = {
   SIGN_IN: 'texra.auth.signIn',
   SIGN_OUT: 'texra.auth.signOut',
   VIEW_PROFILE: 'texra.auth.viewProfile',
-  ACCOUNT_MENU: 'texra.auth.accountMenu',
 } as const;
-
-let profileViewProvider: ProfileViewProvider | null = null;
-
-export function initializeProfileViewProvider(
-  context: vscode.ExtensionContext,
-): ProfileViewProvider {
-  if (!profileViewProvider) {
-    profileViewProvider = new ProfileViewProvider(context);
-  }
-  return profileViewProvider;
-}
 
 type AuthMethod = OAuthProvider | 'github-browser' | 'email';
 
@@ -187,15 +174,10 @@ export async function signOut(): Promise<void> {
 }
 
 export async function viewProfile(): Promise<void> {
-  if (!profileViewProvider) {
-    void vscode.window.showErrorMessage(
-      'Profile view not initialized. Please reload the extension.',
-    );
-    return;
-  }
-
   try {
-    await profileViewProvider.showProfileView();
+    // Import dynamically to avoid circular dependencies
+    const { showSettingsView } = await import('@commands/settings');
+    await showSettingsView();
   } catch (error) {
     void vscode.window.showErrorMessage(
       `Failed to load profile: ${toErrorMessage(error)}`,
@@ -214,49 +196,4 @@ export async function getAuthStatus(): Promise<{
   const user = await SupabaseClient.getUser();
   const tier = await SupabaseClient.getUserTier();
   return { authenticated: true, email: user?.email, tier };
-}
-
-interface MenuOption {
-  label: string;
-  description: string;
-  command: string;
-}
-
-export async function showAccountMenu(): Promise<void> {
-  try {
-    const status = await getAuthStatus();
-
-    const items: MenuOption[] = status.authenticated
-      ? [
-          {
-            label: '$(account) View Profile',
-            description: `Signed in as ${status.email || 'unknown'} (${status.tier} tier)`,
-            command: AUTH_COMMANDS.VIEW_PROFILE,
-          },
-          {
-            label: '$(sign-out) Sign Out',
-            description: 'Sign out of your TeXRA account',
-            command: AUTH_COMMANDS.SIGN_OUT,
-          },
-        ]
-      : [
-          {
-            label: '$(sign-in) Sign In',
-            description:
-              'Access AI models and remote agents via Researcher Access Program',
-            command: AUTH_COMMANDS.SIGN_IN,
-          },
-        ];
-
-    const choice = await vscode.window.showQuickPick(items, {
-      placeHolder: 'Account Options',
-    });
-    if (choice) {
-      await vscode.commands.executeCommand(choice.command);
-    }
-  } catch (error) {
-    void vscode.window.showErrorMessage(
-      `Failed to show account menu: ${toErrorMessage(error)}`,
-    );
-  }
 }
