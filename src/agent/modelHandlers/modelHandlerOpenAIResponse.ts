@@ -1157,11 +1157,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           this.logger.warn(
             `Streaming response ${response.id} ended with pending status "${response.status}" - polling for completion`,
           );
-          response = await this.waitForBackgroundCompletion(
+          response = (await this.waitForBackgroundCompletion(
             client,
             response,
             signal,
-          );
+          )) as typeof response;
         }
 
         // Finalize any remaining thinking content (only if there's actual content)
