@@ -272,7 +272,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
         const modelResponse = await services.modelHandler.createResponse({
           client: services.client,
           messages: prepRes.messages,
-          temperature: services.setting.temperature || 0.0,
+          temperature: services.setting.temperature,
           systemPrompt: prepRes.systemPrompt,
           endTag: services.setting.endTag,
           signal,
@@ -575,6 +575,8 @@ class ResponseProcessNode<C> extends BaseNode<
     }
 
     const outputLocation = shared.outputLocation!;
+    const connector = result.bestConnector ?? '';
+
     await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
 
     if (!shared.outputExists) {
@@ -590,7 +592,7 @@ class ResponseProcessNode<C> extends BaseNode<
       );
       await flexibleFS.appendFile(
         outputLocation,
-        (result.bestConnector ?? '') + result.processedResponse,
+        connector + result.processedResponse,
       );
     }
 
@@ -613,8 +615,6 @@ class ResponseProcessNode<C> extends BaseNode<
     logger.debug(
       `Last ${K_SLICE} chars:\n${result.processedResponse.slice(-K_SLICE)}`,
     );
-
-    const connector = result.bestConnector ?? '';
 
     if (modelHandler.capabilities.supportsAssistantPrefill) {
       modelHandler.updateMessageContentWithPrefill(

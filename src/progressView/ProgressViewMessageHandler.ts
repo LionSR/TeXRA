@@ -933,7 +933,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
 
     // Collect all output files from declared config and generated paths
-    const declaredOutputs = taskState.agentConfig.outputFiles ?? [];
+    const declaredOutputs = taskState.agentConfig.outputFiles;
     const allFiles = [...declaredOutputs, ...generatedPaths].filter(Boolean);
     const outputFiles = [...new Set(allFiles)];
 
@@ -1224,7 +1224,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       : AgentCategory.Workflow;
 
     const mergedReferenceFiles = [
-      ...(originalConfig.referenceFiles ?? []),
+      ...originalConfig.referenceFiles,
       ...outputsAsReference,
     ];
 
