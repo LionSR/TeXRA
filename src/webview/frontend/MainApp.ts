@@ -1212,17 +1212,6 @@ export class MainApp extends BaseWebviewApp {
     }, 300);
   }
 
-  private startPlaceholderRotation(): void {
-    if (this.placeholderTimer) return;
-    this.placeholderTimer = window.setInterval(() => {
-      if (this.instruction.trim()) {
-        this.stopPlaceholderRotation();
-        return;
-      }
-      this.refreshInstructionPlaceholder(true);
-    }, PLACEHOLDER_ROTATION_MS);
-  }
-
   private stopPlaceholderRotation(): void {
     if (this.placeholderTimer) {
       window.clearInterval(this.placeholderTimer);
