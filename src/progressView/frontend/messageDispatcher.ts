@@ -134,27 +134,13 @@ function updateStreamInfo(
     const backendState = backendStates?.[stream.name];
     if (backendState) {
       const existing = nextStates.get(stream.name);
-      // Preserve frontend-owned 'ui' property during backend state updates
-      // Only preserve when kinds match (ToolUse UI != Workflow UI)
-      if (existing && existing.kind === backendState.kind) {
-        if (isToolUseState(backendState) && isToolUseState(existing)) {
-          nextStates.set(stream.name, {
-            ...backendState,
-            ui: existing.ui,
-            info: stream,
-          });
-        } else if (isWorkflowState(backendState) && isWorkflowState(existing)) {
-          nextStates.set(stream.name, {
-            ...backendState,
-            ui: existing.ui,
-            info: stream,
-          });
-        } else {
-          nextStates.set(stream.name, { ...backendState, info: stream });
-        }
-      } else {
-        nextStates.set(stream.name, { ...backendState, info: stream });
-      }
+      // Preserve frontend-owned 'ui' property when kinds match
+      const preserveUI = existing && existing.kind === backendState.kind;
+      nextStates.set(stream.name, {
+        ...backendState,
+        ...(preserveUI && { ui: existing.ui }),
+        info: stream,
+      } as StreamState);
     } else {
       const existing =
         nextStates.get(stream.name) ?? createStreamState(stream.agentCategory);
