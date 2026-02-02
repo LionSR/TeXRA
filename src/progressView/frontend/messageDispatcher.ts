@@ -469,18 +469,12 @@ const handlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE]: (data, ctx) => {
     const { stream, runId, usage } = data;
-    const currentState = getStreamState(ctx.getState(), stream);
-
-    // Tool-use streams: accumulate into sessionUsage (backend sends accumulated total)
-    if (currentState && isToolUseState(currentState)) {
-      updateToolUseState(ctx, stream, (prev) => ({
-        ...prev,
-        sessionUsage: usage,
-      }));
-      return;
-    }
-
-    // Workflow streams: store per-run usage
+    // Try both handlers - internal type guards ensure only the matching one updates.
+    // This handles cases where stream state is created on-demand by setStreamState.
+    updateToolUseState(ctx, stream, (prev) => ({
+      ...prev,
+      sessionUsage: usage,
+    }));
     updateWorkflowState(ctx, stream, (prev) => ({
       ...prev,
       runUsage: { ...prev.runUsage, [runId]: usage },
@@ -489,19 +483,12 @@ const handlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_USAGE]: (data, ctx) => {
     const { stream, usage } = data;
-    const currentState = getStreamState(ctx.getState(), stream);
-
-    // Tool-use streams: use first run's usage as session total
-    if (currentState && isToolUseState(currentState)) {
-      const firstUsage = Object.values(usage)[0] ?? null;
-      updateToolUseState(ctx, stream, (prev) => ({
-        ...prev,
-        sessionUsage: firstUsage,
-      }));
-      return;
-    }
-
-    // Workflow streams: store full run usage map
+    // Try both handlers - internal type guards ensure only the matching one updates.
+    const firstUsage = Object.values(usage)[0] ?? null;
+    updateToolUseState(ctx, stream, (prev) => ({
+      ...prev,
+      sessionUsage: firstUsage,
+    }));
     updateWorkflowState(ctx, stream, (prev) => ({
       ...prev,
       runUsage: usage,
