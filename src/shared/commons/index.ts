@@ -114,5 +114,5 @@ export * from '@shared/streams/runSelection';
 // Shared: Files
 export * from '@shared/files/pastedImageConstants';
 
-// Shared: Highlighting
-export * from '@shared/highlighting/hljs';
+// Shared: Highlighting (default export requires explicit re-export)
+export { default as hljs } from '@shared/highlighting/hljs';

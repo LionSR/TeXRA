@@ -36,7 +36,7 @@ export class UserMessage extends LitElement {
         max-width: 85%;
         background-color: var(--vscode-editor-selectionBackground);
         border: 1px solid var(--vscode-panel-border);
-        border-radius: var(--radius-small);
+        border-radius: var(--radius-medium);
       }
 
       .user-message-header {
