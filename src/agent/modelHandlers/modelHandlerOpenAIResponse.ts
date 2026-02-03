@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer';
 
 // Third-party imports
 import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
+import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -191,6 +192,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    */
   private pendingBackgroundResponseId: string | null = null;
 
+  /** DIAGNOSTIC: Pre-flight token estimate for comparison with actual usage */
+  private _diagPreFlightTokens: number | null = null;
+
   /** Clears the pending background response ID. Single point of mutation. */
   private clearPendingBackgroundResponse(): void {
     this.pendingBackgroundResponseId = null;
@@ -355,10 +359,62 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Note: OpenAI's input_tokens is the TOTAL (includes cached tokens).
     // Cached tokens are a subset reported in input_tokens_details.cached_tokens.
     // This differs from Anthropic where input_tokens excludes cached tokens.
-    // For context window tracking, we want the total, which input_tokens provides.
+    //
+    // NOTE: With previous_response_id, input_tokens includes the full conversation
+    // history. However, there may be edge cases where token counting doesn't match
+    // actual context usage (e.g., timing between count and API call, tool definitions,
+    // or reasoning token accounting). See PRD Known Issues for investigation details.
     if (response.usage?.input_tokens) {
-      this.conversationState.cumulativeInputTokens =
-        response.usage.input_tokens;
+      const actualTokens = response.usage.input_tokens;
+      this.conversationState.cumulativeInputTokens = actualTokens;
+
+      // DIAGNOSTIC: Compare pre-flight estimate with actual usage
+      if (this._diagPreFlightTokens !== null) {
+        const diff = actualTokens - this._diagPreFlightTokens;
+        const diffPercent =
+          this._diagPreFlightTokens > 0
+            ? ((diff / this._diagPreFlightTokens) * 100).toFixed(1)
+            : 'N/A';
+        const reasoningTokens =
+          response.usage.output_tokens_details?.reasoning_tokens ?? 0;
+        const outputTokens = response.usage.output_tokens ?? 0;
+
+        this.logger.debug(
+          `[TOKEN_DIAG] Actual vs pre-flight: ${actualTokens} vs ${this._diagPreFlightTokens} (diff: ${diff > 0 ? '+' : ''}${diff}, ${diffPercent}%)`,
+          {
+            data: {
+              actualInputTokens: actualTokens,
+              preFlightTokens: this._diagPreFlightTokens,
+              difference: diff,
+              differencePercent: diffPercent,
+              outputTokens,
+              reasoningTokens,
+              totalTokens: response.usage.total_tokens,
+              contextWindow: this.config.contextWindow,
+              utilizationActual:
+                (actualTokens / this.config.contextWindow) * 100,
+            },
+          },
+        );
+        this._diagPreFlightTokens = null; // Clear for next request
+      }
+    } else {
+      // DIAGNOSTIC: Log when usage data is missing (streaming instability?)
+      this.logger.warn(
+        `[TOKEN_DIAG] response.usage.input_tokens MISSING - cannot track context usage`,
+        {
+          data: {
+            responseId: response.id,
+            responseStatus: response.status,
+            hasUsage: !!response.usage,
+            inputTokens: response.usage?.input_tokens,
+            outputTokens: response.usage?.output_tokens,
+            totalTokens: response.usage?.total_tokens,
+            preFlightTokens: this._diagPreFlightTokens,
+          },
+        },
+      );
+      this._diagPreFlightTokens = null; // Clear anyway
     }
 
     // Reset compacted flag after successful request (ready for next compaction if needed)
@@ -861,14 +917,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     const client = options?.client ?? (await this.getClient());
+
+    // Build params matching what we send to the actual API call
+    const countParams: InputTokenCountParams = {
+      model: this.config.fullName,
+      input: messages,
+      ...(this.previousResponseId && {
+        previous_response_id: this.previousResponseId,
+      }),
+      ...(options?.systemPrompt && { instructions: options.systemPrompt }),
+      ...(options?.tools?.length && {
+        tools: options.tools as InputTokenCountParams['tools'],
+      }),
+    };
+
     const tokenCount = await client.responses.inputTokens.count(
-      {
-        model: this.config.fullName,
-        input: messages,
-        ...(this.previousResponseId && {
-          previous_response_id: this.previousResponseId,
-        }),
-      },
+      countParams,
       options?.signal ? { signal: options.signal } : undefined,
     );
 
@@ -987,14 +1051,43 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     //    to proactively compact before trouble
     // 2. This native count (CURRENT request) is the safety net at 100% threshold
     //
-    // When previous_response_id is set, the API includes server-side history in the count.
+    // NOTE: When previous_response_id is set, the API includes server-side history
+    // (per OpenAI docs). However, there may be edge cases where token counting
+    // doesn't match actual context usage. See PRD Known Issues for investigation.
     if (this.supportsTokenCounting) {
       try {
         // Reuse built params for token counting (build once principle)
+        // IMPORTANT: Pass tools and systemPrompt for accurate count
         const inputTokens = await this.estimateTokenCount(baseParams.input, {
           client,
           signal,
+          systemPrompt,
+          tools: convertedTools,
         });
+
+        // DIAGNOSTIC: Log token count details for investigation
+        // Compare pre-flight estimate with cumulative tokens from previous response
+        const prevCumulative = this.conversationState.cumulativeInputTokens;
+        const utilizationEstimate =
+          (inputTokens / this.config.contextWindow) * 100;
+        this._diagPreFlightTokens = inputTokens; // Store for comparison in finalizeResponse
+        this.logger.debug(
+          `[TOKEN_DIAG] Pre-flight count: ${inputTokens} (${utilizationEstimate.toFixed(1)}% of ${this.config.contextWindow})`,
+          {
+            data: {
+              preFlightTokens: inputTokens,
+              prevCumulativeTokens: prevCumulative,
+              delta: inputTokens - prevCumulative,
+              newMessagesCount: newMessages.length,
+              totalMessagesCount: effectiveMessages.length,
+              hasPreviousResponseId: !!this.previousResponseId,
+              hasTools: !!convertedTools?.length,
+              toolCount: convertedTools?.length ?? 0,
+              contextWindow: this.config.contextWindow,
+              maxOutputTokens,
+            },
+          },
+        );
 
         // Validate and adjust max_output_tokens if needed (throws if context window exceeded)
         const validation = this.validateTokenLimits(
@@ -1266,6 +1359,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             'next attempt will try to resume polling instead of creating new request',
         );
       }
+
+      // Clear diagnostic state to avoid stale comparison on retry
+      this._diagPreFlightTokens = null;
 
       throw error;
     }
