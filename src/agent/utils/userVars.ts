@@ -102,8 +102,19 @@ function getBasicVars(
       .map((a) => `- ${a.name}: ${a.description || 'No description'}`)
       .join('\n');
 
+  // Format tool-use agents with their available tools
+  const formatToolUseAgentList = (
+    agents: { name: string; description?: string; tools?: string[] }[],
+  ) =>
+    agents
+      .map((a) => {
+        const toolsStr = a.tools?.length ? ` [${a.tools.join(', ')}]` : '';
+        return `- ${a.name}: ${a.description || 'No description'}${toolsStr}`;
+      })
+      .join('\n');
+
   const workflowAgentsList = formatAgentList(getVisibleWorkflowAgents());
-  const toolUseAgentsList = formatAgentList(getVisibleToolUseAgents());
+  const toolUseAgentsList = formatToolUseAgentList(getVisibleToolUseAgents());
 
   // Get default bib path from settings (empty string if not configured)
   const defaultBibPath = getConfig<string>('texra.bib.defaultPath', '');
