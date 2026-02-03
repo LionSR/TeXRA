@@ -96,8 +96,6 @@ export const MainViewPersistedStateSchema = UIFileFieldsSchema.merge(
   outputFilesVisible: z.boolean().prefault(false),
   outputFilesActive: z.boolean().prefault(false),
   latexdiffsVisible: z.boolean().prefault(false),
-  agent: z.string().prefault(''),
-  isToolUseAgent: z.boolean().prefault(true),
   openedFiles: z.array(z.string()).nullish(),
 });
 export type MainViewPersistedState = z.infer<
