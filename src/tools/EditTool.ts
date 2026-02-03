@@ -10,7 +10,6 @@ import {
 import { pluralize } from '@tools/utils';
 import {
   buildApprovalRejectedResult,
-  firstChangedLine,
   formatUnifiedApprovalUserDiff,
   getApprovedContent,
   requestToolEditApproval,
@@ -77,9 +76,12 @@ export class EditFileTool extends defineTool({
       );
     }
 
+    // Escape $ in replacement string to prevent special replacement patterns
+    // ($&, $', $`, $<digits> have special meaning in String.replace)
+    const safeNewStr = new_str.replace(/\$/g, '$$$$');
     const updatedContent = replace_all
-      ? currentContent.replaceAll(old_str, new_str)
-      : currentContent.replace(old_str, new_str);
+      ? currentContent.replaceAll(old_str, safeNewStr)
+      : currentContent.replace(old_str, safeNewStr);
 
     const approval = await requestToolEditApproval({
       path: targetPath,
@@ -118,16 +120,16 @@ export class EditFileTool extends defineTool({
       ? `${replacementSummary}\n\n${userDiffNote}`
       : replacementSummary;
 
-    // Compute first changed line (convert from 0-based to 1-based for display)
-    const changedLine = firstChangedLine(currentContent, appliedContent);
-    const startLine = changedLine !== null ? changedLine + 1 : undefined;
-
     return {
       summary,
       output,
       userPatch: approval.userPatch,
       edits: [
-        { path: targetPath, lineChanges: approval.lineChanges, startLine },
+        {
+          path: targetPath,
+          lineChanges: approval.lineChanges,
+          startLine: approval.startLine,
+        },
       ],
     };
   }
