@@ -681,10 +681,17 @@ Compaction model is determined by constant map (`COMPACTION_MODEL_MAP`), not con
 
 The `createResponse()` methods in model handlers (especially `modelHandlerAnthropic.ts:580+`) are monolithic, mixing:
 - Parameter building
-- Token counting
+- Token counting (with provider-specific tools)
 - Context management setup
 - Streaming vs non-streaming logic
 - Response handling
+
+**Why this is the right place for compaction:** The `createResponse()` method has access to:
+1. Provider-specific tool format (e.g., `anthropicTools`)
+2. Full token count including tools, system prompt, thinking config
+3. Context window limits and validation
+
+The token check in `ToolUseDispatchNode.post()` only provides a lower-bound estimate without tools. The actual compaction trigger must happen in `createResponse()` where we have full context.
 
 **Proposed refactoring:**
 
@@ -695,13 +702,14 @@ class ModelHandlerAnthropic {
     // Phase 1: Build
     const params = this.buildRequestParams(messages, options);
 
-    // Phase 2: Count & Validate (optional)
+    // Phase 2: Count & Validate
     const validation = await this.validateContext(params);
 
-    // Phase 3: Compact if needed (NEW)
+    // Phase 3: Compact if needed (NEW - before throwing context window error)
     if (validation.shouldCompact && this.autoCompactEnabled) {
       const compacted = await this.compactContext(messages);
       params.messages = compacted.messages;
+      // Re-validate after compaction
     }
 
     // Phase 4: Execute
@@ -760,7 +768,9 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 
 ### Completed
 
-- **Token count check after tool results** (2026-02-03): Added token count logging in `ToolUseDispatchNode.post()` at `src/agent/core/flows/ToolUseCycleFlow.ts:778-795`. Only runs for providers with native token counting support (`supportsTokenCounting`). Logs context utilization after tool results are attached and before the next `createResponse()`.
+- **Token count check after tool results** (2026-02-03): Added token count logging in `ToolUseDispatchNode.post()` at `src/agent/core/flows/ToolUseCycleFlow.ts:778-808`. Only runs for providers with native token counting support (`supportsTokenCounting`). Logs context utilization after tool results are attached and before the next `createResponse()`.
+
+  **Limitation:** This is a lower-bound estimate (messages + systemPrompt only). Tool definitions are not included because each provider uses a different format (`anthropicTools`, etc.). Full accuracy requires the compaction check to happen inside `createResponse()` where provider-specific tools are already built — see Phase 0 refactoring.
 
 ### In Progress
 
