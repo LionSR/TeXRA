@@ -1360,6 +1360,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
       }
 
+      // Clear diagnostic state to avoid stale comparison on retry
+      this._diagPreFlightTokens = null;
+
       throw error;
     }
   }
