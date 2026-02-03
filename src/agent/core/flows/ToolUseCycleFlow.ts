@@ -787,6 +787,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
           {
             client: services.client,
             systemPrompt: services.prompt.systemPrompt,
+            tools: services.setting.tools,
           },
         );
         if (tokenCount > 0) {
