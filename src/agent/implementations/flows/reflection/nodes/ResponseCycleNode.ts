@@ -33,7 +33,11 @@ import {
   interpretCycleCompletion,
   type CycleCompletionResult,
 } from '@agent/core/flows/CommonCycleTypes';
-import type { CycleStateSlices } from '@agent/core/flows/CycleServices';
+import {
+  createClientRef,
+  type CycleStateSlices,
+  type ResponseCycleServices,
+} from '@agent/core/flows/CycleServices';
 import type { AgentFileLocation } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -159,14 +163,25 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
       // Create and run the flow directly on shared (native nesting)
       const flow = createResponseCycleFlow<C>();
-      flow.setServices({
+      const modelHandler = this.services.modelHandler;
+      const [clientRef, refreshClient] = createClientRef<C>(
+        await modelHandler.getClient(),
+        () => modelHandler.getClient(),
+      );
+      const flowServices: ResponseCycleServices<C> & {
+        refreshClient: () => Promise<void>;
+      } = {
         ...this.services,
-        client: await this.services.modelHandler.getClient(),
+        get client() {
+          return clientRef.current;
+        },
         round: prepRes.round,
         run: prepRes.run,
         workspace: prepRes.workspace,
         onRoundFinalized,
-      });
+        refreshClient,
+      };
+      flow.setServices(flowServices);
 
       // Validate and narrow type - asserts all required cycle fields are populated
       assertCycleFieldsPopulated(shared);

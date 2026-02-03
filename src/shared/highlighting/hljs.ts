@@ -52,4 +52,5 @@ hljs.registerLanguage('ts', typescript);
 hljs.registerLanguage('xml', xml);
 hljs.registerLanguage('yaml', yaml);
 
+export { hljs };
 export default hljs;

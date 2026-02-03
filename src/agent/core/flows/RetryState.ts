@@ -12,7 +12,7 @@ import {
   type RetryResult,
 } from '@agent/runtime/RetryRequestCoordinator';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { formatProviderHttpError } from '@common/errors';
+import { formatProviderHttpError, toErrorMessage } from '@common/errors';
 import type { AgentLogger } from '@logger/AgentLogger';
 import {
   getModelRetryBackoffMs,
@@ -52,6 +52,31 @@ interface RetryableNodeServices {
   streamId: string;
   logger: AgentLogger;
   setAbortController: (ac: AbortController | null) => void;
+  refreshClient?: () => Promise<void>;
+}
+
+/**
+ * Attempts to refresh the model client using the provided refreshClient function.
+ * Logs success or failure; returns true if refresh was attempted and succeeded.
+ */
+async function tryRefreshClient(
+  refreshClient: (() => Promise<void>) | undefined,
+  logger: AgentLogger,
+  context: string,
+): Promise<boolean> {
+  if (!refreshClient) {
+    return false;
+  }
+  try {
+    await refreshClient();
+    logger.debug(`Refreshed model client ${context}`);
+    return true;
+  } catch (refreshError) {
+    logger.warn(
+      `Failed to refresh model client ${context}: ${toErrorMessage(refreshError)}`,
+    );
+    return false;
+  }
 }
 
 /** Base class for model/tool invocation nodes with retry support. */
@@ -105,6 +130,11 @@ export abstract class RetryableInvocationNode<
         services.logger.debug('Relay 401, refreshing token before retry loop');
         const refreshed = await SupabaseClient.getAccessToken(true);
         if (refreshed) {
+          await tryRefreshClient(
+            services.refreshClient,
+            services.logger,
+            'after token refresh',
+          );
           activeController = new AbortController();
           this.signal = activeController.signal;
           services.setAbortController(activeController);
@@ -171,6 +201,14 @@ export abstract class RetryableInvocationNode<
     if (result.shouldRetry) {
       this._persistent401Error = null;
       this._hasAttemptedTokenRefresh = false;
+      const formatted = formatProviderHttpError(error);
+      if (formatted.isRelayError && formatted.statusCode === 401) {
+        await tryRefreshClient(
+          this.services.refreshClient,
+          this.services.logger,
+          'before manual retry after relay 401',
+        );
+      }
     }
 
     return result.shouldRetry;
@@ -250,6 +288,12 @@ export function handleInvocationResult<T extends { response: unknown }>(
 ): (T & { kind: 'success' }) | null {
   const { logger, operationName } = options;
 
+  /** Mark flow as stopped without ending the turn (error/cancellation path). */
+  function stopWithoutEndTurn(): void {
+    state.shouldStop = true;
+    state.endTurn = false;
+  }
+
   if (result.kind === 'skipped') {
     logger.debug(`${operationName} skipped: shouldStop was already true`);
     return null;
@@ -257,15 +301,13 @@ export function handleInvocationResult<T extends { response: unknown }>(
 
   if (result.kind === 'cancelled') {
     retryState.lastError = undefined;
-    state.shouldStop = true;
-    state.endTurn = false;
+    stopWithoutEndTurn();
     return null;
   }
 
   if (result.kind === 'failed') {
     retryState.lastError = { message: result.message, retryable: false };
-    state.shouldStop = true;
-    state.endTurn = false;
+    stopWithoutEndTurn();
     return null;
   }
 
@@ -275,8 +317,7 @@ export function handleInvocationResult<T extends { response: unknown }>(
       message: EMPTY_RESPONSE_ERROR_MESSAGE,
       retryable: false,
     };
-    state.shouldStop = true;
-    state.endTurn = false;
+    stopWithoutEndTurn();
     return null;
   }
 

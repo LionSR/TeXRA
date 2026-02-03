@@ -50,12 +50,24 @@ const NULLABLE_TYPES: Set<MessageType> = new Set([
   'contextState',
 ]);
 
+/** Create an error fallback template when formatting fails. */
+function formatRenderError(label: string, errorMsg: string): TemplateResult {
+  // prettier-ignore
+  return html`<div class="log-line log-line--render-error"><span class="render-error-icon">⚠️</span><span class="render-error-text">Failed to render ${label}: ${errorMsg}</span></div>`;
+}
+
 /** Wrap a formatter function with error handling for graceful degradation. */
 function wrapWithErrorHandling(
   fn: (m: LogMessageData, opts?: { defaultOpen?: boolean }) => FormatResult,
   label: string,
 ): TemplateFormatterFn {
-  return (message, options) => safeFormat(() => fn(message, options), label);
+  return (message, options) => {
+    const result = safeFormat(() => fn(message, options), label);
+    if (!result.ok) {
+      return formatRenderError(label, result.error);
+    }
+    return result.value;
+  };
 }
 
 /** Map of message types to their formatter functions. */
