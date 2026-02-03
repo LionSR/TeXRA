@@ -195,9 +195,9 @@ Messages: [
 - System prompt remains unchanged (agent identity preserved)
 - The next user request is appended after the summary message
 
-**Compaction event logging:**
+**Compaction event logging (applies to ALL models):**
 
-When compaction occurs, emit a special message type (like existing `CONTEXT_MANAGEMENT`) with the summary inside:
+When compaction occurs for **any model** (Anthropic, OpenAI Chat, Gemini, DeepSeek, Kimi), emit a `CONTEXT_MANAGEMENT` message with the summary. This creates a visible event in the progress view that users can expand to see what context was preserved.
 
 ```typescript
 // In src/shared/schemas/contextManagement.ts
@@ -212,7 +212,7 @@ export const CompactionEventSchema = z.object({
   compactionModel: z.string(),
 });
 
-// Logger call
+// Logger call (same for all providers)
 this.logger.logContextManagement('Context compacted', {
   action: 'compaction',
   tokensBefore: 72000,
@@ -224,6 +224,11 @@ this.logger.logContextManagement('Context compacted', {
   compactionModel: 'claude-sonnet-4-5',
 });
 ```
+
+**UI display:** The progress view renders this as a special collapsible block:
+- Header: "Context compacted: 72K → 3K tokens (1.5% utilization)"
+- Expandable body: Shows the full summary text
+- Badge: Shows compaction model used
 
 This makes the summary visible in the progress view and preserves it for debugging/review.
 
