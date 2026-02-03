@@ -502,7 +502,7 @@ Messages array:
   ]
 ```
 
-### 4.6 Message History Preservation
+### 4.7 Message History Preservation
 
 **Single source of truth**: `allMessages` is the only persistent message array. There is no separately-maintained "active messages" array that could diverge.
 
@@ -541,7 +541,7 @@ On each compaction:
 
 **UI display**: The webview renders from `allMessages`, showing the full conversation with a visual divider indicating which messages are "in context" vs "compacted away".
 
-### 4.7 Auto-Compact Toggle (like YOLO mode)
+### 4.8 Auto-Compact Toggle (like YOLO mode)
 
 Add an **Auto-Compact toggle button** in the toolbar, following the same pattern as the YOLO mode button (`src/progressView/frontend/constants.ts:154-163`).
 
@@ -578,7 +578,7 @@ const TOOL_USE_TOOLBAR = [
 | ON | Yes | Trigger compaction automatically, then continue |
 | ON | No | Normal operation |
 
-### 4.8 Manual "Compact Now" Button
+### 4.9 Manual "Compact Now" Button
 
 In addition to the auto-compact toggle in the toolbar, add a **Compact Now** button in the **follow-up input section** alongside the existing action buttons (Polish, Record, Clear, Send).
 
