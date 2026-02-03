@@ -11,3 +11,10 @@ export { requestPanelStyles } from './requestPanelStyles';
 
 // Badge styles (combined array used by multiple views)
 export { badgeStyles } from './badgeStyles';
+
+// History/search styles
+export {
+  searchStyles,
+  historyListStyles,
+  historyStyles,
+} from './historyStyles';

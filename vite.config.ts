@@ -1,17 +1,43 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import { resolve } from 'path';
+import { mkdirSync, writeFileSync, existsSync } from 'fs';
 
 // Shared path aliases from tsconfig.json (single source of truth)
 // @ts-expect-error - .mjs import works at runtime via Vite's ESM handling
 import { aliases } from './scripts/aliases.mjs';
 
-const webviews = [
-  'progressView',
-  'memoryView',
-  'historyView',
-  'profileView',
-  'webview',
-] as const;
+const webviews = ['progressView', 'settingsView', 'webview'] as const;
+
+/**
+ * Plugin to generate a stub commons.js for Vite builds.
+ *
+ * Webpack builds use a shared UMD bundle (WebviewCommons) that all webviews
+ * reference via externals. Vite builds inline all dependencies directly into
+ * each webview bundle, so the WebviewCommons global is never used.
+ *
+ * However, the HTML templates reference ${commonsBundleUri} which points to
+ * dist/shared/commons.js. This plugin generates a minimal stub that:
+ * 1. Prevents 404 errors when loading the webview
+ * 2. Sets up an empty WebviewCommons global (never actually used by Vite bundles)
+ */
+function commonsStubPlugin(): Plugin {
+  return {
+    name: 'commons-stub',
+    buildStart() {
+      const sharedDir = resolve(__dirname, 'dist/shared');
+      const commonsPath = resolve(sharedDir, 'commons.js');
+
+      // Only create stub if commons.js doesn't exist (i.e., webpack hasn't run)
+      if (!existsSync(commonsPath)) {
+        mkdirSync(sharedDir, { recursive: true });
+        writeFileSync(
+          commonsPath,
+          '// Vite stub - dependencies are bundled inline\nwindow.WebviewCommons = {};\n',
+        );
+      }
+    },
+  };
+}
 
 /**
  * Build configuration for a single webview.
@@ -43,6 +69,7 @@ function createWebviewConfig(webviewName: string, isDev: boolean) {
         },
       },
     },
+    plugins: [commonsStubPlugin()],
     resolve: { alias: aliases },
     define: {
       'process.env.NODE_ENV': JSON.stringify(

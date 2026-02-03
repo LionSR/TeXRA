@@ -54,14 +54,14 @@ The project has two build systems with different trade-offs:
 
 ## Coding style
 
-- All code in `src/` is written in TypeScript targeting ES2022, except some javascript files in `src/(webview,progressView,historyView)/modules/`.
+- All code in `src/` is written in TypeScript targeting ES2022, except some javascript files in `src/(webview,progressView)/modules/`.
 - Use the provided ESLint configuration (`eslint.config.mjs`) and Prettier settings (`.prettierrc`). Run `npm run format` before committing.
 - Prefer `const` and `let` over `var`.
 - Group imports by source and prefix each block with a descriptive comment (e.g., `// Third-party imports`, `// Local imports - component`).
 - Use the path aliases defined in `tsconfig.json` (for example `@frontend/*`, `@common/*`, `@utils/*`) instead of long relative import chains.
 - Document functions with concise comments. Use JSDoc style for public APIs.
 - Keep functions small and focused; extract helpers or modules when logic becomes complex.
-- Keep the directory structure aligned among different webviews (webview, historyView, progressView). Use the same folder names for modules of the same type and functionality but in different webviews.
+- Keep the directory structure aligned among different webviews (webview, progressView, settingsView). Use the same folder names for modules of the same type and functionality but in different webviews.
 - Place view-specific manager classes under each view's `managers` folder. For example, `WebviewUpdater.ts` lives in `src/progressView/managers/`.
 
 ### Naming conventions
@@ -94,7 +94,7 @@ The project has two build systems with different trade-offs:
   - `utils/text/` - Text and XML processing utilities
   - `utils/prompt/` - Prompt builder utilities
 - `src/explorer/` - VS Code file explorer integration and watchers
-- `src/profileView/` - Agent profile/settings webview (follows same pattern as progressView/historyView)
+- `src/settingsView/` - Unified settings webview combining Memory, History, Models, and Agents tabs
 
 ### Pragmatic implementations
 
@@ -306,8 +306,8 @@ See `docs/pocketflow/` for full framework documentation.
 
 ### Webview Consistency Patterns
 
-- **Base Classes**: All webviews (webview, progressView, historyView, profileView) extend `BaseViewContentProvider`, `BaseViewMessageHandler`, and use DOM managers built on `BaseDomHandler` from `src/common/modules/BaseDomHandler.js` for consistent error handling, logging, and cleanup.
-- **Naming Convention**: Follow `[Domain]View[Component]` pattern (e.g., `MainViewContentProvider`, `HistoryViewMessageHandler`, `ProfileViewDomHandler`)
+- **Base Classes**: All webviews (webview, progressView, settingsView) extend `BaseViewContentProvider`, `BaseViewMessageHandler`, and use DOM managers built on `BaseDomHandler` from `src/common/modules/BaseDomHandler.js` for consistent error handling, logging, and cleanup.
+- **Naming Convention**: Follow `[Domain]View[Component]` pattern (e.g., `MainViewContentProvider`, `SettingsViewMessageHandler`, `ProgressViewDomHandler`)
 - **Command Constants**: Define all commands in `src/common/webview/commands.js` and `.ts` - use constants, not string literals
 - **Message Handlers**: Delegate to domain-specific manager classes (FileManager, SettingsManager, etc.) for separation of concerns
 - **Client-Side State**: Add empty handlers with `/* State saved client-side */` comment for checkbox/toggle operations

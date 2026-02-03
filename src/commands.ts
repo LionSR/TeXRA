@@ -39,11 +39,8 @@ import {
   registerSampleProjectCommands,
   registerWalkthroughCommands,
 } from '@commands/system';
-import {
-  registerStateRestoreCommand,
-  registerHistoryCommands,
-} from '@commands/history';
-import { registerMemoryCommands } from '@commands/memory';
+import { registerStateRestoreCommand } from '@commands/history';
+import { registerSettingsViewCommands } from '@commands/settings';
 import { registerAuthCommands } from '@commands/auth';
 import { registerApiKeyCommands } from '@commands/api/apiKeyCommands';
 import { registerGitCommands } from '@commands/git/gitCommands';
@@ -89,8 +86,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerStateRestoreCommand(context);
   registerTextEditorCommands(context);
   registerLinterCommands(context);
-  registerHistoryCommands(context);
-  registerMemoryCommands(context);
+  registerSettingsViewCommands(context);
   registerArXivCommands(context);
   registerCompareCommands(context);
   registerProgressViewCommands(context);
@@ -131,4 +127,4 @@ export {
 } from '@commands/system';
 export { apiKeyCommands } from '@commands/api/apiKeyCommands';
 export { historyCommands } from '@commands/history';
-export { memoryCommands } from '@commands/memory';
+export { settingsViewCommands } from '@commands/settings';
