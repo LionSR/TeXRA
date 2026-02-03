@@ -11,6 +11,7 @@ import {
 } from '@tools/fileInteractions';
 import {
   buildApprovalRejectedResult,
+  firstChangedLine,
   formatUnifiedApprovalUserDiff,
   getApprovedContent,
   requestToolEditApproval,
@@ -87,11 +88,15 @@ export class WriteFileTool extends defineTool({
         ? `Replaced ${originalLineCount} lines with ${newLineCount} lines.`
         : undefined;
 
+    // Compute first changed line (convert from 0-based to 1-based for display)
+    const changedLine = firstChangedLine(originalContent, appliedContent);
+    const startLine = changedLine !== null ? changedLine + 1 : 1;
+
     return {
       summary,
       output,
       userPatch: approval.userPatch,
-      edits: [{ path: input.path, lineChanges: approval.lineChanges }],
+      edits: [{ path: input.path, lineChanges: approval.lineChanges, startLine }],
       ...(userInstruction && { userInstruction }),
     };
   }
