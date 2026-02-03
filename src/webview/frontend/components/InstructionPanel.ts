@@ -14,6 +14,7 @@ import { styleMap } from 'lit/directives/style-map.js';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
+import { commonViewStyles } from '@shared/styles/commonViewStyles';
 import { selectStyles } from '@shared/styles/selectStyles';
 
 // Local imports - shared utils
@@ -36,6 +37,7 @@ import {
 export class InstructionPanel extends LitElement {
   static override styles = [
     designTokens,
+    commonViewStyles,
     selectStyles,
     css`
       :host {

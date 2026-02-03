@@ -61,13 +61,6 @@ CLAUDE.md
 !src/common/modules/files/*.js
 !src/common/constants/*.js
 
-!src/historyView/modules/*.js
-!src/historyView/modules/uiManagers/*.js
-!src/historyView/styles/*.css
-!src/historyView/*.html
-!src/historyView/*.css
-!src/historyView/*.js
-
 !src/progressView/modules/uiManagers/*.js
 !src/progressView/modules/handlers/*.js
 !src/progressView/modules/formatters/*.js
@@ -78,19 +71,7 @@ CLAUDE.md
 !src/progressView/*.html
 !src/progressView/*.css
 
-!src/profileView/modules/uiManagers/*.js
-!src/profileView/modules/*.js
-!src/profileView/styles/*.css
-!src/profileView/*.js
-!src/profileView/*.html
-!src/profileView/*.css
-
-!src/memoryView/modules/uiManagers/*.js
-!src/memoryView/modules/*.js
-!src/memoryView/styles/*.css
-!src/memoryView/*.js
-!src/memoryView/*.html
-!src/memoryView/*.css
+!src/settingsView/*.html
 
 .env
 

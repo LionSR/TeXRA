@@ -8,7 +8,7 @@
  */
 
 // Third-party imports - use optimized hljs with only TeXRA-relevant languages
-import hljs from '@shared/highlighting/hljs';
+import { hljs } from '@shared/highlighting/hljs';
 
 // Local imports - shared utilities
 import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';

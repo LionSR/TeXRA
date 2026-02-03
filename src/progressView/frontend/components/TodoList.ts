@@ -5,7 +5,11 @@ import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
-import { designTokens, animationStyles } from '@shared/styles';
+import {
+  designTokens,
+  animationStyles,
+  commonViewStyles,
+} from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared schemas
@@ -24,34 +28,22 @@ const STATUS_ICONS: Record<string, string> = {
 export class TodoList extends LitElement {
   static override styles = [
     designTokens,
+    commonViewStyles,
     codiconIconClasses,
     animationStyles,
     css`
       :host {
         display: block;
+        margin: var(--spacing-small) 0;
       }
 
       :host([hidden]) {
         display: none;
       }
 
+      /* Add bottom border */
       .todo-collapsible {
-        margin: var(--spacing-small) 0;
-        border-top: var(--border-thin) solid var(--color-border);
         border-bottom: var(--border-thin) solid var(--color-border);
-      }
-
-      .todo-collapsible::part(header) {
-        padding: var(--spacing-small) var(--spacing-medium);
-        background-color: var(
-          --vscode-sideBarSectionHeader-background,
-          transparent
-        );
-        color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
-      }
-
-      .todo-collapsible::part(body) {
-        padding: 0 var(--spacing-medium) var(--spacing-small);
       }
 
       .todo-list {
@@ -121,7 +113,7 @@ export class TodoList extends LitElement {
     return html`
       <vscode-collapsible
         id=${ELEMENT_IDS.TODO_LIST_CONTAINER}
-        class="todo-collapsible progress-collapsible"
+        class="todo-collapsible panel-collapsible"
         title="Task Progress"
         open
       >
