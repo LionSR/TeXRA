@@ -172,36 +172,37 @@ Messages: [
 
 ### 4.3 Compaction Model Selection
 
-Add a new configuration (named `compactionModel` for consistency with `compactionThresholdPercent`):
-
-```json
-"texra.model.compactionModel": {
-  "type": "string",
-  "default": "auto",
-  "description": "Model used for context summarization. 'auto' uses the cheapest model from the same provider family."
-}
-```
-
-**"auto" resolution — get cheapest model from same provider family:**
-
-| Primary Model | Compaction Model |
-|--------------|------------------|
-| `claude-sonnet-4-5`, `claude-opus-4-5` | `claude-haiku-4-5` |
-| `gpt-4.1`, `gpt-4o` | `gpt-4.1-mini` |
-| `gemini-2.5-pro` | `gemini-2.5-flash-lite` |
-| `deepseek-chat`, `deepseek-reasoner` | `deepseek-chat` (no cheaper option) |
-| `moonshot-v1-*` | `moonshot-v1-8k` |
-
-This uses the same provider (same API key, same base URL for OpenRouter), just the cheapest model in that family.
-
-**Implementation:**
+Simple constant map — use a capable but faster/cheaper model from the same family:
 
 ```typescript
-function getCheapestModelInFamily(modelId: string): string {
-  const family = getModelFamily(modelId);  // e.g., "anthropic", "openai", "google"
-  return CHEAPEST_MODEL_BY_FAMILY[family] ?? modelId;
+const COMPACTION_MODEL_MAP: Record<string, string> = {
+  // Anthropic: opus → sonnet (both 4.5, sonnet is faster)
+  'claude-opus-4-5': 'claude-sonnet-4-5',
+  'claude-sonnet-4-5': 'claude-sonnet-4-5',
+
+  // OpenAI: gpt5 → gpt5 (same model, summarization uses fewer thinking tokens)
+  'gpt-5': 'gpt-5',
+
+  // Google: pro → flash
+  'gemini-3-pro': 'gemini-3-flash',
+  'gemini-2.5-pro': 'gemini-2.5-flash',
+
+  // DeepSeek: same model (no cheaper option)
+  'deepseek-chat': 'deepseek-chat',
+  'deepseek-reasoner': 'deepseek-chat',
+
+  // Kimi: same model
+  'moonshot-v1-128k': 'moonshot-v1-128k',
+};
+
+function getCompactionModel(primaryModel: string): string {
+  return COMPACTION_MODEL_MAP[primaryModel] ?? primaryModel;
 }
 ```
+
+Fallback: if model not in map, use the same model.
+
+**No thinking mode for summarizer.** The Anthropic SDK's compaction call doesn't pass thinking parameters — summarization is straightforward and doesn't need extended thinking. Keeps compaction faster and cheaper.
 
 ### 4.4 Structured Summary Prompt
 
@@ -518,8 +519,8 @@ Existing `UsagePanel` already shows token counts. After compaction, show "Compac
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `texra.model.compactionThresholdPercent` | number | 75 | Existing. Threshold for auto-compaction. 0 = disabled. |
-| `texra.model.compactionModel` | string | "auto" | New. Model for summarization. "auto" = cheapest in same provider family. |
-| `texra.model.enableThinkingClearing` | boolean | false | Existing. Anthropic thinking block clearing (deprecated — use SDK compaction instead). |
+
+Compaction model is determined by constant map (`COMPACTION_MODEL_MAP`), not configurable.
 
 ## 7. Implementation Plan
 
