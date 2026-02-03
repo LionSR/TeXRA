@@ -779,6 +779,10 @@ class ToolUseDispatchNode<C> extends BatchNode<
     // This gives visibility into token count BEFORE the next createResponse,
     // allowing compaction to trigger if threshold exceeded.
     // Only run for providers with native token counting support.
+    //
+    // Note: This is a lower-bound estimate. Tools are counted in createResponse()
+    // with provider-specific formats (e.g., anthropicTools for Anthropic).
+    // Full accuracy requires the compaction check to happen inside createResponse().
     const { contextWindow } = services.modelHandler.config;
     if (contextWindow > 0 && services.modelHandler.supportsTokenCounting) {
       try {
@@ -787,11 +791,14 @@ class ToolUseDispatchNode<C> extends BatchNode<
           {
             client: services.client,
             systemPrompt: services.prompt.systemPrompt,
-            tools: services.setting.tools,
           },
         );
         if (tokenCount > 0) {
           services.logger.logContextState(tokenCount, contextWindow);
+
+          // TODO: When auto-compact is enabled, trigger compaction here if
+          // tokenCount exceeds threshold (e.g., 75% of contextWindow).
+          // This prevents the next createResponse() from failing.
         }
       } catch {
         // Token counting failed - silently skip
