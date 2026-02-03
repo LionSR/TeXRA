@@ -27,7 +27,7 @@ prompts:
     Self-contained instruction examples:
 
     BAD (assumes conversation context): "Fix the issue we discussed with the convergence proof."
-    GOOD: "In the proof of \ref{thm:convergence}, the bound on line 3 uses $\epsilon < 1$ but this contradicts the assumption $\epsilon \geq 1$ stated in \ref{lem:setup}. Revise the proof to handle both cases or adjust the lemma's assumptions."
+    GOOD: "In the proof of \ref{thm:convergence}, the bound $\|x_n - x^*\| < \epsilon$ assumes $\epsilon < 1$, but \ref{lem:setup} allows $\epsilon \geq 1$. Revise the proof to handle both cases or tighten the lemma's assumptions to require $\epsilon < 1$."
 
     BAD (vague, no specific location): "Improve the introduction."
     GOOD: "The introduction (\ref{sec:intro}) currently jumps directly into technical details. Add 2-3 sentences after the first paragraph explaining the practical motivation: why practitioners should care about this problem and what real-world scenarios benefit from the solution."
