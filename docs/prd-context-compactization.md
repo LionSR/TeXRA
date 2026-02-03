@@ -66,118 +66,109 @@ Key takeaway: the **system prompt is the right place** for compacted context. Ra
 
 ### 4.2 Compaction Strategies
 
-#### Strategy 1: Anthropic SDK-Style Compaction (replicate for Anthropic)
-
-The Anthropic Python SDK's `toolRunner` implements compaction in `_check_and_compact()`. Since TeXRA doesn't use `toolRunner`, we replicate this logic ourselves.
-
-**What the SDK does (from `_beta_runner.py`):**
-
-```python
-def _check_and_compact(self) -> bool:
-    # 1. Check if compaction needed
-    tokens_used = message.usage.input_tokens + message.usage.output_tokens
-    threshold = self._compaction_control.get("context_token_threshold", 100_000)
-    if tokens_used < threshold:
-        return False
-
-    # 2. Remove pending tool_use blocks from last message
-    if messages[-1]["role"] == "assistant":
-        non_tool_blocks = [b for b in messages[-1]["content"] if b.get("type") != "tool_use"]
-        if non_tool_blocks:
-            messages[-1]["content"] = non_tool_blocks
-        else:
-            messages.pop()
-
-    # 3. Append summary prompt as user message
-    messages.append({"role": "user", "content": DEFAULT_SUMMARY_PROMPT})
-
-    # 4. Call API (non-streaming) with cheaper model
-    model = self._compaction_control.get("model", self._params["model"])
-    response = client.beta.messages.create(model=model, messages=messages, ...)
-
-    # 5. Replace ALL messages with single user message containing summary
-    self.set_messages_params({"messages": [{"role": "user", "content": response.content[0].text}]})
-```
-
-**Key details:**
-- Uses token count from `message.usage` (input + output tokens)
-- Default threshold: 100,000 tokens
-- Summary prompt asks for `<summary></summary>` tags but SDK takes raw text (doesn't extract from tags)
-- Replaces entire message history with one user message containing the summary
-- Can use cheaper model (e.g., `claude-haiku-4-5`) for summary generation
-
-**TeXRA implementation:** Replicate this in `ModelHandlerAnthropic` since we don't use `toolRunner`.
-
-#### Strategy 2: OpenAI Responses API Compaction (existing, works well)
+#### Strategy 1: OpenAI Responses API Compaction (existing, prioritized)
 - Continue using `/responses/compact` endpoint.
 - **Works well**: Opaque but effective — handles compaction server-side with good results.
+- No changes needed.
 
-#### Strategy 3: Client-Side Summarization via System Prompt Injection (new -- fallback for all providers)
+#### Strategy 2: Client-Side Summarization (for all other providers)
 
-This is the new capability. It covers all providers that lack a native compaction API:
+Copy the Anthropic SDK's `_check_and_compact()` pattern but make it work for **all providers** (Anthropic, DeepSeek, Kimi, Gemini, OpenAI Chat, etc.).
 
-| Provider | Native Compaction | Needs Client-Side |
-|----------|------------------|-------------------|
-| Anthropic | SDK `compactionControl` (uses Haiku for summaries) | No |
-| OpenAI Responses API | `/responses/compact` endpoint | No |
-| OpenAI Chat Completions | None | **Yes** |
-| Google GenAI (Gemini) | None | **Yes** |
-| DeepSeek | None | **Yes** |
-| Kimi (Moonshot) | None | **Yes** |
-| Any future provider | None by default | **Yes** |
+**Implementation (from Anthropic SDK `_beta_runner.py`, adapted for TeXRA):**
 
-Client-side summarization is the **fallback** for providers without native compaction. Anthropic and OpenAI Responses have native paths that work well.
+```typescript
+async function checkAndCompact(
+  messages: Message[],
+  lastUsage: TokenUsage,
+  threshold: number,
+  compactionModel: string,
+): Promise<{ compacted: boolean; newMessages: Message[] }> {
+  // 1. Check if compaction needed
+  const tokensUsed = lastUsage.inputTokens + lastUsage.outputTokens;
+  if (tokensUsed < threshold) {
+    return { compacted: false, newMessages: messages };
+  }
 
-**Core insight: inject the summary into the system prompt, not into messages.**
+  // 2. Remove pending tool_use blocks from last message
+  const cleanedMessages = [...messages];
+  const lastMsg = cleanedMessages[cleanedMessages.length - 1];
+  if (lastMsg?.role === 'assistant') {
+    const nonToolBlocks = lastMsg.content.filter(b => b.type !== 'tool_use');
+    if (nonToolBlocks.length > 0) {
+      lastMsg.content = nonToolBlocks;
+    } else {
+      cleanedMessages.pop();
+    }
+  }
 
-Replacing conversation messages with a fake assistant summary message is problematic:
-- Breaks tool-use call/result pairs (providers validate these sequences)
-- Creates an unnatural message history (assistant "remembering" things it didn't say)
-- Requires complex logic to decide which messages to keep vs. replace
+  // 3. Append summary prompt as user message
+  cleanedMessages.push({ role: 'user', content: DEFAULT_SUMMARY_PROMPT });
 
-Instead, the approach is simple:
+  // 4. Call API (non-streaming) with cheaper model
+  const response = await createResponse(compactionModel, cleanedMessages, { stream: false });
 
-**Compaction Flow (non-streaming):**
-
+  // 5. Replace ALL messages with single user message containing summary
+  const summary = response.content[0].text;
+  return {
+    compacted: true,
+    newMessages: [{ role: 'user', content: summary }]
+  };
+}
 ```
-1. Trigger: shouldCompact() returns true (threshold exceeded or manual button)
 
-2. Call compactor model (non-streaming):
-   - System prompt: replaced with COMPACTOR_SYSTEM_PROMPT
-   - Messages: allMessages (full history)
-   - User message: COMPACT_INSTRUCTION
+**Key change: Check AFTER tool results are added.**
 
-3. Parse response:
-   - Extract content from <conversation-summary> tag using extractTextFromTag()
-   - Discard <analysis> block
-
-4. Update state:
-   - Store summary in compactionState
-   - allMessages remains unchanged (append-only for UI)
-
-5. Next API call to primary model:
-   - System prompt: original agent prompt (unchanged)
-   - Messages: [summary message, current user message]
+The current flow has a gap:
+```
+1. createResponse() → validates tokens → sends request
+2. Model returns tool_use
+3. Tool executes → produces result (potentially large)
+4. Result appended to messages  ← TOKENS INCREASE HERE
+5. createResponse() → [MAY OVERFLOW]
 ```
 
-**Post-compaction message structure:**
+**New flow with compaction check:**
+```
+1. createResponse() → sends request
+2. Model returns tool_use + usage stats
+3. Tool executes → produces result
+4. Result appended to messages
+5. CHECK: if (usage.inputTokens + usage.outputTokens > threshold) → compact
+6. createResponse() → now within limits
+```
+
+The check uses the **last response's usage stats** (available from step 2) to predict if we'll overflow, then compacts BEFORE the next API call.
+
+| Provider | Strategy |
+|----------|----------|
+| OpenAI Responses API | Native `/responses/compact` (keep existing) |
+| Anthropic | Client-side (uses Haiku for summaries) |
+| Google GenAI (Gemini) | Client-side (uses Flash Lite for summaries) |
+| DeepSeek | Client-side (same model, no cheaper option) |
+| Kimi (Moonshot) | Client-side (uses moonshot-v1-8k) |
+| OpenAI Chat Completions | Client-side (uses gpt-4.1-mini) |
+
+**Only OpenAI Responses uses native compaction.** All other providers use the same client-side implementation with provider-appropriate cheaper models.
+
+**Post-compaction state (following Anthropic SDK pattern):**
 
 ```
 System prompt: "You are a LaTeX research assistant..."  ← unchanged
 
 Messages: [
-  { role: "user", content: "<conversation-summary>...[summary content]...</conversation-summary>" },
-  { role: "user", content: "[current user request]" }
+  { role: "user", content: "[summary from compactor model]" }
 ]
 ```
 
-For providers supporting developer/system messages in the array (OpenAI), the summary can use `role: "developer"` for clearer separation.
+- Replace ALL messages with a single user message containing the summary
+- System prompt remains unchanged (agent identity preserved)
+- The next user request is appended after the summary message
 
 **Why this is simple:**
-- No streaming — just a single blocking call to the compactor model
-- No message surgery — drop everything, prepend summary
-- System prompt untouched — agent identity preserved
-- Clean handoff — summary becomes context for next turn
+- No streaming — single blocking call to compactor model
+- No message surgery — drop everything, replace with summary
+- Works identically across all providers
 
 ### 4.3 Compaction Model Selection
 
