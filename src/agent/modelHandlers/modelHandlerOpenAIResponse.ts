@@ -191,6 +191,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    */
   private pendingBackgroundResponseId: string | null = null;
 
+  /** DIAGNOSTIC: Pre-flight token estimate for comparison with actual usage */
+  private _diagPreFlightTokens: number | null = null;
+
   /** Clears the pending background response ID. Single point of mutation. */
   private clearPendingBackgroundResponse(): void {
     this.pendingBackgroundResponseId = null;
@@ -361,8 +364,39 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // actual context usage (e.g., timing between count and API call, tool definitions,
     // or reasoning token accounting). See PRD Known Issues for investigation details.
     if (response.usage?.input_tokens) {
-      this.conversationState.cumulativeInputTokens =
-        response.usage.input_tokens;
+      const actualTokens = response.usage.input_tokens;
+      this.conversationState.cumulativeInputTokens = actualTokens;
+
+      // DIAGNOSTIC: Compare pre-flight estimate with actual usage
+      if (this._diagPreFlightTokens !== null) {
+        const diff = actualTokens - this._diagPreFlightTokens;
+        const diffPercent =
+          this._diagPreFlightTokens > 0
+            ? ((diff / this._diagPreFlightTokens) * 100).toFixed(1)
+            : 'N/A';
+        const reasoningTokens =
+          response.usage.output_tokens_details?.reasoning_tokens ?? 0;
+        const outputTokens = response.usage.output_tokens ?? 0;
+
+        this.logger.debug(
+          `[TOKEN_DIAG] Actual vs pre-flight: ${actualTokens} vs ${this._diagPreFlightTokens} (diff: ${diff > 0 ? '+' : ''}${diff}, ${diffPercent}%)`,
+          {
+            data: {
+              actualInputTokens: actualTokens,
+              preFlightTokens: this._diagPreFlightTokens,
+              difference: diff,
+              differencePercent: diffPercent,
+              outputTokens,
+              reasoningTokens,
+              totalTokens: response.usage.total_tokens,
+              contextWindow: this.config.contextWindow,
+              utilizationActual:
+                (actualTokens / this.config.contextWindow) * 100,
+            },
+          },
+        );
+        this._diagPreFlightTokens = null; // Clear for next request
+      }
     }
 
     // Reset compacted flag after successful request (ready for next compaction if needed)
@@ -1001,6 +1035,30 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           client,
           signal,
         });
+
+        // DIAGNOSTIC: Log token count details for investigation
+        // Compare pre-flight estimate with cumulative tokens from previous response
+        const prevCumulative = this.conversationState.cumulativeInputTokens;
+        const utilizationEstimate =
+          (inputTokens / this.config.contextWindow) * 100;
+        this._diagPreFlightTokens = inputTokens; // Store for comparison in finalizeResponse
+        this.logger.debug(
+          `[TOKEN_DIAG] Pre-flight count: ${inputTokens} (${utilizationEstimate.toFixed(1)}% of ${this.config.contextWindow})`,
+          {
+            data: {
+              preFlightTokens: inputTokens,
+              prevCumulativeTokens: prevCumulative,
+              delta: inputTokens - prevCumulative,
+              newMessagesCount: newMessages.length,
+              totalMessagesCount: effectiveMessages.length,
+              hasPreviousResponseId: !!this.previousResponseId,
+              hasTools: !!convertedTools?.length,
+              toolCount: convertedTools?.length ?? 0,
+              contextWindow: this.config.contextWindow,
+              maxOutputTokens,
+            },
+          },
+        );
 
         // Validate and adjust max_output_tokens if needed (throws if context window exceeded)
         const validation = this.validateTokenLimits(
