@@ -98,7 +98,7 @@ export const AGENT_DECORATORS = {
   },
 } as const;
 
-export type AgentCategory = keyof typeof AGENT_DECORATORS.agentCategories;
+type AgentCategory = keyof typeof AGENT_DECORATORS.agentCategories;
 
 export function getAgentCategoryDecorator(
   agentCategory: string | undefined,

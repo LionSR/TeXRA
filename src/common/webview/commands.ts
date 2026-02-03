@@ -287,3 +287,19 @@ export const MEMORY_VIEW_COMMANDS = {
   SET_MEMORY_ENABLED: 'setMemoryEnabled',
   UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
 } as const;
+
+// Import schema-defined commands and extend with COMMON_COMMANDS
+import { SETTINGS_VIEW_CMD } from '@shared/schemas/settingsViewMessages';
+
+// Settings view specific commands (combines Memory, History, and Profile views)
+// Schema commands are the source of truth; outbound-only commands are added here
+export const SETTINGS_VIEW_COMMANDS = {
+  ...COMMON_COMMANDS,
+  ...SETTINGS_VIEW_CMD,
+  // Outbound-only commands (backend → frontend, not schema-validated)
+  UPDATE_MEMORY: 'updateMemory',
+  UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
+  UPDATE_HISTORY: 'updateHistory',
+  HISTORY_CLEARED: 'historyCleared',
+  UPDATE_PROFILE: 'updateProfile',
+} as const;

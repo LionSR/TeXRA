@@ -12,6 +12,10 @@ import {
   type ToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
 import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
+import {
+  createClientRef,
+  type ToolUseCycleServices,
+} from '@agent/core/flows/CycleServices';
 import { bus } from '@eventBus/ProgressEventBus';
 
 import {
@@ -78,16 +82,26 @@ export class ToolUseCycleNode<C> extends Node<
     };
 
     const flow = createToolUseCycleFlow<C>();
-    flow.setServices({
+    const [clientRef, refreshClient] = createClientRef<C>(
+      await modelHandler.getClient(),
+      () => modelHandler.getClient(),
+    );
+    const flowServices: ToolUseCycleServices<C> & {
+      refreshClient: () => Promise<void>;
+    } = {
       ...this.services,
       setting: { ...setting, tools: resolvedTools },
-      client: await modelHandler.getClient(),
+      get client() {
+        return clientRef.current;
+      },
       run: prepRes.runState,
       workspace: prepRes.workspaceState,
       onRoundFinalized: getUsageRecorder(),
       modelName: config.model,
       agentName: config.agent,
-    });
+      refreshClient,
+    };
+    flow.setServices(flowServices);
 
     prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {
       bus.emit('updateTodos', {

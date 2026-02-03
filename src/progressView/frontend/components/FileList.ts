@@ -46,24 +46,6 @@ export class FileList extends LitElement {
         display: none;
       }
 
-      .files-collapsible {
-        margin: 0;
-        border-top: var(--border-thin) solid var(--color-border);
-      }
-
-      .files-collapsible::part(header) {
-        padding: var(--spacing-tiny) var(--spacing-medium);
-        background-color: var(
-          --vscode-sideBarSectionHeader-background,
-          transparent
-        );
-        color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
-      }
-
-      .files-collapsible::part(body) {
-        padding: 0 var(--spacing-small) var(--spacing-tiny);
-      }
-
       .files-container {
         padding: 0;
         font-size: var(--vscode-editor-font-size);
@@ -142,6 +124,7 @@ export class FileList extends LitElement {
         margin-left: var(--spacing-tiny);
       }
 
+      /* Nested round collapsibles */
       .round-collapsible {
         border-top: var(--border-thin) solid var(--color-border);
       }
@@ -191,7 +174,7 @@ export class FileList extends LitElement {
     return html`
       <vscode-collapsible
         id=${ELEMENT_IDS.GENERATED_FILES_COLLAPSIBLE}
-        class="files-collapsible progress-collapsible"
+        class="panel-collapsible"
         title="Generated Files"
         open
       >
@@ -221,7 +204,7 @@ export class FileList extends LitElement {
 
     return html`
       <vscode-collapsible
-        class="round-collapsible progress-collapsible"
+        class="round-collapsible panel-collapsible"
         title=${`r${round}`}
         ?open=${true}
       >

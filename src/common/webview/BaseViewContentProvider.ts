@@ -106,6 +106,9 @@ export abstract class BaseViewContentProvider {
       { key: 'codiconsFontUri', path: '@vscode/codicons/dist/codicon.ttf' },
     ];
 
+  private static readonly SHARED_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
+    [{ key: 'commonsBundleUri', path: 'commons.js' }];
+
   private getCommonModuleUris(
     webview: vscode.Webview,
   ): Record<string, vscode.Uri> {
@@ -119,6 +122,11 @@ export abstract class BaseViewContentProvider {
         webview,
         BaseViewContentProvider.NODE_MODULE_DESCRIPTORS,
         ['node_modules'],
+      ),
+      ...this.buildUriRecord(
+        webview,
+        BaseViewContentProvider.SHARED_MODULE_DESCRIPTORS,
+        ['dist', 'shared'],
       ),
     };
   }
