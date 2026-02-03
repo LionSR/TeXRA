@@ -4,12 +4,27 @@ import {
   type MainViewPersistedState,
 } from '@shared/schemas';
 
+// Local imports - agent registry
+import { getAgent, createKey } from '@agent/index';
+
 // Local imports - task state
 import {
   isToolUseTaskState,
   isWorkflowTaskState,
   type TaskState,
 } from '@logger/TaskState';
+
+/**
+ * Resolve an agent name to its full source:name key.
+ * Uses the agent registry's lookup priority (custom > builtIn > builtInToolUse > remote).
+ * Falls back to the original name if agent not found (e.g., stale state).
+ */
+function resolveAgentKey(agentName: string): string {
+  if (!agentName) return agentName;
+  const entry = getAgent(agentName);
+  if (!entry) return agentName;
+  return createKey(entry.source, entry.name);
+}
 
 /** Convert a TaskState payload into a full main view state snapshot. */
 export function buildMainViewState(
@@ -21,13 +36,17 @@ export function buildMainViewState(
   const activeFiles = isWorkflow ? taskState.activeFiles : undefined;
   const toolConfig = agentConfig.toolConfig ?? {};
 
+  // Resolve agent name to full key (e.g., "criticize" → "builtIn:criticize")
+  // This ensures the frontend receives the exact key used in dropdown options.
+  const resolvedAgent = resolveAgentKey(agentConfig.agent);
+
   // Build partial state from agentConfig and toolConfig, then parse with schema
   // to apply prefault defaults for any missing fields.
   // Note: UIFileFieldsSchema uses catch('') for nullable fields from AgentConfig.
   return MainViewPersistedStateSchema.parse({
     sessionType: isToolUse ? 'toolUse' : 'workflow',
-    workflowAgent: isToolUse ? undefined : agentConfig.agent,
-    toolUseAgent: isToolUse ? agentConfig.agent : undefined,
+    workflowAgent: isToolUse ? undefined : resolvedAgent,
+    toolUseAgent: isToolUse ? resolvedAgent : undefined,
     model: agentConfig.model,
     instruction: agentConfig.instruction,
     inputFile: agentConfig.inputFile,
@@ -51,7 +70,7 @@ export function buildMainViewState(
     autoCompileInputPdf: toolConfig.autoCompileInputPdf,
     attachTeXCount: toolConfig.attachTeXCount,
     attachDiagnostics: toolConfig.attachDiagnostics,
-    agent: agentConfig.agent,
+    agent: resolvedAgent, // Use resolved key for consistency with workflowAgent/toolUseAgent
     isToolUseAgent: isToolUse,
   });
 }
