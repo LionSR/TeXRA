@@ -6,6 +6,7 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
   getVisibleWorkflowAgents,
   getVisibleToolUseAgents,
+  type AgentEntry,
 } from '@agent/index/agentRegistry';
 // Internal imports
 import {
@@ -104,7 +105,7 @@ function getBasicVars(
 
   // Format tool-use agents with their available tools
   const formatToolUseAgentList = (
-    agents: { name: string; description?: string; tools?: string[] }[],
+    agents: Pick<AgentEntry, 'name' | 'description' | 'tools'>[],
   ) =>
     agents
       .map((a) => {
