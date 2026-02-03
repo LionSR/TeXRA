@@ -5,7 +5,7 @@ import {
 } from '@shared/schemas';
 
 // Local imports - agent registry
-import { getAgent, createKey } from '@agent/index';
+import { resolveAgentKey } from '@agent/index';
 
 // Local imports - task state
 import {
@@ -13,18 +13,6 @@ import {
   isWorkflowTaskState,
   type TaskState,
 } from '@logger/TaskState';
-
-/**
- * Resolve an agent name to its full source:name key.
- * Uses the agent registry's lookup priority (custom > builtIn > builtInToolUse > remote).
- * Falls back to the original name if agent not found (e.g., stale state).
- */
-function resolveAgentKey(agentName: string): string {
-  if (!agentName) return agentName;
-  const entry = getAgent(agentName);
-  if (!entry) return agentName;
-  return createKey(entry.source, entry.name);
-}
 
 /** Convert a TaskState payload into a full main view state snapshot. */
 export function buildMainViewState(
@@ -38,7 +26,9 @@ export function buildMainViewState(
 
   // Resolve agent name to full key (e.g., "criticize" → "builtIn:criticize")
   // This ensures the frontend receives the exact key used in dropdown options.
-  const resolvedAgent = resolveAgentKey(agentConfig.agent);
+  // Pass isToolUse to prefer builtInToolUse source for tool-use sessions,
+  // preventing workflow agents from shadowing tool-use agents with same name.
+  const resolvedAgent = resolveAgentKey(agentConfig.agent, isToolUse);
 
   // Build partial state from agentConfig and toolConfig, then parse with schema
   // to apply prefault defaults for any missing fields.
@@ -70,7 +60,5 @@ export function buildMainViewState(
     autoCompileInputPdf: toolConfig.autoCompileInputPdf,
     attachTeXCount: toolConfig.attachTeXCount,
     attachDiagnostics: toolConfig.attachDiagnostics,
-    agent: resolvedAgent, // Use resolved key for consistency with workflowAgent/toolUseAgent
-    isToolUseAgent: isToolUse,
   });
 }
