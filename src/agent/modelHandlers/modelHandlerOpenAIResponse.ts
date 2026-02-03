@@ -918,20 +918,21 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const client = options?.client ?? (await this.getClient());
 
     // Build params matching what we send to the actual API call
-    const countParams: Parameters<typeof client.responses.inputTokens.count>[0] =
-      {
-        model: this.config.fullName,
-        input: messages,
-        ...(this.previousResponseId && {
-          previous_response_id: this.previousResponseId,
-        }),
-        ...(options?.systemPrompt && { instructions: options.systemPrompt }),
-        ...(options?.tools?.length && {
-          tools: options.tools as Parameters<
-            typeof client.responses.inputTokens.count
-          >[0]['tools'],
-        }),
-      };
+    const countParams: Parameters<
+      typeof client.responses.inputTokens.count
+    >[0] = {
+      model: this.config.fullName,
+      input: messages,
+      ...(this.previousResponseId && {
+        previous_response_id: this.previousResponseId,
+      }),
+      ...(options?.systemPrompt && { instructions: options.systemPrompt }),
+      ...(options?.tools?.length && {
+        tools: options.tools as Parameters<
+          typeof client.responses.inputTokens.count
+        >[0]['tools'],
+      }),
+    };
 
     const tokenCount = await client.responses.inputTokens.count(
       countParams,

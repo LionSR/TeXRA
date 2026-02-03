@@ -1,7 +1,9 @@
 # PRD: Context Window Compactization
 
 ## Status: Draft
+
 ## Author: Claude
+
 ## Date: 2026-02-02
 
 ---
@@ -20,7 +22,7 @@ This creates several issues:
 2. **No user control**: Compaction happens silently; users can't inspect what was dropped or override decisions
 3. **Opaque compaction**: Both Anthropic's clearing and OpenAI's encrypted compaction give zero visibility into what was preserved
 4. **No client-side fallback**: When provider-side compaction isn't available, there's no fallback strategy
-5. **UI gaps**: The progress view shows compaction *events* but not the *state* of context — users can't see what the model "remembers"
+5. **UI gaps**: The progress view shows compaction _events_ but not the _state_ of context — users can't see what the model "remembers"
 
 ## 2. Goals
 
@@ -68,6 +70,7 @@ The [neu-translator](https://github.com/neutree-ai/neu-translator) project uses 
 ### 4.2 Compaction Strategies
 
 #### Strategy 1: OpenAI Responses API Compaction (existing, prioritized)
+
 - Continue using `/responses/compact` endpoint.
 - **Works well**: Opaque but effective — handles compaction server-side with good results.
 - **Token count from response**: Use `compactedResponse.usage.input_tokens` for the post-compaction token count.
@@ -116,7 +119,7 @@ async function checkAndCompact(
   const cleanedMessages = [...messages];
   const lastMsg = cleanedMessages[cleanedMessages.length - 1];
   if (lastMsg?.role === 'assistant') {
-    const nonToolBlocks = lastMsg.content.filter(b => b.type !== 'tool_use');
+    const nonToolBlocks = lastMsg.content.filter((b) => b.type !== 'tool_use');
     if (nonToolBlocks.length > 0) {
       lastMsg.content = nonToolBlocks;
     } else {
@@ -128,13 +131,15 @@ async function checkAndCompact(
   cleanedMessages.push({ role: 'user', content: DEFAULT_SUMMARY_PROMPT });
 
   // 4. Call API (non-streaming) with cheaper model
-  const response = await createResponse(compactionModel, cleanedMessages, { stream: false });
+  const response = await createResponse(compactionModel, cleanedMessages, {
+    stream: false,
+  });
 
   // 5. Replace ALL messages with single user message containing summary
   const summary = response.content[0].text;
   return {
     compacted: true,
-    newMessages: [{ role: 'user', content: summary }]
+    newMessages: [{ role: 'user', content: summary }],
   };
 }
 ```
@@ -142,6 +147,7 @@ async function checkAndCompact(
 **Key change: Check AFTER tool results are added, BEFORE next createResponse.**
 
 The current flow has a gap:
+
 ```
 1. createResponse() → validates tokens → sends request
 2. Model returns tool_use
@@ -151,6 +157,7 @@ The current flow has a gap:
 ```
 
 **New flow with token count check:**
+
 ```
 1. createResponse() → sends request
 2. Model returns tool_use + usage stats
@@ -191,14 +198,14 @@ return FlowTransition.CONTINUE;
 
 This gives visibility into token count right after tool results are attached, and allows compaction before the next API call.
 
-| Provider | Strategy |
-|----------|----------|
-| OpenAI Responses API | Native `/responses/compact` (keep existing) |
-| Anthropic | Client-side (uses Haiku for summaries) |
-| Google GenAI (Gemini) | Client-side (uses Flash Lite for summaries) |
-| DeepSeek | Client-side (same model, no cheaper option) |
-| Kimi (Moonshot) | Client-side (uses moonshot-v1-8k) |
-| OpenAI Chat Completions | Client-side (uses gpt-4.1-mini) |
+| Provider                | Strategy                                    |
+| ----------------------- | ------------------------------------------- |
+| OpenAI Responses API    | Native `/responses/compact` (keep existing) |
+| Anthropic               | Client-side (uses Haiku for summaries)      |
+| Google GenAI (Gemini)   | Client-side (uses Flash Lite for summaries) |
+| DeepSeek                | Client-side (same model, no cheaper option) |
+| Kimi (Moonshot)         | Client-side (uses moonshot-v1-8k)           |
+| OpenAI Chat Completions | Client-side (uses gpt-4.1-mini)             |
 
 **Only OpenAI Responses uses native compaction.** All other providers use the same client-side implementation with provider-appropriate cheaper models.
 
@@ -229,7 +236,7 @@ export const CompactionEventSchema = z.object({
   contextWindow: z.number(),
   utilizationBefore: z.number(),
   utilizationAfter: z.number(),
-  summary: z.string(),  // The full summary text
+  summary: z.string(), // The full summary text
   compactionModel: z.string(),
 });
 
@@ -247,6 +254,7 @@ this.logger.logContextManagement('Context compacted', {
 ```
 
 **UI display:** The progress view renders this as a special collapsible block:
+
 - Header: "Context compacted: 72K → 3K tokens (1.5% utilization)"
 - Expandable body: Shows the full summary text
 - Badge: Shows compaction model used
@@ -254,6 +262,7 @@ this.logger.logContextManagement('Context compacted', {
 This makes the summary visible in the progress view and preserves it for debugging/review.
 
 **Why this is simple:**
+
 - No streaming — single blocking call to compactor model
 - No message surgery — drop everything, replace with summary
 - Works identically across all providers
@@ -306,7 +315,7 @@ Kimi, DeepSeek, and OpenAI Chat Completions all use the same OpenAI-compatible A
  * Used by: ModelHandlerOpenAI, ModelHandlerDeepSeek, ModelHandlerKimi
  */
 export async function compactOpenAICompatible(
-  client: OpenAI,  // OpenAI SDK client (works with any OpenAI-compatible endpoint)
+  client: OpenAI, // OpenAI SDK client (works with any OpenAI-compatible endpoint)
   messages: ChatCompletionMessageParam[],
   compactionModel: string,
   summaryPrompt: string,
@@ -338,7 +347,7 @@ Each handler calls this shared function with its own client:
 ```typescript
 // In ModelHandlerKimi
 const result = await compactOpenAICompatible(
-  this.client,  // Kimi client (OpenAI SDK pointing to Kimi endpoint)
+  this.client, // Kimi client (OpenAI SDK pointing to Kimi endpoint)
   messages,
   getCompactionModel(this.config.model),
   DEFAULT_SUMMARY_PROMPT,
@@ -346,7 +355,7 @@ const result = await compactOpenAICompatible(
 
 // In ModelHandlerDeepSeek
 const result = await compactOpenAICompatible(
-  this.client,  // DeepSeek client
+  this.client, // DeepSeek client
   messages,
   getCompactionModel(this.config.model),
   DEFAULT_SUMMARY_PROMPT,
@@ -401,6 +410,7 @@ Wrap your summary in <summary></summary> tags.
 This is better than neu-translator's prompt — it's more actionable and focused on task continuation.
 
 **Notes:**
+
 - The SDK prompt uses `<summary></summary>` tags, but the SDK code doesn't actually extract from tags — it takes the raw response text
 - For consistency with TeXRA's patterns, we can use `<summary>` tags and extract via `extractTextFromTag()`
 - Store prompt in `src/agent/modelHandlers/compactionPrompt.ts` so it can be iterated independently
@@ -421,6 +431,7 @@ modelHandlerOpenAIResponse.ts:994-1003 → estimateTokenCount() → validateToke
 **Current gap: Tool results can overflow BETWEEN validation and append.**
 
 The tool-use flow is:
+
 ```
 1. createResponse() → validates tokens → sends request
 2. Model returns tool_use
@@ -434,6 +445,7 @@ The problem: between steps 4 and 5, the messages array grows with potentially la
 **How compaction addresses this:**
 
 With auto-compact enabled, step 5 becomes:
+
 ```
 5. createResponse():
    a. estimateTokenCount()
@@ -467,6 +479,7 @@ public async compactIfNeeded(
 ```
 
 Each handler overrides `getCompactionStrategy()`:
+
 - `ModelHandlerOpenAIResponse` → returns `OpenAICompactStrategy` (existing `/responses/compact` endpoint)
 - `ModelHandlerAnthropic` → returns `null` → triggers client-side summarization
 - `ModelHandlerOpenAI` → returns `null` → triggers client-side summarization
@@ -516,16 +529,21 @@ Messages array:
 
 3. The derivation logic is a pure function:
    ```typescript
-   function getMessagesToSend(allMessages: Message[], compactionState: CompactionState | null): Message[] {
+   function getMessagesToSend(
+     allMessages: Message[],
+     compactionState: CompactionState | null,
+   ): Message[] {
      if (compactionState === null) {
        return allMessages; // No compaction yet — send everything
      }
      // Post-compaction — return only the summary message
      // The current user message is appended by the caller
-     return [{
-       role: 'user', // or 'developer' for OpenAI
-       content: `<conversation-summary>${compactionState.summary}</conversation-summary>`
-     }];
+     return [
+       {
+         role: 'user', // or 'developer' for OpenAI
+         content: `<conversation-summary>${compactionState.summary}</conversation-summary>`,
+       },
+     ];
    }
    ```
 
@@ -534,6 +552,7 @@ Messages array:
 Maintaining two arrays (`allMessages` + `activeMessages`) creates an invariant that every append must update both. This is error-prone — any code path that forgets to update both causes silent divergence. By deriving the active set from `allMessages` + compaction state, correctness is guaranteed.
 
 On each compaction:
+
 - `allMessages` remains unchanged (append-only)
 - `compactionState` is updated with the new summary and timestamp
 - The system prompt remains unchanged — summary is prepended as a message
@@ -551,8 +570,8 @@ Add an **Auto-Compact toggle button** in the toolbar, following the same pattern
 // In src/progressView/frontend/constants.ts
 const AUTO_COMPACT_TOGGLE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.AUTO_COMPACT_TOGGLE_BTN,
-  icon: 'fold',                    // collapsed state icon
-  iconActive: 'unfold',            // expanded/active state icon
+  icon: 'fold', // collapsed state icon
+  iconActive: 'unfold', // expanded/active state icon
   command: COMMANDS.TOGGLE_AUTO_COMPACT,
   title: 'Enable auto-compact (summarize context when threshold exceeded)',
   titleActive: 'Auto-compact active - click to disable',
@@ -564,7 +583,7 @@ const AUTO_COMPACT_TOGGLE_BUTTON = Object.freeze({
 const TOOL_USE_TOOLBAR = [
   STOP_STREAM_BUTTON,
   YOLO_TOGGLE_BUTTON,
-  AUTO_COMPACT_TOGGLE_BUTTON,  // New
+  AUTO_COMPACT_TOGGLE_BUTTON, // New
   RESTORE_STATE_BUTTON,
   { ...OPEN_TASK_STORAGE_BUTTON },
 ];
@@ -572,11 +591,11 @@ const TOOL_USE_TOOLBAR = [
 
 **Behavior:**
 
-| Auto-Compact State | Threshold Exceeded | Action |
-|--------------------|-------------------|--------|
-| OFF | Yes | Hard fail with "context window exceeded" error |
-| ON | Yes | Trigger compaction automatically, then continue |
-| ON | No | Normal operation |
+| Auto-Compact State | Threshold Exceeded | Action                                          |
+| ------------------ | ------------------ | ----------------------------------------------- |
+| OFF                | Yes                | Hard fail with "context window exceeded" error  |
+| ON                 | Yes                | Trigger compaction automatically, then continue |
+| ON                 | No                 | Normal operation                                |
 
 ### 4.9 Manual "Compact Now" Button
 
@@ -585,6 +604,7 @@ In addition to the auto-compact toggle in the toolbar, add a **Compact Now** but
 **Location:** `src/progressView/frontend/components/FollowUpInput.ts:196-237`
 
 The follow-up input has a vertical action column:
+
 ```
 ┌─────────────────────────────────────────┐
 │ [Textarea]            │ [Polish]        │
@@ -609,12 +629,14 @@ The follow-up input has a vertical action column:
 ```
 
 **Behavior:**
+
 - Visible when stream is in tool-use mode (not workflow)
 - Always enabled (no threshold check — user decides when to compact)
 - On click: dispatches `COMPACT_NOW` command
 - Shows progress ring during compaction (like Polish button)
 
 **Why in follow-up input area?**
+
 - User is actively chatting → compaction is a chat-related action
 - Follows the existing pattern (Polish, Record, Clear, Send are all chat actions)
 - Auto-compact toggle stays in toolbar (system-level setting)
@@ -627,6 +649,7 @@ The follow-up input has a vertical action column:
 Location: `src/progressView/frontend/components/StreamHeader.ts`
 
 **Single new toggle button** (like YOLO):
+
 - Toggle button with active/inactive states
 - Visual glow when active (blue instead of red)
 - Persisted per-stream
@@ -669,9 +692,9 @@ Existing `UsagePanel` already shows token counts. After compaction, show "Compac
 
 ## 6. Configuration Summary
 
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `texra.model.compactionThresholdPercent` | number | 75 | Existing. Threshold for auto-compaction. 0 = disabled. |
+| Setting                                  | Type   | Default | Description                                            |
+| ---------------------------------------- | ------ | ------- | ------------------------------------------------------ |
+| `texra.model.compactionThresholdPercent` | number | 75      | Existing. Threshold for auto-compaction. 0 = disabled. |
 
 Compaction model is determined by constant map (`COMPACTION_MODEL_MAP`), not configurable.
 
@@ -680,6 +703,7 @@ Compaction model is determined by constant map (`COMPACTION_MODEL_MAP`), not con
 ### Phase 0: Refactor createResponse for Modularity
 
 The `createResponse()` methods in model handlers (especially `modelHandlerAnthropic.ts:580+`) are monolithic, mixing:
+
 - Parameter building
 - Token counting (with provider-specific tools)
 - Context management setup
@@ -687,6 +711,7 @@ The `createResponse()` methods in model handlers (especially `modelHandlerAnthro
 - Response handling
 
 **Why this is the right place for compaction:** The `createResponse()` method has access to:
+
 1. Provider-specific tool format (e.g., `anthropicTools`)
 2. Full token count including tools, system prompt, thinking config
 3. Context window limits and validation
@@ -721,23 +746,27 @@ class ModelHandlerAnthropic {
 This makes compaction a clean plug-in phase rather than deeply embedded logic.
 
 ### Phase 1: Client-Side Summarization Engine
+
 - Create `ContextCompactor` class in `src/agent/modelHandlers/contextCompaction/`
 - Implement `COMPACTOR_SYSTEM_PROMPT` and `COMPACT_INSTRUCTION` prompts
 - Add `extractTextFromTag()` call for `<conversation-summary>`
 - Add `compactionState` to agent execution state schema
 
 ### Phase 2: Auto-Compact Toggle
+
 - Add `AUTO_COMPACT_TOGGLE_BTN` to `constants.ts` (following YOLO pattern)
 - Add `TOGGLE_AUTO_COMPACT` command
 - Wire toggle state through `ProgressViewMessageHandler`
 - Persist per-stream (like YOLO state)
 
 ### Phase 3: Integration with Handlers
+
 - Add `compactIfNeeded()` to `ModelHandler` base class
 - Integrate into OpenAI Chat, Google GenAI, DeepSeek, Kimi handlers
 - Ensure Anthropic and OpenAI Responses use their native paths
 
 ### Phase 4: UI -- Compaction Visibility
+
 - Add context utilization bar to `UsagePanel`
 - Add compaction divider to chat webview
 - Implement faded messages for compacted history
@@ -745,11 +774,11 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 
 ## 8. Risks and Mitigations
 
-| Risk | Mitigation |
-|------|------------|
+| Risk                                       | Mitigation                                                                        |
+| ------------------------------------------ | --------------------------------------------------------------------------------- |
 | Client-side summary loses critical context | Structured prompt with mandatory sections; user can scroll up to see full history |
-| Compactor model call adds latency | Use cheapest/fastest available model |
-| Double-compaction (native + client-side) | Strategy selection is exclusive — never both |
+| Compactor model call adds latency          | Use cheapest/fastest available model                                              |
+| Double-compaction (native + client-side)   | Strategy selection is exclusive — never both                                      |
 
 ## 9. Success Metrics
 
@@ -782,12 +811,10 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 - **~~Fix: estimateContextTokens() for correct delta handling~~** (2026-02-03): REMOVED. This method was added to fix delta handling in `ToolUseCycleFlow`, but the entire token counting block in `ToolUseCycleFlow` was subsequently removed (see below), making this method dead code.
 
 - **Fix: Pass tools to token counting endpoint** (2026-02-03): Updated `ModelHandlerOpenAIResponse.estimateTokenCount()` to accept and pass `tools` and `systemPrompt` to OpenAI's `/responses/input_tokens` endpoint. Previously, only `input` and `previous_response_id` were passed, causing the count to miss tool definition tokens.
-
   - `estimateTokenCount()` now builds params matching the actual API call (model, input, previous_response_id, instructions, tools)
   - `createResponse()` now passes `systemPrompt` and `convertedTools` to `estimateTokenCount()`
 
 - **Cleanup: Remove redundant token counting from ToolUseCycleFlow** (2026-02-03): Removed the token counting block from `ToolUseDispatchNode.post()`. This code was redundant because:
-
   1. **createResponse() already does accurate token counting**: The flow is Prep → Call → Process → Dispatch → (loop), where Call invokes `createResponse()` which performs accurate token counting with all parameters (tools, systemPrompt, previous_response_id)
   2. **Redundant API calls**: ToolUseCycleFlow's token counting added an extra `/responses/input_tokens` call on every iteration
   3. **Less accurate**: ToolUseCycleFlow couldn't pass tools (requires provider-specific conversion done in createResponse), making it a lower-bound estimate
@@ -813,6 +840,7 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 - **INVESTIGATION: OpenAI Responses API token counting mismatch** (pre-existing issue): When using `previous_response_id`, there's a case where UI shows "32% context left" but API returns "context_length_exceeded".
 
   **OpenAI documentation confirms** (`/responses/input_tokens` endpoint):
+
   > Items from this conversation are prepended to input_items for this response request.
 
   So `previous_response_id` IS properly handled by the token counting endpoint. The returned `input_tokens` should include the full conversation (user messages + assistant responses) from the previous response ID.
