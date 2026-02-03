@@ -945,14 +945,25 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     const client = options?.client ?? (await this.getClient());
-    const tokenCount = await client.responses.inputTokens.count(
+
+    // Build params matching what we send to the actual API call
+    const countParams: Parameters<typeof client.responses.inputTokens.count>[0] =
       {
         model: this.config.fullName,
         input: messages,
         ...(this.previousResponseId && {
           previous_response_id: this.previousResponseId,
         }),
-      },
+        ...(options?.systemPrompt && { instructions: options.systemPrompt }),
+        ...(options?.tools?.length && {
+          tools: options.tools as Parameters<
+            typeof client.responses.inputTokens.count
+          >[0]['tools'],
+        }),
+      };
+
+    const tokenCount = await client.responses.inputTokens.count(
+      countParams,
       options?.signal ? { signal: options.signal } : undefined,
     );
 
@@ -1077,9 +1088,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (this.supportsTokenCounting) {
       try {
         // Reuse built params for token counting (build once principle)
+        // IMPORTANT: Pass tools and systemPrompt for accurate count
         const inputTokens = await this.estimateTokenCount(baseParams.input, {
           client,
           signal,
+          systemPrompt,
+          tools: convertedTools,
         });
 
         // DIAGNOSTIC: Log token count details for investigation
