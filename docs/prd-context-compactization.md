@@ -433,58 +433,65 @@ const TOOL_USE_TOOLBAR = [
 
 ### 4.8 Manual "Compact Now" Button
 
-In addition to the auto-compact toggle, add a **Compact Now** button that immediately triggers compaction when clicked.
+In addition to the auto-compact toggle in the toolbar, add a **Compact Now** button in the **follow-up input section** alongside the existing action buttons (Polish, Record, Clear, Send).
+
+**Location:** `src/progressView/frontend/components/FollowUpInput.ts:196-237`
+
+The follow-up input has a vertical action column:
+```
+┌─────────────────────────────────────────┐
+│ [Textarea]            │ [Polish]        │
+│                       │ [Record]        │
+│                       │ [Clear]         │
+│                       │ [Compact] ← NEW │
+│                       │ [Send]          │
+└─────────────────────────────────────────┘
+```
 
 **Button definition:**
 
 ```typescript
-const COMPACT_NOW_BUTTON = Object.freeze({
-  id: ELEMENT_IDS.COMPACT_NOW_BTN,
-  icon: 'fold-down',
-  command: COMMANDS.COMPACT_NOW,
-  title: 'Compact context now (summarize conversation history)',
-  className: 'compact-now-button',
-});
-
-// Add to TOOL_USE_TOOLBAR
-const TOOL_USE_TOOLBAR = [
-  STOP_STREAM_BUTTON,
-  YOLO_TOGGLE_BUTTON,
-  AUTO_COMPACT_TOGGLE_BUTTON,
-  COMPACT_NOW_BUTTON,  // Active button - always available
-  RESTORE_STATE_BUTTON,
-  { ...OPEN_TASK_STORAGE_BUTTON },
-];
+// In FollowUpInput.ts render() method, add to .follow-up-actions
+<vscode-toolbar-button
+  id=${ELEMENT_IDS.COMPACT_NOW_BTN}
+  icon="fold-down"
+  label="Compact context"
+  title="Compact conversation context (summarize history to free tokens)"
+  ?disabled=${!this.canCompact}
+  @click=${this.emitCompact}
+></vscode-toolbar-button>
 ```
 
 **Behavior:**
-- Enabled when stream is RUNNING, WAITING, or RESUMING
+- Visible when stream is in tool-use mode (not workflow)
 - Disabled if context utilization is below 10% (wasteful to compact)
-- On click: immediately triggers compaction (non-streaming call to compactor)
-- Shows progress indicator during compaction
+- On click: dispatches `COMPACT_NOW` command
+- Shows progress ring during compaction (like Polish button)
 - After completion: logs compaction event, updates context state display
 
-**Why both buttons?**
-- **Auto-Compact Toggle**: Set-and-forget mode for long sessions
-- **Compact Now**: Manual control when user notices model "forgetting" or wants to proactively free context
+**State management:**
+```typescript
+@property({ type: Boolean }) canCompact = false;  // From context utilization > 10%
+@state() private compacting = false;              // Shows progress ring
+```
+
+**Why in follow-up input area?**
+- User is actively chatting → compaction is a chat-related action
+- Follows the existing pattern (Polish, Record, Clear, Send are all chat actions)
+- Auto-compact toggle stays in toolbar (system-level setting)
+- Compact Now is contextual to the current input
 
 ## 5. UI Changes
 
-### 5.1 Toolbar Buttons (StreamHeader)
+### 5.1 Auto-Compact Toggle Button (StreamHeader Toolbar)
 
 Location: `src/progressView/frontend/components/StreamHeader.ts`
 
-**Two new buttons following YOLO pattern:**
-
-1. **Auto-Compact Toggle** (like YOLO):
-   - Toggle button with active/inactive states
-   - Visual glow when active (blue instead of red)
-   - Persisted per-stream
-
-2. **Compact Now** (action button):
-   - One-shot action button
-   - Disabled when context utilization < 10%
-   - Shows spinner during compaction
+**Single new toggle button** (like YOLO):
+- Toggle button with active/inactive states
+- Visual glow when active (blue instead of red)
+- Persisted per-stream
+- Located in toolbar next to YOLO toggle
 
 **Styling:**
 
@@ -500,17 +507,15 @@ Location: `src/progressView/frontend/components/StreamHeader.ts`
   border-radius: var(--border-radius);
   box-shadow: 0 0 8px color-mix(in srgb, var(--color-info) 40%, transparent);
 }
-
-.compact-now-button {
-  flex-shrink: 0;
-}
-
-.compact-now-button:disabled {
-  opacity: 0.5;
-}
 ```
 
-### 5.2 Context Utilization Indicator
+### 5.2 Compact Now Button (FollowUpInput)
+
+Location: `src/progressView/frontend/components/FollowUpInput.ts`
+
+Added to the vertical action column alongside Polish, Record, Clear, Send. See section 4.8 for details.
+
+### 5.3 Context Utilization Indicator
 
 Add to `UsagePanel` or as a separate component:
 
@@ -521,7 +526,7 @@ Add to `UsagePanel` or as a separate component:
 2. **Compaction badge**: After compaction, show "Compacted: 72K → 18K"
 3. **Expandable details**: Click to see summary text (for client-side compaction)
 
-### 5.3 Chat View Compaction Divider
+### 5.4 Chat View Compaction Divider
 
 1. **Visual divider**: When compaction occurs, insert a divider in the message list
    - Text: "Context compacted — {tokens freed} tokens freed"
