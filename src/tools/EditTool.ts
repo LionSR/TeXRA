@@ -76,12 +76,18 @@ export class EditFileTool extends defineTool({
       );
     }
 
-    // Escape $ in replacement string to prevent special replacement patterns
-    // ($&, $', $`, $<digits> have special meaning in String.replace)
-    const safeNewStr = new_str.replace(/\$/g, '$$$$');
-    const updatedContent = replace_all
-      ? currentContent.replaceAll(old_str, safeNewStr)
-      : currentContent.replace(old_str, safeNewStr);
+    // Use split/join and indexOf/slice for literal replacement
+    // (String.replace has special patterns like $$, $&, $' that corrupt LaTeX)
+    let updatedContent: string;
+    if (replace_all) {
+      updatedContent = currentContent.split(old_str).join(new_str);
+    } else {
+      const idx = currentContent.indexOf(old_str);
+      updatedContent =
+        currentContent.slice(0, idx) +
+        new_str +
+        currentContent.slice(idx + old_str.length);
+    }
 
     const approval = await requestToolEditApproval({
       path: targetPath,
