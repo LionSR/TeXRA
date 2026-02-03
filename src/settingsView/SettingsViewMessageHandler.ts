@@ -4,7 +4,6 @@
  * Combines handlers from MemoryView, HistoryView, and ProfileView
  * into a single unified message handler.
  */
-import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Shared schemas and dispatchers
@@ -12,7 +11,6 @@ import {
   dispatchSettingsViewInbound,
   type SettingsViewInboundHandlerRegistry,
   type SettingsViewInboundMessage,
-  type MemoryViewItem,
   SETTINGS_VIEW_CMD,
 } from '@shared/schemas/settingsViewMessages';
 import { showLoggedErrorMessage } from '@common/errors';
@@ -22,17 +20,10 @@ import {
 } from '@common/webview';
 
 // Memory-related imports
-import {
-  MEMORY_STORAGE_ROOT,
-  MAX_PREVIEW_LINES,
-  MAX_PREVIEW_CHARS,
-  shouldSkipEntry,
-} from '@tools/memory/constants';
-import {
-  relativeToDisplayPath,
-  resolveMemoryStoragePath,
-} from '@tools/memory/memoryUtils';
+import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
+import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
+import { loadMemoryItems } from './utils/memoryFileSystem';
 import {
   getToolUseMemoryEnabled,
   setToolUseMemoryEnabled,
@@ -73,6 +64,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private createHandlerRegistry(): SettingsViewInboundHandlerRegistry {
     return {
+      // Navigation handlers
+      [SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS]: () =>
+        this.handleOpenVscodeSettings(),
+
       // Memory handlers
       [SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA]: () =>
         this.handleGetMemoryData(),
@@ -115,21 +110,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     await this.withActiveView(webviewView, async () => {
-      // Handle special commands not in the schema
-      if (
-        message &&
-        typeof message === 'object' &&
-        'command' in message &&
-        (message as { command: string }).command ===
-          SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS
-      ) {
-        await vscode.commands.executeCommand(
-          'workbench.action.openSettings',
-          '@ext:texra-ai.texra',
-        );
-        return;
-      }
-
       const handled = dispatchSettingsViewInbound(
         message,
         this.handlerRegistry,
@@ -168,7 +148,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendMemoryData(webview: vscode.Webview): Promise<void> {
-    const items = await this.loadMemoryItems();
+    const items = await loadMemoryItems();
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY,
       items,
@@ -262,6 +242,17 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       },
       accessExpiresAt: accessExpiresAt?.toISOString() ?? null,
     });
+  }
+
+  // ============================================================
+  // Navigation handler implementations
+  // ============================================================
+
+  private async handleOpenVscodeSettings(): Promise<void> {
+    await vscode.commands.executeCommand(
+      'workbench.action.openSettings',
+      '@ext:texra-ai.texra',
+    );
   }
 
   // ============================================================
@@ -505,83 +496,4 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
-  // ============================================================
-  // Memory helper methods
-  // ============================================================
-
-  private async loadMemoryItems(): Promise<MemoryViewItem[]> {
-    const exists = await StorageFS.exists(MEMORY_STORAGE_ROOT);
-    if (!exists) {
-      return [];
-    }
-
-    const items = await this.walkMemoryDirectory(MEMORY_STORAGE_ROOT);
-    return items.sort((a, b) => b.mtime.localeCompare(a.mtime));
-  }
-
-  private async walkMemoryDirectory(
-    storagePath: string,
-    relativeRoot = '',
-  ): Promise<MemoryViewItem[]> {
-    const entries = await StorageFS.readDir(storagePath);
-    const results: MemoryViewItem[] = [];
-
-    for (const [name, type] of entries) {
-      if (shouldSkipEntry(name)) {
-        continue;
-      }
-
-      const nextRelative = relativeRoot ? path.join(relativeRoot, name) : name;
-      const nextStoragePath = path.join(MEMORY_STORAGE_ROOT, nextRelative);
-
-      if (type === vscode.FileType.Directory) {
-        results.push(
-          ...(await this.walkMemoryDirectory(nextStoragePath, nextRelative)),
-        );
-        continue;
-      }
-
-      const stats = await StorageFS.stat(nextStoragePath);
-      const content = await StorageFS.read(nextStoragePath);
-      const previewData = this.buildPreview(content);
-      const displayPath = relativeToDisplayPath(nextRelative);
-
-      results.push({
-        displayPath,
-        storagePath: nextStoragePath,
-        size: stats.size,
-        mtime: new Date(stats.mtime).toISOString(),
-        lineCount: previewData.lineCount,
-        preview: previewData.preview,
-      });
-    }
-
-    return results;
-  }
-
-  private buildPreview(content: string): {
-    preview: string;
-    lineCount: number;
-  } {
-    const lines = content.split(/\r?\n/);
-    if (lines.length > 0 && lines.at(-1) === '') {
-      lines.pop();
-    }
-
-    const lineCount = lines.length;
-    const previewLines = lines.slice(0, MAX_PREVIEW_LINES);
-    let preview = previewLines.join('\n');
-    let truncated = lineCount > MAX_PREVIEW_LINES;
-
-    if (preview.length > MAX_PREVIEW_CHARS) {
-      preview = preview.slice(0, MAX_PREVIEW_CHARS);
-      truncated = true;
-    }
-
-    if (truncated) {
-      preview = `${preview}\n...`;
-    }
-
-    return { preview, lineCount };
-  }
 }

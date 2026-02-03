@@ -5,7 +5,7 @@
 
 // Third-party imports
 import { html, css, type TemplateResult } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement, state, query } from 'lit/decorators.js';
 import type { VscTabsSelectEvent } from '@vscode-elements/elements/dist/vscode-tabs/vscode-tabs.js';
 
 // Local imports - shared webview
@@ -30,6 +30,7 @@ import {
   type HistoryItem,
   UpdateProfileMessageSchema,
   type RemoteAgent,
+  SetTabMessageSchema,
 } from '@shared/schemas';
 
 // Local imports - settings view commands
@@ -43,6 +44,7 @@ import './tabs/MemoryTab';
 import './tabs/HistoryTab';
 import './tabs/ModelsTab';
 import './tabs/AgentsTab';
+import type { HistoryTab } from './tabs/HistoryTab';
 
 const HISTORY_ACTION_COMMANDS: Record<string, string> = {
   delete: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
@@ -83,6 +85,9 @@ export class SettingsApp extends BaseWebviewApp {
       }
     `,
   ];
+
+  // Tab refs
+  @query('history-tab') private historyTab?: HistoryTab;
 
   // Tab state
   @state() private selectedTabIndex = 0;
@@ -128,10 +133,15 @@ export class SettingsApp extends BaseWebviewApp {
 
     // Navigation messages
     if (command === SETTINGS_VIEW_COMMANDS.SET_TAB) {
-      const msg = raw as { command: string; tabIndex: number };
-      if (typeof msg.tabIndex === 'number') {
-        this.selectedTabIndex = msg.tabIndex;
+      const result = SetTabMessageSchema.safeParse(raw);
+      if (!result.success) {
+        this.logSchemaError(
+          '[SettingsApp] Set tab message validation failed.',
+          result.error,
+        );
+        return;
       }
+      this.selectedTabIndex = result.data.tabIndex;
       return;
     }
 
@@ -190,6 +200,8 @@ export class SettingsApp extends BaseWebviewApp {
         return;
       }
       this.historyItems = [];
+      // Clear search state when history is cleared
+      this.historyTab?.clearSearch();
       return;
     }
 
