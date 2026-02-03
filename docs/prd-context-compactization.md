@@ -39,7 +39,7 @@ The [neu-translator](https://github.com/neutree-ai/neu-translator) project uses 
 - **Compaction output replaces `activeMessages`** with a single assistant message containing the summary
 - **System prompt is rebuilt each call** via `SYSTEM_WORKFLOW` (incorporating memory + skills), so the model always gets fresh instructions alongside the compacted context
 
-Key takeaway: the **system prompt is the right place** for compacted context. Rather than replacing conversation messages with a fake assistant message (which breaks tool-use chains and feels unnatural), the summary should be injected into the system prompt. The model then receives: `[enriched system prompt with summary] + [only the most recent messages]`. This is simpler, avoids broken message sequences, and works uniformly across all providers.
+**Note:** neu-translator injects summaries into the system prompt. We chose a different approach: replace all messages with a single **user message** containing the summary (following the Anthropic SDK pattern). This keeps the system prompt focused on agent identity and avoids mutating it during the conversation. See Section 4.2 for details.
 
 ## 4. Proposed Design
 
@@ -673,7 +673,7 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 
 ### Completed
 
-- **Token count check after tool results** (2026-02-03): Added token count logging in `ToolUseDispatchNode.post()` at `src/agent/core/flows/ToolUseCycleFlow.ts:778-794`. This logs context utilization after tool results are attached and before the next `createResponse()`, giving visibility into token usage and setting up for compaction trigger.
+- **Token count check after tool results** (2026-02-03): Added token count logging in `ToolUseDispatchNode.post()` at `src/agent/core/flows/ToolUseCycleFlow.ts:778-795`. Only runs for providers with native token counting support (`supportsTokenCounting`). Logs context utilization after tool results are attached and before the next `createResponse()`.
 
 ### In Progress
 
@@ -686,3 +686,9 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 - Phase 2: Auto-compact toggle
 - Phase 3: Integration with handlers
 - Phase 4: UI — compaction visibility
+
+### Future Optimizations
+
+- **Token counting latency**: Currently `estimateTokenCount()` is called after every tool completion. To reduce overhead, track cumulative token usage from API responses (`lastUsage`) and only call `estimateTokenCount()` when utilization exceeds 50% threshold.
+- **Configurable compaction model**: Add `compactionModel` property to `ModelConfig` (requires llm-zoo changes).
+- **Button icons**: Consider using `layers` or `archive` codicons instead of `fold/unfold` for clearer compaction metaphor.
