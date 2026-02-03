@@ -66,29 +66,47 @@ Key takeaway: the **system prompt is the right place** for compacted context. Ra
 
 ### 4.2 Compaction Strategies
 
-#### Strategy 1: Anthropic SDK Compaction (preferred for Anthropic)
+#### Strategy 1: Anthropic SDK-Style Compaction (replicate for Anthropic)
 
-The Anthropic SDK now supports `compactionControl` in `toolRunner`, which is better than raw `context_management` clearing:
+The Anthropic Python SDK's `toolRunner` implements compaction in `_check_and_compact()`. Since TeXRA doesn't use `toolRunner`, we replicate this logic ourselves.
 
-```typescript
-const runner = client.beta.messages.toolRunner({
-  model: 'claude-sonnet-4-5',
-  max_tokens: 4096,
-  tools: [...],
-  messages: [...],
-  compactionControl: {
-    enabled: true,
-    contextTokenThreshold: 100000,
-    model: 'claude-haiku-4-5'  // Use cheaper model for summaries
-  }
-});
+**What the SDK does (from `_beta_runner.py`):**
+
+```python
+def _check_and_compact(self) -> bool:
+    # 1. Check if compaction needed
+    tokens_used = message.usage.input_tokens + message.usage.output_tokens
+    threshold = self._compaction_control.get("context_token_threshold", 100_000)
+    if tokens_used < threshold:
+        return False
+
+    # 2. Remove pending tool_use blocks from last message
+    if messages[-1]["role"] == "assistant":
+        non_tool_blocks = [b for b in messages[-1]["content"] if b.get("type") != "tool_use"]
+        if non_tool_blocks:
+            messages[-1]["content"] = non_tool_blocks
+        else:
+            messages.pop()
+
+    # 3. Append summary prompt as user message
+    messages.append({"role": "user", "content": DEFAULT_SUMMARY_PROMPT})
+
+    # 4. Call API (non-streaming) with cheaper model
+    model = self._compaction_control.get("model", self._params["model"])
+    response = client.beta.messages.create(model=model, messages=messages, ...)
+
+    # 5. Replace ALL messages with single user message containing summary
+    self.set_messages_params({"messages": [{"role": "user", "content": response.content[0].text}]})
 ```
 
-- **Uses `<summary>` tags** — same pattern as our client-side approach
-- **Configurable summary model** — can use Haiku for cheaper/faster summaries
-- **Built-in summary prompt** — structured (Task Overview, Current State, Discoveries, Next Steps, Context to Preserve)
+**Key details:**
+- Uses token count from `message.usage` (input + output tokens)
+- Default threshold: 100,000 tokens
+- Summary prompt asks for `<summary></summary>` tags but SDK takes raw text (doesn't extract from tags)
+- Replaces entire message history with one user message containing the summary
+- Can use cheaper model (e.g., `claude-haiku-4-5`) for summary generation
 
-This replaces the lossy `context_management` clearing approach. The SDK handles compaction automatically.
+**TeXRA implementation:** Replicate this in `ModelHandlerAnthropic` since we don't use `toolRunner`.
 
 #### Strategy 2: OpenAI Responses API Compaction (existing, works well)
 - Continue using `/responses/compact` endpoint.
@@ -196,104 +214,53 @@ function getCheapestModelInFamily(modelId: string): string {
 
 ### 4.4 Structured Summary Prompt
 
-Adapted from [neu-translator's `COMPACT_INSTRUCTION`](https://github.com/neutree-ai/neu-translator/blob/main/packages/core/src/prompts/system.compact.ts), modified for TeXRA's XML conventions (output tag is `<conversation-summary>` instead of `<summary>`).
-
-**System prompt for compactor model:**
+**Use the Anthropic SDK's `DEFAULT_SUMMARY_PROMPT`** (from `_beta_compaction_control.py`):
 
 ```
-You are a helpful AI assistant tasked with summarizing conversations.
+You have been working on the task described above but have not yet completed it.
+Write a continuation summary that will allow you (or another instance of yourself)
+to resume work efficiently in a future context window where the conversation
+history will be replaced with this summary. Your summary should be structured,
+concise, and actionable. Include:
+
+1. Task Overview
+   The user's core request and success criteria
+   Any clarifications or constraints they specified
+
+2. Current State
+   What has been completed so far
+   Files created, modified, or analyzed (with paths if relevant)
+   Key outputs or artifacts produced
+
+3. Important Discoveries
+   Technical constraints or requirements uncovered
+   Decisions made and their rationale
+   Errors encountered and how they were resolved
+   What approaches were tried that didn't work (and why)
+
+4. Next Steps
+   Specific actions needed to complete the task
+   Any blockers or open questions to resolve
+   Priority order if multiple steps remain
+
+5. Context to Preserve
+   User preferences or style requirements
+   Domain-specific details that aren't obvious
+   Any promises made to the user
+
+Be concise but complete—err on the side of including information that would
+prevent duplicate work or repeated mistakes. Write in a way that enables
+immediate resumption of the task.
+
+Wrap your summary in <summary></summary> tags.
 ```
 
-**Compaction instruction (sent as user message after the conversation history):**
-
-```
-Your task is to create a detailed summary of the conversation so far, paying close
-attention to the user's explicit requests and your previous actions.
-This summary should be thorough in capturing the details that would be essential for
-continuing work without losing context.
-
-Before providing your final summary, wrap your analysis in <analysis> tags to organize
-your thoughts and ensure you've covered all necessary points. In your analysis process:
-
-1. Chronologically analyze each message and section of the conversation. For each
-   section thoroughly identify:
-   - The user's explicit requests and intents
-   - Your approach to addressing the user's requests
-   - Key decisions
-   - Specific details
-   - Pay special attention to specific user feedback that you received, especially
-     if the user told you to do something differently.
-
-2. Double-check for accuracy and completeness, addressing each required element
-   thoroughly.
-
-Your summary should include the following sections:
-1. Primary Request and Intent: Capture all of the user's explicit requests and intents
-   in detail
-2. Key Concepts: List all important concepts and topics discussed.
-3. Errors and fixes: List all errors that you ran into, and how you fixed them. Pay
-   special attention to specific user feedback that you received, especially if the
-   user told you to do something differently.
-4. Problem Solving: Document problems solved and any ongoing troubleshooting efforts.
-5. All user messages: List ALL user messages that are not tool results. These are
-   critical for understanding the users' feedback and changing intent.
-6. Pending Tasks: Outline any pending tasks that you have explicitly been asked to
-   work on.
-7. Current Work: Describe in detail precisely what was being worked on immediately
-   before this summary request.
-8. Optional Next Step: List the next step that you will take that is related to the
-   most recent work you were doing. If your last task was concluded, then only list
-   next steps if they are explicitly in line with the users request. Do not start on
-   tangential requests without confirming with the user first.
-
-If there is a next step, include direct quotes from the most recent conversation
-showing exactly what task you were working on and where you left off. This should be
-verbatim to ensure there's no drift in task interpretation.
-
-Here's an example of how your output should be structured:
-
-<example>
-<analysis>
-[Your thought process, ensuring all points are covered thoroughly and accurately]
-</analysis>
-
-<conversation-summary>
-1. Primary Request and Intent:
-   [Detailed description]
-2. Key Concepts:
-   - [Concept 1]
-   - [Concept 2]
-   - [...]
-3. Errors and fixes:
-   - [Detailed description of error 1]:
-   - [How you fixed the error]
-   - [User feedback on the error if any]
-   - [...]
-4. Problem Solving:
-   [Description of solved problems and ongoing troubleshooting]
-5. All user messages:
-   - [Detailed non tool use user message]
-   - [...]
-   [Should ignore the user message that triggered this compaction]
-6. Pending Tasks:
-   - [Task 1]
-   - [Task 2]
-   - [...]
-7. Current Work:
-   [Precise description of current work]
-8. Optional Next Step:
-   [Optional next step to take]
-</conversation-summary>
-</example>
-
-Please provide your summary based on the conversation so far, following this structure
-and ensuring precision and thoroughness in your response.
-```
+This is better than neu-translator's prompt — it's more actionable and focused on task continuation.
 
 **Notes:**
-- Output tag is `<conversation-summary>` (parsed via `extractTextFromTag()`)
-- The `<analysis>` block is discarded — only `<conversation-summary>` content is injected into the system prompt
-- The prompt is stored in `src/agent/modelHandlers/compactionPrompt.ts` so it can be iterated independently
+- The SDK prompt uses `<summary></summary>` tags, but the SDK code doesn't actually extract from tags — it takes the raw response text
+- For consistency with TeXRA's patterns, we can use `<summary>` tags and extract via `extractTextFromTag()`
+- Store prompt in `src/agent/modelHandlers/compactionPrompt.ts` so it can be iterated independently
 
 ### 4.5 Current Context Validation (Gap Analysis)
 
