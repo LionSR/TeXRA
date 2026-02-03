@@ -165,10 +165,43 @@ Messages: [
 - System prompt remains unchanged (agent identity preserved)
 - The next user request is appended after the summary message
 
+**Compaction event logging:**
+
+When compaction occurs, emit a special message type (like existing `CONTEXT_MANAGEMENT`) with the summary inside:
+
+```typescript
+// In src/shared/schemas/contextManagement.ts
+export const CompactionEventSchema = z.object({
+  action: z.literal('compaction'),
+  tokensBefore: z.number(),
+  tokensAfter: z.number(),
+  contextWindow: z.number(),
+  utilizationBefore: z.number(),
+  utilizationAfter: z.number(),
+  summary: z.string(),  // The full summary text
+  compactionModel: z.string(),
+});
+
+// Logger call
+this.logger.logContextManagement('Context compacted', {
+  action: 'compaction',
+  tokensBefore: 72000,
+  tokensAfter: 3000,
+  contextWindow: 200000,
+  utilizationBefore: 36,
+  utilizationAfter: 1.5,
+  summary: summaryText,
+  compactionModel: 'claude-sonnet-4-5',
+});
+```
+
+This makes the summary visible in the progress view and preserves it for debugging/review.
+
 **Why this is simple:**
 - No streaming — single blocking call to compactor model
 - No message surgery — drop everything, replace with summary
 - Works identically across all providers
+- Summary preserved in logs for visibility
 
 ### 4.3 Compaction Model Selection
 
