@@ -787,6 +787,12 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 
   This fixes the mismatch where `ToolUseCycleFlow` was passing ALL messages to the token counting endpoint, which could cause incorrect counts when OpenAI's endpoint prepends the conversation history from `previous_response_id`.
 
+- **Fix: Pass tools to token counting endpoint** (2026-02-03): Updated `ModelHandlerOpenAIResponse.estimateTokenCount()` to accept and pass `tools` and `systemPrompt` to OpenAI's `/responses/input_tokens` endpoint. Previously, only `input` and `previous_response_id` were passed, causing the count to miss tool definition tokens.
+
+  - `estimateTokenCount()` now builds params matching the actual API call (model, input, previous_response_id, instructions, tools)
+  - `createResponse()` now passes `systemPrompt` and `convertedTools` to `estimateTokenCount()`
+  - `ToolUseCycleFlow` still doesn't pass tools (requires provider-specific conversion) - documented as lower-bound estimate
+
 ### In Progress
 
 - PRD finalization and review
