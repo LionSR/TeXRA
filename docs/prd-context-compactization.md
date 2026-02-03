@@ -66,10 +66,29 @@ Key takeaway: the **system prompt is the right place** for compacted context. Ra
 
 ### 4.2 Compaction Strategies
 
-#### Strategy 1: Anthropic Server-Side Clearing (existing, not ideal)
-- Continue using `context_management` parameter with `clear_tool_uses` and `clear_thinking`.
-- **Limitation**: Clearing is lossy — tool results and thinking blocks are simply dropped, not summarized. The model loses access to specific details that might be needed later.
-- Consider offering client-side summarization as an optional override for Anthropic users who want better context preservation.
+#### Strategy 1: Anthropic SDK Compaction (preferred for Anthropic)
+
+The Anthropic SDK now supports `compactionControl` in `toolRunner`, which is better than raw `context_management` clearing:
+
+```typescript
+const runner = client.beta.messages.toolRunner({
+  model: 'claude-sonnet-4-5',
+  max_tokens: 4096,
+  tools: [...],
+  messages: [...],
+  compactionControl: {
+    enabled: true,
+    contextTokenThreshold: 100000,
+    model: 'claude-haiku-4-5'  // Use cheaper model for summaries
+  }
+});
+```
+
+- **Uses `<summary>` tags** — same pattern as our client-side approach
+- **Configurable summary model** — can use Haiku for cheaper/faster summaries
+- **Built-in summary prompt** — structured (Task Overview, Current State, Discoveries, Next Steps, Context to Preserve)
+
+This replaces the lossy `context_management` clearing approach. The SDK handles compaction automatically.
 
 #### Strategy 2: OpenAI Responses API Compaction (existing, works well)
 - Continue using `/responses/compact` endpoint.
@@ -81,15 +100,15 @@ This is the new capability. It covers all providers that lack a native compactio
 
 | Provider | Native Compaction | Needs Client-Side |
 |----------|------------------|-------------------|
-| Anthropic | Server-side clearing (`context_management`) | No (but available as optional override) |
-| OpenAI Responses API | `/responses/compact` endpoint | No (but available as optional override) |
+| Anthropic | SDK `compactionControl` (uses Haiku for summaries) | No |
+| OpenAI Responses API | `/responses/compact` endpoint | No |
 | OpenAI Chat Completions | None | **Yes** |
 | Google GenAI (Gemini) | None | **Yes** |
 | DeepSeek | None | **Yes** |
 | Kimi (Moonshot) | None | **Yes** |
 | Any future provider | None by default | **Yes** |
 
-This makes client-side summarization the **default compaction strategy** for the majority of providers. Only Anthropic and OpenAI Responses have native paths.
+Client-side summarization is the **fallback** for providers without native compaction. Anthropic and OpenAI Responses have native paths that work well.
 
 **Core insight: inject the summary into the system prompt, not into messages.**
 
@@ -142,23 +161,38 @@ For providers supporting developer/system messages in the array (OpenAI), the su
 - System prompt untouched — agent identity preserved
 - Clean handoff — summary becomes context for next turn
 
-### 4.3 Compactor Model Selection
+### 4.3 Compaction Model Selection
 
-Add a new configuration:
+Add a new configuration (named `compactionModel` for consistency with `compactionThresholdPercent`):
 
 ```json
-"texra.model.compactorModel": {
+"texra.model.compactionModel": {
   "type": "string",
   "default": "auto",
-  "description": "Model used for client-side context summarization. 'auto' uses the cheapest available model from the active provider, or 'same' uses the current model."
+  "description": "Model used for context summarization. 'auto' uses the cheapest model from the same provider family."
 }
 ```
 
-**"auto" resolution order:**
-1. If Anthropic key available: `claude-haiku-4-0`
-2. If OpenAI key available: `gpt-4.1-mini`
-3. If Google key available: `gemini-2.5-flash-lite`
-4. Fall back to current model
+**"auto" resolution — get cheapest model from same provider family:**
+
+| Primary Model | Compaction Model |
+|--------------|------------------|
+| `claude-sonnet-4-5`, `claude-opus-4-5` | `claude-haiku-4-5` |
+| `gpt-4.1`, `gpt-4o` | `gpt-4.1-mini` |
+| `gemini-2.5-pro` | `gemini-2.5-flash-lite` |
+| `deepseek-chat`, `deepseek-reasoner` | `deepseek-chat` (no cheaper option) |
+| `moonshot-v1-*` | `moonshot-v1-8k` |
+
+This uses the same provider (same API key, same base URL for OpenRouter), just the cheapest model in that family.
+
+**Implementation:**
+
+```typescript
+function getCheapestModelInFamily(modelId: string): string {
+  const family = getModelFamily(modelId);  // e.g., "anthropic", "openai", "google"
+  return CHEAPEST_MODEL_BY_FAMILY[family] ?? modelId;
+}
+```
 
 ### 4.4 Structured Summary Prompt
 
@@ -526,8 +560,8 @@ Existing `UsagePanel` already shows token counts. After compaction, show "Compac
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `texra.model.compactionThresholdPercent` | number | 75 | Existing. Threshold for auto-compaction. 0 = disabled. |
-| `texra.model.compactorModel` | string | "auto" | New. Model for client-side summarization. |
-| `texra.model.enableThinkingClearing` | boolean | false | Existing. Anthropic thinking block clearing. |
+| `texra.model.compactionModel` | string | "auto" | New. Model for summarization. "auto" = cheapest in same provider family. |
+| `texra.model.enableThinkingClearing` | boolean | false | Existing. Anthropic thinking block clearing (deprecated — use SDK compaction instead). |
 
 ## 7. Implementation Plan
 
