@@ -180,8 +180,8 @@ const COMPACTION_MODEL_MAP: Record<string, string> = {
   'claude-opus-4-5': 'claude-sonnet-4-5',
   'claude-sonnet-4-5': 'claude-sonnet-4-5',
 
-  // OpenAI: gpt5 → gpt5 (same model, summarization uses fewer thinking tokens)
-  'gpt-5': 'gpt-5',
+  // OpenAI: gpt-5.2 → gpt-5.2 (same model, summarization uses fewer thinking tokens)
+  'gpt-5.2': 'gpt-5.2',
 
   // Google: pro → flash
   'gemini-3-pro': 'gemini-3-flash',
@@ -192,7 +192,8 @@ const COMPACTION_MODEL_MAP: Record<string, string> = {
   'deepseek-reasoner': 'deepseek-chat',
 
   // Kimi: same model
-  'moonshot-v1-128k': 'moonshot-v1-128k',
+  'kimi-k2': 'kimi-k2',
+  'kimi-k1.5-long': 'kimi-k1.5-long',
 };
 
 function getCompactionModel(primaryModel: string): string {
