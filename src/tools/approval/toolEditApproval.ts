@@ -41,6 +41,8 @@ export interface ToolEditApprovalResult {
   appliedContent?: string;
   userPatch?: string;
   lineChanges?: LineChanges;
+  /** 1-based line number where the first change occurs (for navigation) */
+  startLine?: number;
 }
 
 export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
@@ -255,7 +257,14 @@ function computeLineChangeSummary(
   return { added, removed };
 }
 
-function firstChangedLine(original: string, proposed: string): number | null {
+/**
+ * Compute the 0-based line number where the first change occurs.
+ * Returns null if the content is identical.
+ */
+function firstChangedLine(
+  original: string,
+  proposed: string,
+): number | null {
   if (original === proposed) {
     return null;
   }
@@ -572,6 +581,10 @@ function finalizeApprovalResult(
     result.userPatch ??
     computeUserPatch(request.proposedContent, appliedContent);
 
+  // Compute startLine once here (convert 0-based to 1-based)
+  const changedLine = firstChangedLine(request.originalContent, appliedContent);
+  const startLine = changedLine !== null ? changedLine + 1 : 1;
+
   return {
     ...result,
     appliedContent,
@@ -579,6 +592,7 @@ function finalizeApprovalResult(
     lineChanges:
       result.lineChanges ??
       computeLineChangeSummary(request.originalContent, appliedContent),
+    startLine,
   };
 }
 

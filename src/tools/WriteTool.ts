@@ -91,7 +91,13 @@ export class WriteFileTool extends defineTool({
       summary,
       output,
       userPatch: approval.userPatch,
-      edits: [{ path: input.path, lineChanges: approval.lineChanges }],
+      edits: [
+        {
+          path: input.path,
+          lineChanges: approval.lineChanges,
+          startLine: approval.startLine,
+        },
+      ],
       ...(userInstruction && { userInstruction }),
     };
   }
