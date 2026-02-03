@@ -775,39 +775,6 @@ class ToolUseDispatchNode<C> extends BatchNode<
 
     shared.toolCalls = [];
 
-    // Log context state after tool results attached (for compaction planning).
-    // This gives visibility into token count BEFORE the next createResponse,
-    // allowing compaction to trigger if threshold exceeded.
-    // Only run for providers with native token counting support.
-    //
-    // Use estimateContextTokens() which correctly handles conversation state
-    // (e.g., passing only delta messages when previous_response_id is set).
-    //
-    // NOTE: This is a lower-bound estimate - tools are NOT included because they
-    // require provider-specific conversion (done in createResponse). The authoritative
-    // token count with tools happens inside createResponse().
-    const { contextWindow } = services.modelHandler.config;
-    if (contextWindow > 0 && services.modelHandler.supportsTokenCounting) {
-      try {
-        const tokenCount = await services.modelHandler.estimateContextTokens(
-          shared.messages,
-          {
-            client: services.client,
-            systemPrompt: services.prompt.systemPrompt,
-          },
-        );
-        if (tokenCount > 0) {
-          services.logger.logContextState(tokenCount, contextWindow);
-
-          // TODO: When auto-compact is enabled, trigger compaction here if
-          // tokenCount exceeds threshold (e.g., 75% of contextWindow).
-          // This prevents the next createResponse() from failing.
-        }
-      } catch {
-        // Token counting failed - silently skip
-      }
-    }
-
     return FlowTransition.CONTINUE;
   }
 }
