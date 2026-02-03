@@ -289,18 +289,37 @@ After compaction:
 
 ### 4.6 Message History Preservation
 
-Maintain two representations:
+**Single source of truth**: `allMessages` is the only persistent message array. There is no separately-maintained "active messages" array that could diverge.
 
-1. **Full history** (`allMessages`): Append-only. Never sent to the primary model after compaction. Used for:
-   - UI display (so the user can still scroll through the full conversation)
-   - Generating the next compaction summary (avoids lossy summarization-of-summaries)
-2. **Active messages**: Empty after compaction. Only the current user message is sent alongside the enriched system prompt.
+**How it works:**
+
+1. `allMessages`: Append-only array containing the full conversation history. This is the sole source of truth, persisted to agent execution state.
+
+2. At each API call, the messages to send are **derived** (not stored separately):
+   - Before compaction: send `allMessages` directly
+   - After compaction: send `[]` (empty) — the summary lives in the system prompt
+
+3. The derivation logic is a pure function:
+   ```typescript
+   function getMessagesToSend(allMessages: Message[], compactionState: CompactionState | null): Message[] {
+     if (compactionState === null) {
+       return allMessages; // No compaction yet — send everything
+     }
+     return []; // Post-compaction — summary is in system prompt, send no history
+   }
+   ```
+
+**Why not a dual-array design?**
+
+Maintaining two arrays (`allMessages` + `activeMessages`) creates an invariant that every append must update both. This is error-prone — any code path that forgets to update both causes silent divergence. By deriving the active set from `allMessages` + compaction state, correctness is guaranteed.
 
 On each compaction:
 - `allMessages` remains unchanged (append-only)
-- All prior messages are dropped from the API call
-- The system prompt gains/updates a `<conversation-summary>` block parsed from the compactor's XML output
-- On subsequent compactions, the compactor model receives `allMessages` (the full history), so it always works from ground truth
+- `compactionState` is updated with the new summary and timestamp
+- The system prompt is rebuilt to include the `<conversation-summary>` block
+- Subsequent compactions re-summarize from `allMessages` (the full history), avoiding lossy summarization-of-summaries
+
+**UI display**: The webview renders from `allMessages`, showing the full conversation with a visual divider indicating which messages are "in context" vs "compacted away".
 
 ### 4.7 Automatic vs Manual Trigger
 
