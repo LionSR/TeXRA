@@ -897,35 +897,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
-   * Estimates context token count, correctly handling previous_response_id.
-   *
-   * When previous_response_id is set, OpenAI's token counting endpoint expects
-   * only the NEW messages (delta) - it prepends the conversation history from
-   * the previous response. This method extracts the delta based on sentMessages.
-   *
-   * @param messages - All messages in the conversation
-   * @param options - Token counting options
-   * @returns Promise resolving to the total context token count
-   */
-  override async estimateContextTokens(
-    messages: ResponseInputItem[],
-    options?: TokenCountOptions<OpenAI>,
-  ): Promise<number> {
-    if (!this.supportsNativeTokenCounting) {
-      throw new Error(
-        'Token counting not available when routing through OpenRouter',
-      );
-    }
-
-    // When using previous_response_id, only pass new messages (delta)
-    const newMessages = this.previousResponseId
-      ? messages.slice(this.conversationState.sentMessages)
-      : messages;
-
-    return this.estimateTokenCount(newMessages, options);
-  }
-
-  /**
    * Estimates token count using OpenAI's native /responses/input_tokens endpoint.
    * This provides exact pre-flight token counts for the Responses API.
    *
