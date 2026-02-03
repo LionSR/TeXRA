@@ -772,6 +772,12 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 
   **Limitation:** This is a lower-bound estimate (messages + systemPrompt only). Tool definitions are not included because each provider uses a different format (`anthropicTools`, etc.). Full accuracy requires the compaction check to happen inside `createResponse()` where provider-specific tools are already built — see Phase 0 refactoring.
 
+- **Diagnostic logging for token count investigation** (2026-02-03): Added `[TOKEN_DIAG]` logs in `modelHandlerOpenAIResponse.ts` to compare pre-flight token estimate with actual usage:
+  - Pre-flight log: Shows `estimateTokenCount()` result, previous cumulative tokens, message counts, tool count, `previous_response_id` status
+  - Post-response log: Compares actual `response.usage.input_tokens` with pre-flight estimate, shows difference, reasoning tokens, output tokens
+
+  Look for `[TOKEN_DIAG]` in debug logs to investigate token counting mismatch.
+
 ### In Progress
 
 - PRD finalization and review
