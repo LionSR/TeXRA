@@ -42,7 +42,12 @@ export const SETTINGS_VIEW_CMD = {
 } as const;
 
 /** Tab name order - single source of truth for tab indices */
-export const SETTINGS_TAB_ORDER = ['MEMORY', 'HISTORY', 'MODELS', 'AGENTS'] as const;
+export const SETTINGS_TAB_ORDER = [
+  'MEMORY',
+  'HISTORY',
+  'MODELS',
+  'AGENTS',
+] as const;
 
 export type SettingsTabName = (typeof SETTINGS_TAB_ORDER)[number];
 

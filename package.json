@@ -1656,7 +1656,7 @@
     "eslint": "^9.39.2",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-unicorn": "^62.0.0",
-    "globals": "^17.2.0",
+    "globals": "^17.3.0",
     "jsdom": "^27.4.0",
     "node-loader": "^2.1.0",
     "nunjucks": "^3.2.4",
