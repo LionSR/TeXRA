@@ -775,6 +775,24 @@ class ToolUseDispatchNode<C> extends BatchNode<
 
     shared.toolCalls = [];
 
+    // Log context state after tool results attached (for compaction planning).
+    // This gives visibility into token count BEFORE the next createResponse,
+    // allowing compaction to trigger if threshold exceeded.
+    const { contextWindow } = services.modelHandler.config;
+    if (contextWindow > 0) {
+      try {
+        const tokenCount = await services.modelHandler.estimateTokenCount(
+          shared.messages,
+          { client: services.client },
+        );
+        if (tokenCount > 0) {
+          services.logger.logContextState(tokenCount, contextWindow);
+        }
+      } catch {
+        // Token counting not available for this provider - silently skip
+      }
+    }
+
     return FlowTransition.CONTINUE;
   }
 }
