@@ -355,7 +355,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Note: OpenAI's input_tokens is the TOTAL (includes cached tokens).
     // Cached tokens are a subset reported in input_tokens_details.cached_tokens.
     // This differs from Anthropic where input_tokens excludes cached tokens.
-    // For context window tracking, we want the total, which input_tokens provides.
+    //
+    // NOTE: With previous_response_id, input_tokens includes the full conversation
+    // history. However, there may be edge cases where token counting doesn't match
+    // actual context usage (e.g., timing between count and API call, tool definitions,
+    // or reasoning token accounting). See PRD Known Issues for investigation details.
     if (response.usage?.input_tokens) {
       this.conversationState.cumulativeInputTokens =
         response.usage.input_tokens;
@@ -987,7 +991,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     //    to proactively compact before trouble
     // 2. This native count (CURRENT request) is the safety net at 100% threshold
     //
-    // When previous_response_id is set, the API includes server-side history in the count.
+    // NOTE: When previous_response_id is set, the API includes server-side history
+    // (per OpenAI docs). However, there may be edge cases where token counting
+    // doesn't match actual context usage. See PRD Known Issues for investigation.
     if (this.supportsTokenCounting) {
       try {
         // Reuse built params for token counting (build once principle)
