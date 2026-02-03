@@ -64,7 +64,7 @@ export async function selectAgentInMainView(
 
     webviewView.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
-      agentValue,
+      agentId: agentValue, // Must match schema field name
       sessionType,
     });
 

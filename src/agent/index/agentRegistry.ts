@@ -81,6 +81,14 @@ const LOOKUP_PRIORITY: AgentSource[] = [
   'remote',
 ];
 
+/** Source priority for tool-use sessions (prefers tool-use agents). */
+const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
+  'custom',
+  'builtInToolUse',
+  'builtIn',
+  'remote',
+];
+
 /** Default agents for dropdowns. */
 const DEFAULT_WORKFLOW_AGENT = 'correct';
 const DEFAULT_TOOL_USE_AGENT = 'chat';
@@ -180,13 +188,22 @@ async function doLoad(): Promise<void> {
 /**
  * Get an agent by identifier.
  * Supports "source:name" format or just "name" (finds first match by priority).
+ *
+ * When preferToolUse is true, uses tool-use lookup priority:
+ * custom → builtInToolUse → builtIn → remote
+ *
+ * This handles name collisions where a workflow agent shadows a tool-use agent.
  */
-export function getAgent(identifier: string): AgentEntry | undefined {
-  // Direct lookup for source:name format
+export function getAgent(
+  identifier: string,
+  preferToolUse = false,
+): AgentEntry | undefined {
+  // Direct lookup for source:name format (already resolved)
   if (cache.has(identifier)) return cache.get(identifier);
 
-  // Legacy: find first match by name across sources
-  for (const source of LOOKUP_PRIORITY) {
+  // Find first match using session-appropriate priority
+  const priority = preferToolUse ? TOOL_USE_LOOKUP_PRIORITY : LOOKUP_PRIORITY;
+  for (const source of priority) {
     const entry = cache.get(`${source}:${identifier}`);
     if (entry) return entry;
   }
@@ -445,6 +462,21 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
 /** Create source:name key. */
 export function createKey(source: AgentSource, name: string): string {
   return `${source}:${name}`;
+}
+
+/**
+ * Resolve an agent identifier to its full source:name key.
+ * Handles both plain names ("criticize") and existing keys ("builtIn:criticize").
+ * Falls back to original identifier if agent not found.
+ */
+export function resolveAgentKey(
+  agentIdentifier: string,
+  preferToolUse = false,
+): string {
+  if (!agentIdentifier) return agentIdentifier;
+  const entry = getAgent(agentIdentifier, preferToolUse);
+  if (!entry) return agentIdentifier;
+  return createKey(entry.source, entry.name);
 }
 
 /**
