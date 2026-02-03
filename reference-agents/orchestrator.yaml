@@ -34,6 +34,8 @@ prompts:
     (The agent won't know what $\H$ or $\ip{\cdot}{\cdot}$ mean without the macro definitions.)
     GOOD: Include preamble.tex as auxiliary so the agent sees the custom commands.
 
+    Similarly, include .bbl files as auxiliary when the document has compiled bibliography entries the agent should reference.
+
     TeXRA is a LaTeX-focused tool. Prefer .tex output format even for tool-use agents when suitable. Markdown often leads to inconsistency and formatting chaos in academic workflows.
 
     Choose propose_workflow when the task centers on transforming a specific document. The agent processes the input file and produces output that follows the same structure and section order. Use this for grammar correction, style polishing, figure generation, or document merging. If you want fresh content unrelated to existing structure, provide an empty template as input. Available workflow agents: {{ WORKFLOW_AGENTS }}.
