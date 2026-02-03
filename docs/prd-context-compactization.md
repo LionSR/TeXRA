@@ -97,16 +97,30 @@ Replacing conversation messages with a fake assistant summary message is problem
 - Creates an unnatural message history (assistant "remembering" things it didn't say)
 - Requires complex logic to decide which messages to keep vs. replace
 
-Instead, the approach is:
+Instead, the approach is simple:
 
-1. When `shouldCompact()` returns true and no native strategy is available:
-2. Send the full message history to a **compactor model** with a structured summarization prompt
-3. The compactor returns the summary inside a `<conversation-summary>` XML tag
-4. Parse the summary using the existing `extractTextFromTag()` utility (`src/utils/text/xmlExtraction.ts:55`)
-5. **Drop all old messages**
-6. **Prepend the summary as a message** — the original system prompt remains unchanged
-7. The model receives: `[original system prompt]` + `[summary message, current user message]`
-8. Record compaction metadata (tokens before/after, summary text)
+**Compaction Flow (non-streaming):**
+
+```
+1. Trigger: shouldCompact() returns true (threshold exceeded or manual button)
+
+2. Call compactor model (non-streaming):
+   - System prompt: replaced with COMPACTOR_SYSTEM_PROMPT
+   - Messages: allMessages (full history)
+   - User message: COMPACT_INSTRUCTION
+
+3. Parse response:
+   - Extract content from <conversation-summary> tag using extractTextFromTag()
+   - Discard <analysis> block
+
+4. Update state:
+   - Store summary in compactionState
+   - allMessages remains unchanged (append-only for UI)
+
+5. Next API call to primary model:
+   - System prompt: original agent prompt (unchanged)
+   - Messages: [summary message, current user message]
+```
 
 **Post-compaction message structure:**
 
@@ -121,11 +135,11 @@ Messages: [
 
 For providers supporting developer/system messages in the array (OpenAI), the summary can use `role: "developer"` for clearer separation.
 
-**Why a separate summary message (not injected into system prompt)?**
-- System prompt remains stable — agent identity and instructions don't change
-- No string manipulation or replacement of `<conversation-summary>` blocks needed
-- Clear separation: system prompt = instructions, summary message = context
-- The summary is explicitly "context from previous conversation", not part of core instructions
+**Why this is simple:**
+- No streaming — just a single blocking call to the compactor model
+- No message surgery — drop everything, prepend summary
+- System prompt untouched — agent identity preserved
+- Clean handoff — summary becomes context for next turn
 
 ### 4.3 Compactor Model Selection
 
@@ -246,7 +260,46 @@ and ensuring precision and thoroughness in your response.
 - The `<analysis>` block is discarded — only `<conversation-summary>` content is injected into the system prompt
 - The prompt is stored in `src/agent/modelHandlers/compactionPrompt.ts` so it can be iterated independently
 
-### 4.5 Integration with ModelHandler Base Class
+### 4.5 Current Context Validation (Gap Analysis)
+
+**Where validation currently happens:**
+
+Context overflow is checked in `createResponse()` methods **before each API call**:
+
+```
+modelHandlerAnthropic.ts:620-631   → estimateTokenCount() → validateTokenLimits()
+modelHandlerOpenAI.ts:395-411     → estimateTokenCount() → validateTokenLimits()
+modelHandlerGoogleGenAI.ts:491-503 → estimateTokenCount() → validateTokenLimits()
+modelHandlerOpenAIResponse.ts:994-1003 → estimateTokenCount() → validateTokenLimits()
+```
+
+**Current gap: Tool results can overflow BETWEEN validation and append.**
+
+The tool-use flow is:
+```
+1. createResponse() → validates tokens → sends request
+2. Model returns tool_use
+3. Tool executes → produces result (potentially large)
+4. Result appended to messages
+5. createResponse() → validates tokens → [MIGHT OVERFLOW HERE]
+```
+
+The problem: between steps 4 and 5, the messages array grows with potentially large tool results. If the result pushes total tokens over the context window, step 5 will hard-fail.
+
+**How compaction addresses this:**
+
+With auto-compact enabled, step 5 becomes:
+```
+5. createResponse():
+   a. estimateTokenCount()
+   b. IF tokens > threshold: compactIfNeeded() → summarize → replace messages
+   c. validateTokenLimits() → now passes
+   d. send request
+```
+
+Compaction happens **before validation**, so large tool results trigger compaction rather than failure.
+
+### 4.6 Integration with ModelHandler Base Class
 
 Extend `ModelHandler.ts`:
 
@@ -341,43 +394,141 @@ On each compaction:
 
 **UI display**: The webview renders from `allMessages`, showing the full conversation with a visual divider indicating which messages are "in context" vs "compacted away".
 
-### 4.7 Automatic vs Manual Trigger
+### 4.7 Auto-Compact Toggle (like YOLO mode)
 
-- **Automatic**: Existing threshold-based trigger (`compactionThresholdPercent` setting, default 75%) applies to all strategies
-- **Manual**: Add a command `texra.compactContext` that users can invoke mid-conversation
-  - Useful when users notice the model "forgetting" things
-  - Always uses client-side summarization (gives user full visibility)
+Add an **Auto-Compact toggle button** in the toolbar, following the same pattern as the YOLO mode button (`src/progressView/frontend/constants.ts:154-163`).
+
+**Button definition:**
+
+```typescript
+// In src/progressView/frontend/constants.ts
+const AUTO_COMPACT_TOGGLE_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.AUTO_COMPACT_TOGGLE_BTN,
+  icon: 'fold',                    // collapsed state icon
+  iconActive: 'unfold',            // expanded/active state icon
+  command: COMMANDS.TOGGLE_AUTO_COMPACT,
+  title: 'Enable auto-compact (summarize context when threshold exceeded)',
+  titleActive: 'Auto-compact active - click to disable',
+  className: 'auto-compact-toggle-button',
+  isToggle: true,
+});
+
+// Add to TOOL_USE_TOOLBAR alongside YOLO button
+const TOOL_USE_TOOLBAR = [
+  STOP_STREAM_BUTTON,
+  YOLO_TOGGLE_BUTTON,
+  AUTO_COMPACT_TOGGLE_BUTTON,  // New
+  RESTORE_STATE_BUTTON,
+  { ...OPEN_TASK_STORAGE_BUTTON },
+];
+```
+
+**Behavior:**
+
+| Auto-Compact State | Threshold Exceeded | Action |
+|--------------------|-------------------|--------|
+| OFF | Yes | Hard fail with "context window exceeded" error |
+| ON | Yes | Trigger compaction automatically, then continue |
+| ON | No | Normal operation |
+
+### 4.8 Manual "Compact Now" Button
+
+In addition to the auto-compact toggle, add a **Compact Now** button that immediately triggers compaction when clicked.
+
+**Button definition:**
+
+```typescript
+const COMPACT_NOW_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.COMPACT_NOW_BTN,
+  icon: 'fold-down',
+  command: COMMANDS.COMPACT_NOW,
+  title: 'Compact context now (summarize conversation history)',
+  className: 'compact-now-button',
+});
+
+// Add to TOOL_USE_TOOLBAR
+const TOOL_USE_TOOLBAR = [
+  STOP_STREAM_BUTTON,
+  YOLO_TOGGLE_BUTTON,
+  AUTO_COMPACT_TOGGLE_BUTTON,
+  COMPACT_NOW_BUTTON,  // Active button - always available
+  RESTORE_STATE_BUTTON,
+  { ...OPEN_TASK_STORAGE_BUTTON },
+];
+```
+
+**Behavior:**
+- Enabled when stream is RUNNING, WAITING, or RESUMING
+- Disabled if context utilization is below 10% (wasteful to compact)
+- On click: immediately triggers compaction (non-streaming call to compactor)
+- Shows progress indicator during compaction
+- After completion: logs compaction event, updates context state display
+
+**Why both buttons?**
+- **Auto-Compact Toggle**: Set-and-forget mode for long sessions
+- **Compact Now**: Manual control when user notices model "forgetting" or wants to proactively free context
 
 ## 5. UI Changes
 
-### 5.1 Context Utilization Bar (Progress View)
+### 5.1 Toolbar Buttons (StreamHeader)
 
-**Current state**: The `UsagePanel` shows token counts and "context left" percentage. The `ContextManagement` component shows compaction events in a log format.
+Location: `src/progressView/frontend/components/StreamHeader.ts`
 
-**Proposed changes:**
+**Two new buttons following YOLO pattern:**
 
-1. **Context bar indicator**: Add a visual progress bar showing context utilization (green < 50%, yellow 50-75%, red > 75%)
-2. **Compaction badge**: When compaction has occurred, show a badge with "Compacted" and the compression ratio (e.g., "72K -> 18K tokens")
-3. **Expandable compaction details**: Click the badge to see:
-   - Summary text (for client-side compaction)
-   - Strategy used (clearing / compact / summarization)
-   - What was dropped (tool results count, thinking blocks count)
+1. **Auto-Compact Toggle** (like YOLO):
+   - Toggle button with active/inactive states
+   - Visual glow when active (blue instead of red)
+   - Persisted per-stream
 
-### 5.2 Chat View (Webview)
+2. **Compact Now** (action button):
+   - One-shot action button
+   - Disabled when context utilization < 10%
+   - Shows spinner during compaction
 
-1. **Compaction divider**: Insert a visual divider in the chat when compaction occurs, similar to "older messages cleared" in chat apps
-   - Shows: "Context compacted -- {strategy} -- {tokens freed}"
-   - Collapsed by default; expandable to show summary
-2. **Faded messages**: Messages that were compacted away should appear faded/collapsed above the divider (sourced from `allMessages`)
-   - Users can scroll up to see full history even though the model no longer "sees" it
-   - Clear visual distinction between "in context" and "compacted away"
+**Styling:**
 
-### 5.3 Manual Compact Command
+```css
+.auto-compact-toggle-button {
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
 
-- Add button in the chat toolbar (next to existing action buttons)
-- Tooltip: "Compact conversation context"
-- Disabled when utilization is below 25% (compaction would be wasteful)
-- Shows confirmation with estimated token savings before executing
+.auto-compact-toggle-button.is-active {
+  color: var(--color-info);
+  background-color: color-mix(in srgb, var(--color-info) 15%, transparent);
+  border-radius: var(--border-radius);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--color-info) 40%, transparent);
+}
+
+.compact-now-button {
+  flex-shrink: 0;
+}
+
+.compact-now-button:disabled {
+  opacity: 0.5;
+}
+```
+
+### 5.2 Context Utilization Indicator
+
+Add to `UsagePanel` or as a separate component:
+
+1. **Progress bar**: Visual bar showing context utilization
+   - Green: < 50%
+   - Yellow: 50-75%
+   - Red: > 75%
+2. **Compaction badge**: After compaction, show "Compacted: 72K → 18K"
+3. **Expandable details**: Click to see summary text (for client-side compaction)
+
+### 5.3 Chat View Compaction Divider
+
+1. **Visual divider**: When compaction occurs, insert a divider in the message list
+   - Text: "Context compacted — {tokens freed} tokens freed"
+   - Expandable to show summary
+2. **Faded messages**: Messages above the divider appear faded (from `allMessages`)
+   - User can scroll up to see full history
+   - Clear visual distinction: "in context" vs "compacted away"
 
 ## 6. Configuration Summary
 
@@ -390,28 +541,63 @@ On each compaction:
 
 ## 7. Implementation Plan
 
+### Phase 0: Refactor createResponse for Modularity
+
+The `createResponse()` methods in model handlers (especially `modelHandlerAnthropic.ts:580+`) are monolithic, mixing:
+- Parameter building
+- Token counting
+- Context management setup
+- Streaming vs non-streaming logic
+- Response handling
+
+**Proposed refactoring:**
+
+```typescript
+// Extract into composable phases
+class ModelHandlerAnthropic {
+  async createResponse(...) {
+    // Phase 1: Build
+    const params = this.buildRequestParams(messages, options);
+
+    // Phase 2: Count & Validate (optional)
+    const validation = await this.validateContext(params);
+
+    // Phase 3: Compact if needed (NEW)
+    if (validation.shouldCompact && this.autoCompactEnabled) {
+      const compacted = await this.compactContext(messages);
+      params.messages = compacted.messages;
+    }
+
+    // Phase 4: Execute
+    return this.executeRequest(params, options);
+  }
+}
+```
+
+This makes compaction a clean plug-in phase rather than deeply embedded logic.
+
 ### Phase 1: Client-Side Summarization Engine
-- Create `CompactionStrategy` interface and `ClientSideSummarizationStrategy`
-- Create compaction prompt template
-- Add compactor model selection logic
-- Add `allMessages` / `activeMessages` split to message management
-- Wire into `ModelHandler.compactIfNeeded()`
+- Create `ContextCompactor` class in `src/agent/modelHandlers/contextCompaction/`
+- Implement `COMPACTOR_SYSTEM_PROMPT` and `COMPACT_INSTRUCTION` prompts
+- Add `extractTextFromTag()` call for `<conversation-summary>`
+- Add `compactionState` to agent execution state schema
 
-### Phase 2: Integration with OpenAI Chat & Google Handlers
-- Enable auto-compaction for `ModelHandlerOpenAI` and `ModelHandlerGoogleGenAI`
-- Add token counting fallback (character-based heuristic) for providers without native counting
-- Ensure existing Anthropic and OpenAI Responses paths are unaffected
+### Phase 2: Auto-Compact Toggle
+- Add `AUTO_COMPACT_TOGGLE_BTN` to `constants.ts` (following YOLO pattern)
+- Add `TOGGLE_AUTO_COMPACT` command
+- Wire toggle state through `ProgressViewMessageHandler`
+- Persist per-stream (like YOLO state)
 
-### Phase 3: UI -- Compaction Visibility
-- Add context utilization bar to progress view
+### Phase 3: Integration with Handlers
+- Add `compactIfNeeded()` to `ModelHandler` base class
+- Integrate into OpenAI Chat, Google GenAI, DeepSeek, Kimi handlers
+- Ensure Anthropic and OpenAI Responses use their native paths
+
+### Phase 4: UI -- Compaction Visibility
+- Add context utilization bar to `UsagePanel`
 - Add compaction divider to chat webview
-- Implement faded/collapsed messages for compacted history
-- Add compaction badge with expandable details
-
-### Phase 4: Manual Compact Command
-- Register `texra.compactContext` command
-- Add toolbar button to chat view
-- Add confirmation dialog with token savings estimate
+- Implement faded messages for compacted history
+- Add compaction badge with expandable summary
 
 ## 8. Risks and Mitigations
 
