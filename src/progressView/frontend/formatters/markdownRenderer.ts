@@ -8,7 +8,7 @@ import texmath from 'markdown-it-texmath';
 import katex from 'katex';
 
 // Local imports - optimized highlight.js with only TeXRA-relevant languages
-import hljs from '@shared/highlighting/hljs';
+import { hljs } from '@shared/highlighting/hljs';
 
 // Local imports - progress view helpers
 import { katexMacros } from '../katexMacros';

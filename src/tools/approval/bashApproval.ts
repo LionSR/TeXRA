@@ -102,6 +102,12 @@ async function showApprovalPrompt(
       });
 
       void safeExecuteCommand('texra.showProgressView');
+
+      // Activate the stream that needs approval so user sees the prompt immediately
+      if (streamId) {
+        bus.emit('setActiveStream', { streamId });
+      }
+
       bus.emit('showBashPermission', {
         requestId,
         command: request.command,
