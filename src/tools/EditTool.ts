@@ -10,6 +10,7 @@ import {
 import { pluralize } from '@tools/utils';
 import {
   buildApprovalRejectedResult,
+  firstChangedLine,
   formatUnifiedApprovalUserDiff,
   getApprovedContent,
   requestToolEditApproval,
@@ -117,11 +118,17 @@ export class EditFileTool extends defineTool({
       ? `${replacementSummary}\n\n${userDiffNote}`
       : replacementSummary;
 
+    // Compute first changed line (convert from 0-based to 1-based for display)
+    const changedLine = firstChangedLine(currentContent, appliedContent);
+    const startLine = changedLine !== null ? changedLine + 1 : undefined;
+
     return {
       summary,
       output,
       userPatch: approval.userPatch,
-      edits: [{ path: targetPath, lineChanges: approval.lineChanges }],
+      edits: [
+        { path: targetPath, lineChanges: approval.lineChanges, startLine },
+      ],
     };
   }
 }

@@ -51,6 +51,8 @@ export type ToolFileAttachment = z.infer<typeof ToolFileAttachmentSchema>;
 export const EditRecordSchema = z.object({
   path: z.string(),
   lineChanges: LineChangesSchema.optional(),
+  /** 1-based line number where the edit starts (for navigation) */
+  startLine: z.number().optional(),
 });
 export type EditRecord = z.infer<typeof EditRecordSchema>;
 

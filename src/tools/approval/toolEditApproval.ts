@@ -255,7 +255,18 @@ function computeLineChangeSummary(
   return { added, removed };
 }
 
-function firstChangedLine(original: string, proposed: string): number | null {
+/**
+ * Compute the 0-based line number where the first change occurs.
+ * Returns null if the content is identical.
+ *
+ * @param original - Original content
+ * @param proposed - Proposed content
+ * @returns 0-based line number of first change, or null if identical
+ */
+export function firstChangedLine(
+  original: string,
+  proposed: string,
+): number | null {
   if (original === proposed) {
     return null;
   }
