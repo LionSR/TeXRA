@@ -76,9 +76,18 @@ export class EditFileTool extends defineTool({
       );
     }
 
-    const updatedContent = replace_all
-      ? currentContent.replaceAll(old_str, new_str)
-      : currentContent.replace(old_str, new_str);
+    // Use split/join and indexOf/slice for literal replacement
+    // (String.replace has special patterns like $$, $&, $' that corrupt LaTeX)
+    let updatedContent: string;
+    if (replace_all) {
+      updatedContent = currentContent.split(old_str).join(new_str);
+    } else {
+      const idx = currentContent.indexOf(old_str);
+      updatedContent =
+        currentContent.slice(0, idx) +
+        new_str +
+        currentContent.slice(idx + old_str.length);
+    }
 
     const approval = await requestToolEditApproval({
       path: targetPath,
@@ -121,7 +130,13 @@ export class EditFileTool extends defineTool({
       summary,
       output,
       userPatch: approval.userPatch,
-      edits: [{ path: targetPath, lineChanges: approval.lineChanges }],
+      edits: [
+        {
+          path: targetPath,
+          lineChanges: approval.lineChanges,
+          startLine: approval.startLine,
+        },
+      ],
     };
   }
 }
