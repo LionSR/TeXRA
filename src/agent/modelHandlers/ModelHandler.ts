@@ -891,4 +891,25 @@ export abstract class ModelHandler<
   get supportsTokenCounting(): boolean {
     return false;
   }
+
+  /**
+   * Estimates the current context token count, properly handling conversation
+   * state (e.g., previous_response_id, sentMessages tracking).
+   *
+   * This is the preferred method for external callers who don't know the
+   * handler's internal state. The default implementation delegates to
+   * estimateTokenCount(), but handlers with conversation state (like OpenAI
+   * Responses API) can override to pass only the correct delta messages.
+   *
+   * @param messages - All messages in the conversation
+   * @param options - Token counting options
+   * @returns Promise resolving to the total context token count
+   */
+  async estimateContextTokens(
+    messages: M[],
+    options?: TokenCountOptions<C>,
+  ): Promise<number> {
+    // Default: delegate to estimateTokenCount with all messages
+    return this.estimateTokenCount(messages, options);
+  }
 }

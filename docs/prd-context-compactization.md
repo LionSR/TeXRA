@@ -775,8 +775,17 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 - **Diagnostic logging for token count investigation** (2026-02-03): Added `[TOKEN_DIAG]` logs in `modelHandlerOpenAIResponse.ts` to compare pre-flight token estimate with actual usage:
   - Pre-flight log: Shows `estimateTokenCount()` result, previous cumulative tokens, message counts, tool count, `previous_response_id` status
   - Post-response log: Compares actual `response.usage.input_tokens` with pre-flight estimate, shows difference, reasoning tokens, output tokens
+  - Warning log: When `response.usage.input_tokens` is missing (streaming instability)
 
   Look for `[TOKEN_DIAG]` in debug logs to investigate token counting mismatch.
+
+- **Fix: estimateContextTokens() for correct delta handling** (2026-02-03): Added `estimateContextTokens()` method to `ModelHandler` base class. For OpenAI Responses API with `previous_response_id`, this correctly passes only the delta messages (new messages since last request) to the token counting endpoint, matching how `createResponse()` works.
+
+  - `ModelHandler.estimateContextTokens()`: Default implementation delegates to `estimateTokenCount()` with all messages
+  - `ModelHandlerOpenAIResponse.estimateContextTokens()`: Override that slices messages using `sentMessages` to get only the delta when `previous_response_id` is set
+  - `ToolUseCycleFlow.ts`: Now uses `estimateContextTokens()` instead of `estimateTokenCount()`
+
+  This fixes the mismatch where `ToolUseCycleFlow` was passing ALL messages to the token counting endpoint, which could cause incorrect counts when OpenAI's endpoint prepends the conversation history from `previous_response_id`.
 
 ### In Progress
 
@@ -792,24 +801,7 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 
 ### Known Issues
 
-- **BUG: Token count mismatch between ToolUseCycleFlow and createResponse** (discovered 2026-02-03): For OpenAI Responses API with `previous_response_id`, there's a mismatch in how token counting is performed:
-
-  - **In `ToolUseCycleFlow.ts:789`**: Calls `estimateTokenCount(shared.messages, ...)` passing **ALL messages**
-  - **In `createResponse():994`**: Calls `estimateTokenCount(baseParams.input, ...)` passing **only `newMessages`** (the delta since last request, via `effectiveMessages.slice(conversationState.sentMessages)`)
-
-  When `previous_response_id` is set, OpenAI's token counting endpoint interprets `input` as the NEW messages to add to the server-side conversation history. The semantic difference:
-
-  - **ToolUseCycleFlow**: Sends all messages + `previous_response_id` → ambiguous interpretation (endpoint may count only input, missing server-side assistant responses and reasoning tokens)
-  - **createResponse**: Sends only delta + `previous_response_id` → correct interpretation (endpoint adds delta to reconstructed history)
-
-  This can cause displayed context utilization to be **lower than actual usage** if the endpoint counts only the `input` parameter without properly accounting for the `previous_response_id` history (including assistant responses and reasoning tokens from previous turns).
-
-  **Example**: UI shows "32% context left" but API returns "context_length_exceeded" because the token count didn't include the full server-side history.
-
-  **Fix needed**: The token count in `ToolUseCycleFlow` should either:
-  1. Pass only new messages (requires exposing `sentMessages` from the handler), or
-  2. Skip token counting for OpenAI Responses API (rely on `createResponse`'s authoritative count), or
-  3. Use cumulative token tracking from API responses instead of pre-flight counting
+- ~~**BUG: Token count mismatch between ToolUseCycleFlow and createResponse**~~ **FIXED** (2026-02-03): Added `estimateContextTokens()` method that correctly handles delta messages for OpenAI Responses API. See "Completed" section above.
 
 - **INVESTIGATION: OpenAI Responses API token counting mismatch** (pre-existing issue): When using `previous_response_id`, there's a case where UI shows "32% context left" but API returns "context_length_exceeded".
 
