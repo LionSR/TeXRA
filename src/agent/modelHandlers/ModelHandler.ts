@@ -891,5 +891,4 @@ export abstract class ModelHandler<
   get supportsTokenCounting(): boolean {
     return false;
   }
-
 }
