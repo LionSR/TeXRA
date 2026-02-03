@@ -447,6 +447,56 @@ export function createKey(source: AgentSource, name: string): string {
   return `${source}:${name}`;
 }
 
+/** Source priority for tool-use sessions (prefers tool-use agents). */
+const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
+  'custom',
+  'builtInToolUse',
+  'builtIn',
+  'remote',
+];
+
+/**
+ * Get an agent by identifier with session-aware priority.
+ * For tool-use sessions, prefers builtInToolUse over builtIn to handle name collisions.
+ */
+function getAgentWithPriority(
+  identifier: string,
+  preferToolUse: boolean,
+): AgentEntry | undefined {
+  // Direct lookup for source:name format (already resolved)
+  if (cache.has(identifier)) return cache.get(identifier);
+
+  // Find first match using session-appropriate priority
+  const priority = preferToolUse ? TOOL_USE_LOOKUP_PRIORITY : LOOKUP_PRIORITY;
+  for (const source of priority) {
+    const entry = cache.get(`${source}:${identifier}`);
+    if (entry) return entry;
+  }
+  return undefined;
+}
+
+/**
+ * Resolve an agent identifier to its full source:name key.
+ * Handles both plain names ("criticize") and existing keys ("builtIn:criticize").
+ *
+ * When preferToolUse is true, uses tool-use lookup priority:
+ * custom → builtInToolUse → builtIn → remote
+ *
+ * This prevents workflow agents from shadowing tool-use agents with the same name
+ * when restoring tool-use session state.
+ *
+ * Falls back to original identifier if agent not found.
+ */
+export function resolveAgentKey(
+  agentIdentifier: string,
+  preferToolUse = false,
+): string {
+  if (!agentIdentifier) return agentIdentifier;
+  const entry = getAgentWithPriority(agentIdentifier, preferToolUse);
+  if (!entry) return agentIdentifier;
+  return createKey(entry.source, entry.name);
+}
+
 /**
  * Extract the clean agent name from an identifier.
  * Handles source:name format (e.g., "custom:summarize" → "summarize").
