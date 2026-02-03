@@ -117,7 +117,7 @@ async function checkAndCompact(
 }
 ```
 
-**Key change: Check AFTER tool results are added.**
+**Key change: Check AFTER tool results are added, BEFORE next createResponse.**
 
 The current flow has a gap:
 ```
@@ -128,17 +128,46 @@ The current flow has a gap:
 5. createResponse() → [MAY OVERFLOW]
 ```
 
-**New flow with compaction check:**
+**New flow with token count check:**
 ```
 1. createResponse() → sends request
 2. Model returns tool_use + usage stats
 3. Tool executes → produces result
 4. Result appended to messages
-5. CHECK: if (usage.inputTokens + usage.outputTokens > threshold) → compact
-6. createResponse() → now within limits
+5. TOKEN COUNT CHECK  ← NEW
+6. If exceeds threshold → compact
+7. createResponse() → now within limits
 ```
 
-The check uses the **last response's usage stats** (available from step 2) to predict if we'll overflow, then compacts BEFORE the next API call.
+**Insertion point:** `ToolUseDispatchNode.post()` in `src/agent/core/flows/ToolUseCycleFlow.ts:764`
+
+```typescript
+// In ToolUseDispatchNode.post(), after line 764 (after all follow-up messages pushed)
+// and before line 778 (return FlowTransition.CONTINUE)
+
+// NEW: Token count check after tool results attached
+const tokenCount = await services.modelHandler.estimateTokenCount(shared.messages);
+const threshold = getCompactionThreshold(services.modelHandler.config.contextWindow);
+
+this.logger.logContextState({
+  inputTokens: tokenCount,
+  contextWindow: services.modelHandler.config.contextWindow,
+  utilizationPercent: (tokenCount / services.modelHandler.config.contextWindow) * 100,
+});
+
+if (tokenCount > threshold) {
+  // Trigger compaction before next createResponse
+  const compactionResult = await checkAndCompact(shared.messages, tokenCount, threshold, ...);
+  if (compactionResult.compacted) {
+    shared.messages = compactionResult.newMessages;
+    this.logger.logContextManagement('Context compacted', { ... });
+  }
+}
+
+return FlowTransition.CONTINUE;
+```
+
+This gives visibility into token count right after tool results are attached, and allows compaction before the next API call.
 
 | Provider | Strategy |
 |----------|----------|
