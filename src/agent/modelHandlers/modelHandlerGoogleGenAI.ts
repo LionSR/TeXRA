@@ -13,6 +13,7 @@ import {
   PartMediaResolutionLevel,
   type FunctionCall,
   type FunctionResponsePart,
+  type Tool as GeminiTool,
   File,
   createPartFromText,
   createPartFromUri,
@@ -392,6 +393,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     options?: TokenCountOptions<GoogleGenAI> & {
       /** Parts for the upcoming user message to include in count */
       lastMessageParts?: Part[];
+      /** Google-format tools to include in count (from toGoogleTools) */
+      googleTools?: GeminiTool[];
     },
   ): Promise<number> {
     const client = options?.client ?? (await this.getClient());
@@ -414,7 +417,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const responseTokenCount = await client.models.countTokens({
       model: this.config.fullName,
       contents: countContents,
-      config: { abortSignal: options?.signal },
+      config: {
+        abortSignal: options?.signal,
+        // Cast needed: toGoogleTools returns Tool[] but generationConfig.tools
+        // is typed as ToolListUnion (includes CallableTool). We know our tools
+        // are always Tool[] since toGoogleTools creates FunctionDeclaration tools.
+        ...(options?.googleTools?.length && {
+          tools: options.googleTools as GeminiTool[],
+        }),
+      },
     });
 
     const totalTokens = responseTokenCount.totalTokens ?? 0;
@@ -488,10 +499,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (this.supportsTokenCounting) {
       try {
         // Reuse built params for token counting (build once principle)
+        // Cast: toGoogleTools always returns Tool[], but generationConfig.tools
+        // is typed as ToolListUnion (which includes CallableTool union member)
         const totalTokens = await this.estimateTokenCount(history, {
           client,
           systemPrompt,
           lastMessageParts,
+          googleTools: generationConfig.tools as GeminiTool[] | undefined,
           signal,
         });
 
