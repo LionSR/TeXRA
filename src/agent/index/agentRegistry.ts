@@ -498,6 +498,19 @@ export function resolveAgentKey(
 }
 
 /**
+ * Resolve an agent identifier to its full source:name key.
+ * Handles both plain names ("criticize") and existing keys ("builtIn:criticize").
+ * Uses registry lookup priority (custom > builtIn > builtInToolUse > remote).
+ * Falls back to original identifier if agent not found.
+ */
+export function resolveAgentKey(agentIdentifier: string): string {
+  if (!agentIdentifier) return agentIdentifier;
+  const entry = getAgent(agentIdentifier);
+  if (!entry) return agentIdentifier;
+  return createKey(entry.source, entry.name);
+}
+
+/**
  * Extract the clean agent name from an identifier.
  * Handles source:name format (e.g., "custom:summarize" → "summarize").
  */
