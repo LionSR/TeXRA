@@ -34,7 +34,6 @@ import {
 } from '@shared/schemas';
 
 // Local imports - shared utilities
-import { ensureContextMenuUsesSlot } from '@shared/utils/dom';
 import { getBasename } from '@shared/utils/path';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { postMessage } from '@shared/vscode';
@@ -139,13 +138,6 @@ export class RequestPanels extends LitElement {
     if (this.openDiffMenuKey && !activeKeys.has(this.openDiffMenuKey)) {
       this.openDiffMenuKey = null;
     }
-  }
-
-  protected override updated(): void {
-    // Workaround for vscode-context-menu slot rendering
-    this.shadowRoot
-      ?.querySelectorAll('.diff-dropdown-menu')
-      .forEach(ensureContextMenuUsesSlot);
   }
 
   override connectedCallback(): void {
@@ -349,23 +341,14 @@ export class RequestPanels extends LitElement {
               <vscode-context-menu
                 class="diff-dropdown-menu"
                 ?show=${isMenuOpen}
+                .data=${[
+                  { label: 'Preview', value: 'previewProposed' },
+                  { label: 'LaTeXdiff', value: 'showLatexdiff' },
+                ]}
+                data-permission-kind=${permission.kind}
+                data-permission-id=${this.getPermissionId(permission)}
                 @vsc-click=${this.handleMenuClick}
-              >
-                <vscode-context-menu-item
-                  value="previewProposed"
-                  data-permission-kind=${permission.kind}
-                  data-permission-id=${this.getPermissionId(permission)}
-                >
-                  Preview
-                </vscode-context-menu-item>
-                <vscode-context-menu-item
-                  value="showLatexdiff"
-                  data-permission-kind=${permission.kind}
-                  data-permission-id=${this.getPermissionId(permission)}
-                >
-                  LaTeXdiff
-                </vscode-context-menu-item>
-              </vscode-context-menu>
+              ></vscode-context-menu>
             `
           : nothing}
       </div>
@@ -828,17 +811,17 @@ export class RequestPanels extends LitElement {
   }
 
   private handleMenuClick = (event: CustomEvent): void => {
-    const menuItem = getComposedPathElement<HTMLElement>(
+    const menu = getComposedPathElement<HTMLElement>(
       event,
-      'vscode-context-menu-item',
+      'vscode-context-menu',
     );
-    if (!menuItem) return;
+    if (!menu) return;
 
-    const kind = menuItem.dataset.permissionKind as
+    const kind = menu.dataset.permissionKind as
       | PermissionState['kind']
       | undefined;
-    const permissionId = menuItem.dataset.permissionId;
-    const action = event.detail?.value ?? menuItem.getAttribute('value') ?? '';
+    const permissionId = menu.dataset.permissionId;
+    const action = event.detail?.value ?? '';
     if (!kind || !permissionId || !action) return;
 
     const permission = this.permissions.find(
