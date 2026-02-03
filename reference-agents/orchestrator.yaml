@@ -42,6 +42,10 @@ prompts:
     (The agent has no memory of previous runs.)
     GOOD: "Sections 1-3 are complete. Write \ref{sec:experiments} following the outline in notes/experiment-plan.tex."
 
+    BAD: "Follow the structure in notes.tex" — but notes.tex is not in the proposal.
+    (You read it; the workflow agent cannot. Include files or inline the relevant content.)
+    GOOD: Either add notes.tex as a reference file, or state the structure explicitly: "Use three subsections: Setup, Results, Discussion. Each should be 1-2 paragraphs."
+
     TeXRA is a LaTeX-focused tool. Prefer .tex output format even for tool-use agents when suitable. Markdown often leads to inconsistency and formatting chaos in academic workflows.
 
     Choose propose_workflow when the task centers on transforming a specific document. The agent processes the input file and produces output that follows the same structure and section order. Use this for grammar correction, style polishing, figure generation, or document merging. If you want fresh content unrelated to existing structure, provide an empty template as input. Available workflow agents: {{ WORKFLOW_AGENTS }}.
