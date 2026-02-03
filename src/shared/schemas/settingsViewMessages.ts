@@ -17,8 +17,9 @@ import {
  * Exported for use in MessageFor type helper in message handler.
  */
 export const SETTINGS_VIEW_CMD = {
-  // Navigation commands (outbound only)
+  // Navigation commands
   SET_TAB: 'setTab',
+  OPEN_VSCODE_SETTINGS: 'openVscodeSettings',
   // Memory commands
   GET_MEMORY_DATA: 'getMemoryData',
   OPEN_MEMORY_FILE: 'openMemoryFile',
@@ -40,21 +41,28 @@ export const SETTINGS_VIEW_CMD = {
   SET_API_ACCESS_MODE: 'setApiAccessMode',
 } as const;
 
-/** Tab indices for the settings view */
-export const SETTINGS_TAB = {
-  MEMORY: 0,
-  HISTORY: 1,
-  MODELS: 2,
-  AGENTS: 3,
-} as const;
+/** Tab name order - single source of truth for tab indices */
+export const SETTINGS_TAB_ORDER = ['MEMORY', 'HISTORY', 'MODELS', 'AGENTS'] as const;
+
+export type SettingsTabName = (typeof SETTINGS_TAB_ORDER)[number];
+
+/** Tab indices derived from ordered array */
+export const SETTINGS_TAB = Object.fromEntries(
+  SETTINGS_TAB_ORDER.map((name, index) => [name, index]),
+) as Record<SettingsTabName, number>;
 
 export type SettingsTab = (typeof SETTINGS_TAB)[keyof typeof SETTINGS_TAB];
 
-/** Outbound message to switch tabs */
-export interface SetTabMessage {
-  command: typeof SETTINGS_VIEW_CMD.SET_TAB;
-  tabIndex: SettingsTab;
-}
+/** Maximum valid tab index */
+const MAX_TAB_INDEX = SETTINGS_TAB_ORDER.length - 1;
+
+/** Outbound schema to switch tabs */
+export const SetTabMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_CMD.SET_TAB),
+  tabIndex: z.number().int().min(0).max(MAX_TAB_INDEX),
+});
+
+export type SetTabMessage = z.infer<typeof SetTabMessageSchema>;
 
 // Alias for internal use
 const CMD = SETTINGS_VIEW_CMD;
@@ -167,6 +175,11 @@ const SetApiAccessModeInboundMessageSchema = z.object({
   mode: z.enum(['included', 'personal']),
 });
 
+// Navigation inbound messages
+const OpenVscodeSettingsMessageSchema = z.object({
+  command: z.literal(CMD.OPEN_VSCODE_SETTINGS),
+});
+
 // ============================================================
 // Discriminated union of all inbound messages
 // ============================================================
@@ -174,6 +187,8 @@ const SetApiAccessModeInboundMessageSchema = z.object({
 export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
   'command',
   [
+    // Navigation messages
+    OpenVscodeSettingsMessageSchema,
     // Memory messages
     GetMemoryDataMessageSchema,
     OpenMemoryFileMessageSchema,

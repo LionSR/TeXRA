@@ -117,38 +117,6 @@ function clearPendingLogUpdatesForStream(streamId: string): void {
   }
 }
 
-/**
- * Sum all token usage stats from a record of run usages.
- * Used to compute total usage for tool-use streams.
- */
-function sumRunUsage(
-  runUsage: Record<string, TokenUsageStats> | undefined,
-): TokenUsageStats | undefined {
-  if (!runUsage) return undefined;
-  const values = Object.values(runUsage);
-  if (values.length === 0) return undefined;
-
-  return values.reduce<TokenUsageStats>(
-    (acc, usage) => ({
-      inputTokens: (acc.inputTokens ?? 0) + (usage.inputTokens ?? 0),
-      outputTokens: (acc.outputTokens ?? 0) + (usage.outputTokens ?? 0),
-      cost: (acc.cost ?? 0) + (usage.cost ?? 0),
-      cacheReadInputTokens:
-        (acc.cacheReadInputTokens ?? 0) + (usage.cacheReadInputTokens ?? 0),
-      cacheCreationInputTokens:
-        (acc.cacheCreationInputTokens ?? 0) +
-        (usage.cacheCreationInputTokens ?? 0),
-    }),
-    {
-      inputTokens: 0,
-      outputTokens: 0,
-      cost: 0,
-      cacheReadInputTokens: 0,
-      cacheCreationInputTokens: 0,
-    },
-  );
-}
-
 function addPermission(
   ctx: MessageHandlerContext,
   permission: PermissionState,

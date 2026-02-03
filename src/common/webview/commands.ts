@@ -288,34 +288,18 @@ export const MEMORY_VIEW_COMMANDS = {
   UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
 } as const;
 
+// Import schema-defined commands and extend with COMMON_COMMANDS
+import { SETTINGS_VIEW_CMD } from '@shared/schemas/settingsViewMessages';
+
 // Settings view specific commands (combines Memory, History, and Profile views)
+// Schema commands are the source of truth; outbound-only commands are added here
 export const SETTINGS_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
-  // Navigation commands
-  SET_TAB: 'setTab',
-  OPEN_VSCODE_SETTINGS: 'openVscodeSettings',
-  // Memory commands
-  GET_MEMORY_DATA: 'getMemoryData',
+  ...SETTINGS_VIEW_CMD,
+  // Outbound-only commands (backend → frontend, not schema-validated)
   UPDATE_MEMORY: 'updateMemory',
-  OPEN_MEMORY_FILE: 'openMemoryFile',
-  OPEN_MEMORY_FOLDER: 'openMemoryFolder',
-  DELETE_MEMORY: 'deleteMemory',
-  GET_MEMORY_ENABLED: 'getMemoryEnabled',
-  SET_MEMORY_ENABLED: 'setMemoryEnabled',
   UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
-  // History commands
-  GET_HISTORY_DATA: 'getHistoryData',
   UPDATE_HISTORY: 'updateHistory',
-  CLEAR_HISTORY: 'clearHistory',
   HISTORY_CLEARED: 'historyCleared',
-  RERUN_AGENT: 'rerunAgent',
-  RESTORE_AGENT: 'restoreAgent',
-  DELETE_AGENT: 'deleteAgent',
-  // Profile commands
-  GET_PROFILE_DATA: 'getProfileData',
   UPDATE_PROFILE: 'updateProfile',
-  SELECT_AGENT: 'selectAgent',
-  SIGN_IN: 'signIn',
-  SIGN_OUT: 'signOut',
-  SET_API_ACCESS_MODE: 'setApiAccessMode',
 } as const;

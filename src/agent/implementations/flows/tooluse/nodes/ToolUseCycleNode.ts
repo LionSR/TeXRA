@@ -12,7 +12,10 @@ import {
   type ToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
 import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
-import type { ToolUseCycleServices } from '@agent/core/flows/CycleServices';
+import {
+  createClientRef,
+  type ToolUseCycleServices,
+} from '@agent/core/flows/CycleServices';
 import { bus } from '@eventBus/ProgressEventBus';
 
 import {
@@ -79,23 +82,24 @@ export class ToolUseCycleNode<C> extends Node<
     };
 
     const flow = createToolUseCycleFlow<C>();
-    let flowServices: ToolUseCycleServices<C> & {
+    const [clientRef, refreshClient] = createClientRef<C>(
+      await modelHandler.getClient(),
+      () => modelHandler.getClient(),
+    );
+    const flowServices: ToolUseCycleServices<C> & {
       refreshClient: () => Promise<void>;
-    };
-    flowServices = {
+    } = {
       ...this.services,
       setting: { ...setting, tools: resolvedTools },
-      client: await modelHandler.getClient(),
+      get client() {
+        return clientRef.current;
+      },
       run: prepRes.runState,
       workspace: prepRes.workspaceState,
       onRoundFinalized: getUsageRecorder(),
       modelName: config.model,
       agentName: config.agent,
-      refreshClient: async () => {
-        // Refresh client instance so retries pick up updated relay tokens.
-        const nextClient = await modelHandler.getClient();
-        (flowServices as { client: C }).client = nextClient;
-      },
+      refreshClient,
     };
     flow.setServices(flowServices);
 
