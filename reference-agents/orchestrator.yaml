@@ -32,9 +32,7 @@ prompts:
 
     BAD: "Use the same notation." — but preamble.tex is not in the proposal.
     (The agent won't know what $\H$ or $\ip{\cdot}{\cdot}$ mean without the macro definitions.)
-    GOOD: Include preamble.tex as auxiliary so the agent sees the custom commands.
-
-    Similarly, include .bbl files as auxiliary when the document has compiled bibliography entries the agent should reference.
+    GOOD: Include preamble.tex (or .bbl for bibliography) as auxiliary so the agent sees the definitions.
 
     TeXRA is a LaTeX-focused tool. Prefer .tex output format even for tool-use agents when suitable. Markdown often leads to inconsistency and formatting chaos in academic workflows.
 
