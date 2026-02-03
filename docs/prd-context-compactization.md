@@ -779,19 +779,20 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 
   Look for `[TOKEN_DIAG]` in debug logs to investigate token counting mismatch.
 
-- **Fix: estimateContextTokens() for correct delta handling** (2026-02-03): Added `estimateContextTokens()` method to `ModelHandler` base class. For OpenAI Responses API with `previous_response_id`, this correctly passes only the delta messages (new messages since last request) to the token counting endpoint, matching how `createResponse()` works.
-
-  - `ModelHandler.estimateContextTokens()`: Default implementation delegates to `estimateTokenCount()` with all messages
-  - `ModelHandlerOpenAIResponse.estimateContextTokens()`: Override that slices messages using `sentMessages` to get only the delta when `previous_response_id` is set
-  - `ToolUseCycleFlow.ts`: Now uses `estimateContextTokens()` instead of `estimateTokenCount()`
-
-  This fixes the mismatch where `ToolUseCycleFlow` was passing ALL messages to the token counting endpoint, which could cause incorrect counts when OpenAI's endpoint prepends the conversation history from `previous_response_id`.
+- **~~Fix: estimateContextTokens() for correct delta handling~~** (2026-02-03): REMOVED. This method was added to fix delta handling in `ToolUseCycleFlow`, but the entire token counting block in `ToolUseCycleFlow` was subsequently removed (see below), making this method dead code.
 
 - **Fix: Pass tools to token counting endpoint** (2026-02-03): Updated `ModelHandlerOpenAIResponse.estimateTokenCount()` to accept and pass `tools` and `systemPrompt` to OpenAI's `/responses/input_tokens` endpoint. Previously, only `input` and `previous_response_id` were passed, causing the count to miss tool definition tokens.
 
   - `estimateTokenCount()` now builds params matching the actual API call (model, input, previous_response_id, instructions, tools)
   - `createResponse()` now passes `systemPrompt` and `convertedTools` to `estimateTokenCount()`
-  - `ToolUseCycleFlow` still doesn't pass tools (requires provider-specific conversion) - documented as lower-bound estimate
+
+- **Cleanup: Remove redundant token counting from ToolUseCycleFlow** (2026-02-03): Removed the token counting block from `ToolUseDispatchNode.post()`. This code was redundant because:
+
+  1. **createResponse() already does accurate token counting**: The flow is Prep → Call → Process → Dispatch → (loop), where Call invokes `createResponse()` which performs accurate token counting with all parameters (tools, systemPrompt, previous_response_id)
+  2. **Redundant API calls**: ToolUseCycleFlow's token counting added an extra `/responses/input_tokens` call on every iteration
+  3. **Less accurate**: ToolUseCycleFlow couldn't pass tools (requires provider-specific conversion done in createResponse), making it a lower-bound estimate
+
+  Also removed the now-unused `estimateContextTokens()` method from `ModelHandler` and `ModelHandlerOpenAIResponse`.
 
 ### In Progress
 
@@ -807,7 +808,7 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 
 ### Known Issues
 
-- ~~**BUG: Token count mismatch between ToolUseCycleFlow and createResponse**~~ **FIXED** (2026-02-03): Added `estimateContextTokens()` method that correctly handles delta messages for OpenAI Responses API. See "Completed" section above.
+- ~~**BUG: Token count mismatch between ToolUseCycleFlow and createResponse**~~ **RESOLVED** (2026-02-03): Removed the redundant token counting from ToolUseCycleFlow entirely. The authoritative token counting happens inside `createResponse()`, which has access to all parameters (tools, systemPrompt, previous_response_id).
 
 - **INVESTIGATION: OpenAI Responses API token counting mismatch** (pre-existing issue): When using `previous_response_id`, there's a case where UI shows "32% context left" but API returns "context_length_exceeded".
 
@@ -829,6 +830,6 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 
 ### Future Optimizations
 
-- **Token counting latency**: Currently `estimateTokenCount()` is called after every tool completion. To reduce overhead, track cumulative token usage from API responses (`lastUsage`) and only call `estimateTokenCount()` when utilization exceeds 50% threshold.
+- **Token counting latency**: ~~Currently `estimateTokenCount()` is called after every tool completion.~~ RESOLVED: Removed redundant token counting from ToolUseCycleFlow. The authoritative token counting in `createResponse()` already happens per iteration and includes all parameters. Future optimization: track cumulative token usage from API responses (`lastUsage`) and skip the pre-flight `estimateTokenCount()` call when utilization is low (e.g., <50%).
 - **Configurable compaction model**: Add `compactionModel` property to `ModelConfig` (requires llm-zoo changes).
 - **Button icons**: Consider using `layers` or `archive` codicons instead of `fold/unfold` for clearer compaction metaphor.
