@@ -26,25 +26,13 @@ prompts:
 
     Self-contained instruction examples:
 
-    BAD: "Fix the issue with the convergence proof."
-    (What issue? The agent has no conversation history.)
-    GOOD: "In \ref{thm:convergence}, the bound assumes $\epsilon < 1$ but \ref{lem:setup} allows $\epsilon \geq 1$. Handle both cases."
-
-    BAD: "Apply the same style as before."
-    (Before when? The agent starts fresh.)
-    GOOD: "Use active voice, present tense, and keep sentences under 25 words. Avoid 'it is shown that' constructions."
-
-    BAD: "Use the notation we discussed."
-    (The agent wasn't in that discussion.)
-    GOOD: "Use $\mathcal{H}$ for the Hilbert space and $\langle \cdot, \cdot \rangle$ for inner products, matching the notation in preamble.tex."
-
-    BAD: "Continue where we left off."
-    (The agent has no memory of previous runs.)
-    GOOD: "Sections 1-3 are complete. Write \ref{sec:experiments} following the outline in notes/experiment-plan.tex."
-
     BAD: "Follow the structure in notes.tex" — but notes.tex is not in the proposal.
     (You read it; the workflow agent cannot. Include files or inline the relevant content.)
-    GOOD: Either add notes.tex as a reference file, or state the structure explicitly: "Use three subsections: Setup, Results, Discussion. Each should be 1-2 paragraphs."
+    GOOD: Either add notes.tex as a reference file, or state the structure explicitly: "Use three subsections: Setup, Results, Discussion."
+
+    BAD: "Use the same notation." — but preamble.tex is not in the proposal.
+    (The agent won't know what $\H$ or $\ip{\cdot}{\cdot}$ mean without the macro definitions.)
+    GOOD: Include preamble.tex as auxiliary so the agent sees the custom commands.
 
     TeXRA is a LaTeX-focused tool. Prefer .tex output format even for tool-use agents when suitable. Markdown often leads to inconsistency and formatting chaos in academic workflows.
 
