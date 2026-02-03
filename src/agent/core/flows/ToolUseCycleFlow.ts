@@ -782,6 +782,10 @@ class ToolUseDispatchNode<C> extends BatchNode<
     //
     // Use estimateContextTokens() which correctly handles conversation state
     // (e.g., passing only delta messages when previous_response_id is set).
+    //
+    // NOTE: This is a lower-bound estimate - tools are NOT included because they
+    // require provider-specific conversion (done in createResponse). The authoritative
+    // token count with tools happens inside createResponse().
     const { contextWindow } = services.modelHandler.config;
     if (contextWindow > 0 && services.modelHandler.supportsTokenCounting) {
       try {
