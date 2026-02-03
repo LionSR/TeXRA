@@ -784,6 +784,16 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 - Phase 3: Integration with handlers
 - Phase 4: UI — compaction visibility
 
+### Known Issues
+
+- **BUG: Reasoning tokens not counted in context utilization** (discovered 2026-02-03): For OpenAI o-series models (gpt-5.2, etc.), the context utilization only counts `inputTokens`, ignoring `reasoning_tokens`. When using `previous_response_id`, OpenAI reconstructs the full conversation **including previous reasoning tokens**, so actual context usage is much higher than displayed. Example: UI shows "32% context left" but API returns "context_length_exceeded" because 10M+ reasoning tokens weren't counted.
+
+  **Fix needed**: Include reasoning tokens in `logContextState()` calculation:
+  ```typescript
+  const actualContextUsed = inputTokens + (reasoningTokens ?? 0);
+  const utilizationPercent = (actualContextUsed / contextWindow) * 100;
+  ```
+
 ### Future Optimizations
 
 - **Token counting latency**: Currently `estimateTokenCount()` is called after every tool completion. To reduce overhead, track cumulative token usage from API responses (`lastUsage`) and only call `estimateTokenCount()` when utilization exceeds 50% threshold.
