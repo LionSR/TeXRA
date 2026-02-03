@@ -495,5 +495,4 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       `Model access changed to: ${modeLabel}`,
     );
   }
-
 }
