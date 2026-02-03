@@ -102,17 +102,30 @@ Instead, the approach is:
 1. When `shouldCompact()` returns true and no native strategy is available:
 2. Send the full message history to a **compactor model** with a structured summarization prompt
 3. The compactor returns the summary inside a `<conversation-summary>` XML tag
-4. **Replace the system prompt**: parse the summary using the existing `extractTextFromTag()` utility (`src/utils/text/xmlExtraction.ts:55`) and append it to the original system prompt. This is the same extraction pattern already used for `<revised>`, `<scratchpad>`, and `<document>` tags throughout the agent output pipeline.
-5. **Drop all old messages** -- the summary in the system prompt is now the sole representation of prior context
-6. The model receives: `[system prompt + summary]` + `[only the current user message]`
-7. Record compaction metadata (tokens before/after, summary text)
+4. Parse the summary using the existing `extractTextFromTag()` utility (`src/utils/text/xmlExtraction.ts:55`)
+5. **Drop all old messages**
+6. **Prepend the summary as a message** — the original system prompt remains unchanged
+7. The model receives: `[original system prompt]` + `[summary message, current user message]`
+8. Record compaction metadata (tokens before/after, summary text)
 
-**Why the system prompt?**
-- All providers support system prompts uniformly
-- No message sequence validation issues
-- The model treats it as authoritative context (system > conversation history)
-- Easy to re-summarize: just replace the `<conversation-summary>` section on next compaction
-- Works identically across Anthropic, OpenAI, Google, and any future provider
+**Post-compaction message structure:**
+
+```
+System prompt: "You are a LaTeX research assistant..."  ← unchanged
+
+Messages: [
+  { role: "user", content: "<conversation-summary>...[summary content]...</conversation-summary>" },
+  { role: "user", content: "[current user request]" }
+]
+```
+
+For providers supporting developer/system messages in the array (OpenAI), the summary can use `role: "developer"` for clearer separation.
+
+**Why a separate summary message (not injected into system prompt)?**
+- System prompt remains stable — agent identity and instructions don't change
+- No string manipulation or replacement of `<conversation-summary>` blocks needed
+- Clear separation: system prompt = instructions, summary message = context
+- The summary is explicitly "context from previous conversation", not part of core instructions
 
 ### 4.3 Compactor Model Selection
 
@@ -264,27 +277,29 @@ Each handler overrides `getCompactionStrategy()`:
 - `ModelHandlerKimi` → returns `null` → triggers system-prompt summarization
 - Any new handler → returns `null` by default (safe fallback)
 
-**System prompt mutation flow:**
+**Example post-compaction API call:**
 
 ```
-Original system prompt:
-  "You are a LaTeX research assistant..."
+System prompt (unchanged):
+  "You are a LaTeX research assistant. Help the user with their academic writing..."
 
-After compaction:
-  "You are a LaTeX research assistant...
-
-  <conversation-summary>
-  ## Task Objective
-  User asked to rewrite Section 3 of their paper on quantum error correction...
-
-  ## Current State
-  Completed rewrite of 3.1 and 3.2. Working on 3.3 (stabilizer codes).
-  Last generated text: "The stabilizer formalism provides..."
-
-  ## Pending Work
-  - Complete section 3.3
-  - Add citations for [Gottesman1997] and [Knill2005]
-  </conversation-summary>"
+Messages array:
+  [
+    {
+      role: "user",
+      content: "<conversation-summary>
+        1. Primary Request: Rewrite Section 3 on quantum error correction
+        2. Key Concepts: stabilizer codes, Gottesman-Knill theorem
+        3. Errors and fixes: Fixed citation format per user feedback
+        4. Current Work: Completed 3.1 and 3.2, working on 3.3
+        5. Pending Tasks: Complete 3.3, add citations [Gottesman1997], [Knill2005]
+        </conversation-summary>"
+    },
+    {
+      role: "user",
+      content: "Continue with section 3.3 on stabilizer codes"
+    }
+  ]
 ```
 
 ### 4.6 Message History Preservation
@@ -297,7 +312,7 @@ After compaction:
 
 2. At each API call, the messages to send are **derived** (not stored separately):
    - Before compaction: send `allMessages` directly
-   - After compaction: send `[]` (empty) — the summary lives in the system prompt
+   - After compaction: send `[summary message]` — old messages are dropped, summary provides context
 
 3. The derivation logic is a pure function:
    ```typescript
@@ -305,7 +320,12 @@ After compaction:
      if (compactionState === null) {
        return allMessages; // No compaction yet — send everything
      }
-     return []; // Post-compaction — summary is in system prompt, send no history
+     // Post-compaction — return only the summary message
+     // The current user message is appended by the caller
+     return [{
+       role: 'user', // or 'developer' for OpenAI
+       content: `<conversation-summary>${compactionState.summary}</conversation-summary>`
+     }];
    }
    ```
 
@@ -316,7 +336,7 @@ Maintaining two arrays (`allMessages` + `activeMessages`) creates an invariant t
 On each compaction:
 - `allMessages` remains unchanged (append-only)
 - `compactionState` is updated with the new summary and timestamp
-- The system prompt is rebuilt to include the `<conversation-summary>` block
+- The system prompt remains unchanged — summary is prepended as a message
 - Subsequent compactions re-summarize from `allMessages` (the full history), avoiding lossy summarization-of-summaries
 
 **UI display**: The webview renders from `allMessages`, showing the full conversation with a visual divider indicating which messages are "in context" vs "compacted away".
