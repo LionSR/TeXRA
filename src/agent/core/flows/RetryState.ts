@@ -55,6 +55,30 @@ interface RetryableNodeServices {
   refreshClient?: () => Promise<void>;
 }
 
+/**
+ * Attempts to refresh the model client using the provided refreshClient function.
+ * Logs success or failure; returns true if refresh was attempted and succeeded.
+ */
+async function tryRefreshClient(
+  refreshClient: (() => Promise<void>) | undefined,
+  logger: AgentLogger,
+  context: string,
+): Promise<boolean> {
+  if (!refreshClient) {
+    return false;
+  }
+  try {
+    await refreshClient();
+    logger.debug(`Refreshed model client ${context}`);
+    return true;
+  } catch (refreshError) {
+    logger.warn(
+      `Failed to refresh model client ${context}: ${toErrorMessage(refreshError)}`,
+    );
+    return false;
+  }
+}
+
 /** Base class for model/tool invocation nodes with retry support. */
 export abstract class RetryableInvocationNode<
   S,
@@ -106,18 +130,11 @@ export abstract class RetryableInvocationNode<
         services.logger.debug('Relay 401, refreshing token before retry loop');
         const refreshed = await SupabaseClient.getAccessToken(true);
         if (refreshed) {
-          if (services.refreshClient) {
-            try {
-              await services.refreshClient();
-              services.logger.debug(
-                'Refreshed model client after token refresh',
-              );
-            } catch (refreshError) {
-              services.logger.warn(
-                `Failed to refresh model client after token refresh: ${toErrorMessage(refreshError)}`,
-              );
-            }
-          }
+          await tryRefreshClient(
+            services.refreshClient,
+            services.logger,
+            'after token refresh',
+          );
           activeController = new AbortController();
           this.signal = activeController.signal;
           services.setAbortController(activeController);
@@ -185,21 +202,12 @@ export abstract class RetryableInvocationNode<
       this._persistent401Error = null;
       this._hasAttemptedTokenRefresh = false;
       const formatted = formatProviderHttpError(error);
-      if (
-        formatted.isRelayError &&
-        formatted.statusCode === 401 &&
-        this.services.refreshClient
-      ) {
-        try {
-          await this.services.refreshClient();
-          this.services.logger.debug(
-            'Refreshed model client before manual retry after relay 401',
-          );
-        } catch (refreshError) {
-          this.services.logger.warn(
-            `Failed to refresh model client before manual retry: ${toErrorMessage(refreshError)}`,
-          );
-        }
+      if (formatted.isRelayError && formatted.statusCode === 401) {
+        await tryRefreshClient(
+          this.services.refreshClient,
+          this.services.logger,
+          'before manual retry after relay 401',
+        );
       }
     }
 

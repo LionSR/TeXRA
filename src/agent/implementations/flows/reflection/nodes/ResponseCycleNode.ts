@@ -33,9 +33,10 @@ import {
   interpretCycleCompletion,
   type CycleCompletionResult,
 } from '@agent/core/flows/CommonCycleTypes';
-import type {
-  CycleStateSlices,
-  ResponseCycleServices,
+import {
+  createClientRef,
+  type CycleStateSlices,
+  type ResponseCycleServices,
 } from '@agent/core/flows/CycleServices';
 import type { AgentFileLocation } from '@utils/files';
 
@@ -163,21 +164,22 @@ export class ResponseCycleNode<C = unknown> extends Node<
       // Create and run the flow directly on shared (native nesting)
       const flow = createResponseCycleFlow<C>();
       const modelHandler = this.services.modelHandler;
-      let flowServices: ResponseCycleServices<C> & {
+      const [clientRef, refreshClient] = createClientRef<C>(
+        await modelHandler.getClient(),
+        () => modelHandler.getClient(),
+      );
+      const flowServices: ResponseCycleServices<C> & {
         refreshClient: () => Promise<void>;
-      };
-      flowServices = {
+      } = {
         ...this.services,
-        client: await modelHandler.getClient(),
+        get client() {
+          return clientRef.current;
+        },
         round: prepRes.round,
         run: prepRes.run,
         workspace: prepRes.workspace,
         onRoundFinalized,
-        refreshClient: async () => {
-          // Refresh client instance so retries pick up updated relay tokens.
-          const nextClient = await modelHandler.getClient();
-          (flowServices as { client: C }).client = nextClient;
-        },
+        refreshClient,
       };
       flow.setServices(flowServices);
 
