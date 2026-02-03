@@ -66,13 +66,14 @@ Key takeaway: the **system prompt is the right place** for compacted context. Ra
 
 ### 4.2 Compaction Strategies
 
-#### Strategy 1: Anthropic Server-Side Clearing (existing)
-- No changes. Continue using `context_management` parameter with `clear_tool_uses` and `clear_thinking`.
-- Already well-integrated.
+#### Strategy 1: Anthropic Server-Side Clearing (existing, not ideal)
+- Continue using `context_management` parameter with `clear_tool_uses` and `clear_thinking`.
+- **Limitation**: Clearing is lossy — tool results and thinking blocks are simply dropped, not summarized. The model loses access to specific details that might be needed later.
+- Consider offering client-side summarization as an optional override for Anthropic users who want better context preservation.
 
-#### Strategy 2: OpenAI Responses API Compaction (existing)
-- No changes. Continue using `/responses/compact` endpoint.
-- Already well-integrated.
+#### Strategy 2: OpenAI Responses API Compaction (existing, works well)
+- Continue using `/responses/compact` endpoint.
+- **Works well**: Opaque but effective — handles compaction server-side with good results.
 
 #### Strategy 3: Client-Side Summarization via System Prompt Injection (new -- fallback for all providers)
 
@@ -457,23 +458,15 @@ The follow-up input has a vertical action column:
   icon="fold-down"
   label="Compact context"
   title="Compact conversation context (summarize history to free tokens)"
-  ?disabled=${!this.canCompact}
   @click=${this.emitCompact}
 ></vscode-toolbar-button>
 ```
 
 **Behavior:**
 - Visible when stream is in tool-use mode (not workflow)
-- Disabled if context utilization is below 10% (wasteful to compact)
+- Always enabled (no threshold check — user decides when to compact)
 - On click: dispatches `COMPACT_NOW` command
 - Shows progress ring during compaction (like Polish button)
-- After completion: logs compaction event, updates context state display
-
-**State management:**
-```typescript
-@property({ type: Boolean }) canCompact = false;  // From context utilization > 10%
-@state() private compacting = false;              // Shows progress ring
-```
 
 **Why in follow-up input area?**
 - User is actively chatting → compaction is a chat-related action
@@ -517,14 +510,7 @@ Added to the vertical action column alongside Polish, Record, Clear, Send. See s
 
 ### 5.3 Context Utilization Indicator
 
-Add to `UsagePanel` or as a separate component:
-
-1. **Progress bar**: Visual bar showing context utilization
-   - Green: < 50%
-   - Yellow: 50-75%
-   - Red: > 75%
-2. **Compaction badge**: After compaction, show "Compacted: 72K → 18K"
-3. **Expandable details**: Click to see summary text (for client-side compaction)
+Existing `UsagePanel` already shows token counts. After compaction, show "Compacted: 72K → 18K" badge.
 
 ### 5.4 Chat View Compaction Divider
 
@@ -541,7 +527,6 @@ Add to `UsagePanel` or as a separate component:
 |---------|------|---------|-------------|
 | `texra.model.compactionThresholdPercent` | number | 75 | Existing. Threshold for auto-compaction. 0 = disabled. |
 | `texra.model.compactorModel` | string | "auto" | New. Model for client-side summarization. |
-| `texra.model.enableClientSideCompaction` | boolean | true | New. Enable client-side fallback when native compaction unavailable. |
 | `texra.model.enableThinkingClearing` | boolean | false | Existing. Anthropic thinking block clearing. |
 
 ## 7. Implementation Plan
@@ -609,10 +594,8 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 | Risk | Mitigation |
 |------|------------|
 | Client-side summary loses critical context | Structured prompt with mandatory sections; user can scroll up to see full history |
-| Compactor model call adds latency | Use cheapest/fastest available model; run async before next request |
-| Compactor model unavailable (no API key) | Fall back to naive truncation (drop oldest tool results first) |
-| Double-compaction (native + client-side) | Strategy selection is exclusive -- never both |
-| `allMessages` grows unbounded in memory | Cap at ~500 messages; beyond that, persist to disk and load on demand |
+| Compactor model call adds latency | Use cheapest/fastest available model |
+| Double-compaction (native + client-side) | Strategy selection is exclusive — never both |
 
 ## 9. Success Metrics
 
