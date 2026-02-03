@@ -540,15 +540,22 @@ export class MainApp extends BaseWebviewApp {
   }
 
   /**
-   * Validates that the current selection exists in the new options.
-   * Returns the current value if valid, otherwise returns a fallback.
+   * Validates that a selection exists in options.
+   * Returns current value if found, otherwise falls back to first available option.
    */
-  private validateOptionSelection<
+  private validateSelection<
     T extends { value: string; disabled?: boolean },
-  >(options: T[], currentValue: string, preferEnabled = false): string {
-    const hasValue = options.some((opt) => opt.value === currentValue);
-    if (hasValue) return currentValue;
+  >(
+    options: T[],
+    currentValue: string,
+    preferEnabled = false,
+  ): string {
+    // Exact match
+    if (options.some((opt) => opt.value === currentValue)) {
+      return currentValue;
+    }
 
+    // Fallback: prefer enabled options (for models with missing API keys)
     if (preferEnabled) {
       const firstEnabled = options.find((opt) => !opt.disabled);
       if (firstEnabled) return firstEnabled.value;
@@ -562,10 +569,10 @@ export class MainApp extends BaseWebviewApp {
     if (!message.optionsData) return;
 
     this.modelOptions = message.optionsData;
-    this.model = this.validateOptionSelection(
+    this.model = this.validateSelection(
       message.optionsData,
       this.model,
-      true,
+      true, // preferEnabled: skip disabled models
     );
   }
 
@@ -576,19 +583,19 @@ export class MainApp extends BaseWebviewApp {
 
     if (optionsData.workflow) {
       this.workflowAgentOptions = optionsData.workflow;
-      this.workflowAgent = this.validateOptionSelection(
+      this.workflowAgent = this.validateSelection(
         optionsData.workflow,
         this.workflowAgent,
-        true, // preferEnabled: avoid selecting disabled agents
+        true, // preferEnabled for consistency (agents don't have disabled, but future-proof)
       );
     }
 
     if (optionsData.toolUse) {
       this.toolUseAgentOptions = optionsData.toolUse;
-      this.toolUseAgent = this.validateOptionSelection(
+      this.toolUseAgent = this.validateSelection(
         optionsData.toolUse,
         this.toolUseAgent,
-        true, // preferEnabled: avoid selecting disabled agents
+        true,
       );
     }
   }
@@ -873,6 +880,8 @@ export class MainApp extends BaseWebviewApp {
     this.blockSave();
     try {
       this.sessionType = state.sessionType;
+      // Backend resolves agent names to source:name format via buildMainViewState,
+      // so we can set directly. handleSetAgentOptions validates when options arrive.
       this.workflowAgent = state.workflowAgent;
       this.toolUseAgent = state.toolUseAgent;
       this.model = state.model;
