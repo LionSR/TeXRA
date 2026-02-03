@@ -21,6 +21,7 @@ export {
   // Key helpers
   createKey,
   getCleanAgentName,
+  resolveAgentKey,
   // _multiple helpers
   getBaseName,
   getMultipleName,
