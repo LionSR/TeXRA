@@ -24,10 +24,6 @@ export function initializeSettingsViewProvider(
   return settingsViewProvider;
 }
 
-export function getSettingsViewProvider(): SettingsViewProvider | null {
-  return settingsViewProvider;
-}
-
 export async function showSettingsView(): Promise<void> {
   if (!settingsViewProvider) {
     void vscode.window.showErrorMessage(
