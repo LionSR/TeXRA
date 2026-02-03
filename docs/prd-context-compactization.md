@@ -70,7 +70,28 @@ The [neu-translator](https://github.com/neutree-ai/neu-translator) project uses 
 #### Strategy 1: OpenAI Responses API Compaction (existing, prioritized)
 - Continue using `/responses/compact` endpoint.
 - **Works well**: Opaque but effective — handles compaction server-side with good results.
-- **Still emit CONTEXT_MANAGEMENT**: Even though compaction is server-side, emit the event for UI visibility. The summary field will note "Server-side compaction (details not available)".
+- **Token count from response**: Use `compactedResponse.usage.input_tokens` for the post-compaction token count.
+- **Still emit CONTEXT_MANAGEMENT**: Even though compaction is server-side, emit the event for UI visibility using the token counts from the response. The summary field will note "Server-side compaction (details not available)".
+
+```typescript
+// Existing implementation in modelHandlerOpenAIResponse.ts:483-512
+const compactedResponse = await client.responses.compact(compactParams);
+const tokensAfter = compactedResponse.usage.input_tokens;
+
+this.logger.logContextManagement(
+  `Compacted: ${tokensBefore} → ${tokensAfter} tokens`,
+  {
+    action: 'compaction',
+    tokensBefore,
+    tokensAfter,
+    contextWindow,
+    utilizationBefore,
+    utilizationAfter,
+    summary: 'Server-side compaction (details not available)',
+    compactionModel: this.config.model,
+  },
+);
+```
 
 #### Strategy 2: Client-Side Summarization (for all other providers)
 
