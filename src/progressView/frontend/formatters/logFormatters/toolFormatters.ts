@@ -172,9 +172,20 @@ export function formatToolUseTemplate(
     typeof (input as { old_str?: string }).old_str === 'string' &&
     typeof (input as { new_str?: string }).new_str === 'string'
   ) {
+    // Extract startLine from output.edits[0] for file link navigation
+    const outputData = parsed.output;
+    const edits =
+      outputData && typeof outputData === 'object' && 'edits' in outputData
+        ? (outputData as { edits?: Array<{ startLine?: number }> }).edits
+        : undefined;
+    const startLine = edits?.[0]?.startLine;
+
     if (filePath) {
       sections.push(
-        buildToolUseSection('File:', buildFileLinkWithLines(filePath)),
+        buildToolUseSection(
+          'File:',
+          buildFileLinkWithLines(filePath, { startLine }),
+        ),
       );
     }
     sections.push(
