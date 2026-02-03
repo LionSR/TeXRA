@@ -397,6 +397,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
         this._diagPreFlightTokens = null; // Clear for next request
       }
+    } else {
+      // DIAGNOSTIC: Log when usage data is missing (streaming instability?)
+      this.logger.warn(
+        `[TOKEN_DIAG] response.usage.input_tokens MISSING - cannot track context usage`,
+        {
+          data: {
+            responseId: response.id,
+            responseStatus: response.status,
+            hasUsage: !!response.usage,
+            inputTokens: response.usage?.input_tokens,
+            outputTokens: response.usage?.output_tokens,
+            totalTokens: response.usage?.total_tokens,
+            preFlightTokens: this._diagPreFlightTokens,
+          },
+        },
+      );
+      this._diagPreFlightTokens = null; // Clear anyway
     }
 
     // Reset compacted flag after successful request (ready for next compaction if needed)
