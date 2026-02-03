@@ -780,19 +780,12 @@ class ToolUseDispatchNode<C> extends BatchNode<
     // allowing compaction to trigger if threshold exceeded.
     // Only run for providers with native token counting support.
     //
-    // LIMITATIONS (this is a diagnostic estimate, not authoritative):
-    // 1. Tools are counted in createResponse() with provider-specific formats
-    //    (e.g., anthropicTools for Anthropic) - not included here.
-    // 2. For OpenAI Responses API with previous_response_id: this passes ALL
-    //    messages, but createResponse() correctly passes only newMessages (delta).
-    //    The token count may underestimate actual usage because it may not fully
-    //    account for server-side history (assistant responses, reasoning tokens).
-    //
-    // The authoritative token count happens inside createResponse().
+    // Use estimateContextTokens() which correctly handles conversation state
+    // (e.g., passing only delta messages when previous_response_id is set).
     const { contextWindow } = services.modelHandler.config;
     if (contextWindow > 0 && services.modelHandler.supportsTokenCounting) {
       try {
-        const tokenCount = await services.modelHandler.estimateTokenCount(
+        const tokenCount = await services.modelHandler.estimateContextTokens(
           shared.messages,
           {
             client: services.client,
