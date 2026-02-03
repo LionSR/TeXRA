@@ -10,24 +10,24 @@
 
 TeXRA supports long-running agent conversations (multi-step research, tool-use cycles, reflection loops) that can exhaust a model's context window. Currently, each model handler has its own ad-hoc approach:
 
-- **Anthropic**: Server-side clearing of tool uses and thinking blocks via `context_management` beta parameter
-- **OpenAI Responses API**: Opaque `/responses/compact` endpoint that returns encrypted compacted state
-- **OpenAI Chat / Google GenAI**: No compaction at all -- only dynamic `max_tokens` reduction, which eventually fails when input alone exceeds the window
+- **Anthropic**: Server-side clearing of tool uses and thinking blocks via `context_management` beta parameter (opaque — user can't see what was removed)
+- **OpenAI Responses API**: `/responses/compact` endpoint that works well but returns encrypted compacted state
+- **OpenAI Chat / Google GenAI / DeepSeek / Kimi**: No compaction at all — only dynamic `max_tokens` reduction, which eventually fails when input alone exceeds the window
 
 This creates several issues:
 
 1. **Inconsistent behavior**: Users on Google or OpenAI Chat models hit hard failures that Anthropic/OpenAI Responses users don't
 2. **No user control**: Compaction happens silently; users can't inspect what was dropped or override decisions
-3. **Opaque compaction**: OpenAI's encrypted compaction gives zero visibility into what was preserved
+3. **Opaque compaction**: Both Anthropic's clearing and OpenAI's encrypted compaction give zero visibility into what was preserved
 4. **No client-side fallback**: When provider-side compaction isn't available, there's no fallback strategy
-5. **UI gaps**: The progress view shows compaction *events* but not the *state* of context -- users can't see what the model "remembers"
+5. **UI gaps**: The progress view shows compaction *events* but not the *state* of context — users can't see what the model "remembers"
 
 ## 2. Goals
 
 1. **Universal compaction**: Every model handler gets a compaction path, even if the provider doesn't natively support it
-2. **Layered strategy**: Prefer provider-native compaction when available; fall back to client-side summarization
+2. **Client-side summarization**: Use the same visible summarization approach for all providers except OpenAI Responses API
 3. **User visibility**: Show what was compacted, what remains, and allow manual trigger
-4. **Preserve existing behavior**: Provider-native compaction (Anthropic clearing, OpenAI `/compact`) stays as the primary path for those providers
+4. **OpenAI Responses keeps native**: Only OpenAI Responses API continues using `/responses/compact` (it works well)
 
 ## 3. Reference: neu-translator Approach
 
@@ -54,15 +54,16 @@ Key takeaway: the **system prompt is the right place** for compacted context. Ra
                     │  getCompactionState()│
                     └──────┬───────────────┘
                            │
-              ┌────────────┼────────────────┐
-              ▼            ▼                ▼
-     ┌────────────┐ ┌───────────┐  ┌──────────────┐
-     │ Anthropic   │ │ OpenAI    │  │ Client-Side  │
-     │ Strategy    │ │ Response  │  │ Summarization│
-     │ (clearing)  │ │ Strategy  │  │ Strategy     │
-     │             │ │ (compact) │  │ (fallback)   │
-     └────────────┘ └───────────┘  └──────────────┘
+              ┌────────────┴────────────────┐
+              ▼                             ▼
+     ┌───────────────────┐     ┌──────────────────────┐
+     │ OpenAI Responses  │     │ Client-Side          │
+     │ Strategy          │     │ Summarization        │
+     │ (/compact)        │     │ (all other providers)│
+     └───────────────────┘     └──────────────────────┘
 ```
+
+**Note:** Anthropic's server-side `context_management` (clearing tool uses/thinking blocks) is **not used**. All providers except OpenAI Responses API use client-side summarization for consistent, visible compaction.
 
 ### 4.2 Compaction Strategies
 
@@ -379,13 +380,15 @@ public async compactIfNeeded(
 ```
 
 Each handler overrides `getCompactionStrategy()`:
-- `ModelHandlerAnthropic` → returns `AnthropicClearingStrategy` (existing behavior, no change -- compaction handled server-side)
-- `ModelHandlerOpenAIResponse` → returns `OpenAICompactStrategy` (existing behavior, no change)
-- `ModelHandlerOpenAI` → returns `null` → triggers system-prompt summarization
-- `ModelHandlerGoogleGenAI` → returns `null` → triggers system-prompt summarization
-- `ModelHandlerDeepSeek` → returns `null` → triggers system-prompt summarization
-- `ModelHandlerKimi` → returns `null` → triggers system-prompt summarization
+- `ModelHandlerOpenAIResponse` → returns `OpenAICompactStrategy` (existing `/responses/compact` endpoint)
+- `ModelHandlerAnthropic` → returns `null` → triggers client-side summarization
+- `ModelHandlerOpenAI` → returns `null` → triggers client-side summarization
+- `ModelHandlerGoogleGenAI` → returns `null` → triggers client-side summarization
+- `ModelHandlerDeepSeek` → returns `null` → triggers client-side summarization
+- `ModelHandlerKimi` → returns `null` → triggers client-side summarization
 - Any new handler → returns `null` by default (safe fallback)
+
+**Why not use Anthropic's `context_management`?** The server-side clearing (removing tool uses and thinking blocks) is opaque and loses context. Client-side summarization preserves the conversation summary visibly in the message history, giving users transparency into what the model "remembers".
 
 **Example post-compaction API call:**
 
@@ -655,9 +658,9 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 
 ## 9. Success Metrics
 
-- Users on Google/OpenAI Chat models can run conversations 3x longer before hitting context errors
+- Users on Anthropic/Google/OpenAI Chat models can run conversations 3x longer before hitting context errors
 - Compaction events are visible in UI with < 2 clicks
-- No regression in Anthropic or OpenAI Responses compaction behavior
+- No regression in OpenAI Responses compaction behavior
 - Client-side summarization completes in < 5 seconds with the default compactor model
 
 ## 10. Out of Scope
@@ -665,3 +668,21 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 - Cross-session memory / persistent knowledge base (like neu-translator's `Memory` class)
 - Automatic prompt optimization / compression (token-level compression)
 - Streaming compaction (compacting while the model is still generating)
+
+## 11. Implementation Progress
+
+### Completed
+
+- **Token count check after tool results** (2026-02-03): Added token count logging in `ToolUseDispatchNode.post()` at `src/agent/core/flows/ToolUseCycleFlow.ts:778-794`. This logs context utilization after tool results are attached and before the next `createResponse()`, giving visibility into token usage and setting up for compaction trigger.
+
+### In Progress
+
+- PRD finalization and review
+
+### Pending
+
+- Phase 0: Refactor createResponse for modularity
+- Phase 1: Client-side summarization engine
+- Phase 2: Auto-compact toggle
+- Phase 3: Integration with handlers
+- Phase 4: UI — compaction visibility
