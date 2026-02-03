@@ -70,7 +70,7 @@ The [neu-translator](https://github.com/neutree-ai/neu-translator) project uses 
 #### Strategy 1: OpenAI Responses API Compaction (existing, prioritized)
 - Continue using `/responses/compact` endpoint.
 - **Works well**: Opaque but effective — handles compaction server-side with good results.
-- No changes needed.
+- **Still emit CONTEXT_MANAGEMENT**: Even though compaction is server-side, emit the event for UI visibility. The summary field will note "Server-side compaction (details not available)".
 
 #### Strategy 2: Client-Side Summarization (for all other providers)
 
@@ -272,6 +272,67 @@ function getCompactionModel(primaryModel: string): string {
 Fallback: if model not in map, use the same model.
 
 **No thinking mode for summarizer.** The Anthropic SDK's compaction call doesn't pass thinking parameters — summarization is straightforward and doesn't need extended thinking. Keeps compaction faster and cheaper.
+
+### 4.3.1 DRY Implementation for OpenAI-Compatible Providers
+
+Kimi, DeepSeek, and OpenAI Chat Completions all use the same OpenAI-compatible API format. To avoid code duplication:
+
+```typescript
+// src/agent/modelHandlers/compaction/openaiCompatibleCompaction.ts
+
+/**
+ * Shared compaction implementation for OpenAI-compatible providers.
+ * Used by: ModelHandlerOpenAI, ModelHandlerDeepSeek, ModelHandlerKimi
+ */
+export async function compactOpenAICompatible(
+  client: OpenAI,  // OpenAI SDK client (works with any OpenAI-compatible endpoint)
+  messages: ChatCompletionMessageParam[],
+  compactionModel: string,
+  summaryPrompt: string,
+): Promise<{ summary: string; inputTokens: number; outputTokens: number }> {
+  // Append summary prompt as user message
+  const compactionMessages = [
+    ...messages,
+    { role: 'user' as const, content: summaryPrompt },
+  ];
+
+  // Non-streaming call to compaction model
+  const response = await client.chat.completions.create({
+    model: compactionModel,
+    messages: compactionMessages,
+    stream: false,
+  });
+
+  const summary = response.choices[0]?.message?.content ?? '';
+  return {
+    summary,
+    inputTokens: response.usage?.prompt_tokens ?? 0,
+    outputTokens: response.usage?.completion_tokens ?? 0,
+  };
+}
+```
+
+Each handler calls this shared function with its own client:
+
+```typescript
+// In ModelHandlerKimi
+const result = await compactOpenAICompatible(
+  this.client,  // Kimi client (OpenAI SDK pointing to Kimi endpoint)
+  messages,
+  getCompactionModel(this.config.model),
+  DEFAULT_SUMMARY_PROMPT,
+);
+
+// In ModelHandlerDeepSeek
+const result = await compactOpenAICompatible(
+  this.client,  // DeepSeek client
+  messages,
+  getCompactionModel(this.config.model),
+  DEFAULT_SUMMARY_PROMPT,
+);
+```
+
+**Anthropic and Google** have different SDK shapes, so they need their own implementations (but follow the same pattern).
 
 ### 4.4 Structured Summary Prompt
 
