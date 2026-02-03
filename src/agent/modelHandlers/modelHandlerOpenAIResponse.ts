@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer';
 
 // Third-party imports
 import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
+import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -918,9 +919,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const client = options?.client ?? (await this.getClient());
 
     // Build params matching what we send to the actual API call
-    const countParams: Parameters<
-      typeof client.responses.inputTokens.count
-    >[0] = {
+    const countParams: InputTokenCountParams = {
       model: this.config.fullName,
       input: messages,
       ...(this.previousResponseId && {
@@ -928,9 +927,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }),
       ...(options?.systemPrompt && { instructions: options.systemPrompt }),
       ...(options?.tools?.length && {
-        tools: options.tools as Parameters<
-          typeof client.responses.inputTokens.count
-        >[0]['tools'],
+        tools: options.tools as InputTokenCountParams['tools'],
       }),
     };
 
