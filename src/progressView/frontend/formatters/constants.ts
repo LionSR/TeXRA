@@ -41,7 +41,11 @@ export const TIME_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
  * Tools that show old/new diff display for their input.
  * Output is human-readable status, NOT code (don't syntax highlight output).
  */
-export const TOOLS_WITH_DIFF_INPUT = new Set(['edit_file']);
+export const TOOLS_WITH_DIFF_INPUT = new Set([
+  'edit_file',
+  'str_replace_editor',
+  'str_replace_based_edit_tool',
+]);
 
 /**
  * Tools that read files and should show file link instead of content.
