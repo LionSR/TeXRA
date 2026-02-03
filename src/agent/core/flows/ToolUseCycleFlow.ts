@@ -784,7 +784,10 @@ class ToolUseDispatchNode<C> extends BatchNode<
       try {
         const tokenCount = await services.modelHandler.estimateTokenCount(
           shared.messages,
-          { client: services.client },
+          {
+            client: services.client,
+            systemPrompt: services.prompt.systemPrompt,
+          },
         );
         if (tokenCount > 0) {
           services.logger.logContextState(tokenCount, contextWindow);
