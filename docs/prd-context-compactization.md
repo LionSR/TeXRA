@@ -786,13 +786,42 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 
 ### Known Issues
 
-- **BUG: Reasoning tokens not counted in context utilization** (discovered 2026-02-03): For OpenAI o-series models (gpt-5.2, etc.), the context utilization only counts `inputTokens`, ignoring `reasoning_tokens`. When using `previous_response_id`, OpenAI reconstructs the full conversation **including previous reasoning tokens**, so actual context usage is much higher than displayed. Example: UI shows "32% context left" but API returns "context_length_exceeded" because 10M+ reasoning tokens weren't counted.
+- **BUG: Token count mismatch between ToolUseCycleFlow and createResponse** (discovered 2026-02-03): For OpenAI Responses API with `previous_response_id`, there's a mismatch in how token counting is performed:
 
-  **Fix needed**: Include reasoning tokens in `logContextState()` calculation:
-  ```typescript
-  const actualContextUsed = inputTokens + (reasoningTokens ?? 0);
-  const utilizationPercent = (actualContextUsed / contextWindow) * 100;
-  ```
+  - **In `ToolUseCycleFlow.ts:789`**: Calls `estimateTokenCount(shared.messages, ...)` passing **ALL messages**
+  - **In `createResponse():994`**: Calls `estimateTokenCount(baseParams.input, ...)` passing **only `newMessages`** (the delta since last request, via `effectiveMessages.slice(conversationState.sentMessages)`)
+
+  When `previous_response_id` is set, OpenAI's token counting endpoint interprets `input` as the NEW messages to add to the server-side conversation history. The semantic difference:
+
+  - **ToolUseCycleFlow**: Sends all messages + `previous_response_id` → ambiguous interpretation (endpoint may count only input, missing server-side assistant responses and reasoning tokens)
+  - **createResponse**: Sends only delta + `previous_response_id` → correct interpretation (endpoint adds delta to reconstructed history)
+
+  This can cause displayed context utilization to be **lower than actual usage** if the endpoint counts only the `input` parameter without properly accounting for the `previous_response_id` history (including assistant responses and reasoning tokens from previous turns).
+
+  **Example**: UI shows "32% context left" but API returns "context_length_exceeded" because the token count didn't include the full server-side history.
+
+  **Fix needed**: The token count in `ToolUseCycleFlow` should either:
+  1. Pass only new messages (requires exposing `sentMessages` from the handler), or
+  2. Skip token counting for OpenAI Responses API (rely on `createResponse`'s authoritative count), or
+  3. Use cumulative token tracking from API responses instead of pre-flight counting
+
+- **INVESTIGATION: OpenAI Responses API token counting mismatch** (pre-existing issue): When using `previous_response_id`, there's a case where UI shows "32% context left" but API returns "context_length_exceeded".
+
+  **OpenAI documentation confirms** (`/responses/input_tokens` endpoint):
+  > Items from this conversation are prepended to input_items for this response request.
+
+  So `previous_response_id` IS properly handled by the token counting endpoint. The returned `input_tokens` should include the full conversation (user messages + assistant responses) from the previous response ID.
+
+  **Possible causes to investigate**:
+  1. **Timing issue**: Token count logged, then new messages added before `createResponse()` call
+  2. **Tool definitions not counted**: Tools are added in `createResponse()` with provider-specific format, but our pre-flight check in `ToolUseCycleFlow` doesn't include them
+  3. **Reasoning tokens**: While `input_tokens` includes the conversation history, reasoning tokens from o-series models may be counted separately. OpenAI's context window is: `input_tokens + output_tokens` (where `output_tokens` includes `reasoning_tokens`). If reasoning is extensive, this could cause overflow.
+  4. **Token count interpretation**: Need to verify whether the count includes ALL server-side state or just messages
+
+  **Verification needed**:
+  - Log the exact token count returned by `estimateTokenCount()` right before the failing `createResponse()` call
+  - Compare with `response.usage.input_tokens` from previous responses
+  - Check if the error includes expected vs actual token counts
 
 ### Future Optimizations
 
