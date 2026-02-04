@@ -90,6 +90,7 @@ export const toolUseStyles = css`
     color: var(--vscode-charts-yellow, #cca700);
   }
 
+  /* Uses @keyframes spin from animationStyles (included via logStyles) */
   .tool-use-in-progress > .details-summary .codicon.spin {
     animation: spin 1s linear infinite;
   }
