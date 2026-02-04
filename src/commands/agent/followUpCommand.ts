@@ -171,7 +171,7 @@ async function handleFollowUpResult(
       break;
     case 'no_session':
       await vscode.window.showWarningMessage(
-        'No active tool-use session found. Use the Resume button to continue.',
+        'No active session. Start a new agent task to continue.',
       );
       break;
   }
