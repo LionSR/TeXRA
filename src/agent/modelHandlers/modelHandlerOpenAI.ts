@@ -155,7 +155,7 @@ export class ModelHandlerOpenAI<
   protected override async performClientCompaction(
     client: OpenAI,
     messages: ChatCompletionMessageParam[],
-    _systemPrompt: string,
+    systemPrompt: string,
   ): Promise<{
     summary: string;
     inputTokens: number;
@@ -166,7 +166,12 @@ export class ModelHandlerOpenAI<
       `Performing client-side compaction with model: ${compactionModel}`,
     );
 
-    return compactOpenAICompatible(client, messages, compactionModel);
+    return compactOpenAICompatible(
+      client,
+      messages,
+      systemPrompt,
+      compactionModel,
+    );
   }
 
   /**
@@ -419,9 +424,55 @@ export class ModelHandlerOpenAI<
 
     // Apply message normalization if subclass specifies options
     const normOptions = this.getMessageNormalizationOptions();
-    const messages = normOptions
+    let messages = normOptions
       ? this.prepareNormalizedMessages(rawMessages, normOptions)
       : rawMessages;
+
+    // Check if client-side compaction is needed before building request
+    // Only for handlers that don't use native compaction (e.g., not OpenAI Responses API)
+    if (this.supportsTokenCounting && !this.usesNativeCompaction()) {
+      try {
+        // Pre-flight token count to check if compaction is needed
+        const preflightTokens = await this.estimateTokenCount(messages, {
+          client,
+          systemPrompt,
+        });
+
+        if (this.shouldCompact(preflightTokens)) {
+          const threshold = this.getCompactionTokenThreshold();
+          this.logger.logProgress(
+            `Compacting conversation (${preflightTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
+          );
+
+          const compactionResult = await this.performClientCompaction(
+            client,
+            messages,
+            systemPrompt ?? '',
+          );
+
+          // Update compaction state
+          this.compactionState = {
+            isCompacted: true,
+            summary: compactionResult.summary,
+            tokensBefore: preflightTokens,
+            tokensAfter: compactionResult.outputTokens,
+            compactionModel: getCompactionModel(this.config.name),
+          };
+
+          // Replace messages with compacted summary
+          messages = this.getCompactedMessages(compactionResult.summary);
+
+          this.logger.logProgress(
+            `Compaction complete: ${preflightTokens} → ~${compactionResult.outputTokens} tokens`,
+          );
+        }
+      } catch (error) {
+        // Soft failure - proceed without compaction
+        this.logger.warn(
+          `Compaction check failed, proceeding without compaction: ${error}`,
+        );
+      }
+    }
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const useStreaming = this.getStreamingConfig();

@@ -566,11 +566,59 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const documentAnalysis = this.analyzeDocumentSources(messages);
     let hasFileReference = documentAnalysis.hasFileSource;
 
+    // Check if client-side compaction is needed before building request
+    let effectiveMessages = messages;
+    if (this.supportsTokenCounting && !hasFileReference) {
+      try {
+        // Pre-flight token count to check if compaction is needed
+        const preflightTokens = await this.estimateTokenCount(messages, {
+          client,
+          systemPrompt,
+        });
+
+        if (this.shouldCompact(preflightTokens)) {
+          const threshold = this.getCompactionTokenThreshold();
+          this.logger.logProgress(
+            `Compacting conversation (${preflightTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
+          );
+
+          const compactionResult = await this.performClientCompaction(
+            client,
+            messages,
+            systemPrompt ?? '',
+          );
+
+          // Update compaction state
+          this.compactionState = {
+            isCompacted: true,
+            summary: compactionResult.summary,
+            tokensBefore: preflightTokens,
+            tokensAfter: compactionResult.outputTokens,
+            compactionModel: getCompactionModel(this.config.name),
+          };
+
+          // Replace messages with compacted summary
+          effectiveMessages = this.getCompactedMessages(
+            compactionResult.summary,
+          );
+
+          this.logger.logProgress(
+            `Compaction complete: ${preflightTokens} → ~${compactionResult.outputTokens} tokens`,
+          );
+        }
+      } catch (error) {
+        // Soft failure - proceed without compaction
+        this.logger.warn(
+          `Compaction check failed, proceeding without compaction: ${error}`,
+        );
+      }
+    }
+
     // Phase 1: BUILD - Construct provider-specific request parameters
     const options: MessageCreateParams = {
       model: this.config.fullName,
       max_tokens: this.config.maxOutputTokens,
-      messages,
+      messages: effectiveMessages,
       temperature,
       stop_sequences: endTag ? [endTag] : undefined,
       system: systemPrompt,

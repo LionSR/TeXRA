@@ -18,6 +18,7 @@ import { extractTextFromTag } from '@utils/text/xmlExtraction';
  *
  * @param client - OpenAI SDK client (works with any OpenAI-compatible endpoint)
  * @param messages - Current conversation messages
+ * @param systemPrompt - System prompt to include for context
  * @param compactionModel - Model to use for summarization
  * @param summaryPrompt - Prompt to use for summarization (defaults to DEFAULT_SUMMARY_PROMPT)
  * @returns Promise resolving to the summarization result
@@ -25,14 +26,18 @@ import { extractTextFromTag } from '@utils/text/xmlExtraction';
 export async function compactOpenAICompatible(
   client: OpenAI,
   messages: ChatCompletionMessageParam[],
+  systemPrompt: string,
   compactionModel: string,
   summaryPrompt: string = DEFAULT_SUMMARY_PROMPT,
 ): Promise<SummarizationResult> {
   // Remove pending tool_use blocks from last assistant message
   const cleanedMessages = cleanMessagesForCompaction(messages);
 
-  // Append summary prompt as user message
+  // Build messages with system prompt and summary request
   const compactionMessages: ChatCompletionMessageParam[] = [
+    ...(systemPrompt
+      ? [{ role: 'system' as const, content: systemPrompt }]
+      : []),
     ...cleanedMessages,
     { role: 'user', content: summaryPrompt },
   ];

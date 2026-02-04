@@ -484,21 +484,73 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   ): Promise<GenerateContentResponse> {
     const {
       client,
-      messages,
+      messages: originalMessages,
       temperature,
       systemPrompt,
       endTag,
       signal,
       tools,
     } = options;
-    if (messages.length === 0) {
+    if (originalMessages.length === 0) {
       this.logger.error('Cannot create response from empty messages array.');
       throw new Error('Messages array cannot be empty.');
     }
 
+    // Check if client-side compaction is needed before building request
+    let effectiveMessages = originalMessages;
+    if (this.supportsTokenCounting) {
+      try {
+        // Pre-flight token count to check if compaction is needed
+        const preflightTokens = await this.estimateTokenCount(
+          originalMessages.slice(0, -1),
+          {
+            client,
+            systemPrompt,
+            lastMessageParts: originalMessages.at(-1)?.parts ?? [],
+          },
+        );
+
+        if (this.shouldCompact(preflightTokens)) {
+          const threshold = this.getCompactionTokenThreshold();
+          this.logger.logProgress(
+            `Compacting conversation (${preflightTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
+          );
+
+          const compactionResult = await this.performClientCompaction(
+            client,
+            originalMessages,
+            systemPrompt ?? '',
+          );
+
+          // Update compaction state
+          this.compactionState = {
+            isCompacted: true,
+            summary: compactionResult.summary,
+            tokensBefore: preflightTokens,
+            tokensAfter: compactionResult.outputTokens,
+            compactionModel: getCompactionModel(this.config.name),
+          };
+
+          // Replace messages with compacted summary
+          effectiveMessages = this.getCompactedMessages(
+            compactionResult.summary,
+          );
+
+          this.logger.logProgress(
+            `Compaction complete: ${preflightTokens} → ~${compactionResult.outputTokens} tokens`,
+          );
+        }
+      } catch (error) {
+        // Soft failure - proceed without compaction
+        this.logger.warn(
+          `Compaction check failed, proceeding without compaction: ${error}`,
+        );
+      }
+    }
+
     // History excludes the final user message - we send it separately via sendMessage
-    const history = messages.slice(0, -1);
-    const lastMessage = messages.at(-1);
+    const history = effectiveMessages.slice(0, -1);
+    const lastMessage = effectiveMessages.at(-1);
 
     // Messages should already be properly formatted with alternating turns
     validateGoogleMessageHistory(history, this.logger);

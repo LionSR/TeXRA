@@ -21,7 +21,7 @@ export {
 } from './compactionPrompt';
 
 // Model mapping
-export { COMPACTION_MODEL_MAP, getCompactionModel } from './compactionModelMap';
+export { getCompactionModel } from './compactionModelMap';
 
 // Provider-specific compaction functions
 export { compactOpenAICompatible } from './openaiCompatibleCompaction';

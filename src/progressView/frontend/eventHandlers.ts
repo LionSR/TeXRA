@@ -250,6 +250,12 @@ export function sendFollowupCommand(
   });
 }
 
+export function handleCompactNow(ctx: FrontendEventHandlerContext): void {
+  const streamId = ctx.getState().activeStreamId;
+  if (!streamId) return;
+  postMessage(PROGRESS_VIEW_COMMANDS.COMPACT_NOW, { stream: streamId });
+}
+
 export function handlePermissionAction(
   event: CustomEvent<PermissionActionDetail>,
 ): void {

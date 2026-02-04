@@ -42,6 +42,7 @@ const ProgressViewPrefsSchema = z.object({
 
 // Local imports - event handlers
 import {
+  handleCompactNow,
   handleDeleteAll,
   handleFileAction,
   handleFilterChange,
@@ -235,6 +236,7 @@ export class ProgressApp extends BaseWebviewApp {
           @followup-polish=${this.onFollowUpPolish}
           @followup-clear=${this.onFollowUpClear}
           @followup-focus-complete=${this.onFollowUpFocusComplete}
+          @compact-now=${this.onCompactNow}
         ></tool-use-stream-content>
       `;
     }
@@ -384,6 +386,9 @@ export class ProgressApp extends BaseWebviewApp {
 
   private onFollowUpClear = (): void =>
     handleFollowUpClear(this.getEventHandlerContext());
+
+  private onCompactNow = (): void =>
+    handleCompactNow(this.getEventHandlerContext());
 
   private onFollowupRequestOptions = (): void =>
     handleFollowupRequestOptions(this.getEventHandlerContext());

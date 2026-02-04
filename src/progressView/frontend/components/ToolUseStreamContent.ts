@@ -19,6 +19,7 @@
  * @fires followup-send - When follow-up is submitted
  * @fires followup-polish - When polish button is clicked
  * @fires followup-clear - When clear button is clicked
+ * @fires compact-now - When compact now button is clicked
  */
 
 // Third-party imports
