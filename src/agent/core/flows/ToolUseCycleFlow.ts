@@ -533,8 +533,8 @@ interface ToolExecutionResult {
     source: string;
     sourceDisplay: string;
   }>;
-  /** Log ID for updating the in-progress log entry after execution */
-  logId?: string;
+  /** Log ID and groupId for updating the in-progress log entry after execution */
+  logRef?: { logId: string; groupId: string | undefined };
 }
 
 /**
@@ -626,7 +626,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     const tool = options.toolRegistry.get(call.name);
 
     // Only show in-progress for tools that can take a while
-    const logId = SLOW_TOOLS.has(call.name)
+    const logRef = SLOW_TOOLS.has(call.name)
       ? options.logger.logToolUseStart(call.name, parsedInput ?? call.raw)
       : undefined;
 
@@ -661,7 +661,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
       parsedInput,
       sanitizedOutput,
       editedFiles,
-      logId,
+      logRef,
     };
   }
 
@@ -670,7 +670,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     options: ToolUseCycleOptions<C>,
     workspace: ToolUseCycleServices<C>['workspace'],
   ): Promise<void> {
-    const { call, result, parsedInput, sanitizedOutput, editedFiles, logId } =
+    const { call, result, parsedInput, sanitizedOutput, editedFiles, logRef } =
       execResult;
 
     const toolUseLog = {
@@ -681,9 +681,9 @@ class ToolUseDispatchNode<C> extends BatchNode<
       isError: Boolean(result.isError),
     };
 
-    // Update the in-progress log entry with the result, or create new if no logId
-    if (logId) {
-      options.logger.updateToolUse(logId, toolUseLog);
+    // Update the in-progress log entry with the result, or create new if no logRef
+    if (logRef) {
+      options.logger.updateToolUse(logRef.logId, toolUseLog, logRef.groupId);
     } else {
       options.logger.logToolUse({ ...toolUseLog, status: 'completed' });
     }
