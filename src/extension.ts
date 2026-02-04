@@ -27,11 +27,11 @@ import { StorageFS } from '@utils/files';
 import { watchConfig, getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
-import { initializeServerSideKeyAccess } from '@/auth/serverKeys';
-import { SupabaseClient } from '@/auth/SupabaseClient';
-import { SupabaseAuthProvider } from '@/auth/SupabaseAuthProvider';
-import { SupabaseUriHandler } from '@/auth/UriHandler';
-import { isSupabaseConfigured, setRuntimeExtensionId } from '@/auth/config';
+import { initializeServerSideKeyAccess } from '@auth/serverKeys';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { SupabaseAuthProvider } from '@auth/SupabaseAuthProvider';
+import { SupabaseUriHandler } from '@auth/UriHandler';
+import { isSupabaseConfigured, setRuntimeExtensionId } from '@auth/config';
 import { loadAgents } from '@agent/index';
 
 // Local imports - components

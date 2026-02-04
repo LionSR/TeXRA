@@ -41,10 +41,10 @@ import { runExecuteCommand } from '@commands/agent/executeCommand';
 import type { RemoteAgent } from '@shared/schemas/profileViewMessages';
 import { getAgentsBySource, loadAgents } from '@agent/index';
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
-import { SupabaseClient } from '@/auth/SupabaseClient';
-import { AUTH_COMMANDS } from '@/auth/constants';
-import { ULTRA_TIER, MAX_TIER } from '@/auth/config';
-import { getServerSideKeyService } from '@/auth/serverKeys';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { AUTH_COMMANDS } from '@auth/constants';
+import { ULTRA_TIER, MAX_TIER } from '@auth/config';
+import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Type helper for extracting specific message types
 type MessageFor<C extends SettingsViewInboundMessage['command']> = Extract<
