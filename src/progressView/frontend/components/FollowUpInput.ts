@@ -228,6 +228,13 @@ export class FollowUpInput extends LitElement {
                 @click=${this.recordingController.handleClick}
               ></vscode-toolbar-button>
               <vscode-toolbar-button
+                id=${ELEMENT_IDS.COMPACT_NOW_BTN}
+                icon="fold-up"
+                label="Compact context"
+                title="Compact conversation context now (summarize history)"
+                @click=${this.emitCompactNow}
+              ></vscode-toolbar-button>
+              <vscode-toolbar-button
                 id=${ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN}
                 icon="clear-all"
                 label="Clear input"
@@ -289,6 +296,10 @@ export class FollowUpInput extends LitElement {
 
   private emitClear(): void {
     this.dispatchEvent(ProgressEvents.followupClear());
+  }
+
+  private emitCompactNow(): void {
+    this.dispatchEvent(ProgressEvents.compactNow());
   }
 
   private updateValue(value: string): void {

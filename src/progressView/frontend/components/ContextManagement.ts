@@ -30,6 +30,12 @@ export interface ActionConfig {
   color: string;
 }
 
+/** Extended configuration for compaction events with summary */
+export interface CompactionConfig extends ActionConfig {
+  summary?: string;
+  compactionModel?: string;
+}
+
 @customElement('context-management')
 export class ContextManagement extends LitElement {
   static override styles = [
@@ -75,14 +81,60 @@ export class ContextManagement extends LitElement {
       .stat-item .codicon {
         opacity: 0.7;
       }
+
+      /* Summary section for compaction events */
+      .summary-section {
+        margin-top: var(--spacing-small);
+        border-top: 1px solid var(--vscode-panel-border);
+        padding-top: var(--spacing-small);
+      }
+
+      .summary-header {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        font-weight: 500;
+        margin-bottom: var(--spacing-tiny);
+        color: var(--vscode-descriptionForeground);
+        font-size: var(--font-size-sm);
+      }
+
+      .summary-content {
+        background: var(--vscode-textBlockQuote-background);
+        border-radius: var(--border-radius-small);
+        padding: var(--spacing-small);
+        font-size: var(--font-size-sm);
+        white-space: pre-wrap;
+        font-family: var(--vscode-editor-font-family);
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .summary-content.collapsed {
+        max-height: 4em;
+        overflow: hidden;
+      }
+
+      .summary-toggle {
+        background: none;
+        border: none;
+        color: var(--vscode-textLink-foreground);
+        cursor: pointer;
+        padding: var(--spacing-tiny);
+        font-size: var(--font-size-sm);
+      }
+
+      .summary-toggle:hover {
+        text-decoration: underline;
+      }
     `,
   ];
 
   /** Log ID for tracking */
   @property({ type: String }) logId = '';
 
-  /** Action configuration (icon, label, color) */
-  @property({ type: Object }) config: ActionConfig = {
+  /** Action configuration (icon, label, color, optional summary) */
+  @property({ type: Object }) config: CompactionConfig = {
     icon: 'codicon-history',
     label: 'Context Management',
     color: 'var(--vscode-foreground)',
@@ -90,6 +142,41 @@ export class ContextManagement extends LitElement {
 
   /** Statistics items to display */
   @property({ type: Array }) items: ContextStatItem[] = [];
+
+  /** Whether the summary is expanded */
+  @property({ type: Boolean }) summaryExpanded = false;
+
+  private toggleSummary(): void {
+    this.summaryExpanded = !this.summaryExpanded;
+  }
+
+  private renderSummarySection(): TemplateResult | typeof nothing {
+    if (!this.config.summary) {
+      return nothing;
+    }
+
+    const modelInfo = this.config.compactionModel
+      ? ` (via ${this.config.compactionModel})`
+      : '';
+
+    return html`
+      <div class="summary-section">
+        <div class="summary-header">
+          <i class="codicon codicon-note"></i>
+          <span>Compaction Summary${modelInfo}</span>
+          <button
+            class="summary-toggle"
+            @click=${this.toggleSummary}
+          >
+            ${this.summaryExpanded ? 'Collapse' : 'Expand'}
+          </button>
+        </div>
+        <div class="summary-content ${this.summaryExpanded ? '' : 'collapsed'}">
+          ${this.config.summary}
+        </div>
+      </div>
+    `;
+  }
 
   override render(): TemplateResult {
     if (this.items.length === 0) {
@@ -119,6 +206,7 @@ export class ContextManagement extends LitElement {
               </span>
             `,
           )}
+          ${this.renderSummarySection()}
         </div>
       </details>
     `;

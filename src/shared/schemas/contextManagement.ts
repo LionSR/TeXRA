@@ -19,6 +19,16 @@ export const ContextManagementDataSchema = z.object({
   details: z.string().optional(),
   originalMaxTokens: z.number().positive().optional(),
   reducedMaxTokens: z.number().positive().optional(),
+  /**
+   * The full summary text generated during compaction.
+   * Only present when action is 'compaction'.
+   */
+  summary: z.string().optional(),
+  /**
+   * The model used for generating the compaction summary.
+   * Only present when action is 'compaction'.
+   */
+  compactionModel: z.string().optional(),
 });
 
 export type ContextManagementData = z.infer<typeof ContextManagementDataSchema>;

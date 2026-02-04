@@ -437,10 +437,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
+   * OpenAI Responses API uses native compaction via /responses/compact endpoint.
+   * This handler does NOT use client-side summarization.
+   */
+  protected override usesNativeCompaction(): boolean {
+    return true;
+  }
+
+  /**
    * Get the configured compaction threshold percentage.
    * Returns 0 if compaction is disabled.
    */
-  private getCompactionThresholdPercent(): number {
+  protected override getCompactionThresholdPercent(): number {
     return getConfig<number>(
       'texra.model.compactionThresholdPercent',
       DEFAULT_COMPACTION_THRESHOLD_PERCENT,
@@ -451,7 +459,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Calculate the absolute token threshold based on the model's context window
    * and the configured percentage threshold.
    */
-  private getCompactionTokenThreshold(): number {
+  protected override getCompactionTokenThreshold(): number {
     const percent = this.getCompactionThresholdPercent();
     if (percent <= 0) {
       return 0;
@@ -462,12 +470,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /**
    * Check if the conversation should be compacted based on cumulative input tokens.
+   * Uses OpenAI Responses API's native compaction.
    * Compaction is only triggered when:
    * - Threshold percentage is greater than 0 (not disabled)
    * - Cumulative input tokens exceed the calculated threshold (percentage of context window)
    * - Not running through OpenRouter (which may not support compaction)
    */
-  private shouldCompact(): boolean {
+  protected override shouldCompact(): boolean {
     const thresholdPercent = this.getCompactionThresholdPercent();
     if (thresholdPercent <= 0) {
       return false;

@@ -49,6 +49,11 @@ import { flexibleFS, type FileLocation } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 
 // Local file imports
+import {
+  compactAnthropic,
+  getCompactionModel,
+  CONVERSATION_SUMMARY_TAG,
+} from './compaction';
 import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
 import { AnthropicStreamHandler } from './support/AnthropicStreamHandler';
 import { toAnthropicTools } from './toolConversion';
@@ -486,6 +491,49 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     return responseTokenCount.input_tokens;
+  }
+
+  // =========================================================================
+  // Context compaction methods (client-side summarization)
+  // =========================================================================
+
+  /**
+   * Perform client-side compaction by summarizing the conversation.
+   * Uses a cheaper/faster Anthropic model for the summarization call.
+   */
+  protected override async performClientCompaction(
+    client: Anthropic,
+    messages: MessageParam[],
+    systemPrompt: string,
+  ): Promise<{
+    summary: string;
+    inputTokens: number;
+    outputTokens: number;
+  }> {
+    const compactionModel = getCompactionModel(this.config.name);
+    this.logger.debug(
+      `Performing client-side compaction with model: ${compactionModel}`,
+    );
+
+    return compactAnthropic(
+      client,
+      messages,
+      systemPrompt,
+      compactionModel,
+    );
+  }
+
+  /**
+   * Get the messages to send after compaction has occurred.
+   * Returns the summary wrapped in a user message with conversation-summary tags.
+   */
+  protected override getCompactedMessages(summary: string): MessageParam[] {
+    return [
+      {
+        role: 'user',
+        content: `<${CONVERSATION_SUMMARY_TAG}>${summary}</${CONVERSATION_SUMMARY_TAG}>`,
+      },
+    ];
   }
 
   /** Creates a chat completion response using Anthropic's API with specified parameters and optional system prompt. */
@@ -1115,6 +1163,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
       throw new Error(errMsg);
     }
 
+    // Reset compaction state for new conversation
+    this.resetCompactionState();
     this.updateCacheControlTarget(undefined);
 
     // Create content list for the user message

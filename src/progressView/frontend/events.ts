@@ -130,4 +130,6 @@ export const ProgressEvents = {
 
   followupFocusComplete: () =>
     createEvent('followup-focus-complete', undefined),
+
+  compactNow: () => createEvent('compact-now', undefined),
 } as const;

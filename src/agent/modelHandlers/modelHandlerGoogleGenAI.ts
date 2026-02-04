@@ -70,6 +70,11 @@ import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
 // Local file imports
 import {
+  compactGoogleGenAI,
+  getCompactionModel,
+  CONVERSATION_SUMMARY_TAG,
+} from './compaction';
+import {
   DEFAULT_ATTACHMENT_MIME_TYPE,
   formatAttachmentSummary,
   formatToolResultAsText,
@@ -434,6 +439,45 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return totalTokens;
   }
 
+  // =========================================================================
+  // Context compaction methods (client-side summarization)
+  // =========================================================================
+
+  /**
+   * Perform client-side compaction by summarizing the conversation.
+   * Uses a cheaper/faster Google model for the summarization call.
+   */
+  protected override async performClientCompaction(
+    client: GoogleGenAI,
+    messages: Content[],
+    systemPrompt: string,
+  ): Promise<{
+    summary: string;
+    inputTokens: number;
+    outputTokens: number;
+  }> {
+    const compactionModel = getCompactionModel(this.config.name);
+    this.logger.debug(
+      `Performing client-side compaction with model: ${compactionModel}`,
+    );
+
+    return compactGoogleGenAI(client, messages, systemPrompt, compactionModel);
+  }
+
+  /**
+   * Get the messages to send after compaction has occurred.
+   * Returns the summary wrapped in a user message with conversation-summary tags.
+   */
+  protected override getCompactedMessages(summary: string): Content[] {
+    return [
+      createUserContent([
+        createPartFromText(
+          `<${CONVERSATION_SUMMARY_TAG}>${summary}</${CONVERSATION_SUMMARY_TAG}>`,
+        ),
+      ]),
+    ];
+  }
+
   /** Creates a chat completion response using Google's GenAI API with specified parameters and optional system prompt. */
   async createResponse(
     options: CreateResponseOptions<Content, GoogleGenAI>,
@@ -720,6 +764,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     mediaFiles?: FileLocation[],
     _systemPrompt?: string,
   ): Promise<Content[]> {
+    // Reset compaction state for new conversation
+    this.resetCompactionState();
+
     const userContentParts: Part[] = [createPartFromText(userPrefix)];
 
     if (mediaFiles && mediaFiles.length > 0 && this.supportsFileUploads()) {

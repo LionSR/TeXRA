@@ -50,6 +50,7 @@ import {
 } from './types/StopReasonTypes';
 import {
   computeReducedMaxTokens,
+  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
   TOKEN_SAFETY_BUFFER,
 } from './contextManagementConstants';
 
@@ -808,6 +809,125 @@ export abstract class ModelHandler<
     messages: M[],
     mediaFiles: FileLocation[],
   ): Promise<void>;
+
+  // =========================================================================
+  // Context compaction methods
+  // =========================================================================
+
+  /**
+   * State tracking for client-side compaction.
+   * This tracks whether compaction has occurred and the last summary generated.
+   */
+  protected compactionState: {
+    /** Whether the conversation has been compacted */
+    isCompacted: boolean;
+    /** The summary text from the most recent compaction */
+    summary?: string;
+    /** Token count before compaction */
+    tokensBefore?: number;
+    /** Token count after compaction (summary tokens) */
+    tokensAfter?: number;
+    /** Model used for compaction */
+    compactionModel?: string;
+  } = {
+    isCompacted: false,
+  };
+
+  /** Reset compaction state to initial values. */
+  protected resetCompactionState(): void {
+    this.compactionState = {
+      isCompacted: false,
+    };
+  }
+
+  /**
+   * Get the configured compaction threshold percentage.
+   * Returns 0 if compaction is disabled.
+   */
+  protected getCompactionThresholdPercent(): number {
+    return getConfig<number>(
+      'texra.model.compactionThresholdPercent',
+      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+    );
+  }
+
+  /**
+   * Calculate the absolute token threshold based on the model's context window
+   * and the configured percentage threshold.
+   */
+  protected getCompactionTokenThreshold(): number {
+    const percent = this.getCompactionThresholdPercent();
+    if (percent <= 0) {
+      return 0;
+    }
+    return Math.floor((percent / 100) * this.config.contextWindow);
+  }
+
+  /**
+   * Check if compaction should be triggered based on current token usage.
+   *
+   * @param inputTokens - Current input token count
+   * @returns true if compaction should be triggered
+   */
+  protected shouldCompact(inputTokens: number): boolean {
+    const threshold = this.getCompactionTokenThreshold();
+    if (threshold <= 0) {
+      return false;
+    }
+    return inputTokens > threshold;
+  }
+
+  /**
+   * Determines if this handler uses native/server-side compaction.
+   * Override in handlers that have native compaction (e.g., OpenAI Responses API).
+   * Handlers returning true will NOT use client-side summarization.
+   *
+   * @returns true if the handler uses native compaction, false otherwise
+   */
+  protected usesNativeCompaction(): boolean {
+    return false;
+  }
+
+  /**
+   * Perform client-side compaction by summarizing the conversation.
+   * This method should be overridden by handlers to call their provider-specific
+   * compaction function. The base implementation throws an error.
+   *
+   * @param client - Provider client instance
+   * @param messages - Current conversation messages
+   * @param systemPrompt - System prompt for context
+   * @returns Promise resolving to the compaction result
+   */
+  protected async performClientCompaction(
+    _client: C,
+    _messages: M[],
+    _systemPrompt: string,
+  ): Promise<{
+    summary: string;
+    inputTokens: number;
+    outputTokens: number;
+  }> {
+    throw new Error(
+      `Client-side compaction not implemented for provider: ${this.config.provider}. ` +
+        `Override performClientCompaction() in the handler.`,
+    );
+  }
+
+  /**
+   * Get the messages to send after compaction has occurred.
+   * Returns the summary wrapped in a user message.
+   * Override in handlers that need provider-specific message formats.
+   *
+   * @param summary - The compaction summary text
+   * @returns Array with a single user message containing the summary
+   */
+  protected getCompactedMessages(summary: string): M[] {
+    // This needs to be overridden by each handler since message formats differ
+    throw new Error(
+      `getCompactedMessages not implemented for provider: ${this.config.provider}. ` +
+        `Override this method in the handler.`,
+    );
+  }
 
   // =========================================================================
   // Token counting methods

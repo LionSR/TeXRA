@@ -231,6 +231,11 @@ export const PROGRESS_VIEW_COMMANDS = {
   // Memory
   OPEN_MEMORY_VIEW: 'openMemoryView',
 
+  // Context compaction
+  TOGGLE_AUTO_COMPACT: 'toggleAutoCompact',
+  COMPACT_NOW: 'compactNow',
+  UPDATE_AUTO_COMPACT_STATE: 'updateAutoCompactState',
+
   // File operations
   OPEN_FILE: 'openFile',
   OPEN_FILE_COMPILE: 'openFileCompile',

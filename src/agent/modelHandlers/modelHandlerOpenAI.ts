@@ -52,6 +52,11 @@ import {
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
 // Local file imports
+import {
+  compactOpenAICompatible,
+  getCompactionModel,
+  CONVERSATION_SUMMARY_TAG,
+} from './compaction';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import {
   normalizeOpenAIMessageContent,
@@ -137,6 +142,46 @@ export class ModelHandlerOpenAI<
   /** Returns OpenAI client with configured API key. */
   async getClient(): Promise<OpenAI> {
     return this.createOpenAIClient();
+  }
+
+  // =========================================================================
+  // Context compaction methods (client-side summarization)
+  // =========================================================================
+
+  /**
+   * Perform client-side compaction by summarizing the conversation.
+   * Uses a cheaper/faster OpenAI model for the summarization call.
+   */
+  protected override async performClientCompaction(
+    client: OpenAI,
+    messages: ChatCompletionMessageParam[],
+    _systemPrompt: string,
+  ): Promise<{
+    summary: string;
+    inputTokens: number;
+    outputTokens: number;
+  }> {
+    const compactionModel = getCompactionModel(this.config.name);
+    this.logger.debug(
+      `Performing client-side compaction with model: ${compactionModel}`,
+    );
+
+    return compactOpenAICompatible(client, messages, compactionModel);
+  }
+
+  /**
+   * Get the messages to send after compaction has occurred.
+   * Returns the summary wrapped in a user message with conversation-summary tags.
+   */
+  protected override getCompactedMessages(
+    summary: string,
+  ): ChatCompletionMessageParam[] {
+    return [
+      {
+        role: 'user',
+        content: `<${CONVERSATION_SUMMARY_TAG}>${summary}</${CONVERSATION_SUMMARY_TAG}>`,
+      },
+    ];
   }
 
   /**
@@ -496,6 +541,9 @@ export class ModelHandlerOpenAI<
     mediaFiles?: FileLocation[],
     systemPrompt?: string,
   ): Promise<any[]> {
+    // Reset compaction state for new conversation
+    this.resetCompactionState();
+
     const messages: any[] = [];
 
     // Handle system prompt differently for O1 models
