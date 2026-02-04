@@ -149,7 +149,7 @@ export function formatToolUseTemplate(
   const iconClass = isUserFeedback
     ? 'codicon-comment'
     : isInProgress
-      ? 'codicon codicon-sync spin'
+      ? 'codicon-sync spin'
       : getToolIconClass(toolName, showAsError);
 
   // Build title
