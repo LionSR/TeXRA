@@ -50,7 +50,9 @@ export async function compactAnthropic(
 
   // Extract text from response
   const rawSummary = response.content
-    .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+    .filter(
+      (block): block is { type: 'text'; text: string } => block.type === 'text',
+    )
     .map((block) => block.text)
     .join('\n');
 
@@ -68,9 +70,7 @@ export async function compactAnthropic(
  * Cleans messages for compaction by removing pending tool_use blocks from the last assistant message.
  * This follows the Anthropic SDK pattern.
  */
-function cleanMessagesForCompaction(
-  messages: MessageParam[],
-): MessageParam[] {
+function cleanMessagesForCompaction(messages: MessageParam[]): MessageParam[] {
   if (messages.length === 0) {
     return messages;
   }

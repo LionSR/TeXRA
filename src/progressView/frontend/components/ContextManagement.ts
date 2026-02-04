@@ -166,6 +166,7 @@ export class ContextManagement extends LitElement {
           <span>Compaction Summary${modelInfo}</span>
           <button
             class="summary-toggle"
+            aria-expanded="${this.summaryExpanded}"
             @click=${this.toggleSummary}
           >
             ${this.summaryExpanded ? 'Collapse' : 'Expand'}

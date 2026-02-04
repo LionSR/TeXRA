@@ -36,7 +36,9 @@ export async function compactGoogleGenAI(
   const cleanedMessages = cleanMessagesForCompaction(messages);
 
   // Create the summary request message
-  const summaryUserMessage = createUserContent([createPartFromText(summaryPrompt)]);
+  const summaryUserMessage = createUserContent([
+    createPartFromText(summaryPrompt),
+  ]);
 
   // Use chat API for multi-turn context
   const chat = client.chats.create({

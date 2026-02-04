@@ -515,12 +515,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       `Performing client-side compaction with model: ${compactionModel}`,
     );
 
-    return compactAnthropic(
-      client,
-      messages,
-      systemPrompt,
-      compactionModel,
-    );
+    return compactAnthropic(client, messages, systemPrompt, compactionModel);
   }
 
   /**

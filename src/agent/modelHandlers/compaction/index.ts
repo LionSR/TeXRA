@@ -14,7 +14,11 @@
 export * from './types';
 
 // Prompts
-export { DEFAULT_SUMMARY_PROMPT, SUMMARY_TAG, CONVERSATION_SUMMARY_TAG } from './compactionPrompt';
+export {
+  DEFAULT_SUMMARY_PROMPT,
+  SUMMARY_TAG,
+  CONVERSATION_SUMMARY_TAG,
+} from './compactionPrompt';
 
 // Model mapping
 export { COMPACTION_MODEL_MAP, getCompactionModel } from './compactionModelMap';

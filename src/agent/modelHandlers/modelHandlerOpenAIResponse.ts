@@ -631,6 +631,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<ResponseInputItem[]> {
     this.previousResponseId = null;
     this.resetConversationState();
+    this.resetCompactionState(); // Reset base class state for consistency
     this.clearPendingBackgroundResponse();
 
     const messages: ResponseInputItem[] = [];

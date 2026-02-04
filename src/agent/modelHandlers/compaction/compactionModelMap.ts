@@ -25,9 +25,9 @@ export const COMPACTION_MODEL_MAP: Record<string, string> = {
   'gpt-4o-mini': 'gpt-4o-mini',
   'gpt-4.1': 'gpt-4.1-mini',
   'gpt-4.1-mini': 'gpt-4.1-mini',
-  'o1': 'gpt-4o',
+  o1: 'gpt-4o',
   'o1-mini': 'gpt-4o-mini',
-  'o3': 'gpt-4o',
+  o3: 'gpt-4o',
   'o3-mini': 'gpt-4o-mini',
   'o4-mini': 'gpt-4o-mini',
 
