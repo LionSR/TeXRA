@@ -37,6 +37,11 @@ interface ApprovalCallbacks {
   ) => void;
 }
 
+/** Callbacks for auto-compact toggle state handling. */
+interface AutoCompactCallbacks {
+  updateAutoCompactState: (streamId: string, enabled: boolean) => void;
+}
+
 /** Callbacks for bash approval event handling. */
 interface BashApprovalCallbacks {
   showBashPermission: (
@@ -56,6 +61,7 @@ interface AgentProposalCallbacks {
 /** Combined UI callbacks interface. */
 export type UICallbacks = RetryCallbacks &
   ApprovalCallbacks &
+  AutoCompactCallbacks &
   BashApprovalCallbacks &
   AgentProposalCallbacks;
 
@@ -121,6 +127,14 @@ export function registerUIEvents(
     (p) =>
       callbacks.updateToolEditApprovalBypassState(p.streamId, p.bypassActive),
     'failed to update approval bypass state',
+    signal,
+  );
+
+  registerEvent(
+    bus,
+    'updateAutoCompactState',
+    (p) => callbacks.updateAutoCompactState(p.streamId, p.enabled),
+    'failed to update auto-compact state',
     signal,
   );
 

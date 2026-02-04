@@ -59,6 +59,7 @@ export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   todos: z.array(TodoItemSchema).prefault([]),
   queuedFollowUps: z.array(z.string()).prefault([]),
   toolEditBypass: z.boolean().optional(),
+  autoCompactEnabled: z.boolean().optional(),
   sessionUsage: TokenUsageStatsSchema.nullable().prefault(null),
   // Frontend-owned (nested under ui)
   ui: ToolUseUIStateSchema.prefault({}),

@@ -48,8 +48,10 @@ export const ELEMENT_IDS = {
   QUEUED_FOLLOW_UPS_LIST: 'queuedFollowUpsList',
   RECORD_FOLLOW_UP_BTN: 'recordFollowUpBtn',
   YOLO_TOGGLE_BTN: 'yoloToggleBtn',
+  AUTO_COMPACT_TOGGLE_BTN: 'autoCompactToggleBtn',
   POLISH_FOLLOW_UP_BTN: 'polishFollowUpBtn',
   CLEAR_FOLLOW_UP_BTN: 'clearFollowUpBtn',
+  COMPACT_NOW_BTN: 'compactNowBtn',
   SEND_FOLLOW_UP_BTN: 'sendFollowUpBtn',
   AGENT_FILTER_CONTAINER: 'agentFilterButtons',
   FILTER_ALL_BTN: 'filterAllBtn',
@@ -162,9 +164,21 @@ const YOLO_TOGGLE_BUTTON = Object.freeze({
   isToggle: true,
 });
 
+const AUTO_COMPACT_TOGGLE_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.AUTO_COMPACT_TOGGLE_BTN,
+  icon: 'fold',
+  iconActive: 'unfold',
+  command: COMMANDS.TOGGLE_AUTO_COMPACT,
+  title: 'Enable auto-compact (summarize context when threshold exceeded)',
+  titleActive: 'Auto-compact active - click to disable',
+  className: 'auto-compact-toggle-button',
+  isToggle: true,
+});
+
 const TOOL_USE_TOOLBAR = [
   STOP_STREAM_BUTTON,
   YOLO_TOGGLE_BUTTON,
+  AUTO_COMPACT_TOGGLE_BUTTON,
   RESTORE_STATE_BUTTON,
   { ...OPEN_TASK_STORAGE_BUTTON },
 ];

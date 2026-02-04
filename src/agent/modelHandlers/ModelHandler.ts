@@ -50,6 +50,7 @@ import {
 } from './types/StopReasonTypes';
 import {
   computeReducedMaxTokens,
+  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
   TOKEN_SAFETY_BUFFER,
 } from './contextManagementConstants';
 
@@ -105,6 +106,8 @@ export abstract class ModelHandler<
   protected progressViewEnabled = true;
   protected agentCategory?: AgentCategory;
   protected mediaProcessor: MediaAttachmentProcessor;
+  private autoCompactEnabled = false;
+  private pendingCompactionRequest = false;
 
   /**
    * Whether the handler supports processing attachments in tool results.
@@ -203,6 +206,47 @@ export abstract class ModelHandler<
    */
   public setProgressViewEnabled(enabled: boolean): void {
     this.progressViewEnabled = enabled;
+  }
+
+  /** Enable or disable auto-compaction for this handler instance. */
+  public setAutoCompactEnabled(enabled: boolean): void {
+    this.autoCompactEnabled = enabled;
+  }
+
+  /** Check if auto-compaction is enabled for this handler instance. */
+  public isAutoCompactEnabled(): boolean {
+    return this.autoCompactEnabled;
+  }
+
+  /** Request a manual compaction on the next response cycle. */
+  public requestCompaction(): void {
+    this.pendingCompactionRequest = true;
+  }
+
+  /** Consume a pending manual compaction request. */
+  protected consumeCompactionRequest(): boolean {
+    if (!this.pendingCompactionRequest) {
+      return false;
+    }
+    this.pendingCompactionRequest = false;
+    return true;
+  }
+
+  /** Get the configured compaction threshold percentage. */
+  protected getCompactionThresholdPercent(): number {
+    return getConfig<number>(
+      'texra.model.compactionThresholdPercent',
+      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+    );
+  }
+
+  /** Calculate the absolute token threshold based on context window and configured percentage. */
+  protected getCompactionTokenThreshold(contextWindow: number): number {
+    const percent = this.getCompactionThresholdPercent();
+    if (percent <= 0) {
+      return 0;
+    }
+    return Math.floor((percent / 100) * contextWindow);
   }
 
   /**

@@ -221,6 +221,14 @@ export class WebviewUpdater {
     });
   }
 
+  updateAutoCompactState(stream: StreamTabId, enabled: boolean): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_AUTO_COMPACT_STATE,
+      stream,
+      enabled,
+    });
+  }
+
   showBashPermission(permission: BashPermission): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL,

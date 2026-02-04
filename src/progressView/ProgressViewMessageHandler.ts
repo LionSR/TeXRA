@@ -12,6 +12,12 @@ import { getAgent } from '@agent/index/agentRegistry';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import {
+  clearAllAutoCompactState,
+  clearAutoCompactStateForStream,
+  toggleAutoCompactEnabled,
+} from '@agent/toolUse/ToolUseAutoCompactState';
+import { getToolUseFlowContext } from '@agent/toolUse/ToolUseAgentRegistry';
 import { toErrorMessage } from '@common/errors';
 import {
   BaseViewMessageHandler,
@@ -165,6 +171,28 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           : 'YOLO mode disabled: Tool actions will prompt for approval.';
         await vscode.window.showInformationMessage(msg);
       },
+      [PROGRESS_VIEW_COMMANDS.TOGGLE_AUTO_COMPACT]: async (data) => {
+        const isNowEnabled = toggleAutoCompactEnabled(data.stream);
+        const flowContext = getToolUseFlowContext(data.stream);
+        flowContext?.services.modelHandler.setAutoCompactEnabled(isNowEnabled);
+        const msg = isNowEnabled
+          ? 'Auto-compact enabled: context will be summarized when threshold is exceeded.'
+          : 'Auto-compact disabled.';
+        await vscode.window.showInformationMessage(msg);
+      },
+      [PROGRESS_VIEW_COMMANDS.COMPACT_NOW]: async (data) => {
+        const flowContext = getToolUseFlowContext(data.stream);
+        if (!flowContext) {
+          await vscode.window.showInformationMessage(
+            'No active tool-use session available for compaction.',
+          );
+          return;
+        }
+        flowContext.services.modelHandler.requestCompaction();
+        await vscode.window.showInformationMessage(
+          'Compaction requested. The next model call will summarize context.',
+        );
+      },
       [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]: (data) =>
         this.handleAgentProposalAction(data),
       [PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION]: (data) =>
@@ -276,6 +304,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     // Clear pending task groups, approvals, queued follow-ups, and YOLO state to prevent memory leaks
     this.provider.eventHandler.clearPendingTaskGroups(streamId);
     cleanupApprovalsForStream(streamId);
+    clearAutoCompactStateForStream(streamId);
     ToolUseFollowUpQueue.release(streamId);
     this.clearModelOutputBackups(streamId);
     await this.provider.state.clearStream(streamId);
@@ -299,6 +328,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     // Clear all pending task groups, approvals, queued follow-ups, and YOLO state to prevent memory leaks
     this.provider.eventHandler.clearAllPendingTaskGroups();
     cleanupAllApprovals();
+    clearAllAutoCompactState();
     for (const streamId of this.provider.state.streamTabs.keys()) {
       ToolUseFollowUpQueue.release(streamId);
     }

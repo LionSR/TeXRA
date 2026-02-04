@@ -75,6 +75,22 @@ export class ContextManagement extends LitElement {
       .stat-item .codicon {
         opacity: 0.7;
       }
+
+      .summary-block {
+        flex-basis: 100%;
+        margin-top: var(--spacing-small);
+        padding: var(--spacing-small);
+        border-radius: var(--border-radius);
+        background: color-mix(
+          in srgb,
+          var(--accent-color, var(--vscode-foreground)) 8%,
+          transparent
+        );
+        white-space: pre-wrap;
+        font-family: var(--font-family-monospace);
+        font-size: var(--font-size-sm);
+        line-height: 1.4;
+      }
     `,
   ];
 
@@ -90,6 +106,9 @@ export class ContextManagement extends LitElement {
 
   /** Statistics items to display */
   @property({ type: Array }) items: ContextStatItem[] = [];
+
+  /** Optional summary text shown when compaction occurs */
+  @property({ type: String }) summary = '';
 
   override render(): TemplateResult {
     if (this.items.length === 0) {
@@ -119,6 +138,9 @@ export class ContextManagement extends LitElement {
               </span>
             `,
           )}
+          ${this.summary
+            ? html`<div class="summary-block">${this.summary}</div>`
+            : nothing}
         </div>
       </details>
     `;

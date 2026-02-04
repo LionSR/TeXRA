@@ -125,6 +125,11 @@ export class ProgressViewProvider
               bypassActive,
             );
         },
+        updateAutoCompactState: (streamId, enabled) => {
+          if (canSend()) {
+            u.updateAutoCompactState(streamId as StreamTabId, enabled);
+          }
+        },
         showBashPermission: (p) => this.bashApprovalHandler.show(p),
         resolveBashPermission: (id) => this.bashApprovalHandler.resolve(id),
         showAgentProposal: (p) => this.agentProposalHandler.show(p),

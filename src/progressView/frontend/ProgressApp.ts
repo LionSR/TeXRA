@@ -47,6 +47,7 @@ import {
   handleFilterChange,
   handleFollowUpChange,
   handleFollowUpClear,
+  handleFollowUpCompact,
   handleFollowUpPolish,
   handleFollowUpSend,
   handleFollowupModeChange,
@@ -234,6 +235,7 @@ export class ProgressApp extends BaseWebviewApp {
           @followup-send=${this.onFollowUpSend}
           @followup-polish=${this.onFollowUpPolish}
           @followup-clear=${this.onFollowUpClear}
+          @followup-compact=${this.onFollowUpCompact}
           @followup-focus-complete=${this.onFollowUpFocusComplete}
         ></tool-use-stream-content>
       `;
@@ -384,6 +386,9 @@ export class ProgressApp extends BaseWebviewApp {
 
   private onFollowUpClear = (): void =>
     handleFollowUpClear(this.getEventHandlerContext());
+
+  private onFollowUpCompact = (): void =>
+    handleFollowUpCompact(this.getEventHandlerContext());
 
   private onFollowupRequestOptions = (): void =>
     handleFollowupRequestOptions(this.getEventHandlerContext());

@@ -225,6 +225,8 @@ export const PROGRESS_VIEW_COMMANDS = {
   OPEN_TASK_STORAGE: 'openTaskStorage',
   TOOL_EDIT_APPROVAL_ACTION: 'toolEditApprovalAction',
   TOGGLE_TOOL_EDIT_APPROVAL_BYPASS: 'toggleToolEditApprovalBypass',
+  TOGGLE_AUTO_COMPACT: 'toggleAutoCompact',
+  COMPACT_NOW: 'compactNow',
   AGENT_PROPOSAL_ACTION: 'agentProposalAction',
   BASH_APPROVAL_ACTION: 'bashApprovalAction',
 
@@ -249,6 +251,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   RUN_FOLLOWUP: 'runFollowup',
   GET_FOLLOWUP_OPTIONS: 'getFollowupOptions',
   SET_FOLLOWUP_OPTIONS: 'setFollowupOptions',
+  UPDATE_AUTO_COMPACT_STATE: 'updateAutoCompactState',
 } as const;
 
 // History view specific commands

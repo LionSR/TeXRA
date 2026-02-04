@@ -80,6 +80,10 @@ export interface ProgressEventPayloads {
     streamId: StreamTabId;
     bypassActive: boolean;
   };
+  updateAutoCompactState: {
+    streamId: StreamTabId;
+    enabled: boolean;
+  };
   showBashPermission: BashPermission;
   resolveBashPermission: { requestId: string };
   showAgentProposal: AgentProposalPermission;

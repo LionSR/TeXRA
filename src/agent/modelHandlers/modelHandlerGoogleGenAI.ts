@@ -67,6 +67,7 @@ import {
   nonZeroOrUndefined,
 } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
+const COMPACTION_MAX_TOKENS = 4096;
 
 // Local file imports
 import {
@@ -77,6 +78,9 @@ import {
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { toGoogleTools } from './toolConversion';
+import { DEFAULT_SUMMARY_PROMPT } from './compaction/compactionPrompt';
+import { getCompactionModel } from './compaction/compactionModels';
+import { extractSummaryText } from './compaction/compactionUtils';
 
 // Type imports
 import type { MediaFileResult } from './support/MediaAttachmentProcessor';
@@ -434,6 +438,46 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return totalTokens;
   }
 
+  private async compactConversation(
+    client: GoogleGenAI,
+    messages: Content[],
+    systemPrompt?: string,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    const compactionModel = getCompactionModel(this.config.fullName);
+    const compactionMessages: Content[] = [
+      ...messages,
+      createUserContent([createPartFromText(DEFAULT_SUMMARY_PROMPT)]),
+    ];
+    const compactionHistory = compactionMessages.slice(0, -1);
+    const lastCompactionMessage = compactionMessages.at(-1);
+    const lastCompactionParts = Array.isArray(lastCompactionMessage?.parts)
+      ? lastCompactionMessage.parts
+      : [];
+
+    const chat = client.chats.create({
+      model: compactionModel,
+      history: compactionHistory,
+      config: {
+        maxOutputTokens: Math.min(
+          this.config.maxOutputTokens ?? COMPACTION_MAX_TOKENS,
+          COMPACTION_MAX_TOKENS,
+        ),
+      },
+      ...(systemPrompt && { systemInstruction: systemPrompt }),
+    });
+
+    const response = await chat.sendMessage({
+      message: [...lastCompactionParts],
+      config: { abortSignal: signal },
+    });
+
+    const responseParts = response.candidates?.[0]?.content?.parts ?? [];
+    const rawText =
+      response.text || extractNonThinkingText(responseParts, true);
+    return extractSummaryText(rawText);
+  }
+
   /** Creates a chat completion response using Google's GenAI API with specified parameters and optional system prompt. */
   async createResponse(
     options: CreateResponseOptions<Content, GoogleGenAI>,
@@ -452,20 +496,24 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       throw new Error('Messages array cannot be empty.');
     }
 
+    const forceCompaction = this.consumeCompactionRequest();
+    const shouldAttemptCompaction =
+      this.isToolUseMode() && (this.isAutoCompactEnabled() || forceCompaction);
+    let effectiveMessages = messages;
+
     // History excludes the final user message - we send it separately via sendMessage
-    const history = messages.slice(0, -1);
-    const lastMessage = messages.at(-1);
-
-    // Messages should already be properly formatted with alternating turns
-    validateGoogleMessageHistory(history, this.logger);
-
-    const lastMessageParts = Array.isArray(lastMessage?.parts)
+    let history = effectiveMessages.slice(0, -1);
+    let lastMessage = effectiveMessages.at(-1);
+    let lastMessageParts = Array.isArray(lastMessage?.parts)
       ? lastMessage.parts
       : [];
     if (lastMessageParts.length === 0) {
       this.logger.error('Could not extract valid parts from the last message.');
       throw new Error('Last message conversion resulted in empty parts.');
     }
+
+    // Messages should already be properly formatted with alternating turns
+    validateGoogleMessageHistory(history, this.logger);
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const generationConfig: GenerateContentConfig = {
@@ -487,13 +535,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       generationConfig.tools = toGoogleTools(tools);
     }
 
-    const chatParams: CreateChatParameters = {
-      model: this.config.fullName,
-      history,
-      config: generationConfig,
-      ...(systemPrompt && { systemInstruction: systemPrompt }),
-    };
-
     // Phase 2: COUNT - Estimate input tokens using built params
     // Phase 3: VALIDATE - Adjust maxOutputTokens if needed
     if (this.supportsTokenCounting) {
@@ -508,11 +549,58 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           googleTools: generationConfig.tools as GeminiTool[] | undefined,
           signal,
         });
+        let effectiveInputTokens = totalTokens;
+
+        if (shouldAttemptCompaction) {
+          const threshold = this.getCompactionTokenThreshold(
+            this.config.contextWindow,
+          );
+          if (forceCompaction || (threshold > 0 && totalTokens > threshold)) {
+            const summaryText = await this.compactConversation(
+              client,
+              effectiveMessages,
+              systemPrompt,
+              signal,
+            );
+            effectiveMessages = [
+              createUserContent([createPartFromText(summaryText)]),
+            ];
+            history = effectiveMessages.slice(0, -1);
+            lastMessage = effectiveMessages.at(-1);
+            lastMessageParts = Array.isArray(lastMessage?.parts)
+              ? lastMessage.parts
+              : [];
+            validateGoogleMessageHistory(history, this.logger);
+            const tokensAfter = await this.estimateTokenCount(history, {
+              client,
+              systemPrompt,
+              lastMessageParts,
+              googleTools: generationConfig.tools as GeminiTool[] | undefined,
+              signal,
+            });
+            effectiveInputTokens = tokensAfter;
+            const utilizationBefore =
+              (totalTokens / this.config.contextWindow) * 100;
+            const utilizationAfter =
+              (tokensAfter / this.config.contextWindow) * 100;
+            const compactionModel = getCompactionModel(this.config.fullName);
+            this.logger.logContextManagement('Context compacted', {
+              action: 'compaction',
+              tokensBefore: totalTokens,
+              tokensAfter,
+              contextWindow: this.config.contextWindow,
+              utilizationBefore,
+              utilizationAfter,
+              summary: summaryText,
+              compactionModel,
+            });
+          }
+        }
 
         // Validate and adjust maxOutputTokens if needed (throws if context window exceeded)
         const originalMaxTokens = generationConfig.maxOutputTokens ?? 8192;
         const validation = this.validateTokenLimits(
-          totalTokens,
+          effectiveInputTokens,
           originalMaxTokens,
           this.config.contextWindow,
         );
@@ -546,6 +634,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         );
       }
     }
+
+    const chatParams: CreateChatParameters = {
+      model: this.config.fullName,
+      history,
+      config: generationConfig,
+      ...(systemPrompt && { systemInstruction: systemPrompt }),
+    };
 
     // Phase 4: EXECUTE - Make the API call
     const useStreaming = this.getStreamingConfig();

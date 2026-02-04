@@ -11,6 +11,10 @@ import {
   registerInterruptible,
   unregisterInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
+import {
+  isAutoCompactEnabled,
+  setAutoCompactEnabled,
+} from '@agent/toolUse/ToolUseAutoCompactState';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 
 import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
@@ -93,6 +97,10 @@ export async function runToolUseFlow<C = unknown>(
     snapshot,
     getUsageRecorder: input.getUsageRecorder ?? (() => async () => {}),
   };
+
+  const autoCompactEnabled = isAutoCompactEnabled(streamId);
+  services.modelHandler.setAutoCompactEnabled(autoCompactEnabled);
+  setAutoCompactEnabled(streamId, autoCompactEnabled);
 
   const flowContext: ToolUseFlowContext<C> = {
     services,

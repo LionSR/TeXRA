@@ -49,7 +49,6 @@ import { flexibleFS, type FileLocation } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 
 // Local file imports
-import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
 import { AnthropicStreamHandler } from './support/AnthropicStreamHandler';
 import { toAnthropicTools } from './toolConversion';
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
@@ -70,6 +69,9 @@ import {
   computeCachePercentage,
   nonZeroOrUndefined,
 } from './utils/usageNormalization';
+import { DEFAULT_SUMMARY_PROMPT } from './compaction/compactionPrompt';
+import { getCompactionModel } from './compaction/compactionModels';
+import { extractSummaryText } from './compaction/compactionUtils';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -82,10 +84,6 @@ import type {
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
   BetaContentBlock,
-  BetaContextManagementConfig,
-  BetaContextManagementResponse,
-  BetaClearToolUses20250919EditResponse,
-  BetaClearThinking20251015EditResponse,
   BetaImageBlockParam,
   BetaMessage,
   BetaRedactedThinkingBlock,
@@ -151,22 +149,7 @@ const SONNET_37_OUTPUT_BETA: AnthropicBeta = 'output-128k-2025-02-19';
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
 const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
-
-/**
- * Context management constants for Anthropic's server-side editing.
- * These are reasonable defaults that balance context efficiency with conversation continuity.
- */
-/** Number of recent tool use/result pairs to keep after context clearing */
-const CONTEXT_MANAGEMENT_KEEP_TOOL_USES = 3;
-/** Number of assistant turns with thinking blocks to keep */
-const CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS = 3;
-/**
- * Minimum percentage of context to clear at once for tool uses.
- * This ensures cache invalidation is worthwhile - clearing too few tokens
- * causes frequent cache misses without meaningful benefit.
- * 25% provides more aggressive clearing to reduce frequent cache thrashing.
- */
-const CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT = 25;
+const COMPACTION_MAX_TOKENS = 4096;
 
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
@@ -180,24 +163,6 @@ const THINKING_TEMPERATURE_EXCLUDED_PATTERNS = [
   'claude-haiku-4',
   'claude-3-7-sonnet',
 ];
-
-/**
- * Extended response type for countTokens with context_management.
- * The SDK doesn't export this, so we define it here for type safety.
- */
-interface CountTokensContextManagementResponse {
-  original_input_tokens: number;
-}
-
-/**
- * Options for setting up context management configuration.
- */
-interface ContextManagementSetupOptions {
-  options: MessageCreateParams;
-  contextWindow: number;
-  supportsReasoning: boolean;
-  thresholdPercent: number;
-}
 
 /**
  * Block types that support cache_control for prompt caching.
@@ -271,99 +236,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
   }
 
-  /**
-   * Sets up context management configuration for Anthropic's server-side editing.
-   * Must be called BEFORE token counting so countTokens returns accurate post-clearing counts.
-   */
-  private setupContextManagement({
-    options,
-    contextWindow,
-    supportsReasoning,
-    thresholdPercent,
-  }: ContextManagementSetupOptions): void {
-    if (!this.isToolUseMode()) {
-      return;
-    }
-
-    // Only enable context management if threshold is configured (> 0)
-    if (thresholdPercent <= 0) {
-      return;
-    }
-
-    this.ensureBeta(options, CONTEXT_MANAGEMENT_BETA);
-
-    const contextManagementEdits = [
-      ...(options.context_management?.edits ?? []),
-    ];
-
-    const triggerTokens = Math.floor((thresholdPercent / 100) * contextWindow);
-
-    // When context management is enabled with thinking, the API's default behavior
-    // clears thinking to keep only the last 1 turn. We must explicitly configure
-    // thinking clearing to control this behavior.
-    const enableThinkingClearing = getConfig<boolean>(
-      'texra.model.enableThinkingClearing',
-      false,
-    );
-
-    if (
-      supportsReasoning &&
-      options.thinking &&
-      !contextManagementEdits.some(
-        (edit) => edit.type === 'clear_thinking_20251015',
-      )
-    ) {
-      // Thinking clearing must come first in the edits array per API requirement.
-      // When disabled (default): preserve all thinking blocks to prevent early clearing.
-      // When enabled: keep last N turns to manage context growth.
-      contextManagementEdits.unshift({
-        type: 'clear_thinking_20251015' as const,
-        keep: enableThinkingClearing
-          ? {
-              type: 'thinking_turns' as const,
-              value: CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS,
-            }
-          : ('all' as const),
-      });
-    }
-
-    // Add tool result clearing strategy with server-side trigger.
-    // The trigger ensures clearing only activates when input tokens exceed threshold.
-    if (
-      !contextManagementEdits.some(
-        (edit) => edit.type === 'clear_tool_uses_20250919',
-      )
-    ) {
-      // clear_at_least ensures cache invalidation is worthwhile:
-      // Without it, the API may clear too few tokens, causing frequent
-      // cache misses without meaningful benefit.
-      const clearAtLeastTokens = Math.floor(
-        (CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT / 100) * contextWindow,
-      );
-
-      contextManagementEdits.push({
-        type: 'clear_tool_uses_20250919' as const,
-        trigger: {
-          type: 'input_tokens' as const,
-          value: triggerTokens,
-        },
-        keep: {
-          type: 'tool_uses' as const,
-          value: CONTEXT_MANAGEMENT_KEEP_TOOL_USES,
-        },
-        clear_at_least: {
-          type: 'input_tokens' as const,
-          value: clearAtLeastTokens,
-        },
-      });
-    }
-
-    options.context_management = {
-      ...(options.context_management ?? {}),
-      edits: contextManagementEdits,
-    } satisfies BetaContextManagementConfig;
-  }
-
   private assignCacheControlToLatest(
     content: (ContentBlockParam | ContentBlock)[] | undefined,
   ): void {
@@ -380,6 +252,48 @@ export class ModelHandlerAnthropic extends ModelHandler<
       );
       this.updateCacheControlTarget(undefined);
     }
+  }
+
+  private async compactConversation(
+    client: Anthropic,
+    messages: MessageParam[],
+    systemPrompt?: string,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    const compactionModel = getCompactionModel(this.config.fullName);
+    const compactionMessages: MessageParam[] = [
+      ...messages,
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: DEFAULT_SUMMARY_PROMPT,
+            citations: null,
+          },
+        ],
+      },
+    ];
+
+    const response = await client.beta.messages.create(
+      {
+        model: compactionModel,
+        max_tokens: Math.min(
+          this.config.maxOutputTokens,
+          COMPACTION_MAX_TOKENS,
+        ),
+        messages: compactionMessages,
+        ...(systemPrompt && { system: systemPrompt }),
+      },
+      signal ? { signal } : undefined,
+    );
+
+    const summaryText = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text ?? '')
+      .join('');
+
+    return extractSummaryText(summaryText);
   }
 
   async getClient(): Promise<Anthropic> {
@@ -414,7 +328,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     options?: TokenCountOptions<Anthropic> & {
       anthropicTools?: MessageCountTokensParams['tools'];
       thinking?: MessageCountTokensParams['thinking'];
-      contextManagement?: BetaContextManagementConfig;
       betas?: AnthropicBeta[];
     },
   ): Promise<number> {
@@ -445,18 +358,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       countTokensParams.thinking = options.thinking;
     }
 
-    // Include context_management in token counting to get accurate
-    // post-clearing token counts. This is critical for:
-    // 1. Correctly adjusting max_tokens based on actual available context
-    // 2. Allowing both clearing strategies to work together
-    if (options?.contextManagement) {
-      countTokensParams.context_management = options.contextManagement;
-    }
-
     // Strip betas that only apply to message creation (e.g., output length)
     // while keeping context headers needed for accurate token counting.
     const countTokenBetas = options?.betas?.filter(
-      (beta) => beta === CONTEXT_1M_BETA || beta === CONTEXT_MANAGEMENT_BETA,
+      (beta) => beta === CONTEXT_1M_BETA,
     );
     if (countTokenBetas && countTokenBetas.length > 0) {
       countTokensParams.betas = countTokenBetas;
@@ -465,25 +370,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const responseTokenCount =
       await client.beta.messages.countTokens(countTokensParams);
 
-    // Log both original and post-clearing token counts if available
-    const contextMgmtResponse = (
-      responseTokenCount as typeof responseTokenCount & {
-        context_management?: CountTokensContextManagementResponse;
-      }
-    ).context_management;
-
-    if (contextMgmtResponse?.original_input_tokens) {
-      const clearedTokens =
-        contextMgmtResponse.original_input_tokens -
-        responseTokenCount.input_tokens;
-      this.logger.debug(
-        `Token count: ${responseTokenCount.input_tokens} (after clearing ${clearedTokens} tokens from ${contextMgmtResponse.original_input_tokens})`,
-      );
-    } else {
-      this.logger.debug(
-        `Token count of message: ${responseTokenCount.input_tokens}`,
-      );
-    }
+    this.logger.debug(
+      `Token count of message: ${responseTokenCount.input_tokens}`,
+    );
 
     return responseTokenCount.input_tokens;
   }
@@ -505,6 +394,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const useStreaming = this.getStreamingConfig();
     // Track input token count for client-side context management triggering
     let measuredInputTokens: number | undefined;
+    const forceCompaction = this.consumeCompactionRequest();
+    const shouldAttemptCompaction =
+      this.isToolUseMode() && (this.isAutoCompactEnabled() || forceCompaction);
     const useAnthropic1MBeta = getConfig<boolean>(
       'texra.model.useAnthropic1MBeta',
       false,
@@ -520,7 +412,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     this.enforceCacheControlLimit(messages);
 
-    const documentAnalysis = this.analyzeDocumentSources(messages);
+    let documentAnalysis = this.analyzeDocumentSources(messages);
     let hasFileReference = documentAnalysis.hasFileSource;
 
     // Phase 1: BUILD - Construct provider-specific request parameters
@@ -592,19 +484,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.ensureBeta(options, CONTEXT_1M_BETA);
     }
 
-    // Set up context management BEFORE token counting so countTokens can
-    // return accurate post-clearing token counts.
-    const compactionThresholdPercent = getConfig<number>(
-      'texra.model.compactionThresholdPercent',
-      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-    );
-    this.setupContextManagement({
-      options,
-      contextWindow: effectiveContextWindow,
-      supportsReasoning: this.capabilities.supportsReasoning,
-      thresholdPercent: compactionThresholdPercent,
-    });
-
     // Phase 2: COUNT - Estimate input tokens using built params
     // Phase 3: VALIDATE - Adjust max_tokens if needed
     if (this.supportsTokenCounting) {
@@ -622,14 +501,65 @@ export class ModelHandlerAnthropic extends ModelHandler<
             systemPrompt,
             anthropicTools: options.tools,
             thinking: options.thinking,
-            contextManagement: options.context_management ?? undefined,
             betas: options.betas,
           });
           measuredInputTokens = inputTokens;
 
+          let effectiveInputTokens = inputTokens;
+          if (shouldAttemptCompaction) {
+            const threshold = this.getCompactionTokenThreshold(
+              effectiveContextWindow,
+            );
+            if (forceCompaction || (threshold > 0 && inputTokens > threshold)) {
+              const summaryText = await this.compactConversation(
+                client,
+                messages,
+                systemPrompt,
+                signal,
+              );
+              const compactedMessage: MessageParam = {
+                role: 'user',
+                content: [
+                  {
+                    type: 'text',
+                    text: summaryText,
+                    citations: null,
+                  },
+                ],
+              };
+              messages.splice(0, messages.length, compactedMessage);
+              documentAnalysis = this.analyzeDocumentSources(messages);
+              hasFileReference = documentAnalysis.hasFileSource;
+              const tokensAfter = await this.estimateTokenCount(messages, {
+                client,
+                systemPrompt,
+                anthropicTools: options.tools,
+                thinking: options.thinking,
+                betas: options.betas,
+              });
+              measuredInputTokens = tokensAfter;
+              effectiveInputTokens = tokensAfter;
+              const utilizationBefore =
+                (inputTokens / effectiveContextWindow) * 100;
+              const utilizationAfter =
+                (tokensAfter / effectiveContextWindow) * 100;
+              const compactionModel = getCompactionModel(this.config.fullName);
+              this.logger.logContextManagement('Context compacted', {
+                action: 'compaction',
+                tokensBefore: inputTokens,
+                tokensAfter,
+                contextWindow: effectiveContextWindow,
+                utilizationBefore,
+                utilizationAfter,
+                summary: summaryText,
+                compactionModel,
+              });
+            }
+          }
+
           // Validate and adjust max_tokens if needed (throws if context window exceeded)
           const validation = this.validateTokenLimits(
-            inputTokens,
+            effectiveInputTokens,
             options.max_tokens,
             effectiveContextWindow,
           );
@@ -776,77 +706,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       response = await client.beta.messages.create(options, { signal });
     }
 
-    // Log context management events if any edits were applied
-    this.logContextManagementFromResponse(response);
-
     return response;
-  }
-
-  /**
-   * Log context management events from the Anthropic response.
-   * The response includes applied_edits when server-side context editing was performed.
-   */
-  private logContextManagementFromResponse(response: BetaMessage): void {
-    const contextManagement = (
-      response as BetaMessage & {
-        context_management?: BetaContextManagementResponse | null;
-      }
-    ).context_management;
-
-    // Debug logging to diagnose context management response
-    if (contextManagement) {
-      this.logger.debug(
-        `Context management response received: ${JSON.stringify(contextManagement)}`,
-      );
-    }
-
-    if (!contextManagement?.applied_edits?.length) {
-      return;
-    }
-
-    const contextWindow = this.config.contextWindow;
-    // Anthropic's input_tokens excludes cached tokens (unlike OpenAI where it's the total).
-    // Per SDK docs: "Total input tokens is the summation of input_tokens,
-    // cache_creation_input_tokens, and cache_read_input_tokens."
-    const totalInputTokens =
-      response.usage.input_tokens +
-      (response.usage.cache_read_input_tokens ?? 0) +
-      (response.usage.cache_creation_input_tokens ?? 0);
-
-    type AppliedEdit =
-      | BetaClearToolUses20250919EditResponse
-      | BetaClearThinking20251015EditResponse;
-
-    for (const edit of contextManagement.applied_edits as AppliedEdit[]) {
-      const clearedTokens = edit.cleared_input_tokens;
-      if (!clearedTokens || clearedTokens <= 0) {
-        continue;
-      }
-
-      const isToolUses = edit.type === 'clear_tool_uses_20250919';
-      const clearedCount = isToolUses
-        ? ((edit as BetaClearToolUses20250919EditResponse).cleared_tool_uses ??
-          0)
-        : ((edit as BetaClearThinking20251015EditResponse)
-            .cleared_thinking_turns ?? 0);
-      const itemLabel = isToolUses ? 'tool use(s)' : 'thinking turn(s)';
-      const action = isToolUses ? 'clear_tool_uses' : 'clear_thinking';
-      const utilizationReduction = (clearedTokens / contextWindow) * 100;
-
-      this.logger.logContextManagement(
-        `Cleared ${clearedCount} ${itemLabel}: ${clearedTokens.toLocaleString()} tokens freed (${utilizationReduction.toFixed(1)}% of context)`,
-        {
-          action,
-          tokensBefore: totalInputTokens + clearedTokens,
-          tokensAfter: totalInputTokens,
-          contextWindow,
-          utilizationBefore:
-            ((totalInputTokens + clearedTokens) / contextWindow) * 100,
-          utilizationAfter: (totalInputTokens / contextWindow) * 100,
-          details: `Anthropic server-side: cleared ${clearedCount} ${itemLabel}`,
-        },
-      );
-    }
   }
 
   private enforceCacheControlLimit(messages: MessageParam[]): void {

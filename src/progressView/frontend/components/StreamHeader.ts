@@ -58,6 +58,7 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, string[]> = {
   [STREAM_STATUS.RUNNING]: [
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
+    ELEMENT_IDS.AUTO_COMPACT_TOGGLE_BTN,
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   ],
@@ -90,12 +91,14 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, string[]> = {
   [STREAM_STATUS.WAITING]: [
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
+    ELEMENT_IDS.AUTO_COMPACT_TOGGLE_BTN,
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   ],
   [STREAM_STATUS.RESUMING]: [
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
+    ELEMENT_IDS.AUTO_COMPACT_TOGGLE_BTN,
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   ],
@@ -280,6 +283,33 @@ export class StreamHeader extends LitElement {
           color-mix(in srgb, var(--color-error) 60%, transparent);
       }
 
+      .auto-compact-toggle-button {
+        flex-shrink: 0;
+        transition: all 0.2s ease;
+      }
+
+      .auto-compact-toggle-button.is-active {
+        color: var(--color-info);
+        background-color: color-mix(
+          in srgb,
+          var(--color-info) 15%,
+          transparent
+        );
+        border-radius: var(--border-radius);
+        box-shadow: 0 0 8px
+          color-mix(in srgb, var(--color-info) 40%, transparent);
+      }
+
+      .auto-compact-toggle-button.is-active:hover {
+        background-color: color-mix(
+          in srgb,
+          var(--color-info) 25%,
+          transparent
+        );
+        box-shadow: 0 0 12px
+          color-mix(in srgb, var(--color-info) 60%, transparent);
+      }
+
       @media (max-width: 500px) {
         .log-header {
           flex-wrap: wrap;
@@ -306,6 +336,7 @@ export class StreamHeader extends LitElement {
     startTime: number;
   }> = [];
   @property({ type: Boolean }) yoloActive = false;
+  @property({ type: Boolean }) autoCompactActive = false;
 
   override render(): TemplateResult | typeof nothing {
     if (!this.stream) {
@@ -356,7 +387,13 @@ export class StreamHeader extends LitElement {
                     status,
                     hasExecutionId,
                   );
-                  const isActive = Boolean(btn.isToggle && this.yoloActive);
+                  const isActive = Boolean(
+                    btn.isToggle &&
+                    ((btn.id === ELEMENT_IDS.YOLO_TOGGLE_BTN &&
+                      this.yoloActive) ||
+                      (btn.id === ELEMENT_IDS.AUTO_COMPACT_TOGGLE_BTN &&
+                        this.autoCompactActive)),
+                  );
                   const icon =
                     isActive && btn.iconActive ? btn.iconActive : btn.icon;
                   const title =

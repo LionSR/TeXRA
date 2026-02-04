@@ -66,7 +66,7 @@ const ACTION_CONFIG: Record<
 /** Build context management items from data. */
 function buildContextManagementItems(
   data: unknown,
-): { config: ActionConfig; items: ContextStatItem[] } | null {
+): { config: ActionConfig; items: ContextStatItem[]; summary?: string } | null {
   const result = ContextManagementDataSchema.safeParse(data);
   if (!result.success) {
     return null;
@@ -82,6 +82,8 @@ function buildContextManagementItems(
     originalMaxTokens,
     reducedMaxTokens,
     details,
+    summary,
+    compactionModel,
   } = result.data;
 
   const config: ActionConfig = ACTION_CONFIG[action] || {
@@ -145,7 +147,15 @@ function buildContextManagementItems(
     });
   }
 
-  return { config, items };
+  if (compactionModel) {
+    items.push({
+      icon: 'codicon-hubot',
+      label: 'Compaction model',
+      value: compactionModel,
+    });
+  }
+
+  return { config, items, summary };
 }
 
 /** Format context management event as TemplateResult. */
@@ -157,13 +167,14 @@ export function formatContextManagementTemplate(
   const result = buildContextManagementItems(data);
   if (!result) return null;
 
-  const { config, items } = result;
+  const { config, items, summary } = result;
 
   return html`
     <context-management
       .logId=${id}
       .config=${config}
       .items=${items}
+      .summary=${summary ?? ''}
     ></context-management>
   `;
 }

@@ -209,6 +209,15 @@ export interface IModelHandler<
   /** Retrieve the agent category currently associated with the handler, if any. */
   getAgentCategory(): AgentCategory | undefined;
 
+  /** Enable or disable auto-compaction for this handler instance. */
+  setAutoCompactEnabled(enabled: boolean): void;
+
+  /** Check if auto-compaction is enabled for this handler instance. */
+  isAutoCompactEnabled(): boolean;
+
+  /** Request a manual compaction on the next response cycle. */
+  requestCompaction(): void;
+
   /** Retrieve an authenticated client instance. */
   getClient(): Promise<C>;
 

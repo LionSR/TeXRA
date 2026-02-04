@@ -3,7 +3,6 @@ import { Buffer } from 'node:buffer';
 
 // Third-party imports
 import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
-import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -49,7 +48,6 @@ import {
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
-import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
 import {
   buildOpenAIWebSearchResult,
   extractOpenAIWebSearchResults,
@@ -62,6 +60,7 @@ import {
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
@@ -437,39 +436,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
-   * Get the configured compaction threshold percentage.
-   * Returns 0 if compaction is disabled.
-   */
-  private getCompactionThresholdPercent(): number {
-    return getConfig<number>(
-      'texra.model.compactionThresholdPercent',
-      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-    );
-  }
-
-  /**
-   * Calculate the absolute token threshold based on the model's context window
-   * and the configured percentage threshold.
-   */
-  private getCompactionTokenThreshold(): number {
-    const percent = this.getCompactionThresholdPercent();
-    if (percent <= 0) {
-      return 0;
-    }
-    // Calculate threshold as percentage of context window
-    return Math.floor((percent / 100) * this.config.contextWindow);
-  }
-
-  /**
    * Check if the conversation should be compacted based on cumulative input tokens.
    * Compaction is only triggered when:
    * - Threshold percentage is greater than 0 (not disabled)
    * - Cumulative input tokens exceed the calculated threshold (percentage of context window)
    * - Not running through OpenRouter (which may not support compaction)
    */
-  private shouldCompact(): boolean {
-    const thresholdPercent = this.getCompactionThresholdPercent();
-    if (thresholdPercent <= 0) {
+  private shouldCompact(forceCompaction: boolean): boolean {
+    if (!this.isToolUseMode()) {
+      return false;
+    }
+    if (!this.isAutoCompactEnabled() && !forceCompaction) {
       return false;
     }
     if (this.isOpenRouterRoutingEnabled()) {
@@ -479,7 +456,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
       return false;
     }
-    const threshold = this.getCompactionTokenThreshold();
+    if (forceCompaction) {
+      return true;
+    }
+    const thresholdPercent = this.getCompactionThresholdPercent();
+    if (thresholdPercent <= 0) {
+      return false;
+    }
+    const threshold = this.getCompactionTokenThreshold(
+      this.config.contextWindow,
+    );
     return this.conversationState.cumulativeInputTokens > threshold;
   }
 
@@ -554,6 +540,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           contextWindow,
           utilizationBefore: Number(utilizationBefore.toFixed(1)),
           utilizationAfter: Number(utilizationAfter.toFixed(1)),
+          summary: 'Server-side compaction (details not available)',
+          compactionModel: this.config.fullName,
           details: `OpenAI Responses API compaction: ${compactedResponse.output.length} items`,
         },
       );
@@ -990,11 +978,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let effectiveMessages = messages;
     // Track if compaction happened in THIS call (not previous calls)
     let compactedThisCall = false;
-    if (this.shouldCompact()) {
-      const threshold = this.getCompactionTokenThreshold();
-      this.logger.logProgress(
-        `Compacting conversation (${this.conversationState.cumulativeInputTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
+    const forceCompaction = this.consumeCompactionRequest();
+    if (this.shouldCompact(forceCompaction)) {
+      const threshold = this.getCompactionTokenThreshold(
+        this.config.contextWindow,
       );
+      const compactionLabel = forceCompaction
+        ? 'Compacting conversation (manual request)'
+        : `Compacting conversation (${this.conversationState.cumulativeInputTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`;
+      this.logger.logProgress(compactionLabel);
       effectiveMessages = await this.compactConversation(
         client,
         messages,

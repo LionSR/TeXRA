@@ -50,6 +50,10 @@ import {
   nonZeroOrUndefined,
 } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
+import { DEFAULT_SUMMARY_PROMPT } from './compaction/compactionPrompt';
+import { getCompactionModel } from './compaction/compactionModels';
+import { compactOpenAICompatible } from './compaction/openaiCompatibleCompaction';
+import { extractSummaryText } from './compaction/compactionUtils';
 
 // Local file imports
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
@@ -69,6 +73,7 @@ import type {
   ExtractResponseResult,
   DeepSeekToolCall,
   OpenAIToolCall,
+  TokenCountOptions,
 } from './types/IModelHandler';
 
 // Type imports
@@ -90,6 +95,7 @@ function extractReasoningText(content: ReasoningContent | undefined): string {
 }
 
 const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
+const TOKEN_ESTIMATION_DIVISOR = 4;
 
 export interface StreamingAggregator {
   appendContent(delta: string): void;
@@ -119,6 +125,66 @@ export class ModelHandlerOpenAI<
   OpenAI,
   ChatCompletion
 > {
+  /**
+   * Estimates token count using a heuristic for OpenAI-compatible messages.
+   * Subclasses can override for native token counting APIs.
+   */
+  override async estimateTokenCount(
+    messages: ChatCompletionMessageParam[],
+    _options?: TokenCountOptions<OpenAI>,
+  ): Promise<number> {
+    const serialized = messages
+      .map((message) => {
+        const content = this.stringifyMessageContent(message.content);
+        const toolCalls = 'tool_calls' in message ? message.tool_calls : null;
+        const functionCall =
+          'function_call' in message ? message.function_call : null;
+        return [
+          message.role,
+          content,
+          toolCalls ? JSON.stringify(toolCalls) : '',
+          functionCall ? JSON.stringify(functionCall) : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
+      })
+      .join('\n');
+
+    return Math.ceil(serialized.length / TOKEN_ESTIMATION_DIVISOR);
+  }
+
+  private stringifyMessageContent(
+    content: ChatCompletionMessageParam['content'],
+  ): string {
+    if (!content) return '';
+    if (typeof content === 'string') return content;
+    if (!Array.isArray(content)) return '';
+    return content
+      .map((part) =>
+        part && 'text' in part && typeof part.text === 'string'
+          ? part.text
+          : '',
+      )
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  private buildCompactedMessages(
+    messages: ChatCompletionMessageParam[],
+    summary: string,
+  ): ChatCompletionMessageParam[] {
+    const preserved: ChatCompletionMessageParam[] = [];
+    for (const message of messages) {
+      if (message.role === 'system' || message.role === 'developer') {
+        preserved.push(message);
+      } else {
+        break;
+      }
+    }
+
+    return [...preserved, { role: 'user', content: summary }];
+  }
+
   /**
    * Creates a new OpenAI client using the stored credentials.
    * Handles API key retrieval, base URL resolution, and logging.
@@ -377,6 +443,54 @@ export class ModelHandlerOpenAI<
     const messages = normOptions
       ? this.prepareNormalizedMessages(rawMessages, normOptions)
       : rawMessages;
+
+    const forceCompaction = this.consumeCompactionRequest();
+    const shouldAttemptCompaction =
+      this.isToolUseMode() && (this.isAutoCompactEnabled() || forceCompaction);
+    if (shouldAttemptCompaction) {
+      const tokensBefore = await this.estimateTokenCount(messages, {
+        client,
+        systemPrompt,
+        signal,
+      });
+      const threshold = this.getCompactionTokenThreshold(
+        this.config.contextWindow,
+      );
+      if (forceCompaction || (threshold > 0 && tokensBefore > threshold)) {
+        const compactionModel = getCompactionModel(this.config.fullName);
+        const compactionResult = await compactOpenAICompatible(
+          client,
+          messages,
+          compactionModel,
+          DEFAULT_SUMMARY_PROMPT,
+        );
+        const summaryText = extractSummaryText(compactionResult.summary);
+        const compactedMessages = this.buildCompactedMessages(
+          messages,
+          summaryText,
+        );
+        const tokensAfter = await this.estimateTokenCount(compactedMessages, {
+          client,
+          systemPrompt,
+          signal,
+        });
+        const utilizationBefore =
+          (tokensBefore / this.config.contextWindow) * 100;
+        const utilizationAfter =
+          (tokensAfter / this.config.contextWindow) * 100;
+        this.logger.logContextManagement('Context compacted', {
+          action: 'compaction',
+          tokensBefore,
+          tokensAfter,
+          contextWindow: this.config.contextWindow,
+          utilizationBefore,
+          utilizationAfter,
+          summary: summaryText,
+          compactionModel,
+        });
+        messages.splice(0, messages.length, ...compactedMessages);
+      }
+    }
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const useStreaming = this.getStreamingConfig();

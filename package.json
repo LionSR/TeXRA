@@ -284,7 +284,7 @@
             "default": 75,
             "minimum": 0,
             "maximum": 100,
-            "description": "Percentage of context window to trigger automatic context management. For OpenAI, triggers conversation compaction via /responses/compact. For Anthropic, triggers server-side clearing of tool uses and thinking blocks. Set to 0 to disable.",
+            "description": "Percentage of context window to trigger automatic context compaction. OpenAI Responses use /responses/compact; other providers summarize client-side. Set to 0 to disable.",
             "scope": "resource"
           },
           "texra.model.enableThinkingClearing": {

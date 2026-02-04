@@ -230,6 +230,12 @@ export const UpdateToolEditApprovalStateMessageSchema = z.object({
   bypassActive: z.boolean(),
 });
 
+export const UpdateAutoCompactStateMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_AUTO_COMPACT_STATE),
+  stream: StreamTabIdSchema,
+  enabled: z.boolean(),
+});
+
 export const ShowBashApprovalMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL),
   request: BashPermissionSchema,
@@ -334,6 +340,7 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     ShowToolEditApprovalMessageSchema,
     ResolveToolEditApprovalMessageSchema,
     UpdateToolEditApprovalStateMessageSchema,
+    UpdateAutoCompactStateMessageSchema,
     ShowBashApprovalMessageSchema,
     ResolveBashApprovalMessageSchema,
     ShowRetryRequestMessageSchema,
@@ -504,6 +511,16 @@ const ToggleToolEditApprovalBypassMessageSchema = z.object({
   stream: StreamTabIdSchema,
 });
 
+const ToggleAutoCompactMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.TOGGLE_AUTO_COMPACT),
+  stream: StreamTabIdSchema,
+});
+
+const CompactNowMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.COMPACT_NOW),
+  stream: StreamTabIdSchema,
+});
+
 const SendFollowUpMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP),
   stream: StreamTabIdSchema,
@@ -650,6 +667,8 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     StopRecordingMessageSchema,
     ToolEditApprovalActionMessageSchema,
     ToggleToolEditApprovalBypassMessageSchema,
+    ToggleAutoCompactMessageSchema,
+    CompactNowMessageSchema,
     BashApprovalActionMessageSchema,
     AgentProposalActionMessageSchema,
     ShowInformationMessageSchema,
