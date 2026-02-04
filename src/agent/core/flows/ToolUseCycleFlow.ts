@@ -515,6 +515,9 @@ class ToolUseProcessNode<C> extends BaseNode<
   }
 }
 
+/** Tools that may take a while and benefit from showing in-progress state. */
+const SLOW_TOOLS = new Set(['bash', 'wolfram', 'web_fetch', 'web_search']);
+
 /**
  * Result of executing a single tool call, capturing everything needed
  * for logging and message creation.
@@ -530,6 +533,8 @@ interface ToolExecutionResult {
     source: string;
     sourceDisplay: string;
   }>;
+  /** Log reference for consistent grouping. logId only set for slow tools. */
+  logRef: { logId: string | undefined; groupId: string | undefined };
 }
 
 /**
@@ -620,6 +625,11 @@ class ToolUseDispatchNode<C> extends BatchNode<
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
     const tool = options.toolRegistry.get(call.name);
 
+    // Capture groupId at start to ensure consistent grouping for all tools
+    const logRef = SLOW_TOOLS.has(call.name)
+      ? options.logger.logToolUseStart(call.name, parsedInput ?? call.raw)
+      : { logId: undefined, groupId: options.logger.resolveActiveGroupId() };
+
     const result = await this.invokeToolSafely(
       call,
       tool,
@@ -651,6 +661,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
       parsedInput,
       sanitizedOutput,
       editedFiles,
+      logRef,
     };
   }
 
@@ -659,7 +670,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     options: ToolUseCycleOptions<C>,
     workspace: ToolUseCycleServices<C>['workspace'],
   ): Promise<void> {
-    const { call, result, parsedInput, sanitizedOutput, editedFiles } =
+    const { call, result, parsedInput, sanitizedOutput, editedFiles, logRef } =
       execResult;
 
     const toolUseLog = {
@@ -669,7 +680,17 @@ class ToolUseDispatchNode<C> extends BatchNode<
       ...(editedFiles.length > 0 && { files: editedFiles }),
       isError: Boolean(result.isError),
     };
-    options.logger.logToolUse(toolUseLog);
+
+    // Update in-progress log (slow tools) or create new log (fast tools)
+    // Both use the groupId captured at execution start for consistency
+    if (logRef.logId) {
+      options.logger.updateToolUse(logRef.logId, toolUseLog, logRef.groupId);
+    } else {
+      options.logger.logToolUse(
+        { ...toolUseLog, status: 'completed' },
+        logRef.groupId,
+      );
+    }
 
     // Collect and add valid media file locations
     const files = result.files;
