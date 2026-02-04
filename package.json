@@ -1030,7 +1030,7 @@
           },
           "texra.toolUse.persistence.ttlHours": {
             "type": "number",
-            "default": 72,
+            "default": 336,
             "minimum": 1,
             "description": "Maximum age (in hours) to keep saved tool-use sessions before automatic cleanup",
             "scope": "resource"
