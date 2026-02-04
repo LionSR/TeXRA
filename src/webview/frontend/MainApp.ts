@@ -538,9 +538,7 @@ export class MainApp extends BaseWebviewApp {
    * Validates that a selection exists in options.
    * Returns current value if found, otherwise falls back to first available option.
    */
-  private validateSelection<
-    T extends { value: string; disabled?: boolean },
-  >(
+  private validateSelection<T extends { value: string; disabled?: boolean }>(
     options: T[],
     currentValue: string,
     preferEnabled = false,

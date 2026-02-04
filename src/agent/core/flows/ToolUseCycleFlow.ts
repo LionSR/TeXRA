@@ -533,8 +533,8 @@ interface ToolExecutionResult {
     source: string;
     sourceDisplay: string;
   }>;
-  /** Log ID and groupId for updating the in-progress log entry after execution */
-  logRef?: { logId: string; groupId: string | undefined };
+  /** Log reference for consistent grouping. logId only set for slow tools. */
+  logRef: { logId: string | undefined; groupId: string | undefined };
 }
 
 /**
@@ -625,10 +625,10 @@ class ToolUseDispatchNode<C> extends BatchNode<
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
     const tool = options.toolRegistry.get(call.name);
 
-    // Only show in-progress for tools that can take a while
+    // Capture groupId at start to ensure consistent grouping for all tools
     const logRef = SLOW_TOOLS.has(call.name)
       ? options.logger.logToolUseStart(call.name, parsedInput ?? call.raw)
-      : undefined;
+      : { logId: undefined, groupId: options.logger.resolveActiveGroupId() };
 
     const result = await this.invokeToolSafely(
       call,
@@ -681,11 +681,15 @@ class ToolUseDispatchNode<C> extends BatchNode<
       isError: Boolean(result.isError),
     };
 
-    // Update the in-progress log entry with the result, or create new if no logRef
-    if (logRef) {
+    // Update in-progress log (slow tools) or create new log (fast tools)
+    // Both use the groupId captured at execution start for consistency
+    if (logRef.logId) {
       options.logger.updateToolUse(logRef.logId, toolUseLog, logRef.groupId);
     } else {
-      options.logger.logToolUse({ ...toolUseLog, status: 'completed' });
+      options.logger.logToolUse(
+        { ...toolUseLog, status: 'completed' },
+        logRef.groupId,
+      );
     }
 
     // Collect and add valid media file locations
