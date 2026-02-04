@@ -19,6 +19,12 @@ export const toolUseStyles = css`
     cursor: text;
   }
 
+  /* Allow selecting text in error/banner labels (overrides summary's user-select: none) */
+  .details-summary .label {
+    user-select: text;
+    cursor: text;
+  }
+
   .tool-use-label {
     font-weight: 600;
     color: var(--color-text-link);
