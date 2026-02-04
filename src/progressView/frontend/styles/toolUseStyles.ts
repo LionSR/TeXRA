@@ -85,6 +85,16 @@ export const toolUseStyles = css`
     color: var(--vscode-textLink-foreground, #3794ff);
   }
 
+  .tool-use-in-progress > .details-summary .tool-use-title,
+  .tool-use-in-progress > .details-summary .codicon {
+    color: var(--vscode-charts-yellow, #cca700);
+  }
+
+  /* Uses @keyframes spin from animationStyles (included via logStyles) */
+  .tool-use-in-progress > .details-summary .codicon.spin {
+    animation: spin 1s linear infinite;
+  }
+
   :is(.tool-user-feedback, .tool-error-content, .tool-output-full) {
     white-space: pre-wrap;
     word-break: break-word;
