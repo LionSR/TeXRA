@@ -515,6 +515,9 @@ class ToolUseProcessNode<C> extends BaseNode<
   }
 }
 
+/** Tools that may take a while and benefit from showing in-progress state. */
+const SLOW_TOOLS = new Set(['Bash', 'Wolfram', 'WebFetch', 'WebSearch']);
+
 /**
  * Result of executing a single tool call, capturing everything needed
  * for logging and message creation.
@@ -622,11 +625,10 @@ class ToolUseDispatchNode<C> extends BatchNode<
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
     const tool = options.toolRegistry.get(call.name);
 
-    // Log in-progress state before execution so UI shows the command immediately
-    const logId = options.logger.logToolUseStart({
-      toolName: call.name,
-      input: parsedInput ?? call.raw,
-    });
+    // Only show in-progress for tools that can take a while
+    const logId = SLOW_TOOLS.has(call.name)
+      ? options.logger.logToolUseStart(call.name, parsedInput ?? call.raw)
+      : undefined;
 
     const result = await this.invokeToolSafely(
       call,
