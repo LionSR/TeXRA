@@ -94,15 +94,6 @@ export const toolUseStyles = css`
     animation: spin 1s linear infinite;
   }
 
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
   :is(.tool-user-feedback, .tool-error-content, .tool-output-full) {
     white-space: pre-wrap;
     word-break: break-word;
