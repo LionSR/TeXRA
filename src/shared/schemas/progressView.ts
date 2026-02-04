@@ -54,6 +54,9 @@ export const MissingOutputsPayloadSchema = z.object({
 });
 export type MissingOutputsPayload = z.infer<typeof MissingOutputsPayloadSchema>;
 
+export const ToolUseStatusSchema = z.enum(['in_progress', 'completed']);
+export type ToolUseStatus = z.infer<typeof ToolUseStatusSchema>;
+
 export const ToolUseLogSchema = z.object({
   toolName: z.string().optional(),
   tool: z.string().optional(),
@@ -63,6 +66,7 @@ export const ToolUseLogSchema = z.object({
   error: z.string().optional(),
   isError: z.boolean().optional(),
   userInstruction: z.string().optional(),
+  status: ToolUseStatusSchema.optional(),
 });
 export type ToolUseLog = z.infer<typeof ToolUseLogSchema>;
 
@@ -76,6 +80,7 @@ export const NormalizedToolUseSchema = z.object({
   isError: z.boolean(),
   isUserFeedback: z.boolean(),
   headerSummary: z.string(),
+  status: ToolUseStatusSchema.optional(),
 });
 export type NormalizedToolUse = z.infer<typeof NormalizedToolUseSchema>;
 
