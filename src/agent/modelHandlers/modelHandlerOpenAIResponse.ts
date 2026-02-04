@@ -52,7 +52,6 @@ import { ModelHandler } from './ModelHandler';
 import {
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
   TOKEN_SAFETY_BUFFER,
-  TOOL_USE_MAX_OUTPUT_FACTOR,
   TOOL_USE_SAFETY_BUFFER,
 } from './contextManagementConstants';
 import {
@@ -512,6 +511,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
+   * Get the appropriate safety buffer for token validation.
+   * Uses larger buffer (2000) when:
+   * - Tool-use mode: tool results can have counting discrepancies
+   * - previous_response_id is set: server-side history may differ from token count
+   * Otherwise uses small buffer (10) for exact counting.
+   */
+  private getTokenSafetyBuffer(): number {
+    const needsLargerBuffer =
+      this.isToolUseMode() || this.previousResponseId !== null;
+    return needsLargerBuffer ? TOOL_USE_SAFETY_BUFFER : TOKEN_SAFETY_BUFFER;
+  }
+
+  /**
    * Compact the conversation to reduce context size.
    * Uses OpenAI's `/responses/compact` endpoint to replace prior assistant messages,
    * tool calls, and results with a single encrypted compaction item.
@@ -549,9 +561,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       compactParams.instructions = systemPrompt;
     }
 
-    if (this.previousResponseId) {
-      compactParams.previous_response_id = this.previousResponseId;
-    }
+    // NOTE: Do NOT pass previous_response_id here.
+    // We're sending the full message history in `input`, so passing
+    // previous_response_id would cause double-counting and exceed context window.
 
     try {
       const compactedResponse: CompactedResponse =
@@ -1061,13 +1073,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     let maxOutputTokens = this.getEffectiveMaxOutputTokens();
 
-    // DEBUG: Log effective max output tokens calculation
-    this.logger.debug(
-      `[TOKEN_DEBUG] maxOutputTokens=${maxOutputTokens}, isToolUseMode=${this.isToolUseMode()}, ` +
-        `configMax=${this.config.maxOutputTokens}, factor=${this.isToolUseMode() ? TOOL_USE_MAX_OUTPUT_FACTOR : 1.0}, ` +
-        `agentCategory=${this.agentCategory}`,
-    );
-
     // Phase 2: COUNT - Estimate input tokens using built params
     // Phase 3: VALIDATE - Adjust max_output_tokens if needed
     //
@@ -1115,27 +1120,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
 
         // Validate and adjust max_output_tokens if needed (throws if context window exceeded)
-        // Use larger safety buffer for:
-        // - Tool-use mode: account for tool result counting discrepancies
-        // - previous_response_id: server-side history may differ from token count
-        const needsLargerBuffer =
-          this.isToolUseMode() || this.previousResponseId !== null;
-        const tokenBuffer = needsLargerBuffer
-          ? TOOL_USE_SAFETY_BUFFER
-          : undefined;
+        const tokenBuffer = this.getTokenSafetyBuffer();
         const validation = this.validateTokenLimits(
           inputTokens,
           maxOutputTokens,
           this.config.contextWindow,
           tokenBuffer,
-        );
-
-        // DEBUG: Log validation details
-        const availableForOutput = this.config.contextWindow - inputTokens;
-        this.logger.debug(
-          `[TOKEN_DEBUG] Validation: inputTokens=${inputTokens}, maxOutputTokens=${maxOutputTokens}, ` +
-            `available=${availableForOutput}, buffer=${tokenBuffer ?? 'default'}, ` +
-            `adjusted=${validation.adjustedMaxTokens}, total=${inputTokens + validation.adjustedMaxTokens}`,
         );
 
         if (validation.adjustedMaxTokens !== maxOutputTokens) {
@@ -1165,9 +1155,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // Skip on first turn (no history to overflow).
         const inputEstimate = this.getBestInputTokenEstimate();
         if (inputEstimate > 0) {
-          const buffer = this.isToolUseMode()
-            ? TOOL_USE_SAFETY_BUFFER
-            : TOKEN_SAFETY_BUFFER;
+          const buffer = this.getTokenSafetyBuffer();
           const available =
             this.config.contextWindow - inputEstimate - buffer;
           const capped = Math.min(maxOutputTokens, Math.max(0, available));
@@ -1188,13 +1176,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       store: true,
       ...(convertedTools?.length && { tool_choice: 'auto' as const }),
     };
-
-    // DEBUG: Log final API params
-    this.logger.debug(
-      `[TOKEN_DEBUG] API call: max_output_tokens=${maxOutputTokens}, ` +
-        `previous_response_id=${this.previousResponseId ?? 'none'}, ` +
-        `inputMessageCount=${newMessages.length}, model=${this.config.fullName}`,
-    );
 
     if (useBackgroundResponses) {
       this.logger.debug(
