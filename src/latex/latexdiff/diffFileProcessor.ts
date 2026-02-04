@@ -75,21 +75,25 @@ export class DiffFileProcessor {
     let skippingPreambleBlock = false;
     let documentStarted = false;
 
-    const processedLines = content.split('\n').flatMap((line) => {
-      if (TEX_ROOT_COMMENT.test(line)) {
-        return [];
-      }
+    // Normalize line endings (handle both \r\n and \n)
+    const processedLines = content
+      .replaceAll('\r\n', '\n')
+      .split('\n')
+      .flatMap((line) => {
+        if (TEX_ROOT_COMMENT.test(line)) {
+          return [];
+        }
 
-      const lineState = this.updateLineState(line, documentStarted);
-      documentStarted = lineState.documentStarted;
-      skippingPreambleBlock = lineState.skipBlock ?? skippingPreambleBlock;
+        const lineState = this.updateLineState(line, documentStarted);
+        documentStarted = lineState.documentStarted;
+        skippingPreambleBlock = lineState.skipBlock ?? skippingPreambleBlock;
 
-      if (skippingPreambleBlock) {
-        return [];
-      }
+        if (skippingPreambleBlock) {
+          return [];
+        }
 
-      return this.formatLine(line);
-    });
+        return this.formatLine(line);
+      });
 
     return processedLines.join('\n') + '\n';
   }
