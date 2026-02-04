@@ -49,7 +49,10 @@ import {
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
-import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
+import {
+  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+  TOOL_USE_SAFETY_BUFFER,
+} from './contextManagementConstants';
 import {
   buildOpenAIWebSearchResult,
   extractOpenAIWebSearchResults,
@@ -1041,7 +1044,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }),
     };
 
-    let maxOutputTokens = this.config.maxOutputTokens;
+    let maxOutputTokens = this.getEffectiveMaxOutputTokens();
 
     // Phase 2: COUNT - Estimate input tokens using built params
     // Phase 3: VALIDATE - Adjust max_output_tokens if needed
@@ -1090,10 +1093,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
 
         // Validate and adjust max_output_tokens if needed (throws if context window exceeded)
+        // Use larger safety buffer for tool-use mode to account for counting discrepancies
+        const tokenBuffer = this.isToolUseMode()
+          ? TOOL_USE_SAFETY_BUFFER
+          : undefined;
         const validation = this.validateTokenLimits(
           inputTokens,
           maxOutputTokens,
           this.config.contextWindow,
+          tokenBuffer,
         );
 
         if (validation.adjustedMaxTokens !== maxOutputTokens) {
