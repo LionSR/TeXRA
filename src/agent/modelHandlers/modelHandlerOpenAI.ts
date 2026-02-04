@@ -64,6 +64,7 @@ import {
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { ModelHandler } from './ModelHandler';
+import { TOOL_USE_SAFETY_BUFFER } from './contextManagementConstants';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
@@ -166,12 +167,14 @@ export class ModelHandlerOpenAI<
     endTag?: string,
     tools?: ToolDefinition[],
   ): ChatCompletionRequestBase {
+    const effectiveMaxTokens = this.getEffectiveMaxOutputTokens();
+
     const baseParams: ChatCompletionRequestBase = {
       model: this.config.fullName,
       messages,
       ...(this.isOReasoningModel
-        ? { max_completion_tokens: this.config.maxOutputTokens }
-        : { max_tokens: this.config.maxOutputTokens }),
+        ? { max_completion_tokens: effectiveMaxTokens }
+        : { max_tokens: effectiveMaxTokens }),
     };
 
     if (!this.isOReasoningModel && !this.isGrokReasoningModel) {
@@ -399,16 +402,21 @@ export class ModelHandlerOpenAI<
         });
 
         // Validate and adjust max_tokens if needed (throws if context window exceeded)
+        // Use larger safety buffer for tool-use mode
         const maxTokensKey = this.isOReasoningModel
           ? 'max_completion_tokens'
           : 'max_tokens';
         const currentMaxTokens = (baseParams as Record<string, unknown>)[
           maxTokensKey
         ] as number;
+        const tokenBuffer = this.isToolUseMode()
+          ? TOOL_USE_SAFETY_BUFFER
+          : undefined;
         const validation = this.validateTokenLimits(
           inputTokens,
           currentMaxTokens,
           this.config.contextWindow,
+          tokenBuffer,
         );
 
         if (validation.adjustedMaxTokens !== currentMaxTokens) {
