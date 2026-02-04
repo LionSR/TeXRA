@@ -103,7 +103,9 @@ export async function extractFigurePathsFromLatex(
   }
 
   // Pre-process content to remove commented lines
+  // Normalize line endings first to handle Windows files
   const processedLines = content
+    .replaceAll('\r\n', '\n')
     .split('\n')
     .filter((line) => !/^\s*%/.test(line)) // Remove lines that start with whitespace + %
     .join('\n');
