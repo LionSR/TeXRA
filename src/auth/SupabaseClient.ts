@@ -20,6 +20,7 @@ interface AuthTokenProvider {
 
 /**
  * Singleton Supabase client with authentication helpers.
+ * This is the single source of truth for auth initialization state.
  */
 export class SupabaseClient {
   private static instance: Client | null = null;
@@ -28,11 +29,58 @@ export class SupabaseClient {
   private static authProvider: AuthTokenProvider | null = null;
 
   /**
+   * Whether VS Code's auth provider registration succeeded.
+   * This is separate from authProvider being set (which happens in constructor).
+   */
+  private static vscodeProviderRegistered = false;
+
+  /**
+   * Error that occurred during initialization, if any.
+   * Used to provide meaningful error messages to users.
+   */
+  private static initError: Error | null = null;
+
+  /**
    * Register an auth provider for token refresh.
    * Called by SupabaseAuthProvider on initialization.
    */
   static setAuthProvider(provider: AuthTokenProvider): void {
     this.authProvider = provider;
+  }
+
+  /**
+   * Mark VS Code auth provider as successfully registered.
+   * Called after vscode.authentication.registerAuthenticationProvider() succeeds.
+   */
+  static setVSCodeProviderRegistered(): void {
+    this.vscodeProviderRegistered = true;
+  }
+
+  /**
+   * Record an initialization error for later retrieval.
+   * Allows surfacing meaningful error messages to users.
+   */
+  static setInitError(error: Error): void {
+    this.initError = error;
+  }
+
+  /**
+   * Get initialization error if any occurred.
+   */
+  static getInitError(): Error | null {
+    return this.initError;
+  }
+
+  /**
+   * Check if auth system is fully initialized and ready for use.
+   */
+  static isReady(): boolean {
+    return (
+      this.instance !== null &&
+      this.authProvider !== null &&
+      this.vscodeProviderRegistered &&
+      this.initError === null
+    );
   }
 
   /**
@@ -73,36 +121,18 @@ export class SupabaseClient {
   }
 
   /**
-   * Get the current user's access token from VS Code authentication.
-   * Automatically refreshes the token if it's about to expire via the registered auth provider.
-   * @param forceRefresh - When true, forces a token refresh regardless of local expiry (e.g., after relay 401).
+   * Get the current user's access token.
+   * Returns null if not authenticated or auth system not ready.
+   * @param forceRefresh - When true, forces a token refresh (e.g., after relay 401).
    */
   static async getAccessToken(forceRefresh?: boolean): Promise<string | null> {
-    try {
-      // Use registered auth provider for proactive token refresh
-      if (this.authProvider) {
-        const token = await this.authProvider.ensureFreshToken(forceRefresh);
-        if (token) {
-          return token;
-        }
-        logger.debug(
-          'SupabaseClient',
-          'ensureFreshToken returned null, falling back to VS Code auth',
-        );
-      } else {
-        logger.debug(
-          'SupabaseClient',
-          'Auth provider not registered, using VS Code auth fallback',
-        );
-      }
+    if (!this.authProvider) {
+      // Auth provider not set - system not initialized
+      return null;
+    }
 
-      // Fallback to VS Code's authentication API
-      const session = await vscode.authentication.getSession(
-        'texra-supabase',
-        [],
-        { silent: true },
-      );
-      return session?.accessToken || null;
+    try {
+      return await this.authProvider.ensureFreshToken(forceRefresh);
     } catch (error) {
       logger.error(
         'SupabaseClient',

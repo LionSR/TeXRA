@@ -27,8 +27,12 @@ import { StorageFS } from '@utils/files';
 import { watchConfig, getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
-import { initializeServerSideKeyAccess } from '@/auth/serverKeys';
-import { SupabaseClient } from '@/auth/SupabaseClient';
+import { initializeServerSideKeyAccess } from '@auth/serverKeys';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { SupabaseAuthProvider } from '@auth/SupabaseAuthProvider';
+import { SupabaseUriHandler } from '@auth/UriHandler';
+import { isSupabaseConfigured, setRuntimeExtensionId } from '@auth/config';
+import { loadAgents } from '@agent/index';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -115,8 +119,6 @@ export async function activate(context: vscode.ExtensionContext) {
   await refreshModelListIfNeeded();
 
   // Initialize agent index (single source of truth for agent metadata)
-  const { loadAgents } = await import('@agent/index');
-
   // Start loading the agent index in the background
   // This will scan all directories and fetch remote agents
   loadAgents().catch((err) => {
@@ -131,11 +133,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
   if (authEnabled) {
     try {
-      const { SupabaseAuthProvider } =
-        await import('@/auth/SupabaseAuthProvider');
-      const { isSupabaseConfigured, setRuntimeExtensionId } =
-        await import('@/auth/config');
-
       // Set the runtime extension ID for OAuth redirects
       // This ensures the redirect URI matches the actual extension ID
       setRuntimeExtensionId(context.extension.id);
@@ -159,7 +156,6 @@ export async function activate(context: vscode.ExtensionContext) {
         );
 
         // Register URI handler for OAuth callbacks
-        const { SupabaseUriHandler } = await import('@/auth/UriHandler');
         const uriHandler = new SupabaseUriHandler();
         context.subscriptions.push(
           vscode.window.registerUriHandler(uriHandler),
@@ -168,23 +164,37 @@ export async function activate(context: vscode.ExtensionContext) {
         // Connect URI handler to auth provider
         authProvider.setUriHandler(uriHandler);
 
+        // Mark provider as registered AFTER all auth-critical setup succeeds
+        SupabaseClient.setVSCodeProviderRegistered();
+
+        logger.info('extension', 'Supabase authentication provider registered');
+
         // Note: Auth state change listener is handled in MainViewProvider.setupAuthListener()
         // to avoid duplicate refresh calls when user logs in/out.
 
         // Initialize usage logging service for backend analytics (only when auth is available)
-        const extensionVersion =
-          typeof context.extension.packageJSON?.version === 'string'
-            ? context.extension.packageJSON.version
-            : undefined;
-        UsageLogService.initialize({}, extensionVersion);
-        // Add safety net disposable in case deactivate() isn't called
-        context.subscriptions.push({
-          dispose: () => void UsageLogService.dispose(),
-        });
-
-        logger.info('extension', 'Supabase authentication provider registered');
+        // This is separate from auth - failures here shouldn't block sign-in
+        try {
+          const extensionVersion =
+            typeof context.extension.packageJSON?.version === 'string'
+              ? context.extension.packageJSON.version
+              : undefined;
+          UsageLogService.initialize({}, extensionVersion);
+          // Add safety net disposable in case deactivate() isn't called
+          context.subscriptions.push({
+            dispose: () => void UsageLogService.dispose(),
+          });
+        } catch (usageError) {
+          logger.warn(
+            'extension',
+            `Usage logging service failed to initialize: ${toErrorMessage(usageError)}`,
+          );
+        }
       }
     } catch (error) {
+      const initError =
+        error instanceof Error ? error : new Error(toErrorMessage(error));
+      SupabaseClient.setInitError(initError);
       logger.error(
         'extension',
         `Failed to initialize Supabase authentication: ${toErrorMessage(error)}`,
