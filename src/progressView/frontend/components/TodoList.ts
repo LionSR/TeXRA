@@ -115,7 +115,6 @@ export class TodoList extends LitElement {
         id=${ELEMENT_IDS.TODO_LIST_CONTAINER}
         class="todo-collapsible panel-collapsible"
         title="Task Progress"
-        open
       >
         <div id=${ELEMENT_IDS.TODO_LIST} class="todo-list">
           ${repeat(
