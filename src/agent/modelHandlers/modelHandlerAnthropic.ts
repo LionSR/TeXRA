@@ -72,6 +72,7 @@ import {
 import { DEFAULT_SUMMARY_PROMPT } from './compaction/compactionPrompt';
 import { getCompactionModel } from './compaction/compactionModels';
 import { extractSummaryText } from './compaction/compactionUtils';
+import { COMPACTION_MAX_TOKENS } from './contextManagementConstants';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -149,7 +150,6 @@ const SONNET_37_OUTPUT_BETA: AnthropicBeta = 'output-128k-2025-02-19';
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
 const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
-const COMPACTION_MAX_TOKENS = 4096;
 
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
@@ -269,7 +269,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
           {
             type: 'text',
             text: DEFAULT_SUMMARY_PROMPT,
-            citations: null,
           },
         ],
       },
@@ -390,11 +389,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
       signal,
       tools,
     } = requestOptions;
+    let effectiveMessages = messages;
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
     // Track input token count for client-side context management triggering
     let measuredInputTokens: number | undefined;
-    const forceCompaction = this.consumeCompactionRequest();
+    const forceCompaction = this.hasPendingCompactionRequest();
     const shouldAttemptCompaction =
       this.isToolUseMode() && (this.isAutoCompactEnabled() || forceCompaction);
     const useAnthropic1MBeta = getConfig<boolean>(
@@ -410,16 +410,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
       ? ANTHROPIC_1M_CONTEXT_WINDOW
       : this.config.contextWindow;
 
-    this.enforceCacheControlLimit(messages);
+    this.enforceCacheControlLimit(effectiveMessages);
 
-    let documentAnalysis = this.analyzeDocumentSources(messages);
+    let documentAnalysis = this.analyzeDocumentSources(effectiveMessages);
     let hasFileReference = documentAnalysis.hasFileSource;
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const options: MessageCreateParams = {
       model: this.config.fullName,
       max_tokens: this.config.maxOutputTokens,
-      messages,
+      messages: effectiveMessages,
       temperature,
       stop_sequences: endTag ? [endTag] : undefined,
       system: systemPrompt,
@@ -491,12 +491,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
         this.logger.debug(
           'Skipping token counting because Anthropic countTokens does not support file-based document sources.',
         );
+        if (forceCompaction) {
+          this.logger.debug(
+            'Deferring manual compaction request until token counting is available.',
+          );
+        }
       } else {
         // Token counting uses soft failure - if it fails, we proceed without adjustment
         // and let the API enforce limits. This avoids unnecessary retries for non-critical operations.
         try {
           // Reuse built params for token counting (build once principle)
-          const inputTokens = await this.estimateTokenCount(messages, {
+          const inputTokens = await this.estimateTokenCount(effectiveMessages, {
             client,
             systemPrompt,
             anthropicTools: options.tools,
@@ -506,14 +511,24 @@ export class ModelHandlerAnthropic extends ModelHandler<
           measuredInputTokens = inputTokens;
 
           let effectiveInputTokens = inputTokens;
-          if (shouldAttemptCompaction) {
-            const threshold = this.getCompactionTokenThreshold(
-              effectiveContextWindow,
-            );
-            if (forceCompaction || (threshold > 0 && inputTokens > threshold)) {
+          const compactionOutcome = await this.maybeCompactContext({
+            messages: effectiveMessages,
+            tokensBefore: inputTokens,
+            contextWindow: effectiveContextWindow,
+            forceCompaction,
+            shouldAttempt: shouldAttemptCompaction,
+            estimateTokens: (nextMessages) =>
+              this.estimateTokenCount(nextMessages, {
+                client,
+                systemPrompt,
+                anthropicTools: options.tools,
+                thinking: options.thinking,
+                betas: options.betas,
+              }),
+            compact: async () => {
               const summaryText = await this.compactConversation(
                 client,
-                messages,
+                effectiveMessages,
                 systemPrompt,
                 signal,
               );
@@ -523,39 +538,29 @@ export class ModelHandlerAnthropic extends ModelHandler<
                   {
                     type: 'text',
                     text: summaryText,
-                    citations: null,
                   },
                 ],
               };
-              messages.splice(0, messages.length, compactedMessage);
-              documentAnalysis = this.analyzeDocumentSources(messages);
-              hasFileReference = documentAnalysis.hasFileSource;
-              const tokensAfter = await this.estimateTokenCount(messages, {
-                client,
-                systemPrompt,
-                anthropicTools: options.tools,
-                thinking: options.thinking,
-                betas: options.betas,
-              });
-              measuredInputTokens = tokensAfter;
-              effectiveInputTokens = tokensAfter;
-              const utilizationBefore =
-                (inputTokens / effectiveContextWindow) * 100;
-              const utilizationAfter =
-                (tokensAfter / effectiveContextWindow) * 100;
-              const compactionModel = getCompactionModel(this.config.fullName);
-              this.logger.logContextManagement('Context compacted', {
-                action: 'compaction',
-                tokensBefore: inputTokens,
-                tokensAfter,
-                contextWindow: effectiveContextWindow,
-                utilizationBefore,
-                utilizationAfter,
-                summary: summaryText,
-                compactionModel,
-              });
-            }
+              return {
+                summaryText,
+                compactedMessages: [compactedMessage],
+                compactionModel: getCompactionModel(this.config.fullName),
+              };
+            },
+            onCompactionStart: () => {
+              this.consumeCompactionRequest();
+            },
+          });
+
+          if (compactionOutcome.didCompact) {
+            effectiveMessages = compactionOutcome.messages;
+            options.messages = effectiveMessages;
+            documentAnalysis = this.analyzeDocumentSources(effectiveMessages);
+            hasFileReference = documentAnalysis.hasFileSource;
           }
+
+          effectiveInputTokens = compactionOutcome.tokensAfter;
+          measuredInputTokens = compactionOutcome.tokensAfter;
 
           // Validate and adjust max_tokens if needed (throws if context window exceeded)
           const validation = this.validateTokenLimits(
@@ -620,7 +625,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (documentAnalysis.hasBase64Pdf) {
       const uploadResult = await this.replaceDocumentDataWithUploads(
         client,
-        messages,
+        effectiveMessages,
       );
       if (uploadResult.hasFileReference) {
         hasFileReference = true;

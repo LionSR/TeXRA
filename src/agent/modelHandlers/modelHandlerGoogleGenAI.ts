@@ -41,35 +41,41 @@ import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
+
+// Local imports - common
 import {
   getSdkErrorMessage,
   isContextWindowError,
 } from '@common/errors/sdkErrorUtils';
+
+// Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
 
+// Local imports - model
 import { ReasoningEffort } from '@model/ModelConfig';
 
-// Internal imports
+// Local imports - replacement
 import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
 import type { ToolFileAttachment } from '@tools/result';
-import type { FileLocation } from '@utils/files';
 
-// Google finish reasons are re-exported from the SDK
-
-// Local constant
+// Local imports - utils
 import { K_SLICE } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
+import type { FileLocation } from '@utils/files';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
+
+// Local file imports
+import { COMPACTION_MAX_TOKENS } from './contextManagementConstants';
+import { DEFAULT_SUMMARY_PROMPT } from './compaction/compactionPrompt';
+import { getCompactionModel } from './compaction/compactionModels';
+import { extractSummaryText } from './compaction/compactionUtils';
 import {
   computeCachePercentage,
   nonZeroOrUndefined,
 } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
-const COMPACTION_MAX_TOKENS = 4096;
-
-// Local file imports
 import {
   DEFAULT_ATTACHMENT_MIME_TYPE,
   formatAttachmentSummary,
@@ -78,9 +84,6 @@ import {
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { toGoogleTools } from './toolConversion';
-import { DEFAULT_SUMMARY_PROMPT } from './compaction/compactionPrompt';
-import { getCompactionModel } from './compaction/compactionModels';
-import { extractSummaryText } from './compaction/compactionUtils';
 
 // Type imports
 import type { MediaFileResult } from './support/MediaAttachmentProcessor';
@@ -443,8 +446,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     messages: Content[],
     systemPrompt?: string,
     signal?: AbortSignal,
+    compactionModel: string = getCompactionModel(this.config.fullName),
   ): Promise<string> {
-    const compactionModel = getCompactionModel(this.config.fullName);
     const compactionMessages: Content[] = [
       ...messages,
       createUserContent([createPartFromText(DEFAULT_SUMMARY_PROMPT)]),
@@ -496,7 +499,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       throw new Error('Messages array cannot be empty.');
     }
 
-    const forceCompaction = this.consumeCompactionRequest();
+    const forceCompaction = this.hasPendingCompactionRequest();
     const shouldAttemptCompaction =
       this.isToolUseMode() && (this.isAutoCompactEnabled() || forceCompaction);
     let effectiveMessages = messages;
@@ -551,51 +554,59 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         });
         let effectiveInputTokens = totalTokens;
 
-        if (shouldAttemptCompaction) {
-          const threshold = this.getCompactionTokenThreshold(
-            this.config.contextWindow,
-          );
-          if (forceCompaction || (threshold > 0 && totalTokens > threshold)) {
+        const compactionOutcome = await this.maybeCompactContext({
+          messages: effectiveMessages,
+          tokensBefore: totalTokens,
+          contextWindow: this.config.contextWindow,
+          forceCompaction,
+          shouldAttempt: shouldAttemptCompaction,
+          estimateTokens: async (nextMessages) => {
+            const nextHistory = nextMessages.slice(0, -1);
+            const nextLastMessage = nextMessages.at(-1);
+            const nextLastMessageParts = Array.isArray(nextLastMessage?.parts)
+              ? nextLastMessage.parts
+              : [];
+            return this.estimateTokenCount(nextHistory, {
+              client,
+              systemPrompt,
+              lastMessageParts: nextLastMessageParts,
+              googleTools: generationConfig.tools as GeminiTool[] | undefined,
+              signal,
+            });
+          },
+          compact: async () => {
+            const compactionModel = getCompactionModel(this.config.fullName);
             const summaryText = await this.compactConversation(
               client,
               effectiveMessages,
               systemPrompt,
               signal,
-            );
-            effectiveMessages = [
-              createUserContent([createPartFromText(summaryText)]),
-            ];
-            history = effectiveMessages.slice(0, -1);
-            lastMessage = effectiveMessages.at(-1);
-            lastMessageParts = Array.isArray(lastMessage?.parts)
-              ? lastMessage.parts
-              : [];
-            validateGoogleMessageHistory(history, this.logger);
-            const tokensAfter = await this.estimateTokenCount(history, {
-              client,
-              systemPrompt,
-              lastMessageParts,
-              googleTools: generationConfig.tools as GeminiTool[] | undefined,
-              signal,
-            });
-            effectiveInputTokens = tokensAfter;
-            const utilizationBefore =
-              (totalTokens / this.config.contextWindow) * 100;
-            const utilizationAfter =
-              (tokensAfter / this.config.contextWindow) * 100;
-            const compactionModel = getCompactionModel(this.config.fullName);
-            this.logger.logContextManagement('Context compacted', {
-              action: 'compaction',
-              tokensBefore: totalTokens,
-              tokensAfter,
-              contextWindow: this.config.contextWindow,
-              utilizationBefore,
-              utilizationAfter,
-              summary: summaryText,
               compactionModel,
-            });
-          }
+            );
+            return {
+              summaryText,
+              compactedMessages: [
+                createUserContent([createPartFromText(summaryText)]),
+              ],
+              compactionModel,
+            };
+          },
+          onCompactionStart: () => {
+            this.consumeCompactionRequest();
+          },
+        });
+
+        if (compactionOutcome.didCompact) {
+          effectiveMessages = compactionOutcome.messages;
+          history = effectiveMessages.slice(0, -1);
+          lastMessage = effectiveMessages.at(-1);
+          lastMessageParts = Array.isArray(lastMessage?.parts)
+            ? lastMessage.parts
+            : [];
+          validateGoogleMessageHistory(history, this.logger);
         }
+
+        effectiveInputTokens = compactionOutcome.tokensAfter;
 
         // Validate and adjust maxOutputTokens if needed (throws if context window exceeded)
         const originalMaxTokens = generationConfig.maxOutputTokens ?? 8192;
@@ -633,6 +644,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
         );
       }
+    } else if (forceCompaction) {
+      this.logger.debug(
+        'Deferring manual compaction request until token counting is available.',
+      );
     }
 
     const chatParams: CreateChatParameters = {

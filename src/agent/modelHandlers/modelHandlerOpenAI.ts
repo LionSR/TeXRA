@@ -95,7 +95,8 @@ function extractReasoningText(content: ReasoningContent | undefined): string {
 }
 
 const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
-const TOKEN_ESTIMATION_DIVISOR = 4;
+// Heuristic token estimation: lower divisor slightly to overcount for non-English/code-heavy content.
+const TOKEN_ESTIMATION_DIVISOR = 3.5;
 
 export interface StreamingAggregator {
   appendContent(delta: string): void;
@@ -443,59 +444,61 @@ export class ModelHandlerOpenAI<
     const messages = normOptions
       ? this.prepareNormalizedMessages(rawMessages, normOptions)
       : rawMessages;
+    let effectiveMessages = messages;
 
-    const forceCompaction = this.consumeCompactionRequest();
+    const forceCompaction = this.hasPendingCompactionRequest();
     const shouldAttemptCompaction =
       this.isToolUseMode() && (this.isAutoCompactEnabled() || forceCompaction);
     if (shouldAttemptCompaction) {
-      const tokensBefore = await this.estimateTokenCount(messages, {
+      const tokensBefore = await this.estimateTokenCount(effectiveMessages, {
         client,
         systemPrompt,
         signal,
       });
-      const threshold = this.getCompactionTokenThreshold(
-        this.config.contextWindow,
-      );
-      if (forceCompaction || (threshold > 0 && tokensBefore > threshold)) {
-        const compactionModel = getCompactionModel(this.config.fullName);
-        const compactionResult = await compactOpenAICompatible(
-          client,
-          messages,
-          compactionModel,
-          DEFAULT_SUMMARY_PROMPT,
-        );
-        const summaryText = extractSummaryText(compactionResult.summary);
-        const compactedMessages = this.buildCompactedMessages(
-          messages,
-          summaryText,
-        );
-        const tokensAfter = await this.estimateTokenCount(compactedMessages, {
-          client,
-          systemPrompt,
-          signal,
-        });
-        const utilizationBefore =
-          (tokensBefore / this.config.contextWindow) * 100;
-        const utilizationAfter =
-          (tokensAfter / this.config.contextWindow) * 100;
-        this.logger.logContextManagement('Context compacted', {
-          action: 'compaction',
-          tokensBefore,
-          tokensAfter,
-          contextWindow: this.config.contextWindow,
-          utilizationBefore,
-          utilizationAfter,
-          summary: summaryText,
-          compactionModel,
-        });
-        messages.splice(0, messages.length, ...compactedMessages);
-      }
+      const compactionOutcome = await this.maybeCompactContext({
+        messages: effectiveMessages,
+        tokensBefore,
+        contextWindow: this.config.contextWindow,
+        forceCompaction,
+        shouldAttempt: shouldAttemptCompaction,
+        estimateTokens: (nextMessages) =>
+          this.estimateTokenCount(nextMessages, {
+            client,
+            systemPrompt,
+            signal,
+          }),
+        compact: async () => {
+          const compactionModel = getCompactionModel(this.config.fullName);
+          const compactionResult = await compactOpenAICompatible(
+            client,
+            effectiveMessages,
+            compactionModel,
+            DEFAULT_SUMMARY_PROMPT,
+          );
+          const summaryText = extractSummaryText(compactionResult.summary);
+          const compactedMessages = this.buildCompactedMessages(
+            effectiveMessages,
+            summaryText,
+          );
+          return {
+            summaryText,
+            compactedMessages,
+            compactionModel,
+            compactionInputTokens: compactionResult.inputTokens,
+            compactionOutputTokens: compactionResult.outputTokens,
+          };
+        },
+        onCompactionStart: () => {
+          this.consumeCompactionRequest();
+        },
+      });
+      effectiveMessages = compactionOutcome.messages;
     }
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const useStreaming = this.getStreamingConfig();
     const baseParams = this.buildChatBaseParams(
-      messages,
+      effectiveMessages,
       temperature,
       systemPrompt,
       endTag,
@@ -506,7 +509,7 @@ export class ModelHandlerOpenAI<
     // Phase 3: VALIDATE - Adjust max_tokens if needed
     if (this.supportsTokenCounting) {
       try {
-        const inputTokens = await this.estimateTokenCount(messages, {
+        const inputTokens = await this.estimateTokenCount(effectiveMessages, {
           client,
           systemPrompt,
           signal,

@@ -17,6 +17,9 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
+// Local imports - common
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+
 // Local imports - frontend
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
@@ -223,6 +226,11 @@ export abstract class ModelHandler<
     this.pendingCompactionRequest = true;
   }
 
+  /** Check if a manual compaction request is pending. */
+  protected hasPendingCompactionRequest(): boolean {
+    return this.pendingCompactionRequest;
+  }
+
   /** Consume a pending manual compaction request. */
   protected consumeCompactionRequest(): boolean {
     if (!this.pendingCompactionRequest) {
@@ -247,6 +255,86 @@ export abstract class ModelHandler<
       return 0;
     }
     return Math.floor((percent / 100) * contextWindow);
+  }
+
+  /**
+   * Shared orchestration for compaction across handlers.
+   * Keeps retry behavior stable by returning new message arrays rather than mutating inputs.
+   */
+  protected async maybeCompactContext<TMessage>(options: {
+    messages: TMessage[];
+    tokensBefore: number;
+    contextWindow: number;
+    forceCompaction: boolean;
+    shouldAttempt: boolean;
+    estimateTokens: (messages: TMessage[]) => Promise<number>;
+    compact: () => Promise<{
+      summaryText: string;
+      compactedMessages: TMessage[];
+      compactionModel: string;
+      compactionInputTokens?: number;
+      compactionOutputTokens?: number;
+    }>;
+    onCompactionStart?: () => void;
+  }): Promise<{
+    messages: TMessage[];
+    tokensAfter: number;
+    didCompact: boolean;
+  }> {
+    const {
+      messages,
+      tokensBefore,
+      contextWindow,
+      forceCompaction,
+      shouldAttempt,
+      estimateTokens,
+      compact,
+      onCompactionStart,
+    } = options;
+
+    if (!shouldAttempt) {
+      return { messages, tokensAfter: tokensBefore, didCompact: false };
+    }
+
+    const threshold = this.getCompactionTokenThreshold(contextWindow);
+    if (!forceCompaction && (threshold <= 0 || tokensBefore <= threshold)) {
+      return { messages, tokensAfter: tokensBefore, didCompact: false };
+    }
+
+    onCompactionStart?.();
+
+    try {
+      const compactionResult = await compact();
+      const tokensAfter = await estimateTokens(
+        compactionResult.compactedMessages,
+      );
+      const utilizationBefore = (tokensBefore / contextWindow) * 100;
+      const utilizationAfter = (tokensAfter / contextWindow) * 100;
+
+      this.logger.logContextManagement('Context compacted', {
+        action: 'compaction',
+        tokensBefore,
+        tokensAfter,
+        contextWindow,
+        utilizationBefore,
+        utilizationAfter,
+        summary: compactionResult.summaryText,
+        compactionModel: compactionResult.compactionModel,
+        compactionInputTokens: compactionResult.compactionInputTokens,
+        compactionOutputTokens: compactionResult.compactionOutputTokens,
+      });
+
+      return {
+        messages: compactionResult.compactedMessages,
+        tokensAfter,
+        didCompact: true,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Compaction failed: ${getSdkErrorMessage(error)}. Proceeding without compaction.`,
+      );
+      return { messages, tokensAfter: tokensBefore, didCompact: false };
+    }
   }
 
   /**

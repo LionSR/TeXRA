@@ -21,6 +21,9 @@ export function setAutoCompactEnabled(
   streamId: StreamTabId,
   enabled: boolean,
 ): boolean {
+  if (autoCompactByStream.get(streamId) === enabled) {
+    return enabled;
+  }
   autoCompactByStream.set(streamId, enabled);
   bus.emit('updateAutoCompactState', { streamId, enabled });
   return enabled;

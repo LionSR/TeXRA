@@ -21,6 +21,8 @@ export const ContextManagementDataSchema = z.object({
   reducedMaxTokens: z.number().positive().optional(),
   summary: z.string().optional(),
   compactionModel: z.string().optional(),
+  compactionInputTokens: z.number().nonnegative().optional(),
+  compactionOutputTokens: z.number().nonnegative().optional(),
 });
 
 export type ContextManagementData = z.infer<typeof ContextManagementDataSchema>;

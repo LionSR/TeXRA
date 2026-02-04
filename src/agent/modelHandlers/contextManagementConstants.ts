@@ -34,6 +34,11 @@ export const TOKEN_SAFETY_BUFFER = 10;
 export const HEURISTIC_TOKEN_BUFFER = 5000;
 
 /**
+ * Default maximum output tokens used during compaction requests.
+ */
+export const COMPACTION_MAX_TOKENS = 4096;
+
+/**
  * Maximum character length for tool result text sent to models.
  * Tool results exceeding this limit return an error to prevent context window overflow.
  * Set to 200KB (200,000 characters) which is roughly 50,000-66,000 tokens depending on content.
