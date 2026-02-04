@@ -32,6 +32,7 @@ import { SupabaseClient } from '@/auth/SupabaseClient';
 import { SupabaseAuthProvider } from '@/auth/SupabaseAuthProvider';
 import { SupabaseUriHandler } from '@/auth/UriHandler';
 import { isSupabaseConfigured, setRuntimeExtensionId } from '@/auth/config';
+import { loadAgents } from '@agent/index';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -118,8 +119,6 @@ export async function activate(context: vscode.ExtensionContext) {
   await refreshModelListIfNeeded();
 
   // Initialize agent index (single source of truth for agent metadata)
-  const { loadAgents } = await import('@agent/index');
-
   // Start loading the agent index in the background
   // This will scan all directories and fetch remote agents
   loadAgents().catch((err) => {

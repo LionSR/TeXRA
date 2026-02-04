@@ -42,7 +42,7 @@ import type { RemoteAgent } from '@shared/schemas/profileViewMessages';
 import { getAgentsBySource, loadAgents } from '@agent/index';
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
 import { SupabaseClient } from '@/auth/SupabaseClient';
-import { AUTH_COMMANDS } from '@/auth/authCommands';
+import { AUTH_COMMANDS } from '@/auth/constants';
 import { ULTRA_TIER, MAX_TIER } from '@/auth/config';
 import { getServerSideKeyService } from '@/auth/serverKeys';
 
