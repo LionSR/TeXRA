@@ -155,9 +155,6 @@ export async function activate(context: vscode.ExtensionContext) {
           ),
         );
 
-        // Mark provider as registered so auth commands know it's safe to use
-        SupabaseClient.setVSCodeProviderRegistered();
-
         // Register URI handler for OAuth callbacks
         const uriHandler = new SupabaseUriHandler();
         context.subscriptions.push(
@@ -167,21 +164,32 @@ export async function activate(context: vscode.ExtensionContext) {
         // Connect URI handler to auth provider
         authProvider.setUriHandler(uriHandler);
 
+        // Mark provider as registered AFTER all auth-critical setup succeeds
+        SupabaseClient.setVSCodeProviderRegistered();
+
+        logger.info('extension', 'Supabase authentication provider registered');
+
         // Note: Auth state change listener is handled in MainViewProvider.setupAuthListener()
         // to avoid duplicate refresh calls when user logs in/out.
 
         // Initialize usage logging service for backend analytics (only when auth is available)
-        const extensionVersion =
-          typeof context.extension.packageJSON?.version === 'string'
-            ? context.extension.packageJSON.version
-            : undefined;
-        UsageLogService.initialize({}, extensionVersion);
-        // Add safety net disposable in case deactivate() isn't called
-        context.subscriptions.push({
-          dispose: () => void UsageLogService.dispose(),
-        });
-
-        logger.info('extension', 'Supabase authentication provider registered');
+        // This is separate from auth - failures here shouldn't block sign-in
+        try {
+          const extensionVersion =
+            typeof context.extension.packageJSON?.version === 'string'
+              ? context.extension.packageJSON.version
+              : undefined;
+          UsageLogService.initialize({}, extensionVersion);
+          // Add safety net disposable in case deactivate() isn't called
+          context.subscriptions.push({
+            dispose: () => void UsageLogService.dispose(),
+          });
+        } catch (usageError) {
+          logger.warn(
+            'extension',
+            `Usage logging service failed to initialize: ${toErrorMessage(usageError)}`,
+          );
+        }
       }
     } catch (error) {
       const initError =
