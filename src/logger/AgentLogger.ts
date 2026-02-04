@@ -9,6 +9,7 @@ import {
   type ExtendedTokenUsageStats,
   type FileListEntry,
   type MessageType,
+  type ToolUseLog,
 } from '@shared/schemas';
 import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
 import { delay } from '@utils/core';
@@ -323,7 +324,7 @@ export class AgentLogger {
    */
   updateToolUse(
     logId: string,
-    toolUseLog: Record<string, unknown>,
+    toolUseLog: Omit<ToolUseLog, 'status'>,
     groupId: string | undefined,
   ): void {
     bus.emit('updateLogMessage', {
