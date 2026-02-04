@@ -9,6 +9,7 @@ import {
   type ExtendedTokenUsageStats,
   type FileListEntry,
   type MessageType,
+  type ToolUseLog,
 } from '@shared/schemas';
 import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
 import { delay } from '@utils/core';
@@ -291,6 +292,54 @@ export class AgentLogger {
     this.info('', { groupId, messageType: MESSAGE_TYPES.TOOL_USE, data });
   }
 
+  /**
+   * Log tool use start with status='in_progress'.
+   * Returns log ID and resolved groupId for consistent update.
+   * Note: Emits directly to bus (like createStream) for immediate UI update.
+   */
+  logToolUseStart(
+    toolName: string,
+    input: unknown,
+    groupId?: string,
+  ): { logId: string; groupId: string | undefined } {
+    const id = randomUUID();
+    const resolvedGroupId = groupId ?? this.resolveActiveGroupId();
+    this.debug(`Tool started: ${toolName}`, { groupId: resolvedGroupId });
+    bus.emit('addLogMessage', {
+      streamId: this.streamId,
+      logMessage: {
+        id,
+        text: '',
+        level: 'info',
+        timestamp: Date.now(),
+        groupId: resolvedGroupId,
+        messageType: MESSAGE_TYPES.TOOL_USE,
+        data: { toolName, input, status: 'in_progress' },
+      },
+    });
+    return { logId: id, groupId: resolvedGroupId };
+  }
+
+  /**
+   * Update a tool use log entry with the completed result.
+   * Pass the groupId returned from logToolUseStart for consistency.
+   */
+  updateToolUse(
+    logId: string,
+    toolUseLog: Omit<ToolUseLog, 'status'>,
+    groupId: string | undefined,
+  ): void {
+    bus.emit('updateLogMessage', {
+      streamId: this.streamId,
+      logMessage: {
+        id: logId,
+        groupId,
+        messageType: MESSAGE_TYPES.TOOL_USE,
+        data: { ...toolUseLog, status: 'completed' },
+      },
+    });
+  }
+
   logWebSearch(data: unknown, groupId?: string): void {
     this.info('', { groupId, messageType: MESSAGE_TYPES.WEB_SEARCH, data });
   }
@@ -427,7 +476,8 @@ export class AgentLogger {
     logger.endGroup(this.streamId, groupId, status, this.isAgentLogger);
   }
 
-  private resolveActiveGroupId(): string | undefined {
+  /** Get the currently active group ID for this logger's stream. */
+  resolveActiveGroupId(): string | undefined {
     return logger.getActiveGroupId(this.streamId, this.isAgentLogger);
   }
 }
