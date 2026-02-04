@@ -11,7 +11,6 @@ import {
   type UserTier,
   UserAuthContextSchema,
   SUPABASE_SESSION_KEY,
-  isAuthProviderRegistered,
 } from './config';
 
 /** Interface for auth provider to avoid circular imports. */
@@ -21,6 +20,7 @@ interface AuthTokenProvider {
 
 /**
  * Singleton Supabase client with authentication helpers.
+ * This is the single source of truth for auth initialization state.
  */
 export class SupabaseClient {
   private static instance: Client | null = null;
@@ -29,11 +29,60 @@ export class SupabaseClient {
   private static authProvider: AuthTokenProvider | null = null;
 
   /**
+   * Whether VS Code's auth provider registration succeeded.
+   * This is separate from authProvider being set (which happens in constructor).
+   */
+  private static vscodeProviderRegistered = false;
+
+  /**
+   * Error that occurred during initialization, if any.
+   * Used to provide meaningful error messages to users.
+   */
+  private static initError: Error | null = null;
+
+  /**
    * Register an auth provider for token refresh.
    * Called by SupabaseAuthProvider on initialization.
    */
   static setAuthProvider(provider: AuthTokenProvider): void {
     this.authProvider = provider;
+  }
+
+  /**
+   * Mark VS Code auth provider as successfully registered.
+   * Called after vscode.authentication.registerAuthenticationProvider() succeeds.
+   */
+  static setVSCodeProviderRegistered(): void {
+    this.vscodeProviderRegistered = true;
+  }
+
+  /**
+   * Record an initialization error for later retrieval.
+   * Allows surfacing meaningful error messages to users.
+   */
+  static setInitError(error: Error): void {
+    this.initError = error;
+  }
+
+  /**
+   * Get initialization error if any occurred.
+   */
+  static getInitError(): Error | null {
+    return this.initError;
+  }
+
+  /**
+   * Check if auth system is fully initialized and ready for use.
+   * Use this before calling vscode.authentication.getSession('texra-supabase', ...)
+   * to avoid timeout errors.
+   */
+  static isReady(): boolean {
+    return (
+      this.instance !== null &&
+      this.authProvider !== null &&
+      this.vscodeProviderRegistered &&
+      this.initError === null
+    );
   }
 
   /**
@@ -98,12 +147,12 @@ export class SupabaseClient {
       }
 
       // Fallback to VS Code's authentication API
-      // Only attempt if provider was successfully registered, otherwise VS Code
-      // will timeout waiting for a provider that was never registered
-      if (!isAuthProviderRegistered()) {
+      // Only attempt if auth system is ready, otherwise VS Code will timeout
+      // waiting for a provider that was never registered
+      if (!this.isReady()) {
         logger.debug(
           'SupabaseClient',
-          'Skipping VS Code auth fallback - provider not registered with VS Code',
+          'Skipping VS Code auth fallback - auth system not ready',
         );
         return null;
       }

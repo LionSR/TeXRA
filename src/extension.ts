@@ -31,11 +31,7 @@ import { initializeServerSideKeyAccess } from '@/auth/serverKeys';
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { SupabaseAuthProvider } from '@/auth/SupabaseAuthProvider';
 import { SupabaseUriHandler } from '@/auth/UriHandler';
-import {
-  isSupabaseConfigured,
-  setRuntimeExtensionId,
-  setAuthProviderRegistered,
-} from '@/auth/config';
+import { isSupabaseConfigured, setRuntimeExtensionId } from '@/auth/config';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -161,7 +157,7 @@ export async function activate(context: vscode.ExtensionContext) {
         );
 
         // Mark provider as registered so auth commands know it's safe to use
-        setAuthProviderRegistered();
+        SupabaseClient.setVSCodeProviderRegistered();
 
         // Register URI handler for OAuth callbacks
         const uriHandler = new SupabaseUriHandler();
@@ -189,6 +185,9 @@ export async function activate(context: vscode.ExtensionContext) {
         logger.info('extension', 'Supabase authentication provider registered');
       }
     } catch (error) {
+      const initError =
+        error instanceof Error ? error : new Error(toErrorMessage(error));
+      SupabaseClient.setInitError(initError);
       logger.error(
         'extension',
         `Failed to initialize Supabase authentication: ${toErrorMessage(error)}`,
