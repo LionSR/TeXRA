@@ -3,7 +3,11 @@ import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getConfig } from '@utils/config';
 import { SupabaseClient } from './SupabaseClient';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';
-import { type OAuthProvider, getExternalAuthCallbackUri } from './config';
+import {
+  type OAuthProvider,
+  getExternalAuthCallbackUri,
+  isAuthProviderRegistered,
+} from './config';
 
 const AUTH_PROVIDER_ID = 'texra-supabase';
 
@@ -24,6 +28,10 @@ function isVSCodeGitHubEnabled(): boolean {
 async function getExistingSession(): Promise<
   vscode.AuthenticationSession | undefined
 > {
+  // Skip VS Code auth API if provider was never registered to avoid timeout
+  if (!isAuthProviderRegistered()) {
+    return undefined;
+  }
   return vscode.authentication.getSession(AUTH_PROVIDER_ID, [], {
     silent: true,
   });
@@ -69,6 +77,14 @@ function getSignInOptions(): SignInOption[] {
 
 export async function signIn(): Promise<void> {
   try {
+    // Check if auth provider was registered - if not, provide clear error
+    if (!isAuthProviderRegistered()) {
+      void vscode.window.showErrorMessage(
+        'Sign in failed: Authentication service not initialized. Please reload VS Code and try again. If the issue persists, check the TeXRA output channel for errors.',
+      );
+      return;
+    }
+
     const existing = await getExistingSession();
     if (existing) {
       const user = await SupabaseClient.getUser();
