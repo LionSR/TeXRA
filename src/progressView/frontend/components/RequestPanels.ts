@@ -45,11 +45,6 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { ProgressEvents } from '../events';
 import { buildCodeBlock } from '../formatters/htmlBuilders';
 import { getComposedPathElement } from '../utils';
-import {
-  registerCopyContent,
-  getCopyContent,
-} from '../formatters/copyContentStore';
-import { copyWithFeedback } from '@shared/utils/clipboard';
 
 // Local imports - progress view component types
 import type { PermissionState } from './PermissionCard';
@@ -431,16 +426,6 @@ export class RequestPanels extends LitElement {
                   <summary class="retry-request__error-summary">
                     <i class="codicon codicon-chevron-right toggle-icon"></i>
                     Error details
-                    <vscode-toolbar-button
-                      class="retry-request__copy-button"
-                      icon="copy"
-                      title="Copy error details"
-                      aria-label="Copy error details"
-                      data-default-title="Copy error details"
-                      data-success-title="Copied!"
-                      data-copy-id=${registerCopyContent(detailsText)}
-                      @click=${this.handleCopyClick}
-                    ></vscode-toolbar-button>
                   </summary>
                   <div class="retry-request__error-body">${detailsText}</div>
                 </details>
@@ -862,16 +847,6 @@ export class RequestPanels extends LitElement {
     if (!clickedInside) {
       this.openDiffMenuKey = null;
     }
-  };
-
-  private handleCopyClick = async (event: MouseEvent): Promise<void> => {
-    event.stopPropagation();
-    const button = event.currentTarget as HTMLElement;
-    const copyId = button.dataset.copyId ?? '';
-    const textToCopy = copyId ? (getCopyContent(copyId) ?? '') : '';
-    if (!textToCopy.trim()) return;
-
-    await copyWithFeedback(button, textToCopy);
   };
 
   private toggleDiffMenu(event: MouseEvent, key: PermissionKey): void {
