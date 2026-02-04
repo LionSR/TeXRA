@@ -685,7 +685,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     if (logId) {
       options.logger.updateToolUse(logId, toolUseLog);
     } else {
-      options.logger.logToolUse(toolUseLog);
+      options.logger.logToolUse({ ...toolUseLog, status: 'completed' });
     }
 
     // Collect and add valid media file locations
