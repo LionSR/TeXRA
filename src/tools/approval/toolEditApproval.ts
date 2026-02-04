@@ -261,10 +261,7 @@ function computeLineChangeSummary(
  * Compute the 0-based line number where the first change occurs.
  * Returns null if the content is identical.
  */
-function firstChangedLine(
-  original: string,
-  proposed: string,
-): number | null {
+function firstChangedLine(original: string, proposed: string): number | null {
   if (original === proposed) {
     return null;
   }
