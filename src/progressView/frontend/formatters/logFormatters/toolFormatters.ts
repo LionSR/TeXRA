@@ -101,9 +101,14 @@ function buildToolSection(
 }
 
 /** Title prefix lookup based on tool state. */
-function getToolTitlePrefix(isUserFeedback: boolean, isError: boolean): string {
+function getToolTitlePrefix(
+  isUserFeedback: boolean,
+  isError: boolean,
+  isInProgress: boolean,
+): string {
   if (isUserFeedback) return 'User Feedback';
   if (isError) return 'Tool Error';
+  if (isInProgress) return 'Running';
   return 'Tool Use';
 }
 
@@ -135,17 +140,21 @@ export function formatToolUseTemplate(
     userInstructionText,
     input,
     isUserFeedback,
+    status,
   } = normalizedToolLog;
 
   // Determine display state
+  const isInProgress = status === 'in_progress';
   const showAsError = normalizedToolLog.isError && !isUserFeedback;
   const iconClass = isUserFeedback
     ? 'codicon-comment'
-    : getToolIconClass(toolName, showAsError);
+    : isInProgress
+      ? 'codicon codicon-sync spin'
+      : getToolIconClass(toolName, showAsError);
 
   // Build title
-  const titlePrefix = getToolTitlePrefix(isUserFeedback, showAsError);
-  const isNormalToolUse = !isUserFeedback && !showAsError;
+  const titlePrefix = getToolTitlePrefix(isUserFeedback, showAsError, isInProgress);
+  const isNormalToolUse = !isUserFeedback && !showAsError && !isInProgress;
   const titleBase = buildTitleBase(toolName, titlePrefix, isNormalToolUse);
 
   const headerSummary = normalizedToolLog.headerSummary ?? '';
@@ -306,7 +315,8 @@ export function formatToolUseTemplate(
       : joinWithSeparator(sections);
 
   const fullTimestamp = new Date(timestamp).toISOString();
-  const shouldOpen = options?.defaultOpen ?? false;
+  // Auto-open in-progress tools so users see the command immediately
+  const shouldOpen = options?.defaultOpen ?? isInProgress;
   // prettier-ignore
   const bannerContentTemplate = html`<div class="banner-content log-entry-content" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${contentTemplate}</div>`;
 
@@ -316,6 +326,7 @@ export function formatToolUseTemplate(
     'tool-use-details': true,
     'tool-use-error': showAsError,
     'tool-use-user-feedback': isUserFeedback,
+    'tool-use-in-progress': isInProgress,
   })} ?open=${shouldOpen}>${buildDetailsSummary({
     iconClass,
     label: titleText,
