@@ -295,6 +295,7 @@ export class AgentLogger {
   /**
    * Log tool use start with status='in_progress'.
    * Returns log ID and resolved groupId for consistent update.
+   * Note: Emits directly to bus (like createStream) for immediate UI update.
    */
   logToolUseStart(
     toolName: string,
@@ -303,6 +304,7 @@ export class AgentLogger {
   ): { logId: string; groupId: string | undefined } {
     const id = randomUUID();
     const resolvedGroupId = groupId ?? this.resolveActiveGroupId();
+    this.debug(`Tool started: ${toolName}`, { groupId: resolvedGroupId });
     bus.emit('addLogMessage', {
       streamId: this.streamId,
       logMessage: {
