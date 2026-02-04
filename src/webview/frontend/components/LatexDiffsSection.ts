@@ -70,15 +70,6 @@ export class LatexDiffsSection extends LitElement {
       #commit::part(listbox) {
         max-height: var(--height-large);
       }
-
-      .instruction-controls {
-        display: flex;
-        align-items: center;
-        justify-content: flex-start;
-        gap: var(--spacing-small);
-        flex-wrap: wrap;
-        width: 100%;
-      }
     `,
   ];
 
@@ -263,15 +254,48 @@ export class LatexDiffsSection extends LitElement {
           <div class="file-select">
             <div class="file-select-header">
               <div class="file-select-label-group">
-                <label for="editedFile">Edited</label>
-              </div>
-              <vscode-toolbar-container class="file-select-actions">
                 <vscode-toolbar-button
                   id="refreshEditedFileButton"
                   icon="edit"
                   label="Refresh edited files"
                   title="Refresh edited files"
                   @click=${this.handleRefreshEditedFiles}
+                ></vscode-toolbar-button>
+                <label
+                  for="editedFile"
+                  title="File containing edits to merge into the base file"
+                >
+                  Edited
+                </label>
+              </div>
+              <vscode-toolbar-container class="file-select-actions">
+                <vscode-toolbar-button
+                  id="acceptButton"
+                  icon="check"
+                  label="Accept changes"
+                  title="Accept changes from edited file and overwrite base file"
+                  @click=${() => this.handleAction('accept')}
+                ></vscode-toolbar-button>
+                <vscode-toolbar-button
+                  id="compareButton"
+                  icon="diff"
+                  label="Compare files"
+                  title="Compare the selected edited file with the selected base file"
+                  @click=${() => this.handleAction('compare')}
+                ></vscode-toolbar-button>
+                <vscode-toolbar-button
+                  id="mergeButton"
+                  icon="merge"
+                  label="Merge edits"
+                  title="Create a new version of the base file by merging the edits suggested by the edited file"
+                  @click=${() => this.handleAction('merge')}
+                ></vscode-toolbar-button>
+                <vscode-toolbar-button
+                  id="latexdiffButton"
+                  icon="diff-single"
+                  label="LaTeXdiff"
+                  title="LaTeXdiff the selected edited file with the selected base file"
+                  @click=${() => this.handleAction('latexdiff')}
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="currentEditedFileButton"
@@ -303,17 +327,36 @@ export class LatexDiffsSection extends LitElement {
           <div class="file-select">
             <div class="file-select-header">
               <div class="file-select-label-group">
-                <label for="commit">
-                  <i class="codicon codicon-git-commit"></i> Commit
-                </label>
+                <vscode-toolbar-button
+                  id="refreshCommitsButton"
+                  icon="git-commit"
+                  label="Refresh commit list"
+                  title="Refresh commit list"
+                  @click=${this.handleRefreshCommits}
+                ></vscode-toolbar-button>
+                <label for="commit">Commit</label>
               </div>
               <vscode-toolbar-container class="file-select-actions">
                 <vscode-toolbar-button
-                  id="refreshCommitsButton"
-                  icon="refresh"
-                  label="Refresh commits"
-                  title="Refresh commits"
-                  @click=${this.handleRefreshCommits}
+                  id="latexdiffvcButton"
+                  icon="diff-single"
+                  label="LaTeXdiff with commit"
+                  title="LaTeXdiff the selected base file with another git commit"
+                  @click=${() => this.handleAction('latexdiffvc')}
+                ></vscode-toolbar-button>
+                <vscode-toolbar-button
+                  id="packLatexdiffvcButton"
+                  icon="archive"
+                  label="Pack latexdiff output"
+                  title="Pack the latexdiff-vc output into the History folder"
+                  @click=${() => this.handleAction('packLatexdiffvc')}
+                ></vscode-toolbar-button>
+                <vscode-toolbar-button
+                  id="cleanLatexdiffvcButton"
+                  icon="trash"
+                  label="Clean latexdiff output"
+                  title="Clean the latexdiff-vc output"
+                  @click=${() => this.handleAction('cleanLatexdiffvc')}
                 ></vscode-toolbar-button>
               </vscode-toolbar-container>
             </div>
@@ -328,57 +371,6 @@ export class LatexDiffsSection extends LitElement {
             >
               ${this.renderCommitOptions()}
             </vscode-single-select>
-          </div>
-          <div class="instruction-controls">
-            <vscode-toolbar-button
-              id="latexdiffButton"
-              icon="compare-changes"
-              label="Run LaTeXDiff"
-              title="Run LaTeXDiff"
-              @click=${() => this.handleAction('latexdiff')}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="latexdiffvcButton"
-              icon="compare-changes"
-              label="Run LaTeXDiff with version control"
-              title="Run LaTeXDiff with version control"
-              @click=${() => this.handleAction('latexdiffvc')}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="packLatexdiffvcButton"
-              icon="archive"
-              label="Pack LaTeXDiff VC"
-              title="Pack LaTeXDiff VC"
-              @click=${() => this.handleAction('packLatexdiffvc')}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="cleanLatexdiffvcButton"
-              icon="trash"
-              label="Clean LaTeXDiff VC"
-              title="Clean LaTeXDiff VC"
-              @click=${() => this.handleAction('cleanLatexdiffvc')}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="mergeButton"
-              icon="merge"
-              label="Merge edits"
-              title="Merge edits"
-              @click=${() => this.handleAction('merge')}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="compareButton"
-              icon="diff"
-              label="Compare"
-              title="Compare"
-              @click=${() => this.handleAction('compare')}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="acceptButton"
-              icon="check"
-              label="Accept"
-              title="Accept"
-              @click=${() => this.handleAction('accept')}
-            ></vscode-toolbar-button>
           </div>
         </div>
       </div>
