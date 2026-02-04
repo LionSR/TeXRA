@@ -51,6 +51,8 @@ import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
 import {
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+  TOKEN_SAFETY_BUFFER,
+  TOOL_USE_MAX_OUTPUT_FACTOR,
   TOOL_USE_SAFETY_BUFFER,
 } from './contextManagementConstants';
 import {
@@ -495,6 +497,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     compactedMessages: ResponseInputItem[];
     tokensAfter: number;
   };
+
+  /**
+   * Best available estimate of current input tokens.
+   * Returns compactionResult.tokensAfter if compaction just happened,
+   * otherwise falls back to cumulativeInputTokens from previous response.
+   * Returns 0 if no token data available (first turn).
+   */
+  private getBestInputTokenEstimate(): number {
+    return (
+      this.compactionResult?.tokensAfter ??
+      this.conversationState.cumulativeInputTokens
+    );
+  }
 
   /**
    * Compact the conversation to reduce context size.
@@ -1046,6 +1061,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     let maxOutputTokens = this.getEffectiveMaxOutputTokens();
 
+    // DEBUG: Log effective max output tokens calculation
+    this.logger.debug(
+      `[TOKEN_DEBUG] maxOutputTokens=${maxOutputTokens}, isToolUseMode=${this.isToolUseMode()}, ` +
+        `configMax=${this.config.maxOutputTokens}, factor=${this.isToolUseMode() ? TOOL_USE_MAX_OUTPUT_FACTOR : 1.0}, ` +
+        `agentCategory=${this.agentCategory}`,
+    );
+
     // Phase 2: COUNT - Estimate input tokens using built params
     // Phase 3: VALIDATE - Adjust max_output_tokens if needed
     //
@@ -1093,8 +1115,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
 
         // Validate and adjust max_output_tokens if needed (throws if context window exceeded)
-        // Use larger safety buffer for tool-use mode to account for counting discrepancies
-        const tokenBuffer = this.isToolUseMode()
+        // Use larger safety buffer for:
+        // - Tool-use mode: account for tool result counting discrepancies
+        // - previous_response_id: server-side history may differ from token count
+        const needsLargerBuffer =
+          this.isToolUseMode() || this.previousResponseId !== null;
+        const tokenBuffer = needsLargerBuffer
           ? TOOL_USE_SAFETY_BUFFER
           : undefined;
         const validation = this.validateTokenLimits(
@@ -1102,6 +1128,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           maxOutputTokens,
           this.config.contextWindow,
           tokenBuffer,
+        );
+
+        // DEBUG: Log validation details
+        const availableForOutput = this.config.contextWindow - inputTokens;
+        this.logger.debug(
+          `[TOKEN_DEBUG] Validation: inputTokens=${inputTokens}, maxOutputTokens=${maxOutputTokens}, ` +
+            `available=${availableForOutput}, buffer=${tokenBuffer ?? 'default'}, ` +
+            `adjusted=${validation.adjustedMaxTokens}, total=${inputTokens + validation.adjustedMaxTokens}`,
         );
 
         if (validation.adjustedMaxTokens !== maxOutputTokens) {
@@ -1125,8 +1159,25 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       } catch (err) {
         if (isContextWindowError(err)) throw err;
         this.logger.warn(
-          `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
+          `Token counting failed: ${getSdkErrorMessage(err)}. Applying fallback cap.`,
         );
+        // Fallback: cap output based on best available estimate.
+        // Skip on first turn (no history to overflow).
+        const inputEstimate = this.getBestInputTokenEstimate();
+        if (inputEstimate > 0) {
+          const buffer = this.isToolUseMode()
+            ? TOOL_USE_SAFETY_BUFFER
+            : TOKEN_SAFETY_BUFFER;
+          const available =
+            this.config.contextWindow - inputEstimate - buffer;
+          const capped = Math.min(maxOutputTokens, Math.max(0, available));
+          if (capped !== maxOutputTokens) {
+            this.logger.debug(
+              `Fallback: max_output_tokens ${maxOutputTokens} → ${capped} (estimate: ${inputEstimate})`,
+            );
+            maxOutputTokens = capped;
+          }
+        }
       }
     }
 
@@ -1137,6 +1188,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       store: true,
       ...(convertedTools?.length && { tool_choice: 'auto' as const }),
     };
+
+    // DEBUG: Log final API params
+    this.logger.debug(
+      `[TOKEN_DEBUG] API call: max_output_tokens=${maxOutputTokens}, ` +
+        `previous_response_id=${this.previousResponseId ?? 'none'}, ` +
+        `inputMessageCount=${newMessages.length}, model=${this.config.fullName}`,
+    );
 
     if (useBackgroundResponses) {
       this.logger.debug(
