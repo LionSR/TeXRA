@@ -51,6 +51,7 @@ import {
 import {
   computeReducedMaxTokens,
   TOKEN_SAFETY_BUFFER,
+  TOOL_USE_MAX_OUTPUT_FACTOR,
 } from './contextManagementConstants';
 
 // Type imports
@@ -173,6 +174,18 @@ export abstract class ModelHandler<
    */
   protected isWorkflowMode(): boolean {
     return this.agentCategory === AgentCategory.Workflow;
+  }
+
+  /**
+   * Returns the effective max output tokens for the current mode.
+   * Tool-use agents use a reduced value to leave headroom for context growth.
+   */
+  protected getEffectiveMaxOutputTokens(): number {
+    const base = this.config.maxOutputTokens;
+    if (!this.isToolUseMode()) {
+      return base;
+    }
+    return Math.floor(base * TOOL_USE_MAX_OUTPUT_FACTOR);
   }
 
   /**

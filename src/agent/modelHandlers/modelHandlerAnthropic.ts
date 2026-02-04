@@ -49,7 +49,10 @@ import { flexibleFS, type FileLocation } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 
 // Local file imports
-import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
+import {
+  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+  TOOL_USE_SAFETY_BUFFER,
+} from './contextManagementConstants';
 import { AnthropicStreamHandler } from './support/AnthropicStreamHandler';
 import { toAnthropicTools } from './toolConversion';
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
@@ -526,7 +529,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Phase 1: BUILD - Construct provider-specific request parameters
     const options: MessageCreateParams = {
       model: this.config.fullName,
-      max_tokens: this.config.maxOutputTokens,
+      max_tokens: this.getEffectiveMaxOutputTokens(),
       messages,
       temperature,
       stop_sequences: endTag ? [endTag] : undefined,
@@ -551,13 +554,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Enable thinking for any models that support reasoning
     if (this.capabilities.supportsReasoning) {
-      // This ensures thinking is explicitly enabled for all models that support it
       this.logger.debug('Enabling thinking for model with reasoning support');
 
-      // Calculate thinking budget based on max_tokens constraint
-      // budget_tokens must be less than max_tokens
-      const maxBudget = Math.floor(this.config.maxOutputTokens * 0.5); // Use 50% of max_tokens as safe budget
-      const defaultBudget = useStreaming ? 32768 : 4096; // streaming allows larger thinking budget
+      // budget_tokens must be < max_tokens; use 50% to leave room for actual output
+      const maxBudget = Math.floor(options.max_tokens * 0.5);
+      const defaultBudget = useStreaming ? 32768 : 4096;
       const thinkingBudget = Math.min(defaultBudget, maxBudget);
 
       options.thinking = {
@@ -566,7 +567,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       };
 
       this.logger.debug(
-        `Set thinking budget: ${thinkingBudget} tokens (max_tokens: ${this.config.maxOutputTokens}, streaming: ${useStreaming})`,
+        `Set thinking budget: ${thinkingBudget} tokens (max_tokens: ${options.max_tokens}, streaming: ${useStreaming})`,
       );
 
       // Remove temperature for Claude 4 models when thinking is enabled as per Anthropic docs
@@ -628,10 +629,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
           measuredInputTokens = inputTokens;
 
           // Validate and adjust max_tokens if needed (throws if context window exceeded)
+          // Use larger safety buffer for tool-use mode
+          const tokenBuffer = this.isToolUseMode()
+            ? TOOL_USE_SAFETY_BUFFER
+            : undefined;
           const validation = this.validateTokenLimits(
             inputTokens,
             options.max_tokens,
             effectiveContextWindow,
+            tokenBuffer,
           );
 
           if (validation.adjustedMaxTokens !== options.max_tokens) {
@@ -652,24 +658,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
             );
             options.max_tokens = validation.adjustedMaxTokens;
 
-            // Adjust thinking budget if reasoning is enabled and max_tokens was reduced
-            if (
-              this.capabilities.supportsReasoning &&
-              options.thinking &&
-              options.thinking.type === 'enabled'
-            ) {
-              const adjustedBudget = Math.max(
-                1,
-                Math.min(
-                  options.thinking.budget_tokens,
-                  Math.floor(options.max_tokens * 0.5),
-                ),
-              );
-              if (adjustedBudget !== options.thinking.budget_tokens) {
+            // Adjust thinking budget if max_tokens was reduced
+            if (options.thinking?.type === 'enabled') {
+              const maxBudget = Math.floor(options.max_tokens * 0.5);
+              if (options.thinking.budget_tokens > maxBudget) {
                 this.logger.debug(
-                  `Adjusted thinking budget to ${adjustedBudget} due to reduced max_tokens`,
+                  `Adjusted thinking budget from ${options.thinking.budget_tokens} to ${maxBudget} due to reduced max_tokens`,
                 );
-                options.thinking.budget_tokens = adjustedBudget;
+                options.thinking.budget_tokens = maxBudget;
               }
             }
           }

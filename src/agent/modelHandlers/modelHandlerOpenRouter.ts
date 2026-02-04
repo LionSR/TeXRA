@@ -116,7 +116,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     const kwargs: any = {
       model: this.config.openrouterFullName, // Use OpenRouter model name
       messages,
-      max_tokens: this.config.maxOutputTokens,
+      max_tokens: this.getEffectiveMaxOutputTokens(),
       temperature,
       extra_headers: { 'X-Title': 'TeXRA.ai' },
     };
