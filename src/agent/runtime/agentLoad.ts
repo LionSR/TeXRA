@@ -22,6 +22,8 @@ import {
 } from '@agent/core/AgentDataclass';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
+import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
+import { resolveToolDefinitions } from '@tools/registry';
 
 // Internal imports
 import { AbsoluteFS } from '@utils/files';
@@ -114,8 +116,6 @@ export async function loadAgentSettingAndPrompts(
 
     // Handle remote agents
     if (entry.source === 'remote') {
-      const { RemoteAgentLoader } =
-        await import('@agent/remote/RemoteAgentLoader');
       const remoteConfig = await RemoteAgentLoader.loadRemoteAgent(
         resolution.resolvedName,
         { preferMultiple: options?.preferMultiple },
@@ -158,7 +158,6 @@ export async function loadAgentSettingAndPrompts(
 
     // Resolve tool names to definitions using shared utility
     if (Array.isArray(settings.tools)) {
-      const { resolveToolDefinitions } = await import('@tools/registry');
       settings.tools = resolveToolDefinitions(
         settings.tools as (string | { name: string })[],
         (name) => logger.warn(CHANNEL, `Tool "${name}" not found in registry`),

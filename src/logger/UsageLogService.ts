@@ -1,8 +1,8 @@
 import { randomUUID } from 'crypto';
 
 import * as logger from '@logger/logUtils';
-import { SupabaseClient } from '@/auth/SupabaseClient';
-import { SUPABASE_CUSTOM_DOMAIN } from '@/auth/config';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 
 import { UsageLogResponseSchema } from './UsageLogTypes';
 import type {
