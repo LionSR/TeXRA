@@ -73,8 +73,6 @@ export class SupabaseClient {
 
   /**
    * Check if auth system is fully initialized and ready for use.
-   * Use this before calling vscode.authentication.getSession('texra-supabase', ...)
-   * to avoid timeout errors.
    */
   static isReady(): boolean {
     return (
@@ -123,46 +121,18 @@ export class SupabaseClient {
   }
 
   /**
-   * Get the current user's access token from VS Code authentication.
-   * Automatically refreshes the token if it's about to expire via the registered auth provider.
-   * @param forceRefresh - When true, forces a token refresh regardless of local expiry (e.g., after relay 401).
+   * Get the current user's access token.
+   * Returns null if not authenticated or auth system not ready.
+   * @param forceRefresh - When true, forces a token refresh (e.g., after relay 401).
    */
   static async getAccessToken(forceRefresh?: boolean): Promise<string | null> {
+    if (!this.authProvider) {
+      // Auth provider not set - system not initialized
+      return null;
+    }
+
     try {
-      // Use registered auth provider for proactive token refresh
-      if (this.authProvider) {
-        const token = await this.authProvider.ensureFreshToken(forceRefresh);
-        if (token) {
-          return token;
-        }
-        logger.debug(
-          'SupabaseClient',
-          'ensureFreshToken returned null, falling back to VS Code auth',
-        );
-      } else {
-        logger.debug(
-          'SupabaseClient',
-          'Auth provider not registered, using VS Code auth fallback',
-        );
-      }
-
-      // Fallback to VS Code's authentication API
-      // Only attempt if auth system is ready, otherwise VS Code will timeout
-      // waiting for a provider that was never registered
-      if (!this.isReady()) {
-        logger.debug(
-          'SupabaseClient',
-          'Skipping VS Code auth fallback - auth system not ready',
-        );
-        return null;
-      }
-
-      const session = await vscode.authentication.getSession(
-        'texra-supabase',
-        [],
-        { silent: true },
-      );
-      return session?.accessToken || null;
+      return await this.authProvider.ensureFreshToken(forceRefresh);
     } catch (error) {
       logger.error(
         'SupabaseClient',
