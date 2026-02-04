@@ -1,3 +1,6 @@
+// Standard library imports
+import * as path from 'path';
+
 // Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
 import * as vscode from 'vscode';
@@ -231,7 +234,7 @@ async function handleCreateAgentWithAI(_context: vscode.ExtensionContext) {
 
     const targetDir = await agentDirectories.custom();
 
-    const filePath = vscode.Uri.file(`${targetDir}/${agentName}.yaml`);
+    const filePath = vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`));
 
     let yamlContent: string | undefined;
     try {
