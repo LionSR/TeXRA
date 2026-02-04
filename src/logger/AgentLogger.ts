@@ -291,6 +291,44 @@ export class AgentLogger {
     this.info('', { groupId, messageType: MESSAGE_TYPES.TOOL_USE, data });
   }
 
+  /**
+   * Log tool use start with status='in_progress'. Returns log ID for later update.
+   * Use this to show the tool command before execution completes.
+   */
+  logToolUseStart(data: { toolName: string; input: unknown }, groupId?: string): string {
+    const id = randomUUID();
+    const resolvedGroupId = groupId ?? this.resolveActiveGroupId();
+    bus.emit('addLogMessage', {
+      streamId: this.streamId,
+      logMessage: {
+        id,
+        text: '',
+        level: 'info',
+        timestamp: Date.now(),
+        groupId: resolvedGroupId,
+        messageType: MESSAGE_TYPES.TOOL_USE,
+        data: { ...data, status: 'in_progress' },
+      },
+    });
+    return id;
+  }
+
+  /**
+   * Update a tool use log entry with the completed result.
+   */
+  updateToolUse(logId: string, data: unknown, groupId?: string): void {
+    const resolvedGroupId = groupId ?? this.resolveActiveGroupId();
+    bus.emit('updateLogMessage', {
+      streamId: this.streamId,
+      logMessage: {
+        id: logId,
+        groupId: resolvedGroupId,
+        messageType: MESSAGE_TYPES.TOOL_USE,
+        data: { ...(data as object), status: 'completed' },
+      },
+    });
+  }
+
   logWebSearch(data: unknown, groupId?: string): void {
     this.info('', { groupId, messageType: MESSAGE_TYPES.WEB_SEARCH, data });
   }
