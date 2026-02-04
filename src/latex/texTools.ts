@@ -62,9 +62,12 @@ export async function compileLatex2Pdf(
     ];
 
     // Build environment with TEXINPUTS if we have custom paths or existing TEXINPUTS
+    // Use path.delimiter for cross-platform compatibility (`:` on Unix, `;` on Windows)
     const needsTexInputs = texInputParts.length > 1 || process.env.TEXINPUTS;
     const texInputs = needsTexInputs
-      ? texInputParts.join(':') + ':' + (process.env.TEXINPUTS ?? '')
+      ? texInputParts.join(path.delimiter) +
+        path.delimiter +
+        (process.env.TEXINPUTS ?? '')
       : undefined;
     const env: Record<string, string> = {
       ...(texInputs && { TEXINPUTS: texInputs }),
