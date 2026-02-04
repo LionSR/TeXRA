@@ -516,7 +516,7 @@ class ToolUseProcessNode<C> extends BaseNode<
 }
 
 /** Tools that may take a while and benefit from showing in-progress state. */
-const SLOW_TOOLS = new Set(['Bash', 'Wolfram', 'WebFetch', 'WebSearch']);
+const SLOW_TOOLS = new Set(['bash', 'wolfram', 'web_fetch', 'web_search']);
 
 /**
  * Result of executing a single tool call, capturing everything needed
