@@ -153,7 +153,11 @@ export function formatToolUseTemplate(
       : getToolIconClass(toolName, showAsError);
 
   // Build title
-  const titlePrefix = getToolTitlePrefix(isUserFeedback, showAsError, isInProgress);
+  const titlePrefix = getToolTitlePrefix(
+    isUserFeedback,
+    showAsError,
+    isInProgress,
+  );
   const isNormalToolUse = !isUserFeedback && !showAsError && !isInProgress;
   const titleBase = buildTitleBase(toolName, titlePrefix, isNormalToolUse);
 

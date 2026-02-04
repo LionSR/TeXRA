@@ -476,7 +476,8 @@ export class AgentLogger {
     logger.endGroup(this.streamId, groupId, status, this.isAgentLogger);
   }
 
-  private resolveActiveGroupId(): string | undefined {
+  /** Get the currently active group ID for this logger's stream. */
+  resolveActiveGroupId(): string | undefined {
     return logger.getActiveGroupId(this.streamId, this.isAgentLogger);
   }
 }
