@@ -67,6 +67,7 @@ import {
   nonZeroOrUndefined,
 } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
+import { TOOL_USE_SAFETY_BUFFER } from './contextManagementConstants';
 
 // Local file imports
 import {
@@ -470,7 +471,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // Phase 1: BUILD - Construct provider-specific request parameters
     const generationConfig: GenerateContentConfig = {
       temperature: temperature,
-      maxOutputTokens: this.config.maxOutputTokens ?? 8192,
+      maxOutputTokens: this.getEffectiveMaxOutputTokens(),
       ...(endTag && { stopSequences: [endTag] }),
     };
 
@@ -510,11 +511,16 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         });
 
         // Validate and adjust maxOutputTokens if needed (throws if context window exceeded)
+        // Use larger safety buffer for tool-use mode
         const originalMaxTokens = generationConfig.maxOutputTokens ?? 8192;
+        const tokenBuffer = this.isToolUseMode()
+          ? TOOL_USE_SAFETY_BUFFER
+          : undefined;
         const validation = this.validateTokenLimits(
           totalTokens,
           originalMaxTokens,
           this.config.contextWindow,
+          tokenBuffer,
         );
 
         if (validation.adjustedMaxTokens !== originalMaxTokens) {

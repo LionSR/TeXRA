@@ -34,6 +34,21 @@ export const TOKEN_SAFETY_BUFFER = 10;
 export const HEURISTIC_TOKEN_BUFFER = 5000;
 
 /**
+ * Factor to reduce max output tokens for tool-use agents (0 < factor <= 1).
+ * Tool-use conversations accumulate context over many turns, so reserving
+ * a smaller portion for output leaves more headroom for context growth.
+ */
+export const TOOL_USE_MAX_OUTPUT_FACTOR = 0.7;
+
+/**
+ * Larger safety buffer for tool-use mode token validation.
+ * Accounts for tokenization differences between client estimates and
+ * server-side counting, API framing overhead, and edge cases in long
+ * multi-turn conversations.
+ */
+export const TOOL_USE_SAFETY_BUFFER = 2000;
+
+/**
  * Maximum character length for tool result text sent to models.
  * Tool results exceeding this limit return an error to prevent context window overflow.
  * Set to 200KB (200,000 characters) which is roughly 50,000-66,000 tokens depending on content.
