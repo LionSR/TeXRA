@@ -4,7 +4,7 @@ import {
   signIn,
   signOut,
   viewProfile,
-} from '@/auth/authCommands';
+} from '@auth/authCommands';
 
 /**
  * Register authentication-related commands.
@@ -23,4 +23,4 @@ export function registerAuthCommands(
 }
 
 // Re-export AUTH_COMMANDS for external use
-export { AUTH_COMMANDS, getAuthStatus } from '@/auth/authCommands';
+export { AUTH_COMMANDS, getAuthStatus } from '@auth/authCommands';
