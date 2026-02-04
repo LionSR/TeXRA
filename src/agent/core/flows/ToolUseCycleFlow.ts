@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - core flow primitives
-import { MESSAGE_TYPES } from '@shared/schemas';
+import { CompactionStateSchema, MESSAGE_TYPES } from '@shared/schemas';
 import { isRemoteAgent } from '@agent/index';
 import { BaseNode, BatchNode, Flow } from '@agent/node';
 import {
@@ -58,6 +58,10 @@ import type {
   ToolUseCycleServices,
   ToolUseCycleParams,
 } from './CycleServices';
+import {
+  consumeCompactNow,
+  isAutoCompactEnabled,
+} from '@agent/toolUse/ToolUseCompactionManager';
 
 /** Parse tool input, handling JSON strings and other formats from model providers. */
 function parseToolInput(
@@ -154,6 +158,8 @@ export const ToolUseCycleFieldsSchema = BaseCycleFieldsSchema.extend({
    * Reset after finalization when continuing to next cycle.
    */
   cycleNormalizedUsage: NormalizedUsageSchema.optional(),
+  /** Compaction state for long-running tool-use sessions. */
+  compactionState: CompactionStateSchema.nullable().prefault(null),
 });
 
 /** Tool-use cycle fields derived from schema */
@@ -174,6 +180,8 @@ export interface ToolUseCycleShared extends ToolUseCycleFields {
   toolCalls?: SdkToolCall[];
   /** Normalized usage with proper typing */
   cycleNormalizedUsage?: NormalizedUsage;
+  /** Compaction state with proper typing */
+  compactionState?: z.infer<typeof CompactionStateSchema> | null;
 }
 
 /**
@@ -265,15 +273,22 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     return 'Tool-use call';
   }
 
-  async prep(shared: ToolUseCycleShared): Promise<BaseInvocationPrepResult> {
+  async prep(shared: ToolUseCycleShared): Promise<
+    BaseInvocationPrepResult & {
+      compactionState: z.infer<typeof CompactionStateSchema> | null;
+    }
+  > {
     return {
       shouldStop: shared.shouldStop,
       messages: shared.messages,
+      compactionState: shared.compactionState ?? null,
     };
   }
 
   async exec(
-    prepRes: BaseInvocationPrepResult,
+    prepRes: BaseInvocationPrepResult & {
+      compactionState: z.infer<typeof CompactionStateSchema> | null;
+    },
   ): Promise<InvocationResult<BaseInvocationSuccessData>> {
     const services = this.services;
 
@@ -284,18 +299,36 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     const start = Date.now();
 
     return this.withAbortController(async (signal) => {
+      const { streamId } = services;
+      const autoCompactEnabled = isAutoCompactEnabled(streamId);
+      const forceCompact = consumeCompactNow(streamId);
       services.modelHandler.setOutputStreaming(true);
-      const response = await services.modelHandler.createResponse({
-        client: services.client,
-        messages: prepRes.messages,
-        temperature: services.setting.temperature,
-        signal,
-        tools: services.setting.tools as ToolDefinition[] | undefined,
-      });
 
-      const responseTimeMs = Date.now() - start;
+      try {
+        const response = await services.modelHandler.createResponse({
+          client: services.client,
+          messages: prepRes.messages,
+          temperature: services.setting.temperature,
+          signal,
+          tools: services.setting.tools as ToolDefinition[] | undefined,
+          compaction: {
+            state: prepRes.compactionState,
+            autoCompactEnabled,
+            forceCompact,
+            updateState: (state) => {
+              prepRes.compactionState = state;
+            },
+          },
+        });
 
-      return { kind: 'success', response, responseTimeMs };
+        const responseTimeMs = Date.now() - start;
+
+        return { kind: 'success', response, responseTimeMs };
+      } finally {
+        if (forceCompact) {
+          bus.emit('compactNowCompleted', { streamId });
+        }
+      }
     });
   }
 
@@ -308,7 +341,9 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
 
   async post(
     shared: ToolUseCycleShared,
-    _prepRes: BaseInvocationPrepResult,
+    prepRes: BaseInvocationPrepResult & {
+      compactionState: z.infer<typeof CompactionStateSchema> | null;
+    },
     execRes: InvocationResult<BaseInvocationSuccessData>,
   ): Promise<string | undefined> {
     const successRes = handleInvocationResult(execRes, shared, shared, {
@@ -323,6 +358,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     // Apply success-specific side effects
     shared.response = successRes.response;
     shared.responseTimeMs = successRes.responseTimeMs;
+    shared.compactionState = prepRes.compactionState ?? null;
 
     await maybeSaveDebugObject({
       object: successRes.response,

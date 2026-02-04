@@ -17,11 +17,22 @@ export const ContextManagementDataSchema = z.object({
   utilizationBefore: z.number().nonnegative(),
   utilizationAfter: z.number().nonnegative().optional(),
   details: z.string().optional(),
+  summary: z.string().optional(),
+  compactionModel: z.string().optional(),
   originalMaxTokens: z.number().positive().optional(),
   reducedMaxTokens: z.number().positive().optional(),
 });
 
 export type ContextManagementData = z.infer<typeof ContextManagementDataSchema>;
+
+export const CompactionStateSchema = z.object({
+  summary: z.string(),
+  messageIndex: z.int().nonnegative(),
+  updatedAt: z.number().nonnegative(),
+  compactionModel: z.string().optional(),
+});
+
+export type CompactionState = z.infer<typeof CompactionStateSchema>;
 
 export const ContextStateDataSchema = z.object({
   inputTokens: z.number().nonnegative(),

@@ -42,6 +42,12 @@ import {
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval';
 import {
+  clearAllAutoCompactState,
+  clearAutoCompactState,
+  requestCompactNow,
+  toggleAutoCompact,
+} from '@agent/toolUse/ToolUseCompactionManager';
+import {
   createExternalLocation,
   createFileMapping,
   flexibleFS,
@@ -146,6 +152,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.handleSendFollowUp(data),
       [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]: (data) =>
         this.handleOpenTaskStorage(data),
+      [PROGRESS_VIEW_COMMANDS.COMPACT_NOW]: (data) =>
+        this.handleCompactNow(data),
       [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]: (data) =>
         this.handlePolishFollowUp(data),
       [PROGRESS_VIEW_COMMANDS.START_RECORDING]: () =>
@@ -163,6 +171,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         const msg = isNowEnabled
           ? 'YOLO mode enabled: Tool actions will be auto-approved for this stream.'
           : 'YOLO mode disabled: Tool actions will prompt for approval.';
+        await vscode.window.showInformationMessage(msg);
+      },
+      [PROGRESS_VIEW_COMMANDS.TOGGLE_AUTO_COMPACT]: async (data) => {
+        const isNowEnabled = toggleAutoCompact(data.stream);
+        const msg = isNowEnabled
+          ? 'Auto-compact enabled: context will be summarized when limits are reached.'
+          : 'Auto-compact disabled: context overflow will error.';
         await vscode.window.showInformationMessage(msg);
       },
       [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]: (data) =>
@@ -276,6 +291,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     // Clear pending task groups, approvals, queued follow-ups, and YOLO state to prevent memory leaks
     this.provider.eventHandler.clearPendingTaskGroups(streamId);
     cleanupApprovalsForStream(streamId);
+    clearAutoCompactState(streamId);
     ToolUseFollowUpQueue.release(streamId);
     this.clearModelOutputBackups(streamId);
     await this.provider.state.clearStream(streamId);
@@ -299,6 +315,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     // Clear all pending task groups, approvals, queued follow-ups, and YOLO state to prevent memory leaks
     this.provider.eventHandler.clearAllPendingTaskGroups();
     cleanupAllApprovals();
+    clearAllAutoCompactState();
     for (const streamId of this.provider.state.streamTabs.keys()) {
       ToolUseFollowUpQueue.release(streamId);
     }
@@ -444,6 +461,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       stream: data.stream,
       text: data.text,
     });
+  }
+
+  private handleCompactNow(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.COMPACT_NOW>,
+  ): void {
+    requestCompactNow(data.stream);
   }
 
   private async handlePolishFollowUp(

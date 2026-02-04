@@ -50,6 +50,10 @@ import {
   nonZeroOrUndefined,
 } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
+import { DEFAULT_SUMMARY_PROMPT } from './contextCompaction/compactionPrompt';
+import { getCompactionModel } from './contextCompaction/compactionModelMap';
+import { extractCompactionSummary } from './contextCompaction/compactionUtils';
+import { compactOpenAICompatible } from './contextCompaction/openaiCompatibleCompaction';
 
 // Local file imports
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
@@ -213,6 +217,34 @@ export class ModelHandlerOpenAI<
     return baseParams;
   }
 
+  protected stripTrailingToolCallsForCompaction(
+    messages: ChatCompletionMessageParam[],
+  ): ChatCompletionMessageParam[] {
+    const cleaned = [...messages];
+    const lastMessage = cleaned.at(-1);
+    if (!lastMessage || lastMessage.role !== 'assistant') {
+      return cleaned;
+    }
+
+    if (!('tool_calls' in lastMessage)) {
+      return cleaned;
+    }
+
+    const content = lastMessage.content;
+    const hasContent = Array.isArray(content)
+      ? content.length > 0
+      : Boolean(content?.trim());
+
+    if (hasContent) {
+      const { tool_calls: _toolCalls, ...rest } = lastMessage;
+      cleaned[cleaned.length - 1] = rest as ChatCompletionMessageParam;
+      return cleaned;
+    }
+
+    cleaned.pop();
+    return cleaned;
+  }
+
   protected finalizeStreams(
     thinking: ReturnType<ModelHandler['createThinkingStream']>,
     output: ReturnType<ModelHandler['createOutputStream']> | undefined,
@@ -370,6 +402,7 @@ export class ModelHandlerOpenAI<
       endTag,
       signal,
       tools,
+      compaction,
     } = options;
 
     // Apply message normalization if subclass specifies options
@@ -378,10 +411,89 @@ export class ModelHandlerOpenAI<
       ? this.prepareNormalizedMessages(rawMessages, normOptions)
       : rawMessages;
 
+    let compactionState = compaction?.state ?? null;
+    let effectiveMessages = await this.buildMessagesForCompactionState(
+      messages,
+      compactionState,
+    );
+    if (compaction) {
+      const { tokens: inputTokens } =
+        await this.estimateTokensForCompaction(effectiveMessages);
+      const threshold = this.getCompactionTokenThreshold(
+        this.config.contextWindow,
+      );
+      const autoCompactEnabled = compaction.autoCompactEnabled ?? true;
+      const shouldCompact =
+        compaction.forceCompact ||
+        (autoCompactEnabled && threshold > 0 && inputTokens >= threshold);
+
+      if (shouldCompact) {
+        try {
+          const { systemCount } = this.getLeadingSystemMessages(messages);
+          const tailStartIndex = this.getCompactionTailStartIndex(
+            messages,
+            systemCount,
+          );
+          const summarySourceMessages =
+            this.stripTrailingToolCallsForCompaction(
+              messages.slice(systemCount, tailStartIndex),
+            );
+
+          if (summarySourceMessages.length > 0) {
+            const compactionModel = getCompactionModel(this.config.fullName);
+            const compactionResult = await compactOpenAICompatible(
+              client,
+              summarySourceMessages,
+              compactionModel,
+              DEFAULT_SUMMARY_PROMPT,
+            );
+            const summary = extractCompactionSummary(compactionResult.summary);
+
+            compactionState = {
+              summary,
+              messageIndex: tailStartIndex,
+              updatedAt: Date.now(),
+              compactionModel,
+            };
+            compaction.updateState?.(compactionState);
+            effectiveMessages = await this.buildMessagesForCompactionState(
+              messages,
+              compactionState,
+            );
+
+            const { tokens: tokensAfter } =
+              await this.estimateTokensForCompaction(effectiveMessages);
+            const utilizationBefore =
+              (inputTokens / this.config.contextWindow) * 100;
+            const utilizationAfter =
+              (tokensAfter / this.config.contextWindow) * 100;
+
+            this.logger.logContextManagement(
+              `Context compacted: ${inputTokens.toLocaleString()} → ${tokensAfter.toLocaleString()} tokens`,
+              {
+                action: 'compaction',
+                tokensBefore: inputTokens,
+                tokensAfter,
+                contextWindow: this.config.contextWindow,
+                utilizationBefore,
+                utilizationAfter,
+                summary,
+                compactionModel,
+              },
+            );
+          }
+        } catch (err) {
+          this.logger.warn(
+            `Compaction failed: ${getSdkErrorMessage(err)}. Proceeding with existing context.`,
+          );
+        }
+      }
+    }
+
     // Phase 1: BUILD - Construct provider-specific request parameters
     const useStreaming = this.getStreamingConfig();
     const baseParams = this.buildChatBaseParams(
-      messages,
+      effectiveMessages,
       temperature,
       systemPrompt,
       endTag,
@@ -392,7 +504,7 @@ export class ModelHandlerOpenAI<
     // Phase 3: VALIDATE - Adjust max_tokens if needed
     if (this.supportsTokenCounting) {
       try {
-        const inputTokens = await this.estimateTokenCount(messages, {
+        const inputTokens = await this.estimateTokenCount(effectiveMessages, {
           client,
           systemPrompt,
           signal,

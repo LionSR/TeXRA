@@ -96,6 +96,14 @@ export class FollowUpInput extends LitElement {
       .polish-progress.is-visible {
         display: block;
       }
+
+      .compact-progress {
+        display: none;
+      }
+
+      .compact-progress.is-visible {
+        display: block;
+      }
     `,
   ];
 
@@ -107,10 +115,12 @@ export class FollowUpInput extends LitElement {
   @property({ type: Boolean }) shouldFocus = false;
   @property({ type: String }) polishedText: string | null = null;
   @property({ type: Number }) polishRevision = 0;
+  @property({ type: Number }) compactRevision = 0;
   @property({ type: String }) transcribedText: string | null = null;
   @property({ type: Boolean }) recording = false;
 
   @state() private polishing = false;
+  @state() private compacting = false;
 
   @query(`#${ELEMENT_IDS.FOLLOW_UP_INPUT}`)
   declare private textAreaEl: HTMLElement | null;
@@ -142,6 +152,10 @@ export class FollowUpInput extends LitElement {
 
     if (changedProperties.has('polishRevision')) {
       this.polishing = false;
+    }
+
+    if (changedProperties.has('compactRevision')) {
+      this.compacting = false;
     }
 
     // React to transcribedText property change
@@ -235,6 +249,21 @@ export class FollowUpInput extends LitElement {
                 @click=${this.emitClear}
               ></vscode-toolbar-button>
               <vscode-toolbar-button
+                id=${ELEMENT_IDS.COMPACT_NOW_BTN}
+                icon="fold-down"
+                label="Compact context"
+                title="Compact conversation context (summarize history to free tokens)"
+                @click=${this.emitCompactNow}
+              ></vscode-toolbar-button>
+              <vscode-progress-ring
+                id="compactNowProgressContainer"
+                class=${classMap({
+                  'compact-progress': true,
+                  'is-visible': this.compacting,
+                })}
+                ?hidden=${!this.compacting}
+              ></vscode-progress-ring>
+              <vscode-toolbar-button
                 id=${ELEMENT_IDS.SEND_FOLLOW_UP_BTN}
                 icon="send"
                 label="Send"
@@ -289,6 +318,11 @@ export class FollowUpInput extends LitElement {
 
   private emitClear(): void {
     this.dispatchEvent(ProgressEvents.followupClear());
+  }
+
+  private emitCompactNow(): void {
+    this.compacting = true;
+    this.dispatchEvent(ProgressEvents.followupCompact());
   }
 
   private updateValue(value: string): void {

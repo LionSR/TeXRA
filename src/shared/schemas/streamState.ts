@@ -44,6 +44,7 @@ export const ToolUseUIStateSchema = z.object({
   followUpText: z.string().prefault(''),
   polishedText: z.string().nullable().prefault(null),
   polishRevision: z.int().prefault(0),
+  compactRevision: z.int().prefault(0),
   transcribedText: z.string().nullable().prefault(null),
   recording: z.boolean().prefault(false),
   shouldFocusFollowUp: z.boolean().prefault(false),
@@ -59,6 +60,7 @@ export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   todos: z.array(TodoItemSchema).prefault([]),
   queuedFollowUps: z.array(z.string()).prefault([]),
   toolEditBypass: z.boolean().optional(),
+  autoCompactEnabled: z.boolean().optional(),
   sessionUsage: TokenUsageStatsSchema.nullable().prefault(null),
   // Frontend-owned (nested under ui)
   ui: ToolUseUIStateSchema.prefault({}),

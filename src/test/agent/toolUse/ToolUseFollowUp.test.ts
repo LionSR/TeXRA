@@ -19,7 +19,7 @@ describe('ToolUseFollowUp', () => {
   const workspaceState = AgentWorkspaceState.create();
 
   const snapshot: ToolUseSessionSnapshot = {
-    version: 2,
+    version: 3,
     executionId: 'exec-1',
     streamId,
     agentConfig: AgentConfigSchema.parse({
@@ -28,6 +28,7 @@ describe('ToolUseFollowUp', () => {
       agentCategory: 'toolUse',
     }),
     messages: [],
+    compactionState: null,
     // State slices stored directly (v2 schema)
     run: runState.toSnapshot(),
     workspace: workspaceState.toSnapshot(),
@@ -62,7 +63,7 @@ describe('ToolUseFollowUp', () => {
 
   it('creates valid snapshot structure', () => {
     // Test that snapshot structure is valid (used for resume operations)
-    assert.equal(snapshot.version, 2);
+    assert.equal(snapshot.version, 3);
     assert.equal(snapshot.streamId, streamId);
     assert.equal(snapshot.executionId, 'exec-1');
     assert.ok(snapshot.agentConfig);

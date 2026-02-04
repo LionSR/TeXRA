@@ -39,6 +39,7 @@ export class ToolUsePrepareNode<C> extends Node<
             input: Object.freeze({ ...snapshot.user.input }),
             transient: { ...snapshot.user.transient },
           },
+          compactionState: snapshot.compactionState ?? null,
           shouldSkipCycle: true,
         },
       };
@@ -82,6 +83,7 @@ export class ToolUsePrepareNode<C> extends Node<
         runState,
         workspaceState,
         userChannels: userVarChannels,
+        compactionState: null,
         shouldSkipCycle: false,
       },
     };
@@ -109,9 +111,11 @@ export class ToolUsePrepareNode<C> extends Node<
       workspaceState,
       userChannels,
       shouldSkipCycle,
+      compactionState,
     } = execRes.result;
     shared.conversation = [...messages];
     shared.shouldSkipCycle = shouldSkipCycle;
+    shared.compactionState = compactionState ?? null;
     shared.stateSlices = {
       runStateSnapshot: runState.toSnapshot(),
       workspaceSnapshot: workspaceState.toSnapshot(),

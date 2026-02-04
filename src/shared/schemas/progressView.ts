@@ -214,6 +214,17 @@ export const UpdateQueuedFollowUpsMessageSchema = z.object({
   messages: z.array(z.string()),
 });
 
+export const UpdateAutoCompactStateMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_AUTO_COMPACT_STATE),
+  stream: StreamTabIdSchema,
+  autoCompactEnabled: z.boolean(),
+});
+
+export const CompactNowDoneMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.COMPACT_NOW_DONE),
+  stream: StreamTabIdSchema,
+});
+
 export const ShowToolEditApprovalMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL),
   request: ToolEditPermissionSchema,
@@ -331,6 +342,8 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateRunUsageMessageSchema,
     UpdateContextStateMessageSchema,
     UpdateQueuedFollowUpsMessageSchema,
+    UpdateAutoCompactStateMessageSchema,
+    CompactNowDoneMessageSchema,
     ShowToolEditApprovalMessageSchema,
     ResolveToolEditApprovalMessageSchema,
     UpdateToolEditApprovalStateMessageSchema,
@@ -504,10 +517,20 @@ const ToggleToolEditApprovalBypassMessageSchema = z.object({
   stream: StreamTabIdSchema,
 });
 
+const ToggleAutoCompactMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.TOGGLE_AUTO_COMPACT),
+  stream: StreamTabIdSchema,
+});
+
 const SendFollowUpMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP),
   stream: StreamTabIdSchema,
   text: TrimmedStringSchema,
+});
+
+const CompactNowMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.COMPACT_NOW),
+  stream: StreamTabIdSchema,
 });
 
 const PolishFollowUpMessageSchema = z.object({
@@ -643,6 +666,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     SortStreamsMessageSchema,
     FilterStreamsMessageSchema,
     SendFollowUpMessageSchema,
+    CompactNowMessageSchema,
     PolishFollowUpMessageSchema,
     RetryStreamRequestMessageSchema,
     CancelRetryRequestMessageSchema,
@@ -650,6 +674,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     StopRecordingMessageSchema,
     ToolEditApprovalActionMessageSchema,
     ToggleToolEditApprovalBypassMessageSchema,
+    ToggleAutoCompactMessageSchema,
     BashApprovalActionMessageSchema,
     AgentProposalActionMessageSchema,
     ShowInformationMessageSchema,

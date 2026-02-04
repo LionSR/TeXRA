@@ -16,7 +16,11 @@
 import { z } from 'zod';
 
 // Local imports - agent
-import { ExecutionIdSchema, StreamTabIdSchema } from '@shared/schemas';
+import {
+  CompactionStateSchema,
+  ExecutionIdSchema,
+  StreamTabIdSchema,
+} from '@shared/schemas';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
 import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/AgentWorkspaceState';
@@ -27,7 +31,7 @@ import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessag
 // Snapshot Schema & Types
 // ============================================================================
 
-export const TOOL_USE_SNAPSHOT_VERSION = 2;
+export const TOOL_USE_SNAPSHOT_VERSION = 3;
 
 /**
  * We use z.object() instead of z.strictObject() to remain backward compatible
@@ -44,6 +48,7 @@ export const ToolUseSessionSnapshotSchema = z.object({
   streamId: StreamTabIdSchema,
   agentConfig: AgentConfigSchema,
   messages: z.array(ProviderMessageSchema),
+  compactionState: CompactionStateSchema.nullable().prefault(null),
   // State slices stored directly (no wrapper)
   run: AgentRunStateSnapshotSchema,
   workspace: AgentWorkspaceStateSnapshotSchema,

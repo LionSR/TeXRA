@@ -23,6 +23,7 @@ import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
 import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/AgentWorkspaceState';
 import { UserVariableChannelsSchema } from '@agent/core/AgentCycleOptions';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
+import { CompactionStateSchema } from '@shared/schemas';
 import {
   TOOL_USE_SNAPSHOT_VERSION,
   ToolUseSessionSnapshotSchema,
@@ -83,6 +84,7 @@ const StateSlicesSchema = z.object({
 const ToolUseStateFieldsSchema = z.object({
   conversation: z.array(ProviderMessageSchema),
   stateSlices: StateSlicesSchema,
+  compactionState: CompactionStateSchema.nullable().prefault(null),
 });
 
 /**
@@ -197,7 +199,7 @@ async function retrieveToolUseResumeData(
       return null;
     }
 
-    const { conversation, stateSlices } = parsedState;
+    const { conversation, stateSlices, compactionState } = parsedState;
 
     // Construct and validate the complete snapshot.
     // Validation provides defense-in-depth: even if flow record is valid,
@@ -208,6 +210,7 @@ async function retrieveToolUseResumeData(
       streamId,
       agentConfig: taskState.agentConfig,
       messages: conversation,
+      compactionState,
       run: stateSlices.runStateSnapshot,
       workspace: stateSlices.workspaceSnapshot,
       user: stateSlices.userChannels,

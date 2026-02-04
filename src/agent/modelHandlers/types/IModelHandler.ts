@@ -15,6 +15,7 @@ import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
+import type { CompactionState } from '@shared/schemas';
 import type {
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageToolCall,
@@ -51,6 +52,13 @@ export interface TokenValidationResult {
   utilizationPercent?: number;
 }
 
+export interface CompactionRequest {
+  state: CompactionState | null;
+  autoCompactEnabled?: boolean;
+  forceCompact?: boolean;
+  updateState?: (state: CompactionState | null) => void;
+}
+
 /**
  * Options for creating a model response.
  * @template M - Provider-specific message type
@@ -73,6 +81,8 @@ export interface CreateResponseOptions<
   signal?: AbortSignal;
   /** Optional tool definitions for function calling */
   tools?: ToolDefinition[];
+  /** Optional compaction controls for long-running conversations */
+  compaction?: CompactionRequest;
 }
 
 /**

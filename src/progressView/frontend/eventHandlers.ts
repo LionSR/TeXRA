@@ -199,6 +199,12 @@ export function handleFollowUpClear(ctx: FrontendEventHandlerContext): void {
   });
 }
 
+export function handleFollowUpCompact(ctx: FrontendEventHandlerContext): void {
+  const streamId = ctx.getState().activeStreamId;
+  if (!streamId) return;
+  postMessage(PROGRESS_VIEW_COMMANDS.COMPACT_NOW, { stream: streamId });
+}
+
 export function handleFollowupRequestOptions(
   ctx: FrontendEventHandlerContext,
 ): void {

@@ -221,6 +221,24 @@ export class WebviewUpdater {
     });
   }
 
+  updateAutoCompactState(
+    stream: StreamTabId,
+    autoCompactEnabled: boolean,
+  ): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_AUTO_COMPACT_STATE,
+      stream,
+      autoCompactEnabled,
+    });
+  }
+
+  compactNowCompleted(stream: StreamTabId): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.COMPACT_NOW_DONE,
+      stream,
+    });
+  }
+
   showBashPermission(permission: BashPermission): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL,

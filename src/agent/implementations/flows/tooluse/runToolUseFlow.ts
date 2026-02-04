@@ -114,6 +114,7 @@ export async function runToolUseFlow<C = unknown>(
     conversation: [],
     shouldSkipCycle: false,
     stateSlices: null,
+    compactionState: null,
   };
 
   try {

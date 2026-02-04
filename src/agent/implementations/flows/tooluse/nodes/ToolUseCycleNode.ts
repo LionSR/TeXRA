@@ -38,6 +38,7 @@ export class ToolUseCycleNode<C> extends Node<
     return {
       shouldSkip: shared.shouldSkipCycle,
       conversation: shared.conversation,
+      compactionState: shared.compactionState ?? null,
       runState: AgentRunState.fromSnapshot(shared.stateSlices.runStateSnapshot),
       workspaceState: AgentWorkspaceState.fromSnapshot(
         shared.stateSlices.workspaceSnapshot,
@@ -79,6 +80,7 @@ export class ToolUseCycleNode<C> extends Node<
       cycleIndex: prepRes.runState.totalRounds,
       cycleResponseTimeMs: 0,
       cycleNormalizedUsage: undefined,
+      compactionState: prepRes.compactionState,
     };
 
     const flow = createToolUseCycleFlow<C>();
@@ -123,7 +125,11 @@ export class ToolUseCycleNode<C> extends Node<
       if (completion.userCancelled) {
         return { kind: 'cancelled' };
       }
-      return { kind: 'success', messages: cycleShared.messages };
+      return {
+        kind: 'success',
+        messages: cycleShared.messages,
+        compactionState: cycleShared.compactionState ?? null,
+      };
     } finally {
       prepRes.workspaceState.todos.clearOnUpdate();
     }
@@ -154,6 +160,7 @@ export class ToolUseCycleNode<C> extends Node<
     switch (execRes.kind) {
       case 'success':
         shared.conversation = execRes.messages;
+        shared.compactionState = execRes.compactionState ?? null;
         return FlowTransition.DEFAULT;
 
       case 'skipped':

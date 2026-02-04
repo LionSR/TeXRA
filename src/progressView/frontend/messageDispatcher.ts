@@ -615,6 +615,23 @@ const handlers: HandlerRegistry = {
     }));
   },
 
+  [PROGRESS_VIEW_COMMANDS.UPDATE_AUTO_COMPACT_STATE]: (data, ctx) => {
+    updateToolUseState(ctx, data.stream, (prev) => ({
+      ...prev,
+      autoCompactEnabled: data.autoCompactEnabled,
+    }));
+  },
+
+  [PROGRESS_VIEW_COMMANDS.COMPACT_NOW_DONE]: (data, ctx) => {
+    updateToolUseState(ctx, data.stream, (prev) => ({
+      ...prev,
+      ui: {
+        ...prev.ui,
+        compactRevision: (prev.ui.compactRevision ?? 0) + 1,
+      },
+    }));
+  },
+
   [PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL]: (data, ctx) => {
     addPermission(ctx, { kind: PERMISSION_KIND.BASH, data: data.request });
   },

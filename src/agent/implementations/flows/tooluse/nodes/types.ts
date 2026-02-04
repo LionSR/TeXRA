@@ -14,6 +14,7 @@ import type {
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { InvocationResult } from '@agent/core/flows/RetryState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { CompactionState } from '@shared/schemas';
 
 export interface StateSlicesSnapshot {
   runStateSnapshot: AgentRunStateSnapshot;
@@ -27,6 +28,7 @@ export interface ToolUseRunShared {
   shouldSkipCycle: boolean;
   stateSlices: StateSlicesSnapshot | null;
   userCancelledRetry?: boolean;
+  compactionState?: CompactionState | null;
 }
 
 interface NodeResultStateBase {
@@ -39,10 +41,14 @@ interface NodeResultStateBase {
 export interface PrepareResult extends NodeResultStateBase {
   messages: ProviderMessage[];
   shouldSkipCycle: boolean;
+  compactionState: CompactionState | null;
 }
 
 /** Result from ToolUseCycleNode exec phase. */
-export type CycleExecResult = InvocationResult<{ messages: ProviderMessage[] }>;
+export type CycleExecResult = InvocationResult<{
+  messages: ProviderMessage[];
+  compactionState: CompactionState | null;
+}>;
 
 /** Result from ToolUseWaitNode exec phase. */
 export type WaitExecResult =
@@ -53,6 +59,7 @@ export type WaitExecResult =
 export interface CyclePrepResult extends NodeResultStateBase {
   conversation: ProviderMessage[];
   shouldSkip: boolean;
+  compactionState: CompactionState | null;
 }
 
 export type PreparedShared = ToolUseRunShared & {
@@ -70,6 +77,7 @@ export function assertPreparedShared(
 /** Lightweight schema for detecting shared state format. */
 const ConversationSchema = z.looseObject({
   conversation: z.array(z.unknown()),
+  compactionState: z.unknown().optional(),
 });
 
 /**
@@ -81,14 +89,22 @@ export function migrateSharedState(
 ): { data: ToolUseRunShared; migrated: boolean } | null {
   const flatResult = ConversationSchema.safeParse(shared);
   if (flatResult.success && !('state' in flatResult.data)) {
-    return { data: shared as ToolUseRunShared, migrated: false };
+    const data = shared as ToolUseRunShared;
+    if (data.compactionState === undefined) {
+      data.compactionState = null;
+    }
+    return { data, migrated: false };
   }
 
   const obj = shared as Record<string, unknown>;
   if (obj && typeof obj === 'object' && 'state' in obj) {
     const legacyResult = ConversationSchema.safeParse(obj.state);
     if (legacyResult.success) {
-      return { data: obj.state as ToolUseRunShared, migrated: true };
+      const data = obj.state as ToolUseRunShared;
+      if (data.compactionState === undefined) {
+        data.compactionState = null;
+      }
+      return { data, migrated: true };
     }
   }
 

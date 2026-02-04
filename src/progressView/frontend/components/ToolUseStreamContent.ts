@@ -19,6 +19,7 @@
  * @fires followup-send - When follow-up is submitted
  * @fires followup-polish - When polish button is clicked
  * @fires followup-clear - When clear button is clicked
+ * @fires followup-compact - When compact now is clicked
  */
 
 // Third-party imports
@@ -136,6 +137,7 @@ export class ToolUseStreamContent extends LitElement {
         .runId=${null}
         .runs=${this.runGroups}
         .yoloActive=${Boolean(currentState.toolEditBypass)}
+        .autoCompactActive=${Boolean(currentState.autoCompactEnabled)}
       ></stream-header>
 
       <request-panels .permissions=${this.filteredPermissions}></request-panels>
@@ -157,6 +159,7 @@ export class ToolUseStreamContent extends LitElement {
         .shouldFocus=${currentState.ui.shouldFocusFollowUp}
         .polishedText=${currentState.ui.polishedText}
         .polishRevision=${currentState.ui.polishRevision}
+        .compactRevision=${currentState.ui.compactRevision}
         .transcribedText=${currentState.ui.transcribedText}
         .recording=${currentState.ui.recording}
         @focus-complete=${this.handleFocusComplete}

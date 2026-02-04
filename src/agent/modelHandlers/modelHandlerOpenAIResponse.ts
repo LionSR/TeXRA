@@ -467,9 +467,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * - Cumulative input tokens exceed the calculated threshold (percentage of context window)
    * - Not running through OpenRouter (which may not support compaction)
    */
-  private shouldCompact(): boolean {
+  private shouldCompact(
+    autoCompactEnabled: boolean,
+    forceCompact: boolean,
+  ): boolean {
+    if (!autoCompactEnabled && !forceCompact) {
+      return false;
+    }
     const thresholdPercent = this.getCompactionThresholdPercent();
-    if (thresholdPercent <= 0) {
+    if (thresholdPercent <= 0 && !forceCompact) {
       return false;
     }
     if (this.isOpenRouterRoutingEnabled()) {
@@ -478,6 +484,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.conversationState.openRouterSkipLogged = true;
       }
       return false;
+    }
+    if (forceCompact) {
+      return true;
     }
     const threshold = this.getCompactionTokenThreshold();
     return this.conversationState.cumulativeInputTokens > threshold;
@@ -555,6 +564,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           utilizationBefore: Number(utilizationBefore.toFixed(1)),
           utilizationAfter: Number(utilizationAfter.toFixed(1)),
           details: `OpenAI Responses API compaction: ${compactedResponse.output.length} items`,
+          summary: 'Server-side compaction (details not available)',
+          compactionModel: this.config.fullName,
         },
       );
 
@@ -954,8 +965,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Clear any stale compaction result from previous attempts (ensures clean state on retries)
     this.compactionResult = undefined;
 
-    const { client, messages, temperature, systemPrompt, signal, tools } =
-      options;
+    const {
+      client,
+      messages,
+      temperature,
+      systemPrompt,
+      signal,
+      tools,
+      compaction,
+    } = options;
     const streamingToggleEnabled = this.getStreamingConfig();
     const backgroundToggleEnabled = getConfig<boolean>(
       'texra.model.useBackgroundResponses',
@@ -990,7 +1008,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let effectiveMessages = messages;
     // Track if compaction happened in THIS call (not previous calls)
     let compactedThisCall = false;
-    if (this.shouldCompact()) {
+    const autoCompactEnabled = compaction?.autoCompactEnabled ?? true;
+    const forceCompact = compaction?.forceCompact ?? false;
+    if (this.shouldCompact(autoCompactEnabled, forceCompact)) {
       const threshold = this.getCompactionTokenThreshold();
       this.logger.logProgress(
         `Compacting conversation (${this.conversationState.cumulativeInputTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,

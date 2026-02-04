@@ -65,6 +65,18 @@ export class ContextManagement extends LitElement {
         gap: var(--spacing-large);
       }
 
+      .context-summary {
+        margin-top: var(--spacing-small);
+        padding: var(--spacing-small);
+        background: color-mix(
+          in srgb,
+          var(--vscode-editor-background) 92%,
+          var(--accent-color, var(--vscode-foreground)) 8%
+        );
+        border-radius: var(--border-radius);
+        white-space: pre-wrap;
+      }
+
       .stat-item {
         display: inline-flex;
         align-items: center;
@@ -90,6 +102,9 @@ export class ContextManagement extends LitElement {
 
   /** Statistics items to display */
   @property({ type: Array }) items: ContextStatItem[] = [];
+
+  /** Summary text for compaction events */
+  @property({ type: String }) summary: string | null = null;
 
   override render(): TemplateResult {
     if (this.items.length === 0) {
@@ -120,6 +135,9 @@ export class ContextManagement extends LitElement {
             `,
           )}
         </div>
+        ${this.summary
+          ? html`<div class="context-summary">${this.summary}</div>`
+          : nothing}
       </details>
     `;
   }

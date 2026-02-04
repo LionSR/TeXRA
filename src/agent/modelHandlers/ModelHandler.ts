@@ -51,6 +51,7 @@ import {
 import {
   computeReducedMaxTokens,
   TOKEN_SAFETY_BUFFER,
+  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
 } from './contextManagementConstants';
 
 // Type imports
@@ -70,6 +71,7 @@ import type {
   ServerToolExtractionResult,
   WebSearchResult,
 } from './types/ServerToolTypes';
+import type { CompactionState } from '@shared/schemas';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
@@ -858,6 +860,97 @@ export abstract class ModelHandler<
       inputTokens,
       utilizationPercent,
     };
+  }
+
+  protected getCompactionThresholdPercent(): number {
+    return getConfig<number>(
+      'texra.model.compactionThresholdPercent',
+      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+    );
+  }
+
+  protected getCompactionTokenThreshold(contextWindow: number): number {
+    const percent = this.getCompactionThresholdPercent();
+    if (percent <= 0) return 0;
+    return Math.floor((percent / 100) * contextWindow);
+  }
+
+  protected getMessageRole(message: M | undefined): string | undefined {
+    if (!message || typeof message !== 'object') {
+      return undefined;
+    }
+    if ('role' in message && typeof message.role === 'string') {
+      return message.role;
+    }
+    return undefined;
+  }
+
+  protected getLeadingSystemMessages(messages: M[]): {
+    systemMessages: M[];
+    systemCount: number;
+  } {
+    const systemMessages: M[] = [];
+    for (const message of messages) {
+      const role = this.getMessageRole(message);
+      if (role === 'system' || role === 'developer') {
+        systemMessages.push(message);
+        continue;
+      }
+      break;
+    }
+    return { systemMessages, systemCount: systemMessages.length };
+  }
+
+  protected getCompactionTailStartIndex(
+    messages: M[],
+    systemCount: number,
+  ): number {
+    const lastMessage = messages.at(-1);
+    const lastRole = this.getMessageRole(lastMessage);
+    const preserveLastUser = lastRole === 'user';
+    const tailStart = preserveLastUser ? messages.length - 1 : messages.length;
+    return Math.max(tailStart, systemCount);
+  }
+
+  protected async buildCompactionSummaryMessage(summary: string): Promise<M> {
+    const summaryMessages = await this.createUserFollowUpMessages([], summary);
+    const summaryMessage = summaryMessages.at(-1);
+    if (!summaryMessage) {
+      throw new Error('Failed to build compaction summary message.');
+    }
+    return summaryMessage;
+  }
+
+  protected async buildMessagesForCompactionState(
+    messages: M[],
+    compactionState: CompactionState | null,
+  ): Promise<M[]> {
+    if (!compactionState) {
+      return messages;
+    }
+    const { systemMessages } = this.getLeadingSystemMessages(messages);
+    const summaryMessage = await this.buildCompactionSummaryMessage(
+      compactionState.summary,
+    );
+    const tailMessages = messages.slice(compactionState.messageIndex);
+    return [...systemMessages, summaryMessage, ...tailMessages];
+  }
+
+  protected async estimateTokensForCompaction(
+    messages: M[],
+    options?: TokenCountOptions<C>,
+  ): Promise<{ tokens: number; isEstimated: boolean }> {
+    if (this.supportsTokenCounting) {
+      const tokens = await this.estimateTokenCount(messages, options);
+      return { tokens, isEstimated: false };
+    }
+
+    const serialized = JSON.stringify({
+      messages,
+      systemPrompt: options?.systemPrompt,
+      tools: options?.tools,
+    });
+    return { tokens: Math.ceil(serialized.length / 4), isEstimated: true };
   }
 
   /**

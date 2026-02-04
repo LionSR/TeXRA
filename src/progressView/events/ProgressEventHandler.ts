@@ -72,6 +72,10 @@ export class ProgressEventHandler {
     bus.on('extensionDeactivating', this.markAllRunningTasksAsCancelled, {
       signal,
     });
+    bus.on('updateAutoCompactState', this.handleUpdateAutoCompactState, {
+      signal,
+    });
+    bus.on('compactNowCompleted', this.handleCompactNowCompleted, { signal });
 
     registerLogEventHandlers(bus, this.ctx, signal);
     registerOutputEventHandlers(bus, this.ctx, signal);
@@ -177,6 +181,37 @@ export class ProgressEventHandler {
       streamEventQueue.enqueue(data.streamId, () =>
         this.processAddTaskGroup(data),
       ),
+    );
+  };
+
+  private handleUpdateAutoCompactState = (
+    payload: ProgressEventPayloads['updateAutoCompactState'],
+  ): void => {
+    withEventErrorHandling(
+      'ContextManagement',
+      'failed to handle updateAutoCompactState',
+      () => {
+        if (this.webviewUpdater.isAvailable()) {
+          this.webviewUpdater.updateAutoCompactState(
+            payload.streamId,
+            payload.autoCompactEnabled,
+          );
+        }
+      },
+    );
+  };
+
+  private handleCompactNowCompleted = (
+    payload: ProgressEventPayloads['compactNowCompleted'],
+  ): void => {
+    withEventErrorHandling(
+      'ContextManagement',
+      'failed to handle compactNowCompleted',
+      () => {
+        if (this.webviewUpdater.isAvailable()) {
+          this.webviewUpdater.compactNowCompleted(payload.streamId);
+        }
+      },
     );
   };
 
