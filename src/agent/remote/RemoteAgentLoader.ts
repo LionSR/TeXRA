@@ -17,8 +17,8 @@ import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { resolveToolDefinitions } from '@tools/registry';
 import { getConfig } from '@utils/config';
-import { SupabaseClient } from '@/auth/SupabaseClient';
-import { SUPABASE_CONFIG } from '@/auth/config';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { SUPABASE_CONFIG } from '@auth/config';
 
 import {
   RemoteAgentListItemSchema,
