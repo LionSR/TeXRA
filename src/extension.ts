@@ -29,6 +29,13 @@ import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
 import { initializeServerSideKeyAccess } from '@/auth/serverKeys';
 import { SupabaseClient } from '@/auth/SupabaseClient';
+import { SupabaseAuthProvider } from '@/auth/SupabaseAuthProvider';
+import { SupabaseUriHandler } from '@/auth/UriHandler';
+import {
+  isSupabaseConfigured,
+  setRuntimeExtensionId,
+  setAuthProviderRegistered,
+} from '@/auth/config';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -131,14 +138,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
   if (authEnabled) {
     try {
-      const { SupabaseAuthProvider } =
-        await import('@/auth/SupabaseAuthProvider');
-      const {
-        isSupabaseConfigured,
-        setRuntimeExtensionId,
-        setAuthProviderRegistered,
-      } = await import('@/auth/config');
-
       // Set the runtime extension ID for OAuth redirects
       // This ensures the redirect URI matches the actual extension ID
       setRuntimeExtensionId(context.extension.id);
@@ -165,7 +164,6 @@ export async function activate(context: vscode.ExtensionContext) {
         setAuthProviderRegistered();
 
         // Register URI handler for OAuth callbacks
-        const { SupabaseUriHandler } = await import('@/auth/UriHandler');
         const uriHandler = new SupabaseUriHandler();
         context.subscriptions.push(
           vscode.window.registerUriHandler(uriHandler),
