@@ -279,6 +279,20 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-foreground);
   }
 
+  .retry-request__copy-button {
+    margin-left: auto;
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+  }
+
+  .retry-request__copy-button:hover {
+    opacity: 1;
+  }
+
+  .retry-request__error-summary:not(:hover) .retry-request__copy-button {
+    opacity: 0.5;
+  }
+
   /* Note: .toggle-icon rotation handled by commonViewStyles */
 
   .retry-request__error-body {
