@@ -93,8 +93,11 @@ export async function extractFigurePathsFromLatex(
     /\\begin\{overpic\}(?:\[.*?\])?\{(.+?)\}/g,
   ];
 
-  // Read file content
-  const content = await flexibleFS.read(latexFileLocation);
+  // Read file content and normalize line endings for Windows compatibility
+  const content = (await flexibleFS.read(latexFileLocation)).replaceAll(
+    '\r\n',
+    '\n',
+  );
 
   // Parse graphicspaths
   const paths = parseGraphicspath(content);
@@ -103,9 +106,7 @@ export async function extractFigurePathsFromLatex(
   }
 
   // Pre-process content to remove commented lines
-  // Normalize line endings first to handle Windows files
   const processedLines = content
-    .replaceAll('\r\n', '\n')
     .split('\n')
     .filter((line) => !/^\s*%/.test(line)) // Remove lines that start with whitespace + %
     .join('\n');
