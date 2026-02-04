@@ -201,13 +201,6 @@ export const EXTENSION_ID = 'texra-ai.texra';
 let runtimeExtensionId: string | null = null;
 
 /**
- * Flag indicating whether the VS Code auth provider was successfully registered.
- * When false, calls to vscode.authentication.getSession('texra-supabase', ...) will
- * time out waiting for a provider that was never registered.
- */
-let authProviderRegistered = false;
-
-/**
  * Set the runtime extension ID from the extension context.
  * Should be called during extension activation with context.extension.id
  */
@@ -221,23 +214,6 @@ export function setRuntimeExtensionId(id: string): void {
  */
 export function getExtensionId(): string {
   return runtimeExtensionId ?? EXTENSION_ID;
-}
-
-/**
- * Mark the auth provider as successfully registered with VS Code.
- * Should be called immediately after vscode.authentication.registerAuthenticationProvider() succeeds.
- */
-export function setAuthProviderRegistered(): void {
-  authProviderRegistered = true;
-}
-
-/**
- * Check if the auth provider has been registered with VS Code.
- * Use this before calling vscode.authentication.getSession('texra-supabase', ...)
- * to avoid timeout errors when the provider was never registered.
- */
-export function isAuthProviderRegistered(): boolean {
-  return authProviderRegistered;
 }
 
 /**

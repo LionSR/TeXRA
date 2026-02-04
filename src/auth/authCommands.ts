@@ -3,11 +3,7 @@ import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getConfig } from '@utils/config';
 import { SupabaseClient } from './SupabaseClient';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';
-import {
-  type OAuthProvider,
-  getExternalAuthCallbackUri,
-  isAuthProviderRegistered,
-} from './config';
+import { type OAuthProvider, getExternalAuthCallbackUri } from './config';
 
 const AUTH_PROVIDER_ID = 'texra-supabase';
 
@@ -28,8 +24,8 @@ function isVSCodeGitHubEnabled(): boolean {
 async function getExistingSession(): Promise<
   vscode.AuthenticationSession | undefined
 > {
-  // Skip VS Code auth API if provider was never registered to avoid timeout
-  if (!isAuthProviderRegistered()) {
+  // Skip VS Code auth API if auth system not ready to avoid timeout
+  if (!SupabaseClient.isReady()) {
     return undefined;
   }
   return vscode.authentication.getSession(AUTH_PROVIDER_ID, [], {
@@ -77,10 +73,14 @@ function getSignInOptions(): SignInOption[] {
 
 export async function signIn(): Promise<void> {
   try {
-    // Check if auth provider was registered - if not, provide clear error
-    if (!isAuthProviderRegistered()) {
+    // Check if auth system is ready - if not, provide clear error with reason
+    if (!SupabaseClient.isReady()) {
+      const initError = SupabaseClient.getInitError();
+      const reason = initError
+        ? initError.message
+        : 'Authentication service not initialized';
       void vscode.window.showErrorMessage(
-        'Sign in failed: Authentication service not initialized. Please reload VS Code and try again. If the issue persists, check the TeXRA output channel for errors.',
+        `Sign in failed: ${reason}. Please reload VS Code and try again. If the issue persists, check the TeXRA output channel for errors.`,
       );
       return;
     }
