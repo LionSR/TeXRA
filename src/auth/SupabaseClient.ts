@@ -11,6 +11,7 @@ import {
   type UserTier,
   UserAuthContextSchema,
   SUPABASE_SESSION_KEY,
+  isAuthProviderRegistered,
 } from './config';
 
 /** Interface for auth provider to avoid circular imports. */
@@ -97,6 +98,16 @@ export class SupabaseClient {
       }
 
       // Fallback to VS Code's authentication API
+      // Only attempt if provider was successfully registered, otherwise VS Code
+      // will timeout waiting for a provider that was never registered
+      if (!isAuthProviderRegistered()) {
+        logger.debug(
+          'SupabaseClient',
+          'Skipping VS Code auth fallback - provider not registered with VS Code',
+        );
+        return null;
+      }
+
       const session = await vscode.authentication.getSession(
         'texra-supabase',
         [],
