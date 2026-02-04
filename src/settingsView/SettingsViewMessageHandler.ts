@@ -6,45 +6,55 @@
  */
 import * as vscode from 'vscode';
 
-// Shared schemas and dispatchers
+// Local imports - shared schemas
 import {
   dispatchSettingsViewInbound,
   type SettingsViewInboundHandlerRegistry,
   type SettingsViewInboundMessage,
   SETTINGS_VIEW_CMD,
 } from '@shared/schemas/settingsViewMessages';
+
+// Local imports - agent
+import { getAgentsBySource, loadAgents } from '@agent/index';
+import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
+
+// Local imports - common
 import { showLoggedErrorMessage } from '@common/errors';
 import {
   BaseViewMessageHandler,
   SETTINGS_VIEW_COMMANDS,
 } from '@common/webview';
+import {
+  AgentHistoryManager,
+  type AgentHistoryItem,
+} from '@common/history/AgentHistoryManager';
 
-// Memory-related imports
+// Local imports - tools
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
+
+// Local imports - utils
 import { StorageFS } from '@utils/files';
-import { loadMemoryItems } from './utils/memoryFileSystem';
+import { agentConfigToTaskState } from '@utils/config/configConversion';
 import {
   getToolUseMemoryEnabled,
   setToolUseMemoryEnabled,
 } from '@utils/config/constants';
 
-// History-related imports
-import {
-  AgentHistoryManager,
-  type AgentHistoryItem,
-} from '@common/history/AgentHistoryManager';
-import { agentConfigToTaskState } from '@utils/config/configConversion';
+// Local imports - commands
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 
-// Profile-related imports
-import type { RemoteAgent } from '@shared/schemas/profileViewMessages';
-import { getAgentsBySource, loadAgents } from '@agent/index';
-import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
+// Local imports - auth
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@/auth/authCommands';
-import { ULTRA_TIER, MAX_TIER } from '@/auth/config';
+import { MAX_TIER, ULTRA_TIER } from '@/auth/config';
 import { getServerSideKeyService } from '@/auth/serverKeys';
+
+// Local imports - settings view utils
+import { loadMemoryItems } from './utils/memoryFileSystem';
+
+// Local imports - shared schemas
+import type { RemoteAgent } from '@shared/schemas/profileViewMessages';
 
 // Type helper for extracting specific message types
 type MessageFor<C extends SettingsViewInboundMessage['command']> = Extract<

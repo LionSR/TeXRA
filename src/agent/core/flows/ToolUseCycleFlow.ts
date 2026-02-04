@@ -65,7 +65,7 @@ function parseToolInput(
   callId: string,
   logger: AgentLogger,
 ): unknown {
-  if (raw == null) {
+  if (raw === null || raw === undefined) {
     logger.warn(`Tool call ${callId}: Received null input, using empty object`);
     return {};
   }

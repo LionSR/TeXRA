@@ -195,7 +195,7 @@ export function requireField<T>(
   fieldName: string,
   command: string,
 ): T {
-  if (value == null) {
+  if (value === null || value === undefined) {
     throw new ToolError(
       `Parameter \`${fieldName}\` is required for command: ${command}`,
     );

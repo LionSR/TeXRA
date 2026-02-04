@@ -17,9 +17,6 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
-// Local imports - common
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
-
 // Local imports - frontend
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
@@ -303,38 +300,31 @@ export abstract class ModelHandler<
 
     onCompactionStart?.();
 
-    try {
-      const compactionResult = await compact();
-      const tokensAfter = await estimateTokens(
-        compactionResult.compactedMessages,
-      );
-      const utilizationBefore = (tokensBefore / contextWindow) * 100;
-      const utilizationAfter = (tokensAfter / contextWindow) * 100;
+    const compactionResult = await compact();
+    const tokensAfter = await estimateTokens(
+      compactionResult.compactedMessages,
+    );
+    const utilizationBefore = (tokensBefore / contextWindow) * 100;
+    const utilizationAfter = (tokensAfter / contextWindow) * 100;
 
-      this.logger.logContextManagement('Context compacted', {
-        action: 'compaction',
-        tokensBefore,
-        tokensAfter,
-        contextWindow,
-        utilizationBefore,
-        utilizationAfter,
-        summary: compactionResult.summaryText,
-        compactionModel: compactionResult.compactionModel,
-        compactionInputTokens: compactionResult.compactionInputTokens,
-        compactionOutputTokens: compactionResult.compactionOutputTokens,
-      });
+    this.logger.logContextManagement('Context compacted', {
+      action: 'compaction',
+      tokensBefore,
+      tokensAfter,
+      contextWindow,
+      utilizationBefore,
+      utilizationAfter,
+      summary: compactionResult.summaryText,
+      compactionModel: compactionResult.compactionModel,
+      compactionInputTokens: compactionResult.compactionInputTokens,
+      compactionOutputTokens: compactionResult.compactionOutputTokens,
+    });
 
-      return {
-        messages: compactionResult.compactedMessages,
-        tokensAfter,
-        didCompact: true,
-      };
-    } catch (error) {
-      this.logger.warn(
-        `Compaction failed: ${getSdkErrorMessage(error)}. Proceeding without compaction.`,
-      );
-      return { messages, tokensAfter: tokensBefore, didCompact: false };
-    }
+    return {
+      messages: compactionResult.compactedMessages,
+      tokensAfter,
+      didCompact: true,
+    };
   }
 
   /**

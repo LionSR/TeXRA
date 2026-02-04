@@ -109,7 +109,10 @@ export function buildCopyButton(
   options: { hidden?: boolean; content?: string; contentId?: string } = {},
 ): TemplateResult {
   const { hidden = false, content, contentId } = options;
-  const copyId = content != null ? registerCopyContent(content, contentId) : '';
+  const copyId =
+    content !== null && content !== undefined
+      ? registerCopyContent(content, contentId)
+      : '';
   // prettier-ignore
   return html`<vscode-toolbar-button class="banner-content-copy" icon="copy" title=${title} aria-label=${title} data-default-title=${title} data-success-title="Copied!" data-copy-id=${ifDefined(copyId || undefined)} data-copy-type="banner" ?hidden=${hidden}></vscode-toolbar-button>`;
 }

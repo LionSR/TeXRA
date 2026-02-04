@@ -127,7 +127,7 @@ export async function extractBibliographyContext(
 }
 
 function formatFieldValue(value: unknown): string {
-  if (value == null) {
+  if (value === null || value === undefined) {
     return '{}';
   }
   if (typeof value === 'number') {

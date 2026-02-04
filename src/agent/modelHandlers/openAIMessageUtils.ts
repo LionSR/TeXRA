@@ -33,7 +33,7 @@ function mergeMessageContent(
   const currContent = current.content;
 
   // No previous content: use current
-  if (prevContent == null) {
+  if (prevContent === null || prevContent === undefined) {
     previous.content = currContent;
     return;
   }

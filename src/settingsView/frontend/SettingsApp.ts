@@ -6,7 +6,6 @@
 // Third-party imports
 import { html, css, type TemplateResult } from 'lit';
 import { customElement, state, query } from 'lit/decorators.js';
-import type { VscTabsSelectEvent } from '@vscode-elements/elements/dist/vscode-tabs/vscode-tabs.js';
 
 // Local imports - shared webview
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
@@ -38,6 +37,9 @@ import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - settings view styles
 import { settingsViewStyles } from './styles';
+
+// Type imports
+import type { VscTabsSelectEvent } from '@vscode-elements/elements/dist/vscode-tabs/vscode-tabs.js';
 
 // Local imports - settings view tabs (side-effect: register)
 import './tabs/MemoryTab';
