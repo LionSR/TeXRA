@@ -530,6 +530,8 @@ interface ToolExecutionResult {
     source: string;
     sourceDisplay: string;
   }>;
+  /** Log ID for updating the in-progress log entry after execution */
+  logId?: string;
 }
 
 /**
@@ -620,6 +622,12 @@ class ToolUseDispatchNode<C> extends BatchNode<
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
     const tool = options.toolRegistry.get(call.name);
 
+    // Log in-progress state before execution so UI shows the command immediately
+    const logId = options.logger.logToolUseStart({
+      toolName: call.name,
+      input: parsedInput ?? call.raw,
+    });
+
     const result = await this.invokeToolSafely(
       call,
       tool,
@@ -651,6 +659,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
       parsedInput,
       sanitizedOutput,
       editedFiles,
+      logId,
     };
   }
 
@@ -659,7 +668,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     options: ToolUseCycleOptions<C>,
     workspace: ToolUseCycleServices<C>['workspace'],
   ): Promise<void> {
-    const { call, result, parsedInput, sanitizedOutput, editedFiles } =
+    const { call, result, parsedInput, sanitizedOutput, editedFiles, logId } =
       execResult;
 
     const toolUseLog = {
@@ -669,7 +678,13 @@ class ToolUseDispatchNode<C> extends BatchNode<
       ...(editedFiles.length > 0 && { files: editedFiles }),
       isError: Boolean(result.isError),
     };
-    options.logger.logToolUse(toolUseLog);
+
+    // Update the in-progress log entry with the result, or create new if no logId
+    if (logId) {
+      options.logger.updateToolUse(logId, toolUseLog);
+    } else {
+      options.logger.logToolUse(toolUseLog);
+    }
 
     // Collect and add valid media file locations
     const files = result.files;

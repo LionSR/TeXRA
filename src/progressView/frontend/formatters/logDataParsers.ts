@@ -102,5 +102,6 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
     isError: Boolean(validated.isError || nested.isError || errorText),
     isUserFeedback,
     headerSummary: summaryText || (isUserFeedback ? '' : errorText),
+    status: validated.status,
   };
 }
