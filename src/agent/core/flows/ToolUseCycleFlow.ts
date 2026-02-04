@@ -26,6 +26,10 @@ import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 // Internal imports - use core ToolTypes as single source of truth
 import { extractToolAttachments } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import {
+  consumeCompactNow,
+  isAutoCompactEnabled,
+} from '@agent/toolUse/ToolUseCompactionManager';
 import type {
   FileInteractionState,
   TodoState,
@@ -58,10 +62,6 @@ import type {
   ToolUseCycleServices,
   ToolUseCycleParams,
 } from './CycleServices';
-import {
-  consumeCompactNow,
-  isAutoCompactEnabled,
-} from '@agent/toolUse/ToolUseCompactionManager';
 
 /** Parse tool input, handling JSON strings and other formats from model providers. */
 function parseToolInput(
@@ -69,7 +69,7 @@ function parseToolInput(
   callId: string,
   logger: AgentLogger,
 ): unknown {
-  if (raw == null) {
+  if (raw === null || raw === undefined) {
     logger.warn(`Tool call ${callId}: Received null input, using empty object`);
     return {};
   }

@@ -89,7 +89,9 @@ export function getAuthorNames(
   maxAuthors?: number,
 ): string[] {
   const names = authors.map((author) => author.name);
-  return maxAuthors != null ? names.slice(0, maxAuthors) : names;
+  return maxAuthors !== null && maxAuthors !== undefined
+    ? names.slice(0, maxAuthors)
+    : names;
 }
 
 /** Normalize entry title by trimming whitespace */

@@ -1,3 +1,9 @@
+/**
+ * Default compaction model fallbacks for known model families.
+ *
+ * This map is used when no explicit override is configured via
+ * `texra.model.compactionModelOverrides`.
+ */
 const COMPACTION_MODEL_MAP: Record<string, string> = {
   // Anthropic: opus → sonnet (both 4.5, sonnet is faster)
   'claude-opus-4-5': 'claude-sonnet-4-5',

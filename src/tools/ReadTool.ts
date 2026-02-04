@@ -133,7 +133,9 @@ export class ReadFileTool extends defineTool({
       rangeProvided: Boolean(input.range),
 
       rangeEndExceeded:
-        input.range?.end != null && input.range.end > totalLines,
+        input.range?.end !== null &&
+        input.range?.end !== undefined &&
+        input.range.end > totalLines,
     });
 
     return {

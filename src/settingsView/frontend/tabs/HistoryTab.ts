@@ -15,14 +15,14 @@ import {
   historyStyles,
 } from '@shared/styles';
 
-// Local imports - shared schemas
-import type { HistoryItem } from '@shared/schemas';
-
 // Local imports - settings view components
 import { HistoryViewState } from '../components/history/state';
 import '../components/history/SearchBar';
 import '../components/history/HistoryList';
 import type { SearchAction } from '../components/history/HistoryList';
+
+// Local imports - shared schemas
+import type { HistoryItem } from '@shared/schemas';
 
 @customElement('history-tab')
 export class HistoryTab extends LitElement {

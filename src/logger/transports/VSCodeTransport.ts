@@ -88,7 +88,11 @@ export class VSCodeTransport extends Transport {
     const prefix = this.isAgentChannel ? '' : `[${this.streamId}] `;
     this.channel.appendLine(`${emoji} [${timestamp}] ${prefix}${message}`);
 
-    if (structuredData != null && this.includeStructuredData?.()) {
+    if (
+      structuredData !== null &&
+      structuredData !== undefined &&
+      this.includeStructuredData?.()
+    ) {
       const dataString =
         typeof structuredData === 'string'
           ? structuredData

@@ -17,6 +17,9 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
+// Local imports - common
+import { toErrorMessage } from '@common/errors';
+
 // Local imports - frontend
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
@@ -43,6 +46,8 @@ import {
   resolveBaseUrl,
   shouldUseOpenRouter,
 } from './support/ProxyConfigResolver';
+import { extractCompactionSummary } from './contextCompaction/compactionUtils';
+import { getCompactionModel } from './contextCompaction/compactionModelMap';
 import {
   ANTHROPIC_STOP,
   OPENAI_CHAT_FINISH,
@@ -64,6 +69,7 @@ import type {
   ExtractResponseResult,
   SdkToolCall,
   StopConditionsResult,
+  CompactionRequest,
   TokenCountOptions,
   TokenValidationResult,
 } from './types/IModelHandler';
@@ -875,6 +881,15 @@ export abstract class ModelHandler<
     return Math.floor((percent / 100) * contextWindow);
   }
 
+  protected getCompactionModelName(): string {
+    const overrides = getConfig<Record<string, string> | undefined>(
+      'texra.model.compactionModelOverrides',
+      {},
+    );
+    const override = overrides?.[this.config.fullName]?.trim();
+    return override || getCompactionModel(this.config.fullName);
+  }
+
   protected getMessageRole(message: M | undefined): string | undefined {
     if (!message || typeof message !== 'object') {
       return undefined;
@@ -933,24 +948,132 @@ export abstract class ModelHandler<
       compactionState.summary,
     );
     const tailMessages = messages.slice(compactionState.messageIndex);
-    return [...systemMessages, summaryMessage, ...tailMessages];
+    return [
+      ...systemMessages,
+      ...this.mergeCompactionSummaryWithTail(summaryMessage, tailMessages),
+    ];
   }
 
-  protected async estimateTokensForCompaction(
+  protected mergeCompactionSummaryWithTail(
+    summaryMessage: M,
+    tailMessages: M[],
+  ): M[] {
+    return [summaryMessage, ...tailMessages];
+  }
+
+  protected async maybeApplyCompaction(
     messages: M[],
-    options?: TokenCountOptions<C>,
-  ): Promise<{ tokens: number; isEstimated: boolean }> {
-    if (this.supportsTokenCounting) {
-      const tokens = await this.estimateTokenCount(messages, options);
-      return { tokens, isEstimated: false };
+    compaction: CompactionRequest | undefined,
+    options: {
+      contextWindow: number;
+      getTokenCount: (messagesToCount: M[]) => Promise<number>;
+      buildSummarySourceMessages?: (
+        messagesToCompact: M[],
+        systemCount: number,
+        tailStartIndex: number,
+      ) => M[];
+      createSummary: (
+        summarySourceMessages: M[],
+        compactionModel: string,
+      ) => Promise<string>;
+    },
+  ): Promise<{
+    compactionState: CompactionState | null;
+    effectiveMessages: M[];
+    tokensBefore?: number;
+    tokensAfter?: number;
+  }> {
+    let compactionState = compaction?.state ?? null;
+    let effectiveMessages = await this.buildMessagesForCompactionState(
+      messages,
+      compactionState,
+    );
+
+    if (!compaction) {
+      return { compactionState, effectiveMessages };
     }
 
-    const serialized = JSON.stringify({
-      messages,
-      systemPrompt: options?.systemPrompt,
-      tools: options?.tools,
-    });
-    return { tokens: Math.ceil(serialized.length / 4), isEstimated: true };
+    if (!this.supportsTokenCounting) {
+      if (compaction.forceCompact) {
+        this.logger.warn(
+          'Compaction skipped: token counting is not supported for this provider.',
+        );
+      }
+      return { compactionState, effectiveMessages };
+    }
+
+    const tokensBefore = await options.getTokenCount(effectiveMessages);
+    const threshold = this.getCompactionTokenThreshold(options.contextWindow);
+    const autoCompactEnabled = compaction.autoCompactEnabled ?? true;
+    const shouldCompact =
+      compaction.forceCompact ||
+      (autoCompactEnabled && threshold > 0 && tokensBefore >= threshold);
+
+    if (!shouldCompact) {
+      return { compactionState, effectiveMessages, tokensBefore };
+    }
+
+    try {
+      const { systemCount } = this.getLeadingSystemMessages(messages);
+      const tailStartIndex = this.getCompactionTailStartIndex(
+        messages,
+        systemCount,
+      );
+      const summarySourceMessages =
+        options.buildSummarySourceMessages?.(
+          messages,
+          systemCount,
+          tailStartIndex,
+        ) ?? messages.slice(systemCount, tailStartIndex);
+
+      if (summarySourceMessages.length === 0) {
+        return { compactionState, effectiveMessages, tokensBefore };
+      }
+
+      const compactionModel = this.getCompactionModelName();
+      const summaryText = await options.createSummary(
+        summarySourceMessages,
+        compactionModel,
+      );
+      const summary = extractCompactionSummary(summaryText);
+
+      compactionState = {
+        summary,
+        messageIndex: tailStartIndex,
+        updatedAt: Date.now(),
+        compactionModel,
+      };
+      compaction.updateState?.(compactionState);
+      effectiveMessages = await this.buildMessagesForCompactionState(
+        messages,
+        compactionState,
+      );
+
+      const tokensAfter = await options.getTokenCount(effectiveMessages);
+      const utilizationBefore = (tokensBefore / options.contextWindow) * 100;
+      const utilizationAfter = (tokensAfter / options.contextWindow) * 100;
+
+      this.logger.logContextManagement(
+        `Context compacted: ${tokensBefore.toLocaleString()} → ${tokensAfter.toLocaleString()} tokens`,
+        {
+          action: 'compaction',
+          tokensBefore,
+          tokensAfter,
+          contextWindow: options.contextWindow,
+          utilizationBefore,
+          utilizationAfter,
+          summary,
+          compactionModel,
+        },
+      );
+
+      return { compactionState, effectiveMessages, tokensBefore, tokensAfter };
+    } catch (err) {
+      this.logger.warn(
+        `Compaction failed: ${toErrorMessage(err)}. Proceeding with existing context.`,
+      );
+      return { compactionState, effectiveMessages, tokensBefore };
+    }
   }
 
   /**

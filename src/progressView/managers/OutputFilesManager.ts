@@ -209,7 +209,9 @@ export class OutputFilesManager extends PersistentMapManager<
     if (!runs) return paths;
 
     const targetRunIds =
-      options.storageKey != null ? [options.storageKey] : [...runs.keys()];
+      options.storageKey !== null && options.storageKey !== undefined
+        ? [options.storageKey]
+        : [...runs.keys()];
     const workspaceOnly = options.workspaceOnly ?? false;
 
     for (const target of targetRunIds) {

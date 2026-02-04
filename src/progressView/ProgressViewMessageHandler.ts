@@ -12,6 +12,12 @@ import { getAgent } from '@agent/index/agentRegistry';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import {
+  clearAllAutoCompactState,
+  clearAutoCompactState,
+  requestCompactNow,
+  toggleAutoCompact,
+} from '@agent/toolUse/ToolUseCompactionManager';
 import { toErrorMessage } from '@common/errors';
 import {
   BaseViewMessageHandler,
@@ -41,12 +47,6 @@ import {
   handleProgressViewToolEditApprovalAction,
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval';
-import {
-  clearAllAutoCompactState,
-  clearAutoCompactState,
-  requestCompactNow,
-  toggleAutoCompact,
-} from '@agent/toolUse/ToolUseCompactionManager';
 import {
   createExternalLocation,
   createFileMapping,

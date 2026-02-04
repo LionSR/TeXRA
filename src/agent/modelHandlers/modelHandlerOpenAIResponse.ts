@@ -3,7 +3,6 @@ import { Buffer } from 'node:buffer';
 
 // Third-party imports
 import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
-import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -70,6 +69,7 @@ import type {
 } from './types/IModelHandler';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 import type { Reasoning } from 'openai/resources/shared';
+import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
 import type {
   CompactedResponse,
   EasyInputMessage,

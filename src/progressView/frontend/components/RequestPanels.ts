@@ -19,9 +19,6 @@ import {
   requestPanelStyles,
 } from '@shared/styles';
 
-// Local imports - progress view styles
-import { codeBlockStyles } from '../styles/codeBlockStyles';
-
 // Local imports - shared schemas
 import {
   AGENT_CATEGORY,
@@ -40,6 +37,9 @@ import { postMessage } from '@shared/vscode';
 
 // Local imports - webview commands
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+
+// Local imports - progress view styles
+import { codeBlockStyles } from '../styles/codeBlockStyles';
 
 // Local imports - progress view events
 import { ProgressEvents } from '../events';
@@ -940,12 +940,19 @@ export class RequestPanels extends LitElement {
     const lines = [
       details.message && `message: ${details.message}`,
       details.provider && `provider: ${details.provider}`,
-      details.statusCode != null && `statusCode: ${details.statusCode}`,
+      details.statusCode !== null &&
+        details.statusCode !== undefined &&
+        `statusCode: ${details.statusCode}`,
       details.statusText && `statusText: ${details.statusText}`,
-      details.isRelayError != null && `isRelayError: ${details.isRelayError}`,
-      details.retryable != null && `retryable: ${details.retryable}`,
+      details.isRelayError !== null &&
+        details.isRelayError !== undefined &&
+        `isRelayError: ${details.isRelayError}`,
+      details.retryable !== null &&
+        details.retryable !== undefined &&
+        `retryable: ${details.retryable}`,
       details.requestId && `requestId: ${details.requestId}`,
-      details.rawErrorBody != null &&
+      details.rawErrorBody !== null &&
+        details.rawErrorBody !== undefined &&
         `rawErrorBody: ${formatBody(details.rawErrorBody)}`,
     ].filter(Boolean);
 

@@ -44,7 +44,7 @@ export function generateDiffFileName(
     // Extract base name from edited filename using round pattern
     const name = path.parse(editedFileName).name;
     const lastMatch = extractLastRoundMatch(name);
-    if (lastMatch?.index == null) {
+    if (lastMatch?.index === null || lastMatch?.index === undefined) {
       throw new Error(
         `Failed to extract base name from edited file: ${editedFileName}`,
       );

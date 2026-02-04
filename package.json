@@ -287,6 +287,12 @@
             "description": "Percentage of context window to trigger automatic context management. For OpenAI, triggers conversation compaction via /responses/compact. For Anthropic, triggers server-side clearing of tool uses and thinking blocks. Set to 0 to disable.",
             "scope": "resource"
           },
+          "texra.model.compactionModelOverrides": {
+            "type": "object",
+            "default": {},
+            "description": "Optional map of primary model IDs to alternate compaction model IDs (e.g., { \"gpt-4.1\": \"gpt-4.1-mini\" }).",
+            "scope": "resource"
+          },
           "texra.model.enableThinkingClearing": {
             "type": "boolean",
             "default": false,

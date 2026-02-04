@@ -12,6 +12,7 @@
 import { z } from 'zod';
 
 import {
+  CompactionStateSchema,
   ExecutionIdSchema,
   type StreamTabId,
   type ExecutionId,
@@ -23,7 +24,6 @@ import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
 import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/AgentWorkspaceState';
 import { UserVariableChannelsSchema } from '@agent/core/AgentCycleOptions';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
-import { CompactionStateSchema } from '@shared/schemas';
 import {
   TOOL_USE_SNAPSHOT_VERSION,
   ToolUseSessionSnapshotSchema,

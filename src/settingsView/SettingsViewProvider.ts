@@ -1,15 +1,15 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - shared schemas
+import { type SettingsTab } from '@shared/schemas/settingsViewMessages';
+
 // Local imports - common webview
 import { BaseWebviewProvider, SETTINGS_VIEW_COMMANDS } from '@common/webview';
 
 // Local imports - settings view components
 import { SettingsViewContentProvider } from './SettingsViewContentProvider';
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';
-
-// Local imports - shared schemas
-import { type SettingsTab } from '@shared/schemas/settingsViewMessages';
 
 export class SettingsViewProvider
   extends BaseWebviewProvider

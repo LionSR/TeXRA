@@ -1,8 +1,14 @@
 import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas';
 
+/**
+ * Module-level state for per-stream compaction controls.
+ *
+ * This module assumes a single-threaded event loop (VS Code extension host).
+ * Requests are queued and consumed on the next tool-use cycle.
+ */
 const autoCompactByStream = new Map<StreamTabId, boolean>();
-const pendingCompactNow = new Set<StreamTabId>();
+const pendingCompactNow = new Map<StreamTabId, number>();
 
 export function setAutoCompactEnabled(
   streamId: StreamTabId,
@@ -20,18 +26,24 @@ export function toggleAutoCompact(streamId: StreamTabId): boolean {
 }
 
 export function isAutoCompactEnabled(streamId: StreamTabId): boolean {
-  return autoCompactByStream.get(streamId) ?? false;
+  return autoCompactByStream.get(streamId) ?? true;
 }
 
 export function requestCompactNow(streamId: StreamTabId): void {
-  pendingCompactNow.add(streamId);
+  const count = pendingCompactNow.get(streamId) ?? 0;
+  pendingCompactNow.set(streamId, count + 1);
 }
 
 export function consumeCompactNow(streamId: StreamTabId): boolean {
-  if (!pendingCompactNow.has(streamId)) {
+  const count = pendingCompactNow.get(streamId) ?? 0;
+  if (count <= 0) {
     return false;
   }
-  pendingCompactNow.delete(streamId);
+  if (count === 1) {
+    pendingCompactNow.delete(streamId);
+  } else {
+    pendingCompactNow.set(streamId, count - 1);
+  }
   return true;
 }
 

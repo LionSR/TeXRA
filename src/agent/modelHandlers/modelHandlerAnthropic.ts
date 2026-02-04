@@ -50,8 +50,6 @@ import { objectToLogString } from '@utils/text/stringUtils';
 
 // Local file imports
 import { DEFAULT_SUMMARY_PROMPT } from './contextCompaction/compactionPrompt';
-import { getCompactionModel } from './contextCompaction/compactionModelMap';
-import { extractCompactionSummary } from './contextCompaction/compactionUtils';
 import { AnthropicStreamHandler } from './support/AnthropicStreamHandler';
 import { toAnthropicTools } from './toolConversion';
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
@@ -389,17 +387,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
       ? ANTHROPIC_1M_CONTEXT_WINDOW
       : this.config.contextWindow;
 
-    let compactionState = compaction?.state ?? null;
     let effectiveMessages = await this.buildMessagesForCompactionState(
       messages,
-      compactionState,
+      compaction?.state ?? null,
     );
 
     this.enforceCacheControlLimit(effectiveMessages);
 
     let documentAnalysis = this.analyzeDocumentSources(effectiveMessages);
     let hasFileReference = documentAnalysis.hasFileSource;
-    let didCompact = false;
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const options: MessageCreateParams = {
@@ -470,121 +466,54 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.ensureBeta(options, CONTEXT_1M_BETA);
     }
 
-    if (compaction) {
-      const inputTokens = await this.estimateTokenCount(effectiveMessages, {
-        client,
-        systemPrompt,
-        anthropicTools: options.tools,
-        thinking: options.thinking,
-        betas: options.betas,
+    const { effectiveMessages: compactedMessages } =
+      await this.maybeApplyCompaction(messages, compaction, {
+        contextWindow: effectiveContextWindow,
+        getTokenCount: (messagesToCount) =>
+          this.estimateTokenCount(messagesToCount, {
+            client,
+            systemPrompt,
+            anthropicTools: options.tools,
+            thinking: options.thinking,
+            betas: options.betas,
+          }),
+        buildSummarySourceMessages: (
+          messagesToCompact,
+          systemCount,
+          tailStart,
+        ) =>
+          this.stripTrailingToolUsesForCompaction(
+            messagesToCompact.slice(systemCount, tailStart),
+          ),
+        createSummary: async (summarySourceMessages, compactionModel) => {
+          const summaryMessages = await this.createUserFollowUpMessages(
+            [...summarySourceMessages],
+            DEFAULT_SUMMARY_PROMPT,
+          );
+          const summaryResponse = await client.beta.messages.create(
+            {
+              model: compactionModel,
+              max_tokens: Math.min(this.config.maxOutputTokens, 4096),
+              messages: summaryMessages,
+              ...(systemPrompt ? { system: systemPrompt } : {}),
+            },
+            { signal },
+          );
+          return summaryResponse.content
+            .filter(
+              (block): block is Extract<BetaContentBlock, { type: 'text' }> =>
+                block.type === 'text',
+            )
+            .map((block) => block.text.trim())
+            .join('');
+        },
       });
-      const threshold = this.getCompactionTokenThreshold(
-        effectiveContextWindow,
-      );
-      const autoCompactEnabled = compaction.autoCompactEnabled ?? true;
-      const shouldCompact =
-        compaction.forceCompact ||
-        (autoCompactEnabled && threshold > 0 && inputTokens >= threshold);
 
-      if (shouldCompact) {
-        try {
-          const { systemCount } = this.getLeadingSystemMessages(messages);
-          const tailStartIndex = this.getCompactionTailStartIndex(
-            messages,
-            systemCount,
-          );
-          const summarySourceMessages = this.stripTrailingToolUsesForCompaction(
-            messages.slice(systemCount, tailStartIndex),
-          );
-
-          if (summarySourceMessages.length > 0) {
-            const compactionModel = getCompactionModel(this.config.fullName);
-            const summaryMessages = [
-              ...summarySourceMessages,
-              {
-                role: 'user',
-                content: [
-                  {
-                    type: 'text',
-                    text: DEFAULT_SUMMARY_PROMPT,
-                    citations: null,
-                  },
-                ],
-              },
-            ];
-            const summaryResponse = await client.beta.messages.create(
-              {
-                model: compactionModel,
-                max_tokens: Math.min(this.config.maxOutputTokens, 4096),
-                messages: summaryMessages,
-                ...(systemPrompt ? { system: systemPrompt } : {}),
-              },
-              { signal },
-            );
-            const summaryText = summaryResponse.content
-              .filter(
-                (block): block is Extract<BetaContentBlock, { type: 'text' }> =>
-                  block.type === 'text',
-              )
-              .map((block) => block.text.trim())
-              .join('');
-            const summary = extractCompactionSummary(summaryText);
-
-            compactionState = {
-              summary,
-              messageIndex: tailStartIndex,
-              updatedAt: Date.now(),
-              compactionModel,
-            };
-            compaction.updateState?.(compactionState);
-            effectiveMessages = await this.buildMessagesForCompactionState(
-              messages,
-              compactionState,
-            );
-            options.messages = effectiveMessages;
-            didCompact = true;
-
-            const tokensAfter = await this.estimateTokenCount(
-              effectiveMessages,
-              {
-                client,
-                systemPrompt,
-                anthropicTools: options.tools,
-                thinking: options.thinking,
-                betas: options.betas,
-              },
-            );
-            const utilizationBefore =
-              (inputTokens / effectiveContextWindow) * 100;
-            const utilizationAfter =
-              (tokensAfter / effectiveContextWindow) * 100;
-
-            this.logger.logContextManagement(
-              `Context compacted: ${inputTokens.toLocaleString()} → ${tokensAfter.toLocaleString()} tokens`,
-              {
-                action: 'compaction',
-                tokensBefore: inputTokens,
-                tokensAfter,
-                contextWindow: effectiveContextWindow,
-                utilizationBefore,
-                utilizationAfter,
-                summary,
-                compactionModel,
-              },
-            );
-          }
-        } catch (err) {
-          this.logger.warn(
-            `Compaction failed: ${getSdkErrorMessage(err)}. Proceeding with existing context.`,
-          );
-        }
-      }
-    }
-
-    if (didCompact) {
-      documentAnalysis = this.analyzeDocumentSources(effectiveMessages);
-      hasFileReference = documentAnalysis.hasFileSource;
-    }
+    effectiveMessages = compactedMessages;
+    options.messages = effectiveMessages;
+    this.enforceCacheControlLimit(effectiveMessages);
+    documentAnalysis = this.analyzeDocumentSources(effectiveMessages);
+    hasFileReference = documentAnalysis.hasFileSource;
 
     // Phase 2: COUNT - Estimate input tokens using built params
     // Phase 3: VALIDATE - Adjust max_tokens if needed

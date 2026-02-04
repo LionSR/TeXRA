@@ -68,8 +68,6 @@ import {
 } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 import { DEFAULT_SUMMARY_PROMPT } from './contextCompaction/compactionPrompt';
-import { getCompactionModel } from './contextCompaction/compactionModelMap';
-import { extractCompactionSummary } from './contextCompaction/compactionUtils';
 
 // Local file imports
 import {
@@ -456,29 +454,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       throw new Error('Messages array cannot be empty.');
     }
 
-    let compactionState = compaction?.state ?? null;
-    let effectiveMessages = await this.buildMessagesForCompactionState(
-      messages,
-      compactionState,
-    );
-
-    if (effectiveMessages.length === 0) {
-      this.logger.error('Cannot create response from empty messages array.');
-      throw new Error('Messages array cannot be empty.');
-    }
-
-    // History excludes the final user message - we send it separately via sendMessage
-    let history = effectiveMessages.slice(0, -1);
-    let lastMessage = effectiveMessages.at(-1);
-
-    let lastMessageParts = Array.isArray(lastMessage?.parts)
-      ? lastMessage.parts
-      : [];
-    if (lastMessageParts.length === 0) {
-      this.logger.error('Could not extract valid parts from the last message.');
-      throw new Error('Last message conversion resulted in empty parts.');
-    }
-
     // Phase 1: BUILD - Construct provider-specific request parameters
     const generationConfig: GenerateContentConfig = {
       temperature: temperature,
@@ -499,6 +474,55 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       generationConfig.tools = toGoogleTools(tools);
     }
 
+    const getTokenCountForMessages = (messagesToCount: Content[]) => {
+      const { history: historyToCount, lastMessageParts: lastParts } =
+        this.splitConversationMessages(messagesToCount);
+      return this.estimateTokenCount(historyToCount, {
+        client,
+        systemPrompt,
+        lastMessageParts: lastParts,
+        googleTools: generationConfig.tools as GeminiTool[] | undefined,
+        signal,
+      });
+    };
+
+    const { effectiveMessages } = await this.maybeApplyCompaction(
+      messages,
+      compaction,
+      {
+        contextWindow: this.config.contextWindow,
+        getTokenCount: getTokenCountForMessages,
+        createSummary: async (summarySourceMessages, compactionModel) => {
+          const chat = client.chats.create({
+            model: compactionModel,
+            history: summarySourceMessages,
+            config: { temperature: 0.2, maxOutputTokens: 2048 },
+            ...(systemPrompt && { systemInstruction: systemPrompt }),
+          });
+          const summaryResponse = await chat.sendMessage({
+            message: [createPartFromText(DEFAULT_SUMMARY_PROMPT)],
+            config: { abortSignal: signal },
+          });
+          const summaryParts =
+            summaryResponse.candidates?.[0]?.content?.parts ?? [];
+          return extractNonThinkingText(summaryParts, true);
+        },
+      },
+    );
+
+    if (effectiveMessages.length === 0) {
+      this.logger.error('Cannot create response from empty messages array.');
+      throw new Error('Messages array cannot be empty.');
+    }
+
+    // History excludes the final user message - we send it separately via sendMessage
+    const { history, lastMessageParts } =
+      this.splitConversationMessages(effectiveMessages);
+    if (lastMessageParts.length === 0) {
+      this.logger.error('Could not extract valid parts from the last message.');
+      throw new Error('Last message conversion resulted in empty parts.');
+    }
+
     // Phase 2: COUNT - Estimate input tokens using built params
     // Phase 3: VALIDATE - Adjust maxOutputTokens if needed
     if (this.supportsTokenCounting) {
@@ -506,99 +530,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         // Reuse built params for token counting (build once principle)
         // Cast: toGoogleTools always returns Tool[], but generationConfig.tools
         // is typed as ToolListUnion (which includes CallableTool union member)
-        let totalTokens = await this.estimateTokenCount(history, {
+        const totalTokens = await this.estimateTokenCount(history, {
           client,
           systemPrompt,
           lastMessageParts,
           googleTools: generationConfig.tools as GeminiTool[] | undefined,
           signal,
         });
-        const tokensBefore = totalTokens;
-
-        if (compaction) {
-          const threshold = this.getCompactionTokenThreshold(
-            this.config.contextWindow,
-          );
-          const autoCompactEnabled = compaction.autoCompactEnabled ?? true;
-          const shouldCompact =
-            compaction.forceCompact ||
-            (autoCompactEnabled && threshold > 0 && totalTokens >= threshold);
-
-          if (shouldCompact) {
-            const { systemCount } = this.getLeadingSystemMessages(messages);
-            const tailStartIndex = this.getCompactionTailStartIndex(
-              messages,
-              systemCount,
-            );
-            const summarySourceMessages = messages.slice(
-              systemCount,
-              tailStartIndex,
-            );
-
-            if (summarySourceMessages.length > 0) {
-              const compactionModel = getCompactionModel(this.config.fullName);
-              const chat = client.chats.create({
-                model: compactionModel,
-                history: summarySourceMessages,
-                config: { temperature: 0.2, maxOutputTokens: 2048 },
-                ...(systemPrompt && { systemInstruction: systemPrompt }),
-              });
-              const summaryResponse = await chat.sendMessage({
-                message: [createPartFromText(DEFAULT_SUMMARY_PROMPT)],
-                config: { abortSignal: signal },
-              });
-              const summaryParts =
-                summaryResponse.candidates?.[0]?.content?.parts ?? [];
-              const summary = extractCompactionSummary(
-                extractNonThinkingText(summaryParts, true),
-              );
-
-              compactionState = {
-                summary,
-                messageIndex: tailStartIndex,
-                updatedAt: Date.now(),
-                compactionModel,
-              };
-              compaction.updateState?.(compactionState);
-              effectiveMessages = await this.buildMessagesForCompactionState(
-                messages,
-                compactionState,
-              );
-              history = effectiveMessages.slice(0, -1);
-              lastMessage = effectiveMessages.at(-1);
-              lastMessageParts = Array.isArray(lastMessage?.parts)
-                ? lastMessage.parts
-                : [];
-
-              totalTokens = await this.estimateTokenCount(history, {
-                client,
-                systemPrompt,
-                lastMessageParts,
-                googleTools: generationConfig.tools as GeminiTool[] | undefined,
-                signal,
-              });
-
-              const utilizationBefore =
-                (tokensBefore / this.config.contextWindow) * 100;
-              const utilizationAfter =
-                (totalTokens / this.config.contextWindow) * 100;
-
-              this.logger.logContextManagement(
-                `Context compacted: ${tokensBefore.toLocaleString()} → ${totalTokens.toLocaleString()} tokens`,
-                {
-                  action: 'compaction',
-                  tokensBefore,
-                  tokensAfter: totalTokens,
-                  contextWindow: this.config.contextWindow,
-                  utilizationBefore,
-                  utilizationAfter,
-                  summary,
-                  compactionModel,
-                },
-              );
-            }
-          }
-        }
 
         // Validate and adjust maxOutputTokens if needed (throws if context window exceeded)
         const originalMaxTokens = generationConfig.maxOutputTokens ?? 8192;
@@ -812,6 +750,38 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
       throw error;
     }
+  }
+
+  protected override mergeCompactionSummaryWithTail(
+    summaryMessage: Content,
+    tailMessages: Content[],
+  ): Content[] {
+    const firstTail = tailMessages.at(0);
+    if (firstTail?.role === 'user' && Array.isArray(firstTail.parts)) {
+      const summaryParts = Array.isArray(summaryMessage.parts)
+        ? summaryMessage.parts
+        : [];
+      if (summaryParts.length > 0) {
+        const mergedFirst = {
+          ...firstTail,
+          parts: [...summaryParts, ...firstTail.parts],
+        };
+        return [mergedFirst, ...tailMessages.slice(1)];
+      }
+    }
+    return [summaryMessage, ...tailMessages];
+  }
+
+  private splitConversationMessages(messages: Content[]): {
+    history: Content[];
+    lastMessageParts: Part[];
+  } {
+    const history = messages.slice(0, -1);
+    const lastMessage = messages.at(-1);
+    const lastMessageParts = Array.isArray(lastMessage?.parts)
+      ? lastMessage.parts
+      : [];
+    return { history, lastMessageParts };
   }
 
   /** Initializes the message array for Google GenAI chat models with user prefix, request, and optional media. */
