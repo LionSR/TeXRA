@@ -4,14 +4,11 @@ import { getConfig } from '@utils/config';
 import { SupabaseClient } from './SupabaseClient';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';
 import { type OAuthProvider, getExternalAuthCallbackUri } from './config';
+import { AUTH_PROVIDER_ID, AUTH_COMMANDS } from './constants';
+import { showSettingsView } from '@commands/settings';
 
-const AUTH_PROVIDER_ID = 'texra-supabase';
-
-export const AUTH_COMMANDS = {
-  SIGN_IN: 'texra.auth.signIn',
-  SIGN_OUT: 'texra.auth.signOut',
-  VIEW_PROFILE: 'texra.auth.viewProfile',
-} as const;
+// Re-export for backwards compatibility
+export { AUTH_COMMANDS } from './constants';
 
 type AuthMethod = OAuthProvider | 'github-browser' | 'email';
 
@@ -24,6 +21,10 @@ function isVSCodeGitHubEnabled(): boolean {
 async function getExistingSession(): Promise<
   vscode.AuthenticationSession | undefined
 > {
+  // Skip VS Code auth API if auth system not ready to avoid timeout
+  if (!SupabaseClient.isReady()) {
+    return undefined;
+  }
   return vscode.authentication.getSession(AUTH_PROVIDER_ID, [], {
     silent: true,
   });
@@ -69,6 +70,18 @@ function getSignInOptions(): SignInOption[] {
 
 export async function signIn(): Promise<void> {
   try {
+    // Check if auth system is ready - if not, provide clear error with reason
+    if (!SupabaseClient.isReady()) {
+      const initError = SupabaseClient.getInitError();
+      const reason = initError
+        ? initError.message
+        : 'Authentication service not initialized';
+      void vscode.window.showErrorMessage(
+        `Sign in failed: ${reason}. Please reload VS Code and try again. If the issue persists, check the TeXRA output channel for errors.`,
+      );
+      return;
+    }
+
     const existing = await getExistingSession();
     if (existing) {
       const user = await SupabaseClient.getUser();
@@ -175,8 +188,6 @@ export async function signOut(): Promise<void> {
 
 export async function viewProfile(): Promise<void> {
   try {
-    // Import dynamically to avoid circular dependencies
-    const { showSettingsView } = await import('@commands/settings');
     await showSettingsView();
   } catch (error) {
     void vscode.window.showErrorMessage(
