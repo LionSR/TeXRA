@@ -993,21 +993,22 @@ export abstract class ModelHandler<
       return { compactionState, effectiveMessages };
     }
 
-    if (!this.supportsTokenCounting) {
-      if (compaction.forceCompact) {
-        this.logger.warn(
-          'Compaction skipped: token counting is not supported for this provider.',
-        );
-      }
-      return { compactionState, effectiveMessages };
-    }
-
-    const tokensBefore = await options.getTokenCount(effectiveMessages);
+    const { tokens: tokensBefore, isEstimated } =
+      await this.estimateTokensForCompaction(
+        effectiveMessages,
+        options.getTokenCount,
+      );
     const threshold = this.getCompactionTokenThreshold(options.contextWindow);
     const autoCompactEnabled = compaction.autoCompactEnabled ?? true;
     const shouldCompact =
       compaction.forceCompact ||
       (autoCompactEnabled && threshold > 0 && tokensBefore >= threshold);
+
+    if (isEstimated) {
+      this.logger.debug(
+        `Compaction token count estimated; using ${tokensBefore.toLocaleString()} tokens for threshold checks.`,
+      );
+    }
 
     if (!shouldCompact) {
       return { compactionState, effectiveMessages, tokensBefore };
@@ -1049,7 +1050,10 @@ export abstract class ModelHandler<
         compactionState,
       );
 
-      const tokensAfter = await options.getTokenCount(effectiveMessages);
+      const { tokens: tokensAfter } = await this.estimateTokensForCompaction(
+        effectiveMessages,
+        options.getTokenCount,
+      );
       const utilizationBefore = (tokensBefore / options.contextWindow) * 100;
       const utilizationAfter = (tokensAfter / options.contextWindow) * 100;
 
@@ -1073,6 +1077,23 @@ export abstract class ModelHandler<
         `Compaction failed: ${toErrorMessage(err)}. Proceeding with existing context.`,
       );
       return { compactionState, effectiveMessages, tokensBefore };
+    }
+  }
+
+  protected async estimateTokensForCompaction(
+    messages: M[],
+    getTokenCount: (messagesToCount: M[]) => Promise<number>,
+  ): Promise<{ tokens: number; isEstimated: boolean }> {
+    try {
+      const tokens = await getTokenCount(messages);
+      return { tokens, isEstimated: false };
+    } catch (err) {
+      const serialized = JSON.stringify(messages);
+      const tokens = Math.ceil(serialized.length / 4);
+      this.logger.warn(
+        `Token counting failed: ${toErrorMessage(err)}. Using estimated tokens for compaction.`,
+      );
+      return { tokens, isEstimated: true };
     }
   }
 

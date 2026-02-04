@@ -19,7 +19,7 @@ export function setAutoCompactEnabled(
 }
 
 export function toggleAutoCompact(streamId: StreamTabId): boolean {
-  const current = autoCompactByStream.get(streamId) ?? false;
+  const current = isAutoCompactEnabled(streamId);
   const next = !current;
   setAutoCompactEnabled(streamId, next);
   return next;
