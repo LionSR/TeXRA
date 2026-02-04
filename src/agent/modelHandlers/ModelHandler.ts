@@ -53,6 +53,7 @@ import {
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
   TOKEN_SAFETY_BUFFER,
 } from './contextManagementConstants';
+import { getCompactionModel } from './compaction';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -927,6 +928,68 @@ export abstract class ModelHandler<
       `getCompactedMessages not implemented for provider: ${this.config.provider}. ` +
         `Override this method in the handler.`,
     );
+  }
+
+  /**
+   * Check if compaction is needed and perform it if so.
+   * This is a template method that encapsulates the common compaction logic
+   * used by all handlers that support client-side compaction.
+   *
+   * @param client - Provider client instance
+   * @param messages - Current conversation messages
+   * @param systemPrompt - System prompt for context
+   * @param preflightTokens - Pre-computed token count for the messages
+   * @returns The effective messages to use (compacted or original)
+   */
+  protected async checkAndPerformCompaction(
+    client: C,
+    messages: M[],
+    systemPrompt: string,
+    preflightTokens: number,
+  ): Promise<M[]> {
+    // Skip if compaction not needed
+    if (!this.shouldCompact(preflightTokens)) {
+      return messages;
+    }
+
+    const threshold = this.getCompactionTokenThreshold();
+    this.logger.logProgress(
+      `Compacting conversation (${preflightTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
+    );
+
+    const compactionResult = await this.performClientCompaction(
+      client,
+      messages,
+      systemPrompt,
+    );
+
+    // Get compaction model and warn if falling back to primary model
+    const compactionModel = getCompactionModel(this.config.name);
+    if (compactionModel === this.config.name) {
+      this.logger.warn(
+        `No compaction model mapping for "${this.config.name}". Using primary model for compaction, which may be slower/more expensive.`,
+      );
+    }
+
+    // Update compaction state
+    this.compactionState = {
+      isCompacted: true,
+      summary: compactionResult.summary,
+      tokensBefore: preflightTokens,
+      tokensAfter: compactionResult.outputTokens,
+      compactionModel,
+    };
+
+    // Replace messages with compacted summary
+    const effectiveMessages = this.getCompactedMessages(
+      compactionResult.summary,
+    );
+
+    this.logger.logProgress(
+      `Compaction complete: ${preflightTokens} → ~${compactionResult.outputTokens} tokens`,
+    );
+
+    return effectiveMessages;
   }
 
   // =========================================================================

@@ -57,3 +57,9 @@ export const SUMMARY_TAG = 'summary';
  * This makes it clear to the model that this is a conversation context summary.
  */
 export const CONVERSATION_SUMMARY_TAG = 'conversation-summary';
+
+/**
+ * Default max output tokens for compaction summarization.
+ * Summaries should be concise, so we don't need the full model output capacity.
+ */
+export const COMPACTION_MAX_TOKENS = 4096;

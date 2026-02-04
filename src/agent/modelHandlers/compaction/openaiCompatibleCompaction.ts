@@ -7,11 +7,32 @@
  */
 
 import type { OpenAI } from 'openai';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type {
+  ChatCompletionContentPart,
+  ChatCompletionMessageParam,
+} from 'openai/resources/chat/completions';
 
 import type { SummarizationResult } from './types';
+
 import { DEFAULT_SUMMARY_PROMPT, SUMMARY_TAG } from './compactionPrompt';
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
+
+/**
+ * Type guard to check if a content part is a known valid type.
+ * Filters out any unknown or tool-related types defensively.
+ */
+function isValidContentPart(
+  part: ChatCompletionContentPart | { type: string },
+): part is ChatCompletionContentPart {
+  // Only allow known content types (text, image_url, input_audio, file)
+  // Exclude any tool-related types defensively
+  return (
+    part.type === 'text' ||
+    part.type === 'image_url' ||
+    part.type === 'input_audio' ||
+    part.type === 'file'
+  );
+}
 
 /**
  * Performs context summarization using an OpenAI-compatible API.
@@ -82,10 +103,8 @@ function cleanMessagesForCompaction(
 
   // Check if content is an array (structured content)
   if (Array.isArray(lastMsg.content)) {
-    // Filter out tool_call parts
-    const nonToolParts = lastMsg.content.filter(
-      (part: any) => part.type !== 'tool_call',
-    );
+    // Filter to keep only known valid content types (exclude tool-related parts)
+    const nonToolParts = lastMsg.content.filter(isValidContentPart);
 
     if (nonToolParts.length > 0) {
       cleaned[cleaned.length - 1] = {

@@ -122,6 +122,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
       [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: (data) =>
         this.handleStopStream(data),
+      [PROGRESS_VIEW_COMMANDS.COMPACT_NOW]: (data) =>
+        this.handleCompactNow(data),
 
       // Actions
       [PROGRESS_VIEW_COMMANDS.RESUME]: (data) => this.handleResume(data),
@@ -312,6 +314,30 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.STOP_STREAM>,
   ): Promise<void> {
     await vscode.commands.executeCommand('texra.stopAgent', data.stream);
+  }
+
+  private async handleCompactNow(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.COMPACT_NOW>,
+  ): Promise<void> {
+    const streamId = data.stream;
+    this.logger.info(
+      this.channel,
+      `Compact now requested for stream: ${streamId}`,
+    );
+
+    // For now, show an informational message.
+    // Full implementation would require integrating with the agent runtime
+    // to trigger immediate compaction of the conversation history.
+    await vscode.window.showInformationMessage(
+      'Manual compaction will be applied on the next message. ' +
+        'Automatic compaction is already active when token thresholds are exceeded.',
+    );
+
+    // TODO: Implement immediate compaction by:
+    // 1. Getting the active agent's model handler
+    // 2. Triggering performClientCompaction
+    // 3. Updating the conversation state with compacted messages
+    // 4. Sending context management update to webview
   }
 
   // ============================================================

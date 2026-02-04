@@ -576,36 +576,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
           systemPrompt,
         });
 
-        if (this.shouldCompact(preflightTokens)) {
-          const threshold = this.getCompactionTokenThreshold();
-          this.logger.logProgress(
-            `Compacting conversation (${preflightTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
-          );
-
-          const compactionResult = await this.performClientCompaction(
-            client,
-            messages,
-            systemPrompt ?? '',
-          );
-
-          // Update compaction state
-          this.compactionState = {
-            isCompacted: true,
-            summary: compactionResult.summary,
-            tokensBefore: preflightTokens,
-            tokensAfter: compactionResult.outputTokens,
-            compactionModel: getCompactionModel(this.config.name),
-          };
-
-          // Replace messages with compacted summary
-          effectiveMessages = this.getCompactedMessages(
-            compactionResult.summary,
-          );
-
-          this.logger.logProgress(
-            `Compaction complete: ${preflightTokens} → ~${compactionResult.outputTokens} tokens`,
-          );
-        }
+        effectiveMessages = await this.checkAndPerformCompaction(
+          client,
+          messages,
+          systemPrompt ?? '',
+          preflightTokens,
+        );
       } catch (error) {
         // Soft failure - proceed without compaction
         this.logger.warn(
@@ -708,7 +684,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // and let the API enforce limits. This avoids unnecessary retries for non-critical operations.
         try {
           // Reuse built params for token counting (build once principle)
-          const inputTokens = await this.estimateTokenCount(messages, {
+          // Use effectiveMessages (post-compaction) to get accurate token count
+          const inputTokens = await this.estimateTokenCount(effectiveMessages, {
             client,
             systemPrompt,
             anthropicTools: options.tools,

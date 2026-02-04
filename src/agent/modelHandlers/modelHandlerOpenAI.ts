@@ -438,34 +438,12 @@ export class ModelHandlerOpenAI<
           systemPrompt,
         });
 
-        if (this.shouldCompact(preflightTokens)) {
-          const threshold = this.getCompactionTokenThreshold();
-          this.logger.logProgress(
-            `Compacting conversation (${preflightTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
-          );
-
-          const compactionResult = await this.performClientCompaction(
-            client,
-            messages,
-            systemPrompt ?? '',
-          );
-
-          // Update compaction state
-          this.compactionState = {
-            isCompacted: true,
-            summary: compactionResult.summary,
-            tokensBefore: preflightTokens,
-            tokensAfter: compactionResult.outputTokens,
-            compactionModel: getCompactionModel(this.config.name),
-          };
-
-          // Replace messages with compacted summary
-          messages = this.getCompactedMessages(compactionResult.summary);
-
-          this.logger.logProgress(
-            `Compaction complete: ${preflightTokens} → ~${compactionResult.outputTokens} tokens`,
-          );
-        }
+        messages = await this.checkAndPerformCompaction(
+          client,
+          messages,
+          systemPrompt ?? '',
+          preflightTokens,
+        );
       } catch (error) {
         // Soft failure - proceed without compaction
         this.logger.warn(

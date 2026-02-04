@@ -10,7 +10,11 @@ import type {
 } from '@anthropic-ai/sdk/resources/messages';
 
 import type { SummarizationResult } from './types';
-import { DEFAULT_SUMMARY_PROMPT, SUMMARY_TAG } from './compactionPrompt';
+import {
+  COMPACTION_MAX_TOKENS,
+  DEFAULT_SUMMARY_PROMPT,
+  SUMMARY_TAG,
+} from './compactionPrompt';
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
 
 /**
@@ -42,7 +46,7 @@ export async function compactAnthropic(
   // Non-streaming call to compaction model (no thinking, no extended features)
   const response = await client.messages.create({
     model: compactionModel,
-    max_tokens: 4096, // Summaries should be concise
+    max_tokens: COMPACTION_MAX_TOKENS,
     system: systemPrompt,
     messages: compactionMessages,
     stream: false,

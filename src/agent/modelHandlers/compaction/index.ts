@@ -13,11 +13,12 @@
 // Types
 export * from './types';
 
-// Prompts
+// Prompts and constants
 export {
+  COMPACTION_MAX_TOKENS,
+  CONVERSATION_SUMMARY_TAG,
   DEFAULT_SUMMARY_PROMPT,
   SUMMARY_TAG,
-  CONVERSATION_SUMMARY_TAG,
 } from './compactionPrompt';
 
 // Model mapping
