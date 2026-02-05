@@ -67,27 +67,30 @@ const PROVIDER_DISPLAY_NAMES: Record<ApiProvider, string> = {
 /**
  * Map from ApiProvider to the VS Code config key for per-provider streaming.
  * Providers not listed here (e.g., 'wolframllmapp') have no streaming config.
+ *
+ * Keys use short form (without 'texra.' prefix) so getConfig() resolves them
+ * correctly via getConfiguration('texra').get(key).
  */
 const STREAMING_CONFIG_KEY: Partial<Record<ApiProvider, string>> = {
-  openai: 'texra.model.useStreamingOpenai',
-  anthropic: 'texra.model.useStreamingAnthropic',
-  openRouter: 'texra.model.useStreamingOpenrouter',
-  google: 'texra.model.useStreamingGoogle',
-  xai: 'texra.model.useStreamingXai',
-  deepseek: 'texra.model.useStreamingDeepseek',
-  moonshot: 'texra.model.useStreamingMoonshot',
-  dashscope: 'texra.model.useStreamingDashscope',
+  openai: 'model.useStreamingOpenai',
+  anthropic: 'model.useStreamingAnthropic',
+  openRouter: 'model.useStreamingOpenrouter',
+  google: 'model.useStreamingGoogle',
+  xai: 'model.useStreamingXai',
+  deepseek: 'model.useStreamingDeepseek',
+  moonshot: 'model.useStreamingMoonshot',
+  dashscope: 'model.useStreamingDashscope',
 };
 
 /** Map from ApiProvider to the VS Code config key for custom endpoint. */
 const ENDPOINT_CONFIG_KEY: Partial<Record<ApiProvider, string>> = {
-  openai: 'texra.model.baseUrlOpenai',
-  anthropic: 'texra.model.baseUrlAnthropic',
-  google: 'texra.model.baseUrlGoogle',
-  deepseek: 'texra.model.baseUrlDeepSeek',
-  xai: 'texra.model.baseUrlXai',
-  moonshot: 'texra.model.baseUrlMoonshot',
-  dashscope: 'texra.model.baseUrlDashscope',
+  openai: 'model.baseUrlOpenai',
+  anthropic: 'model.baseUrlAnthropic',
+  google: 'model.baseUrlGoogle',
+  deepseek: 'model.baseUrlDeepSeek',
+  xai: 'model.baseUrlXai',
+  moonshot: 'model.baseUrlMoonshot',
+  dashscope: 'model.baseUrlDashscope',
 };
 
 async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
@@ -108,7 +111,7 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
       }
 
       const globalStreaming = getConfig<boolean>(
-        'texra.model.useStreaming',
+        'model.useStreaming',
         true,
       );
       const streamingKey = STREAMING_CONFIG_KEY[provider];
@@ -273,7 +276,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const providerKeyStatuses = await getProviderKeyStatuses();
 
     const globalStreamingDefault = getConfig<boolean>(
-      'texra.model.useStreaming',
+      'model.useStreaming',
       true,
     );
 
@@ -691,7 +694,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const configKey = STREAMING_CONFIG_KEY[provider];
     if (!configKey) return;
 
-    await updateConfig(configKey, data.enabled, { prefix: false });
+    await updateConfig(configKey, data.enabled);
 
     const view = this.getActiveView();
     if (view) {
@@ -706,7 +709,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const configKey = ENDPOINT_CONFIG_KEY[provider];
     if (!configKey) return;
 
-    await updateConfig(configKey, data.endpoint, { prefix: false });
+    await updateConfig(configKey, data.endpoint);
 
     const view = this.getActiveView();
     if (view) {
@@ -717,9 +720,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetGlobalStreaming(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GLOBAL_STREAMING>,
   ): Promise<void> {
-    await updateConfig('texra.model.useStreaming', data.enabled, {
-      prefix: false,
-    });
+    await updateConfig('model.useStreaming', data.enabled);
 
     const view = this.getActiveView();
     if (view) {
