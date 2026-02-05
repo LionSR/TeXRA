@@ -7,6 +7,31 @@ All notable changes to this project will be documented in this file.
 ### Features
 
 - Added **Claude Opus 4.6 models** (`opus46`, `opus46T`).
+- Added **unified Dashboard** consolidating history, memory, and profile views with a searchable, collapsible history list.
+- Added **diff display** for edit tool in progress view with inline line numbers and file links.
+- Added **live tool commands** in progress view, shown immediately before execution completes.
+- Task Progress section now **collapsed by default** for a cleaner UI.
+- Orchestrator now shows available tools in the **TOOL_USE_AGENTS** list.
+- Increased **default session retention** to 2 weeks.
+
+### Bug Fixes
+
+- Fixed **sign-in timeout** when auth provider fails to register, and auth errors no longer block unrelated initialization.
+- Fixed **monologue leaking** into tool-use agent file outputs.
+- Fixed `$` **in replacement strings** being interpreted during edit tool operations.
+- Fixed **GPT-5 token counting** fallback when counting fails.
+- Fixed **Windows compatibility** for paths and line endings in graphicspath parsing.
+- Fixed **context overflow** from maxOutputTokens in tool-use agents.
+- Fixed **token counting accuracy** across model handlers and inflated message history after compaction.
+- Fixed **LatexDiff UI regression**.
+- Fixed error message titles not being selectable/copyable.
+
+### Improvements
+
+- Simplified user message styling to minimalist VS Code native look.
+- Consolidated webview styles into shared commons bundle and `.panel-collapsible` class.
+- Faster webpack builds with `transpileOnly`.
+- Updated dependencies (supabase, glob, minimatch, jsdom, @vscode/test-cli, globals).
 
 ## [0.35.8] - 2026-02-02
 
