@@ -244,6 +244,10 @@ export class AnthropicStreamHandler {
         blockIndex,
         this.factories.createThinkingStream(),
       );
+    } else if (blockType === 'compaction') {
+      // Compaction summaries are internal context artifacts and should not be streamed.
+      this.logger.debug('Compaction block started in stream');
+      this.finalizeOutputStream();
     } else if (blockType === 'text' && this.config.outputEnabled) {
       // Consecutive text blocks share a stream
       // Consecutive means: immediately following (by index) AND previous was text
@@ -313,6 +317,12 @@ export class AnthropicStreamHandler {
             break;
           }
         }
+        break;
+      case 'compaction_delta':
+        // Compaction content arrives as a single summary delta and is not user-visible output.
+        this.logger.debug(
+          `Compaction summary delta received (${event.delta.content?.length ?? 0} chars)`,
+        );
         break;
     }
   }

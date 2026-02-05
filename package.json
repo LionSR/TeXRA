@@ -227,7 +227,7 @@
             "default": 75,
             "minimum": 0,
             "maximum": 100,
-            "description": "Percentage of context window to trigger automatic context management. For OpenAI, triggers conversation compaction via /responses/compact. For Anthropic, triggers server-side clearing of tool uses and thinking blocks. Set to 0 to disable.",
+            "description": "Percentage of context window to trigger automatic context management. For OpenAI, triggers conversation compaction via /responses/compact. For Anthropic, triggers server-side clearing (all models) and native compaction on Claude Opus 4.6. Set to 0 to disable.",
             "scope": "resource"
           },
           "texra.model.enableThinkingClearing": {
@@ -1648,7 +1648,7 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.72.1",
+    "@anthropic-ai/sdk": "^0.73.0",
     "@cantoo/pdf-lib": "^2.5.3",
     "@google/genai": "^1.40.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
@@ -1656,7 +1656,7 @@
     "@lit/context": "^1.1.6",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@openrouter/sdk": "^0.5.1",
-    "@supabase/supabase-js": "^2.95.1",
+    "@supabase/supabase-js": "^2.95.2",
     "@vscode-elements/elements": "^2.4.0",
     "@vscode/codicons": "^0.0.44",
     "arxiv-client": "^0.0.9",
