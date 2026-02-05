@@ -1,6 +1,6 @@
 # Plan: Server-Side Compaction via `compact_20260112` API
 
-## Status: Proposed (Blocked — SDK types not available)
+## Status: Proposed (Blocked — SDK types not available; PRD recommends client-side instead)
 
 ## Date: 2026-02-05
 
@@ -8,13 +8,25 @@
 
 ---
 
+> **PRD Decision:** The main PRD (`docs/prd-context-compactization.md`, Section 4.6) explicitly chose **client-side summarization** over server-side compaction for Anthropic. Reasons cited:
+> - Server-side compaction is **opaque** — no visibility into what was preserved
+> - Server-side uses the **same expensive model** for summarization (Opus at ~$12/200K)
+> - **Inconsistent** — only works on Opus 4.6, not Sonnet/Haiku
+> - **No user control** — can't inspect or override the summary
+>
+> This plan is preserved as a **reference and future option**, not a recommended near-term approach. Implement `docs/plan-claude-client-compactization.md` first.
+
+---
+
 ## 1. Summary
 
-Add server-side compaction to `ModelHandlerAnthropic` using Anthropic's native `compact_20260112` context management edit. This is an **upgrade path** for models that support it (currently Opus 4.6 only). When active, the API handles compaction automatically within the same request — no separate API call needed.
+Add server-side compaction to `ModelHandlerAnthropic` using Anthropic's native `compact_20260112` context management edit. This is an **optional upgrade path** for models that support it (currently Opus 4.6 only). When active, the API handles compaction automatically within the same request — no separate API call needed.
 
-**This plan is blocked** until the Anthropic SDK includes types for `compact_20260112`. The current SDK (v0.72.1) only supports `BetaClearToolUses20250919Edit` and `BetaClearThinking20251015Edit` in `BetaContextManagementConfig.edits`. Implementing without types would require extensive type augmentation.
+**This plan is doubly blocked:**
+1. **SDK types not available** — The current SDK (v0.72.1) only supports `BetaClearToolUses20250919Edit` and `BetaClearThinking20251015Edit` in `BetaContextManagementConfig.edits`. Implementing without types would require extensive type augmentation.
+2. **PRD recommends against it** — The PRD's architecture (Section 4.6) uses client-side for all providers except OpenAI Responses. Adopting server-side for Anthropic would deviate from the PRD's design.
 
-**Relationship to client-side plan:** Client-side compaction (`docs/plan-claude-client-compactization.md`) should be implemented first. Server-side compaction is additive — it supplements client-side for eligible models. Client-side remains the fallback for all other Anthropic models.
+**Relationship to client-side plan:** Client-side compaction (`docs/plan-claude-client-compactization.md`) is the **primary and recommended** approach. This plan documents the server-side API for reference and as a potential future optimization if the trade-offs shift (e.g., server-side summary quality proves significantly better, or cost becomes comparable).
 
 ---
 
@@ -428,16 +440,24 @@ Same as client-side plan Steps 6-7.
 
 ## 6. What Changes vs Client-Side
 
-| Aspect | Client-Side | Server-Side |
+| Aspect | Client-Side (Recommended) | Server-Side (This Plan) |
 |---|---|---|
 | When compaction runs | After `createResponse()`, separate API call | During `createResponse()`, same API call |
-| Who summarizes | Haiku (cheaper model) | Same model (Opus 4.6) |
+| Who summarizes | Sonnet (capable + cheaper model) | Same model (Opus 4.6) |
 | Message management | Replace all messages with summary | API drops old messages; `compaction` block preserved |
 | Streaming | No impact | New event types to handle |
 | Usage tracking | Standard (separate call) | `iterations` array to parse |
-| Cost | Haiku pricing (~$0.20/200K) | Opus pricing (~$12/200K) |
+| Cost | Sonnet pricing (~$0.60/200K) | Opus pricing (~$12/200K) |
 | Model support | All Anthropic models | Opus 4.6 only |
 | SDK requirement | None (uses standard API) | SDK types for `compact_20260112` |
+| Summary visibility | Full — summary is a user message | Opaque — `compaction` block content visible in logs only |
+| User control | Summary in message history, can re-compact | API decides what to summarize |
+| PRD alignment | Matches PRD Section 4.6 | Deviates from PRD architecture |
+
+**Recommendation:** Client-side is preferred for all the reasons in the PRD. Server-side may be reconsidered if:
+- Summary quality with Sonnet proves insufficient for complex LaTeX research contexts
+- Anthropic adds visibility features to server-side compaction
+- Cost differential narrows (e.g., compaction uses a cheaper model server-side)
 
 ---
 
@@ -469,7 +489,11 @@ Same as client-side plan Steps 6-7.
 
 ## 9. Unblocking Criteria
 
-This plan can proceed when ANY of these are true:
+This plan requires **BOTH** technical and architectural unblocking:
+
+### Technical (SDK types)
+
+One of these must be true:
 
 1. **Anthropic SDK releases types for `compact_20260112`** — Check each SDK release for `BetaCompact20260112Edit` or similar types in `resources/beta/messages/messages.d.ts`.
 
@@ -478,6 +502,16 @@ This plan can proceed when ANY of these are true:
 3. **Decision to proceed with type assertions** — If the team decides type safety trade-off is acceptable, can proceed with `as any` assertions. Not recommended for long-term maintenance.
 
 To check: `npm info @anthropic-ai/sdk version` and review changelog for compaction/compact references.
+
+### Architectural (PRD alignment)
+
+The PRD (Section 4.6) currently recommends client-side for Anthropic. To proceed with server-side, one of these must be true:
+
+1. **Client-side summary quality proves insufficient** — E.g., Sonnet summaries lose critical LaTeX research context that Opus preserves server-side. This would be evaluated after client-side is deployed.
+
+2. **PRD is updated to allow server-side for Opus 4.6** — The team explicitly revises the architecture to use server-side for Opus while keeping client-side as fallback for other models.
+
+3. **Server-side adds transparency** — Anthropic adds features that make server-side compaction visible (e.g., returning the full summary text, allowing custom extraction).
 
 ---
 
