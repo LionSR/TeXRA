@@ -1709,7 +1709,7 @@
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@lit-labs/virtualizer": "^2.1.1",
     "@lit/context": "^1.1.6",
-    "@modelcontextprotocol/sdk": "^1.25.3",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@openrouter/sdk": "^0.5.1",
     "@supabase/supabase-js": "^2.94.0",
     "@vscode-elements/elements": "^2.4.0",
