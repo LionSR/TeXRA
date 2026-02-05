@@ -269,6 +269,12 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     return {
       shouldStop: shared.shouldStop,
       messages: shared.messages,
+      // Callback to update shared.messages when compaction occurs.
+      // Mutates the array in-place so all references see the compacted messages.
+      onCompacted: (compactedMessages) => {
+        shared.messages.length = 0;
+        shared.messages.push(...compactedMessages);
+      },
     };
   }
 
@@ -291,6 +297,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
         temperature: services.setting.temperature,
         signal,
         tools: services.setting.tools as ToolDefinition[] | undefined,
+        onCompacted: prepRes.onCompacted,
       });
 
       const responseTimeMs = Date.now() - start;
