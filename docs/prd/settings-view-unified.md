@@ -22,8 +22,8 @@ A unified Settings View that consolidates memory management, execution history, 
 | History tab           | Done        | Search (mark.js), restore, rerun, collapsible details   |
 | Models tab            | Partial     | API access mode toggle + inline provider key management |
 | Agents tab            | Partial     | Only remote agents table with Select                    |
-| LaTeX tab             | Not started | Not yet implemented                                     |
-| Advanced tab          | Deferred    | Intentionally deferred to future release                |
+| LaTeX settings        | VS Code     | Remain as VS Code settings only                         |
+| Advanced settings     | VS Code     | Remain as VS Code settings only                         |
 | Header bar            | Done        | Auth/unauth states, sign in/out, VS Code settings gear  |
 | Old views removed     | Done        | profileView, historyView, memoryView fully deleted      |
 | Lit web components    | Done        | Frontend uses Lit instead of vanilla JS                 |
@@ -52,7 +52,6 @@ A unified Settings View that consolidates memory management, execution history, 
 5. As a user, I want to view and select remote agents shared by my team
 6. As a user, I want to easily switch between these configuration pages
 7. As a user, I want to configure which models appear in my dropdown _(future)_
-8. As a user, I want to configure LaTeX formatter, latexdiff, and TikZ settings in one place _(future)_
 
 ---
 
@@ -147,22 +146,9 @@ Tab 3: Agents       ← PARTIAL (remote agents only)
 └── Remote agents table with Select buttons
 ```
 
-**Not yet implemented:**
+**Remain as VS Code settings only:**
 
-```
-Tab: LaTeX          ← NOT STARTED
-├── ▼ Formatter (collapsible)
-├── ▼ LaTeXdiff (collapsible)
-├── ▼ TikZ Figures (collapsible)
-└── ▼ Replacements (collapsible)
-
-Tab: Advanced       ← DEFERRED
-├── ▼ Multi-Agent (collapsible)
-├── ▼ UI Preferences (collapsible)
-├── ▼ Git Integration (collapsible)
-├── ▼ System Paths (collapsible)
-└── ▼ Debug (collapsible)
-```
+LaTeX settings (formatter, latexdiff, TikZ, replacements) and advanced settings (multi-agent, UI preferences, git, system paths, debug) are configured via VS Code's built-in Settings UI.
 
 ---
 
@@ -465,138 +451,6 @@ Tab: Advanced       ← DEFERRED
 
 ---
 
-### LaTeX Tab (Not Yet Implemented)
-
-**Purpose:** Configure LaTeX formatting, latexdiff, and TikZ compilation settings.
-
-**Design Philosophy:** Consolidate scattered LaTeX-related VS Code settings into a visual, grouped interface. Settings remain in VS Code configuration for backwards compatibility.
-
-**Layout:**
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Configure LaTeX formatting and processing options.             │
-│                                                                 │
-│  FORMATTER                                                     │
-│  Formatter:  [latexindent ▼]                                   │
-│  Config file (optional): [/path/to/config      ] [Browse]      │
-│  ☑ Show warning if latexindent is not installed                │
-│                                                                 │
-│  LATEXDIFF                                                     │
-│  Timeout: [30000 ms ▼]                                         │
-│  Math markup:  [fine ▼]                                        │
-│  Picture environments (regex): [regex input]                   │
-│  ☐ Generate diffs between rounds (multi-round agents)          │
-│                                                                 │
-│  TIKZ FIGURES                                                  │
-│  Extra input directory: [/path      ] [Browse]                 │
-│  ☑ Include workspace root in TEXINPUTS                         │
-│  ▶ TikZ template (advanced)                                    │
-│                                                                 │
-│  REPLACEMENTS                                                  │
-│  ☑ Wrap critique in align environment                          │
-│  Enabled replacement categories: [checkbox group]              │
-│  Enabled regex replacements: [checkbox group]                  │
-│  ▶ Custom replacements (advanced)                              │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**Settings Mapping:**
-| UI Element | VS Code Setting |
-|------------|-----------------|
-| Formatter dropdown | `texra.latex.formatter` |
-| Config file path | `texra.latex.latexindentConfig` / `texra.latex.texfmtConfig` |
-| Show warning checkbox | `texra.latex.showLatexindentWarning` |
-| Timeout | `texra.latexdiff.timeoutMs` |
-| Math markup | `texra.latexdiff.mathMarkup` |
-| Picture environments | `texra.latexdiff.pictureEnvironments` |
-| Generate between-round diffs | `texra.latexdiff.generateBetweenRoundDiffs` |
-| TikZ input directory | `texra.latex.tikzInputDirectory` |
-| Include workspace | `texra.latex.includeWorkspaceInTexinputs` |
-| TikZ template | `texra.latex.tikzTemplate` |
-| Wrap critique | `texra.latex.wrapCritiqueInAlign` |
-| Replacement categories | `texra.latex.enabledReplacements` |
-| Regex replacements | `texra.latex.enabledReplacementsRegex` |
-| Custom replacements | `texra.latex.customReplacements` / `texra.latex.customReplacementsRegex` |
-
-**Storage:** VS Code configuration (`texra.latex.*`, `texra.latexdiff.*`)
-
-**Note:** Unlike other tabs that use globalState/workspaceState, LaTeX settings remain in VS Code configuration for backwards compatibility and to allow users to configure via settings.json if preferred.
-
----
-
-### Provider Configuration Modal (Not Yet Implemented)
-
-When clicking [Configure] on a provider in the Models tab:
-
-**Standard Provider (Anthropic, OpenAI, Google, etc.):**
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Configure Anthropic                                     [×]   │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  API Key                                                       │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ sk-ant-api03-●●●●●●●●●●●●●●●●●●●●            [👁] [Clear] │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│  Get your key at: console.anthropic.com                        │
-│                                                                 │
-│  Alternative: Environment Variable                             │
-│  Set ANTHROPIC_API_KEY in your environment or .env file        │
-│                                                                 │
-│  ▶ Advanced Options                                            │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ Custom Endpoint (optional)                                │  │
-│  │ ┌─────────────────────────────────────────────────────┐   │  │
-│  │ │                                                     │   │  │
-│  │ └─────────────────────────────────────────────────────┘   │  │
-│  │ Leave empty for default (api.anthropic.com)               │  │
-│  │                                                           │  │
-│  │ ☑ Enable streaming                                        │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│                                            [Cancel]   [Save]   │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**Streaming Settings (per provider):**
-| Provider Modal | VS Code Setting |
-|----------------|-----------------|
-| Anthropic | `texra.model.useStreamingAnthropic` |
-| OpenAI | `texra.model.useStreamingOpenai` |
-| Google | `texra.model.useStreamingGoogle` |
-| DeepSeek | `texra.model.useStreamingDeepseek` |
-| xAI | `texra.model.useStreamingXai` |
-| Moonshot | `texra.model.useStreamingMoonshot` |
-| Dashscope | `texra.model.useStreamingDashscope` |
-| OpenRouter | `texra.model.useStreamingOpenrouter` |
-| (Global fallback) | `texra.model.useStreaming` |
-
----
-
-### Advanced Tab (Deferred to Future Release)
-
-> **Note:** This tab is not included in the current release. Specifications kept for future reference.
-
-**Purpose:** Multi-agent settings, UI preferences, retry behavior, system paths, and developer options.
-
-**Settings Mapping:**
-| UI Element | VS Code Setting |
-|------------|-----------------|
-| Default merge model | `texra.merge.defaultModel` |
-| Show API key reminders | `texra.ui.showApiKeyReminders` |
-| Show dependency reminders | `texra.ui.showDependencyReminders` |
-| Show login banner | `texra.ui.showLoginBanner` |
-| Max image dimension | `texra.maxImageDimension` |
-| Progress board sort | `texra.progressBoard.streamSortOrder` |
-| Commits to show | `texra.git.numberOfCommitsToShow` |
-| Sox audio path | `texra.audio.soxPath` |
-| Debug mode | `texra.logger.debugMode` |
-| Save debug objects | `texra.debug.saveDebugObjects` |
-| Save input prompt | `texra.debug.saveInputPrompt` |
-
 ---
 
 ### Features Summary
@@ -613,11 +467,11 @@ When clicking [Configure] on a provider in the Models tab:
 
 - **Models Tab expansion** - Model selection UI, provider configuration (endpoint + streaming), routing options
 - **Agents Tab expansion** - Built-in/custom agent lists, enable/disable, Workflow/Tool-Use settings
-- **LaTeX Tab** - Formatter, latexdiff, TikZ, replacements settings
 
-**Deferred to future release:**
+**Remain as VS Code settings only:**
 
-- **Advanced Tab** - Multi-Agent, UI preferences, git, system paths, debug
+- **LaTeX settings** - Formatter, latexdiff, TikZ, replacements
+- **Advanced settings** - Multi-agent, UI preferences, git, system paths, debug
 
 ---
 
@@ -849,29 +703,6 @@ src/settingsView/
 - [ ] Include Advanced collapsible (custom agents directory)
 - [ ] Wire `OPEN_AGENT_SETTINGS` from main view to Settings View Agents tab
 
-### Next: Phase 4 - LaTeX Tab
-
-- [ ] Add LaTeX tab with collapsible sections:
-  - Formatter (dropdown, config path, warning checkbox)
-  - LaTeXdiff (timeout, math markup, picture envs, between-round diffs)
-  - TikZ Figures (input directory, workspace root, template)
-  - Replacements (wrap critique, enabled categories, regex, custom)
-- [ ] Wire up to existing VS Code configuration
-- [ ] Add file browser for config paths
-
-### Future: Phase 5 - Advanced Tab
-
-- [ ] Multi-Agent (merge model + ensemble features)
-- [ ] UI Preferences (reminders, image dimension, sort order)
-- [ ] Git Integration
-- [ ] System Paths
-- [ ] Debug
-
-### Future: Agent Creation Wizard
-
-- AI-assisted agent creation from plain English description
-- Form-based editing without YAML knowledge
-
 ---
 
 ## Settings Coverage Summary
@@ -892,25 +723,19 @@ Based on settings in package.json:
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Models** | `texra.models`, `texra.model.useStreaming*` (9), `texra.model.useOpenRouter`, `texra.model.useImprovedConnection`, `texra.model.improvedConnectionDomain`, `texra.model.baseUrlDeepSeek`                                             |
 | **Agents** | `texra.agents`, `texra.toolUseAgents`, `texra.remoteAgents.autoShow`, `texra.explorer.agentsDirectory`, `texra.agentOutputs.storageMode`, `texra.toolUse.*` (3), `texra.model.compactionThresholdPercent`, `texra.model.retry.*` (2) |
-| **LaTeX**  | `texra.latex.*` (7), `texra.latexdiff.*` (4)                                                                                                                                                                                         |
-
-### Deferred to Future Release (Advanced Tab)
-
-| Section             | Settings                                                                           |
-| ------------------- | ---------------------------------------------------------------------------------- |
-| **Multi-Agent**     | `texra.merge.defaultModel`                                                         |
-| **UI Preferences**  | `texra.ui.*` (3), `texra.progressBoard.streamSortOrder`, `texra.maxImageDimension` |
-| **Git Integration** | `texra.git.numberOfCommitsToShow`                                                  |
-| **System Paths**    | `texra.audio.soxPath`                                                              |
-| **Debug**           | `texra.debug.*`, `texra.logger.*`                                                  |
 
 ### Remain as VS Code Settings Only
 
-These are advanced/power-user settings that don't need UI exposure:
+These settings are configured via VS Code's built-in Settings UI:
 
-- `texra.files.*` (16) - File type filtering patterns (power user)
+- `texra.latex.*` (7), `texra.latexdiff.*` (4) - LaTeX formatting, latexdiff, TikZ, replacements
+- `texra.merge.defaultModel` - Multi-agent merge model
+- `texra.ui.*` (3), `texra.progressBoard.streamSortOrder`, `texra.maxImageDimension` - UI preferences
+- `texra.git.numberOfCommitsToShow` - Git integration
+- `texra.audio.soxPath` - System paths
+- `texra.debug.*`, `texra.logger.*` - Debug settings
+- `texra.files.*` (16) - File type filtering patterns
 - `texra.auth.*` (3) - System-level authentication endpoints
-- Other system-level paths and debug flags
 
 ---
 
