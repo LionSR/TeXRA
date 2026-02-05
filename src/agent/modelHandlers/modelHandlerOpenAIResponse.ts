@@ -68,6 +68,7 @@ import {
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type {
   CreateResponseOptions,
+  CreateResponseResult,
   ExtractResponseResult,
   OpenAIResponseToolCall,
   TokenCountOptions,
@@ -609,7 +610,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /**
    * Apply compaction state updates after successful API call.
-   * Clears the pending compaction result and updates conversation state.
+   * Updates conversation state flags. Does NOT clear compactionResult -
+   * it's needed for the return value and gets cleared on next createResponse() call.
    *
    * Note: cumulativeInputTokens is NOT updated here - it will be set from
    * response.usage.input_tokens after the API call to reflect actual usage.
@@ -621,11 +623,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.conversationState.sentMessages = 0;
     // Mark as compacted so subsequent requests know to send all messages
     this.conversationState.isCompacted = true;
-    // Clear previous_response_id - compacted output replaces server-side history
-    this.previousResponseId = null;
 
-    // Clear the pending result
-    this.compactionResult = undefined;
+    // Note: previousResponseId is already cleared immediately after compaction
+    // (before API call) to avoid "No tool output found" errors.
+
+    // Note: compactionResult is NOT cleared here - it's read for the return value.
+    // It gets cleared at the start of the next createResponse() call.
   }
 
   /** Creates a configured OpenAI client instance. */
@@ -977,10 +980,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    *
    * Supports automatic conversation compaction when cumulative input tokens
    * exceed the configured threshold (texra.model.compactionThresholdPercent).
+   *
+   * @returns Result containing the response and optionally updated messages if compaction occurred
    */
   async createResponse(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
-  ): Promise<Response> {
+  ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
     // Clear any stale compaction result from previous attempts (ensures clean state on retries)
     this.compactionResult = undefined;
 
@@ -1020,6 +1025,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let effectiveMessages = messages;
     // Track if compaction happened in THIS call (not previous calls)
     let compactedThisCall = false;
+    // Store compacted messages for return value (captured when compaction succeeds)
+    let compactedMessages: ResponseInputItem[] | undefined;
     if (this.shouldCompact()) {
       const threshold = this.getCompactionTokenThreshold();
       this.logger.logProgress(
@@ -1033,6 +1040,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
       // compactionResult is set if compaction succeeded
       compactedThisCall = this.compactionResult !== undefined;
+      if (compactedThisCall) {
+        // CRITICAL: Clear previousResponseId IMMEDIATELY after successful compaction.
+        // The compacted output replaces the server-side history, so we must not
+        // reference the old response ID - it may have pending tool calls that
+        // aren't in the compacted messages, causing "No tool output found" errors.
+        this.previousResponseId = null;
+        // Capture compacted messages now (used in return value)
+        compactedMessages = this.compactionResult!.compactedMessages;
+      }
     }
 
     // After compaction in THIS call, send all compacted messages.
@@ -1156,8 +1172,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         const inputEstimate = this.getBestInputTokenEstimate();
         if (inputEstimate > 0) {
           const buffer = this.getTokenSafetyBuffer();
-          const available =
-            this.config.contextWindow - inputEstimate - buffer;
+          const available = this.config.contextWindow - inputEstimate - buffer;
           const capped = Math.min(maxOutputTokens, Math.max(0, available));
           if (capped !== maxOutputTokens) {
             this.logger.debug(
@@ -1226,13 +1241,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           signal,
         );
         if (resumedResponse) {
-          // Successfully resumed - finalize and return
           this.finalizeResponse(
             resumedResponse,
             effectiveMessages.length,
             compactedThisCall,
           );
-          return resumedResponse;
+          return {
+            response: resumedResponse,
+            updatedMessages: compactedMessages,
+          };
         }
         // Resume failed or response failed remotely - fall through to create new request
       }
@@ -1319,7 +1336,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           effectiveMessages.length,
           compactedThisCall,
         );
-        return response;
+        return {
+          response,
+          updatedMessages: compactedMessages,
+        };
       }
 
       // Non-streaming path
@@ -1368,7 +1388,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         effectiveMessages.length,
         compactedThisCall,
       );
-      return response;
+      return {
+        response,
+        updatedMessages: compactedMessages,
+      };
     } catch (error) {
       // Extract error details for diagnostics (useful for relay errors)
       const { rawErrorBody } = formatProviderHttpError(error);

@@ -78,6 +78,7 @@ import {
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type {
   CreateResponseOptions,
+  CreateResponseResult,
   ExtractResponseResult,
   AnthropicToolCall,
   TokenCountOptions,
@@ -494,7 +495,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /** Creates a chat completion response using Anthropic's API with specified parameters and optional system prompt. */
   async createResponse(
     requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
-  ): Promise<BetaMessage> {
+  ): Promise<CreateResponseResult<BetaMessage, MessageParam>> {
     const {
       client,
       messages,
@@ -775,7 +776,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Log context management events if any edits were applied
     this.logContextManagementFromResponse(response);
 
-    return response;
+    return { response };
   }
 
   /**
