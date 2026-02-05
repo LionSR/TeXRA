@@ -6,13 +6,23 @@
 
 ## Prerequisite: None (can start immediately)
 
+## PRD Alignment: `docs/prd-context-compactization.md`
+
+This plan implements **Phase 3** (Integration with Handlers) of the PRD for the Anthropic provider. It follows the PRD's core architectural decision (Section 4.6): **Anthropic uses client-side summarization, not server-side `context_management`**. The PRD explicitly states: "Anthropic → returns `null` → triggers client-side summarization" and explains: "The server-side clearing is opaque and loses context. Client-side summarization preserves the conversation summary visibly in the message history."
+
 ---
 
 ## 1. Summary
 
-Add client-side compaction to `ModelHandlerAnthropic`, following the pattern proven in the Anthropic SDK's `BetaToolRunner._checkAndCompact()`. This approach works with **all Anthropic models** (not just Opus 4.6), uses a **cheaper model** for summarization (Haiku), and requires **no SDK type additions**.
+Add client-side compaction to `ModelHandlerAnthropic`, following the pattern proven in the Anthropic SDK's `BetaToolRunner._checkAndCompact()`. This approach works with **all Anthropic models** (not just Opus 4.6), uses a **cheaper model** for summarization, and requires **no SDK type additions**.
 
 This is the same approach proposed in the main PRD (`docs/prd-context-compactization.md`) Section 4.2 for all non-OpenAI-Responses providers. Implementing it for Anthropic first validates the pattern before rolling out to Google, DeepSeek, Kimi, and OpenAI Chat.
+
+**Relationship to PRD phases:**
+- **Phase 0** (Refactor `createResponse()`): Not a hard prerequisite — compaction can be added as a new phase (Phase 5: CHECK COMPACTION) at the end of `createResponse()` without restructuring earlier phases. However, the Phase 0 refactoring would make the integration cleaner.
+- **Phase 1** (Client-Side Summarization Engine): This plan is the Anthropic-specific implementation of Phase 1's `ContextCompactor`.
+- **Phase 2** (Auto-Compact Toggle): Independent UI work. This plan works with or without the toggle — when no toggle exists, compaction is always enabled (controlled by `compactionThresholdPercent > 0`).
+- **Phase 3** (Integration with Handlers): This plan IS Phase 3 for Anthropic.
 
 ---
 
@@ -189,19 +199,44 @@ private async compactConversation(
 
 ### 3.5 Compaction Model Selection
 
+Uses the shared `COMPACTION_MODEL_MAP` from the PRD (Section 4.3). For the Anthropic handler:
+
 ```typescript
-private getCompactionModel(): string {
-  const model = this.config.fullName;
-  // Opus/Sonnet → Haiku (much cheaper for summarization)
-  if (model.includes('claude-opus') || model.includes('claude-sonnet')) {
-    return 'claude-haiku-4-5';
-  }
-  // Haiku or unknown → same model
-  return model;
+// From src/agent/modelHandlers/compactionPrompt.ts (shared across providers)
+export const COMPACTION_MODEL_MAP: Record<string, string> = {
+  // Anthropic: use Sonnet for summarization (capable + fast)
+  'claude-opus-4-6': 'claude-sonnet-4-5',
+  'claude-opus-4-5': 'claude-sonnet-4-5',
+  'claude-sonnet-4-5': 'claude-sonnet-4-5',
+  // Haiku → same model (already cheapest)
+  'claude-haiku-4-5': 'claude-haiku-4-5',
+
+  // Google
+  'gemini-3-pro': 'gemini-3-flash',
+  'gemini-2.5-pro': 'gemini-2.5-flash',
+
+  // DeepSeek: no cheaper option
+  'deepseek-chat': 'deepseek-chat',
+  'deepseek-reasoner': 'deepseek-chat',
+
+  // Kimi
+  'kimi-k2': 'kimi-k2',
+  'kimi-k1.5-long': 'kimi-k1.5-long',
+};
+
+export function getCompactionModel(primaryModel: string): string {
+  return COMPACTION_MODEL_MAP[primaryModel] ?? primaryModel;
 }
 ```
 
-Cost advantage: Haiku is ~60x cheaper than Opus for input tokens. A 200K-token conversation costs ~$0.20 to summarize with Haiku vs ~$12 with Opus.
+The Anthropic handler calls:
+```typescript
+private getCompactionModel(): string {
+  return getCompactionModel(this.config.fullName);
+}
+```
+
+**No thinking mode for summarizer** (per PRD Section 4.3): The Anthropic SDK's compaction call doesn't pass thinking parameters — summarization is straightforward and doesn't need extended thinking.
 
 ### 3.6 Summary Prompt
 
@@ -291,6 +326,27 @@ The calling flow (`ToolUseCycleFlow`) already handles `updatedMessages`:
 
 The next iteration appends user/assistant messages normally. The conversation grows from this clean baseline until the next compaction threshold is reached.
 
+### 3.8.1 Relationship to PRD's `allMessages` Pattern
+
+The PRD (Section 4.7) proposes a single `allMessages` source of truth with derived active messages:
+
+```typescript
+function getMessagesToSend(
+  allMessages: Message[],
+  compactionState: CompactionState | null,
+): Message[] {
+  if (compactionState === null) return allMessages;
+  return [{ role: 'user', content: `<conversation-summary>${compactionState.summary}</conversation-summary>` }];
+}
+```
+
+**For the MVP implementation**, we use the simpler `updatedMessages` return pattern that already exists in the flow infrastructure (proven by OpenAI Responses handler). The `allMessages` / `compactionState` derivation pattern from the PRD is the **long-term architecture** and should be adopted in Phase 1 (Client-Side Summarization Engine) when building the shared `ContextCompactor` class. At that point:
+
+- `allMessages` remains append-only (full history, visible in UI)
+- `compactionState` stores the latest summary + metadata
+- Active messages are derived at each `createResponse()` call
+- The webview shows full history with a "compacted away" visual divider (PRD Section 5.4)
+
 ### 3.9 Interaction with Server-Side Clearing
 
 Client-side compaction and server-side clearing are **independent and complementary**:
@@ -307,15 +363,26 @@ The sequence in a single `createResponse()` call:
 
 After compaction, the next API call has a single user message — server-side clearing has nothing to clear and becomes a no-op. Clearing resumes as the conversation grows again.
 
+**Note on Anthropic's `compact_20260112` API:** The PRD (Section 4.6) explicitly chose **not** to use Anthropic's native server-side compaction for these reasons:
+1. **Opaque** — server-side compaction gives zero visibility into what was preserved
+2. **Inconsistent** — only works on Opus 4.6, not on Sonnet/Haiku
+3. **Expensive** — uses the same model for summarization (Opus at ~$12/200K vs Sonnet at ~$0.60)
+4. **No user control** — can't inspect or override the summary
+
+Client-side summarization provides the same compaction benefit with full transparency, lower cost, and universal model support. See `docs/plan-claude-server-compactization.md` for the server-side plan (kept as a future option, not recommended for near-term).
+
 ---
 
 ## 4. Implementation Steps
 
-### Step 1: Summary prompt file
+### Step 1: Shared compaction infrastructure
 
 **New file:** `src/agent/modelHandlers/compactionPrompt.ts`
 
-Single export: `COMPACTION_SUMMARY_PROMPT`. Shared across providers when they add compaction.
+Exports shared across all providers:
+- `COMPACTION_SUMMARY_PROMPT` — The 5-section structured prompt (from Anthropic SDK)
+- `COMPACTION_MODEL_MAP` — Constant map from primary model → cheaper compaction model (PRD Section 4.3)
+- `getCompactionModel()` — Lookup function with same-model fallback
 
 ### Step 2: Compaction state and decision methods
 
@@ -324,7 +391,7 @@ Single export: `COMPACTION_SUMMARY_PROMPT`. Shared across providers when they ad
 Add:
 - `private compactionState = { lastUsageTokens: 0 }`
 - `private shouldCompact(): boolean`
-- `private getCompactionModel(): string`
+- `private getCompactionModel(): string` (delegates to shared `getCompactionModel()`)
 
 ### Step 3: `compactConversation()` method
 
@@ -346,6 +413,8 @@ Add the method as described in Section 3.4. Key behaviors:
 3. If triggered: call `compactConversation()`, set `updatedMessages`
 4. Return `updatedMessages` in result
 
+This adds a **Phase 5: CHECK COMPACTION** after the existing phases (BUILD → COUNT → VALIDATE → EXECUTE). The PRD's Phase 0 refactoring (decomposing `createResponse()`) would make this cleaner but is not a hard prerequisite — the compaction check is a self-contained block appended after the response is received.
+
 ### Step 5: Reset state on new session
 
 **File:** `src/agent/modelHandlers/modelHandlerAnthropic.ts`
@@ -359,7 +428,7 @@ this.compactionState.lastUsageTokens = 0;
 
 **File:** `src/shared/schemas/contextManagement.ts`
 
-Add optional fields for compaction events:
+Add optional fields for compaction events (per PRD Section 4.2 logging spec):
 ```typescript
 summary: z.string().optional(),
 compactionModel: z.string().optional(),
@@ -369,7 +438,10 @@ compactionModel: z.string().optional(),
 
 **File:** `src/progressView/frontend/formatters/logFormatters/contextManagementFormatters.ts`
 
-When `action === 'compaction'` and `summary` present: render expandable `<details>` with the summary text.
+When `action === 'compaction'` and `summary` present: render expandable `<details>` with the summary text. Per PRD Section 4.2:
+- Header: "Context compacted: {tokensBefore} → {tokensAfter} tokens ({utilizationAfter}% utilization)"
+- Expandable body: Full summary text
+- Badge: Compaction model used
 
 ---
 
@@ -408,14 +480,20 @@ When `action === 'compaction'` and `summary` present: render expandable `<detail
 
 ## 8. Relationship to Other Plans
 
-- **Main PRD** (`docs/prd-context-compactization.md`): This plan implements Phase 3 for Anthropic. The `compactionPrompt.ts` and pattern will be reused for Google, DeepSeek, Kimi, OpenAI Chat.
-- **Server-side plan** (`docs/plan-claude-server-compactization.md`): Future upgrade for Opus 4.6 when SDK ships `compact_20260112` types. Client-side remains for other Anthropic models.
+- **Main PRD** (`docs/prd-context-compactization.md`): This plan implements Phase 3 for Anthropic per the PRD's architecture. Key PRD decisions adopted:
+  - Section 4.1: CompactionManager strategy pattern (client-side for Anthropic)
+  - Section 4.3: Shared `COMPACTION_MODEL_MAP` constant
+  - Section 4.5: Compaction inside `createResponse()` (has access to full token context)
+  - Section 4.6: Anthropic returns `null` strategy → triggers client-side summarization
+  - Section 4.7: `allMessages` single source of truth (long-term; MVP uses `updatedMessages`)
+- **Server-side plan** (`docs/plan-claude-server-compactization.md`): Optional future upgrade for Opus 4.6. The PRD explicitly chose client-side over server-side for Anthropic. Server-side plan is preserved as a reference if the team later decides the trade-offs favor it for Opus 4.6.
+- **DRY rollout** (PRD Section 4.3.1): After this plan validates the pattern for Anthropic, Google gets its own implementation (different SDK), while DeepSeek, Kimi, and OpenAI Chat share `compactOpenAICompatible()`.
 
 ---
 
 ## 9. Implementation Order
 
-1. **Summary prompt** (Step 1) — No dependencies
+1. **Shared infrastructure** (Step 1) — Prompt + model map + helper
 2. **State + config** (Step 2) — No dependencies
 3. **Compaction method** (Step 3) — Depends on 1, 2
 4. **createResponse integration** (Step 4) — Depends on 3
@@ -423,3 +501,18 @@ When `action === 'compaction'` and `summary` present: render expandable `<detail
 6. **Schema + UI** (Steps 6-7) — Optional polish
 
 Steps 1-5 = MVP. Steps 6-7 = UI enrichment.
+
+---
+
+## 10. PRD Decisions NOT Adopted in MVP
+
+These PRD features are deferred to keep the MVP focused:
+
+| PRD Feature | Section | Deferred To |
+|---|---|---|
+| `allMessages` single source of truth | 4.7 | Phase 1 (ContextCompactor class) |
+| Auto-Compact toggle button | 4.8 | Phase 2 (UI) |
+| Compact Now button | 4.9 | Phase 2 (UI) |
+| Chat view compaction divider | 5.4 | Phase 4 (UI visibility) |
+| Faded messages above divider | 5.4 | Phase 4 (UI visibility) |
+| Phase 0 `createResponse()` refactoring | 7, Phase 0 | Separate plan (not blocking) |
