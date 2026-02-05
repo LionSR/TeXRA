@@ -4,9 +4,8 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 import { sync as globSync } from 'glob';
-
-// Local imports - log
 import { MODELS } from 'llm-zoo';
+
 import type { FileOpResult } from '@agent/types/ResultTypes';
 
 // Internal imports
