@@ -111,6 +111,20 @@ interface UploadedOpenAIResponseAttachment {
 }
 
 /**
+ * Item types that are model outputs stored server-side via previous_response_id.
+ * These should be filtered out when sending API requests during response chaining
+ * to avoid "Duplicate item found" errors.
+ *
+ * Note: Assistant messages (role: 'assistant') are also server-side outputs but
+ * are identified by role rather than type, so handled separately in isServerSideOutputItem().
+ */
+const SERVER_SIDE_OUTPUT_TYPES = [
+  'function_call',
+  'reasoning',
+  'web_search_call',
+] as const;
+
+/**
  * Handler for OpenAI's Responses API. This implementation works directly with
  * the native response message types instead of reusing the chat completion
  * abstractions. Conversation state is maintained through `previous_response_id`
@@ -2320,11 +2334,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * when previous_response_id is set. These should be filtered out to avoid
    * "Duplicate item found" errors.
    *
-   * Server-side output items include:
-   * - function_call: model's request to call a function
-   * - reasoning: model's thinking/reasoning
-   * - web_search_call: model's web search requests
-   * - assistant messages: model's text responses
+   * Server-side output items (see SERVER_SIDE_OUTPUT_TYPES):
+   * - function_call, reasoning, web_search_call
+   * - assistant messages (role: 'assistant')
    *
    * Items we MUST send (not server-side output):
    * - function_call_output: our response to tool calls
@@ -2337,16 +2349,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const type = (item as { type?: string }).type;
 
-    // These are model output types - server already has them via previous_response_id
+    // Check against the canonical list of server-side output types
     if (
-      type === 'function_call' ||
-      type === 'reasoning' ||
-      type === 'web_search_call'
+      type &&
+      (SERVER_SIDE_OUTPUT_TYPES as readonly string[]).includes(type)
     ) {
       return true;
     }
 
-    // Check for assistant messages (type 'message' with role 'assistant')
+    // Assistant messages are also server-side outputs (identified by role, not type)
     if (type === 'message' || type === undefined) {
       const role = (item as { role?: string }).role;
       if (role === 'assistant') {
