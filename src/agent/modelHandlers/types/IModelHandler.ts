@@ -76,6 +76,26 @@ export interface CreateResponseOptions<
 }
 
 /**
+ * Result from createResponse, optionally including updated messages
+ * after compaction or other transformations.
+ *
+ * @template Resp - Provider-specific response type
+ * @template M - Provider-specific message type
+ */
+export interface CreateResponseResult<
+  Resp,
+  M extends ProviderMessage = ProviderMessage,
+> {
+  /** The provider response */
+  response: Resp;
+  /**
+   * If messages were transformed (e.g., compaction), the new array.
+   * Undefined means messages were not modified - caller keeps original.
+   */
+  updatedMessages?: M[];
+}
+
+/**
  * Result from extracting response data from a provider response.
  */
 export interface ExtractResponseResult {
@@ -215,8 +235,11 @@ export interface IModelHandler<
   /**
    * Generate a response from the model.
    * @param options Options for creating the response
+   * @returns Result containing the response and optionally updated messages
    */
-  createResponse(options: CreateResponseOptions<M, C>): Promise<Resp>;
+  createResponse(
+    options: CreateResponseOptions<M, C>,
+  ): Promise<CreateResponseResult<Resp, M>>;
 
   /** Initialize the conversation for the first round. */
   initializeMessages(
