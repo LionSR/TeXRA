@@ -271,11 +271,12 @@ ${text}`;
 
       let response;
       try {
-        response = await handler.createResponse({
+        const result = await handler.createResponse({
           client,
           messages,
           temperature: 0,
         });
+        response = result.response;
       } catch (error) {
         logger.error(
           CHANNEL,
