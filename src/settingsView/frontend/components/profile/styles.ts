@@ -144,16 +144,6 @@ export const profileViewStyles: CSSResult = css`
     color: var(--vscode-badge-foreground);
   }
 
-  .badge.multi-output-badge.supported {
-    background: var(--vscode-testing-iconPassed);
-    color: var(--vscode-button-foreground);
-  }
-
-  .badge.multi-output-badge.not-supported {
-    background: var(--vscode-input-background);
-    color: var(--color-text-secondary);
-    border: var(--border-thin) solid var(--color-border);
-  }
 
   .select-btn {
     white-space: nowrap;

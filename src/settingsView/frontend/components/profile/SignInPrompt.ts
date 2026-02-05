@@ -34,10 +34,12 @@ export class SignInPrompt extends LitElement {
     return html`
       <div class="not-authenticated">
         <p>You are not signed in to TeXRA.</p>
-        <vscode-button @click=${this.handleSignIn}>
-          <span slot="start" class="codicon codicon-sign-in"></span>
-          Sign In
-        </vscode-button>
+        <vscode-toolbar-button
+          icon="sign-in"
+          label="Sign In"
+          title="Sign in to TeXRA"
+          @click=${this.handleSignIn}
+        ></vscode-toolbar-button>
       </div>
     `;
   }

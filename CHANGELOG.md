@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Features
 
 - Added **Claude Opus 4.6 models** (`opus46`, `opus46T`).
+- Added **inline provider API key management** in the Models tab with set/remove/status for all providers.
 - Added **unified Dashboard** consolidating history, memory, and profile views with a searchable, collapsible history list.
 - Added **diff display** for edit tool in progress view with inline line numbers and file links.
 - Added **live tool commands** in progress view, shown immediately before execution completes.
@@ -28,6 +29,7 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements
 
+- Replaced buttons with codicon toolbar buttons across settings view and progress view for a more native VS Code look.
 - Simplified user message styling to minimalist VS Code native look.
 - Consolidated webview styles into shared commons bundle and `.panel-collapsible` class.
 - Faster webpack builds with `transpileOnly`.
