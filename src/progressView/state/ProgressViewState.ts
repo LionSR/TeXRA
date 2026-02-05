@@ -345,9 +345,10 @@ export class ProgressViewState {
     this.taskStates.set(streamTabId, taskState);
     this.clearStreamHints(streamTabId);
 
-    // Create frontend stream state with correct discriminated type
+    // Create or update frontend stream state with correct discriminated type
     const agentCategory = taskState.agentConfig.agentCategory;
-    if (!this._streamStates.has(streamTabId)) {
+    const existing = this._streamStates.get(streamTabId);
+    if (!existing || existing.kind !== agentCategory) {
       this._streamStates.set(streamTabId, createStreamState(agentCategory));
     }
 
