@@ -110,10 +110,7 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
         status = 'not-set';
       }
 
-      const globalStreaming = getConfig<boolean>(
-        'model.useStreaming',
-        true,
-      );
+      const globalStreaming = getConfig<boolean>('model.useStreaming', true);
       const streamingKey = STREAMING_CONFIG_KEY[provider];
       // OpenRouter defaults to streaming off (different from other providers)
       const streamingDefault =
