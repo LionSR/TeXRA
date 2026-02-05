@@ -9,6 +9,7 @@
 ---
 
 > **PRD Decision:** The main PRD (`docs/prd-context-compactization.md`, Section 4.6) explicitly chose **client-side summarization** over server-side compaction for Anthropic. Reasons cited:
+>
 > - Server-side compaction is **opaque** — no visibility into what was preserved
 > - Server-side uses the **same expensive model** for summarization (Opus at ~$12/200K)
 > - **Inconsistent** — only works on Opus 4.6, not Sonnet/Haiku
@@ -23,6 +24,7 @@
 Add server-side compaction to `ModelHandlerAnthropic` using Anthropic's native `compact_20260112` context management edit. This is an **optional upgrade path** for models that support it (currently Opus 4.6 only). When active, the API handles compaction automatically within the same request — no separate API call needed.
 
 **This plan is doubly blocked:**
+
 1. **SDK types not available** — The current SDK (v0.72.1) only supports `BetaClearToolUses20250919Edit` and `BetaClearThinking20251015Edit` in `BetaContextManagementConfig.edits`. Implementing without types would require extensive type augmentation.
 2. **PRD recommends against it** — The PRD's architecture (Section 4.6) uses client-side for all providers except OpenAI Responses. Adopting server-side for Anthropic would deviate from the PRD's design.
 
@@ -46,12 +48,12 @@ From `docs/prd/claude-documentation-compactization-2026-02.md`:
 
 ### Key API parameters
 
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `type` | string | Required | `"compact_20260112"` |
-| `trigger` | `{ type: "input_tokens", value: number }` | 150,000 | Min 50,000 |
-| `pause_after_compaction` | boolean | `false` | Pause to allow message injection |
-| `instructions` | string | null | Custom summarization prompt (replaces default) |
+| Parameter                | Type                                      | Default  | Description                                    |
+| ------------------------ | ----------------------------------------- | -------- | ---------------------------------------------- |
+| `type`                   | string                                    | Required | `"compact_20260112"`                           |
+| `trigger`                | `{ type: "input_tokens", value: number }` | 150,000  | Min 50,000                                     |
+| `pause_after_compaction` | boolean                                   | `false`  | Pause to allow message injection               |
+| `instructions`           | string                                    | null     | Custom summarization prompt (replaces default) |
 
 ### Response shape when compaction fires
 
@@ -89,13 +91,13 @@ From `docs/prd/claude-documentation-compactization-2026-02.md`:
 
 ### What's missing in SDK v0.72.1
 
-| Type/Feature | Expected | Current SDK | Impact |
-|---|---|---|---|
-| `BetaCompact20260112Edit` | Edit type for `context_management.edits` | Not present | Can't add compaction edit without type assertion |
-| `BetaCompactionContentBlock` | Content block type for `compaction` | Not present | Can't type-safely check `block.type === 'compaction'` |
-| `BetaCompactionDelta` | Streaming delta for `compaction_delta` | Not present | Stream handler can't match the delta type |
-| `iterations` on `BetaUsage` | Array of `{ type, input_tokens, output_tokens }` | Not present | Can't access iteration-level usage for billing |
-| `"compaction"` stop reason | New stop reason value | Not in enum | Can't check `response.stop_reason === 'compaction'` |
+| Type/Feature                 | Expected                                         | Current SDK | Impact                                                |
+| ---------------------------- | ------------------------------------------------ | ----------- | ----------------------------------------------------- |
+| `BetaCompact20260112Edit`    | Edit type for `context_management.edits`         | Not present | Can't add compaction edit without type assertion      |
+| `BetaCompactionContentBlock` | Content block type for `compaction`              | Not present | Can't type-safely check `block.type === 'compaction'` |
+| `BetaCompactionDelta`        | Streaming delta for `compaction_delta`           | Not present | Stream handler can't match the delta type             |
+| `iterations` on `BetaUsage`  | Array of `{ type, input_tokens, output_tokens }` | Not present | Can't access iteration-level usage for billing        |
+| `"compaction"` stop reason   | New stop reason value                            | Not in enum | Can't check `response.stop_reason === 'compaction'`   |
 
 ### What DOES exist
 
@@ -112,9 +114,9 @@ Everything works at the API level with the beta header. The gap is TypeScript ty
 ```typescript
 // Would work at runtime, fails at compile time:
 contextManagementEdits.push({
-  type: 'compact_20260112',  // TS error: not in union type
+  type: 'compact_20260112', // TS error: not in union type
   trigger: { type: 'input_tokens', value: 180000 },
-} as any);  // Requires `as any` or type augmentation
+} as any); // Requires `as any` or type augmentation
 ```
 
 **Decision:** Wait for SDK types rather than use `as any` throughout. The client-side plan covers the immediate need. Type safety is important for maintainability.
@@ -139,7 +141,7 @@ The compaction edit goes **after** clearing edits. The API processes edits in or
 ```typescript
 // In setupContextManagement(), after existing clearing edits:
 if (this.supportsNativeCompaction()) {
-  this.ensureBeta(options, COMPACTION_BETA);  // 'compact-2026-01-12'
+  this.ensureBeta(options, COMPACTION_BETA); // 'compact-2026-01-12'
 
   // Compaction trigger higher than clearing trigger:
   // clearing at thresholdPercent (75%), compaction at min(threshold+15, 95)%
@@ -226,6 +228,7 @@ When compaction fires, `response.content` includes a `compaction` block:
 ```
 
 **No message array surgery needed.** The existing code path:
+
 1. `extractResponse()` — already filters for `type === 'text'` only → compaction blocks excluded from user-visible output
 2. `extractAssistantContent()` — already preserves all non-`tool_use` blocks → compaction blocks included in messages
 3. `createToolUseFollowUpMessages()` — already appends `response.content` as assistant message → compaction blocks flow through
@@ -264,8 +267,8 @@ When compaction occurs, `response.usage` includes an `iterations` array:
 
 ```json
 {
-  "input_tokens": 45000,    // Excludes compaction iteration
-  "output_tokens": 1234,     // Excludes compaction iteration
+  "input_tokens": 45000, // Excludes compaction iteration
+  "output_tokens": 1234, // Excludes compaction iteration
   "iterations": [
     { "type": "compaction", "input_tokens": 180000, "output_tokens": 3500 },
     { "type": "message", "input_tokens": 23000, "output_tokens": 1000 }
@@ -325,7 +328,8 @@ if (compactionBlock) {
 
   // Get pre-compaction tokens from iterations array
   const iterations = (response.usage as any).iterations as
-    Array<{ type: string; input_tokens: number }> | undefined;
+    | Array<{ type: string; input_tokens: number }>
+    | undefined;
   const compactionIteration = iterations?.find((i) => i.type === 'compaction');
   const tokensBefore = compactionIteration?.input_tokens ?? totalInputTokens;
 
@@ -347,6 +351,7 @@ if (compactionBlock) {
 ### 4.9 `pause_after_compaction`
 
 **Use `false` (default).** Reasons:
+
 - Simplest integration — compaction + response in one API call
 - No need to inject context between compaction and response
 - System prompt is preserved automatically
@@ -440,21 +445,22 @@ Same as client-side plan Steps 6-7.
 
 ## 6. What Changes vs Client-Side
 
-| Aspect | Client-Side (Recommended) | Server-Side (This Plan) |
-|---|---|---|
-| When compaction runs | After `createResponse()`, separate API call | During `createResponse()`, same API call |
-| Who summarizes | Sonnet (capable + cheaper model) | Same model (Opus 4.6) |
-| Message management | Replace all messages with summary | API drops old messages; `compaction` block preserved |
-| Streaming | No impact | New event types to handle |
-| Usage tracking | Standard (separate call) | `iterations` array to parse |
-| Cost | Sonnet pricing (~$0.60/200K) | Opus pricing (~$12/200K) |
-| Model support | All Anthropic models | Opus 4.6 only |
-| SDK requirement | None (uses standard API) | SDK types for `compact_20260112` |
-| Summary visibility | Full — summary is a user message | Opaque — `compaction` block content visible in logs only |
-| User control | Summary in message history, can re-compact | API decides what to summarize |
-| PRD alignment | Matches PRD Section 4.6 | Deviates from PRD architecture |
+| Aspect               | Client-Side (Recommended)                   | Server-Side (This Plan)                                  |
+| -------------------- | ------------------------------------------- | -------------------------------------------------------- |
+| When compaction runs | After `createResponse()`, separate API call | During `createResponse()`, same API call                 |
+| Who summarizes       | Sonnet (capable + cheaper model)            | Same model (Opus 4.6)                                    |
+| Message management   | Replace all messages with summary           | API drops old messages; `compaction` block preserved     |
+| Streaming            | No impact                                   | New event types to handle                                |
+| Usage tracking       | Standard (separate call)                    | `iterations` array to parse                              |
+| Cost                 | Sonnet pricing (~$0.60/200K)                | Opus pricing (~$12/200K)                                 |
+| Model support        | All Anthropic models                        | Opus 4.6 only                                            |
+| SDK requirement      | None (uses standard API)                    | SDK types for `compact_20260112`                         |
+| Summary visibility   | Full — summary is a user message            | Opaque — `compaction` block content visible in logs only |
+| User control         | Summary in message history, can re-compact  | API decides what to summarize                            |
+| PRD alignment        | Matches PRD Section 4.6                     | Deviates from PRD architecture                           |
 
 **Recommendation:** Client-side is preferred for all the reasons in the PRD. Server-side may be reconsidered if:
+
 - Summary quality with Sonnet proves insufficient for complex LaTeX research contexts
 - Anthropic adds visibility features to server-side compaction
 - Cost differential narrows (e.g., compaction uses a cheaper model server-side)
@@ -463,15 +469,15 @@ Same as client-side plan Steps 6-7.
 
 ## 7. Risks and Mitigations
 
-| Risk | Mitigation |
-|---|---|
-| **SDK types not available** | Plan is blocked until SDK ships types. Client-side covers immediate need. |
-| **Opus-only** | `supportsNativeCompaction()` guard. Client-side fallback for other models. |
-| **Cost** | Same model for summarization (~$12/200K Opus). Layered thresholds minimize frequency. |
-| **Type assertions fragile** | Wait for proper SDK types rather than `as any`. Track SDK releases. |
-| **Double-compaction** | `hasServerSideCompaction` flag suppresses client-side when server-side active. |
-| **Streaming edge cases** | Log defensively; final message captures compaction block regardless of stream events. |
-| **iterations billing** | `normalizeUsage()` updated to sum iterations. Falls back to top-level when no iterations. |
+| Risk                        | Mitigation                                                                                |
+| --------------------------- | ----------------------------------------------------------------------------------------- |
+| **SDK types not available** | Plan is blocked until SDK ships types. Client-side covers immediate need.                 |
+| **Opus-only**               | `supportsNativeCompaction()` guard. Client-side fallback for other models.                |
+| **Cost**                    | Same model for summarization (~$12/200K Opus). Layered thresholds minimize frequency.     |
+| **Type assertions fragile** | Wait for proper SDK types rather than `as any`. Track SDK releases.                       |
+| **Double-compaction**       | `hasServerSideCompaction` flag suppresses client-side when server-side active.            |
+| **Streaming edge cases**    | Log defensively; final message captures compaction block regardless of stream events.     |
+| **iterations billing**      | `normalizeUsage()` updated to sum iterations. Falls back to top-level when no iterations. |
 
 ---
 
