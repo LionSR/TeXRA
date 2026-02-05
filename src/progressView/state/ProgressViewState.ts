@@ -265,12 +265,14 @@ export class ProgressViewState {
     stream: StreamTabId,
     agentCategory: (typeof AgentCategory)[keyof typeof AgentCategory],
   ): StreamState {
-    let state = this._streamStates.get(stream);
-    if (!state) {
-      state = createStreamState(agentCategory);
+    const existing = this._streamStates.get(stream);
+    // Create or update if kind doesn't match (consistent with setTaskState)
+    if (!existing || existing.kind !== agentCategory) {
+      const state = createStreamState(agentCategory);
       this._streamStates.set(stream, state);
+      return state;
     }
-    return state;
+    return existing;
   }
 
   updateStreamState(
