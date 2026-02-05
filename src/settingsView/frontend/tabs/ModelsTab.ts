@@ -40,6 +40,7 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) enabledProviders: string[] = [];
   @property({ attribute: false }) allowedModels: string[] | null = [];
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
+  @property({ type: Boolean }) globalStreamingDefault = true;
 
   override render(): TemplateResult {
     const apiAccessSection = this.authenticated
@@ -56,6 +57,7 @@ export class ModelsTab extends LitElement {
         <provider-key-list
           .providerKeyStatuses=${this.providerKeyStatuses}
           .apiAccessMode=${this.apiAccessMode}
+          .globalStreamingDefault=${this.globalStreamingDefault}
         ></provider-key-list>
       </div>
     `;

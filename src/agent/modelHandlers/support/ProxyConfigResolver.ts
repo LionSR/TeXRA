@@ -29,6 +29,17 @@ const PROXY_PATHS: Partial<Record<ModelProvider, string>> = {
   [ModelProvider.XAI]: 'xai',
 };
 
+/** Per-provider custom endpoint config keys. OpenRouter/Copilot/Others have no custom endpoint. */
+const ENDPOINT_CONFIG_KEYS: Partial<Record<ModelProvider, string>> = {
+  [ModelProvider.OPENAI]: 'texra.model.baseUrlOpenai',
+  [ModelProvider.ANTHROPIC]: 'texra.model.baseUrlAnthropic',
+  [ModelProvider.GOOGLE]: 'texra.model.baseUrlGoogle',
+  [ModelProvider.DEEPSEEK]: 'texra.model.baseUrlDeepSeek',
+  [ModelProvider.XAI]: 'texra.model.baseUrlXai',
+  [ModelProvider.MOONSHOT]: 'texra.model.baseUrlMoonshot',
+  [ModelProvider.DASHSCOPE]: 'texra.model.baseUrlDashscope',
+};
+
 const BASE_URLS: Record<ModelProvider, string | null> = {
   [ModelProvider.GOOGLE]: null,
   [ModelProvider.OPENAI]: null,
@@ -140,13 +151,16 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
 
   if (useOpenRouter) return 'https://openrouter.ai/api/v1';
 
-  // DeepSeek allows custom base URL override
-  if (config.provider === ModelProvider.DEEPSEEK) {
-    const customUrl = getConfig<string>(
-      'texra.model.baseUrlDeepSeek',
-      '',
-    ).trim();
-    if (customUrl) return `https://${normalizeUrl(customUrl)}`;
+  // Per-provider custom base URL override (all providers except OpenRouter)
+  const endpointKey = ENDPOINT_CONFIG_KEYS[config.provider];
+  if (endpointKey) {
+    const customUrl = getConfig<string>(endpointKey, '').trim();
+    if (customUrl) {
+      config.logger?.debug(
+        `Using custom base URL for ${config.provider}: ${customUrl}`,
+      );
+      return `https://${normalizeUrl(customUrl)}`;
+    }
   }
 
   return BASE_URLS[config.provider];
