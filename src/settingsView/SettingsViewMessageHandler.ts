@@ -13,32 +13,33 @@ import {
   type SettingsViewInboundMessage,
   SETTINGS_VIEW_CMD,
 } from '@shared/schemas/settingsViewMessages';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { ULTRA_TIER, MAX_TIER } from '@auth/config';
+import { AUTH_COMMANDS } from '@auth/constants';
+import { getServerSideKeyService } from '@auth/serverKeys';
+import { getAgentsBySource, loadAgents } from '@agent/index';
+import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
+import {
+  BaseViewMessageHandler,
+  SETTINGS_VIEW_COMMANDS,
+} from '@common/webview';
 import { showLoggedErrorMessage } from '@common/errors';
 import {
   AgentHistoryManager,
   type AgentHistoryItem,
 } from '@common/history/AgentHistoryManager';
-import {
-  BaseViewMessageHandler,
-  SETTINGS_VIEW_COMMANDS,
-} from '@common/webview';
-import { getAgentsBySource, loadAgents } from '@agent/index';
-import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
-import { SupabaseClient } from '@auth/SupabaseClient';
-import { ULTRA_TIER, MAX_TIER } from '@auth/config';
-import { AUTH_COMMANDS } from '@auth/constants';
-import { getServerSideKeyService } from '@auth/serverKeys';
-import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
-import { runExecuteCommand } from '@commands/agent/executeCommand';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
+import { getConfig, updateConfig } from '@utils/config';
+import { StorageFS } from '@utils/files';
+import { agentConfigToTaskState } from '@utils/config/configConversion';
 import {
   getToolUseMemoryEnabled,
   setToolUseMemoryEnabled,
 } from '@utils/config/constants';
-import { agentConfigToTaskState } from '@utils/config/configConversion';
-import { StorageFS } from '@utils/files';
+import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
+import { runExecuteCommand } from '@commands/agent/executeCommand';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import type {
   RemoteAgent,
@@ -63,6 +64,32 @@ const PROVIDER_DISPLAY_NAMES: Record<ApiProvider, string> = {
   wolframllmapp: 'Wolfram',
 };
 
+/**
+ * Map from ApiProvider to the VS Code config key for per-provider streaming.
+ * Providers not listed here (e.g., 'wolframllmapp') have no streaming config.
+ */
+const STREAMING_CONFIG_KEY: Partial<Record<ApiProvider, string>> = {
+  openai: 'texra.model.useStreamingOpenai',
+  anthropic: 'texra.model.useStreamingAnthropic',
+  openRouter: 'texra.model.useStreamingOpenrouter',
+  google: 'texra.model.useStreamingGoogle',
+  xai: 'texra.model.useStreamingXai',
+  deepseek: 'texra.model.useStreamingDeepseek',
+  moonshot: 'texra.model.useStreamingMoonshot',
+  dashscope: 'texra.model.useStreamingDashscope',
+};
+
+/** Map from ApiProvider to the VS Code config key for custom endpoint. */
+const ENDPOINT_CONFIG_KEY: Partial<Record<ApiProvider, string>> = {
+  openai: 'texra.model.baseUrlOpenai',
+  anthropic: 'texra.model.baseUrlAnthropic',
+  google: 'texra.model.baseUrlGoogle',
+  deepseek: 'texra.model.baseUrlDeepSeek',
+  xai: 'texra.model.baseUrlXai',
+  moonshot: 'texra.model.baseUrlMoonshot',
+  dashscope: 'texra.model.baseUrlDashscope',
+};
+
 async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
   return Promise.all(
     SecretManager.API_PROVIDERS.map(async (provider) => {
@@ -80,11 +107,31 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
         status = 'not-set';
       }
 
+      const globalStreaming = getConfig<boolean>(
+        'texra.model.useStreaming',
+        true,
+      );
+      const streamingKey = STREAMING_CONFIG_KEY[provider];
+      // OpenRouter defaults to streaming off (different from other providers)
+      const streamingDefault =
+        provider === 'openRouter' ? false : globalStreaming;
+      const streaming = streamingKey
+        ? getConfig<boolean>(streamingKey, streamingDefault)
+        : globalStreaming;
+
+      const endpointKey = ENDPOINT_CONFIG_KEY[provider];
+      const customEndpoint = endpointKey
+        ? getConfig<string>(endpointKey, '')
+        : '';
+
       return {
         provider,
         displayName: PROVIDER_DISPLAY_NAMES[provider],
         status,
         keyUrl: PROVIDER_URLS[provider],
+        streaming,
+        customEndpoint,
+        supportsCustomEndpoint: Boolean(endpointKey),
       };
     }),
   );
@@ -146,6 +193,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleRemoveProviderKey(data),
       [SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL]: (data) =>
         this.handleOpenProviderKeyUrl(data),
+      [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_STREAMING]: (data) =>
+        this.handleSetProviderStreaming(data),
+      [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_ENDPOINT]: (data) =>
+        this.handleSetProviderEndpoint(data),
+      [SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING]: (data) =>
+        this.handleSetGlobalStreaming(data),
     };
   }
 
@@ -219,6 +272,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const isAuthenticated = await SupabaseClient.isAuthenticated();
     const providerKeyStatuses = await getProviderKeyStatuses();
 
+    const globalStreamingDefault = getConfig<boolean>(
+      'texra.model.useStreaming',
+      true,
+    );
+
     if (!isAuthenticated) {
       await webview.postMessage({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
@@ -235,6 +293,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           max: MAX_TIER,
         },
         providerKeyStatuses,
+        globalStreamingDefault,
       });
       return;
     }
@@ -288,6 +347,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       },
       accessExpiresAt: accessExpiresAt?.toISOString() ?? null,
       providerKeyStatuses,
+      globalStreamingDefault,
     });
   }
 
@@ -621,6 +681,49 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const url = PROVIDER_URLS[provider];
     if (url) {
       await vscode.env.openExternal(vscode.Uri.parse(url));
+    }
+  }
+
+  private async handleSetProviderStreaming(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_STREAMING>,
+  ): Promise<void> {
+    const provider = data.provider as ApiProvider;
+    const configKey = STREAMING_CONFIG_KEY[provider];
+    if (!configKey) return;
+
+    await updateConfig(configKey, data.enabled, { prefix: false });
+
+    const view = this.getActiveView();
+    if (view) {
+      await this.sendProfileData(view.webview);
+    }
+  }
+
+  private async handleSetProviderEndpoint(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_ENDPOINT>,
+  ): Promise<void> {
+    const provider = data.provider as ApiProvider;
+    const configKey = ENDPOINT_CONFIG_KEY[provider];
+    if (!configKey) return;
+
+    await updateConfig(configKey, data.endpoint, { prefix: false });
+
+    const view = this.getActiveView();
+    if (view) {
+      await this.sendProfileData(view.webview);
+    }
+  }
+
+  private async handleSetGlobalStreaming(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GLOBAL_STREAMING>,
+  ): Promise<void> {
+    await updateConfig('texra.model.useStreaming', data.enabled, {
+      prefix: false,
+    });
+
+    const view = this.getActiveView();
+    if (view) {
+      await this.sendProfileData(view.webview);
     }
   }
 }

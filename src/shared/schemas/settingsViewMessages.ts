@@ -172,6 +172,23 @@ const OpenProviderKeyUrlMessageSchema = z.object({
   provider: z.string().min(1),
 });
 
+const SetProviderStreamingMessageSchema = z.object({
+  command: z.literal(CMD.SET_PROVIDER_STREAMING),
+  provider: z.string().min(1),
+  enabled: z.boolean(),
+});
+
+const SetProviderEndpointMessageSchema = z.object({
+  command: z.literal(CMD.SET_PROVIDER_ENDPOINT),
+  provider: z.string().min(1),
+  endpoint: z.string(),
+});
+
+const SetGlobalStreamingMessageSchema = z.object({
+  command: z.literal(CMD.SET_GLOBAL_STREAMING),
+  enabled: z.boolean(),
+});
+
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = z.object({
   command: z.literal(CMD.OPEN_VSCODE_SETTINGS),
@@ -208,6 +225,9 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetProviderKeyMessageSchema,
     RemoveProviderKeyMessageSchema,
     OpenProviderKeyUrlMessageSchema,
+    SetProviderStreamingMessageSchema,
+    SetProviderEndpointMessageSchema,
+    SetGlobalStreamingMessageSchema,
   ],
 );
 

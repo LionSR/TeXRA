@@ -16,4 +16,10 @@ export const ProviderKeyEvents = {
     createEvent('provider-key-remove', detail),
   openKeyUrl: (detail: { provider: string }) =>
     createEvent('provider-key-open-url', detail),
+  setStreaming: (detail: { provider: string; enabled: boolean }) =>
+    createEvent('provider-streaming-set', detail),
+  setEndpoint: (detail: { provider: string; endpoint: string }) =>
+    createEvent('provider-endpoint-set', detail),
+  setGlobalStreaming: (detail: { enabled: boolean }) =>
+    createEvent('provider-global-streaming-set', detail),
 } as const;
