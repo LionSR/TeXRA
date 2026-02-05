@@ -80,6 +80,13 @@ export function resetCycleState<T extends BaseCycleFields>(
 export interface BaseInvocationPrepResult {
   shouldStop: boolean;
   messages: ProviderMessage[];
+  /**
+   * Optional callback invoked when conversation compaction occurs.
+   * The callback receives the compacted messages and should update
+   * the caller's message array to prevent sending inflated history
+   * on subsequent calls.
+   */
+  onCompacted?: (compactedMessages: ProviderMessage[]) => void;
 }
 
 /** Base success data returned from model/tool invocations. */
