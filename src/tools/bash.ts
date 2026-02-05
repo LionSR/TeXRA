@@ -1,6 +1,9 @@
 // Local imports - core
 import { z } from 'zod';
 
+// Local imports - agent
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+
 // Local imports - tools
 import { ToolError, ToolResult } from '@tools/result';
 import {
@@ -34,6 +37,9 @@ export class BashTool extends defineTool({
         approval.userMessage,
       );
     }
+
+    // Signal execution starting (triggers in-progress log after approval)
+    getCurrentToolFileInteractionContext()?.onExecutionReady?.();
 
     // Truncation only applies to internal logging so long-running commands keep
     // the output channel readable while still returning the complete stdout.
