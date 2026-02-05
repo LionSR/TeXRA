@@ -8,3 +8,12 @@ export const ProfileViewEvents = {
   setApiAccessMode: (detail: { mode: 'included' | 'personal' }) =>
     createEvent('profile-api-access-mode', detail),
 } as const;
+
+export const ProviderKeyEvents = {
+  setKey: (detail: { provider: string }) =>
+    createEvent('provider-key-set', detail),
+  removeKey: (detail: { provider: string }) =>
+    createEvent('provider-key-remove', detail),
+  openKeyUrl: (detail: { provider: string }) =>
+    createEvent('provider-key-open-url', detail),
+} as const;

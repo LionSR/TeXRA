@@ -84,20 +84,24 @@ export const profileViewStyles: CSSResult = css`
     margin-top: var(--spacing-xlarge);
   }
 
-  .agents-table {
+  .agents-table,
+  .provider-keys-table {
     width: 100%;
     border-collapse: collapse;
     margin-top: var(--spacing-medium);
   }
 
   .agents-table th,
-  .agents-table td {
+  .agents-table td,
+  .provider-keys-table th,
+  .provider-keys-table td {
     padding: var(--spacing-medium);
     text-align: left;
     border-bottom: var(--border-thin) solid var(--color-border);
   }
 
-  .agents-table th {
+  .agents-table th,
+  .provider-keys-table th {
     background: var(--vscode-editor-background);
     font-weight: 600;
     color: var(--vscode-foreground);
@@ -105,7 +109,8 @@ export const profileViewStyles: CSSResult = css`
     top: 0;
   }
 
-  .agents-table tbody tr:hover {
+  .agents-table tbody tr:hover,
+  .provider-keys-table tbody tr:hover {
     background: var(--vscode-list-hoverBackground);
   }
 
@@ -273,5 +278,54 @@ export const profileViewStyles: CSSResult = css`
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
     line-height: 1.6;
+  }
+
+  .provider-keys-section {
+    margin-top: var(--spacing-xlarge);
+  }
+
+  .provider-keys-section h2 {
+    margin-top: 0;
+  }
+
+  .provider-keys-description {
+    color: var(--color-text-secondary);
+    margin-bottom: var(--spacing-medium);
+  }
+
+  .provider-name {
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .key-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    font-size: var(--font-size-sm);
+    padding: 2px var(--spacing-small);
+    border-radius: var(--border-radius);
+  }
+
+  .key-status-badge.set {
+    background: var(--vscode-testing-iconPassed);
+    color: var(--vscode-button-foreground);
+  }
+
+  .key-status-badge.env {
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+  }
+
+  .key-status-badge.not-set {
+    background: var(--vscode-input-background);
+    color: var(--color-text-secondary);
+    border: var(--border-thin) solid var(--color-border);
+  }
+
+  .provider-actions {
+    display: flex;
+    gap: var(--spacing-small);
+    white-space: nowrap;
   }
 `;

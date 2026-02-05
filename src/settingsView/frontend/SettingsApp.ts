@@ -30,6 +30,7 @@ import {
   type HistoryItem,
   UpdateProfileMessageSchema,
   type RemoteAgent,
+  type ProviderKeyStatus,
   SetTabMessageSchema,
 } from '@shared/schemas';
 
@@ -110,6 +111,7 @@ export class SettingsApp extends BaseWebviewApp {
   @state() private enabledProviders: string[] = [];
   @state() private allowedModels: string[] | null = [];
   @state() private accessExpiresAt: string | null = null;
+  @state() private providerKeyStatuses: ProviderKeyStatus[] = [];
 
   protected get readyCommand(): string | null {
     return null;
@@ -226,6 +228,7 @@ export class SettingsApp extends BaseWebviewApp {
       this.enabledProviders = data.enabledProviders ?? [];
       this.allowedModels = data.allowedModels ?? null;
       this.accessExpiresAt = data.accessExpiresAt ?? null;
+      this.providerKeyStatuses = data.providerKeyStatuses ?? [];
       return;
     }
   }
@@ -305,19 +308,39 @@ export class SettingsApp extends BaseWebviewApp {
     });
   }
 
+  private handleSetProviderKey(event: CustomEvent<{ provider: string }>): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, {
+      provider: event.detail.provider,
+    });
+  }
+
+  private handleRemoveProviderKey(
+    event: CustomEvent<{ provider: string }>,
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY, {
+      provider: event.detail.provider,
+    });
+  }
+
+  private handleOpenProviderKeyUrl(
+    event: CustomEvent<{ provider: string }>,
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL, {
+      provider: event.detail.provider,
+    });
+  }
+
   private handleOpenVscodeSettings(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS);
   }
 
   private renderHeader(): TemplateResult {
     const settingsButton = html`
-      <vscode-button
-        appearance="secondary"
+      <vscode-toolbar-button
+        icon="settings-gear"
         title="Open VS Code Settings"
         @click=${this.handleOpenVscodeSettings}
-      >
-        <span class="codicon codicon-settings-gear"></span>
-      </vscode-button>
+      ></vscode-toolbar-button>
     `;
 
     if (this.authenticated) {
@@ -332,9 +355,12 @@ export class SettingsApp extends BaseWebviewApp {
           </div>
           <div class="settings-header-actions">
             ${settingsButton}
-            <vscode-button appearance="secondary" @click=${this.handleSignOut}>
-              Sign Out
-            </vscode-button>
+            <vscode-toolbar-button
+              icon="sign-out"
+              label="Sign Out"
+              title="Sign out"
+              @click=${this.handleSignOut}
+            ></vscode-toolbar-button>
           </div>
         </div>
       `;
@@ -347,10 +373,12 @@ export class SettingsApp extends BaseWebviewApp {
         </span>
         <div class="settings-header-actions">
           ${settingsButton}
-          <vscode-button @click=${this.handleSignIn}>
-            <span slot="start" class="codicon codicon-sign-in"></span>
-            Sign In
-          </vscode-button>
+          <vscode-toolbar-button
+            icon="sign-in"
+            label="Sign In"
+            title="Sign in"
+            @click=${this.handleSignIn}
+          ></vscode-toolbar-button>
         </div>
       </div>
     `;
@@ -397,7 +425,11 @@ export class SettingsApp extends BaseWebviewApp {
               .apiAccessMode=${this.apiAccessMode}
               .enabledProviders=${this.enabledProviders}
               .allowedModels=${this.allowedModels}
+              .providerKeyStatuses=${this.providerKeyStatuses}
               @profile-api-access-mode=${this.handleApiAccessMode}
+              @provider-key-set=${this.handleSetProviderKey}
+              @provider-key-remove=${this.handleRemoveProviderKey}
+              @provider-key-open-url=${this.handleOpenProviderKeyUrl}
             ></models-tab>
           </vscode-tab-panel>
 

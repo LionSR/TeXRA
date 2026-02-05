@@ -263,9 +263,12 @@ export function extractAnthropicWebSearchResults(
  * The action field is only populated when using include: ['web_search_call.action.sources'].
  * Uses SDK's ResponseFunctionWebSearch.Search type for the action structure.
  */
-interface ResponseFunctionWebSearchWithAction extends ResponseFunctionWebSearch {
+type ResponseFunctionWebSearchWithAction = Omit<
+  ResponseFunctionWebSearch,
+  'action'
+> & {
   action?: ResponseFunctionWebSearch.Search;
-}
+};
 
 /**
  * Build a WebSearchResult from a single OpenAI web search item.

@@ -1,17 +1,21 @@
 /**
  * ModelsTab component - API access and model settings for settings view.
+ * Shows provider key list for all users; authenticated users also see API access mode.
  */
 
 // Third-party imports
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, nothing, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 
+// Local imports - shared schemas
+import type { ProviderKeyStatus } from '@shared/schemas/settingsViewMessages';
+
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/ApiAccessSection';
-import '../components/profile/SignInPrompt';
+import '../components/profile/ProviderKeyList';
 
 @customElement('models-tab')
 export class ModelsTab extends LitElement {
@@ -35,19 +39,24 @@ export class ModelsTab extends LitElement {
     'personal';
   @property({ attribute: false }) enabledProviders: string[] = [];
   @property({ attribute: false }) allowedModels: string[] | null = [];
+  @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
 
   override render(): TemplateResult {
-    if (!this.authenticated) {
-      return html`<sign-in-prompt></sign-in-prompt>`;
-    }
-
-    return html`
-      <div class="models-container">
-        <api-access-section
+    const apiAccessSection = this.authenticated
+      ? html`<api-access-section
           .mode=${this.apiAccessMode}
           .enabledProviders=${this.enabledProviders}
           .allowedModels=${this.allowedModels}
-        ></api-access-section>
+        ></api-access-section>`
+      : nothing;
+
+    return html`
+      <div class="models-container">
+        ${apiAccessSection}
+        <provider-key-list
+          .providerKeyStatuses=${this.providerKeyStatuses}
+          .apiAccessMode=${this.apiAccessMode}
+        ></provider-key-list>
       </div>
     `;
   }
