@@ -486,7 +486,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       'request should opt into the Files API beta',
     );
 
-    assert.equal(response.stop_reason, 'end_turn');
+    assert.equal(response.response.stop_reason, 'end_turn');
   });
 
   it('sanitizes uploaded PDF filenames to strip directories and forbidden characters', async () => {
@@ -643,7 +643,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       'request should opt into the Files API beta when referencing file IDs',
     );
 
-    assert.equal(response.stop_reason, 'end_turn');
+    assert.equal(response.response.stop_reason, 'end_turn');
   });
 
   it('skips token counting when messages include file-based document sources', async () => {
@@ -723,7 +723,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       0,
       'should skip token counting for file sources',
     );
-    assert.equal(response.stop_reason, 'end_turn');
+    assert.equal(response.response.stop_reason, 'end_turn');
   });
 
   it('counts tokens before uploading PDF documents', async () => {
@@ -801,7 +801,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     });
 
     assert.deepEqual(callOrder, ['countTokens', 'upload', 'create']);
-    assert.equal(response.stop_reason, 'end_turn');
+    assert.equal(response.response.stop_reason, 'end_turn');
   });
 
   it('does not warn about context overflow when 1M beta header is active', async () => {
@@ -873,7 +873,7 @@ describe('ModelHandlerAnthropic message guards', () => {
         messages,
         temperature: 0,
       });
-      assert.equal(response.stop_reason, 'end_turn');
+      assert.equal(response.response.stop_reason, 'end_turn');
     } finally {
       (configModule as any).getConfig = originalGetConfig;
     }
