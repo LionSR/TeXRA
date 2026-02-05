@@ -68,9 +68,12 @@ export class ProfileInfo extends LitElement {
         ${this.showSignOut
           ? html`
               <div class="profile-actions">
-                <vscode-button @click=${this.handleSignOut}>
-                  Sign out
-                </vscode-button>
+                <vscode-toolbar-button
+                  icon="sign-out"
+                  label="Sign Out"
+                  title="Sign out"
+                  @click=${this.handleSignOut}
+                ></vscode-toolbar-button>
               </div>
             `
           : nothing}
