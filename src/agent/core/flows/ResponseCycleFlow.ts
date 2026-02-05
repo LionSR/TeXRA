@@ -15,6 +15,7 @@ import {
   BaseInvocationPrepResult,
   BaseInvocationSuccessData,
   getDebugContext,
+  replaceMessagesInPlace,
   resetCycleState,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
@@ -268,25 +269,31 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     const start = Date.now();
 
     return this.withAbortController(async (signal) => {
-      const { response, responseTimeMs } = await stage.run(async () => {
-        const modelResponse = await services.modelHandler.createResponse({
-          client: services.client,
-          messages: prepRes.messages,
-          temperature: services.setting.temperature,
-          systemPrompt: prepRes.systemPrompt,
-          endTag: services.setting.endTag,
-          signal,
-          tools: services.modelHandler.capabilities.supportsFunctionCalling
-            ? services.setting.tools
-            : undefined,
-        });
+      const { response, responseTimeMs, updatedMessages } = await stage.run(
+        async () => {
+          const result = await services.modelHandler.createResponse({
+            client: services.client,
+            messages: prepRes.messages,
+            temperature: services.setting.temperature,
+            systemPrompt: prepRes.systemPrompt,
+            endTag: services.setting.endTag,
+            signal,
+            tools: services.modelHandler.capabilities.supportsFunctionCalling
+              ? services.setting.tools
+              : undefined,
+          });
 
-        const elapsedMs = Date.now() - start;
+          const elapsedMs = Date.now() - start;
 
-        return { response: modelResponse, responseTimeMs: elapsedMs };
-      });
+          return {
+            response: result.response,
+            responseTimeMs: elapsedMs,
+            updatedMessages: result.updatedMessages,
+          };
+        },
+      );
 
-      return { kind: 'success', response, responseTimeMs };
+      return { kind: 'success', response, responseTimeMs, updatedMessages };
     });
   }
 
@@ -309,6 +316,11 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
 
     if (!successRes) {
       return FlowTransition.COMPLETE;
+    }
+
+    // Handle message updates from compaction (explicit in post, not via callback)
+    if (successRes.updatedMessages !== undefined) {
+      replaceMessagesInPlace(shared.messages, successRes.updatedMessages);
     }
 
     shared.responseObject = successRes.response;

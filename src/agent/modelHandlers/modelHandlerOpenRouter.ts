@@ -30,7 +30,10 @@ import { isNonEmptyString } from '@utils/core';
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { toOpenAITools } from './toolConversion';
-import type { CreateResponseOptions } from './types/IModelHandler';
+import type {
+  CreateResponseOptions,
+  CreateResponseResult,
+} from './types/IModelHandler';
 import type {
   ChatCompletion,
   ChatCompletionChunk,
@@ -108,7 +111,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
   /** Creates a response using OpenRouter's API with model-specific configuration. */
   async createResponse(
     options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
-  ): Promise<ChatCompletion> {
+  ): Promise<CreateResponseResult<ChatCompletion, ChatCompletionMessageParam>> {
     const { client, messages, temperature, endTag, signal, tools } = options;
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
@@ -184,10 +187,11 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       thinking.finalize(finalReasoning ?? undefined);
       const finalOutput = response.choices?.[0]?.message?.content ?? '';
       if (output) output.finalize(finalOutput);
-      return response;
+      return { response };
     }
 
-    return client.chat.completions.create(kwargs, { signal });
+    const response = await client.chat.completions.create(kwargs, { signal });
+    return { response };
   }
 
   /**

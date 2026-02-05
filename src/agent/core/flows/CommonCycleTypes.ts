@@ -86,6 +86,21 @@ export interface BaseInvocationPrepResult {
 export interface BaseInvocationSuccessData {
   response: unknown;
   responseTimeMs?: number;
+  /**
+   * If messages were transformed (e.g., compaction), the updated array.
+   * Undefined means messages were not modified.
+   */
+  updatedMessages?: ProviderMessage[];
+}
+
+/**
+ * Replace array contents in-place to preserve references.
+ * Used when compaction returns new messages - mutating in-place ensures
+ * all code holding references to the array sees the updated contents.
+ */
+export function replaceMessagesInPlace<T>(target: T[], newContents: T[]): void {
+  target.length = 0;
+  target.push(...newContents);
 }
 
 // --- Cycle Result Interpretation ---
