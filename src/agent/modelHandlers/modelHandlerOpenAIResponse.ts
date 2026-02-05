@@ -1085,7 +1085,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // server-side output items that the server already has. This prevents
     // "Duplicate item found" errors while keeping local messages complete
     // for compaction and persistence.
-    if (this.previousResponseId && !shouldSendAll) {
+    const useResponseChaining = this.shouldUseResponseChaining(shouldSendAll);
+    if (useResponseChaining) {
       newMessages = newMessages.filter(
         (item) => !this.isServerSideOutputItem(item),
       );
@@ -1107,18 +1108,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       : undefined;
 
     // Phase 1: BUILD - Construct provider-specific request parameters
-    // IMPORTANT: When shouldSendAll is true (after compaction), we MUST NOT include
-    // previous_response_id because:
-    // 1. Compacted messages are self-contained and complete
-    // 2. The old response ID references stale server-side state
-    // Compaction already clears previousResponseId, but we make this explicit here.
-    const usePreviousResponseId =
-      !shouldSendAll && this.previousResponseId !== null;
+    // When shouldSendAll is true (after compaction), we MUST NOT include
+    // previous_response_id because compacted messages are self-contained
+    // and the old response ID references stale server-side state.
     const baseParams = {
       model: this.config.fullName,
       input: newMessages,
       ...(systemPrompt && { instructions: systemPrompt }),
-      ...(usePreviousResponseId && {
+      ...(useResponseChaining && {
         previous_response_id: this.previousResponseId,
       }),
       ...(convertedTools?.length && { tools: convertedTools }),
@@ -1147,7 +1144,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           signal,
           systemPrompt,
           tools: convertedTools,
-          previousResponseId: usePreviousResponseId
+          previousResponseId: useResponseChaining
             ? this.previousResponseId
             : null,
         });
@@ -2360,24 +2357,35 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * - user messages: user input
    */
   private isServerSideOutputItem(item: ResponseInputItem): boolean {
-    // ResponseInputItem is a union type. We need to check 'type' and 'role' fields
-    // which exist on different variants of the union.
-    const itemObj = item as { type?: string; role?: string };
-
-    // Check against the canonical list of server-side output types
-    if (itemObj.type && SERVER_SIDE_OUTPUT_TYPES.has(itemObj.type)) {
-      return true;
+    // Use 'in' operator for proper type narrowing instead of casting
+    if ('type' in item && typeof item.type === 'string') {
+      if (SERVER_SIDE_OUTPUT_TYPES.has(item.type)) {
+        return true;
+      }
     }
 
-    // Assistant messages are also server-side outputs.
-    // They can be either:
-    // - EasyInputMessage: { role: 'assistant', content: ... } (no type field)
+    // Assistant messages are server-side outputs.
+    // Covers both:
+    // - EasyInputMessage: { role: 'assistant', content: ... }
     // - ResponseInputItem.Message: { type: 'message', role: 'assistant', ... }
-    if (itemObj.role === 'assistant') {
+    if ('role' in item && item.role === 'assistant') {
       return true;
     }
 
     return false;
+  }
+
+  /**
+   * Determines if we should use response chaining (previousResponseId) for this request.
+   *
+   * Returns false when:
+   * - shouldSendAll is true (after compaction, must send complete messages)
+   * - No previousResponseId exists (first request in conversation)
+   *
+   * This centralizes the logic to avoid duplicate checks across the codebase.
+   */
+  private shouldUseResponseChaining(shouldSendAll: boolean): boolean {
+    return !shouldSendAll && this.previousResponseId !== null;
   }
 
   /** Type alias for reasoning delta events (both raw and summary). */
