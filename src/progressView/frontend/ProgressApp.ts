@@ -308,10 +308,12 @@ export class ProgressApp extends BaseWebviewApp {
     const streamInfo = this.appState.streams.find(
       (stream) => stream.name === streamId,
     );
+    // Skip unknown streams - they'll receive full state via UPDATE_LOGS after initialization
+    if (!streamInfo) return;
     const current = getStreamState(
       this.appState,
       streamId,
-      streamInfo?.agentCategory,
+      streamInfo.agentCategory,
     );
     nextStates.set(streamId, updater(current));
     this.appState = { ...this.appState, streamStates: nextStates };

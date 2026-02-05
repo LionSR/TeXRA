@@ -383,6 +383,7 @@ const handlers: HandlerRegistry = {
       pendingLogUpdates.delete(getPendingLogKey(data.stream, logId));
     }
 
+    // setStreamState skips unknown streams - they'll receive full state via UPDATE_LOGS
     ctx.setStreamState(data.stream, (prev) => ({
       ...prev,
       logs: [...prev.logs, mergedLogMessage],
