@@ -84,6 +84,7 @@ import type { MediaFileResult } from './support/MediaAttachmentProcessor';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type {
   CreateResponseOptions,
+  CreateResponseResult,
   ExtractResponseResult,
   GoogleToolCall,
   TokenCountOptions,
@@ -438,7 +439,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   /** Creates a chat completion response using Google's GenAI API with specified parameters and optional system prompt. */
   async createResponse(
     options: CreateResponseOptions<Content, GoogleGenAI>,
-  ): Promise<GenerateContentResponse> {
+  ): Promise<CreateResponseResult<GenerateContentResponse, Content>> {
     const {
       client,
       messages,
@@ -685,7 +686,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           candidateContent.parts = filteredParts;
         }
 
-        return baseResponse;
+        return { response: baseResponse };
       }
 
       const sendParams: SendMessageParameters = {
@@ -693,7 +694,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         config: { ...generationConfig, abortSignal: signal },
       };
 
-      return chat.sendMessage(sendParams);
+      const response = await chat.sendMessage(sendParams);
+      return { response };
     } catch (error) {
       // Error logging follows "log at the boundary" principle - Node's retryPrompt
       // or execFallback will log the error once. We only add debug diagnostics here

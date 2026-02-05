@@ -11,6 +11,7 @@ import {
   BaseInvocationSuccessData,
   resetCycleState,
   getDebugContext,
+  replaceMessagesInPlace,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
@@ -269,12 +270,6 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     return {
       shouldStop: shared.shouldStop,
       messages: shared.messages,
-      // Callback to update shared.messages when compaction occurs.
-      // Mutates the array in-place so all references see the compacted messages.
-      onCompacted: (compactedMessages) => {
-        shared.messages.length = 0;
-        shared.messages.push(...compactedMessages);
-      },
     };
   }
 
@@ -291,18 +286,22 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
 
     return this.withAbortController(async (signal) => {
       services.modelHandler.setOutputStreaming(true);
-      const response = await services.modelHandler.createResponse({
+      const result = await services.modelHandler.createResponse({
         client: services.client,
         messages: prepRes.messages,
         temperature: services.setting.temperature,
         signal,
         tools: services.setting.tools as ToolDefinition[] | undefined,
-        onCompacted: prepRes.onCompacted,
       });
 
       const responseTimeMs = Date.now() - start;
 
-      return { kind: 'success', response, responseTimeMs };
+      return {
+        kind: 'success',
+        response: result.response,
+        responseTimeMs,
+        updatedMessages: result.updatedMessages,
+      };
     });
   }
 
@@ -325,6 +324,11 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
 
     if (!successRes) {
       return FlowTransition.COMPLETE;
+    }
+
+    // Handle message updates from compaction (explicit in post, not via callback)
+    if (successRes.updatedMessages !== undefined) {
+      replaceMessagesInPlace(shared.messages, successRes.updatedMessages);
     }
 
     // Apply success-specific side effects
