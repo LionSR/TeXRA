@@ -351,29 +351,68 @@ function getMessagesToSend(
 - Active messages are derived at each `createResponse()` call
 - The webview shows full history with a "compacted away" visual divider (PRD Section 5.4)
 
-### 3.9 Interaction with Server-Side Clearing
+### 3.9 Remove Server-Side Context Editing
 
-Client-side compaction and server-side clearing are **independent and complementary**:
+Client-side compaction **replaces** the existing server-side `context_management` editing entirely. The `clear_tool_uses_20250919` and `clear_thinking_20251015` edits should be removed because:
 
-- **Server-side clearing** (existing `setupContextManagement()`): Removes old tool uses and thinking blocks during the API call. Trigger: 75%.
-- **Client-side compaction** (this plan): Replaces all messages with a summary after the API call. Trigger: also 75%.
+1. **One-off and ineffective** — Clearing individual tool uses or thinking blocks is a crude heuristic that removes specific content types rather than intelligently summarizing. It may clear blocks that were important while keeping less relevant ones.
+2. **Not worth it for prompt caching** — The clearing edits were partly justified by invalidating stale cached prefixes, but the cache benefit doesn't justify the complexity and opaque behavior.
+3. **Superseded by compaction** — Client-side summarization is strictly better: it produces a coherent summary preserving the most important context, rather than randomly dropping blocks.
+4. **Simplifies the handler** — Removing ~120 lines of setup/response-processing code and the beta header dependency.
 
-The sequence in a single `createResponse()` call:
-1. API call includes `context_management.edits` (clearing)
-2. Server applies clearing if threshold exceeded
-3. Response received with `applied_edits` logged
-4. After response: check compaction on total tokens (input+output)
-5. If threshold exceeded: compact client-side
+#### What gets removed
 
-After compaction, the next API call has a single user message — server-side clearing has nothing to clear and becomes a no-op. Clearing resumes as the conversation grows again.
+**`src/agent/modelHandlers/modelHandlerAnthropic.ts`:**
 
-**Note on Anthropic's `compact_20260112` API:** The PRD (Section 4.6) explicitly chose **not** to use Anthropic's native server-side compaction for these reasons:
-1. **Opaque** — server-side compaction gives zero visibility into what was preserved
-2. **Inconsistent** — only works on Opus 4.6, not on Sonnet/Haiku
-3. **Expensive** — uses the same model for summarization (Opus at ~$12/200K vs Sonnet at ~$0.60)
-4. **No user control** — can't inspect or override the summary
+| Code | Lines (approx) | Description |
+|---|---|---|
+| `setupContextManagement()` | 288-375 | Entire method — builds `context_management.edits` array |
+| `logContextManagementFromResponse()` | 800-861 | Response processing for `applied_edits` |
+| `CONTEXT_MANAGEMENT_BETA` constant | 157 | Beta header string |
+| `CONTEXT_MANAGEMENT_KEEP_TOOL_USES` | 166 | Keep-N constant |
+| `CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS` | 168 | Keep-N constant |
+| `CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT` | 175 | Minimum clear % constant |
+| `setupContextManagement()` call in `createResponse()` | 617-622 | Setup invocation before API call |
+| `logContextManagementFromResponse()` call in `createResponse()` | 791 | Response processing invocation |
+| `context_management` in `estimateTokenCount()` | 458-472 | Token counting with clearing config |
+| Beta type imports | 88-92 | `BetaContextManagementResponse`, `BetaClearToolUses...`, `BetaClearThinking...` |
 
-Client-side summarization provides the same compaction benefit with full transparency, lower cost, and universal model support. See `docs/plan-claude-server-compactization.md` for the server-side plan (kept as a future option, not recommended for near-term).
+**`package.json`:**
+
+| Code | Description |
+|---|---|
+| `texra.model.enableThinkingClearing` setting | Boolean config (default `false`) — no longer needed |
+
+**Note:** The `ContextManagementAction` schema, `contextManagementFormatters`, and `<context-management>` UI component remain — they're shared infrastructure used for compaction events and other providers (e.g., OpenAI Responses' compaction logging). Only the `clear_tool_uses` and `clear_thinking` action types become unused for Anthropic.
+
+#### What the API call looks like after removal
+
+Before (current):
+```typescript
+const response = await client.beta.messages.create({
+  model: '...',
+  messages: [...],
+  betas: ['context-management-2025-06-27', ...],
+  context_management: {
+    edits: [
+      { type: 'clear_thinking_20251015', ... },
+      { type: 'clear_tool_uses_20250919', ... },
+    ],
+  },
+});
+```
+
+After (with this plan):
+```typescript
+const response = await client.beta.messages.create({
+  model: '...',
+  messages: [...],
+  // No context_management parameter
+  // No context-management beta header
+});
+```
+
+The `context_management` parameter and beta header are removed entirely. Context is now managed client-side after the response.
 
 ---
 
@@ -388,7 +427,23 @@ Exports shared across all providers:
 - `COMPACTION_MODEL_MAP` — Constant map from primary model → cheaper compaction model (PRD Section 4.3)
 - `getCompactionModel()` — Lookup function with same-model fallback
 
-### Step 2: Compaction state and decision methods
+### Step 2: Remove server-side context editing
+
+**Files:**
+- `src/agent/modelHandlers/modelHandlerAnthropic.ts`
+- `package.json`
+
+Remove all `context_management` editing logic as described in Section 3.9:
+- Delete `setupContextManagement()` method and its call in `createResponse()`
+- Delete `logContextManagementFromResponse()` method and its call in `createResponse()`
+- Delete `CONTEXT_MANAGEMENT_BETA`, `CONTEXT_MANAGEMENT_KEEP_TOOL_USES`, `CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS`, `CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT` constants
+- Remove `context_management` from `estimateTokenCount()` parameters and beta filtering
+- Remove `texra.model.enableThinkingClearing` setting from `package.json`
+- Remove unused beta type imports (`BetaContextManagementResponse`, `BetaClearToolUses20250919EditResponse`, `BetaClearThinking20251015EditResponse`)
+
+This simplifies `createResponse()` significantly — no more beta header juggling or post-response edit parsing. Do this early so subsequent steps work on a cleaner codebase.
+
+### Step 3: Compaction state and decision methods
 
 **File:** `src/agent/modelHandlers/modelHandlerAnthropic.ts`
 
@@ -397,7 +452,7 @@ Add:
 - `private shouldCompact(): boolean`
 - `private getCompactionModel(): string` (delegates to shared `getCompactionModel()`)
 
-### Step 3: `compactConversation()` method
+### Step 4: `compactConversation()` method
 
 **File:** `src/agent/modelHandlers/modelHandlerAnthropic.ts`
 
@@ -408,7 +463,7 @@ Add the method as described in Section 3.4. Key behaviors:
 - Graceful fallback on failure
 - Structured logging via `logger.logContextManagement()`
 
-### Step 4: Integrate into `createResponse()`
+### Step 5: Integrate into `createResponse()`
 
 **File:** `src/agent/modelHandlers/modelHandlerAnthropic.ts`
 
@@ -419,7 +474,7 @@ Add the method as described in Section 3.4. Key behaviors:
 
 This adds a **Phase 5: CHECK COMPACTION** after the existing phases (BUILD → COUNT → VALIDATE → EXECUTE). The PRD's Phase 0 refactoring (decomposing `createResponse()`) would make this cleaner but is not a hard prerequisite — the compaction check is a self-contained block appended after the response is received.
 
-### Step 5: Reset state on new session
+### Step 6: Reset state on new session
 
 **File:** `src/agent/modelHandlers/modelHandlerAnthropic.ts`
 
@@ -428,7 +483,7 @@ In `initializeMessages()`:
 this.compactionState.lastUsageTokens = 0;
 ```
 
-### Step 6: Schema enrichment (optional)
+### Step 7: Schema enrichment (optional)
 
 **File:** `src/shared/schemas/contextManagement.ts`
 
@@ -438,7 +493,7 @@ summary: z.string().optional(),
 compactionModel: z.string().optional(),
 ```
 
-### Step 7: Progress view summary display (optional)
+### Step 8: Progress view summary display (optional)
 
 **File:** `src/progressView/frontend/formatters/logFormatters/contextManagementFormatters.ts`
 
@@ -451,11 +506,11 @@ When `action === 'compaction'` and `summary` present: render expandable `<detail
 
 ## 5. What Does NOT Change
 
-1. **Server-side clearing** — `clear_tool_uses` and `clear_thinking` continue unchanged
-2. **Streaming** — No streaming changes (compaction is a separate non-streaming call)
-3. **Token counting** — `estimateTokenCount()` works on whatever messages are passed
-4. **Other handlers** — Only `ModelHandlerAnthropic` changes now; others follow later
-5. **`createToolUseFollowUpMessages()`** — Works as-is; post-compaction messages are simple
+1. **Streaming** — No streaming changes (compaction is a separate non-streaming call)
+2. **Token counting** — `estimateTokenCount()` works on whatever messages are passed (simplified: no longer needs to include `context_management` config)
+3. **Other handlers** — Only `ModelHandlerAnthropic` changes now; others follow later
+4. **`createToolUseFollowUpMessages()`** — Works as-is; post-compaction messages are simple
+5. **Shared UI infrastructure** — `<context-management>` component and formatters remain for compaction event display and other providers
 
 ---
 
@@ -463,22 +518,24 @@ When `action === 'compaction'` and `summary` present: render expandable `<detail
 
 | Risk | Mitigation |
 |---|---|
-| **Summary quality with Haiku** | SDK's proven 5-section prompt. System prompt included for LaTeX context. Monitor in production. |
-| **Extra API call latency** | After-response timing = no user-visible delay. Haiku is fast (~1-2s for summarization). |
-| **Cost** | Haiku at ~$0.20 per 200K conversation. Far cheaper than Opus compaction iteration. |
+| **Summary quality with Sonnet** | SDK's proven 5-section prompt. System prompt included for LaTeX context. Sonnet is highly capable for summarization. |
+| **Extra API call latency** | After-response timing = no user-visible delay. Sonnet is fast for summarization. |
+| **Cost** | Sonnet at ~$0.60 per 200K conversation. Far cheaper than Opus compaction iteration. |
 | **Lost context** | Structured prompt preserves: task overview, file paths, decisions, errors, next steps. User can scroll full history in UI. |
 | **Message mutation** | `structuredClone` before modifying content blocks. No mutation of caller's array. |
 | **Compaction of compacted content** | Summary replaces all messages — subsequent compactions re-summarize from fresh conversation, not summary-of-summary. |
+| **Removing server-side clearing** | Client-side compaction is strictly better — produces coherent summary instead of randomly dropping blocks. No gap: compaction covers the same threshold. |
 
 ---
 
 ## 7. Testing Strategy
 
-1. **`shouldCompact()`** — Triggers at threshold. Disabled when 0. Uses input+output tokens.
-2. **`compactConversation()`** — Mock API. Verify: tool_use cleanup, summary extraction, message replacement, logging, fallback on error.
-3. **`getCompactionModel()`** — Opus→Haiku, Sonnet→Haiku, Haiku→Haiku.
-4. **`createResponse()` integration** — Token tracking updated from usage. `updatedMessages` returned when compacted.
-5. **Manual test** — Multi-turn tool-use conversation exceeding threshold. Verify compaction fires, progress view shows event, conversation continues.
+1. **Context editing removal** — Verify `createResponse()` no longer sends `context_management` parameter or beta header. Verify `estimateTokenCount()` no longer includes clearing config.
+2. **`shouldCompact()`** — Triggers at threshold. Disabled when 0. Uses input+output tokens.
+3. **`compactConversation()`** — Mock API. Verify: tool_use cleanup, summary extraction, message replacement, logging, fallback on error.
+4. **`getCompactionModel()`** — Opus→Sonnet, Sonnet→Sonnet, Haiku→Haiku.
+5. **`createResponse()` integration** — Token tracking updated from usage. `updatedMessages` returned when compacted.
+6. **Manual test** — Multi-turn tool-use conversation exceeding threshold. Verify compaction fires, progress view shows event, conversation continues.
 
 ---
 
@@ -498,13 +555,14 @@ When `action === 'compaction'` and `summary` present: render expandable `<detail
 ## 9. Implementation Order
 
 1. **Shared infrastructure** (Step 1) — Prompt + model map + helper
-2. **State + config** (Step 2) — No dependencies
-3. **Compaction method** (Step 3) — Depends on 1, 2
-4. **createResponse integration** (Step 4) — Depends on 3
-5. **Session reset** (Step 5) — Depends on 2
-6. **Schema + UI** (Steps 6-7) — Optional polish
+2. **Remove context editing** (Step 2) — Simplify handler before adding new logic
+3. **State + config** (Step 3) — No dependencies
+4. **Compaction method** (Step 4) — Depends on 1, 3
+5. **createResponse integration** (Step 5) — Depends on 4
+6. **Session reset** (Step 6) — Depends on 3
+7. **Schema + UI** (Steps 7-8) — Optional polish
 
-Steps 1-5 = MVP. Steps 6-7 = UI enrichment.
+Steps 1-6 = MVP. Steps 7-8 = UI enrichment.
 
 ---
 
