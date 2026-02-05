@@ -288,11 +288,41 @@ export const MEMORY_VIEW_COMMANDS = {
   UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
 } as const;
 
-// Import schema-defined commands and extend with COMMON_COMMANDS
-import { SETTINGS_VIEW_CMD } from '@shared/schemas/settingsViewMessages';
+/**
+ * Command string literals for settings view schema definitions.
+ * Defined here (not in settingsViewMessages.ts) to avoid circular dependency:
+ * commands.ts → settingsViewMessages.ts → memoryViewMessages.ts → commands.ts
+ */
+export const SETTINGS_VIEW_CMD = {
+  // Navigation commands
+  SET_TAB: 'setTab',
+  OPEN_VSCODE_SETTINGS: 'openVscodeSettings',
+  // Memory commands
+  GET_MEMORY_DATA: 'getMemoryData',
+  OPEN_MEMORY_FILE: 'openMemoryFile',
+  OPEN_MEMORY_FOLDER: 'openMemoryFolder',
+  DELETE_MEMORY: 'deleteMemory',
+  GET_MEMORY_ENABLED: 'getMemoryEnabled',
+  SET_MEMORY_ENABLED: 'setMemoryEnabled',
+  // History commands
+  GET_HISTORY_DATA: 'getHistoryData',
+  RERUN_AGENT: 'rerunAgent',
+  RESTORE_AGENT: 'restoreAgent',
+  DELETE_AGENT: 'deleteAgent',
+  CLEAR_HISTORY: 'clearHistory',
+  // Profile commands
+  GET_PROFILE_DATA: 'getProfileData',
+  SELECT_AGENT: 'selectAgent',
+  SIGN_IN: 'signIn',
+  SIGN_OUT: 'signOut',
+  SET_API_ACCESS_MODE: 'setApiAccessMode',
+  SET_PROVIDER_KEY: 'setProviderKey',
+  REMOVE_PROVIDER_KEY: 'removeProviderKey',
+  OPEN_PROVIDER_KEY_URL: 'openProviderKeyUrl',
+} as const;
 
 // Settings view specific commands (combines Memory, History, and Profile views)
-// Schema commands are the source of truth; outbound-only commands are added here
+// SETTINGS_VIEW_CMD is the source of truth; outbound-only commands are added here
 export const SETTINGS_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
   ...SETTINGS_VIEW_CMD,

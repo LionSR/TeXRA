@@ -15,19 +15,19 @@ A unified Settings View that consolidates memory management, execution history, 
 
 ## Implementation Status
 
-| Component             | Status      | Notes                                                  |
-| --------------------- | ----------- | ------------------------------------------------------ |
-| Core tabbed structure | Done        | 4 tabs with header bar                                 |
-| Memory tab            | Done        | Full file browser with toggle, preview, CRUD           |
-| History tab           | Done        | Search (mark.js), restore, rerun, collapsible details  |
-| Models tab            | Partial     | Only API access mode toggle (included vs personal)     |
-| Agents tab            | Partial     | Only remote agents table with Select                   |
-| LaTeX tab             | Not started | Not yet implemented                                    |
-| Advanced tab          | Deferred    | Intentionally deferred to future release               |
-| Header bar            | Done        | Auth/unauth states, sign in/out, VS Code settings gear |
-| Old views removed     | Done        | profileView, historyView, memoryView fully deleted     |
-| Lit web components    | Done        | Frontend uses Lit instead of vanilla JS                |
-| Zod schema protocol   | Done        | All messages validated via discriminated union         |
+| Component             | Status      | Notes                                                   |
+| --------------------- | ----------- | ------------------------------------------------------- |
+| Core tabbed structure | Done        | 4 tabs with header bar                                  |
+| Memory tab            | Done        | Full file browser with toggle, preview, CRUD            |
+| History tab           | Done        | Search (mark.js), restore, rerun, collapsible details   |
+| Models tab            | Partial     | API access mode toggle + inline provider key management |
+| Agents tab            | Partial     | Only remote agents table with Select                    |
+| LaTeX tab             | Not started | Not yet implemented                                     |
+| Advanced tab          | Deferred    | Intentionally deferred to future release                |
+| Header bar            | Done        | Auth/unauth states, sign in/out, VS Code settings gear  |
+| Old views removed     | Done        | profileView, historyView, memoryView fully deleted      |
+| Lit web components    | Done        | Frontend uses Lit instead of vanilla JS                 |
+| Zod schema protocol   | Done        | All messages validated via discriminated union          |
 
 ---
 
@@ -48,10 +48,11 @@ A unified Settings View that consolidates memory management, execution history, 
 1. As a user, I want to browse and manage persistent memory files created by agents
 2. As a user, I want to browse execution history and restore previous sessions
 3. As a user, I want to toggle between included model access and personal API keys
-4. As a user, I want to view and select remote agents shared by my team
-5. As a user, I want to easily switch between these configuration pages
-6. As a user, I want to configure which models appear in my dropdown _(future)_
-7. As a user, I want to configure LaTeX formatter, latexdiff, and TikZ settings in one place _(future)_
+4. As a user, I want to set, remove, and check the status of my provider API keys inline
+5. As a user, I want to view and select remote agents shared by my team
+6. As a user, I want to easily switch between these configuration pages
+7. As a user, I want to configure which models appear in my dropdown _(future)_
+8. As a user, I want to configure LaTeX formatter, latexdiff, and TikZ settings in one place _(future)_
 
 ---
 
@@ -135,9 +136,11 @@ Tab 1: History      ← IMPLEMENTED
 ├── Clear All History button
 └── History items with delete/restore/rerun actions
 
-Tab 2: Models       ← PARTIAL (API access mode only)
-├── Sign-in prompt (if unauthenticated)
-└── API access mode radio (Included Access vs Personal Keys)
+Tab 2: Models       ← PARTIAL (API access mode + provider keys)
+├── API access mode radio (if authenticated: Included Access vs Personal Keys)
+└── Provider key list (always shown, all users)
+    ├── 9 providers with three-state status (Set / Env / Not Set)
+    └── Per-provider actions: Set Key, Get Key, Remove
 
 Tab 3: Agents       ← PARTIAL (remote agents only)
 ├── Sign-in prompt (if unauthenticated)
@@ -270,25 +273,55 @@ Tab: Advanced       ← DEFERRED
 
 ### Models Tab (Partially Implemented)
 
-**Purpose:** Model access configuration. Currently limited to API access mode toggle.
+**Purpose:** Model access configuration and provider API key management.
 
 **What's implemented:**
 
-- Sign-in prompt for unauthenticated users (`<sign-in-prompt>`)
-- API access mode radio (`<api-access-section>`): "Use Included Access" vs "Use My Own Keys"
+- API access mode radio (`<api-access-section>`): "Use Included Access" vs "Use My Own Keys" (authenticated users only)
 - When "included" is selected, shows collapsible summary: provider count + model count/list
 - Error state if providers can't be loaded
+- Provider key list (`<provider-key-list>`): inline table of all 9 providers with three-state status and actions (available to all users, including unauthenticated)
+- Three-state key status: `Set` (stored in SecretStorage), `Env` (environment variable only), `Not Set`
+- Per-provider actions: "Set Key" (opens VS Code native password input), "Get Key" (opens provider URL in browser), "Remove" (only shown for SecretStorage keys)
+- Context-aware description: different text when using included access vs personal keys
 
-**Layout (Current):**
+**Layout (Current - Authenticated):**
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  API Access                                                     │
+│  Model Access                                                   │
 │                                                                 │
 │  ● Use Included Access                                          │
 │    ▶ Included: 3 providers, 12 models                          │
 │  ○ Use My Own Keys                                              │
 │                                                                 │
+│  API Keys                                                       │
+│  You are using included access. Personal keys below are         │
+│  optional overrides.                                            │
+│  ┌───────────┬──────────┬─────────────────────────────────────┐ │
+│  │ Provider  │ Status   │ Actions                             │ │
+│  ├───────────┼──────────┼─────────────────────────────────────┤ │
+│  │ OpenAI    │ ✓ Set    │ [Set Key] [Get Key] [Remove]        │ │
+│  │ Anthropic │ ● Env    │ [Set Key] [Get Key]                 │ │
+│  │ Google    │ ○ Not Set│ [Set Key] [Get Key]                 │ │
+│  │ ...       │          │                                     │ │
+│  └───────────┴──────────┴─────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Layout (Current - Unauthenticated):**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  API Keys                                                       │
+│  Set API keys for the providers you want to use.                │
+│  ┌───────────┬──────────┬─────────────────────────────────────┐ │
+│  │ Provider  │ Status   │ Actions                             │ │
+│  ├───────────┼──────────┼─────────────────────────────────────┤ │
+│  │ OpenAI    │ ○ Not Set│ [Set Key] [Get Key]                 │ │
+│  │ Anthropic │ ○ Not Set│ [Set Key] [Get Key]                 │ │
+│  │ ...       │          │                                     │ │
+│  └───────────┴──────────┴─────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -297,10 +330,9 @@ Tab: Advanced       ← DEFERRED
 - Model selection checkboxes (per-model enable/disable)
 - Recommended models section
 - Per-provider collapsibles with model lists
-- Provider configuration modal (API key + endpoint + streaming toggle)
+- Provider configuration modal (endpoint + streaming toggle)
 - Routing options (direct/OpenRouter/proxy)
 - Model metadata display (cost, context window, capabilities)
-- Provider status indicators (✓ Ready, ⚠ No key, etc.)
 
 **Future Models Tab Layout (Not Yet Built):**
 
@@ -574,12 +606,12 @@ When clicking [Configure] on a provider in the Models tab:
 - **Header Bar** - Account info (email + tier), sign in/out, VS Code settings gear (always visible)
 - **Memory Tab** - Full memory file browser with toggle, toolbar, content preview, delete
 - **History Tab** - Full execution history with search (mark.js), restore, rerun, collapsible details
-- **Models Tab** - API access mode toggle (included vs personal keys)
+- **Models Tab** - API access mode toggle + inline provider key management (set/remove/status for 9 providers)
 - **Agents Tab** - Remote agents table with Select action
 
 **Not yet implemented:**
 
-- **Models Tab expansion** - Model selection UI, provider configuration, routing options, provider modal
+- **Models Tab expansion** - Model selection UI, provider configuration (endpoint + streaming), routing options
 - **Agents Tab expansion** - Built-in/custom agent lists, enable/disable, Workflow/Tool-Use settings
 - **LaTeX Tab** - Formatter, latexdiff, TikZ, replacements settings
 
@@ -676,11 +708,12 @@ src/
 │           │   └── styles.ts                       # History-specific CSS
 │           └── profile/
 │               ├── ApiAccessSection.ts             # Included vs Personal API key radio
+│               ├── ProviderKeyList.ts              # Provider key status table with actions
 │               ├── ProfileInfo.ts                  # User email/ID/tier display
 │               ├── SignInPrompt.ts                 # Unauthenticated state prompt
 │               ├── AgentsTable.ts                  # Remote agents table with Select
-│               ├── events.ts                       # Profile-related custom events
-│               └── styles.ts                       # Profile-specific CSS
+│               ├── events.ts                       # Profile + provider key custom events
+│               └── styles.ts                       # Profile-specific CSS (shared table styles)
 │
 ├── shared/schemas/
 │   ├── settingsViewMessages.ts                    # Unified Zod schemas + dispatcher
@@ -711,9 +744,9 @@ src/
     │   ├── <search-bar>
     │   └── <history-list>
     │       └── <history-item> (×N)
-    ├── <models-tab>              # Auth-gated
-    │   ├── <sign-in-prompt>      # (if not authenticated)
-    │   └── <api-access-section>  # (if authenticated)
+    ├── <models-tab>              # Mixed auth
+    │   ├── <api-access-section>  # (if authenticated)
+    │   └── <provider-key-list>   # (always shown)
     └── <agents-tab>              # Auth-gated
         ├── <sign-in-prompt>      # (if not authenticated)
         └── <agents-table>        # (if authenticated)
@@ -736,14 +769,14 @@ export const SETTINGS_TAB_ORDER = [
 ] as const;
 ```
 
-**Inbound commands (frontend → backend): 16 total**
+**Inbound commands (frontend → backend): 19 total**
 
-| Domain     | Commands                                                                                                      |
-| ---------- | ------------------------------------------------------------------------------------------------------------- |
-| Navigation | `openVscodeSettings`                                                                                          |
-| Memory     | `getMemoryData`, `openMemoryFile`, `openMemoryFolder`, `deleteMemory`, `getMemoryEnabled`, `setMemoryEnabled` |
-| History    | `getHistoryData`, `rerunAgent`, `restoreAgent`, `deleteAgent`, `clearHistory`                                 |
-| Profile    | `getProfileData`, `selectAgent`, `signIn`, `signOut`, `setApiAccessMode`                                      |
+| Domain     | Commands                                                                                                                              |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Navigation | `openVscodeSettings`                                                                                                                  |
+| Memory     | `getMemoryData`, `openMemoryFile`, `openMemoryFolder`, `deleteMemory`, `getMemoryEnabled`, `setMemoryEnabled`                         |
+| History    | `getHistoryData`, `rerunAgent`, `restoreAgent`, `deleteAgent`, `clearHistory`                                                         |
+| Profile    | `getProfileData`, `selectAgent`, `signIn`, `signOut`, `setApiAccessMode`, `setProviderKey`, `removeProviderKey`, `openProviderKeyUrl` |
 
 **Outbound commands (backend → frontend): 6 total**
 
@@ -753,6 +786,8 @@ export const SETTINGS_TAB_ORDER = [
 | Memory     | `updateMemory`, `updateMemoryEnabled` |
 | History    | `updateHistory`, `historyCleared`     |
 | Profile    | `updateProfile`                       |
+
+The `updateProfile` outbound message includes `providerKeyStatuses` (array of `{provider, displayName, status, keyUrl}`) with `.default([])` for backward compatibility.
 
 All messages validated via `z.discriminatedUnion('command', [...])` with type-safe handler registry and `dispatchSettingsViewInbound()` dispatcher.
 
@@ -792,13 +827,17 @@ src/settingsView/
 
 ### Next: Phase 2 - Models Tab Expansion
 
+- [x] Inline provider key management (set/remove/status for all 9 providers)
+- [x] Three-state key status (Set via SecretStorage, Env var, Not Set)
+- [x] Available without login (unauthenticated users see provider key list directly)
+- [x] Backend `showInputBox` for secure password entry
+- [x] Refresh main view API key status after key changes
 - [ ] Implement model selection UI with per-model checkboxes
 - [ ] Add recommended models section
-- [ ] Add per-provider collapsibles with model lists and API status
-- [ ] Provider configuration modal (API key + custom endpoint + streaming toggle)
+- [ ] Add per-provider collapsibles with model lists
+- [ ] Provider configuration modal (custom endpoint + streaming toggle)
 - [ ] Routing options (direct/OpenRouter/proxy radio group)
 - [ ] Model metadata display from llm-zoo (cost, context window, capabilities)
-- [ ] Provider status indicators (✓ Ready, ⚠ No key, 🔀 OpenRouter)
 - [ ] Wire `OPEN_MODEL_SETTINGS` from main view to Settings View Models tab
 
 ### Next: Phase 3 - Agents Tab Expansion
@@ -841,11 +880,11 @@ Based on settings in package.json:
 
 ### Implemented
 
-| Tab         | Settings Covered                                    |
-| ----------- | --------------------------------------------------- |
-| **Models**  | `texra.model.apiAccessMode` (included vs personal)  |
-| **Memory**  | Memory file browser (file system, no config needed) |
-| **History** | History browser (existing storage)                  |
+| Tab         | Settings Covered                                                                                                |
+| ----------- | --------------------------------------------------------------------------------------------------------------- |
+| **Models**  | `texra.model.apiAccessMode` (included vs personal), provider API key management (9 providers via SecretStorage) |
+| **Memory**  | Memory file browser (file system, no config needed)                                                             |
+| **History** | History browser (existing storage)                                                                              |
 
 ### Not Yet Implemented
 
