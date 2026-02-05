@@ -12,6 +12,8 @@ export interface ToolFileInteractionContext {
   tracker: FileInteractionState;
   /** Todo state for managing task lists. Optional for backward compatibility. */
   todoState?: TodoState;
+  /** Called by tools with approval flows to trigger in-progress log after approval. */
+  onExecutionReady?: () => void;
 }
 
 const contextStack: ToolFileInteractionContext[] = [];
