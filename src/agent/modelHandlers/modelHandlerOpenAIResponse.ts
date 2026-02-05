@@ -1056,9 +1056,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Otherwise, only send new messages since last request.
     const shouldSendAll =
       compactedThisCall || this.conversationState.isCompacted;
-    const newMessages = shouldSendAll
+    let newMessages = shouldSendAll
       ? effectiveMessages
       : effectiveMessages.slice(this.conversationState.sentMessages);
+
+    // When using response chaining (previousResponseId is set), filter out
+    // server-side output items that the server already has. This prevents
+    // "Duplicate item found" errors while keeping local messages complete
+    // for compaction and persistence.
+    if (this.previousResponseId && !shouldSendAll) {
+      newMessages = newMessages.filter(
+        (item) => !this.isServerSideOutputItem(item),
+      );
+    }
 
     await this.uploadInlineInputFiles(client, newMessages);
 
@@ -2090,29 +2100,25 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<ResponseInputItem[]> {
     const messages: ResponseInputItem[] = [];
 
-    // When using previous_response_id (response chaining), the previous response's
-    // output items (reasoning, web_search_call, function_call) are already in
-    // OpenAI's server-side history. We should only send NEW items (function_call_output).
-    // Including them again causes "Duplicate item found" errors.
-    const isResponseChaining = Boolean(this.previousResponseId);
+    // Always include all items in local messages for completeness.
+    // The slicing logic (sentMessages) handles avoiding re-sends during response chaining.
+    // This ensures local messages are a complete representation of the conversation,
+    // which is critical for compaction - the compact endpoint needs the full context
+    // to properly preserve function_call/function_call_output pairs.
 
-    if (text && !isResponseChaining) {
-      // Only include assistant text when not chaining (it's in previous response)
+    if (text) {
       messages.push(this.createAssistantMessage(text));
     }
 
     // Include server tool content blocks (reasoning, web_search_call) from workspace state.
     // These need to be preserved when both server and local tools are in the same response.
     // Reasoning items must be included when web_search_call references them.
-    // SKIP when response chaining - these items are already in previous_response_id context.
     // Always clear after processing to prevent accumulation across cycles.
     if (workspaceState?.serverToolContent.contentBlocks.length) {
-      if (!isResponseChaining) {
-        const openaiBlocks = workspaceState.serverToolContent.contentBlocks
-          .filter(isOpenAIServerToolContent)
-          .map((block) => block as ResponseInputItem);
-        messages.push(...openaiBlocks);
-      }
+      const openaiBlocks = workspaceState.serverToolContent.contentBlocks
+        .filter(isOpenAIServerToolContent)
+        .map((block) => block as ResponseInputItem);
+      messages.push(...openaiBlocks);
       workspaceState.resetServerToolContent();
     }
 
@@ -2307,6 +2313,48 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     item: ResponseOutputItem,
   ): item is ResponseOutputMessage {
     return item.type === 'message';
+  }
+
+  /**
+   * Check if an item is a server-side output item that the server already has
+   * when previous_response_id is set. These should be filtered out to avoid
+   * "Duplicate item found" errors.
+   *
+   * Server-side output items include:
+   * - function_call: model's request to call a function
+   * - reasoning: model's thinking/reasoning
+   * - web_search_call: model's web search requests
+   * - assistant messages: model's text responses
+   *
+   * Items we MUST send (not server-side output):
+   * - function_call_output: our response to tool calls
+   * - user messages: user input
+   */
+  private isServerSideOutputItem(item: ResponseInputItem): boolean {
+    if (typeof item !== 'object' || item === null) {
+      return false;
+    }
+
+    const type = (item as { type?: string }).type;
+
+    // These are model output types - server already has them via previous_response_id
+    if (
+      type === 'function_call' ||
+      type === 'reasoning' ||
+      type === 'web_search_call'
+    ) {
+      return true;
+    }
+
+    // Check for assistant messages (type 'message' with role 'assistant')
+    if (type === 'message' || type === undefined) {
+      const role = (item as { role?: string }).role;
+      if (role === 'assistant') {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /** Type alias for reasoning delta events (both raw and summary). */
