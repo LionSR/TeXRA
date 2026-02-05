@@ -1172,8 +1172,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         const inputEstimate = this.getBestInputTokenEstimate();
         if (inputEstimate > 0) {
           const buffer = this.getTokenSafetyBuffer();
-          const available =
-            this.config.contextWindow - inputEstimate - buffer;
+          const available = this.config.contextWindow - inputEstimate - buffer;
           const capped = Math.min(maxOutputTokens, Math.max(0, available));
           if (capped !== maxOutputTokens) {
             this.logger.debug(
