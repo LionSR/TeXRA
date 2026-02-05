@@ -22,7 +22,7 @@ TeXRA supports models from multiple providers. Select models from the dropdown i
 | `haiku45`   | Fast responses               | $$   | Fast   |
 | `haiku35`   | Budget option                | $    | Fast   |
 
-For 1M-token context on Sonnet 4/4.5, enable `texra.model.useAnthropic1MBeta` in settings.
+For 1M-token context on Opus 4.6 and Sonnet 4/4.5, enable `texra.model.useAnthropic1MBeta` in settings.
 
 ## OpenAI Models
 
