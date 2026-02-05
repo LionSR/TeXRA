@@ -210,66 +210,6 @@
             "default": "proxy.texra.ai",
             "scope": "resource"
           },
-          "texra.model.useStreaming": {
-            "type": "boolean",
-            "default": true,
-            "description": "Enable streaming API responses when supported by the model. This serves as a global default but can be overridden by provider-specific settings.",
-            "scope": "resource"
-          },
-          "texra.model.useStreamingAnthropic": {
-            "type": "boolean",
-            "default": true,
-            "description": "Enable streaming for Anthropic models. Overrides the global useStreaming setting.",
-            "scope": "resource"
-          },
-          "texra.model.useStreamingOpenai": {
-            "type": "boolean",
-            "default": true,
-            "description": "Enable streaming for OpenAI models. Overrides the global useStreaming setting.",
-            "scope": "resource"
-          },
-          "texra.model.useStreamingGoogle": {
-            "type": "boolean",
-            "default": true,
-            "description": "Enable streaming for Google models. Works with both the OpenAI-compatible API and the native GenAI SDK. Overrides the global useStreaming setting.",
-            "scope": "resource"
-          },
-          "texra.model.useStreamingXai": {
-            "type": "boolean",
-            "default": true,
-            "description": "Enable streaming for xAI models via OpenAI-compatible API. Overrides the global useStreaming setting.",
-            "scope": "resource"
-          },
-          "texra.model.useStreamingDeepseek": {
-            "type": "boolean",
-            "default": true,
-            "description": "Enable streaming for DeepSeek models via OpenAI-compatible API. Overrides the global useStreaming setting.",
-            "scope": "resource"
-          },
-          "texra.model.useStreamingMoonshot": {
-            "type": "boolean",
-            "default": true,
-            "description": "Enable streaming for Moonshot Kimi models via OpenAI-compatible API. Overrides the global useStreaming setting.",
-            "scope": "resource"
-          },
-          "texra.model.useStreamingDashscope": {
-            "type": "boolean",
-            "default": true,
-            "description": "Enable streaming for DashScope Qwen models via OpenAI-compatible API. Overrides the global useStreaming setting.",
-            "scope": "resource"
-          },
-          "texra.model.baseUrlDeepSeek": {
-            "type": "string",
-            "default": "",
-            "description": "Custom base URL for DeepSeek models; leave blank to use `https://api.deepseek.com`.",
-            "scope": "resource"
-          },
-          "texra.model.useStreamingOpenrouter": {
-            "type": "boolean",
-            "default": false,
-            "description": "Enable streaming for models accessed via OpenRouter. Overrides the global useStreaming setting.",
-            "scope": "resource"
-          },
           "texra.model.useOpenAIResponsesAPI": {
             "type": "boolean",
             "default": true,

@@ -404,16 +404,14 @@ export abstract class ModelHandler<
    * @returns Boolean indicating if streaming should be enabled
    */
   public getStreamingConfig(): boolean {
-    const globalDefault = getConfig<boolean>('texra.model.useStreaming', false);
+    const globalDefault = getConfig<boolean>('texra.model.useStreaming', true);
 
     if (
       this.config.openRouterOnly ||
       getConfig<boolean>('texra.model.useOpenRouter', false)
     ) {
-      return getConfig<boolean>(
-        'texra.model.useStreamingOpenrouter',
-        globalDefault,
-      );
+      // OpenRouter defaults to streaming off (different from other providers)
+      return getConfig<boolean>('texra.model.useStreamingOpenrouter', false);
     }
 
     // ModelProvider.OTHERS has no provider-specific streaming config

@@ -112,6 +112,7 @@ export class SettingsApp extends BaseWebviewApp {
   @state() private allowedModels: string[] | null = [];
   @state() private accessExpiresAt: string | null = null;
   @state() private providerKeyStatuses: ProviderKeyStatus[] = [];
+  @state() private globalStreamingDefault = true;
 
   protected get readyCommand(): string | null {
     return null;
@@ -229,6 +230,7 @@ export class SettingsApp extends BaseWebviewApp {
       this.allowedModels = data.allowedModels ?? null;
       this.accessExpiresAt = data.accessExpiresAt ?? null;
       this.providerKeyStatuses = data.providerKeyStatuses ?? [];
+      this.globalStreamingDefault = data.globalStreamingDefault ?? true;
       return;
     }
   }
@@ -330,6 +332,32 @@ export class SettingsApp extends BaseWebviewApp {
     });
   }
 
+  private handleSetProviderStreaming(
+    event: CustomEvent<{ provider: string; enabled: boolean }>,
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_STREAMING, {
+      provider: event.detail.provider,
+      enabled: event.detail.enabled,
+    });
+  }
+
+  private handleSetProviderEndpoint(
+    event: CustomEvent<{ provider: string; endpoint: string }>,
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_ENDPOINT, {
+      provider: event.detail.provider,
+      endpoint: event.detail.endpoint,
+    });
+  }
+
+  private handleSetGlobalStreaming(
+    event: CustomEvent<{ enabled: boolean }>,
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING, {
+      enabled: event.detail.enabled,
+    });
+  }
+
   private handleOpenVscodeSettings(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS);
   }
@@ -426,10 +454,14 @@ export class SettingsApp extends BaseWebviewApp {
               .enabledProviders=${this.enabledProviders}
               .allowedModels=${this.allowedModels}
               .providerKeyStatuses=${this.providerKeyStatuses}
+              .globalStreamingDefault=${this.globalStreamingDefault}
               @profile-api-access-mode=${this.handleApiAccessMode}
               @provider-key-set=${this.handleSetProviderKey}
               @provider-key-remove=${this.handleRemoveProviderKey}
               @provider-key-open-url=${this.handleOpenProviderKeyUrl}
+              @provider-streaming-set=${this.handleSetProviderStreaming}
+              @provider-endpoint-set=${this.handleSetProviderEndpoint}
+              @provider-global-streaming-set=${this.handleSetGlobalStreaming}
             ></models-tab>
           </vscode-tab-panel>
 
