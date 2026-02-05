@@ -241,9 +241,13 @@ export class HistoryList extends LitElement {
 
     return html`
       <div class="clear-container">
-        <vscode-button class="button-clear" @click=${this.handleClear}
-          >Clear All History</vscode-button
-        >
+        <vscode-toolbar-button
+          class="button-clear"
+          icon="clear-all"
+          label="Clear All History"
+          title="Clear all history"
+          @click=${this.handleClear}
+        ></vscode-toolbar-button>
       </div>
       <div class="history-container">
         ${repeat(
