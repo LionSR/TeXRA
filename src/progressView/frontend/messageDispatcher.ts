@@ -170,10 +170,16 @@ function updateStreamInfo(
     const backendState = backendStates?.[stream.name];
     if (backendState) {
       const existing = nextStates.get(stream.name);
-      // Preserve frontend-owned 'ui' property when kinds match
+      // Preserve frontend-owned properties:
+      // - 'ui': frontend UI state (follow-up text, polish state, etc.)
+      // - 'logs': managed by APPEND_LOG/UPDATE_LOGS, not UPDATE_STREAMS
+      // - 'taskGroups': managed by ADD_TASK_GROUP/UPDATE_TASK_GROUP
+      // Backend's _streamStates never populates logs/taskGroups (always [])
       const preserveUI = existing && existing.kind === backendState.kind;
       nextStates.set(stream.name, {
         ...backendState,
+        logs: existing?.logs ?? backendState.logs,
+        taskGroups: existing?.taskGroups ?? backendState.taskGroups,
         ...(preserveUI && { ui: existing.ui }),
         info: stream,
       } as StreamState);
