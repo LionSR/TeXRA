@@ -118,11 +118,11 @@ interface UploadedOpenAIResponseAttachment {
  * Note: Assistant messages (role: 'assistant') are also server-side outputs but
  * are identified by role rather than type, so handled separately in isServerSideOutputItem().
  */
-const SERVER_SIDE_OUTPUT_TYPES = [
+const SERVER_SIDE_OUTPUT_TYPES: ReadonlySet<string> = new Set([
   'function_call',
   'reasoning',
   'web_search_call',
-] as const;
+]);
 
 /**
  * Handler for OpenAI's Responses API. This implementation works directly with
@@ -965,12 +965,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const client = options?.client ?? (await this.getClient());
 
+    // Determine previousResponseId: explicit option takes precedence over internal state.
+    // Pass null to explicitly exclude (e.g., after compaction).
+    const prevResponseId =
+      options?.previousResponseId !== undefined
+        ? options.previousResponseId
+        : this.previousResponseId;
+
     // Build params matching what we send to the actual API call
     const countParams: InputTokenCountParams = {
       model: this.config.fullName,
       input: messages,
-      ...(this.previousResponseId && {
-        previous_response_id: this.previousResponseId,
+      ...(prevResponseId && {
+        previous_response_id: prevResponseId,
       }),
       ...(options?.systemPrompt && { instructions: options.systemPrompt }),
       ...(options?.tools?.length && {
@@ -1100,11 +1107,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       : undefined;
 
     // Phase 1: BUILD - Construct provider-specific request parameters
+    // IMPORTANT: When shouldSendAll is true (after compaction), we MUST NOT include
+    // previous_response_id because:
+    // 1. Compacted messages are self-contained and complete
+    // 2. The old response ID references stale server-side state
+    // Compaction already clears previousResponseId, but we make this explicit here.
+    const usePreviousResponseId =
+      !shouldSendAll && this.previousResponseId !== null;
     const baseParams = {
       model: this.config.fullName,
       input: newMessages,
       ...(systemPrompt && { instructions: systemPrompt }),
-      ...(this.previousResponseId && {
+      ...(usePreviousResponseId && {
         previous_response_id: this.previousResponseId,
       }),
       ...(convertedTools?.length && { tools: convertedTools }),
@@ -1127,12 +1141,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (this.supportsTokenCounting) {
       try {
         // Reuse built params for token counting (build once principle)
-        // IMPORTANT: Pass tools and systemPrompt for accurate count
+        // IMPORTANT: Pass tools, systemPrompt, and previousResponseId for accurate count
         const inputTokens = await this.estimateTokenCount(baseParams.input, {
           client,
           signal,
           systemPrompt,
           tools: convertedTools,
+          previousResponseId: usePreviousResponseId
+            ? this.previousResponseId
+            : null,
         });
 
         // DIAGNOSTIC: Log token count details for investigation
@@ -2343,26 +2360,21 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * - user messages: user input
    */
   private isServerSideOutputItem(item: ResponseInputItem): boolean {
-    if (typeof item !== 'object' || item === null) {
-      return false;
-    }
-
-    const type = (item as { type?: string }).type;
+    // ResponseInputItem is a union type. We need to check 'type' and 'role' fields
+    // which exist on different variants of the union.
+    const itemObj = item as { type?: string; role?: string };
 
     // Check against the canonical list of server-side output types
-    if (
-      type &&
-      (SERVER_SIDE_OUTPUT_TYPES as readonly string[]).includes(type)
-    ) {
+    if (itemObj.type && SERVER_SIDE_OUTPUT_TYPES.has(itemObj.type)) {
       return true;
     }
 
-    // Assistant messages are also server-side outputs (identified by role, not type)
-    if (type === 'message' || type === undefined) {
-      const role = (item as { role?: string }).role;
-      if (role === 'assistant') {
-        return true;
-      }
+    // Assistant messages are also server-side outputs.
+    // They can be either:
+    // - EasyInputMessage: { role: 'assistant', content: ... } (no type field)
+    // - ResponseInputItem.Message: { type: 'message', role: 'assistant', ... }
+    if (itemObj.role === 'assistant') {
+      return true;
     }
 
     return false;

@@ -37,6 +37,12 @@ export interface TokenCountOptions<C = unknown> {
   tools?: unknown[];
   /** For cancellation */
   signal?: AbortSignal;
+  /**
+   * Previous response ID for providers that support response chaining.
+   * Pass null to explicitly exclude from count (e.g., after compaction).
+   * If undefined, handler decides based on internal state.
+   */
+  previousResponseId?: string | null;
 }
 
 /**
