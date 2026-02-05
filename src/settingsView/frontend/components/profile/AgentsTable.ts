@@ -46,9 +46,6 @@ export class AgentsTable extends LitElement {
     const visibilityClass = visibilityArray.includes('public')
       ? 'public'
       : 'custom';
-    const multiOutputClass = agent.supportsMultipleOutput
-      ? 'supported'
-      : 'not-supported';
     const multiOutputIcon = agent.supportsMultipleOutput
       ? 'codicon-check'
       : 'codicon-close';
@@ -67,13 +64,11 @@ export class AgentsTable extends LitElement {
         </td>
         <td class="agent-multi-output">
           <span
-            class="badge badge--small multi-output-badge ${multiOutputClass}"
+            class="codicon ${multiOutputIcon}"
             aria-label=${agent.supportsMultipleOutput
               ? 'Supports multiple outputs'
               : 'Single output only'}
-          >
-            <span class="codicon ${multiOutputIcon}"></span>
-          </span>
+          ></span>
         </td>
         <td class="agent-description">${agent.description}</td>
         <td class="agent-visibility">
