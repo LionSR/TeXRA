@@ -521,7 +521,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     );
     const isAnthropic1MBetaEligibleModel =
       this.config.fullName === 'claude-sonnet-4-20250514' ||
-      this.config.fullName === 'claude-sonnet-4-5';
+      this.config.fullName === 'claude-sonnet-4-5' ||
+      this.config.fullName === OPUS_46_FULLNAME;
     const isAnthropic1MBetaActive =
       useAnthropic1MBeta && isAnthropic1MBetaEligibleModel;
     const effectiveContextWindow = isAnthropic1MBetaActive
@@ -603,7 +604,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // The thinking configuration is now handled above for all reasoning models
     }
 
-    // Opt-in beta for 1M context window on Claude Sonnet 4 family
+    // Opt-in beta for 1M context window on eligible Claude models
     if (isAnthropic1MBetaActive) {
       this.ensureBeta(options, CONTEXT_1M_BETA);
     }
