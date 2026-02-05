@@ -19,6 +19,7 @@ Add client-side compaction to `ModelHandlerAnthropic`, following the pattern pro
 This is the same approach proposed in the main PRD (`docs/prd-context-compactization.md`) Section 4.2 for all non-OpenAI-Responses providers. Implementing it for Anthropic first validates the pattern before rolling out to Google, DeepSeek, Kimi, and OpenAI Chat.
 
 **Relationship to PRD phases:**
+
 - **Phase 0** (Refactor `createResponse()`): Not a hard prerequisite — compaction can be added as a new phase (Phase 5: CHECK COMPACTION) at the end of `createResponse()` without restructuring earlier phases. However, the Phase 0 refactoring would make the integration cleaner.
 - **Phase 1** (Client-Side Summarization Engine): This plan is the Anthropic-specific implementation of Phase 1's `ContextCompactor`.
 - **Phase 2** (Auto-Compact Toggle): Independent UI work. This plan works with or without the toggle — when no toggle exists, compaction is always enabled (controlled by `compactionThresholdPercent > 0`).
@@ -44,13 +45,13 @@ From `node_modules/@anthropic-ai/sdk/lib/tools/BetaToolRunner.js` (lines 65-133)
 
 ### What to change
 
-| SDK Behavior | Our Adaptation | Reason |
-|---|---|---|
-| Compaction runs **after** API call | Run **after** API call (match SDK) | Better UX: user sees response immediately, compaction happens between turns |
-| No system prompt in compaction call | **Include** system prompt | TeXRA's system prompts contain important LaTeX/research context |
-| Same `max_tokens` as main request | Fixed **8192** for compaction | Summaries rarely need >4K tokens; avoid wasting budget |
-| Hard throw on non-text response | **Graceful fallback** to original messages | More robust in production |
-| No logging | Full **context management logging** | TeXRA's progress view needs visibility |
+| SDK Behavior                        | Our Adaptation                             | Reason                                                                      |
+| ----------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
+| Compaction runs **after** API call  | Run **after** API call (match SDK)         | Better UX: user sees response immediately, compaction happens between turns |
+| No system prompt in compaction call | **Include** system prompt                  | TeXRA's system prompts contain important LaTeX/research context             |
+| Same `max_tokens` as main request   | Fixed **8192** for compaction              | Summaries rarely need >4K tokens; avoid wasting budget                      |
+| Hard throw on non-text response     | **Graceful fallback** to original messages | More robust in production                                                   |
+| No logging                          | Full **context management logging**        | TeXRA's progress view needs visibility                                      |
 
 ---
 
@@ -71,6 +72,7 @@ ToolUseCycleFlow iteration:
 ```
 
 **Why after, not before:**
+
 - The response that pushes tokens over threshold is still delivered to the user (no added latency)
 - Compaction happens between turns — next `createResponse()` benefits from compacted context
 - Matches the SDK's proven flow
@@ -92,9 +94,10 @@ private compactionState = {
 Updated after every successful `createResponse()`:
 
 ```typescript
-const totalInput = response.usage.input_tokens
-  + (response.usage.cache_read_input_tokens ?? 0)
-  + (response.usage.cache_creation_input_tokens ?? 0);
+const totalInput =
+  response.usage.input_tokens +
+  (response.usage.cache_read_input_tokens ?? 0) +
+  (response.usage.cache_creation_input_tokens ?? 0);
 const totalOutput = response.usage.output_tokens;
 this.compactionState.lastUsageTokens = totalInput + totalOutput;
 ```
@@ -234,6 +237,7 @@ export function getCompactionModel(primaryModel: string): string {
 ```
 
 The Anthropic handler calls:
+
 ```typescript
 private getCompactionModel(): string {
   return getCompactionModel(this.config.fullName);
@@ -324,6 +328,7 @@ The calling flow (`ToolUseCycleFlow`) already handles `updatedMessages`:
 - When compaction returns `updatedMessages`, all subsequent iterations use the compacted messages
 
 **After compaction, the messages array contains:**
+
 ```
 [{ role: 'user', content: [{ type: 'text', text: '<summary>...</summary>' }] }]
 ```
@@ -340,7 +345,12 @@ function getMessagesToSend(
   compactionState: CompactionState | null,
 ): Message[] {
   if (compactionState === null) return allMessages;
-  return [{ role: 'user', content: `<conversation-summary>${compactionState.summary}</conversation-summary>` }];
+  return [
+    {
+      role: 'user',
+      content: `<conversation-summary>${compactionState.summary}</conversation-summary>`,
+    },
+  ];
 }
 ```
 
@@ -364,23 +374,23 @@ Client-side compaction **replaces** the existing server-side `context_management
 
 **`src/agent/modelHandlers/modelHandlerAnthropic.ts`:**
 
-| Code | Lines (approx) | Description |
-|---|---|---|
-| `setupContextManagement()` | 288-375 | Entire method — builds `context_management.edits` array |
-| `logContextManagementFromResponse()` | 800-861 | Response processing for `applied_edits` |
-| `CONTEXT_MANAGEMENT_BETA` constant | 157 | Beta header string |
-| `CONTEXT_MANAGEMENT_KEEP_TOOL_USES` | 166 | Keep-N constant |
-| `CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS` | 168 | Keep-N constant |
-| `CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT` | 175 | Minimum clear % constant |
-| `setupContextManagement()` call in `createResponse()` | 617-622 | Setup invocation before API call |
-| `logContextManagementFromResponse()` call in `createResponse()` | 791 | Response processing invocation |
-| `context_management` in `estimateTokenCount()` | 458-472 | Token counting with clearing config |
-| Beta type imports | 88-92 | `BetaContextManagementResponse`, `BetaClearToolUses...`, `BetaClearThinking...` |
+| Code                                                            | Lines (approx) | Description                                                                     |
+| --------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------- |
+| `setupContextManagement()`                                      | 288-375        | Entire method — builds `context_management.edits` array                         |
+| `logContextManagementFromResponse()`                            | 800-861        | Response processing for `applied_edits`                                         |
+| `CONTEXT_MANAGEMENT_BETA` constant                              | 157            | Beta header string                                                              |
+| `CONTEXT_MANAGEMENT_KEEP_TOOL_USES`                             | 166            | Keep-N constant                                                                 |
+| `CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS`                        | 168            | Keep-N constant                                                                 |
+| `CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT`                     | 175            | Minimum clear % constant                                                        |
+| `setupContextManagement()` call in `createResponse()`           | 617-622        | Setup invocation before API call                                                |
+| `logContextManagementFromResponse()` call in `createResponse()` | 791            | Response processing invocation                                                  |
+| `context_management` in `estimateTokenCount()`                  | 458-472        | Token counting with clearing config                                             |
+| Beta type imports                                               | 88-92          | `BetaContextManagementResponse`, `BetaClearToolUses...`, `BetaClearThinking...` |
 
 **`package.json`:**
 
-| Code | Description |
-|---|---|
+| Code                                         | Description                                         |
+| -------------------------------------------- | --------------------------------------------------- |
 | `texra.model.enableThinkingClearing` setting | Boolean config (default `false`) — no longer needed |
 
 **Note:** The `ContextManagementAction` schema, `contextManagementFormatters`, and `<context-management>` UI component remain — they're shared infrastructure used for compaction events and other providers (e.g., OpenAI Responses' compaction logging). Only the `clear_tool_uses` and `clear_thinking` action types become unused for Anthropic.
@@ -388,6 +398,7 @@ Client-side compaction **replaces** the existing server-side `context_management
 #### What the API call looks like after removal
 
 Before (current):
+
 ```typescript
 const response = await client.beta.messages.create({
   model: '...',
@@ -403,6 +414,7 @@ const response = await client.beta.messages.create({
 ```
 
 After (with this plan):
+
 ```typescript
 const response = await client.beta.messages.create({
   model: '...',
@@ -423,6 +435,7 @@ The `context_management` parameter and beta header are removed entirely. Context
 **New file:** `src/agent/modelHandlers/compactionPrompt.ts`
 
 Exports shared across all providers:
+
 - `COMPACTION_SUMMARY_PROMPT` — The 5-section structured prompt (from Anthropic SDK)
 - `COMPACTION_MODEL_MAP` — Constant map from primary model → cheaper compaction model (PRD Section 4.3)
 - `getCompactionModel()` — Lookup function with same-model fallback
@@ -430,10 +443,12 @@ Exports shared across all providers:
 ### Step 2: Remove server-side context editing
 
 **Files:**
+
 - `src/agent/modelHandlers/modelHandlerAnthropic.ts`
 - `package.json`
 
 Remove all `context_management` editing logic as described in Section 3.9:
+
 - Delete `setupContextManagement()` method and its call in `createResponse()`
 - Delete `logContextManagementFromResponse()` method and its call in `createResponse()`
 - Delete `CONTEXT_MANAGEMENT_BETA`, `CONTEXT_MANAGEMENT_KEEP_TOOL_USES`, `CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS`, `CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT` constants
@@ -448,6 +463,7 @@ This simplifies `createResponse()` significantly — no more beta header jugglin
 **File:** `src/agent/modelHandlers/modelHandlerAnthropic.ts`
 
 Add:
+
 - `private compactionState = { lastUsageTokens: 0 }`
 - `private shouldCompact(): boolean`
 - `private getCompactionModel(): string` (delegates to shared `getCompactionModel()`)
@@ -457,6 +473,7 @@ Add:
 **File:** `src/agent/modelHandlers/modelHandlerAnthropic.ts`
 
 Add the method as described in Section 3.4. Key behaviors:
+
 - `structuredClone` messages before mutation
 - Clean `tool_use` blocks from last assistant message
 - Non-streaming API call to compaction model
@@ -479,6 +496,7 @@ This adds a **Phase 5: CHECK COMPACTION** after the existing phases (BUILD → C
 **File:** `src/agent/modelHandlers/modelHandlerAnthropic.ts`
 
 In `initializeMessages()`:
+
 ```typescript
 this.compactionState.lastUsageTokens = 0;
 ```
@@ -488,6 +506,7 @@ this.compactionState.lastUsageTokens = 0;
 **File:** `src/shared/schemas/contextManagement.ts`
 
 Add optional fields for compaction events (per PRD Section 4.2 logging spec):
+
 ```typescript
 summary: z.string().optional(),
 compactionModel: z.string().optional(),
@@ -498,6 +517,7 @@ compactionModel: z.string().optional(),
 **File:** `src/progressView/frontend/formatters/logFormatters/contextManagementFormatters.ts`
 
 When `action === 'compaction'` and `summary` present: render expandable `<details>` with the summary text. Per PRD Section 4.2:
+
 - Header: "Context compacted: {tokensBefore} → {tokensAfter} tokens ({utilizationAfter}% utilization)"
 - Expandable body: Full summary text
 - Badge: Compaction model used
@@ -516,15 +536,15 @@ When `action === 'compaction'` and `summary` present: render expandable `<detail
 
 ## 6. Risks and Mitigations
 
-| Risk | Mitigation |
-|---|---|
-| **Summary quality with Sonnet** | SDK's proven 5-section prompt. System prompt included for LaTeX context. Sonnet is highly capable for summarization. |
-| **Extra API call latency** | After-response timing = no user-visible delay. Sonnet is fast for summarization. |
-| **Cost** | Sonnet at ~$0.60 per 200K conversation. Far cheaper than Opus compaction iteration. |
-| **Lost context** | Structured prompt preserves: task overview, file paths, decisions, errors, next steps. User can scroll full history in UI. |
-| **Message mutation** | `structuredClone` before modifying content blocks. No mutation of caller's array. |
-| **Compaction of compacted content** | Summary replaces all messages — subsequent compactions re-summarize from fresh conversation, not summary-of-summary. |
-| **Removing server-side clearing** | Client-side compaction is strictly better — produces coherent summary instead of randomly dropping blocks. No gap: compaction covers the same threshold. |
+| Risk                                | Mitigation                                                                                                                                               |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Summary quality with Sonnet**     | SDK's proven 5-section prompt. System prompt included for LaTeX context. Sonnet is highly capable for summarization.                                     |
+| **Extra API call latency**          | After-response timing = no user-visible delay. Sonnet is fast for summarization.                                                                         |
+| **Cost**                            | Sonnet at ~$0.60 per 200K conversation. Far cheaper than Opus compaction iteration.                                                                      |
+| **Lost context**                    | Structured prompt preserves: task overview, file paths, decisions, errors, next steps. User can scroll full history in UI.                               |
+| **Message mutation**                | `structuredClone` before modifying content blocks. No mutation of caller's array.                                                                        |
+| **Compaction of compacted content** | Summary replaces all messages — subsequent compactions re-summarize from fresh conversation, not summary-of-summary.                                     |
+| **Removing server-side clearing**   | Client-side compaction is strictly better — produces coherent summary instead of randomly dropping blocks. No gap: compaction covers the same threshold. |
 
 ---
 
@@ -570,11 +590,11 @@ Steps 1-6 = MVP. Steps 7-8 = UI enrichment.
 
 These PRD features are deferred to keep the MVP focused:
 
-| PRD Feature | Section | Deferred To |
-|---|---|---|
-| `allMessages` single source of truth | 4.7 | Phase 1 (ContextCompactor class) |
-| Auto-Compact toggle button | 4.8 | Phase 2 (UI) |
-| Compact Now button | 4.9 | Phase 2 (UI) |
-| Chat view compaction divider | 5.4 | Phase 4 (UI visibility) |
-| Faded messages above divider | 5.4 | Phase 4 (UI visibility) |
-| Phase 0 `createResponse()` refactoring | 7, Phase 0 | Separate plan (not blocking) |
+| PRD Feature                            | Section    | Deferred To                      |
+| -------------------------------------- | ---------- | -------------------------------- |
+| `allMessages` single source of truth   | 4.7        | Phase 1 (ContextCompactor class) |
+| Auto-Compact toggle button             | 4.8        | Phase 2 (UI)                     |
+| Compact Now button                     | 4.9        | Phase 2 (UI)                     |
+| Chat view compaction divider           | 5.4        | Phase 4 (UI visibility)          |
+| Faded messages above divider           | 5.4        | Phase 4 (UI visibility)          |
+| Phase 0 `createResponse()` refactoring | 7, Phase 0 | Separate plan (not blocking)     |
