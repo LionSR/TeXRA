@@ -141,7 +141,7 @@ const WorkflowAgentInputSchema = z.object({
     .string()
     .prefault('gemini3p')
     .describe(
-      'Model short name (e.g., gemini3p, sonnet45, opus45, gpt45, o3). User can change via dropdown.',
+      'Model short name (e.g., gemini3p, sonnet45, opus46, gpt45, o3). User can change via dropdown.',
     ),
   instruction: z.string().describe('Plain prose instruction for the agent'),
   inputFile: z.string().describe('Primary input file to process (required)'),
@@ -336,7 +336,7 @@ const DelegateAgentInputSchema = z.object({
     .string()
     .prefault('gemini3p')
     .describe(
-      'Model short name (e.g., gemini3p, sonnet45, opus45, gpt45, o3). User can change via dropdown.',
+      'Model short name (e.g., gemini3p, sonnet45, opus46, gpt45, o3). User can change via dropdown.',
     ),
   instruction: z
     .string()
