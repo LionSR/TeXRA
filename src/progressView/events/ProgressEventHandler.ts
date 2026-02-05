@@ -105,6 +105,10 @@ export class ProgressEventHandler {
       isRemote,
       hasMultipleOutputs,
     });
+    // Ensure stream state exists so it's included in getAllStreamStates()
+    if (agentCategory) {
+      this.state.getOrCreateStreamState(streamId, agentCategory);
+    }
     this.maybeUpdateFilterForCategory(agentCategory);
     this.state.activeStream = streamId;
     this.replayPendingTaskGroups(streamId);
@@ -441,6 +445,8 @@ export class ProgressEventHandler {
     this.state.updateStreamHints(streamId, {
       agentCategory: AgentCategory.Workflow,
     });
+    // Ensure stream state exists so it's included in getAllStreamStates()
+    this.state.getOrCreateStreamState(streamId, AgentCategory.Workflow);
     this.maybeUpdateFilterForCategory(AgentCategory.Workflow);
     this.state.activeStream = streamId;
 
