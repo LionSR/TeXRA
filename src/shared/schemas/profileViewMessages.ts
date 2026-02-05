@@ -45,6 +45,9 @@ export const ProviderKeyStatusSchema = z.object({
   displayName: z.string(),
   status: z.enum(['set', 'env', 'not-set']),
   keyUrl: z.string(),
+  streaming: z.boolean().prefault(true),
+  customEndpoint: z.string().prefault(''),
+  supportsCustomEndpoint: z.boolean().prefault(false),
 });
 export type ProviderKeyStatus = z.infer<typeof ProviderKeyStatusSchema>;
 
@@ -65,6 +68,7 @@ export const UpdateProfileMessageSchema = z.object({
   tierConstants: TierConstantsSchema,
   accessExpiresAt: z.string().nullish(),
   providerKeyStatuses: z.array(ProviderKeyStatusSchema).prefault([]),
+  globalStreamingDefault: z.boolean().prefault(true),
 });
 export type UpdateProfileMessage = z.infer<typeof UpdateProfileMessageSchema>;
 

@@ -144,7 +144,6 @@ export const profileViewStyles: CSSResult = css`
     color: var(--vscode-badge-foreground);
   }
 
-
   .select-btn {
     white-space: nowrap;
   }
@@ -317,5 +316,121 @@ export const profileViewStyles: CSSResult = css`
     display: flex;
     gap: var(--spacing-small);
     white-space: nowrap;
+  }
+
+  /* Global streaming toggle */
+  .global-streaming-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-medium);
+    margin-bottom: var(--spacing-medium);
+    padding: var(--spacing-medium);
+    background: var(--vscode-input-background);
+    border: var(--border-thin) solid var(--color-border);
+    border-radius: var(--border-radius);
+  }
+
+  .global-streaming-toggle label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    cursor: pointer;
+    color: var(--vscode-foreground);
+    font-weight: 500;
+  }
+
+  .global-streaming-toggle input[type='checkbox'] {
+    accent-color: var(--vscode-focusBorder);
+  }
+
+  .global-streaming-description {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+  }
+
+  /* Provider row expand/collapse */
+  .provider-expand-btn {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    padding: 0;
+    transition: transform 0.15s ease;
+  }
+
+  .provider-expand-btn:hover {
+    color: var(--vscode-foreground);
+  }
+
+  .provider-expand-btn.expanded {
+    transform: rotate(90deg);
+  }
+
+  .provider-name-cell {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+  }
+
+  /* Provider detail row (collapsible settings) */
+  .provider-detail-row td {
+    padding: 0 var(--spacing-medium) var(--spacing-medium);
+    border-bottom: var(--border-thin) solid var(--color-border);
+  }
+
+  .provider-settings {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-medium);
+    padding: var(--spacing-medium);
+    background: var(--vscode-textBlockQuote-background);
+    border-radius: var(--border-radius);
+  }
+
+  .provider-setting {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-medium);
+  }
+
+  .provider-setting label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    cursor: pointer;
+    color: var(--vscode-foreground);
+    font-size: var(--font-size-sm);
+    min-width: 120px;
+  }
+
+  .provider-setting input[type='checkbox'] {
+    accent-color: var(--vscode-focusBorder);
+  }
+
+  .endpoint-input {
+    flex: 1;
+    max-width: 400px;
+    padding: var(--spacing-small) var(--spacing-medium);
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: var(--border-thin) solid var(--color-border);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-sm);
+    font-family: var(--vscode-editor-font-family);
+  }
+
+  .endpoint-input:focus {
+    outline: none;
+    border-color: var(--vscode-focusBorder);
+  }
+
+  .endpoint-input::placeholder {
+    color: var(--color-text-secondary);
+    opacity: var(--opacity-subtle);
   }
 `;

@@ -319,6 +319,9 @@ export const SETTINGS_VIEW_CMD = {
   SET_PROVIDER_KEY: 'setProviderKey',
   REMOVE_PROVIDER_KEY: 'removeProviderKey',
   OPEN_PROVIDER_KEY_URL: 'openProviderKeyUrl',
+  SET_PROVIDER_STREAMING: 'setProviderStreaming',
+  SET_PROVIDER_ENDPOINT: 'setProviderEndpoint',
+  SET_GLOBAL_STREAMING: 'setGlobalStreaming',
 } as const;
 
 // Settings view specific commands (combines Memory, History, and Profile views)

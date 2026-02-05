@@ -15,19 +15,19 @@ A unified Settings View that consolidates memory management, execution history, 
 
 ## Implementation Status
 
-| Component             | Status      | Notes                                                   |
-| --------------------- | ----------- | ------------------------------------------------------- |
-| Core tabbed structure | Done        | 4 tabs with header bar                                  |
-| Memory tab            | Done        | Full file browser with toggle, preview, CRUD            |
-| History tab           | Done        | Search (mark.js), restore, rerun, collapsible details   |
-| Models tab            | Partial     | API access mode toggle + inline provider key management |
-| Agents tab            | Partial     | Only remote agents table with Select                    |
-| LaTeX settings        | VS Code     | Remain as VS Code settings only                         |
-| Advanced settings     | VS Code     | Remain as VS Code settings only                         |
-| Header bar            | Done        | Auth/unauth states, sign in/out, VS Code settings gear  |
-| Old views removed     | Done        | profileView, historyView, memoryView fully deleted      |
-| Lit web components    | Done        | Frontend uses Lit instead of vanilla JS                 |
-| Zod schema protocol   | Done        | All messages validated via discriminated union          |
+| Component             | Status  | Notes                                                   |
+| --------------------- | ------- | ------------------------------------------------------- |
+| Core tabbed structure | Done    | 4 tabs with header bar                                  |
+| Memory tab            | Done    | Full file browser with toggle, preview, CRUD            |
+| History tab           | Done    | Search (mark.js), restore, rerun, collapsible details   |
+| Models tab            | Partial | API access mode toggle + inline provider key management |
+| Agents tab            | Partial | Only remote agents table with Select                    |
+| LaTeX settings        | VS Code | Remain as VS Code settings only                         |
+| Advanced settings     | VS Code | Remain as VS Code settings only                         |
+| Header bar            | Done    | Auth/unauth states, sign in/out, VS Code settings gear  |
+| Old views removed     | Done    | profileView, historyView, memoryView fully deleted      |
+| Lit web components    | Done    | Frontend uses Lit instead of vanilla JS                 |
+| Zod schema protocol   | Done    | All messages validated via discriminated union          |
 
 ---
 
@@ -711,17 +711,17 @@ Based on settings in package.json:
 
 ### Implemented
 
-| Tab         | Settings Covered                                                                                                |
-| ----------- | --------------------------------------------------------------------------------------------------------------- |
-| **Models**  | `texra.model.apiAccessMode` (included vs personal), provider API key management (9 providers via SecretStorage) |
-| **Memory**  | Memory file browser (file system, no config needed)                                                             |
-| **History** | History browser (existing storage)                                                                              |
+| Tab         | Settings Covered                                                                                                                                                                                                                       |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Models**  | `texra.model.apiAccessMode` (included vs personal), provider API key management (9 providers via SecretStorage), `texra.model.useStreaming*` (9 streaming toggles), per-provider custom endpoint (`texra.model.baseUrl*`, 7 providers) |
+| **Memory**  | Memory file browser (file system, no config needed)                                                                                                                                                                                    |
+| **History** | History browser (existing storage)                                                                                                                                                                                                     |
 
 ### Not Yet Implemented
 
 | Tab        | Settings to Cover                                                                                                                                                                                                                    |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Models** | `texra.models`, `texra.model.useStreaming*` (9), `texra.model.useOpenRouter`, `texra.model.useImprovedConnection`, `texra.model.improvedConnectionDomain`, `texra.model.baseUrlDeepSeek`                                             |
+| **Models** | `texra.models`, `texra.model.useOpenRouter`, `texra.model.useImprovedConnection`, `texra.model.improvedConnectionDomain`                                                                                                             |
 | **Agents** | `texra.agents`, `texra.toolUseAgents`, `texra.remoteAgents.autoShow`, `texra.explorer.agentsDirectory`, `texra.agentOutputs.storageMode`, `texra.toolUse.*` (3), `texra.model.compactionThresholdPercent`, `texra.model.retry.*` (2) |
 
 ### Remain as VS Code Settings Only
