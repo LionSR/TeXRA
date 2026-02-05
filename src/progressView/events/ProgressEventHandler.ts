@@ -274,28 +274,29 @@ export class ProgressEventHandler {
     const runId =
       runIdHint === undefined ? this.state.getActiveRunId(stream) : runIdHint;
 
-    const existingInstruction = runId
-      ? this.state.getRunInstruction(stream, runId)
-      : undefined;
+    // Skip update if no runId - frontend can't store instruction without it
+    if (!runId) {
+      return;
+    }
+
+    const existingInstruction = this.state.getRunInstruction(stream, runId);
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(
       taskState,
       existingInstruction?.timestamp,
     );
 
     // Persist instruction if both runId and instruction exist
-    if (runId) {
-      if (instructionUpdate) {
-        void this.state.setRunInstruction(stream, runId, instructionUpdate);
-      } else {
-        void this.state.deleteRunInstruction(stream, runId);
-      }
+    if (instructionUpdate) {
+      void this.state.setRunInstruction(stream, runId, instructionUpdate);
+    } else {
+      void this.state.deleteRunInstruction(stream, runId);
     }
 
     this.webviewUpdater.updateInstruction(
       stream,
       instructionUpdate ?? null,
       category,
-      runId ?? null,
+      runId,
     );
   }
 
