@@ -67,6 +67,7 @@ import { ModelHandler } from './ModelHandler';
 import { TOOL_USE_SAFETY_BUFFER } from './contextManagementConstants';
 import type {
   CreateResponseOptions,
+  CreateResponseResult,
   ExtractResponseResult,
   DeepSeekToolCall,
   OpenAIToolCall,
@@ -364,7 +365,7 @@ export class ModelHandlerOpenAI<
   /** Creates a chat completion with model-specific parameters. */
   async createResponse(
     options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
-  ): Promise<ChatCompletion> {
+  ): Promise<CreateResponseResult<ChatCompletion, ChatCompletionMessageParam>> {
     const {
       client,
       messages: rawMessages,
@@ -447,10 +448,12 @@ export class ModelHandlerOpenAI<
 
     // Phase 4: EXECUTE
     if (useStreaming) {
-      return this.executeStreamingChat(client, baseParams, signal);
+      const response = await this.executeStreamingChat(client, baseParams, signal);
+      return { response };
     }
 
-    return this.executeNonStreamingChat(client, baseParams, signal);
+    const response = await this.executeNonStreamingChat(client, baseParams, signal);
+    return { response };
   }
 
   /**
