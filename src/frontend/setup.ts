@@ -20,7 +20,7 @@ import { getConfig, isConfigExplicitlySet, updateConfig } from '@utils/config';
  * Version number for the default model list.
  * Increment this when adding new models to force existing users to get the updated defaults.
  */
-const MODEL_LIST_VERSION = 2;
+const MODEL_LIST_VERSION = 3;
 
 /**
  * Legacy agent files that should be deleted from GlobalStorage.
@@ -102,14 +102,16 @@ async function deleteLegacyAgentFiles(): Promise<void> {
  */
 const DEFAULT_MODELS = [
   'gemini3p',
+  'gemini3f',
   'sonnet45T',
-  'opus45T',
+  'opus46T',
+  'opus46',
   'gpt52',
   'gpt52pro',
   'gpt41',
   'deepseekT',
-  'kimi2T',
-  'kimi2',
+  'kimi25T',
+  'kimi25',
   'qwen3max',
   'grok4',
 ];

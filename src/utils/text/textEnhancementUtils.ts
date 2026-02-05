@@ -2,9 +2,8 @@
 
 // Third-party imports
 import * as vscode from 'vscode';
-
-// Local imports - agent runtime
 import { MODEL_CONFIGS } from 'llm-zoo';
+
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { getSdkErrorMessage } from '@common/errors';
