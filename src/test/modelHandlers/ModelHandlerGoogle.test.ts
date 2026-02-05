@@ -330,16 +330,16 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
     });
 
     assert.ok(response, 'expected a response to be returned');
-    const candidate = response.candidates?.[0];
+    const candidate = response.response.candidates?.[0];
     assert.ok(candidate, 'expected a candidate in the aggregated response');
     assert.equal(
       candidate.content?.parts?.length,
       2,
       'expected both streamed parts to be present',
     );
-    assert.equal(response.text, 'Hello world');
+    assert.equal(response.response.text, 'Hello world');
     assert.equal(candidate.finishReason, FinishReason.STOP);
-    assert.deepEqual(response.usageMetadata, chunkTwo.usageMetadata);
+    assert.deepEqual(response.response.usageMetadata, chunkTwo.usageMetadata);
   });
 
   it('concatenates automaticFunctionCallingHistory across streamed chunks', async () => {
@@ -423,12 +423,12 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
       temperature: 0,
     });
 
-    assert.ok(response.automaticFunctionCallingHistory);
-    assert.equal(response.automaticFunctionCallingHistory?.length, 2);
-    assert.deepEqual(response.automaticFunctionCallingHistory?.[0], {
+    assert.ok(response.response.automaticFunctionCallingHistory);
+    assert.equal(response.response.automaticFunctionCallingHistory?.length, 2);
+    assert.deepEqual(response.response.automaticFunctionCallingHistory?.[0], {
       name: 'callOne',
     });
-    assert.deepEqual(response.automaticFunctionCallingHistory?.[1], {
+    assert.deepEqual(response.response.automaticFunctionCallingHistory?.[1], {
       name: 'callTwo',
     });
   });
