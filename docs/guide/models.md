@@ -12,6 +12,8 @@ TeXRA supports models from multiple providers. Select models from the dropdown i
 
 | Model ID    | Use Case                     | Cost | Speed  |
 | :---------- | :--------------------------- | :--- | :----- |
+| `opus46T`   | Complex tasks with reasoning | $$$$ | Slow   |
+| `opus46`    | High quality, complex tasks  | $$$$ | Slow   |
 | `opus45T`   | Complex tasks with reasoning | $$$$ | Slow   |
 | `opus45`    | High quality, complex tasks  | $$$$ | Slow   |
 | `sonnet45T` | All-rounder with reasoning   | $$$  | Medium |
@@ -84,7 +86,7 @@ GPT-5 reasoning summaries require account verification. Enable with `texra.model
 ## Choosing a Model
 
 - **Simple tasks**: Fast, cheap models (`gemini25f-`, `gpt5--`, `haiku35`)
-- **Complex tasks**: Powerful models (`opus45`, `gpt52pro`, `o1`)
+- **Complex tasks**: Powerful models (`opus46`, `gpt52pro`, `o1`)
 - **Reasoning-heavy**: Thinking models (`sonnet45T`, `deepseekT`, `o3`)
 - **Large documents**: High-context models (`gemini*`, `gpt41`, `gpt5`)
 
@@ -96,7 +98,7 @@ Customize available models in VS Code Settings under `texra.models`:
 "texra.models": [
   "gemini3p",
   "sonnet45T",
-  "opus45T",
+  "opus46T",
   "gpt52",
   "deepseekT"
 ]
