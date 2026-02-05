@@ -143,6 +143,10 @@ private async compactConversation(
   }
 
   // 2. Append summary prompt as user message
+  // Note: This may create consecutive user messages (e.g., when last message is
+  // tool_result). This is intentional and matches the Anthropic SDK's
+  // BetaToolRunner._checkAndCompact() pattern (lines 108-118), which the API accepts.
+  // The compaction result replaces all messages anyway, so alternation is restored.
   cleanedMessages.push({
     role: 'user',
     content: [{ type: 'text', text: COMPACTION_SUMMARY_PROMPT }],
