@@ -305,7 +305,7 @@
           "texra.model.useAnthropic1MBeta": {
             "type": "boolean",
             "default": false,
-            "description": "Attach the `context-1m-2025-08-07` beta header for Claude Sonnet 4 requests to enable the 1M-token context window (usage capped at 200 K by extension).",
+            "description": "Attach the `context-1m-2025-08-07` beta header for Claude Opus 4.6 and Sonnet 4 requests to enable the 1M-token context window (usage capped at 200 K by extension).",
             "scope": "resource"
           },
           "texra.model.instructionPolishModel": {
