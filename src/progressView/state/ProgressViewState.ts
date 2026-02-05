@@ -265,12 +265,14 @@ export class ProgressViewState {
     stream: StreamTabId,
     agentCategory: (typeof AgentCategory)[keyof typeof AgentCategory],
   ): StreamState {
-    let state = this._streamStates.get(stream);
-    if (!state) {
-      state = createStreamState(agentCategory);
+    const existing = this._streamStates.get(stream);
+    // Create new state, or replace if kind doesn't match the agent category
+    if (!existing || existing.kind !== agentCategory) {
+      const state = createStreamState(agentCategory);
       this._streamStates.set(stream, state);
+      return state;
     }
-    return state;
+    return existing;
   }
 
   updateStreamState(
@@ -345,11 +347,9 @@ export class ProgressViewState {
     this.taskStates.set(streamTabId, taskState);
     this.clearStreamHints(streamTabId);
 
-    // Create frontend stream state with correct discriminated type
+    // Create or update frontend stream state with correct discriminated type
     const agentCategory = taskState.agentConfig.agentCategory;
-    if (!this._streamStates.has(streamTabId)) {
-      this._streamStates.set(streamTabId, createStreamState(agentCategory));
-    }
+    this.getOrCreateStreamState(streamTabId, agentCategory);
 
     this.saveTaskStates();
     this.cleanupToolUseAgentRegistry();

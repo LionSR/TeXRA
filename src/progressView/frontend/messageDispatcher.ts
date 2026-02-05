@@ -18,7 +18,6 @@ import {
   type StreamTabInfo,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { getEffectiveRunId } from '@shared/streams/runSelection';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
@@ -171,10 +170,16 @@ function updateStreamInfo(
     const backendState = backendStates?.[stream.name];
     if (backendState) {
       const existing = nextStates.get(stream.name);
-      // Preserve frontend-owned 'ui' property when kinds match
+      // Preserve frontend-owned properties:
+      // - 'ui': frontend UI state (follow-up text, polish state, etc.)
+      // - 'logs': managed by APPEND_LOG/UPDATE_LOGS, not UPDATE_STREAMS
+      // - 'taskGroups': managed by ADD_TASK_GROUP/UPDATE_TASK_GROUP
+      // Backend's _streamStates never populates logs/taskGroups (always [])
       const preserveUI = existing && existing.kind === backendState.kind;
       nextStates.set(stream.name, {
         ...backendState,
+        logs: existing?.logs ?? backendState.logs,
+        taskGroups: existing?.taskGroups ?? backendState.taskGroups,
         ...(preserveUI && { ui: existing.ui }),
         info: stream,
       } as StreamState);
@@ -383,6 +388,7 @@ const handlers: HandlerRegistry = {
       pendingLogUpdates.delete(getPendingLogKey(data.stream, logId));
     }
 
+    // setStreamState skips unknown streams - they'll receive full state via UPDATE_LOGS
     ctx.setStreamState(data.stream, (prev) => ({
       ...prev,
       logs: [...prev.logs, mergedLogMessage],
@@ -491,18 +497,10 @@ const handlers: HandlerRegistry = {
 
   // Run-specific updates
   [PROGRESS_VIEW_COMMANDS.UPDATE_INSTRUCTION]: (data, ctx) => {
-    const { stream, instruction, runId: providedRunId } = data;
-    if (!stream) return;
+    const { stream, instruction, runId } = data;
+    if (!stream || !runId) return;
 
     updateWorkflowState(ctx, stream, (prev) => {
-      const runId =
-        providedRunId ?? getEffectiveRunId(prev, { mode: 'fallback' });
-      if (!runId) {
-        console.warn(
-          '[ProgressView] UPDATE_INSTRUCTION missing runId; skipping update.',
-        );
-        return prev;
-      }
       const { [runId]: _, ...rest } = prev.runInstructions;
       return {
         ...prev,
