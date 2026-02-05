@@ -73,6 +73,13 @@ export interface CreateResponseOptions<
   signal?: AbortSignal;
   /** Optional tool definitions for function calling */
   tools?: ToolDefinition[];
+  /**
+   * Optional callback invoked after successful conversation compaction.
+   * The caller should replace their messages array with the compacted messages
+   * to prevent sending inflated history on subsequent calls.
+   * Uses ProviderMessage[] base type to avoid contravariance issues with generics.
+   */
+  onCompacted?: (compactedMessages: ProviderMessage[]) => void;
 }
 
 /**
