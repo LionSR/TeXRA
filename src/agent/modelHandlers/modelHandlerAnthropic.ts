@@ -86,15 +86,16 @@ import type {
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
   BetaContentBlock,
+  BetaCompactionBlock,
+  BetaCompactionIterationUsage,
   BetaContextManagementConfig,
   BetaContextManagementResponse,
-  BetaClearToolUses20250919EditResponse,
-  BetaClearThinking20251015EditResponse,
   BetaImageBlockParam,
   BetaMessage,
   BetaRedactedThinkingBlock,
   BetaRequestDocumentBlock,
   BetaThinkingBlock,
+  BetaUsage,
   MessageCountTokensParams,
   MessageCreateParams,
 } from '@anthropic-ai/sdk/resources/beta/messages';
@@ -155,6 +156,7 @@ const SONNET_37_OUTPUT_BETA: AnthropicBeta = 'output-128k-2025-02-19';
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
 const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
+const COMPACTION_BETA: AnthropicBeta = 'compact-2026-01-12';
 
 const OPUS_46_FULLNAME = 'claude-opus-4-6';
 
@@ -173,6 +175,12 @@ const CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS = 3;
  * 25% provides more aggressive clearing to reduce frequent cache thrashing.
  */
 const CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT = 25;
+/** Compaction must be triggered at or above this minimum input token threshold. */
+const MIN_COMPACTION_TRIGGER_TOKENS = 50_000;
+/** Compaction trigger runs after clearing to avoid frequent summary calls. */
+const COMPACTION_TRIGGER_OFFSET_PERCENT = 15;
+/** Upper bound for compaction trigger percentage. */
+const COMPACTION_TRIGGER_MAX_PERCENT = 95;
 
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
@@ -368,6 +376,30 @@ export class ModelHandlerAnthropic extends ModelHandler<
       });
     }
 
+    if (
+      this.isClaudeOpus46() &&
+      !contextManagementEdits.some((edit) => edit.type === 'compact_20260112')
+    ) {
+      this.ensureBeta(options, COMPACTION_BETA);
+      const compactionPercent = Math.min(
+        thresholdPercent + COMPACTION_TRIGGER_OFFSET_PERCENT,
+        COMPACTION_TRIGGER_MAX_PERCENT,
+      );
+      const compactionTriggerTokens = Math.max(
+        MIN_COMPACTION_TRIGGER_TOKENS,
+        Math.floor((compactionPercent / 100) * contextWindow),
+      );
+
+      contextManagementEdits.push({
+        type: 'compact_20260112',
+        trigger: {
+          type: 'input_tokens',
+          value: compactionTriggerTokens,
+        },
+        pause_after_compaction: false,
+      });
+    }
+
     options.context_management = {
       ...(options.context_management ?? {}),
       edits: contextManagementEdits,
@@ -466,7 +498,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Strip betas that only apply to message creation (e.g., output length)
     // while keeping context headers needed for accurate token counting.
     const countTokenBetas = options?.betas?.filter(
-      (beta) => beta === CONTEXT_1M_BETA || beta === CONTEXT_MANAGEMENT_BETA,
+      (beta) =>
+        beta === CONTEXT_1M_BETA ||
+        beta === CONTEXT_MANAGEMENT_BETA ||
+        beta === COMPACTION_BETA,
     );
     if (countTokenBetas && countTokenBetas.length > 0) {
       countTokensParams.betas = countTokenBetas;
@@ -789,7 +824,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Log context management events if any edits were applied
-    this.logContextManagementFromResponse(response);
+    this.logContextManagementFromResponse(response, effectiveContextWindow);
 
     return { response };
   }
@@ -798,7 +833,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * Log context management events from the Anthropic response.
    * The response includes applied_edits when server-side context editing was performed.
    */
-  private logContextManagementFromResponse(response: BetaMessage): void {
+  private logContextManagementFromResponse(
+    response: BetaMessage,
+    contextWindow: number,
+  ): void {
     const contextManagement = (
       response as BetaMessage & {
         context_management?: BetaContextManagementResponse | null;
@@ -812,11 +850,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       );
     }
 
-    if (!contextManagement?.applied_edits?.length) {
-      return;
-    }
-
-    const contextWindow = this.config.contextWindow;
+    const appliedEdits = contextManagement?.applied_edits ?? [];
     // Anthropic's input_tokens excludes cached tokens (unlike OpenAI where it's the total).
     // Per SDK docs: "Total input tokens is the summation of input_tokens,
     // cache_creation_input_tokens, and cache_read_input_tokens."
@@ -825,11 +859,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       (response.usage.cache_read_input_tokens ?? 0) +
       (response.usage.cache_creation_input_tokens ?? 0);
 
-    type AppliedEdit =
-      | BetaClearToolUses20250919EditResponse
-      | BetaClearThinking20251015EditResponse;
-
-    for (const edit of contextManagement.applied_edits as AppliedEdit[]) {
+    for (const edit of appliedEdits) {
       const clearedTokens = edit.cleared_input_tokens;
       if (!clearedTokens || clearedTokens <= 0) {
         continue;
@@ -837,10 +867,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
       const isToolUses = edit.type === 'clear_tool_uses_20250919';
       const clearedCount = isToolUses
-        ? ((edit as BetaClearToolUses20250919EditResponse).cleared_tool_uses ??
-          0)
-        : ((edit as BetaClearThinking20251015EditResponse)
-            .cleared_thinking_turns ?? 0);
+        ? (edit.cleared_tool_uses ?? 0)
+        : (edit.cleared_thinking_turns ?? 0);
       const itemLabel = isToolUses ? 'tool use(s)' : 'thinking turn(s)';
       const action = isToolUses ? 'clear_tool_uses' : 'clear_thinking';
       const utilizationReduction = (clearedTokens / contextWindow) * 100;
@@ -859,6 +887,39 @@ export class ModelHandlerAnthropic extends ModelHandler<
         },
       );
     }
+
+    const compactionBlock = response.content.find(
+      (block): block is BetaCompactionBlock => block.type === 'compaction',
+    );
+    if (!compactionBlock) {
+      return;
+    }
+
+    const compactionIteration = (response.usage as BetaUsage).iterations?.find(
+      (iteration): iteration is BetaCompactionIterationUsage =>
+        iteration.type === 'compaction',
+    );
+    const tokensBefore = compactionIteration
+      ? compactionIteration.input_tokens +
+        compactionIteration.cache_read_input_tokens +
+        compactionIteration.cache_creation_input_tokens
+      : totalInputTokens;
+    const details = compactionBlock.content
+      ? `Anthropic native compaction (${compactionBlock.content.length.toLocaleString()} chars)`
+      : 'Anthropic native compaction (empty summary)';
+
+    this.logger.logContextManagement(
+      `Server-side compaction: summarized context`,
+      {
+        action: 'compaction',
+        tokensBefore,
+        tokensAfter: totalInputTokens,
+        contextWindow,
+        utilizationBefore: (tokensBefore / contextWindow) * 100,
+        utilizationAfter: (totalInputTokens / contextWindow) * 100,
+        details,
+      },
+    );
   }
 
   private enforceCacheControlLimit(messages: MessageParam[]): void {
@@ -1529,31 +1590,24 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Note: Anthropic doesn't provide tool_use_tokens in their API response
+    const usageTotals = this.getUsageTokenTotals(responseUsage);
 
     let basePrice = calculateTokenPrice(
-      responseUsage.input_tokens,
-      responseUsage.output_tokens,
+      usageTotals.baseInputTokens,
+      usageTotals.outputTokens,
       this.config.inputPrice,
       this.config.outputPrice,
     );
 
     if (this.capabilities.supportsPromptCaching) {
-      if (
-        'cache_creation_input_tokens' in responseUsage &&
-        responseUsage.cache_creation_input_tokens !== null
-      ) {
+      if (usageTotals.cacheCreationTokens > 0) {
         basePrice +=
-          (responseUsage.cache_creation_input_tokens *
-            this.config.inputPrice *
-            1.25) /
+          (usageTotals.cacheCreationTokens * this.config.inputPrice * 1.25) /
           1e6;
       }
-      if (
-        'cache_read_input_tokens' in responseUsage &&
-        responseUsage.cache_read_input_tokens !== null
-      ) {
+      if (usageTotals.cacheReadTokens > 0) {
         basePrice +=
-          (responseUsage.cache_read_input_tokens *
+          (usageTotals.cacheReadTokens *
             this.config.inputPrice *
             this.capabilities.cacheDiscountFactor) /
           1e6;
@@ -1578,28 +1632,71 @@ export class ModelHandlerAnthropic extends ModelHandler<
       };
     }
 
-    // Anthropic: total = input_tokens + cache_read + cache_creation
-    const baseInput = rawUsage.input_tokens ?? 0;
-    const cacheRead = rawUsage.cache_read_input_tokens ?? 0;
-    const cacheCreation = rawUsage.cache_creation_input_tokens ?? 0;
-    const totalInput = baseInput + cacheRead + cacheCreation;
+    const usageTotals = this.getUsageTokenTotals(rawUsage);
+    const totalInput =
+      usageTotals.baseInputTokens +
+      usageTotals.cacheReadTokens +
+      usageTotals.cacheCreationTokens;
 
     return {
       inputTokens: totalInput,
-      outputTokens: rawUsage.output_tokens ?? 0,
+      outputTokens: usageTotals.outputTokens,
       cost: this.computePrice(rawUsage),
       responseTimeMs,
       provider: 'anthropic',
-      cachedInputTokens: nonZeroOrUndefined(cacheRead),
-      cacheCreationTokens: nonZeroOrUndefined(cacheCreation),
+      cachedInputTokens: nonZeroOrUndefined(usageTotals.cacheReadTokens),
+      cacheCreationTokens: nonZeroOrUndefined(usageTotals.cacheCreationTokens),
       percentageCached: computeCachePercentage(
-        cacheRead + cacheCreation,
+        usageTotals.cacheReadTokens + usageTotals.cacheCreationTokens,
         totalInput,
       ),
       serverToolRequests: nonZeroOrUndefined(
         rawUsage.server_tool_use?.web_search_requests,
       ),
       _native: rawUsage,
+    };
+  }
+
+  /**
+   * Gets Anthropic input/output/cache token totals.
+   * Uses per-iteration usage when available so compaction requests are fully billed.
+   */
+  private getUsageTokenTotals(responseUsage: AnthropicUsage): {
+    baseInputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheCreationTokens: number;
+  } {
+    const usageWithIterations = responseUsage as AnthropicUsage & {
+      iterations?: BetaUsage['iterations'];
+    };
+    const iterations = usageWithIterations.iterations;
+    if (Array.isArray(iterations) && iterations.length > 0) {
+      let baseInputTokens = 0;
+      let outputTokens = 0;
+      let cacheReadTokens = 0;
+      let cacheCreationTokens = 0;
+
+      for (const iteration of iterations) {
+        baseInputTokens += iteration.input_tokens;
+        outputTokens += iteration.output_tokens;
+        cacheReadTokens += iteration.cache_read_input_tokens;
+        cacheCreationTokens += iteration.cache_creation_input_tokens;
+      }
+
+      return {
+        baseInputTokens,
+        outputTokens,
+        cacheReadTokens,
+        cacheCreationTokens,
+      };
+    }
+
+    return {
+      baseInputTokens: responseUsage.input_tokens ?? 0,
+      outputTokens: responseUsage.output_tokens ?? 0,
+      cacheReadTokens: responseUsage.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: responseUsage.cache_creation_input_tokens ?? 0,
     };
   }
 
@@ -1872,7 +1969,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return [];
     }
 
-    return responseObject.content.filter((block) => block.type !== 'tool_use');
+    const assistantContent = responseObject.content.filter(
+      (block) => block.type !== 'tool_use',
+    );
+    if (!this.capabilities.supportsPromptCaching) {
+      return assistantContent;
+    }
+
+    return assistantContent.map((block) =>
+      block.type === 'compaction'
+        ? { ...block, cache_control: EPHEMERAL_CACHE_CONTROL }
+        : block,
+    );
   }
 
   async createToolUseFollowUpMessages(
