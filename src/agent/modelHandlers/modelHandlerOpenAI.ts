@@ -448,11 +448,19 @@ export class ModelHandlerOpenAI<
 
     // Phase 4: EXECUTE
     if (useStreaming) {
-      const response = await this.executeStreamingChat(client, baseParams, signal);
+      const response = await this.executeStreamingChat(
+        client,
+        baseParams,
+        signal,
+      );
       return { response };
     }
 
-    const response = await this.executeNonStreamingChat(client, baseParams, signal);
+    const response = await this.executeNonStreamingChat(
+      client,
+      baseParams,
+      signal,
+    );
     return { response };
   }
 
