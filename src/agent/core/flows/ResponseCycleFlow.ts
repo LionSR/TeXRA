@@ -247,6 +247,12 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
       shouldStop: shared.shouldStop,
       messages: shared.messages,
       systemPrompt: shared.systemPrompt,
+      // Callback to update shared.messages when compaction occurs.
+      // Mutates the array in-place so all references see the compacted messages.
+      onCompacted: (compactedMessages) => {
+        shared.messages.length = 0;
+        shared.messages.push(...compactedMessages);
+      },
     };
   }
 
@@ -279,6 +285,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
           tools: services.modelHandler.capabilities.supportsFunctionCalling
             ? services.setting.tools
             : undefined,
+          onCompacted: prepRes.onCompacted,
         });
 
         const elapsedMs = Date.now() - start;

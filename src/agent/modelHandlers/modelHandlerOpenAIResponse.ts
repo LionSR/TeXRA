@@ -325,10 +325,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     response: Response,
     effectiveMessagesCount: number,
     compactedThisCall: boolean,
+    onCompacted?: (compactedMessages: ResponseInputItem[]) => void,
   ): void {
     // Apply compaction state if compaction happened this call
     if (compactedThisCall) {
-      this.applyCompactionState();
+      this.applyCompactionState(onCompacted);
     }
 
     // Only chain from completed responses - failed/incomplete can't be used
@@ -610,18 +611,29 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /**
    * Apply compaction state updates after successful API call.
    * Clears the pending compaction result and updates conversation state.
+   * If onCompacted callback is provided, invokes it with compacted messages
+   * so the caller can update their message array.
    *
    * Note: cumulativeInputTokens is NOT updated here - it will be set from
    * response.usage.input_tokens after the API call to reflect actual usage.
    */
-  private applyCompactionState(): void {
+  private applyCompactionState(
+    onCompacted?: (compactedMessages: ResponseInputItem[]) => void,
+  ): void {
     if (!this.compactionResult) return;
+
+    // Notify caller with compacted messages BEFORE clearing the result
+    // This allows caller to update their shared.messages array
+    if (onCompacted) {
+      onCompacted(this.compactionResult.compactedMessages);
+    }
 
     // Reset sent messages counter since we're using compacted output
     this.conversationState.sentMessages = 0;
     // Mark as compacted so subsequent requests know to send all messages
     this.conversationState.isCompacted = true;
-    // Clear previous_response_id - compacted output replaces server-side history
+    // Note: previousResponseId is cleared immediately after compaction (before API call)
+    // to avoid "No tool output found" errors. This is a defensive no-op.
     this.previousResponseId = null;
 
     // Clear the pending result
@@ -984,8 +996,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Clear any stale compaction result from previous attempts (ensures clean state on retries)
     this.compactionResult = undefined;
 
-    const { client, messages, temperature, systemPrompt, signal, tools } =
-      options;
+    const {
+      client,
+      messages,
+      temperature,
+      systemPrompt,
+      signal,
+      tools,
+      onCompacted,
+    } = options;
     const streamingToggleEnabled = this.getStreamingConfig();
     const backgroundToggleEnabled = getConfig<boolean>(
       'texra.model.useBackgroundResponses',
@@ -1033,6 +1052,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
       // compactionResult is set if compaction succeeded
       compactedThisCall = this.compactionResult !== undefined;
+      if (compactedThisCall) {
+        // CRITICAL: Clear previousResponseId IMMEDIATELY after successful compaction.
+        // The compacted output replaces the server-side history, so we must not
+        // reference the old response ID - it may have pending tool calls that
+        // aren't in the compacted messages, causing "No tool output found" errors.
+        this.previousResponseId = null;
+      }
     }
 
     // After compaction in THIS call, send all compacted messages.
@@ -1231,6 +1257,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             resumedResponse,
             effectiveMessages.length,
             compactedThisCall,
+            onCompacted,
           );
           return resumedResponse;
         }
@@ -1318,6 +1345,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           response,
           effectiveMessages.length,
           compactedThisCall,
+          onCompacted,
         );
         return response;
       }
@@ -1367,6 +1395,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         response,
         effectiveMessages.length,
         compactedThisCall,
+        onCompacted,
       );
       return response;
     } catch (error) {
