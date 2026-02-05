@@ -156,6 +156,8 @@ const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
 const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
 
+const OPUS_46_FULLNAME = 'claude-opus-4-6';
+
 /**
  * Context management constants for Anthropic's server-side editing.
  * These are reasonable defaults that balance context efficiency with conversation continuity.
@@ -238,6 +240,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
   BetaMessage
 > {
   private cacheControlledBlock?: CacheControlEligibleBlock;
+
+  private isClaudeOpus46(): boolean {
+    return this.config.fullName === OPUS_46_FULLNAME;
+  }
 
   /**
    * Anthropic supports file uploads via their Files API.
@@ -543,7 +549,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
       });
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
 
-      if (this.capabilities.supportsInterleavedThinking) {
+      // Opus 4.6 no longer requires the interleaved-thinking beta header.
+      if (
+        this.capabilities.supportsInterleavedThinking &&
+        !this.isClaudeOpus46()
+      ) {
         this.ensureBeta(options, INTERLEAVED_THINKING_BETA);
       }
 
@@ -559,7 +569,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
       // budget_tokens must be < max_tokens; use 50% to leave room for actual output
       const maxBudget = Math.floor(options.max_tokens * 0.5);
-      const defaultBudget = useStreaming ? 32768 : 4096;
+      const defaultBudget = this.isClaudeOpus46()
+        ? maxBudget
+        : useStreaming
+          ? 32768
+          : 4096;
       const thinkingBudget = Math.min(defaultBudget, maxBudget);
 
       options.thinking = {

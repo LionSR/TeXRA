@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.9] - 2026-02-05
+
+### Features
+
+- Added **Claude Opus 4.6 models** (`opus46`, `opus46T`).
+
 ## [0.35.8] - 2026-02-02
 
 ### Features
