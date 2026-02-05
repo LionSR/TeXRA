@@ -80,19 +80,27 @@ export function resetCycleState<T extends BaseCycleFields>(
 export interface BaseInvocationPrepResult {
   shouldStop: boolean;
   messages: ProviderMessage[];
-  /**
-   * Optional callback invoked when conversation compaction occurs.
-   * The callback receives the compacted messages and should update
-   * the caller's message array to prevent sending inflated history
-   * on subsequent calls.
-   */
-  onCompacted?: (compactedMessages: ProviderMessage[]) => void;
 }
 
 /** Base success data returned from model/tool invocations. */
 export interface BaseInvocationSuccessData {
   response: unknown;
   responseTimeMs?: number;
+  /**
+   * If messages were transformed (e.g., compaction), the updated array.
+   * Undefined means messages were not modified.
+   */
+  updatedMessages?: ProviderMessage[];
+}
+
+/**
+ * Replace array contents in-place to preserve references.
+ * Used when compaction returns new messages - mutating in-place ensures
+ * all code holding references to the array sees the updated contents.
+ */
+export function replaceMessagesInPlace<T>(target: T[], newContents: T[]): void {
+  target.length = 0;
+  target.push(...newContents);
 }
 
 // --- Cycle Result Interpretation ---

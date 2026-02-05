@@ -61,6 +61,7 @@ import type { ToolResultPayload } from './utils/toolAttachmentUtils';
 import type {
   IModelHandler,
   CreateResponseOptions,
+  CreateResponseResult,
   ExtractResponseResult,
   SdkToolCall,
   StopConditionsResult,
@@ -596,9 +597,11 @@ export abstract class ModelHandler<
   /**
    * Generates a model response using the provider's API.
    * @param options Options for creating the response
-   * @returns Promise resolving to provider-specific response object
+   * @returns Promise resolving to result containing response and optionally updated messages
    */
-  abstract createResponse(options: CreateResponseOptions<M, C>): Promise<Resp>;
+  abstract createResponse(
+    options: CreateResponseOptions<M, C>,
+  ): Promise<CreateResponseResult<Resp, M>>;
 
   /**
    * Creates initial message array for conversation with optional images and system prompt.
