@@ -15,42 +15,80 @@ import {
 } from '@shared/schemas/settingsViewMessages';
 import { showLoggedErrorMessage } from '@common/errors';
 import {
+  AgentHistoryManager,
+  type AgentHistoryItem,
+} from '@common/history/AgentHistoryManager';
+import {
   BaseViewMessageHandler,
   SETTINGS_VIEW_COMMANDS,
 } from '@common/webview';
-
-// Memory-related imports
+import { getAgentsBySource, loadAgents } from '@agent/index';
+import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { ULTRA_TIER, MAX_TIER } from '@auth/config';
+import { AUTH_COMMANDS } from '@auth/constants';
+import { getServerSideKeyService } from '@auth/serverKeys';
+import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
+import { runExecuteCommand } from '@commands/agent/executeCommand';
+import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
-import { StorageFS } from '@utils/files';
-import { loadMemoryItems } from './utils/memoryFileSystem';
 import {
   getToolUseMemoryEnabled,
   setToolUseMemoryEnabled,
 } from '@utils/config/constants';
-
-// History-related imports
-import {
-  AgentHistoryManager,
-  type AgentHistoryItem,
-} from '@common/history/AgentHistoryManager';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
-import { runExecuteCommand } from '@commands/agent/executeCommand';
-
-// Profile-related imports
-import type { RemoteAgent } from '@shared/schemas/profileViewMessages';
-import { getAgentsBySource, loadAgents } from '@agent/index';
-import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
-import { SupabaseClient } from '@auth/SupabaseClient';
-import { AUTH_COMMANDS } from '@auth/constants';
-import { ULTRA_TIER, MAX_TIER } from '@auth/config';
-import { getServerSideKeyService } from '@auth/serverKeys';
+import { StorageFS } from '@utils/files';
+import { loadMemoryItems } from './utils/memoryFileSystem';
+import type {
+  RemoteAgent,
+  ProviderKeyStatus,
+} from '@shared/schemas/profileViewMessages';
 
 // Type helper for extracting specific message types
 type MessageFor<C extends SettingsViewInboundMessage['command']> = Extract<
   SettingsViewInboundMessage,
   { command: C }
 >;
+
+const PROVIDER_DISPLAY_NAMES: Record<ApiProvider, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  openRouter: 'OpenRouter',
+  google: 'Google',
+  xai: 'xAI',
+  deepseek: 'DeepSeek',
+  moonshot: 'Moonshot',
+  dashscope: 'DashScope',
+  wolframllmapp: 'Wolfram',
+};
+
+async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
+  return Promise.all(
+    SecretManager.API_PROVIDERS.map(async (provider) => {
+      const secretValue = await SecretManager.get(
+        SecretManager.getApiKeySecretName(provider),
+      );
+      const envValue = process.env[`${provider.toUpperCase()}_API_KEY`];
+
+      let status: ProviderKeyStatus['status'];
+      if (secretValue) {
+        status = 'set';
+      } else if (envValue) {
+        status = 'env';
+      } else {
+        status = 'not-set';
+      }
+
+      return {
+        provider,
+        displayName: PROVIDER_DISPLAY_NAMES[provider],
+        status,
+        keyUrl: PROVIDER_URLS[provider],
+      };
+    }),
+  );
+}
 
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
@@ -102,6 +140,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.SIGN_OUT]: () => this.handleSignOut(),
       [SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE]: (data) =>
         this.handleSetApiAccessMode(data),
+      [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY]: (data) =>
+        this.handleSetProviderKey(data),
+      [SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY]: (data) =>
+        this.handleRemoveProviderKey(data),
+      [SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL]: (data) =>
+        this.handleOpenProviderKeyUrl(data),
     };
   }
 
@@ -173,6 +217,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   public async sendProfileData(webview: vscode.Webview): Promise<void> {
     const isAuthenticated = await SupabaseClient.isAuthenticated();
+    const providerKeyStatuses = await getProviderKeyStatuses();
 
     if (!isAuthenticated) {
       await webview.postMessage({
@@ -189,6 +234,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           ultra: ULTRA_TIER,
           max: MAX_TIER,
         },
+        providerKeyStatuses,
       });
       return;
     }
@@ -241,6 +287,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         max: MAX_TIER,
       },
       accessExpiresAt: accessExpiresAt?.toISOString() ?? null,
+      providerKeyStatuses,
     });
   }
 
@@ -494,5 +541,86 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     void vscode.window.showInformationMessage(
       `Model access changed to: ${modeLabel}`,
     );
+  }
+
+  private async handleSetProviderKey(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_KEY>,
+  ): Promise<void> {
+    const provider = data.provider as ApiProvider;
+    const displayName = PROVIDER_DISPLAY_NAMES[provider] ?? provider;
+
+    const apiKey = await vscode.window.showInputBox({
+      prompt: `Enter ${displayName} API key`,
+      password: true,
+      placeHolder: '************************************',
+    });
+
+    if (!apiKey) {
+      return;
+    }
+
+    try {
+      await SecretManager.set(
+        SecretManager.getApiKeySecretName(provider),
+        apiKey,
+      );
+      void vscode.window.showInformationMessage(
+        `${displayName} API key has been set`,
+      );
+      await this.refreshAfterKeyChange();
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        `Failed to set ${displayName} API key`,
+        error,
+      );
+    } finally {
+      const view = this.getActiveView();
+      if (view) {
+        await this.sendProfileData(view.webview);
+      }
+    }
+  }
+
+  private async handleRemoveProviderKey(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.REMOVE_PROVIDER_KEY>,
+  ): Promise<void> {
+    const provider = data.provider as ApiProvider;
+    const displayName = PROVIDER_DISPLAY_NAMES[provider] ?? provider;
+
+    try {
+      await SecretManager.delete(SecretManager.getApiKeySecretName(provider));
+      void vscode.window.showInformationMessage(
+        `${displayName} API key has been removed`,
+      );
+      await this.refreshAfterKeyChange();
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        `Failed to remove ${displayName} API key`,
+        error,
+      );
+    } finally {
+      const view = this.getActiveView();
+      if (view) {
+        await this.sendProfileData(view.webview);
+      }
+    }
+  }
+
+  /** Refresh main view API key status and model options after key changes. */
+  private async refreshAfterKeyChange(): Promise<void> {
+    await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
+    void vscode.commands.executeCommand('texra.refreshAllOptions');
+  }
+
+  private async handleOpenProviderKeyUrl(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_PROVIDER_KEY_URL>,
+  ): Promise<void> {
+    const provider = data.provider as ApiProvider;
+    const url = PROVIDER_URLS[provider];
+    if (url) {
+      await vscode.env.openExternal(vscode.Uri.parse(url));
+    }
   }
 }

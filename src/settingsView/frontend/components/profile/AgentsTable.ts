@@ -82,15 +82,14 @@ export class AgentsTable extends LitElement {
           </span>
         </td>
         <td class="agent-action">
-          <vscode-button
+          <vscode-toolbar-button
             class="select-btn"
-            appearance="primary"
+            icon="arrow-right"
+            label="Select"
+            title="Select agent"
             data-agent=${agent.name}
             @click=${this.handleSelect}
-          >
-            <span slot="start" class="codicon codicon-arrow-right"></span>
-            Select
-          </vscode-button>
+          ></vscode-toolbar-button>
         </td>
       </tr>
     `;

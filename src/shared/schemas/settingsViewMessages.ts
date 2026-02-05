@@ -11,35 +11,10 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 
-/**
- * Command string literals for schema definitions.
- * Must match SETTINGS_VIEW_COMMANDS values exactly.
- * Exported for use in MessageFor type helper in message handler.
- */
-export const SETTINGS_VIEW_CMD = {
-  // Navigation commands
-  SET_TAB: 'setTab',
-  OPEN_VSCODE_SETTINGS: 'openVscodeSettings',
-  // Memory commands
-  GET_MEMORY_DATA: 'getMemoryData',
-  OPEN_MEMORY_FILE: 'openMemoryFile',
-  OPEN_MEMORY_FOLDER: 'openMemoryFolder',
-  DELETE_MEMORY: 'deleteMemory',
-  GET_MEMORY_ENABLED: 'getMemoryEnabled',
-  SET_MEMORY_ENABLED: 'setMemoryEnabled',
-  // History commands
-  GET_HISTORY_DATA: 'getHistoryData',
-  RERUN_AGENT: 'rerunAgent',
-  RESTORE_AGENT: 'restoreAgent',
-  DELETE_AGENT: 'deleteAgent',
-  CLEAR_HISTORY: 'clearHistory',
-  // Profile commands
-  GET_PROFILE_DATA: 'getProfileData',
-  SELECT_AGENT: 'selectAgent',
-  SIGN_IN: 'signIn',
-  SIGN_OUT: 'signOut',
-  SET_API_ACCESS_MODE: 'setApiAccessMode',
-} as const;
+// SETTINGS_VIEW_CMD is defined in commands.ts to avoid circular dependency.
+// Re-exported here for consumers that expect it from the schema module.
+import { SETTINGS_VIEW_CMD } from '@common/webview/commands';
+export { SETTINGS_VIEW_CMD };
 
 /** Tab name order - single source of truth for tab indices */
 export const SETTINGS_TAB_ORDER = [
@@ -64,7 +39,7 @@ const MAX_TAB_INDEX = SETTINGS_TAB_ORDER.length - 1;
 /** Outbound schema to switch tabs */
 export const SetTabMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_CMD.SET_TAB),
-  tabIndex: z.number().int().min(0).max(MAX_TAB_INDEX),
+  tabIndex: z.int().min(0).max(MAX_TAB_INDEX),
 });
 
 export type SetTabMessage = z.infer<typeof SetTabMessageSchema>;
@@ -92,10 +67,12 @@ export {
   RemoteAgentSchema,
   ApiAccessModeSchema,
   TierConstantsSchema,
+  ProviderKeyStatusSchema,
   type ProfileUser,
   type RemoteAgent,
   type ApiAccessMode,
   type TierConstants,
+  type ProviderKeyStatus,
   type SelectAgentMessage,
   type SetApiAccessModeMessage,
 } from './profileViewMessages';
@@ -180,6 +157,21 @@ const SetApiAccessModeInboundMessageSchema = z.object({
   mode: z.enum(['included', 'personal']),
 });
 
+const SetProviderKeyMessageSchema = z.object({
+  command: z.literal(CMD.SET_PROVIDER_KEY),
+  provider: z.string().min(1),
+});
+
+const RemoveProviderKeyMessageSchema = z.object({
+  command: z.literal(CMD.REMOVE_PROVIDER_KEY),
+  provider: z.string().min(1),
+});
+
+const OpenProviderKeyUrlMessageSchema = z.object({
+  command: z.literal(CMD.OPEN_PROVIDER_KEY_URL),
+  provider: z.string().min(1),
+});
+
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = z.object({
   command: z.literal(CMD.OPEN_VSCODE_SETTINGS),
@@ -213,6 +205,9 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SignInMessageSchema,
     SignOutMessageSchema,
     SetApiAccessModeInboundMessageSchema,
+    SetProviderKeyMessageSchema,
+    RemoveProviderKeyMessageSchema,
+    OpenProviderKeyUrlMessageSchema,
   ],
 );
 

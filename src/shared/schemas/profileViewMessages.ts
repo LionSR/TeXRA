@@ -40,6 +40,14 @@ export const TierConstantsSchema = z.object({
 });
 export type TierConstants = z.infer<typeof TierConstantsSchema>;
 
+export const ProviderKeyStatusSchema = z.object({
+  provider: z.string(),
+  displayName: z.string(),
+  status: z.enum(['set', 'env', 'not-set']),
+  keyUrl: z.string(),
+});
+export type ProviderKeyStatus = z.infer<typeof ProviderKeyStatusSchema>;
+
 // ============================================================
 // Outbound message schemas (backend → frontend)
 // ============================================================
@@ -56,6 +64,7 @@ export const UpdateProfileMessageSchema = z.object({
   allowedModels: z.array(z.string()).nullable(),
   tierConstants: TierConstantsSchema,
   accessExpiresAt: z.string().nullish(),
+  providerKeyStatuses: z.array(ProviderKeyStatusSchema).prefault([]),
 });
 export type UpdateProfileMessage = z.infer<typeof UpdateProfileMessageSchema>;
 
