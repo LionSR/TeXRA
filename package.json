@@ -1710,7 +1710,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",
     "@cantoo/pdf-lib": "^2.5.3",
-    "@google/genai": "^1.39.0",
+    "@google/genai": "^1.40.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@lit-labs/virtualizer": "^2.1.1",
     "@lit/context": "^1.1.6",
