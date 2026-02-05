@@ -105,6 +105,10 @@ export class ProgressEventHandler {
       isRemote,
       hasMultipleOutputs,
     });
+    // Ensure stream state exists so it's included in getAllStreamStates()
+    if (agentCategory) {
+      this.state.getOrCreateStreamState(streamId, agentCategory);
+    }
     this.maybeUpdateFilterForCategory(agentCategory);
     this.state.activeStream = streamId;
     this.replayPendingTaskGroups(streamId);
@@ -270,28 +274,29 @@ export class ProgressEventHandler {
     const runId =
       runIdHint === undefined ? this.state.getActiveRunId(stream) : runIdHint;
 
-    const existingInstruction = runId
-      ? this.state.getRunInstruction(stream, runId)
-      : undefined;
+    // Skip update if no runId - frontend can't store instruction without it
+    if (!runId) {
+      return;
+    }
+
+    const existingInstruction = this.state.getRunInstruction(stream, runId);
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(
       taskState,
       existingInstruction?.timestamp,
     );
 
     // Persist instruction if both runId and instruction exist
-    if (runId) {
-      if (instructionUpdate) {
-        void this.state.setRunInstruction(stream, runId, instructionUpdate);
-      } else {
-        void this.state.deleteRunInstruction(stream, runId);
-      }
+    if (instructionUpdate) {
+      void this.state.setRunInstruction(stream, runId, instructionUpdate);
+    } else {
+      void this.state.deleteRunInstruction(stream, runId);
     }
 
     this.webviewUpdater.updateInstruction(
       stream,
       instructionUpdate ?? null,
       category,
-      runId ?? null,
+      runId,
     );
   }
 
@@ -441,6 +446,8 @@ export class ProgressEventHandler {
     this.state.updateStreamHints(streamId, {
       agentCategory: AgentCategory.Workflow,
     });
+    // Ensure stream state exists so it's included in getAllStreamStates()
+    this.state.getOrCreateStreamState(streamId, AgentCategory.Workflow);
     this.maybeUpdateFilterForCategory(AgentCategory.Workflow);
     this.state.activeStream = streamId;
 
