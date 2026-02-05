@@ -18,7 +18,6 @@ import {
   type StreamTabInfo,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { getEffectiveRunId } from '@shared/streams/runSelection';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
@@ -492,18 +491,10 @@ const handlers: HandlerRegistry = {
 
   // Run-specific updates
   [PROGRESS_VIEW_COMMANDS.UPDATE_INSTRUCTION]: (data, ctx) => {
-    const { stream, instruction, runId: providedRunId } = data;
-    if (!stream) return;
+    const { stream, instruction, runId } = data;
+    if (!stream || !runId) return;
 
     updateWorkflowState(ctx, stream, (prev) => {
-      const runId =
-        providedRunId ?? getEffectiveRunId(prev, { mode: 'fallback' });
-      if (!runId) {
-        console.warn(
-          '[ProgressView] UPDATE_INSTRUCTION missing runId; skipping update.',
-        );
-        return prev;
-      }
       const { [runId]: _, ...rest } = prev.runInstructions;
       return {
         ...prev,
