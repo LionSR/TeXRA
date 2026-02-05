@@ -73,13 +73,26 @@ export interface CreateResponseOptions<
   signal?: AbortSignal;
   /** Optional tool definitions for function calling */
   tools?: ToolDefinition[];
+}
+
+/**
+ * Result from createResponse, optionally including updated messages
+ * after compaction or other transformations.
+ *
+ * @template Resp - Provider-specific response type
+ * @template M - Provider-specific message type
+ */
+export interface CreateResponseResult<
+  Resp,
+  M extends ProviderMessage = ProviderMessage,
+> {
+  /** The provider response */
+  response: Resp;
   /**
-   * Optional callback invoked after successful conversation compaction.
-   * The caller should replace their messages array with the compacted messages
-   * to prevent sending inflated history on subsequent calls.
-   * Uses ProviderMessage[] base type to avoid contravariance issues with generics.
+   * If messages were transformed (e.g., compaction), the new array.
+   * Undefined means messages were not modified - caller keeps original.
    */
-  onCompacted?: (compactedMessages: ProviderMessage[]) => void;
+  updatedMessages?: M[];
 }
 
 /**
@@ -222,8 +235,11 @@ export interface IModelHandler<
   /**
    * Generate a response from the model.
    * @param options Options for creating the response
+   * @returns Result containing the response and optionally updated messages
    */
-  createResponse(options: CreateResponseOptions<M, C>): Promise<Resp>;
+  createResponse(
+    options: CreateResponseOptions<M, C>,
+  ): Promise<CreateResponseResult<Resp, M>>;
 
   /** Initialize the conversation for the first round. */
   initializeMessages(
