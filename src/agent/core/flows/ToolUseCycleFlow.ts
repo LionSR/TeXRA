@@ -527,7 +527,10 @@ class ToolUseProcessNode<C> extends BaseNode<
 }
 
 /** Tools that may take a while and benefit from showing in-progress state. */
-const SLOW_TOOLS = new Set(['wolfram', 'web_fetch', 'web_search']);
+const SLOW_TOOLS = new Set(['bash', 'wolfram', 'web_fetch', 'web_search']);
+
+/** Tools that defer in-progress logging until after approval. */
+const DEFERRED_LOG_TOOLS = new Set(['bash']);
 
 /**
  * Result of executing a single tool call, capturing everything needed
@@ -604,6 +607,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     options: ToolUseCycleOptions<C>,
     tracker: FileInteractionState,
     todoState: TodoState,
+    onExecutionReady?: () => void,
   ): Promise<ToolResult> {
     if (!tool) {
       return { error: `Unknown tool ${call.name}`, isError: true };
@@ -617,6 +621,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
           streamId: options.logger.streamId,
           executionId: options.executionId,
           toolCallId: call.callId,
+          onExecutionReady,
         },
         () => tool.call(parsedInput),
       );
@@ -635,11 +640,26 @@ class ToolUseDispatchNode<C> extends BatchNode<
   ): Promise<ToolExecutionResult> {
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
     const tool = options.toolRegistry.get(call.name);
+    const isDeferred = DEFERRED_LOG_TOOLS.has(call.name);
 
-    // Capture groupId at start to ensure consistent grouping for all tools
-    const logRef = SLOW_TOOLS.has(call.name)
-      ? options.logger.logToolUseStart(call.name, parsedInput ?? call.raw)
-      : { logId: undefined, groupId: options.logger.resolveActiveGroupId() };
+    // Capture groupId at start. For deferred tools, delay logging until onExecutionReady.
+    const logRef: { logId: string | undefined; groupId: string | undefined } =
+      SLOW_TOOLS.has(call.name) && !isDeferred
+        ? options.logger.logToolUseStart(call.name, parsedInput ?? call.raw)
+        : { logId: undefined, groupId: options.logger.resolveActiveGroupId() };
+
+    const onExecutionReady = isDeferred
+      ? () => {
+          if (!logRef.logId) {
+            const ref = options.logger.logToolUseStart(
+              call.name,
+              parsedInput ?? call.raw,
+              logRef.groupId,
+            );
+            logRef.logId = ref.logId;
+          }
+        }
+      : undefined;
 
     const result = await this.invokeToolSafely(
       call,
@@ -648,6 +668,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
       options,
       tracker,
       todoState,
+      onExecutionReady,
     );
 
     const trackedEdits = tracker.recordEdits(result.edits);
