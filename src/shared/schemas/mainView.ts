@@ -578,16 +578,27 @@ export const LatexdiffvcMessageSchema = z.object({
   commitHash: z.string(),
 });
 
-export const LatexdiffvcOperationMessageSchema = z.object({
-  command: z.enum([
-    MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC,
-    MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC,
-  ]),
+const latexdiffvcOperationFields = {
   inputFile: z.string(),
   baseFile: z.string(),
   commitHash: z.string(),
   clean: z.boolean().nullish(),
+};
+
+const PackLatexdiffvcMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC),
+  ...latexdiffvcOperationFields,
 });
+
+const CleanLatexdiffvcMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC),
+  ...latexdiffvcOperationFields,
+});
+
+export const LatexdiffvcOperationMessageSchema = z.union([
+  PackLatexdiffvcMessageSchema,
+  CleanLatexdiffvcMessageSchema,
+]);
 
 export const MainViewMessageSchema = z.discriminatedUnion('command', [
   SetModelOptionsMessageSchema,
@@ -649,7 +660,7 @@ export type LatexdiffvcOperationMessage = z.infer<
 // ============================================================
 
 const commandOnly = <T extends string>(command: T) =>
-  z.object({ command: z.literal(command) }).passthrough();
+  z.object({ command: z.literal(command) });
 
 const withOptionalFilePath = <T extends string>(command: T) =>
   z.object({ command: z.literal(command), filePath: z.string().optional() });
@@ -865,22 +876,50 @@ const BannerMessages = [
 ] as const;
 
 const GitDiffMessages = [
-  commandOnly(MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS),
+  RequestRecentCommitsMessageSchema,
   commandOnly(MAIN_VIEW_COMMANDS.REFRESH_COMMITS),
-  commandOnly(MAIN_VIEW_COMMANDS.LATEXDIFF),
-  commandOnly(MAIN_VIEW_COMMANDS.LATEXDIFFVC),
-  commandOnly(MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC),
-  commandOnly(MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC),
+  LatexdiffMessageSchema,
+  LatexdiffvcMessageSchema,
+  PackLatexdiffvcMessageSchema,
+  CleanLatexdiffvcMessageSchema,
 ] as const;
+
+const singleOperationFields = {
+  inputFile: z.string(),
+  agent: z.string(),
+  model: z.string(),
+};
+
+const PackSingleMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.PACK_SINGLE),
+  ...singleOperationFields,
+});
+
+const CleanSingleMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.CLEAN_SINGLE),
+  ...singleOperationFields,
+});
+
+const PackMultipleMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.PACK_MULTIPLE),
+  ...singleOperationFields,
+  outputFiles: z.array(z.string()).optional(),
+});
+
+const CleanMultipleMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE),
+  ...singleOperationFields,
+  outputFiles: z.array(z.string()).optional(),
+});
 
 const HousekeepingMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.CLEAN_OUTPUT),
   commandOnly(MAIN_VIEW_COMMANDS.CLEAN_BUILD),
   commandOnly(MAIN_VIEW_COMMANDS.INDENT_TEX),
-  commandOnly(MAIN_VIEW_COMMANDS.PACK_SINGLE),
-  commandOnly(MAIN_VIEW_COMMANDS.CLEAN_SINGLE),
-  commandOnly(MAIN_VIEW_COMMANDS.PACK_MULTIPLE),
-  commandOnly(MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE),
+  PackSingleMessageSchema,
+  CleanSingleMessageSchema,
+  PackMultipleMessageSchema,
+  CleanMultipleMessageSchema,
 ] as const;
 
 const NavigationMessages = [
