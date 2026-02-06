@@ -22,7 +22,7 @@ import {
 } from '@common/errors/sdkErrorUtils';
 
 // Type imports
-import type { ModelConfig } from '@model';
+import type { ModelConfig } from 'llm-zoo';
 
 // Type imports
 import type { ToolFileAttachment } from '@tools/result';
