@@ -40,11 +40,12 @@ export class MainViewProvider
   // Static flag to track if commands have been registered
   private static commandsRegistered = false;
 
-  // Debounced refresh methods using perfect-debounce
+  // Debounced refresh for agent option changes
   private debouncedRefreshAgentOptions = debounce(
     this.refreshAgentOptions.bind(this),
     DEBOUNCE_OPTIONS_MS,
   );
+
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
     this.messageHandler = new MainViewMessageHandler(context);
