@@ -35,9 +35,9 @@ import {
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import { getConfig, K_SLICE } from '@utils/config';
+import { K_SLICE } from '@utils/config';
+import { getProviderStreaming, getGlobalStreaming } from '@utils/config/constants';
 import type { FileLocation } from '@utils/files';
-import { capitalize } from '@utils/text/stringUtils';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {
   resolveBaseUrl,
@@ -404,27 +404,16 @@ export abstract class ModelHandler<
    * @returns Boolean indicating if streaming should be enabled
    */
   public getStreamingConfig(): boolean {
-    const globalDefault = getConfig<boolean>('texra.model.useStreaming', true);
-
-    if (
-      this.config.openRouterOnly ||
-      getConfig<boolean>('texra.model.useOpenRouter', false)
-    ) {
-      // OpenRouter defaults to streaming off (different from other providers)
-      return getConfig<boolean>('texra.model.useStreamingOpenrouter', false);
+    if (shouldUseOpenRouter(this.config)) {
+      return getProviderStreaming('openrouter');
     }
 
     // ModelProvider.OTHERS has no provider-specific streaming config
     if (this.config.provider === ModelProvider.OTHERS) {
-      return globalDefault;
+      return getGlobalStreaming();
     }
 
-    // Derive config key suffix from provider enum value (e.g., 'openai' -> 'Openai')
-    const suffix = capitalize(this.config.provider);
-    return getConfig<boolean>(
-      `texra.model.useStreaming${suffix}`,
-      globalDefault,
-    );
+    return getProviderStreaming(this.config.provider);
   }
 
   get isOReasoningModel(): boolean {
