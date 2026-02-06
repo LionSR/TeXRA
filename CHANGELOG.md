@@ -2,10 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.35.9] - 2026-02-05
+## [0.35.9] - 2026-02-06
 
 ### Features
 
+- Added **model selection UI** in Models tab with provider-grouped checkboxes, deprecation toggles, and tier availability indicators.
+- Added **polish model dropdown** in the model selection section.
 - Added **Claude Opus 4.6 models** (`opus46`, `opus46T`).
 - Added **inline provider API key management** in the Models tab with set/remove/status for all providers.
 - Added **unified Dashboard** consolidating history, memory, and profile views with a searchable, collapsible history list.
