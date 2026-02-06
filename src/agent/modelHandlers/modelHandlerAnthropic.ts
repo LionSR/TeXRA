@@ -525,12 +525,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
     ).context_management;
 
     if (contextMgmtResponse?.original_input_tokens) {
-      const clearedTokens =
+      const tokenDelta =
         contextMgmtResponse.original_input_tokens -
         responseTokenCount.input_tokens;
-      this.logger.debug(
-        `Token count: ${responseTokenCount.input_tokens} (after clearing ${clearedTokens} tokens from ${contextMgmtResponse.original_input_tokens})`,
-      );
+
+      if (tokenDelta >= 0) {
+        this.logger.debug(
+          `Token count: ${responseTokenCount.input_tokens} (after clearing ${tokenDelta} tokens from ${contextMgmtResponse.original_input_tokens})`,
+        );
+      } else {
+        this.logger.debug(
+          `Token count: ${responseTokenCount.input_tokens} (context management increased count by ${Math.abs(tokenDelta)} tokens from ${contextMgmtResponse.original_input_tokens})`,
+        );
+      }
     } else {
       this.logger.debug(
         `Token count of message: ${responseTokenCount.input_tokens}`,
@@ -851,7 +858,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     ).context_management;
 
     // Debug logging to diagnose context management response
-    if (contextManagement) {
+    if (contextManagement?.applied_edits?.length) {
       this.logger.debug(
         `Context management response received: ${JSON.stringify(contextManagement)}`,
       );
