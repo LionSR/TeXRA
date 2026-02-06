@@ -199,6 +199,12 @@ interface CacheControlCompactionBlock {
   cache_control?: CacheControlEphemeral | null;
 }
 
+type CacheControlInspectableBlock =
+  | ContentBlockParam
+  | ContentBlock
+  | CacheControlCompactionBlock
+  | undefined;
+
 const EPHEMERAL_CACHE_CONTROL: CacheControlEphemeral = {
   type: 'ephemeral',
 };
@@ -206,7 +212,7 @@ const EPHEMERAL_CACHE_CONTROL: CacheControlEphemeral = {
 const MAX_CACHE_CONTROLLED_BLOCKS = 4;
 
 const isCacheControlEligibleBlock = (
-  block: unknown,
+  block: CacheControlInspectableBlock,
 ): block is CacheControlEligibleBlock => {
   if (!block || typeof block !== 'object') {
     return false;
@@ -217,7 +223,7 @@ const isCacheControlEligibleBlock = (
 };
 
 const isCompactionCacheControlBlock = (
-  block: unknown,
+  block: CacheControlInspectableBlock,
 ): block is CacheControlCompactionBlock => {
   if (!block || typeof block !== 'object') {
     return false;
