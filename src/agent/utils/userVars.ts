@@ -178,13 +178,14 @@ async function getFileVars(
 ): Promise<UserVars> {
   const userVars: UserVars = {};
 
-  // Log file categories being loaded (skip for tool-use agents)
+  // Log file categories being loaded (skip for tool-use agents).
+  // Media files are excluded: they have no user vars (display-only in Init)
+  // and are already logged with full load results by MediaExtractionNode in r0.
   if (agentSetting.agentCategory !== AgentCategory.ToolUse) {
     await logFileCategoriesWithExistence(logger, [
       ['Input Files', getCategoryFiles(agentConfig, 'INPUT')],
       ['Reference Files', getCategoryFiles(agentConfig, 'REFERENCE')],
       ['Auxiliary Files', getCategoryFiles(agentConfig, 'AUXILIARY')],
-      ['Media Files', getCategoryFiles(agentConfig, 'MEDIA')],
     ]);
   }
 
