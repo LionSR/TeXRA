@@ -101,6 +101,7 @@ export class LogList extends LitElement {
   private stateManager?: PersistedState<LogListState>;
   private toggleStates: ToggleStateStore;
   private activeStreamId: string | null = null;
+  private shouldScrollToBottom = false;
 
   constructor() {
     super();
@@ -128,6 +129,7 @@ export class LogList extends LitElement {
       return;
     }
     this.activeStreamId = streamId;
+    this.shouldScrollToBottom = true;
     this.initializeState(streamId);
   }
 
@@ -145,8 +147,14 @@ export class LogList extends LitElement {
   }
 
   override updated(): void {
-    // Scroll to bottom after render if the user is already near the end
-    this.taskGroupList?.scrollToBottomIfNearEnd();
+    if (this.shouldScrollToBottom) {
+      // Force scroll to bottom when switching to a different stream tab
+      this.shouldScrollToBottom = false;
+      this.taskGroupList?.scrollToBottom();
+    } else {
+      // Scroll to bottom after render if the user is already near the end
+      this.taskGroupList?.scrollToBottomIfNearEnd();
+    }
   }
 
   // ============================================================
