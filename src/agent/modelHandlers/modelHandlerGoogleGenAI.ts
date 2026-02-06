@@ -47,7 +47,7 @@ import {
 } from '@common/errors/sdkErrorUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 
-import { ReasoningEffort } from '@model/ModelConfig';
+import { ReasoningEffort } from 'llm-zoo';
 
 // Internal imports
 import replacementEngine from '@replacement/engine';

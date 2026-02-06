@@ -17,7 +17,7 @@ import {
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Type imports
-import type { ModelCapabilities } from '@model/ModelConfig';
+import type { ModelCapabilities } from 'llm-zoo';
 
 // Internal imports
 import {
