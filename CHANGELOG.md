@@ -6,9 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- Added **Claude Opus 4.6 models** (`opus46`, `opus46T`).
 - Added **model selection UI** in Models tab with provider-grouped checkboxes, deprecation toggles, and tier availability indicators.
 - Added **polish model dropdown** in the model selection section.
-- Added **Claude Opus 4.6 models** (`opus46`, `opus46T`).
 - Added **inline provider API key management** in the Models tab with set/remove/status for all providers.
 - Added **unified Dashboard** consolidating history, memory, and profile views with a searchable, collapsible history list.
 - Added **diff display** for edit tool in progress view with inline line numbers and file links.
@@ -16,6 +16,10 @@ All notable changes to this project will be documented in this file.
 - Task Progress section now **collapsed by default** for a cleaner UI.
 - Orchestrator now shows available tools in the **TOOL_USE_AGENTS** list.
 - Increased **default session retention** to 2 weeks.
+- Added **Anthropic server compaction** support with compaction summaries surfaced in progress view.
+- Migrated **streaming & endpoint settings** from VS Code config to Settings View.
+- Enabled **1M context window beta** for Claude Opus 4.6.
+- Added **workspace info** to agent system prompts for better project context.
 
 ### Bug Fixes
 
@@ -28,14 +32,17 @@ All notable changes to this project will be documented in this file.
 - Fixed **token counting accuracy** across model handlers and inflated message history after compaction.
 - Fixed **LatexDiff UI regression**.
 - Fixed error message titles not being selectable/copyable.
+- Fixed **duplicate media file listing** in Init stage progress view.
+- Fixed **progress view state** issues (stream initialization, missing runId handling, status drift).
 
 ### Improvements
 
 - Replaced buttons with codicon toolbar buttons across settings view and progress view for a more native VS Code look.
 - Simplified user message styling to minimalist VS Code native look.
 - Consolidated webview styles into shared commons bundle and `.panel-collapsible` class.
+- Improved **grep tool descriptions** to prevent output_mode errors.
 - Faster webpack builds with `transpileOnly`.
-- Updated dependencies (supabase, glob, minimatch, jsdom, @vscode/test-cli, globals).
+- Updated dependencies (supabase, glob, minimatch, jsdom, @vscode/test-cli, globals, esbuild, @openrouter/sdk).
 
 ## [0.35.8] - 2026-02-02
 
