@@ -158,7 +158,7 @@ async function handleFollowUpResult(
         if (!resumed) {
           // Fallback: show message if auto-resume fails
           await vscode.window.showInformationMessage(
-            'Message queued. Click Resume to process it.',
+            'Message queued. Auto-resume failed — start a new agent task to continue.',
           );
         }
       }
