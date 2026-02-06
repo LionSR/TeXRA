@@ -30,19 +30,19 @@ Add `deprecated: boolean` (default `false`) to `ModelConfig` interface. Mark leg
 
 | Provider | Current | Deprecated |
 |----------|---------|------------|
-| Anthropic (21) | opus46T/46, opus45T/45, opus41T/41, opus4T/4, sonnet45T/45, sonnet4T/4, haiku45T/45 (14) | opus3, sonnet37T/37, sonnet36/35/3, haiku35/3 (7) |
-| OpenAI (31) | gpt52/52pro/52codex, gpt51, gpt5/5pro/5-/5--, gpt41/41-/41-- (11) | gpt45, gpt4o/4o-/4ol/4t, o3pro/3/3-, o4-, o1pro/1/1preview/1-, o3-dr/o4-mini-dr, gptoss/- (18) |
-| Google (6) | all 6 (0 deprecated) | — |
-| DeepSeek (7) | deepseek, deepseekT, deepseekT+ (3) | dsv3, dsr1, dsv3o, dsr1o (4) |
-| xAI (5) | grok4, grok3, grok3- (3) | grok2, grok2v (2) |
-| Moonshot (8) | kimi25, kimi25T, kimi2, kimi2+ (4) | kimi2T/2T+, kimi, kimiv, kimit (5) |
+| Anthropic (21) | opus46T/46, sonnet45T/45, haiku45T/45 (6) | opus45T/45, opus41T/41, opus4T/4, sonnet4T/4, sonnet37T/37, sonnet36/35/3, opus3, haiku35/3 (15) |
+| OpenAI (28) | gpt52/52pro/52codex, gpt41/41- (5) | gpt51, gpt5/5pro/5-/5--, gpt41--, gpt45, gpt4o/4o-/4ol/4t, o3pro/3/3-, o4-, o1pro/1/1preview/1-, o3-dr/o4-mini-dr, gptoss/- (23) |
+| Google (6) | gemini3p/3f (2) | gemini25p/25f/25f0617/25f- (4) |
+| DeepSeek (7) | deepseek, deepseekT (2) | deepseekT+, dsv3, dsr1, dsv3o, dsr1o (5) |
+| xAI (5) | grok4 (1) | grok3/3-, grok2/2v (4) |
+| Moonshot (8) | kimi25, kimi25T (2) | kimi2/2+, kimi2T/2T+, kimi, kimiv, kimit (7) |
 | DashScope (3) | all 3 (0 deprecated) | — |
 | **Copilot (1)** | **filtered out of model list** | — |
 | **Others (2)** | — | llama31, qvq-72b (2, **filtered out**) |
 
-**Totals: 84 → 44 current shown + 38 deprecated (hidden by default) + 2 filtered out**
+**Totals: 83 → 21 current shown + 61 deprecated (hidden by default) + 1 filtered out (copilot)**
 
-Rule of thumb: all Claude 3.x models are deprecated (Claude 4 exists). Similar generational logic for other providers.
+As implemented in llm-zoo v1.0.5: only the latest generation per model line is current. All Claude 3.x/4.0-4.5, GPT-4.x/5.0-5.1, o-series, Gemini 2.5, Grok 2-3, etc. are deprecated.
 
 ---
 
@@ -115,36 +115,29 @@ All non-deprecated. Stored in `computeModelOptions.ts` as exported constant. Not
 │                                                                  │
 │ Polish model: [ sonnet45                                    ▼ ]  │
 │                                                                  │
-│ ▸ Anthropic                                       4/14 enabled   │
-│ ▾ OpenAI                                          3/11 enabled   │
+│ ▸ Anthropic                                        4/6  enabled   │
+│ ▾ OpenAI                                           3/5  enabled   │
 │ ┌────────────────────────────────────────────────────────────┐   │
 │ │ ☑ gpt41          128K     $2.00/$8.00                      │   │
 │ │ ☐ gpt41-         128K     $0.40/$1.60                      │   │
-│ │ ☐ gpt41--        128K     $0.10/$0.40                      │   │
-│ │ ☐ gpt5           128K     $2.00/$8.00                      │   │
-│ │ ☐ gpt5-          128K     $0.30/$1.20                      │   │
-│ │ ☐ gpt5--         128K     $0.08/$0.30                      │   │
-│ │ ☐ gpt5pro        128K     $5.00/$20.00                     │   │
-│ │ ☐ gpt51          128K     $2.50/$10.00                     │   │
 │ │ ☑ gpt52          256K     $2.50/$10.00                     │   │
-│ │ ☑ gpt52pro       256K     $5.00/$25.00                     │   │
 │ │ ☐ gpt52codex     256K     $2.50/$10.00                     │   │
+│ │ ☑ gpt52pro       256K     $5.00/$25.00                     │   │
 │ │                                                            │   │
-│ │ ▸ 18 deprecated                                            │   │
+│ │ ▸ 23 deprecated                                            │   │
 │ │ ┌──────────────────────────────────────────────────────┐   │   │
+│ │ │ ☐ gpt41--       128K     $0.10/$0.40                 │   │   │
 │ │ │ ☐ gpt45         128K     $10.00/$30.00               │   │   │
 │ │ │ ☐ gpt4o         128K     $2.50/$10.00                │   │   │
-│ │ │ ☐ gpt4t         128K     $10.00/$30.00               │   │   │
-│ │ │ ☐ o1            200K     $15.00/$60.00               │   │   │
 │ │ │ ☐ o3            200K     $10.00/$40.00               │   │   │
 │ │ │ ...                                                  │   │   │
 │ │ └──────────────────────────────────────────────────────┘   │   │
 │ └────────────────────────────────────────────────────────────┘   │
-│ ▸ Google                                          2/6  enabled   │
-│ ▸ DeepSeek                                        1/3  enabled   │
-│ ▸ xAI                                             1/3  enabled   │
-│ ▸ Moonshot                                        2/4  enabled   │
-│ ▸ DashScope                                       1/3  enabled   │
+│ ▸ Google                                           2/2  enabled   │
+│ ▸ DeepSeek                                         1/2  enabled   │
+│ ▸ xAI                                              1/1  enabled   │
+│ ▸ Moonshot                                         2/2  enabled   │
+│ ▸ DashScope                                        1/3  enabled   │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -458,7 +451,7 @@ Remove `'texra.models'` from `watchConfig()` array. The Settings View handler ca
 
 ## Edge Cases
 
-1. **Fresh install** — `globalSM.get(ENABLED_MODELS)` returns `undefined` → uses `DEFAULT_MODELS`. All 14 defaults are non-deprecated current models.
+1. **Fresh install** — `globalSM.get(ENABLED_MODELS)` returns `undefined` → uses `DEFAULT_MODELS`. All 14 defaults are non-deprecated current models (verified against llm-zoo v1.0.5).
 
 2. **User enables deprecated model** — Works normally. Model appears in dropdown. No special treatment at runtime.
 
