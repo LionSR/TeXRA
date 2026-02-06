@@ -2,6 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
 
 // Type imports
@@ -376,6 +377,34 @@ describe('ModelHandlerAnthropic message guards', () => {
       cacheControlledBlocks.map((block) => (block as { text?: string }).text),
       ['block-1', 'block-2', 'block-3', 'block-4'],
       'the four most recent blocks should retain cache control markers',
+    );
+  });
+
+  it('preserves compaction cache markers during cache control enforcement', () => {
+    const handler = createAnthropicHandler();
+    const compactionBlock = {
+      type: 'compaction',
+      content: '<summary>state</summary>',
+      cache_control: { type: 'ephemeral' },
+    };
+    const messageContent: ContentBlockParam[] = [
+      { type: 'text', text: 'block-0', citations: null },
+      compactionBlock as unknown as ContentBlockParam,
+      { type: 'text', text: 'block-1', citations: null },
+    ];
+    const messages: MessageParam[] = [
+      { role: 'assistant', content: messageContent },
+    ];
+
+    (handler as any).enforceCacheControlLimit(messages);
+
+    const preservedCompaction = (messages[0].content as any[]).find(
+      (block) => block.type === 'compaction',
+    );
+    assert.deepEqual(
+      preservedCompaction?.cache_control,
+      { type: 'ephemeral' },
+      'compaction cache marker should remain on replayed assistant content',
     );
   });
 
@@ -896,5 +925,304 @@ describe('ModelHandlerAnthropic message guards', () => {
       betas.includes('context-1m-2025-08-07'),
       'should include the 1M context beta header when enabled',
     );
+  });
+
+  it('adds native compaction context edit for Claude Opus 4.6 tool-use runs', async () => {
+    const handler = createAnthropicHandler({
+      supportsTokenCounting: false,
+      supportsReasoning: false,
+    });
+    handler.config.fullName = 'claude-opus-4-6';
+    handler.setAgentCategory(AgentCategory.ToolUse);
+
+    const loggerStub = {
+      streamId: 'test',
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      fileList: () => {},
+      withCurrentGroup: () => undefined,
+      runWithinCurrentGroup: async (fn: () => any) => fn(),
+      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
+      logContextManagement: () => {},
+    };
+    handler.setLogger(loggerStub as unknown as AgentLogger);
+    (handler as any).getStreamingConfig = () => false;
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'hello', citations: null }],
+      },
+    ];
+    const messageOptions: any[] = [];
+    const client = {
+      beta: {
+        messages: {
+          create: async (opts: any) => {
+            messageOptions.push(opts);
+            return {
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-opus-4-6',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            } as any;
+          },
+        },
+      },
+    } as any;
+
+    const originalGetConfig = configModule.getConfig;
+    try {
+      (configModule as any).getConfig = (
+        path: string,
+        defaultValue?: unknown,
+      ) => {
+        if (path === 'texra.model.compactionThresholdPercent') return 75;
+        return defaultValue as unknown;
+      };
+
+      await handler.createResponse({ client, messages, temperature: 0 });
+    } finally {
+      (configModule as any).getConfig = originalGetConfig;
+    }
+
+    const options = messageOptions[0] ?? {};
+    const betas: string[] = options.betas ?? [];
+    assert.ok(
+      betas.includes('compact-2026-01-12'),
+      'should include compaction beta header',
+    );
+
+    const edits = options.context_management?.edits ?? [];
+    const compactionEdit = edits.find(
+      (edit: { type: string }) => edit.type === 'compact_20260112',
+    );
+    assert.ok(compactionEdit, 'should configure compact_20260112 context edit');
+    assert.equal(compactionEdit.pause_after_compaction, false);
+    assert.equal(compactionEdit.trigger?.type, 'input_tokens');
+    assert.equal(
+      compactionEdit.trigger?.value,
+      150000,
+      'should trigger compaction at configured threshold (75%) of 200K context window',
+    );
+    assert.equal(
+      compactionEdit.instructions,
+      undefined,
+      'should rely on Anthropic default compaction instructions',
+    );
+  });
+
+  it('does not add native compaction context edit for non-Opus models', async () => {
+    const handler = createAnthropicHandler({
+      supportsTokenCounting: false,
+      supportsReasoning: false,
+    });
+    handler.config.fullName = 'claude-sonnet-4-5';
+    handler.setAgentCategory(AgentCategory.ToolUse);
+
+    const loggerStub = {
+      streamId: 'test',
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      fileList: () => {},
+      withCurrentGroup: () => undefined,
+      runWithinCurrentGroup: async (fn: () => any) => fn(),
+      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
+      logContextManagement: () => {},
+    };
+    handler.setLogger(loggerStub as unknown as AgentLogger);
+    (handler as any).getStreamingConfig = () => false;
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'hello', citations: null }],
+      },
+    ];
+    const messageOptions: any[] = [];
+    const client = {
+      beta: {
+        messages: {
+          create: async (opts: any) => {
+            messageOptions.push(opts);
+            return {
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-sonnet-4-5',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            } as any;
+          },
+        },
+      },
+    } as any;
+
+    const originalGetConfig = configModule.getConfig;
+    try {
+      (configModule as any).getConfig = (
+        path: string,
+        defaultValue?: unknown,
+      ) => {
+        if (path === 'texra.model.compactionThresholdPercent') return 75;
+        return defaultValue as unknown;
+      };
+
+      await handler.createResponse({ client, messages, temperature: 0 });
+    } finally {
+      (configModule as any).getConfig = originalGetConfig;
+    }
+
+    const options = messageOptions[0] ?? {};
+    const betas: string[] = options.betas ?? [];
+    assert.equal(
+      betas.includes('compact-2026-01-12'),
+      false,
+      'non-Opus models should not opt into compact beta',
+    );
+
+    const edits = options.context_management?.edits ?? [];
+    const compactionEdit = edits.find(
+      (edit: { type: string }) => edit.type === 'compact_20260112',
+    );
+    assert.equal(
+      compactionEdit,
+      undefined,
+      'non-Opus models should not include compact_20260112 edit',
+    );
+  });
+
+  it('normalizes Anthropic usage using per-iteration totals when available', () => {
+    const handler = createAnthropicHandler();
+    const usage = handler.normalizeUsage(
+      {
+        input_tokens: 111,
+        output_tokens: 22,
+        cache_read_input_tokens: 3,
+        cache_creation_input_tokens: 4,
+        server_tool_use: null,
+        service_tier: 'standard',
+        iterations: [
+          {
+            type: 'compaction',
+            input_tokens: 1000,
+            output_tokens: 100,
+            cache_read_input_tokens: 90,
+            cache_creation_input_tokens: 40,
+            cache_creation: null,
+          },
+          {
+            type: 'message',
+            input_tokens: 200,
+            output_tokens: 80,
+            cache_read_input_tokens: 10,
+            cache_creation_input_tokens: 5,
+            cache_creation: null,
+          },
+        ],
+      } as any,
+      1000,
+    );
+
+    assert.equal(
+      usage.inputTokens,
+      1345,
+      'input tokens should sum all iteration input and cache tokens',
+    );
+    assert.equal(
+      usage.outputTokens,
+      180,
+      'output tokens should sum all iteration outputs',
+    );
+    assert.equal(
+      usage.cachedInputTokens,
+      100,
+      'cached read tokens should come from iteration totals',
+    );
+    assert.equal(
+      usage.cacheCreationTokens,
+      45,
+      'cache creation tokens should come from iteration totals',
+    );
+  });
+
+  it('logs server-side compaction events from compaction blocks', () => {
+    const handler = createAnthropicHandler();
+    const events: Array<{ message: string; data: unknown }> = [];
+
+    const loggerStub = {
+      streamId: 'test',
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      fileList: () => {},
+      withCurrentGroup: () => undefined,
+      runWithinCurrentGroup: async (fn: () => any) => fn(),
+      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
+      logContextManagement: (message: string, data: unknown) => {
+        events.push({ message, data });
+      },
+    };
+    handler.setLogger(loggerStub as unknown as AgentLogger);
+
+    (handler as any).logContextManagementFromResponse(
+      {
+        content: [
+          { type: 'compaction', content: '<summary>state</summary>' },
+          { type: 'text', text: 'ok' },
+        ],
+        usage: {
+          input_tokens: 24000,
+          output_tokens: 1200,
+          cache_read_input_tokens: 1200,
+          cache_creation_input_tokens: 400,
+          iterations: [
+            {
+              type: 'compaction',
+              input_tokens: 180000,
+              output_tokens: 3200,
+              cache_read_input_tokens: 4000,
+              cache_creation_input_tokens: 1000,
+              cache_creation: null,
+            },
+            {
+              type: 'message',
+              input_tokens: 23000,
+              output_tokens: 1000,
+              cache_read_input_tokens: 1000,
+              cache_creation_input_tokens: 200,
+              cache_creation: null,
+            },
+          ],
+        },
+      } as any,
+      200000,
+    );
+
+    assert.equal(
+      events.length,
+      1,
+      'compaction block should emit one log event',
+    );
+    assert.match(events[0].message, /Server-side compaction/i);
+    const eventData = events[0].data as {
+      action: string;
+      tokensBefore: number;
+      tokensAfter: number;
+      summary?: string;
+    };
+    assert.equal(eventData.action, 'compaction');
+    assert.equal(eventData.tokensBefore, 185000);
+    assert.equal(eventData.tokensAfter, 25600);
+    assert.equal(eventData.summary, '<summary>state</summary>');
   });
 });
