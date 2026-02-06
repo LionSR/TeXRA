@@ -10,7 +10,7 @@ import {
   type AgentLogger,
   type AgentUsageReporter,
 } from '@logger/index';
-import type { ModelCapabilities, ModelConfig } from '@model';
+import type { ModelCapabilities, ModelConfig } from 'llm-zoo';
 import type {
   ExtendedTokenUsageStats,
   StorageKey,
