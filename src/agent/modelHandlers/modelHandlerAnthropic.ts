@@ -771,6 +771,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const details = compactionBlock.content
       ? `Anthropic native compaction (${compactionBlock.content.length.toLocaleString()} chars)`
       : 'Anthropic native compaction (empty summary)';
+    const summary = compactionBlock.content?.trim() || undefined;
 
     this.logger.logContextManagement(
       `Server-side compaction: summarized context`,
@@ -782,6 +783,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         utilizationBefore: (tokensBefore / contextWindow) * 100,
         utilizationAfter: (totalInputTokens / contextWindow) * 100,
         details,
+        summary,
       },
     );
   }
