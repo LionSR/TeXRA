@@ -1514,7 +1514,7 @@
     "deepmerge": "^4.3.1",
     "delay": "^7.0.0",
     "diff-match-patch": "^1.0.5",
-    "dotenv": "^17.2.3",
+    "dotenv": "^17.2.4",
     "execa": "^9.6.1",
     "fast-xml-parser": "^5.3.4",
     "fs-extra": "^11.3.3",
