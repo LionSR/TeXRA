@@ -194,7 +194,7 @@ export async function buildInitialToolUsePrompts(
   if (options?.memoryEnabled) {
     suffixParts.push(MEMORY_TOOL_INSTRUCTIONS);
   }
-  suffixParts.push(buildWorkspaceInfoBlock());
+  suffixParts.push(await buildWorkspaceInfoBlock());
 
   return {
     ...initial,
