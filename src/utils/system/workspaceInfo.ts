@@ -2,10 +2,13 @@
 import * as os from 'os';
 
 // Third-party imports
-import { execaSync } from 'execa';
+import { execa } from 'execa';
 
 // Local imports
 import { WorkspaceFS } from '@utils/files';
+
+/** Timeout for git commands in milliseconds. */
+const GIT_TIMEOUT_MS = 3000;
 
 /**
  * Gathered workspace environment information for system prompt injection.
@@ -67,47 +70,40 @@ function getPlatformLabel(): string {
  * Gather git repository information for the workspace.
  * Returns null if the workspace is not a git repo or git is unavailable.
  */
-function getGitInfo(workspacePath: string): GitInfo | null {
+async function getGitInfo(workspacePath: string): Promise<GitInfo | null> {
   try {
+    const opts = { cwd: workspacePath, reject: false, timeout: GIT_TIMEOUT_MS } as const;
+
     // Check if inside a git repo
-    const isRepo = execaSync('git', ['rev-parse', '--is-inside-work-tree'], {
-      cwd: workspacePath,
-      reject: false,
-    });
+    const isRepo = await execa('git', ['rev-parse', '--is-inside-work-tree'], opts);
     if (isRepo.exitCode !== 0) return null;
 
-    // Get current branch
-    const branchResult = execaSync(
-      'git',
-      ['symbolic-ref', '--short', 'HEAD'],
-      { cwd: workspacePath, reject: false },
-    );
+    // Run branch and status checks in parallel
+    const [branchResult, statusResult] = await Promise.all([
+      execa('git', ['symbolic-ref', '--short', 'HEAD'], opts),
+      execa('git', ['status', '--porcelain'], opts),
+    ]);
+
     const branch =
       branchResult.exitCode === 0
-        ? branchResult.stdout.toString().trim()
+        ? branchResult.stdout.trim()
         : null; // detached HEAD
 
-    // Check for uncommitted changes
-    const statusResult = execaSync('git', ['status', '--porcelain'], {
-      cwd: workspacePath,
-      reject: false,
-    });
     const dirty =
       statusResult.exitCode === 0 &&
-      statusResult.stdout.toString().trim().length > 0;
+      statusResult.stdout.trim().length > 0;
 
     return { isRepo: true, branch, dirty };
   } catch {
-    // git not installed or not on PATH (ENOENT)
+    // git not installed or not on PATH (ENOENT), or timed out
     return null;
   }
 }
 
 /**
  * Gather workspace environment information.
- * All operations are lightweight and synchronous.
  */
-function gatherWorkspaceInfo(): WorkspaceInfo {
+async function gatherWorkspaceInfo(): Promise<WorkspaceInfo> {
   const workspacePath = WorkspaceFS.getPath();
 
   return {
@@ -115,7 +111,7 @@ function gatherWorkspaceInfo(): WorkspaceInfo {
     platform: getPlatformLabel(),
     shell: detectShell(),
     date: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
-    git: workspacePath ? getGitInfo(workspacePath) : null,
+    git: workspacePath ? await getGitInfo(workspacePath) : null,
   };
 }
 
@@ -133,8 +129,8 @@ function escapeXml(value: string): string {
  * Returns a `<workspace_info>` XML block with key environment details
  * that help the LLM understand the user's workspace context.
  */
-export function buildWorkspaceInfoBlock(): string {
-  const info = gatherWorkspaceInfo();
+export async function buildWorkspaceInfoBlock(): Promise<string> {
+  const info = await gatherWorkspaceInfo();
 
   const lines: string[] = [];
 
