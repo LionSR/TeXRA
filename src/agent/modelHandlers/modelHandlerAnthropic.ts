@@ -85,6 +85,7 @@ import type {
 } from './types/IModelHandler';
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
+  BetaCacheControlEphemeral,
   BetaContentBlock,
   BetaContentBlockParam,
   BetaCompactionBlock,
@@ -94,6 +95,7 @@ import type {
   BetaMessage,
   BetaRedactedThinkingBlock,
   BetaRequestDocumentBlock,
+  BetaTextBlockParam,
   BetaThinkingBlock,
   BetaUsage,
   MessageCountTokensParams,
@@ -209,7 +211,12 @@ const EPHEMERAL_CACHE_CONTROL: CacheControlEphemeral = {
   type: 'ephemeral',
 };
 
-const MAX_CACHE_CONTROLLED_BLOCKS = 4;
+/**
+ * Max cache breakpoints allowed in message content blocks.
+ * Anthropic allows 4 total breakpoints across system, tools, and messages.
+ * We reserve 2 for system prompt and tools, leaving 2 for messages.
+ */
+const MAX_CACHE_CONTROLLED_BLOCKS = 2;
 
 const isCacheControlEligibleBlock = (
   block: CacheControlInspectableBlock,
@@ -269,6 +276,49 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     this.cacheControlledBlock = block ?? undefined;
+  }
+
+  /**
+   * Formats a system prompt for caching. When prompt caching is supported,
+   * converts the string to a TextBlockParam array with cache_control.
+   * This ensures the system prompt is explicitly cached across API calls.
+   */
+  private formatSystemPromptForCaching(
+    systemPrompt: string | undefined,
+  ): string | BetaTextBlockParam[] | undefined {
+    if (!systemPrompt) {
+      return undefined;
+    }
+    if (!this.capabilities.supportsPromptCaching) {
+      return systemPrompt;
+    }
+    return [
+      {
+        type: 'text' as const,
+        text: systemPrompt,
+        cache_control: EPHEMERAL_CACHE_CONTROL as BetaCacheControlEphemeral,
+      },
+    ];
+  }
+
+  /**
+   * Adds cache_control to the last tool in a tools array for prompt caching.
+   * Tool definitions are static per conversation and benefit from caching.
+   */
+  private applyCacheControlToTools(tools: MessageCreateParams['tools']): void {
+    if (
+      !this.capabilities.supportsPromptCaching ||
+      !tools ||
+      tools.length === 0
+    ) {
+      return;
+    }
+    const lastTool = tools.at(-1);
+    if (lastTool && typeof lastTool === 'object') {
+      (
+        lastTool as { cache_control?: BetaCacheControlEphemeral }
+      ).cache_control = EPHEMERAL_CACHE_CONTROL as BetaCacheControlEphemeral;
+    }
   }
 
   /** Ensures a beta flag is included in options, initializing the array if needed. */
@@ -393,7 +443,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const countTokensParams: MessageCountTokensParams = {
       model: this.config.fullName,
       messages,
-      ...(options?.systemPrompt && { system: options.systemPrompt }),
+      ...(options?.systemPrompt && {
+        system: this.formatSystemPromptForCaching(options.systemPrompt),
+      }),
     };
 
     // Include tools in token counting for accurate measurement.
@@ -485,13 +537,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
       messages,
       temperature,
       stop_sequences: endTag ? [endTag] : undefined,
-      system: systemPrompt,
+      system: this.formatSystemPromptForCaching(systemPrompt),
     };
 
     if (tools && tools.length > 0) {
       options.tools = toAnthropicTools(tools, {
         supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
       });
+      this.applyCacheControlToTools(options.tools);
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
 
       // Opus 4.6 no longer requires the interleaved-thinking beta header.
