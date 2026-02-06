@@ -15,22 +15,48 @@ const OUTPUT_MODES = ['content', 'files_with_matches', 'count'] as const;
 type OutputMode = (typeof OUTPUT_MODES)[number];
 
 const GrepInputSchema = z.strictObject({
-  pattern: z.string().min(1, 'pattern is required'),
-  path: z.string().nullish(),
-  glob: z.string().nullish(),
+  pattern: z.string().min(1, 'pattern is required').describe('Regex pattern.'),
+  path: z.string().nullish().describe('File or directory to search in.'),
+  glob: z
+    .string()
+    .nullish()
+    .describe('Glob filter for file names (e.g. "*.ts").'),
   output_mode: z
     .enum(OUTPUT_MODES)
     .nullish()
-    .transform((v) => v ?? 'content'),
-  '-B': z.int().min(0).nullish(),
-  '-A': z.int().min(0).nullish(),
-  '-C': z.int().min(0).nullish(),
-  '-n': z.boolean().nullish(),
-  '-i': z.boolean().nullish(),
-  type: z.string().nullish(),
-  offset: z.int().min(0).nullish(),
-  head_limit: z.int().min(1).nullish(),
-  multiline: z.boolean().nullish(),
+    .transform((v) => v ?? 'content')
+    .describe(
+      'Output format: "content" (matching lines), "files_with_matches" (paths only), or "count" (match counts). NOT "context" — use -C for context lines.',
+    ),
+  '-B': z
+    .int()
+    .min(0)
+    .nullish()
+    .describe('Lines of context BEFORE each match (only with output_mode "content").'),
+  '-A': z
+    .int()
+    .min(0)
+    .nullish()
+    .describe('Lines of context AFTER each match (only with output_mode "content").'),
+  '-C': z
+    .int()
+    .min(0)
+    .nullish()
+    .describe(
+      'Lines of context before AND after each match (only with output_mode "content"). Use this instead of output_mode when you want surrounding context.',
+    ),
+  '-n': z.boolean().nullish().describe('Show line numbers.'),
+  '-i': z.boolean().nullish().describe('Case-insensitive search.'),
+  type: z
+    .string()
+    .nullish()
+    .describe('Ripgrep file type filter (e.g. "ts", "py").'),
+  offset: z.int().min(0).nullish().describe('Skip first N results.'),
+  head_limit: z.int().min(1).nullish().describe('Limit to first N results.'),
+  multiline: z
+    .boolean()
+    .nullish()
+    .describe('Enable multiline matching (pattern can span lines).'),
   literal: z.boolean().nullish().describe('Exact string, not regex.'),
 });
 
@@ -77,7 +103,7 @@ export function buildArguments(
 export class GrepTool extends defineTool({
   name: 'grep',
   description:
-    'Search file contents using regex patterns. Supports context (-A/-B/-C), glob/type filters, and multiline matching.',
+    'Search file contents using regex patterns. output_mode must be "content", "files_with_matches", or "count" (NOT "context"). To show surrounding lines, use -C with output_mode "content".',
   schema: GrepInputSchema,
 }) {
   protected async execute(input: GrepInput): Promise<ToolResult> {
