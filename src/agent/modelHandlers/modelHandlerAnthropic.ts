@@ -177,10 +177,6 @@ const CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS = 3;
 const CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT = 25;
 /** Compaction must be triggered at or above this minimum input token threshold. */
 const MIN_COMPACTION_TRIGGER_TOKENS = 50_000;
-/** Compaction trigger runs after clearing to avoid frequent summary calls. */
-const COMPACTION_TRIGGER_OFFSET_PERCENT = 15;
-/** Upper bound for compaction trigger percentage. */
-const COMPACTION_TRIGGER_MAX_PERCENT = 95;
 
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
@@ -222,6 +218,12 @@ type CacheControlEligibleBlock = Extract<
   { type: 'text' | 'tool_result' }
 >;
 
+/** Compaction block shape from beta responses that may carry cache_control when replayed. */
+interface CacheControlCompactionBlock {
+  type: 'compaction';
+  cache_control?: CacheControlEphemeral | null;
+}
+
 const EPHEMERAL_CACHE_CONTROL: CacheControlEphemeral = {
   type: 'ephemeral',
 };
@@ -229,7 +231,7 @@ const EPHEMERAL_CACHE_CONTROL: CacheControlEphemeral = {
 const MAX_CACHE_CONTROLLED_BLOCKS = 4;
 
 const isCacheControlEligibleBlock = (
-  block: ContentBlockParam | ContentBlock | undefined,
+  block: unknown,
 ): block is CacheControlEligibleBlock => {
   if (!block || typeof block !== 'object') {
     return false;
@@ -237,6 +239,15 @@ const isCacheControlEligibleBlock = (
 
   const blockType = (block as { type?: string }).type;
   return blockType === 'text' || blockType === 'tool_result';
+};
+
+const isCompactionCacheControlBlock = (
+  block: unknown,
+): block is CacheControlCompactionBlock => {
+  if (!block || typeof block !== 'object') {
+    return false;
+  }
+  return (block as { type?: string }).type === 'compaction';
 };
 
 export class ModelHandlerAnthropic extends ModelHandler<
@@ -381,13 +392,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
       !contextManagementEdits.some((edit) => edit.type === 'compact_20260112')
     ) {
       this.ensureBeta(options, COMPACTION_BETA);
-      const compactionPercent = Math.min(
-        thresholdPercent + COMPACTION_TRIGGER_OFFSET_PERCENT,
-        COMPACTION_TRIGGER_MAX_PERCENT,
-      );
       const compactionTriggerTokens = Math.max(
         MIN_COMPACTION_TRIGGER_TOKENS,
-        Math.floor((compactionPercent / 100) * contextWindow),
+        Math.floor((thresholdPercent / 100) * contextWindow),
       );
 
       contextManagementEdits.push({
@@ -927,7 +934,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return;
     }
 
-    const cacheControlledBlocks: CacheControlEligibleBlock[] = [];
+    const cacheControlledBlocks: Array<
+      CacheControlEligibleBlock | CacheControlCompactionBlock
+    > = [];
 
     for (const message of messages) {
       const content = message.content;
@@ -937,7 +946,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
       for (const block of content) {
         // Clear cache_control from ineligible blocks (defensive cleanup)
-        if (!isCacheControlEligibleBlock(block)) {
+        if (
+          !isCacheControlEligibleBlock(block) &&
+          !isCompactionCacheControlBlock(block)
+        ) {
           if (block && typeof block === 'object' && 'cache_control' in block) {
             delete (block as { cache_control?: unknown }).cache_control;
           }
@@ -959,7 +971,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
       delete cacheControlledBlocks[idx].cache_control;
     }
 
-    this.cacheControlledBlock = cacheControlledBlocks.at(-1);
+    this.cacheControlledBlock = [...cacheControlledBlocks]
+      .reverse()
+      .find(isCacheControlEligibleBlock);
   }
 
   private async replaceDocumentDataWithUploads(
