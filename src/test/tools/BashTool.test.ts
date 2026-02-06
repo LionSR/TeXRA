@@ -24,9 +24,9 @@ import { MapToolRegistry } from '@agent/core/ToolTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   DEFAULT_MODEL_CAPABILITIES,
-  ModelConfig,
+  type ModelConfig,
   ModelProvider,
-} from '@model/ModelConfig';
+} from 'llm-zoo';
 import { BashTool } from '@tools/bash';
 import * as execUtils from '@utils/system/execUtils';
 import type { StreamTabId } from '@shared/schemas';

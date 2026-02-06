@@ -21,7 +21,7 @@ import type { AgentLogger } from '@logger/AgentLogger';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelCapabilities,
-} from '@model/ModelConfig';
+} from 'llm-zoo';
 import { AbsoluteFS, pathToLocation, getShortDisplayPath } from '@utils/files';
 
 interface LoggerStub extends Partial<AgentLogger> {

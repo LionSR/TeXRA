@@ -1,17 +1,23 @@
-// (none needed)
-
 // Third-party imports
 import * as vscode from 'vscode';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
+// Local imports - shared constants
+import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
+
+// Local imports - agent
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+
+// Local imports - common
 import { getSdkErrorMessage } from '@common/errors';
+import { GlobalStateKey, globalSM } from '@common/state';
+
+// Local imports - logger
 import * as logger from '@logger/logUtils';
-// Type imports
 import type { TaskState } from '@logger/TaskState';
 
-// Local imports - model configs
+// Local imports - utils
 import { getConfig } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
 
@@ -19,8 +25,6 @@ import { isNonEmptyString } from '@utils/core';
 import { extractTextFromTag } from './xmlUtils';
 
 const CHANNEL = 'TextEnhancement';
-
-const DEFAULT_POLISH_MODEL = 'sonnet45';
 
 /**
  * Text Enhancement Utilities
@@ -200,8 +204,8 @@ ${text}`;
         responseText += chunk;
       }
     } else {
-      const configuredModel = getConfig<string>(
-        'model.instructionPolishModel',
+      const configuredModel = globalSM.get<string>(
+        GlobalStateKey.POLISH_MODEL,
         DEFAULT_POLISH_MODEL,
       );
       const modelName = isNonEmptyString(configuredModel)
@@ -213,7 +217,7 @@ ${text}`;
         return {
           success: false,
           text,
-          error: `Unsupported instruction polishing model "${modelName}". Update texra.model.instructionPolishModel to match a short name from your TeXRA model list.`,
+          error: `Unsupported instruction polishing model "${modelName}". Update the polish model in Settings > Models to match a valid model name.`,
         };
       }
 

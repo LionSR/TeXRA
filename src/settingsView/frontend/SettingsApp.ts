@@ -20,7 +20,7 @@ import {
   designTokens,
 } from '@shared/styles';
 
-// Local imports - shared schemas
+// Local imports - shared schemas and constants
 import {
   UpdateMemoryEnabledMessageSchema,
   UpdateMemoryMessageSchema,
@@ -31,8 +31,11 @@ import {
   UpdateProfileMessageSchema,
   type RemoteAgent,
   type ProviderKeyStatus,
+  type ModelSelectionItem,
+  UpdateModelSelectionMessageSchema,
   SetTabMessageSchema,
 } from '@shared/schemas';
+import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
 
 // Local imports - settings view commands
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -114,6 +117,10 @@ export class SettingsApp extends BaseWebviewApp {
   @state() private providerKeyStatuses: ProviderKeyStatus[] = [];
   @state() private globalStreamingDefault = true;
 
+  // Model selection state
+  @state() private modelSelectionItems: ModelSelectionItem[] = [];
+  @state() private polishModel = DEFAULT_POLISH_MODEL;
+
   protected get readyCommand(): string | null {
     return null;
   }
@@ -125,6 +132,7 @@ export class SettingsApp extends BaseWebviewApp {
     postMessage(SETTINGS_VIEW_COMMANDS.GET_MEMORY_ENABLED);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_HISTORY_DATA);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA);
+    postMessage(SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION);
   }
 
   protected override handleMessage(raw: unknown): void {
@@ -205,6 +213,21 @@ export class SettingsApp extends BaseWebviewApp {
       this.historyItems = [];
       // Clear search state when history is cleared
       this.historyTab?.clearSearch();
+      return;
+    }
+
+    // Model selection messages
+    if (command === SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION) {
+      const result = UpdateModelSelectionMessageSchema.safeParse(raw);
+      if (!result.success) {
+        this.logSchemaError(
+          '[SettingsApp] Update model selection message validation failed.',
+          result.error,
+        );
+        return;
+      }
+      this.modelSelectionItems = result.data.models;
+      this.polishModel = result.data.polishModel;
       return;
     }
 
@@ -358,6 +381,24 @@ export class SettingsApp extends BaseWebviewApp {
     });
   }
 
+  // Model selection event handlers
+  private handleSetModelEnabled(
+    event: CustomEvent<{ modelName: string; enabled: boolean }>,
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED, {
+      modelName: event.detail.modelName,
+      enabled: event.detail.enabled,
+    });
+  }
+
+  private handleSetPolishModel(
+    event: CustomEvent<{ modelName: string }>,
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_POLISH_MODEL, {
+      modelName: event.detail.modelName,
+    });
+  }
+
   private handleOpenVscodeSettings(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS);
   }
@@ -455,6 +496,8 @@ export class SettingsApp extends BaseWebviewApp {
               .allowedModels=${this.allowedModels}
               .providerKeyStatuses=${this.providerKeyStatuses}
               .globalStreamingDefault=${this.globalStreamingDefault}
+              .modelSelectionItems=${this.modelSelectionItems}
+              .polishModel=${this.polishModel}
               @profile-api-access-mode=${this.handleApiAccessMode}
               @provider-key-set=${this.handleSetProviderKey}
               @provider-key-remove=${this.handleRemoveProviderKey}
@@ -462,6 +505,8 @@ export class SettingsApp extends BaseWebviewApp {
               @provider-streaming-set=${this.handleSetProviderStreaming}
               @provider-endpoint-set=${this.handleSetProviderEndpoint}
               @provider-global-streaming-set=${this.handleSetGlobalStreaming}
+              @model-enabled-set=${this.handleSetModelEnabled}
+              @polish-model-set=${this.handleSetPolishModel}
             ></models-tab>
           </vscode-tab-panel>
 
