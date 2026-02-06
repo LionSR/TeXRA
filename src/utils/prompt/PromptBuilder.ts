@@ -5,6 +5,7 @@ import type {
 } from '@agent/core/AgentDataclass';
 import type { AgentLogger } from '@logger/AgentLogger';
 import { loadTexraRules } from '@utils/files/rulesUtils';
+import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
 
 // Local imports - utilities
 import { renderPrompt } from './promptUtils';
@@ -188,11 +189,12 @@ export async function buildInitialToolUsePrompts(
   const initial = await builder.buildInitialPrompts();
 
   // Build instruction suffix: always include tool-use instructions,
-  // optionally append memory instructions when enabled
+  // optionally append memory instructions and workspace info
   const suffixParts = [TOOL_USE_INSTRUCTIONS];
   if (options?.memoryEnabled) {
     suffixParts.push(MEMORY_TOOL_INSTRUCTIONS);
   }
+  suffixParts.push(await buildWorkspaceInfoBlock());
 
   return {
     ...initial,
