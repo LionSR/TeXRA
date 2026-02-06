@@ -119,8 +119,6 @@ All non-deprecated. Stored in `computeModelOptions.ts` as exported constant. Not
 ┌──────────────────────────────────────────────────────────────────┐
 │ [API Access Section - existing, authenticated only]              │
 │─────────────────────────────────────────────────────────────────│
-│ [Provider Key List - existing, all users]                        │
-│─────────────────────────────────────────────────────────────────│
 │ Model Selection                                                  │
 │ Select which models appear in the dropdown.                      │
 │                                                                  │
@@ -149,6 +147,8 @@ All non-deprecated. Stored in `computeModelOptions.ts` as exported constant. Not
 │ ▸ xAI                                              1/1  enabled   │
 │ ▸ Moonshot                                         2/2  enabled   │
 │ ▸ DashScope                                        1/3  enabled   │
+│─────────────────────────────────────────────────────────────────│
+│ [Provider Key List - existing, all users]                        │
 └──────────────────────────────────────────────────────────────────┘
 ```
 

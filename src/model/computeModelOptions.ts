@@ -1,14 +1,11 @@
 // Third-party imports
-import { MODEL_CONFIGS } from 'llm-zoo';
+import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
 // Local imports - auth
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - frontend
 import { ApiProvider, SecretManager } from '@frontend/secretManager';
-
-// Local imports - model types
-import type { ModelConfig } from '@model/ModelConfig';
 
 // Local imports - state
 import { GlobalStateKey, globalSM } from '@common/state';
