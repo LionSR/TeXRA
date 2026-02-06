@@ -68,34 +68,39 @@ function getPlatformLabel(): string {
  * Returns null if the workspace is not a git repo or git is unavailable.
  */
 function getGitInfo(workspacePath: string): GitInfo | null {
-  // Check if inside a git repo
-  const isRepo = execaSync('git', ['rev-parse', '--is-inside-work-tree'], {
-    cwd: workspacePath,
-    reject: false,
-  });
-  if (isRepo.exitCode !== 0) return null;
+  try {
+    // Check if inside a git repo
+    const isRepo = execaSync('git', ['rev-parse', '--is-inside-work-tree'], {
+      cwd: workspacePath,
+      reject: false,
+    });
+    if (isRepo.exitCode !== 0) return null;
 
-  // Get current branch
-  const branchResult = execaSync(
-    'git',
-    ['symbolic-ref', '--short', 'HEAD'],
-    { cwd: workspacePath, reject: false },
-  );
-  const branch =
-    branchResult.exitCode === 0
-      ? branchResult.stdout.toString().trim()
-      : null; // detached HEAD
+    // Get current branch
+    const branchResult = execaSync(
+      'git',
+      ['symbolic-ref', '--short', 'HEAD'],
+      { cwd: workspacePath, reject: false },
+    );
+    const branch =
+      branchResult.exitCode === 0
+        ? branchResult.stdout.toString().trim()
+        : null; // detached HEAD
 
-  // Check for uncommitted changes
-  const statusResult = execaSync('git', ['status', '--porcelain'], {
-    cwd: workspacePath,
-    reject: false,
-  });
-  const dirty =
-    statusResult.exitCode === 0 &&
-    statusResult.stdout.toString().trim().length > 0;
+    // Check for uncommitted changes
+    const statusResult = execaSync('git', ['status', '--porcelain'], {
+      cwd: workspacePath,
+      reject: false,
+    });
+    const dirty =
+      statusResult.exitCode === 0 &&
+      statusResult.stdout.toString().trim().length > 0;
 
-  return { isRepo: true, branch, dirty };
+    return { isRepo: true, branch, dirty };
+  } catch {
+    // git not installed or not on PATH (ENOENT)
+    return null;
+  }
 }
 
 /**
@@ -114,6 +119,14 @@ function gatherWorkspaceInfo(): WorkspaceInfo {
   };
 }
 
+/** Escape XML special characters in a string. */
+function escapeXml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
 /**
  * Build a formatted workspace info block for system prompt injection.
  *
@@ -126,13 +139,13 @@ export function buildWorkspaceInfoBlock(): string {
   const lines: string[] = [];
 
   if (info.workspacePath) {
-    lines.push(`Workspace: ${info.workspacePath}`);
+    lines.push(`Workspace: ${escapeXml(info.workspacePath)}`);
   }
 
-  lines.push(`Platform: ${info.platform}`);
+  lines.push(`Platform: ${escapeXml(info.platform)}`);
 
   if (info.shell) {
-    lines.push(`Shell: ${info.shell}`);
+    lines.push(`Shell: ${escapeXml(info.shell)}`);
   }
 
   lines.push(`Date: ${info.date}`);
@@ -140,7 +153,7 @@ export function buildWorkspaceInfoBlock(): string {
   if (info.git) {
     const parts = ['Git: yes'];
     if (info.git.branch) {
-      parts.push(`branch=${info.git.branch}`);
+      parts.push(`branch=${escapeXml(info.git.branch)}`);
     } else {
       parts.push('detached HEAD');
     }
