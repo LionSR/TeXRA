@@ -1,5 +1,5 @@
 import { getServerSideKeyService } from '@auth/serverKeys';
-import { ModelProvider } from '@model/ModelConfig';
+import { ModelProvider } from 'llm-zoo';
 import { getConfig } from '@utils/config';
 
 const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
