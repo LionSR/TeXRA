@@ -72,10 +72,18 @@ function getPlatformLabel(): string {
  */
 async function getGitInfo(workspacePath: string): Promise<GitInfo | null> {
   try {
-    const opts = { cwd: workspacePath, reject: false, timeout: GIT_TIMEOUT_MS } as const;
+    const opts = {
+      cwd: workspacePath,
+      reject: false,
+      timeout: GIT_TIMEOUT_MS,
+    } as const;
 
     // Check if inside a git repo
-    const isRepo = await execa('git', ['rev-parse', '--is-inside-work-tree'], opts);
+    const isRepo = await execa(
+      'git',
+      ['rev-parse', '--is-inside-work-tree'],
+      opts,
+    );
     if (isRepo.exitCode !== 0) return null;
 
     // Run branch and status checks in parallel
@@ -85,13 +93,10 @@ async function getGitInfo(workspacePath: string): Promise<GitInfo | null> {
     ]);
 
     const branch =
-      branchResult.exitCode === 0
-        ? branchResult.stdout.trim()
-        : null; // detached HEAD
+      branchResult.exitCode === 0 ? branchResult.stdout.trim() : null; // detached HEAD
 
     const dirty =
-      statusResult.exitCode === 0 &&
-      statusResult.stdout.trim().length > 0;
+      statusResult.exitCode === 0 && statusResult.stdout.trim().length > 0;
 
     return { isRepo: true, branch, dirty };
   } catch {
