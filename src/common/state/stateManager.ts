@@ -24,6 +24,26 @@ export enum GlobalStateKey {
   LAST_KNOWN_VERSION = 'lastKnownVersion',
   MODEL_LIST_VERSION = 'modelListVersion',
   MEMORY_ENABLED = 'texra.memory.enabled',
+
+  // Streaming settings
+  STREAMING_GLOBAL = 'texra.streaming.global',
+  STREAMING_OPENAI = 'texra.streaming.openai',
+  STREAMING_ANTHROPIC = 'texra.streaming.anthropic',
+  STREAMING_OPENROUTER = 'texra.streaming.openrouter',
+  STREAMING_GOOGLE = 'texra.streaming.google',
+  STREAMING_XAI = 'texra.streaming.xai',
+  STREAMING_DEEPSEEK = 'texra.streaming.deepseek',
+  STREAMING_MOONSHOT = 'texra.streaming.moonshot',
+  STREAMING_DASHSCOPE = 'texra.streaming.dashscope',
+
+  // Endpoint settings
+  ENDPOINT_OPENAI = 'texra.endpoint.openai',
+  ENDPOINT_ANTHROPIC = 'texra.endpoint.anthropic',
+  ENDPOINT_GOOGLE = 'texra.endpoint.google',
+  ENDPOINT_DEEPSEEK = 'texra.endpoint.deepseek',
+  ENDPOINT_XAI = 'texra.endpoint.xai',
+  ENDPOINT_MOONSHOT = 'texra.endpoint.moonshot',
+  ENDPOINT_DASHSCOPE = 'texra.endpoint.dashscope',
 }
 
 /** Prefix used for per-instruction suppression flags */

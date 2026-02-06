@@ -31,12 +31,18 @@ import {
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
-import { getConfig, updateConfig } from '@utils/config';
 import { StorageFS } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
 import {
   getToolUseMemoryEnabled,
   setToolUseMemoryEnabled,
+  getGlobalStreaming,
+  setGlobalStreaming,
+  getProviderStreaming,
+  setProviderStreaming,
+  getProviderEndpoint,
+  setProviderEndpoint,
+  supportsCustomEndpoint,
 } from '@utils/config/constants';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
@@ -64,35 +70,6 @@ const PROVIDER_DISPLAY_NAMES: Record<ApiProvider, string> = {
   wolframllmapp: 'Wolfram',
 };
 
-/**
- * Map from ApiProvider to the VS Code config key for per-provider streaming.
- * Providers not listed here (e.g., 'wolframllmapp') have no streaming config.
- *
- * Keys use short form (without 'texra.' prefix) so getConfig() resolves them
- * correctly via getConfiguration('texra').get(key).
- */
-const STREAMING_CONFIG_KEY: Partial<Record<ApiProvider, string>> = {
-  openai: 'model.useStreamingOpenai',
-  anthropic: 'model.useStreamingAnthropic',
-  openRouter: 'model.useStreamingOpenrouter',
-  google: 'model.useStreamingGoogle',
-  xai: 'model.useStreamingXai',
-  deepseek: 'model.useStreamingDeepseek',
-  moonshot: 'model.useStreamingMoonshot',
-  dashscope: 'model.useStreamingDashscope',
-};
-
-/** Map from ApiProvider to the VS Code config key for custom endpoint. */
-const ENDPOINT_CONFIG_KEY: Partial<Record<ApiProvider, string>> = {
-  openai: 'model.baseUrlOpenai',
-  anthropic: 'model.baseUrlAnthropic',
-  google: 'model.baseUrlGoogle',
-  deepseek: 'model.baseUrlDeepSeek',
-  xai: 'model.baseUrlXai',
-  moonshot: 'model.baseUrlMoonshot',
-  dashscope: 'model.baseUrlDashscope',
-};
-
 async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
   return Promise.all(
     SecretManager.API_PROVIDERS.map(async (provider) => {
@@ -110,28 +87,14 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
         status = 'not-set';
       }
 
-      const globalStreaming = getConfig<boolean>('model.useStreaming', true);
-      const streamingKey = STREAMING_CONFIG_KEY[provider];
-      // OpenRouter defaults to streaming off (different from other providers)
-      const streamingDefault =
-        provider === 'openRouter' ? false : globalStreaming;
-      const streaming = streamingKey
-        ? getConfig<boolean>(streamingKey, streamingDefault)
-        : globalStreaming;
-
-      const endpointKey = ENDPOINT_CONFIG_KEY[provider];
-      const customEndpoint = endpointKey
-        ? getConfig<string>(endpointKey, '')
-        : '';
-
       return {
         provider,
         displayName: PROVIDER_DISPLAY_NAMES[provider],
         status,
         keyUrl: PROVIDER_URLS[provider],
-        streaming,
-        customEndpoint,
-        supportsCustomEndpoint: Boolean(endpointKey),
+        streaming: getProviderStreaming(provider),
+        customEndpoint: getProviderEndpoint(provider),
+        supportsCustomEndpoint: supportsCustomEndpoint(provider),
       };
     }),
   );
@@ -272,10 +235,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const isAuthenticated = await SupabaseClient.isAuthenticated();
     const providerKeyStatuses = await getProviderKeyStatuses();
 
-    const globalStreamingDefault = getConfig<boolean>(
-      'model.useStreaming',
-      true,
-    );
+    const globalStreamingDefault = getGlobalStreaming();
 
     if (!isAuthenticated) {
       await webview.postMessage({
@@ -687,11 +647,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetProviderStreaming(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_STREAMING>,
   ): Promise<void> {
-    const provider = data.provider as ApiProvider;
-    const configKey = STREAMING_CONFIG_KEY[provider];
-    if (!configKey) return;
-
-    await updateConfig(configKey, data.enabled);
+    await setProviderStreaming(data.provider, data.enabled);
 
     const view = this.getActiveView();
     if (view) {
@@ -702,11 +658,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetProviderEndpoint(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_ENDPOINT>,
   ): Promise<void> {
-    const provider = data.provider as ApiProvider;
-    const configKey = ENDPOINT_CONFIG_KEY[provider];
-    if (!configKey) return;
-
-    await updateConfig(configKey, data.endpoint);
+    await setProviderEndpoint(data.provider, data.endpoint);
 
     const view = this.getActiveView();
     if (view) {
@@ -717,7 +669,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetGlobalStreaming(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GLOBAL_STREAMING>,
   ): Promise<void> {
-    await updateConfig('model.useStreaming', data.enabled);
+    await setGlobalStreaming(data.enabled);
 
     const view = this.getActiveView();
     if (view) {
