@@ -13,7 +13,10 @@ import {
 
 // SETTINGS_VIEW_CMD is defined in commands.ts to avoid circular dependency.
 // Re-exported here for consumers that expect it from the schema module.
-import { SETTINGS_VIEW_CMD } from '@common/webview/commands';
+import {
+  SETTINGS_VIEW_CMD,
+  SETTINGS_VIEW_COMMANDS,
+} from '@common/webview/commands';
 export { SETTINGS_VIEW_CMD };
 
 /** Tab name order - single source of truth for tab indices */
@@ -76,6 +79,30 @@ export {
   type SelectAgentMessage,
   type SetApiAccessModeMessage,
 } from './profileViewMessages';
+
+// ============================================================
+// Model selection data schema
+// ============================================================
+
+export const ModelSelectionItemSchema = z.object({
+  name: z.string(),
+  provider: z.string(),
+  enabled: z.boolean(),
+  deprecated: z.boolean(),
+  contextWindow: z.string().optional(),
+  cost: z.string().optional(),
+});
+export type ModelSelectionItem = z.infer<typeof ModelSelectionItemSchema>;
+
+/** Outbound: backend → frontend model selection data */
+export const UpdateModelSelectionMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION),
+  models: z.array(ModelSelectionItemSchema),
+  polishModel: z.string(),
+});
+export type UpdateModelSelectionMessage = z.infer<
+  typeof UpdateModelSelectionMessageSchema
+>;
 
 // ============================================================
 // Inbound message schemas (frontend → backend)
@@ -189,6 +216,22 @@ const SetGlobalStreamingMessageSchema = z.object({
   enabled: z.boolean(),
 });
 
+// Model selection inbound messages
+const GetModelSelectionMessageSchema = z.object({
+  command: z.literal(CMD.GET_MODEL_SELECTION),
+});
+
+const SetModelEnabledMessageSchema = z.object({
+  command: z.literal(CMD.SET_MODEL_ENABLED),
+  modelName: z.string().min(1),
+  enabled: z.boolean(),
+});
+
+const SetPolishModelMessageSchema = z.object({
+  command: z.literal(CMD.SET_POLISH_MODEL),
+  modelName: z.string().min(1),
+});
+
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = z.object({
   command: z.literal(CMD.OPEN_VSCODE_SETTINGS),
@@ -228,6 +271,10 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetProviderStreamingMessageSchema,
     SetProviderEndpointMessageSchema,
     SetGlobalStreamingMessageSchema,
+    // Model selection messages
+    GetModelSelectionMessageSchema,
+    SetModelEnabledMessageSchema,
+    SetPolishModelMessageSchema,
   ],
 );
 
