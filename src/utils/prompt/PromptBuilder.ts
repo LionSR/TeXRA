@@ -5,6 +5,7 @@ import type {
 } from '@agent/core/AgentDataclass';
 import type { AgentLogger } from '@logger/AgentLogger';
 import { loadTexraRules } from '@utils/files/rulesUtils';
+import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
 
 // Local imports - utilities
 import { renderPrompt } from './promptUtils';
@@ -54,7 +55,11 @@ export async function getSystemPromptWithRules(
 ): Promise<string> {
   const basePrompt = await renderPrompt(systemPrompt, userVars);
   const rules = await loadTexraRules();
-  return rules ? `${basePrompt}\n${rules}` : basePrompt;
+  const workspaceInfo = buildWorkspaceInfoBlock();
+  const parts = [basePrompt];
+  if (rules) parts.push(rules);
+  parts.push(workspaceInfo);
+  return parts.join('\n');
 }
 
 /**
