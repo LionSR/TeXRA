@@ -14,7 +14,7 @@ import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpe
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import * as logger from '@logger/logUtils';
-import { ModelConfig, ModelProvider } from '@model';
+import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { getConfig } from '@utils/config';
 
 const CHANNEL = 'ModelFactory';
