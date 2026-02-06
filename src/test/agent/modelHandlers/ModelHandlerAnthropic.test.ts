@@ -1218,9 +1218,11 @@ describe('ModelHandlerAnthropic message guards', () => {
       action: string;
       tokensBefore: number;
       tokensAfter: number;
+      summary?: string;
     };
     assert.equal(eventData.action, 'compaction');
     assert.equal(eventData.tokensBefore, 185000);
     assert.equal(eventData.tokensAfter, 25600);
+    assert.equal(eventData.summary, '<summary>state</summary>');
   });
 });
