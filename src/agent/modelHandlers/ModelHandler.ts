@@ -36,7 +36,10 @@ import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
 import { K_SLICE } from '@utils/config';
-import { getProviderStreaming, getGlobalStreaming } from '@utils/config/constants';
+import {
+  getProviderStreaming,
+  getGlobalStreaming,
+} from '@utils/config/constants';
 import type { FileLocation } from '@utils/files';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {

@@ -10,18 +10,39 @@ import { ApiProvider, SecretManager } from '@frontend/secretManager';
 // Local imports - model types
 import type { ModelConfig } from '@model/ModelConfig';
 
-// Local imports - utils
-import { getConfig } from '@utils/config';
+// Local imports - state
+import { GlobalStateKey, globalSM } from '@common/state';
 
 // Local imports - shared schemas
 import type { ModelOptionData } from '@shared/schemas';
 
 /**
- * Get the list of visible models from user configuration.
+ * Default models that should be present in every user's model list.
+ * Update this list and increment MODEL_LIST_VERSION in setup.ts when adding new models.
+ */
+export const DEFAULT_MODELS = [
+  'gemini3p',
+  'gemini3f',
+  'sonnet45T',
+  'sonnet45',
+  'opus46T',
+  'opus46',
+  'gpt52',
+  'gpt52pro',
+  'gpt41',
+  'deepseekT',
+  'kimi25T',
+  'kimi25',
+  'qwen3max',
+  'grok4',
+];
+
+/**
+ * Get the list of visible models from extension global state.
  * This should be used to validate model selections in proposals.
  */
 export function getVisibleModels(): string[] {
-  return getConfig<string[]>('texra.models', []);
+  return globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS, DEFAULT_MODELS);
 }
 
 /**
@@ -50,7 +71,7 @@ const MILLION = 1_000_000;
 const THOUSAND = 1_000;
 
 /** Format context window number for display. */
-function formatContext(context: number | undefined): string | undefined {
+export function formatContext(context: number | undefined): string | undefined {
   if (context === undefined) return undefined;
   if (context >= MILLION) return `${(context / MILLION).toFixed(1)}M`;
   if (context >= THOUSAND) return `${Math.round(context / THOUSAND)}K`;
@@ -58,7 +79,7 @@ function formatContext(context: number | undefined): string | undefined {
 }
 
 /** Format cost values for display. */
-function formatCost(
+export function formatCost(
   inputPrice: number | undefined,
   outputPrice: number | undefined,
 ): string | undefined {
