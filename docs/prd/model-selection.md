@@ -90,13 +90,13 @@ export enum GlobalStateKey {
 
 ```typescript
 export const DEFAULT_MODELS = [
-  'gemini3p', 'gemini3f', 'sonnet45T', 'opus46T', 'opus46',
+  'gemini3p', 'gemini3f', 'sonnet45T', 'sonnet45', 'opus46T', 'opus46',
   'gpt52', 'gpt52pro', 'gpt41', 'deepseekT', 'kimi25T',
   'kimi25', 'qwen3max', 'grok4',
 ];
 ```
 
-All non-deprecated. Stored in `computeModelOptions.ts` as exported constant.
+All non-deprecated. Stored in `computeModelOptions.ts` as exported constant. Note: `sonnet45` (non-thinking) is included because it is the default polish model.
 
 ---
 
@@ -152,7 +152,7 @@ All non-deprecated. Stored in `computeModelOptions.ts` as exported constant.
 
 - **Provider order:** Matches provider key list order (OpenAI, Anthropic, Google, xAI, DeepSeek, Moonshot, DashScope). Copilot and Others are filtered out.
 - **Model sort:** Alphabetical by short name within each provider.
-- **Count format:** `"N/M enabled"` where M = current (non-deprecated) models only.
+- **Count format:** `"N/M enabled"` where N = enabled current models, M = total current (non-deprecated) models for this provider. Enabled deprecated models are not reflected in the count (they appear in the collapsed deprecated section).
 - **Deprecated toggle:** Per-provider `"▸ N deprecated"` collapsible at the bottom of each provider's model list. Only shown if provider has deprecated models.
 - **Metadata columns:** Context window (formatted: "128K", "200K", "1.0M") and cost (formatted: "$input/$output" per 1M tokens). Both from llm-zoo `ModelConfig`.
 - **No Select All / Deselect All buttons.**
@@ -361,6 +361,16 @@ private async handleSetModelEnabled(
     : current.filter(m => m !== data.modelName);
 
   await globalSM.update(GlobalStateKey.ENABLED_MODELS, updated);
+
+  // Auto-reset polish model if it was just disabled
+  if (!data.enabled) {
+    const polishModel = globalSM.get<string>(GlobalStateKey.POLISH_MODEL, DEFAULT_POLISH_MODEL);
+    if (polishModel === data.modelName) {
+      const newPolish = updated[0] ?? DEFAULT_POLISH_MODEL;
+      await globalSM.update(GlobalStateKey.POLISH_MODEL, newPolish);
+    }
+  }
+
   void vscode.commands.executeCommand('texra.refreshAllOptions');
 
   const view = this.getActiveView();
@@ -448,11 +458,11 @@ Remove `'texra.models'` from `watchConfig()` array. The Settings View handler ca
 
 ## Edge Cases
 
-1. **Fresh install** — `globalSM.get(ENABLED_MODELS)` returns `undefined` → uses `DEFAULT_MODELS`. All 13 defaults are non-deprecated current models.
+1. **Fresh install** — `globalSM.get(ENABLED_MODELS)` returns `undefined` → uses `DEFAULT_MODELS`. All 14 defaults are non-deprecated current models.
 
 2. **User enables deprecated model** — Works normally. Model appears in dropdown. No special treatment at runtime.
 
-3. **Polish model gets unchecked** — If user disables the current polish model, the dropdown still shows the stale value. Next polish attempt will fail with existing error message ("Unsupported instruction polishing model"). User must pick a new one. No auto-reset needed (simple, predictable).
+3. **Polish model gets unchecked** — When `SET_MODEL_ENABLED` disables the current polish model, the handler auto-resets polish model to the first remaining enabled model (or `DEFAULT_POLISH_MODEL` if none). The updated polish model is sent back to the frontend in the same `UPDATE_MODEL_SELECTION` response.
 
 4. **llm-zoo adds new models** — New models appear in the model list as unchecked. `refreshModelListIfNeeded()` can merge new defaults via `MODEL_LIST_VERSION` bump.
 
