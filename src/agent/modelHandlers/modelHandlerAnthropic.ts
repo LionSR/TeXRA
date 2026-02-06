@@ -86,6 +86,7 @@ import type {
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
   BetaContentBlock,
+  BetaContentBlockParam,
   BetaCompactionBlock,
   BetaCompactionIterationUsage,
   BetaContextManagementConfig,
@@ -193,16 +194,15 @@ type CacheControlEligibleBlock = Extract<
   { type: 'text' | 'tool_result' }
 >;
 
-/** Compaction block shape from beta responses that may carry cache_control when replayed. */
-interface CacheControlCompactionBlock {
-  type: 'compaction';
-  cache_control?: CacheControlEphemeral | null;
-}
+type CacheControlCompactionBlock = Extract<
+  BetaContentBlockParam,
+  { type: 'compaction' }
+>;
 
 type CacheControlInspectableBlock =
   | ContentBlockParam
   | ContentBlock
-  | CacheControlCompactionBlock
+  | BetaContentBlockParam
   | undefined;
 
 const EPHEMERAL_CACHE_CONTROL: CacheControlEphemeral = {
