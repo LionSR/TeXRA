@@ -13,8 +13,9 @@ import { GlobalStateKey, globalSM } from '@common/state';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
+import { DEFAULT_MODELS } from '@model/computeModelOptions';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
-import { getConfig, isConfigExplicitlySet, updateConfig } from '@utils/config';
+import { isConfigExplicitlySet, updateConfig } from '@utils/config';
 
 /**
  * Version number for the default model list.
@@ -96,27 +97,6 @@ async function deleteLegacyAgentFiles(): Promise<void> {
 }
 
 /**
- * Default models that should be present in every user's model list.
- * IMPORTANT: This must match the "default" array in package.json under "texra.models".
- * Update this list and increment MODEL_LIST_VERSION when adding new models.
- */
-const DEFAULT_MODELS = [
-  'gemini3p',
-  'gemini3f',
-  'sonnet45T',
-  'opus46T',
-  'opus46',
-  'gpt52',
-  'gpt52pro',
-  'gpt41',
-  'deepseekT',
-  'kimi25T',
-  'kimi25',
-  'qwen3max',
-  'grok4',
-];
-
-/**
  * Refreshes the model list when MODEL_LIST_VERSION changes.
  * - If user hasn't customized settings: package.json defaults apply automatically
  * - If user has customized: merges new default models into their list
@@ -150,18 +130,18 @@ export async function refreshModelListIfNeeded(): Promise<void> {
 }
 
 /**
- * Merges new default models into user's list if they've customized it
+ * Merges new default models into user's existing enabled models list.
  */
 async function mergeNewModelsIfCustomized(): Promise<void> {
-  if (!isConfigExplicitlySet('texra.models')) {
+  const currentModels = globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS);
+  if (!currentModels) {
     logger.info(
       'extension',
-      'User has not customized model list, using package.json defaults',
+      'No custom model list in globalSM, using defaults',
     );
     return;
   }
 
-  const currentModels = getConfig<string[]>('models', []);
   const modelsToAdd = DEFAULT_MODELS.filter(
     (model) => !currentModels.includes(model),
   );
@@ -170,9 +150,10 @@ async function mergeNewModelsIfCustomized(): Promise<void> {
     return;
   }
 
-  await updateConfig('texra.models', [...currentModels, ...modelsToAdd], {
-    target: vscode.ConfigurationTarget.Global,
-  });
+  await globalSM.update(GlobalStateKey.ENABLED_MODELS, [
+    ...currentModels,
+    ...modelsToAdd,
+  ]);
   logger.info(
     'extension',
     `Merged ${modelsToAdd.length} new models into user's list: ${modelsToAdd.join(', ')}`,
@@ -183,10 +164,7 @@ async function mergeNewModelsIfCustomized(): Promise<void> {
  * Resets model-related configs to undefined so package.json defaults apply
  */
 async function resetModelConfigsToDefaults(): Promise<void> {
-  const configsToReset = [
-    'texra.model.instructionPolishModel',
-    'texra.merge.defaultModel',
-  ];
+  const configsToReset = ['texra.merge.defaultModel'];
 
   for (const key of configsToReset) {
     if (isConfigExplicitlySet(key)) {
