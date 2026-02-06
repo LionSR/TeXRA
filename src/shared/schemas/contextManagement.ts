@@ -17,6 +17,7 @@ export const ContextManagementDataSchema = z.object({
   utilizationBefore: z.number().nonnegative(),
   utilizationAfter: z.number().nonnegative().optional(),
   details: z.string().optional(),
+  summary: z.string().optional(),
   originalMaxTokens: z.number().positive().optional(),
   reducedMaxTokens: z.number().positive().optional(),
 });
