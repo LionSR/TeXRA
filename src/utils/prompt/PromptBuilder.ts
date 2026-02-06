@@ -55,11 +55,7 @@ export async function getSystemPromptWithRules(
 ): Promise<string> {
   const basePrompt = await renderPrompt(systemPrompt, userVars);
   const rules = await loadTexraRules();
-  const workspaceInfo = buildWorkspaceInfoBlock();
-  const parts = [basePrompt];
-  if (rules) parts.push(rules);
-  parts.push(workspaceInfo);
-  return parts.join('\n');
+  return rules ? `${basePrompt}\n${rules}` : basePrompt;
 }
 
 /**
@@ -193,11 +189,12 @@ export async function buildInitialToolUsePrompts(
   const initial = await builder.buildInitialPrompts();
 
   // Build instruction suffix: always include tool-use instructions,
-  // optionally append memory instructions when enabled
+  // optionally append memory instructions and workspace info
   const suffixParts = [TOOL_USE_INSTRUCTIONS];
   if (options?.memoryEnabled) {
     suffixParts.push(MEMORY_TOOL_INSTRUCTIONS);
   }
+  suffixParts.push(buildWorkspaceInfoBlock());
 
   return {
     ...initial,
