@@ -101,6 +101,7 @@ export class LogList extends LitElement {
   private stateManager?: PersistedState<LogListState>;
   private toggleStates: ToggleStateStore;
   private activeStreamId: string | null = null;
+  private shouldScrollToBottom = false;
 
   constructor() {
     super();
@@ -128,6 +129,7 @@ export class LogList extends LitElement {
       return;
     }
     this.activeStreamId = streamId;
+    this.shouldScrollToBottom = true;
     this.initializeState(streamId);
   }
 
@@ -145,8 +147,21 @@ export class LogList extends LitElement {
   }
 
   override updated(): void {
-    // Scroll to bottom after render if the user is already near the end
-    this.taskGroupList?.scrollToBottomIfNearEnd();
+    if (this.shouldScrollToBottom) {
+      // Force scroll to bottom when switching to a different stream tab.
+      // Must wait for child TaskGroupList to finish rendering (updateComplete)
+      // and then for a layout pass (requestAnimationFrame) so vscode-scrollable
+      // has an accurate scrollMax before we scroll.
+      this.shouldScrollToBottom = false;
+      void this.taskGroupList?.updateComplete.then(() => {
+        requestAnimationFrame(() => {
+          this.taskGroupList?.scrollToBottom();
+        });
+      });
+    } else {
+      // Scroll to bottom after render if the user is already near the end
+      this.taskGroupList?.scrollToBottomIfNearEnd();
+    }
   }
 
   // ============================================================
