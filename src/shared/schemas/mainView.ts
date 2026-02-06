@@ -595,10 +595,10 @@ const CleanLatexdiffvcMessageSchema = z.object({
   ...latexdiffvcOperationFields,
 });
 
-export const LatexdiffvcOperationMessageSchema = z.union([
-  PackLatexdiffvcMessageSchema,
-  CleanLatexdiffvcMessageSchema,
-]);
+export const LatexdiffvcOperationMessageSchema = z.discriminatedUnion(
+  'command',
+  [PackLatexdiffvcMessageSchema, CleanLatexdiffvcMessageSchema],
+);
 
 export const MainViewMessageSchema = z.discriminatedUnion('command', [
   SetModelOptionsMessageSchema,
