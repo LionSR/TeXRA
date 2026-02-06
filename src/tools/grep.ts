@@ -20,13 +20,13 @@ const GrepInputSchema = z.strictObject({
   glob: z
     .string()
     .nullish()
-    .describe('Glob filter for file names (e.g. "*.ts").'),
+    .describe('Glob filter for file names (e.g. "*.tex").'),
   output_mode: z
     .enum(OUTPUT_MODES)
     .nullish()
     .transform((v) => v ?? 'content')
     .describe(
-      'Output format: "content" (matching lines), "files_with_matches" (paths only), or "count" (match counts). NOT "context" — use -C for context lines.',
+      'Must be "content", "files_with_matches", or "count". For context lines around matches, use -C instead.',
     ),
   '-B': z
     .int()
@@ -42,15 +42,13 @@ const GrepInputSchema = z.strictObject({
     .int()
     .min(0)
     .nullish()
-    .describe(
-      'Lines of context before AND after each match (only with output_mode "content"). Use this instead of output_mode when you want surrounding context.',
-    ),
+    .describe('Lines of context before AND after each match.'),
   '-n': z.boolean().nullish().describe('Show line numbers.'),
   '-i': z.boolean().nullish().describe('Case-insensitive search.'),
   type: z
     .string()
     .nullish()
-    .describe('Ripgrep file type filter (e.g. "ts", "py").'),
+    .describe('Ripgrep file type filter (e.g. "tex", "py").'),
   offset: z.int().min(0).nullish().describe('Skip first N results.'),
   head_limit: z.int().min(1).nullish().describe('Limit to first N results.'),
   multiline: z
