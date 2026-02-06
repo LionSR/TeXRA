@@ -11,10 +11,10 @@ import type { AgentLogger } from '@logger/AgentLogger';
 // Local imports - model config
 import {
   DEFAULT_MODEL_CAPABILITIES,
-  ModelCapabilities,
-  ModelConfig,
+  type ModelCapabilities,
+  type ModelConfig,
   ModelProvider,
-} from '@model/ModelConfig';
+} from 'llm-zoo';
 import * as configModule from '@utils/config';
 import { pathToLocation } from '@utils/files';
 

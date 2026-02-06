@@ -14,9 +14,9 @@ import type { AgentLogger } from '@logger/AgentLogger';
 // Local imports - model config
 import {
   DEFAULT_MODEL_CAPABILITIES,
-  ModelConfig,
+  type ModelConfig,
   ModelProvider,
-} from '@model/ModelConfig';
+} from 'llm-zoo';
 
 type LoggerStub = Partial<AgentLogger> & {
   streamId: string;
