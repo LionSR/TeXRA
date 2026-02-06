@@ -1,6 +1,6 @@
 # PRD: Model Selection in Settings View
 
-**Status:** Not Started
+**Status:** Implemented
 **Date:** 2026-02-06
 **Related:** [Settings View PRD](./settings-view-unified.md), llm-zoo package
 
@@ -28,17 +28,17 @@ Replace `texra.models` (VS Code config array) and `texra.model.instructionPolish
 
 Add `deprecated: boolean` (default `false`) to `ModelConfig` interface. Mark legacy models:
 
-| Provider | Current | Deprecated |
-|----------|---------|------------|
-| Anthropic (21) | opus46T/46, sonnet45T/45, haiku45T/45 (6) | opus45T/45, opus41T/41, opus4T/4, sonnet4T/4, sonnet37T/37, sonnet36/35/3, opus3, haiku35/3 (15) |
-| OpenAI (28) | gpt52/52pro/52codex, gpt41/41- (5) | gpt51, gpt5/5pro/5-/5--, gpt41--, gpt45, gpt4o/4o-/4ol/4t, o3pro/3/3-, o4-, o1pro/1/1preview/1-, o3-dr/o4-mini-dr, gptoss/- (23) |
-| Google (6) | gemini3p/3f (2) | gemini25p/25f/25f0617/25f- (4) |
-| DeepSeek (7) | deepseek, deepseekT (2) | deepseekT+, dsv3, dsr1, dsv3o, dsr1o (5) |
-| xAI (5) | grok4 (1) | grok3/3-, grok2/2v (4) |
-| Moonshot (8) | kimi25, kimi25T (2) | kimi2/2+, kimi2T/2T+, kimi, kimiv, kimit (7) |
-| DashScope (3) | all 3 (0 deprecated) | — |
-| **Copilot (1)** | **filtered out of model list** | — |
-| **Others (2)** | — | llama31, qvq-72b (2, **filtered out**) |
+| Provider        | Current                                   | Deprecated                                                                                                                       |
+| --------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Anthropic (21)  | opus46T/46, sonnet45T/45, haiku45T/45 (6) | opus45T/45, opus41T/41, opus4T/4, sonnet4T/4, sonnet37T/37, sonnet36/35/3, opus3, haiku35/3 (15)                                 |
+| OpenAI (28)     | gpt52/52pro/52codex, gpt41/41- (5)        | gpt51, gpt5/5pro/5-/5--, gpt41--, gpt45, gpt4o/4o-/4ol/4t, o3pro/3/3-, o4-, o1pro/1/1preview/1-, o3-dr/o4-mini-dr, gptoss/- (23) |
+| Google (6)      | gemini3p/3f (2)                           | gemini25p/25f/25f0617/25f- (4)                                                                                                   |
+| DeepSeek (7)    | deepseek, deepseekT (2)                   | deepseekT+, dsv3, dsr1, dsv3o, dsr1o (5)                                                                                         |
+| xAI (5)         | grok4 (1)                                 | grok3/3-, grok2/2v (4)                                                                                                           |
+| Moonshot (8)    | kimi25, kimi25T (2)                       | kimi2/2+, kimi2T/2T+, kimi, kimiv, kimit (7)                                                                                     |
+| DashScope (3)   | all 3 (0 deprecated)                      | —                                                                                                                                |
+| **Copilot (1)** | **filtered out of model list**            | —                                                                                                                                |
+| **Others (2)**  | —                                         | llama31, qvq-72b (2, **filtered out**)                                                                                           |
 
 **Totals: 83 → 21 current shown + 61 deprecated (hidden by default) + 1 filtered out (copilot)**
 
@@ -73,8 +73,8 @@ export enum GlobalStateKey {
   LAST_KNOWN_VERSION = 'lastKnownVersion',
   MODEL_LIST_VERSION = 'modelListVersion',
   MEMORY_ENABLED = 'texra.memory.enabled',
-  ENABLED_MODELS = 'enabledModels',       // NEW
-  POLISH_MODEL = 'polishModel',           // NEW
+  ENABLED_MODELS = 'enabledModels', // NEW
+  POLISH_MODEL = 'polishModel', // NEW
 }
 ```
 
@@ -90,9 +90,20 @@ export enum GlobalStateKey {
 
 ```typescript
 export const DEFAULT_MODELS = [
-  'gemini3p', 'gemini3f', 'sonnet45T', 'sonnet45', 'opus46T', 'opus46',
-  'gpt52', 'gpt52pro', 'gpt41', 'deepseekT', 'kimi25T',
-  'kimi25', 'qwen3max', 'grok4',
+  'gemini3p',
+  'gemini3f',
+  'sonnet45T',
+  'sonnet45',
+  'opus46T',
+  'opus46',
+  'gpt52',
+  'gpt52pro',
+  'gpt41',
+  'deepseekT',
+  'kimi25T',
+  'kimi25',
+  'qwen3max',
+  'grok4',
 ];
 ```
 
@@ -157,6 +168,7 @@ All non-deprecated. Stored in `computeModelOptions.ts` as exported constant. Not
 The model selection list does **not** show relay availability. It only controls **visibility** (which models appear in the dropdown). Availability is determined at runtime by `computeModelOptionsData()` and displayed in the main view dropdown (disabled state + key icon).
 
 This separation is intentional:
+
 - Visibility = user preference (Settings View)
 - Availability = access mode + API keys + relay tier (main dropdown)
 
@@ -185,12 +197,12 @@ UPDATE_MODEL_SELECTION: 'updateModelSelection',
 ```typescript
 // Model item sent from backend to frontend
 const ModelSelectionItemSchema = z.object({
-  name: z.string(),                          // Short name: "sonnet45T"
-  provider: z.string(),                      // Provider: "anthropic"
-  enabled: z.boolean(),                      // In enabled models list
-  deprecated: z.boolean(),                   // From llm-zoo
-  contextWindow: z.string().optional(),      // Formatted: "200K"
-  cost: z.string().optional(),               // Formatted: "$3.00/$15.00"
+  name: z.string(), // Short name: "sonnet45T"
+  provider: z.string(), // Provider: "anthropic"
+  enabled: z.boolean(), // In enabled models list
+  deprecated: z.boolean(), // From llm-zoo
+  contextWindow: z.string().optional(), // Formatted: "200K"
+  cost: z.string().optional(), // Formatted: "$3.00/$15.00"
 });
 
 // Outbound: backend → frontend
@@ -242,11 +254,11 @@ Frontend                          Backend
 
 Currently, provider display names are duplicated:
 
-| Location | Map | Providers |
-|----------|-----|-----------|
-| `SettingsViewMessageHandler.ts` | `PROVIDER_DISPLAY_NAMES` | 9 ApiProviders |
-| `ProviderKeyList.ts` (implicit) | Uses `displayName` from backend | — |
-| Model selection (new) | Needs ModelProvider → display name | 7 ModelProviders |
+| Location                        | Map                                | Providers        |
+| ------------------------------- | ---------------------------------- | ---------------- |
+| `SettingsViewMessageHandler.ts` | `PROVIDER_DISPLAY_NAMES`           | 9 ApiProviders   |
+| `ProviderKeyList.ts` (implicit) | Uses `displayName` from backend    | —                |
+| Model selection (new)           | Needs ModelProvider → display name | 7 ModelProviders |
 
 Consolidate into a single shared constant:
 
@@ -279,6 +291,7 @@ export const MODEL_PROVIDERS_ORDER = [
 ```
 
 This is used by:
+
 - `SettingsViewMessageHandler` (existing provider key statuses + new model selection)
 - `ModelSelectionList` component (provider group headers)
 - Any future provider-aware UI
@@ -289,24 +302,24 @@ This is used by:
 
 ### Files to Modify
 
-| # | File | Change |
-|---|------|--------|
-| 1 | `package.json` | Remove `texra.models` (~80 lines) and `texra.model.instructionPolishModel` (~60 lines) |
-| 2 | `src/common/state/stateManager.ts` | Add `ENABLED_MODELS` and `POLISH_MODEL` to `GlobalStateKey` |
-| 3 | `src/model/computeModelOptions.ts` | Export `DEFAULT_MODELS`; rewrite `getVisibleModels()` to use `globalSM` |
-| 4 | `src/utils/text/textEnhancementUtils.ts` | Read polish model from `globalSM` instead of `getConfig` |
-| 5 | `src/frontend/setup.ts` | Simplify `refreshModelListIfNeeded()` for globalSM; import `DEFAULT_MODELS`; remove `instructionPolishModel` from reset |
-| 6 | `src/MainViewProvider.ts` | Remove `texra.models` from config watcher (refresh now triggered by Settings View handler) |
-| 7 | **New:** `src/shared/constants/providers.ts` | Consolidated `PROVIDER_DISPLAY_NAMES` and `MODEL_PROVIDERS_ORDER` |
-| 8 | `src/common/webview/commands.ts` | Add 3 inbound + 1 outbound command constants |
-| 9 | `src/shared/schemas/settingsViewMessages.ts` | Add `ModelSelectionItemSchema`, outbound + 3 inbound message schemas |
-| 10 | `src/settingsView/SettingsViewMessageHandler.ts` | Add `buildModelSelectionItems()`, `sendModelSelectionData()`, 3 handlers; import from shared providers |
-| 11 | **New:** `src/settingsView/frontend/components/profile/ModelSelectionList.ts` | Checkbox list component with provider groups + deprecated toggles |
-| 12 | `src/settingsView/frontend/components/profile/events.ts` | Add `ModelSelectionEvents` (2 events) |
-| 13 | `src/settingsView/frontend/components/profile/styles.ts` | Add model list CSS |
-| 14 | `src/settingsView/frontend/SettingsApp.ts` | Wire state + event handlers + message handler |
-| 15 | `src/settingsView/frontend/tabs/ModelsTab.ts` | Add properties, render `<model-selection-list>` + polish model dropdown |
-| 16 | `docs/prd/settings-view-unified.md` | Update implementation status |
+| #   | File                                                                          | Change                                                                                                                  |
+| --- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 1   | `package.json`                                                                | Remove `texra.models` (~80 lines) and `texra.model.instructionPolishModel` (~60 lines)                                  |
+| 2   | `src/common/state/stateManager.ts`                                            | Add `ENABLED_MODELS` and `POLISH_MODEL` to `GlobalStateKey`                                                             |
+| 3   | `src/model/computeModelOptions.ts`                                            | Export `DEFAULT_MODELS`; rewrite `getVisibleModels()` to use `globalSM`                                                 |
+| 4   | `src/utils/text/textEnhancementUtils.ts`                                      | Read polish model from `globalSM` instead of `getConfig`                                                                |
+| 5   | `src/frontend/setup.ts`                                                       | Simplify `refreshModelListIfNeeded()` for globalSM; import `DEFAULT_MODELS`; remove `instructionPolishModel` from reset |
+| 6   | `src/MainViewProvider.ts`                                                     | Remove `texra.models` from config watcher (refresh now triggered by Settings View handler)                              |
+| 7   | **New:** `src/shared/constants/providers.ts`                                  | Consolidated `PROVIDER_DISPLAY_NAMES` and `MODEL_PROVIDERS_ORDER`                                                       |
+| 8   | `src/common/webview/commands.ts`                                              | Add 3 inbound + 1 outbound command constants                                                                            |
+| 9   | `src/shared/schemas/settingsViewMessages.ts`                                  | Add `ModelSelectionItemSchema`, outbound + 3 inbound message schemas                                                    |
+| 10  | `src/settingsView/SettingsViewMessageHandler.ts`                              | Add `buildModelSelectionItems()`, `sendModelSelectionData()`, 3 handlers; import from shared providers                  |
+| 11  | **New:** `src/settingsView/frontend/components/profile/ModelSelectionList.ts` | Checkbox list component with provider groups + deprecated toggles                                                       |
+| 12  | `src/settingsView/frontend/components/profile/events.ts`                      | Add `ModelSelectionEvents` (2 events)                                                                                   |
+| 13  | `src/settingsView/frontend/components/profile/styles.ts`                      | Add model list CSS                                                                                                      |
+| 14  | `src/settingsView/frontend/SettingsApp.ts`                                    | Wire state + event handlers + message handler                                                                           |
+| 15  | `src/settingsView/frontend/tabs/ModelsTab.ts`                                 | Add properties, render `<model-selection-list>` + polish model dropdown                                                 |
+| 16  | `docs/prd/settings-view-unified.md`                                           | Update implementation status                                                                                            |
 
 ### Backend: `buildModelSelectionItems()`
 
@@ -319,13 +332,12 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
     globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS, DEFAULT_MODELS),
   );
 
-  return MODELS
-    .filter(name => {
-      const config = MODEL_CONFIGS[name];
-      // Filter out copilot and others
-      return config && MODEL_PROVIDERS_ORDER.includes(config.provider);
-    })
-    .map(name => {
+  return MODELS.filter((name) => {
+    const config = MODEL_CONFIGS[name];
+    // Filter out copilot and others
+    return config && MODEL_PROVIDERS_ORDER.includes(config.provider);
+  })
+    .map((name) => {
       const config = MODEL_CONFIGS[name];
       return {
         name,
@@ -436,7 +448,10 @@ No other consumer changes needed — `computeModelOptionsData()`, `resolveVisibl
 **`textEnhancementUtils.ts`:**
 
 ```typescript
-const polishModel = globalSM.get<string>(GlobalStateKey.POLISH_MODEL, DEFAULT_POLISH_MODEL);
+const polishModel = globalSM.get<string>(
+  GlobalStateKey.POLISH_MODEL,
+  DEFAULT_POLISH_MODEL,
+);
 ```
 
 **`setup.ts` simplification:**
@@ -469,7 +484,7 @@ Remove `'texra.models'` from `watchConfig()` array. The Settings View handler ca
 
 ## Verification
 
-1. `npm run compile:fast` — builds without errors
+1. `npm run compile` — builds without errors
 2. `npm run typecheck` — no type errors
 3. Open Settings View → Models tab → model list below provider keys
 4. Expand a provider → check/uncheck models → main view dropdown updates

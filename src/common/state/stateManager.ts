@@ -25,6 +25,10 @@ export enum GlobalStateKey {
   MODEL_LIST_VERSION = 'modelListVersion',
   MEMORY_ENABLED = 'texra.memory.enabled',
 
+  // Model selection settings
+  ENABLED_MODELS = 'enabledModels',
+  POLISH_MODEL = 'polishModel',
+
   // Streaming settings
   STREAMING_GLOBAL = 'texra.streaming.global',
   STREAMING_OPENAI = 'texra.streaming.openai',
