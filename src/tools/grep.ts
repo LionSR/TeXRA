@@ -32,12 +32,16 @@ const GrepInputSchema = z.strictObject({
     .int()
     .min(0)
     .nullish()
-    .describe('Lines of context BEFORE each match (only with output_mode "content").'),
+    .describe(
+      'Lines of context BEFORE each match (only with output_mode "content").',
+    ),
   '-A': z
     .int()
     .min(0)
     .nullish()
-    .describe('Lines of context AFTER each match (only with output_mode "content").'),
+    .describe(
+      'Lines of context AFTER each match (only with output_mode "content").',
+    ),
   '-C': z
     .int()
     .min(0)
