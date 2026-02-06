@@ -649,7 +649,7 @@ export type LatexdiffvcOperationMessage = z.infer<
 // ============================================================
 
 const commandOnly = <T extends string>(command: T) =>
-  z.object({ command: z.literal(command) });
+  z.object({ command: z.literal(command) }).passthrough();
 
 const withOptionalFilePath = <T extends string>(command: T) =>
   z.object({ command: z.literal(command), filePath: z.string().optional() });
