@@ -1,5 +1,3 @@
-// (none needed)
-
 // Third-party imports
 import * as vscode from 'vscode';
 import { MODEL_CONFIGS } from 'llm-zoo';
@@ -7,15 +5,19 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 // Local imports - shared constants
 import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
 
+// Local imports - agent
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+
+// Local imports - common
 import { getSdkErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
+
+// Local imports - logger
 import * as logger from '@logger/logUtils';
-// Type imports
 import type { TaskState } from '@logger/TaskState';
 
-// Local imports - model configs
+// Local imports - utils
 import { getConfig } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
 

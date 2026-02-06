@@ -47,22 +47,13 @@ export function getVisibleModels(): string[] {
 
 /**
  * Resolve a model to a valid visible model.
- * Returns the model if valid, or falls back to the first visible model.
- * Consistent with filterVisible for agents: if no models configured, allows any model.
- *
- * @returns The resolved model name
- * @throws Error if models are configured but none are available (shouldn't happen in practice)
+ * Returns the model as-is if visible, falls back to the first visible model,
+ * or allows any model when none are configured (consistent with agent filterVisible).
  */
 export function resolveVisibleModel(model: string): string {
   const visibleModels = getVisibleModels();
-
-  // If no models configured, allow any model (consistent with agent filterVisible)
   if (visibleModels.length === 0) return model;
-
-  // If model is in visible list, use it
   if (visibleModels.includes(model)) return model;
-
-  // Fall back to first visible model
   return visibleModels[0];
 }
 
@@ -144,9 +135,7 @@ async function isModelAvailable(
   return false;
 }
 
-/**
- * Build typed model option data for a single model.
- */
+/** Build typed model option data for a single model. */
 async function buildModelOptionData(
   model: string,
   ctx: ModelAvailabilityContext,
@@ -157,28 +146,21 @@ async function buildModelOptionData(
   }
 
   const available = await isModelAvailable(model, config, ctx);
-  const contextStr = formatContext(config.contextWindow);
-  const costStr = formatCost(config.inputPrice, config.outputPrice);
-
   return {
     value: model,
     label: model,
     provider: config.provider,
-    context: contextStr,
-    cost: costStr,
+    context: formatContext(config.contextWindow),
+    cost: formatCost(config.inputPrice, config.outputPrice),
     requiresKey: !available,
     disabled: !available,
   };
 }
 
-/**
- * Compute typed model options data for Lit-native rendering.
- * Returns structured data instead of HTML strings.
- */
+/** Compute typed model options data for Lit-native rendering. */
 export async function computeModelOptionsData(): Promise<ModelOptionData[]> {
   const models = getVisibleModels();
 
-  // Prime caches for availability checks
   const serverSideKeyService = getServerSideKeyService();
   const [hasOpenRouter, hasServerAccess] = await Promise.all([
     SecretManager.apiKeyExists('openRouter'),
