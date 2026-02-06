@@ -1505,7 +1505,7 @@
     "@lit/context": "^1.1.6",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@openrouter/sdk": "^0.8.0",
-    "@supabase/supabase-js": "^2.95.2",
+    "@supabase/supabase-js": "^2.95.3",
     "@vscode-elements/elements": "^2.4.0",
     "@vscode/codicons": "^0.0.44",
     "arxiv-client": "^0.0.9",
