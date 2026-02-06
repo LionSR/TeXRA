@@ -227,13 +227,7 @@
             "default": 75,
             "minimum": 0,
             "maximum": 100,
-            "description": "Percentage of context window to trigger automatic context management. For OpenAI, triggers conversation compaction via /responses/compact. For Anthropic, triggers server-side clearing (all models) and native compaction on Claude Opus 4.6. Set to 0 to disable.",
-            "scope": "resource"
-          },
-          "texra.model.enableThinkingClearing": {
-            "type": "boolean",
-            "default": false,
-            "description": "Enable Anthropic's thinking block clearing strategy. When enabled, old thinking blocks are cleared alongside tool uses. Disabled by default because thinking clearing runs before tool use clearing and may prevent tool use clearing from triggering.",
+            "description": "Percentage of context window to trigger automatic context management. For OpenAI, triggers conversation compaction via /responses/compact. For Anthropic, triggers native server-side compaction on Claude Opus 4.6. Set to 0 to disable.",
             "scope": "resource"
           },
           "texra.model.gpt5ReasoningSummary": {
