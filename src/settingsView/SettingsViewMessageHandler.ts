@@ -108,22 +108,22 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
     globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS, DEFAULT_MODELS),
   );
 
-  return MODELS.filter((name) => {
+  const items: ModelSelectionItem[] = [];
+  for (const name of MODELS) {
     const config = MODEL_CONFIGS[name];
-    return config && modelProvidersSet.has(config.provider);
-  })
-    .map((name) => {
-      const config = MODEL_CONFIGS[name];
-      return {
-        name,
-        provider: config.provider,
-        enabled: enabledSet.has(name),
-        deprecated: config.deprecated ?? false,
-        contextWindow: formatContext(config.contextWindow),
-        cost: formatCost(config.inputPrice, config.outputPrice),
-      };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
+    if (!config || !modelProvidersSet.has(config.provider)) continue;
+
+    items.push({
+      name,
+      provider: config.provider,
+      enabled: enabledSet.has(name),
+      deprecated: config.deprecated ?? false,
+      contextWindow: formatContext(config.contextWindow),
+      cost: formatCost(config.inputPrice, config.outputPrice),
+    });
+  }
+
+  return items.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
@@ -743,9 +743,15 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       GlobalStateKey.ENABLED_MODELS,
       DEFAULT_MODELS,
     );
-    const updated = data.enabled
-      ? [...new Set([...current, data.modelName])]
-      : current.filter((m) => m !== data.modelName);
+
+    let updated: string[];
+    if (data.enabled) {
+      updated = current.includes(data.modelName)
+        ? current
+        : [...current, data.modelName];
+    } else {
+      updated = current.filter((m) => m !== data.modelName);
+    }
 
     await globalSM.update(GlobalStateKey.ENABLED_MODELS, updated);
 

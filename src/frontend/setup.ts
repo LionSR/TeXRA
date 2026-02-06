@@ -98,8 +98,7 @@ async function deleteLegacyAgentFiles(): Promise<void> {
 
 /**
  * Refreshes the model list when MODEL_LIST_VERSION changes.
- * - If user hasn't customized settings: package.json defaults apply automatically
- * - If user has customized: merges new default models into their list
+ * Merges new default models into the user's existing enabled models list.
  */
 export async function refreshModelListIfNeeded(): Promise<void> {
   const storedVersion = globalSM.get<number>(GlobalStateKey.MODEL_LIST_VERSION);
