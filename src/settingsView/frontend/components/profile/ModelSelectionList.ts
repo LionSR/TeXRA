@@ -16,12 +16,12 @@ import {
   MODEL_PROVIDERS_ORDER,
 } from '@shared/constants/providers';
 
-// Local imports - shared schemas
-import type { ModelSelectionItem } from '@shared/schemas/settingsViewMessages';
-
 // Local imports - profile view styles and events
 import { profileViewStyles } from './styles';
 import { ModelSelectionEvents } from './events';
+
+// Local imports - shared schemas
+import type { ModelSelectionItem } from '@shared/schemas/settingsViewMessages';
 
 interface ProviderGroup {
   provider: string;
@@ -65,10 +65,6 @@ export class ModelSelectionList extends LitElement {
     );
   }
 
-  private getEnabledModels(): ModelSelectionItem[] {
-    return this.models.filter((m) => m.enabled);
-  }
-
   private toggleProvider(provider: string): void {
     this.expandedProvider =
       this.expandedProvider === provider ? null : provider;
@@ -98,15 +94,6 @@ export class ModelSelectionList extends LitElement {
     return this.allowedModels.includes(modelName);
   }
 
-  private handleModelToggle(modelName: string, checked: boolean): void {
-    this.dispatchEvent(
-      ModelSelectionEvents.setModelEnabled({
-        modelName,
-        enabled: checked,
-      }),
-    );
-  }
-
   private handlePolishModelChange(e: Event): void {
     const value = (e.target as HTMLSelectElement).value;
     this.dispatchEvent(
@@ -126,7 +113,12 @@ export class ModelSelectionList extends LitElement {
             .checked=${model.enabled}
             @change=${(e: Event) => {
               const checked = (e.target as HTMLInputElement).checked;
-              this.handleModelToggle(model.name, checked);
+              this.dispatchEvent(
+                ModelSelectionEvents.setModelEnabled({
+                  modelName: model.name,
+                  enabled: checked,
+                }),
+              );
             }}
           />
           <span class="model-name">${model.name}</span>
@@ -149,19 +141,8 @@ export class ModelSelectionList extends LitElement {
 
   private renderProviderGroup(group: ProviderGroup): TemplateResult {
     const isExpanded = this.expandedProvider === group.provider;
-    const enabledCurrentCount = group.current.filter((m) => m.enabled).length;
-    const totalCurrentCount = group.current.length;
-
-    const content = isExpanded
-      ? html`
-          <div class="provider-group-content">
-            ${group.current.map((m) => this.renderModelRow(m))}
-            ${group.deprecated.length > 0
-              ? this.renderDeprecatedToggle(group)
-              : nothing}
-          </div>
-        `
-      : nothing;
+    const enabledCount = group.current.filter((m) => m.enabled).length;
+    const totalCount = group.current.length;
 
     return html`
       <div class="provider-group">
@@ -176,10 +157,19 @@ export class ModelSelectionList extends LitElement {
           ></span>
           <span class="provider-group-name">${group.displayName}</span>
           <span class="provider-group-count">
-            ${enabledCurrentCount}/${totalCurrentCount} enabled
+            ${enabledCount}/${totalCount} enabled
           </span>
         </button>
-        ${content}
+        ${isExpanded
+          ? html`
+              <div class="provider-group-content">
+                ${group.current.map((m) => this.renderModelRow(m))}
+                ${group.deprecated.length > 0
+                  ? this.renderDeprecatedToggle(group)
+                  : nothing}
+              </div>
+            `
+          : nothing}
       </div>
     `;
   }
@@ -204,7 +194,7 @@ export class ModelSelectionList extends LitElement {
   }
 
   private renderPolishModelDropdown(): TemplateResult {
-    const enabledModels = this.getEnabledModels();
+    const enabledModels = this.models.filter((m) => m.enabled);
 
     return html`
       <div class="polish-model-row">

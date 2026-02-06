@@ -20,7 +20,7 @@ import {
   designTokens,
 } from '@shared/styles';
 
-// Local imports - shared schemas
+// Local imports - shared schemas and constants
 import {
   UpdateMemoryEnabledMessageSchema,
   UpdateMemoryMessageSchema,
@@ -35,6 +35,7 @@ import {
   UpdateModelSelectionMessageSchema,
   SetTabMessageSchema,
 } from '@shared/schemas';
+import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
 
 // Local imports - settings view commands
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -118,7 +119,7 @@ export class SettingsApp extends BaseWebviewApp {
 
   // Model selection state
   @state() private modelSelectionItems: ModelSelectionItem[] = [];
-  @state() private polishModel = 'sonnet45';
+  @state() private polishModel = DEFAULT_POLISH_MODEL;
 
   protected get readyCommand(): string | null {
     return null;
