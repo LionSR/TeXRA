@@ -25,11 +25,11 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - model
 import {
-  ModelConfig,
+  type ModelConfig,
   ModelProvider,
-  ModelCapabilities,
+  type ModelCapabilities,
   ReasoningEffort,
-} from '@model/ModelConfig';
+} from 'llm-zoo';
 
 // Local imports - tools
 import type { ToolFileAttachment } from '@tools/result';
