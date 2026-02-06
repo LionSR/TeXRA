@@ -5,6 +5,7 @@
  * into a single unified message handler.
  */
 import * as vscode from 'vscode';
+import { MODELS, MODEL_CONFIGS } from 'llm-zoo';
 
 // Shared schemas and dispatchers
 import {
@@ -12,7 +13,13 @@ import {
   type SettingsViewInboundHandlerRegistry,
   type SettingsViewInboundMessage,
   SETTINGS_VIEW_CMD,
+  type ModelSelectionItem,
 } from '@shared/schemas/settingsViewMessages';
+import {
+  PROVIDER_DISPLAY_NAMES,
+  MODEL_PROVIDERS_ORDER,
+  DEFAULT_POLISH_MODEL,
+} from '@shared/constants/providers';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, MAX_TIER } from '@auth/config';
 import { AUTH_COMMANDS } from '@auth/constants';
@@ -28,7 +35,13 @@ import {
   AgentHistoryManager,
   type AgentHistoryItem,
 } from '@common/history/AgentHistoryManager';
+import { GlobalStateKey, globalSM } from '@common/state';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
+import {
+  DEFAULT_MODELS,
+  formatContext,
+  formatCost,
+} from '@model/computeModelOptions';
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
@@ -58,18 +71,6 @@ type MessageFor<C extends SettingsViewInboundMessage['command']> = Extract<
   { command: C }
 >;
 
-const PROVIDER_DISPLAY_NAMES: Record<ApiProvider, string> = {
-  openai: 'OpenAI',
-  anthropic: 'Anthropic',
-  openRouter: 'OpenRouter',
-  google: 'Google',
-  xai: 'xAI',
-  deepseek: 'DeepSeek',
-  moonshot: 'Moonshot',
-  dashscope: 'DashScope',
-  wolframllmapp: 'Wolfram',
-};
-
 async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
   return Promise.all(
     SecretManager.API_PROVIDERS.map(async (provider) => {
@@ -98,6 +99,31 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
       };
     }),
   );
+}
+
+const modelProvidersSet = new Set<string>(MODEL_PROVIDERS_ORDER);
+
+function buildModelSelectionItems(): ModelSelectionItem[] {
+  const enabledSet = new Set(
+    globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS, DEFAULT_MODELS),
+  );
+
+  const items: ModelSelectionItem[] = [];
+  for (const name of MODELS) {
+    const config = MODEL_CONFIGS[name];
+    if (!config || !modelProvidersSet.has(config.provider)) continue;
+
+    items.push({
+      name,
+      provider: config.provider,
+      enabled: enabledSet.has(name),
+      deprecated: config.deprecated ?? false,
+      contextWindow: formatContext(config.contextWindow),
+      cost: formatCost(config.inputPrice, config.outputPrice),
+    });
+  }
+
+  return items.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
@@ -162,6 +188,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleSetProviderEndpoint(data),
       [SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING]: (data) =>
         this.handleSetGlobalStreaming(data),
+
+      // Model selection handlers
+      [SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION]: () =>
+        this.handleGetModelSelection(),
+      [SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED]: (data) =>
+        this.handleSetModelEnabled(data),
+      [SETTINGS_VIEW_COMMANDS.SET_POLISH_MODEL]: (data) =>
+        this.handleSetPolishModel(data),
     };
   }
 
@@ -204,6 +238,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendMemoryEnabled(webview),
       this.sendHistoryData(webview),
       this.sendProfileData(webview),
+      this.sendModelSelectionData(webview),
     ]);
   }
 
@@ -308,6 +343,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       accessExpiresAt: accessExpiresAt?.toISOString() ?? null,
       providerKeyStatuses,
       globalStreamingDefault,
+    });
+  }
+
+  public async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
+    const models = buildModelSelectionItems();
+    const polishModel = globalSM.get<string>(
+      GlobalStateKey.POLISH_MODEL,
+      DEFAULT_POLISH_MODEL,
+    );
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+      models,
+      polishModel,
     });
   }
 
@@ -675,5 +723,62 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     if (view) {
       await this.sendProfileData(view.webview);
     }
+  }
+
+  // ============================================================
+  // Model selection handler implementations
+  // ============================================================
+
+  private async handleGetModelSelection(): Promise<void> {
+    const view = this.getActiveView();
+    if (view) {
+      await this.sendModelSelectionData(view.webview);
+    }
+  }
+
+  private async handleSetModelEnabled(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MODEL_ENABLED>,
+  ): Promise<void> {
+    const current = globalSM.get<string[]>(
+      GlobalStateKey.ENABLED_MODELS,
+      DEFAULT_MODELS,
+    );
+
+    let updated: string[];
+    if (data.enabled) {
+      updated = current.includes(data.modelName)
+        ? current
+        : [...current, data.modelName];
+    } else {
+      updated = current.filter((m) => m !== data.modelName);
+    }
+
+    await globalSM.update(GlobalStateKey.ENABLED_MODELS, updated);
+
+    // Auto-reset polish model if it was just disabled
+    if (!data.enabled) {
+      const polishModel = globalSM.get<string>(
+        GlobalStateKey.POLISH_MODEL,
+        DEFAULT_POLISH_MODEL,
+      );
+      if (polishModel === data.modelName) {
+        const newPolish = updated[0] ?? DEFAULT_POLISH_MODEL;
+        await globalSM.update(GlobalStateKey.POLISH_MODEL, newPolish);
+      }
+    }
+
+    void vscode.commands.executeCommand('texra.refreshAllOptions');
+
+    const view = this.getActiveView();
+    if (view) await this.sendModelSelectionData(view.webview);
+  }
+
+  private async handleSetPolishModel(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_POLISH_MODEL>,
+  ): Promise<void> {
+    await globalSM.update(GlobalStateKey.POLISH_MODEL, data.modelName);
+
+    const view = this.getActiveView();
+    if (view) await this.sendModelSelectionData(view.webview);
   }
 }

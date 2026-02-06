@@ -40,13 +40,9 @@ export class MainViewProvider
   // Static flag to track if commands have been registered
   private static commandsRegistered = false;
 
-  // Debounced refresh methods using perfect-debounce
+  // Debounced refresh for agent option changes
   private debouncedRefreshAgentOptions = debounce(
     this.refreshAgentOptions.bind(this),
-    DEBOUNCE_OPTIONS_MS,
-  );
-  private debouncedRefreshModelOptions = debounce(
-    this.refreshModelOptions.bind(this),
     DEBOUNCE_OPTIONS_MS,
   );
 
@@ -85,13 +81,6 @@ export class MainViewProvider
       this.context,
       ['texra.agents', 'texra.toolUseAgents', 'texra.explorer.agentsDirectory'],
       this.debouncedRefreshAgentOptions,
-    );
-
-    // Watch for model configuration changes - only refresh model options
-    watchConfig(
-      this.context,
-      ['texra.models'],
-      this.debouncedRefreshModelOptions,
     );
 
     // Watch for file configuration changes - only refresh file list
@@ -157,7 +146,7 @@ export class MainViewProvider
 
   /**
    * Refresh model options only.
-   * Called when model config changes (texra.models).
+   * Called via texra.refreshAllOptions when model selection changes in Settings View.
    */
   async refreshModelOptions() {
     if (!this._view) {

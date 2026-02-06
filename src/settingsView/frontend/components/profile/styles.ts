@@ -433,4 +433,183 @@ export const profileViewStyles: CSSResult = css`
     color: var(--color-text-secondary);
     opacity: var(--opacity-subtle);
   }
+
+  /* ============================================
+   * Model Selection List
+   * ============================================ */
+
+  .model-selection-section {
+    margin-top: var(--spacing-xlarge);
+  }
+
+  .model-selection-section h2 {
+    margin-top: 0;
+  }
+
+  .model-selection-description {
+    color: var(--color-text-secondary);
+    margin-bottom: var(--spacing-medium);
+  }
+
+  .polish-model-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-medium);
+    margin-bottom: var(--spacing-large);
+  }
+
+  .polish-model-row label {
+    font-weight: 500;
+    color: var(--vscode-foreground);
+    white-space: nowrap;
+  }
+
+  .polish-model-select {
+    flex: 1;
+    max-width: 300px;
+    padding: var(--spacing-small) var(--spacing-medium);
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: var(--border-thin) solid var(--color-border);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-sm);
+    font-family: var(--vscode-editor-font-family);
+  }
+
+  .polish-model-select:focus {
+    outline: none;
+    border-color: var(--vscode-focusBorder);
+  }
+
+  .provider-group {
+    border: var(--border-thin) solid var(--color-border);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-small);
+    overflow: hidden;
+  }
+
+  .provider-group-header {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: var(--spacing-medium);
+    background: var(--vscode-editor-background);
+    border: none;
+    color: var(--vscode-foreground);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    font-family: inherit;
+    text-align: left;
+  }
+
+  .provider-group-header:hover {
+    background: var(--vscode-list-hoverBackground);
+  }
+
+  .provider-group-chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    margin-right: var(--spacing-small);
+    transition: transform 0.15s ease;
+    color: var(--color-text-secondary);
+  }
+
+  .provider-group-chevron.expanded {
+    transform: rotate(90deg);
+  }
+
+  .provider-group-name {
+    font-weight: 500;
+    flex: 1;
+  }
+
+  .provider-group-count {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+  }
+
+  .provider-group-content {
+    border-top: var(--border-thin) solid var(--color-border);
+    padding: var(--spacing-small) 0;
+  }
+
+  .model-row {
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-small) var(--spacing-medium);
+    gap: var(--spacing-medium);
+  }
+
+  .model-row:hover {
+    background: var(--vscode-list-hoverBackground);
+  }
+
+  .model-row label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    cursor: pointer;
+    flex: 1;
+    min-width: 0;
+    color: var(--vscode-foreground);
+    font-size: var(--font-size-sm);
+  }
+
+  .model-row input[type='checkbox'] {
+    accent-color: var(--vscode-focusBorder);
+  }
+
+  .model-name {
+    font-family: var(--vscode-editor-font-family);
+    white-space: nowrap;
+  }
+
+  .model-metadata {
+    display: flex;
+    gap: var(--spacing-medium);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs, 11px);
+    white-space: nowrap;
+    margin-left: auto;
+  }
+
+  .deprecated-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    padding: var(--spacing-small) var(--spacing-medium);
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    font-family: inherit;
+    width: 100%;
+    text-align: left;
+  }
+
+  .deprecated-toggle:hover {
+    color: var(--vscode-foreground);
+    background: var(--vscode-list-hoverBackground);
+  }
+
+  .deprecated-models {
+    border-top: var(--border-thin) solid var(--color-border);
+    background: var(--vscode-textBlockQuote-background);
+  }
+
+  /* Unavailable model rows (not in relay allowlist) */
+  .model-row--unavailable {
+    opacity: 0.55;
+  }
+
+  .model-key-icon {
+    font-size: var(--font-size-xs, 11px);
+    color: var(--color-text-secondary);
+    margin-left: var(--spacing-tiny, 2px);
+  }
 `;

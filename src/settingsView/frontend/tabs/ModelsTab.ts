@@ -1,6 +1,7 @@
 /**
- * ModelsTab component - API access and model settings for settings view.
+ * ModelsTab component - API access, provider keys, and model selection for settings view.
  * Shows provider key list for all users; authenticated users also see API access mode.
+ * Model selection list allows toggling which models appear in the dropdown.
  */
 
 // Third-party imports
@@ -11,11 +12,15 @@ import { customElement, property } from 'lit/decorators.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas
-import type { ProviderKeyStatus } from '@shared/schemas/settingsViewMessages';
+import type {
+  ProviderKeyStatus,
+  ModelSelectionItem,
+} from '@shared/schemas/settingsViewMessages';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/ApiAccessSection';
 import '../components/profile/ProviderKeyList';
+import '../components/profile/ModelSelectionList';
 
 @customElement('models-tab')
 export class ModelsTab extends LitElement {
@@ -41,6 +46,9 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) allowedModels: string[] | null = [];
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
   @property({ type: Boolean }) globalStreamingDefault = true;
+  @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
+    [];
+  @property({ type: String }) polishModel = '';
 
   override render(): TemplateResult {
     const apiAccessSection = this.authenticated
@@ -54,6 +62,13 @@ export class ModelsTab extends LitElement {
     return html`
       <div class="models-container">
         ${apiAccessSection}
+        <model-selection-list
+          .models=${this.modelSelectionItems}
+          .polishModel=${this.polishModel}
+          .authenticated=${this.authenticated}
+          .apiAccessMode=${this.apiAccessMode}
+          .allowedModels=${this.allowedModels}
+        ></model-selection-list>
         <provider-key-list
           .providerKeyStatuses=${this.providerKeyStatuses}
           .apiAccessMode=${this.apiAccessMode}

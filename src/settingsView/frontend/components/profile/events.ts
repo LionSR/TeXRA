@@ -9,6 +9,13 @@ export const ProfileViewEvents = {
     createEvent('profile-api-access-mode', detail),
 } as const;
 
+export const ModelSelectionEvents = {
+  setModelEnabled: (detail: { modelName: string; enabled: boolean }) =>
+    createEvent('model-enabled-set', detail),
+  setPolishModel: (detail: { modelName: string }) =>
+    createEvent('polish-model-set', detail),
+} as const;
+
 export const ProviderKeyEvents = {
   setKey: (detail: { provider: string }) =>
     createEvent('provider-key-set', detail),

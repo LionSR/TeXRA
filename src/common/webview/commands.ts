@@ -322,6 +322,10 @@ export const SETTINGS_VIEW_CMD = {
   SET_PROVIDER_STREAMING: 'setProviderStreaming',
   SET_PROVIDER_ENDPOINT: 'setProviderEndpoint',
   SET_GLOBAL_STREAMING: 'setGlobalStreaming',
+  // Model selection commands
+  GET_MODEL_SELECTION: 'getModelSelection',
+  SET_MODEL_ENABLED: 'setModelEnabled',
+  SET_POLISH_MODEL: 'setPolishModel',
 } as const;
 
 // Settings view specific commands (combines Memory, History, and Profile views)
@@ -335,4 +339,5 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_HISTORY: 'updateHistory',
   HISTORY_CLEARED: 'historyCleared',
   UPDATE_PROFILE: 'updateProfile',
+  UPDATE_MODEL_SELECTION: 'updateModelSelection',
 } as const;

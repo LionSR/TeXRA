@@ -1,5 +1,5 @@
 // Third-party imports
-import { MODEL_CONFIGS } from 'llm-zoo';
+import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
 // Local imports - auth
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -7,41 +7,50 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 // Local imports - frontend
 import { ApiProvider, SecretManager } from '@frontend/secretManager';
 
-// Local imports - model types
-import type { ModelConfig } from '@model/ModelConfig';
-
-// Local imports - utils
-import { getConfig } from '@utils/config';
+// Local imports - state
+import { GlobalStateKey, globalSM } from '@common/state';
 
 // Local imports - shared schemas
 import type { ModelOptionData } from '@shared/schemas';
 
 /**
- * Get the list of visible models from user configuration.
+ * Default models that should be present in every user's model list.
+ * Update this list and increment MODEL_LIST_VERSION in setup.ts when adding new models.
+ */
+export const DEFAULT_MODELS = [
+  'gemini3p',
+  'gemini3f',
+  'sonnet45T',
+  'sonnet45',
+  'opus46T',
+  'opus46',
+  'gpt52',
+  'gpt52pro',
+  'gpt41',
+  'deepseekT',
+  'kimi25T',
+  'kimi25',
+  'qwen3max',
+  'grok4',
+];
+
+/**
+ * Get the list of visible models from extension global state.
  * This should be used to validate model selections in proposals.
  */
 export function getVisibleModels(): string[] {
-  return getConfig<string[]>('texra.models', []);
+  return globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS, DEFAULT_MODELS);
 }
 
 /**
  * Resolve a model to a valid visible model.
- * Returns the model if valid, or falls back to the first visible model.
- * Consistent with filterVisible for agents: if no models configured, allows any model.
- *
- * @returns The resolved model name
- * @throws Error if models are configured but none are available (shouldn't happen in practice)
+ * Returns the model as-is if visible, falls back to the first visible model,
+ * or allows any model when none are configured (consistent with agent filterVisible).
  */
 export function resolveVisibleModel(model: string): string {
   const visibleModels = getVisibleModels();
-
-  // If no models configured, allow any model (consistent with agent filterVisible)
   if (visibleModels.length === 0) return model;
-
-  // If model is in visible list, use it
   if (visibleModels.includes(model)) return model;
-
-  // Fall back to first visible model
   return visibleModels[0];
 }
 
@@ -50,7 +59,7 @@ const MILLION = 1_000_000;
 const THOUSAND = 1_000;
 
 /** Format context window number for display. */
-function formatContext(context: number | undefined): string | undefined {
+export function formatContext(context: number | undefined): string | undefined {
   if (context === undefined) return undefined;
   if (context >= MILLION) return `${(context / MILLION).toFixed(1)}M`;
   if (context >= THOUSAND) return `${Math.round(context / THOUSAND)}K`;
@@ -58,7 +67,7 @@ function formatContext(context: number | undefined): string | undefined {
 }
 
 /** Format cost values for display. */
-function formatCost(
+export function formatCost(
   inputPrice: number | undefined,
   outputPrice: number | undefined,
 ): string | undefined {
@@ -123,9 +132,7 @@ async function isModelAvailable(
   return false;
 }
 
-/**
- * Build typed model option data for a single model.
- */
+/** Build typed model option data for a single model. */
 async function buildModelOptionData(
   model: string,
   ctx: ModelAvailabilityContext,
@@ -136,28 +143,21 @@ async function buildModelOptionData(
   }
 
   const available = await isModelAvailable(model, config, ctx);
-  const contextStr = formatContext(config.contextWindow);
-  const costStr = formatCost(config.inputPrice, config.outputPrice);
-
   return {
     value: model,
     label: model,
     provider: config.provider,
-    context: contextStr,
-    cost: costStr,
+    context: formatContext(config.contextWindow),
+    cost: formatCost(config.inputPrice, config.outputPrice),
     requiresKey: !available,
     disabled: !available,
   };
 }
 
-/**
- * Compute typed model options data for Lit-native rendering.
- * Returns structured data instead of HTML strings.
- */
+/** Compute typed model options data for Lit-native rendering. */
 export async function computeModelOptionsData(): Promise<ModelOptionData[]> {
   const models = getVisibleModels();
 
-  // Prime caches for availability checks
   const serverSideKeyService = getServerSideKeyService();
   const [hasOpenRouter, hasServerAccess] = await Promise.all([
     SecretManager.apiKeyExists('openRouter'),
