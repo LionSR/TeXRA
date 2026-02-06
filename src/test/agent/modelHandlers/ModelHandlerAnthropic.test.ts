@@ -380,6 +380,34 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
+  it('preserves compaction cache markers during cache control enforcement', () => {
+    const handler = createAnthropicHandler();
+    const compactionBlock = {
+      type: 'compaction',
+      content: '<summary>state</summary>',
+      cache_control: { type: 'ephemeral' },
+    };
+    const messageContent: ContentBlockParam[] = [
+      { type: 'text', text: 'block-0', citations: null },
+      compactionBlock as unknown as ContentBlockParam,
+      { type: 'text', text: 'block-1', citations: null },
+    ];
+    const messages: MessageParam[] = [
+      { role: 'assistant', content: messageContent },
+    ];
+
+    (handler as any).enforceCacheControlLimit(messages);
+
+    const preservedCompaction = (messages[0].content as any[]).find(
+      (block) => block.type === 'compaction',
+    );
+    assert.deepEqual(
+      preservedCompaction?.cache_control,
+      { type: 'ephemeral' },
+      'compaction cache marker should remain on replayed assistant content',
+    );
+  });
+
   it('trims follow-up text and rejects empty follow-ups', async () => {
     const handler = createAnthropicHandler();
     const baseMessages = await handler.initializeMessages('prefix', 'request');
@@ -979,8 +1007,8 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.equal(compactionEdit.trigger?.type, 'input_tokens');
     assert.equal(
       compactionEdit.trigger?.value,
-      180000,
-      'should trigger compaction at 90% of 200K context window',
+      150000,
+      'should trigger compaction at configured threshold (75%) of 200K context window',
     );
     assert.equal(
       compactionEdit.instructions,
