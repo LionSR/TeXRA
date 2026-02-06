@@ -37,7 +37,7 @@ describe('wolframScriptUtils', () => {
     const result = await executeWolframCode('1+1');
 
     assert.deepStrictEqual(calls[0], ['wolframscript', '-code', '1+1']);
-    assert.strictEqual(calls[1].timeout, 30000);
+    assert.strictEqual(calls[1].timeout, 60000);
     assert.ok(result.success);
     assert.strictEqual(result.output, '2');
   });
@@ -60,7 +60,7 @@ describe('wolframScriptUtils', () => {
       '-file',
       '/tmp/test.wls',
     ]);
-    assert.strictEqual(calls[1].timeout, 60000);
+    assert.strictEqual(calls[1].timeout, 120000);
     assert.ok(result.success);
     assert.strictEqual(result.output, 'done');
   });

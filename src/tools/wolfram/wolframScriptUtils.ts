@@ -8,8 +8,8 @@ import { executeCommand, checkToolInstalled } from '@utils/system';
 // Wolfram configuration is now in toolUtils.ts
 
 // Constants
-const DEFAULT_CODE_TIMEOUT = 30000; // 30 seconds
-const DEFAULT_FILE_TIMEOUT = 60000; // 60 seconds
+const DEFAULT_CODE_TIMEOUT = 60000; // 60 seconds
+const DEFAULT_FILE_TIMEOUT = 120000; // 120 seconds
 const WOLFRAM_NOT_INSTALLED_ERROR =
   'Mathematica/wolframscript is not installed or not in your PATH.';
 const WOLFRAM_CHANNEL = 'WolframTool';
