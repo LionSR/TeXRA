@@ -83,21 +83,12 @@ prompts:
     (5) After generating any plot, read the image file with read_file to verify: axes labels visible, legend not overlapping data, no clipping, proper aspect ratio. Regenerate if issues found.
 
     TikZ Diagram Verification (CRITICAL — Iterative):
-    Whenever you generate or modify TikZ code, you MUST run an iterative verify-fix loop until every diagram is correct. Do not move on to subsequent slides or content until all TikZ diagrams on the current page pass inspection.
-    Step 1: Compile the document with latexmk.
-    Step 2: Read the output PDF page(s) containing TikZ diagrams with read_file.
-    Step 3: Inspect each diagram for the following:
-      (a) Rendering correctness: No overflows beyond frame/page boundaries, no clipped edges, no missing arrowheads or labels, no overlapping nodes or edges. TikZ bounding boxes often underestimate actual size — check that nothing is cut off.
-      (b) Layout quality: Nodes evenly spaced, edges routed cleanly without unnecessary crossings, labels readable and not colliding with lines or other labels. Diagrams should look intentional, not auto-generated.
-      (c) Mathematical accuracy: This is especially important for diagrams that represent mathematical structures such as tensor networks, Feynman diagrams, commutative diagrams, circuit diagrams, and computational graphs. Verify that:
-        - The topology matches the intended mathematical object (correct number of legs/indices for tensor networks, correct vertex types and propagator lines for Feynman diagrams, correct morphism directions for commutative diagrams).
-        - Labels on nodes, edges, and indices correspond exactly to the formulas in the surrounding text. If the text says $T_{ijk}$ is a rank-3 tensor, the diagram must show exactly three legs.
-        - Symmetries and conventions are respected (e.g., time direction in Feynman diagrams, contraction patterns in tensor networks).
-        - No spurious or missing connections — every line in the diagram must correspond to a mathematical relationship.
-      (d) Consistency with equations: Cross-reference the diagram against any align/equation environments on the same or adjacent slides. The visual representation must be a faithful depiction, not an approximation.
-    Step 4: If ANY issue is found, fix the TikZ source, recompile, and re-read the PDF. Repeat from Step 1.
-    Step 5: Only proceed to the next content when every TikZ diagram on the current page is verified correct.
-    This loop is mandatory — a broken or inaccurate diagram is worse than no diagram at all.
+    Whenever you generate or modify TikZ code, run an iterative compile → read PDF → inspect → fix loop until every diagram passes. Do not proceed until all diagrams on the current page are correct. Check for:
+      (a) Rendering: No overflows, clipped edges, missing labels, or overlapping nodes/edges.
+      (b) Layout: Even spacing, clean edge routing, readable non-colliding labels.
+      (c) Mathematical accuracy: For tensor networks, Feynman diagrams, commutative diagrams, circuit diagrams, etc., verify the topology matches the math (correct leg count for tensors, correct vertex/propagator types for Feynman diagrams, correct morphism directions). Labels must match surrounding formulas exactly—no spurious or missing connections.
+      (d) Equation consistency: Cross-reference against adjacent align/equation environments.
+    If any issue is found, fix and repeat from compilation. A broken diagram is worse than none.
 
     Mathematical Communication:
     (1) Use $...$ for inline math.
