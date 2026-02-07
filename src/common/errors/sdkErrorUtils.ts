@@ -330,22 +330,6 @@ function detectRawErrorBody(err: unknown): unknown {
   return undefined;
 }
 
-const RETRYABLE_OVERRIDE_KEY = Symbol.for('texra.retryableOverride');
-
-/** Marks an error as retryable regardless of status code (e.g., polling failures). */
-export function markErrorRetryable(err: unknown): void {
-  if (isObject(err)) {
-    (err as Record<symbol, unknown>)[RETRYABLE_OVERRIDE_KEY] = true;
-  }
-}
-
-function hasRetryableOverride(err: unknown): boolean {
-  if (!isObject(err)) {
-    return false;
-  }
-  return (err as Record<symbol, unknown>)[RETRYABLE_OVERRIDE_KEY] === true;
-}
-
 const STREAM_DIAGNOSTICS_KEY = Symbol.for('texra.streamDiagnostics');
 
 /** Attaches stream diagnostics to an error before rethrowing. */
@@ -391,11 +375,6 @@ function determineRetryable(
   statusCode?: number,
   rawErrorBody?: unknown,
 ): boolean {
-  // Explicit override from upstream code (e.g., background polling failures)
-  if (hasRetryableOverride(err)) {
-    return true;
-  }
-
   if (isRelayError(rawErrorBody)) {
     return true;
   }
