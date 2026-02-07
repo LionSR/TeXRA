@@ -10,7 +10,10 @@ import { z } from 'zod';
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
 import { ToolError, ToolResult } from '@tools/result';
+import { isTimeoutErrorCode, buildTimeoutMessage } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
+
+const WEB_FETCH_TIMEOUT_MS = 30_000; // 30 s
 
 const WebFetchInputSchema = z.strictObject({
   url: z
@@ -82,7 +85,7 @@ export class WebFetchTool extends defineTool({
     try {
       response = await axios.get(url, {
         responseType: 'text',
-        timeout: 30_000,
+        timeout: WEB_FETCH_TIMEOUT_MS,
         maxRedirects: 5,
         maxContentLength: 10 * 1024 * 1024,
         maxBodyLength: 10 * 1024 * 1024,
@@ -91,6 +94,12 @@ export class WebFetchTool extends defineTool({
       });
     } catch (error) {
       if (axios.isAxiosError(error)) {
+        if (isTimeoutErrorCode(error.code)) {
+          throw new ToolError(
+            buildTimeoutMessage(`Request to ${url}`, WEB_FETCH_TIMEOUT_MS),
+          );
+        }
+
         if (error.response) {
           throw new ToolError(
             `HTTP ${error.response.status}: Failed to fetch ${url}`,

@@ -3,14 +3,26 @@ import { z } from 'zod';
 
 // Internal imports
 import { ToolResult, ToolError } from '@tools/result';
+import { buildTimeoutMessage } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - tools
-import { executeWolframCode } from './wolframScriptUtils';
+import {
+  WOLFRAM_CODE_TIMEOUT_MS,
+  executeWolframCode,
+} from './wolframScriptUtils';
 
 const WolframInputSchema = z.strictObject({
   code: z.string(),
-  timeout: z.number().nullish(),
+  timeout: z
+    .number()
+    .int()
+    .min(1000)
+    .max(600_000)
+    .nullish()
+    .describe(
+      'Timeout in milliseconds (max 600,000 ms / 10 min, default 30,000 ms / 30 s).',
+    ),
 });
 
 export type WolframInput = z.infer<typeof WolframInputSchema>;
@@ -21,8 +33,9 @@ export class WolframTool extends defineTool({
   schema: WolframInputSchema,
 }) {
   protected async execute(input: WolframInput): Promise<ToolResult> {
+    const effectiveTimeout = input.timeout ?? WOLFRAM_CODE_TIMEOUT_MS;
     const result = await executeWolframCode(input.code, {
-      timeout: input.timeout ?? undefined,
+      timeout: effectiveTimeout,
       showErrorsToUser: false,
     });
     if (result.success) {
@@ -37,7 +50,7 @@ export class WolframTool extends defineTool({
 
     // Check for timeout first - most common cause of silent failures
     if (result.timedOut) {
-      errorParts.push('Execution timed out');
+      errorParts.push(buildTimeoutMessage('Execution', effectiveTimeout));
     }
 
     // Include exit code for debugging (non-zero indicates error)
