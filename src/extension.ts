@@ -167,10 +167,6 @@ export async function activate(context: vscode.ExtensionContext) {
         // Mark provider as registered AFTER all auth-critical setup succeeds
         SupabaseClient.setVSCodeProviderRegistered();
 
-        // Start proactive token refresh so relay tokens stay fresh in the background.
-        // Errors are handled internally; this is fire-and-forget.
-        void authProvider.startProactiveRefresh();
-
         logger.info('extension', 'Supabase authentication provider registered');
 
         // Note: Auth state change listener is handled in MainViewProvider.setupAuthListener()
