@@ -4,17 +4,10 @@
  * Stores copyable content by ID to avoid duplicating large strings in DOM attributes.
  */
 
+import { hashString } from './hashUtils';
+
 // Local module state
 const copyContentStore = new Map<string, string>();
-
-function hashString(input: string): string {
-  let hash = 0;
-  for (let i = 0; i < input.length; i += 1) {
-    hash = (hash << 5) - hash + input.charCodeAt(i);
-    hash |= 0;
-  }
-  return (hash >>> 0).toString(36);
-}
 
 function buildDefaultId(content: string): string {
   const normalized = content ?? '';
