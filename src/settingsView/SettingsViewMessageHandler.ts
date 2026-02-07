@@ -257,6 +257,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleSetAgentEnabled(data),
       [SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER]: (data) =>
         this.handleOpenAgentFolder(data),
+      [SETTINGS_VIEW_COMMANDS.CREATE_AGENT]: () => this.handleCreateAgent(),
     };
   }
 
@@ -969,5 +970,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         error,
       );
     }
+  }
+
+  private async handleCreateAgent(): Promise<void> {
+    await vscode.commands.executeCommand('texra.createAgentWithAI');
+
+    // Refresh agent list after creation
+    const view = this.getActiveView();
+    if (view) await this.sendAgentSelectionData(view.webview);
   }
 }

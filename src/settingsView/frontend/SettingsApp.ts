@@ -455,6 +455,10 @@ export class SettingsApp extends BaseWebviewApp {
     });
   }
 
+  private handleCreateAgent(): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.CREATE_AGENT);
+  }
+
   private handleOpenVscodeSettings(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS);
   }
@@ -573,6 +577,7 @@ export class SettingsApp extends BaseWebviewApp {
               @agent-open-yaml=${this.handleOpenAgentYaml}
               @agent-enabled-set=${this.handleSetAgentEnabled}
               @agent-open-folder=${this.handleOpenAgentFolder}
+              @agent-create=${this.handleCreateAgent}
             ></agents-tab>
           </vscode-tab-panel>
         </vscode-tabs>
