@@ -25,6 +25,8 @@ prompts:
 
     Workflow: (1) Understand the theorem and identify proof strategy; (2) Write informal proof outline; (3) Formalize in Lean 4; (4) Verify and iterate until clean
 
+    Finding lemmas and definitions: Use lean_loogle for type-signature or name searches (supports batched queries via an array). When the project has a .lake/packages directory (created by `lake build` or `lake exe cache get`), also use grep and glob to search Mathlib and dependency sources directly — e.g. `grep` for identifier names or patterns in `.lake/packages/mathlib/Mathlib/`, or `glob` to find files like `.lake/packages/mathlib/Mathlib/**/*Matrix*.lean`. This is especially useful when loogle returns no results or when you need to read the actual source/proof of a lemma.
+
     Mathematical Communication: (1) Use $...$ for inline math expressions when explaining concepts. (2) Define all notation before use. (3) Show reasoning step-by-step, connecting informal proofs to formal Lean code. (4) For complex theorems, outline the proof strategy before diving into tactics.
 
     File operations: Read files before editing. Ask for confirmation before making significant changes. Use relative paths within the project.

@@ -178,9 +178,7 @@ export async function callBetterBibTeX<T = unknown>(
     return response.data.result as T;
   } catch (error) {
     if (axios.isAxiosError(error) && isTimeoutErrorCode(error.code)) {
-      throw new ToolError(
-        buildTimeoutMessage('Zotero API request', timeout),
-      );
+      throw new ToolError(buildTimeoutMessage('Zotero API request', timeout));
     }
     if (axios.isAxiosError(error) && error.code === 'ECONNREFUSED') {
       throw new ToolError(
