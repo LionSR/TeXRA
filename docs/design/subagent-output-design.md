@@ -441,24 +441,43 @@ So results are NOT lost — they persist in the queue until the session resumes 
 
 ---
 
-## Nesting Constraint: No Subagent-of-Subagent
+## Nesting Constraint: No Orchestrator-Launches-Orchestrator
 
-Subagents **cannot** spawn their own subagents. Only top-level tool-use orchestrator agents may call `propose_workflow` / `propose_agent`. If a subagent's tool list includes these proposal tools, they must be stripped at launch time.
+An orchestrator is an agent that has proposal tools (`propose_workflow`, `propose_agent`). Agents launched via those proposal tools **never** receive proposal tools — they are workers, not orchestrators. One level of delegation, no recursion.
 
 **Why**: Nesting adds cascading lifecycle complexity (cascading cancellation, recursive depth tracking, multi-level result routing) for no demonstrated use case. The orchestrator dispatches work; the workers do work and return results. If a task needs further decomposition, the orchestrator handles it in its next turn after collecting the subagent's output.
 
-**Enforcement**: When `executeAgentCore()` is called from a proposal tool, the calling context knows it's a subagent (the parent's `streamId` is in the tool context). Pass an `isSubagent: true` flag through `AgentConfigPayload` or resolve it from lineage. The tool resolver strips `propose_workflow` and `propose_agent` from the tool list when `isSubagent` is true.
+**Enforcement**: `resolveTools()` in `ToolUseFlowContext.ts` is where agent tool lists are resolved from YAML config against the registry. When called for a subagent, filter out proposal tools before they reach the flow:
 
 ```typescript
-// In resolveTools() or at tool-use flow setup:
-if (isSubagent) {
-  resolvedTools = resolvedTools.filter(
-    t => t.name !== 'propose_workflow' && t.name !== 'propose_agent'
-  );
+// In resolveTools() — add isSubagent parameter:
+const PROPOSAL_TOOLS = new Set(['propose_workflow', 'propose_agent']);
+
+export function resolveTools(
+  tools: AgentToolUseSetting['tools'],
+  registry: IToolRegistry,
+  logger: { warn: (msg: string) => void },
+  options?: { isSubagent?: boolean },
+): ToolDefinition[] {
+  const toolConfigs = Array.isArray(tools) ? tools : [];
+
+  const resolved = toolConfigs
+    .map((config) => (typeof config === 'string' ? { name: config } : config))
+    .filter((def) => {
+      if (options?.isSubagent && PROPOSAL_TOOLS.has(def.name)) return false;
+      if (!registry.has(def.name)) {
+        logger.warn(`Tool "${def.name}" not found in registry`);
+        return false;
+      }
+      return true;
+    });
+
+  // ... memory tool injection unchanged ...
+  return resolved;
 }
 ```
 
-This is a hard constraint, not a depth limit. No configuration, no exceptions.
+The call site in `WorkflowTool.ts` passes `{ isSubagent: true }` through to the flow setup. The subagent simply never sees proposal tools. No depth counter, no configuration flag, no exceptions.
 
 ---
 
@@ -565,7 +584,7 @@ Total new infrastructure: ~95 lines of code. One type file, one lineage file, mi
 
 ## Decisions Made
 
-1. **No nested subagents**: Subagents cannot spawn subagents. Proposal tools stripped from subagent tool lists at launch time. Hard constraint, no configuration.
+1. **No orchestrator-launches-orchestrator**: Proposal tools (`propose_workflow`, `propose_agent`) are filtered out in `resolveTools()` when `isSubagent` is true. Workers work, orchestrators orchestrate.
 
 2. **Workflow output = file artifacts**: `OutputFileSummary[]` (paths + diffs), not raw model response text. Projection of `OutputFileInfo`.
 
