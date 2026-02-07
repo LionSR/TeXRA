@@ -284,15 +284,7 @@ export class RequestPanels extends LitElement {
             title="Approve (y)"
             >Approve</vscode-toolbar-button
           >
-          <vscode-toolbar-button
-            icon=${isFeedbackOpen ? 'check' : 'close'}
-            data-action="reject"
-            data-permission-kind=${permission.kind}
-            data-permission-id=${this.getPermissionId(permission)}
-            label=${isFeedbackOpen ? 'Submit' : 'Reject'}
-            title=${isFeedbackOpen ? 'Submit rejection (n)' : 'Reject (n)'}
-            >${isFeedbackOpen ? 'Submit' : 'Reject'}</vscode-toolbar-button
-          >
+          ${this.renderRejectButton(permission, isFeedbackOpen, 'Reject (n)')}
         </vscode-toolbar-container>
         ${this.renderFeedbackSection(
           permission,
@@ -380,15 +372,7 @@ export class RequestPanels extends LitElement {
             title="Allow this command to execute (y)"
             >Approve</vscode-toolbar-button
           >
-          <vscode-toolbar-button
-            icon=${isFeedbackOpen ? 'check' : 'close'}
-            data-action="reject"
-            data-permission-kind=${permission.kind}
-            data-permission-id=${this.getPermissionId(permission)}
-            label=${isFeedbackOpen ? 'Submit' : 'Reject'}
-            title=${isFeedbackOpen ? 'Submit rejection (n)' : 'Reject this command (n)'}
-            >${isFeedbackOpen ? 'Submit' : 'Reject'}</vscode-toolbar-button
-          >
+          ${this.renderRejectButton(permission, isFeedbackOpen, 'Reject this command (n)')}
         </vscode-toolbar-container>
         ${this.renderFeedbackSection(
           permission,
@@ -515,15 +499,7 @@ export class RequestPanels extends LitElement {
             title="Approve (y)"
             >Approve</vscode-toolbar-button
           >
-          <vscode-toolbar-button
-            icon=${isFeedbackOpen ? 'check' : 'close'}
-            data-action="reject"
-            data-permission-kind=${permission.kind}
-            data-permission-id=${this.getPermissionId(permission)}
-            label=${isFeedbackOpen ? 'Submit' : 'Reject'}
-            title=${isFeedbackOpen ? 'Submit rejection (n)' : 'Reject (n)'}
-            >${isFeedbackOpen ? 'Submit' : 'Reject'}</vscode-toolbar-button
-          >
+          ${this.renderRejectButton(permission, isFeedbackOpen, 'Reject (n)')}
           <vscode-toolbar-button
             icon="settings-gear"
             data-action="setup"
@@ -892,6 +868,28 @@ export class RequestPanels extends LitElement {
     const raw = input?.value ?? '';
     const trimmed = raw.trim();
     return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  // ===========================================================================
+  // Shared renderers
+  // ===========================================================================
+
+  private renderRejectButton(
+    permission: PermissionState,
+    isFeedbackOpen: boolean,
+    rejectTitle: string,
+  ): TemplateResult {
+    return html`
+      <vscode-toolbar-button
+        icon=${isFeedbackOpen ? 'check' : 'close'}
+        data-action="reject"
+        data-permission-kind=${permission.kind}
+        data-permission-id=${this.getPermissionId(permission)}
+        label=${isFeedbackOpen ? 'Submit' : 'Reject'}
+        title=${isFeedbackOpen ? 'Submit rejection (n)' : rejectTitle}
+        >${isFeedbackOpen ? 'Submit' : 'Reject'}</vscode-toolbar-button
+      >
+    `;
   }
 
   // ===========================================================================
