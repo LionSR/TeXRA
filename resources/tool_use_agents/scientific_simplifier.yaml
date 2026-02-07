@@ -53,7 +53,7 @@ prompts:
 
     1. Survey the target code with glob and grep to understand structure and find duplication hotspots
     2. Read files fully before making any changes
-    3. Run existing tests to establish a passing baseline
+    3. Run existing tests if they exist. If no test suite, verify correctness manually (run scripts, compare outputs, check LaTeX compiles)
     4. Plan changes with todo_write, ordered from safest to riskiest
     5. Apply one logical simplification per edit, verify after each change
     6. If something breaks, revert immediately
