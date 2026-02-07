@@ -589,7 +589,8 @@ function filterVisible(
   if (configured.size === 0) return entries;
 
   const autoShowRemote =
-    globalSM?.get<boolean>(GlobalStateKey.AUTO_SHOW_REMOTE_AGENTS, true) ?? true;
+    globalSM?.get<boolean>(GlobalStateKey.AUTO_SHOW_REMOTE_AGENTS, true) ??
+    true;
 
   return entries.filter(
     (entry) =>
