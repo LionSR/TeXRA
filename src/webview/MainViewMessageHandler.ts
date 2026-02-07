@@ -94,30 +94,17 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           [SETTINGS_QUERY.EXTENSION],
           this.viewName,
         ),
-      [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: (m) => {
-        const query =
-          m.sessionType === 'toolUse'
-            ? SETTINGS_QUERY.TOOL_USE_AGENTS
-            : SETTINGS_QUERY.WORKFLOW_AGENTS;
-        return safeExecuteCommand(
-          'workbench.action.openSettings',
-          [query],
-          this.viewName,
-        );
-      },
-      [MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS]: () =>
+      [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: (m) =>
         safeExecuteCommand(
-          'workbench.action.openSettings',
-          [SETTINGS_QUERY.MODELS],
+          'texra.showAgents',
+          [m.sessionType === 'toolUse' ? 'toolUse' : undefined],
           this.viewName,
         ),
+      [MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS]: () =>
+        safeExecuteCommand('texra.showModels', [], this.viewName),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY]: async (m) => {
         if (!m.customDirSet) {
-          await safeExecuteCommand(
-            'workbench.action.openSettings',
-            [SETTINGS_QUERY.AGENT_DIRECTORY],
-            this.viewName,
-          );
+          await safeExecuteCommand('texra.showAgents', [], this.viewName);
           return;
         }
         const dir = await agentDirectories.custom();

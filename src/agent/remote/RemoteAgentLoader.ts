@@ -16,7 +16,6 @@ import type { AgentLoadOptions } from '@agent/runtime/agentLoad';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { resolveToolDefinitions } from '@tools/registry';
-import { getConfig } from '@utils/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CONFIG } from '@auth/config';
 
@@ -110,12 +109,6 @@ export class RemoteAgentLoader {
     if (!(await SupabaseClient.isAuthenticated())) {
       throw new Error(
         'Remote agents require authentication. Sign in using the "TeXRA: Sign In" command.',
-      );
-    }
-
-    if (!getConfig<boolean>('remoteAgents.enabled', true)) {
-      throw new Error(
-        'Remote agents are disabled. Enable them in settings: texra.remoteAgents.enabled',
       );
     }
 

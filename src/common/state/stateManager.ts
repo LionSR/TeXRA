@@ -14,6 +14,10 @@ export enum WorkspaceStateKey {
   USAGE_STATS = 'texra.usageStats',
   /** Consolidated progress view preferences (replaces individual keys) */
   PROGRESS_VIEW_PREFS = 'texra.progressViewPrefs',
+
+  // Agent visibility (migrated from VS Code config)
+  ENABLED_AGENTS = 'texra.enabledAgents',
+  ENABLED_TOOL_USE_AGENTS = 'texra.enabledToolUseAgents',
   // Legacy keys (kept for reference, no longer used):
   // ACTIVE_STREAM_TAB = 'texra.activeStreamTab',
   // STREAM_SORT_ORDER = 'texra.streamSortOrder',
@@ -39,6 +43,10 @@ export enum GlobalStateKey {
   STREAMING_DEEPSEEK = 'texra.streaming.deepseek',
   STREAMING_MOONSHOT = 'texra.streaming.moonshot',
   STREAMING_DASHSCOPE = 'texra.streaming.dashscope',
+
+  // Agent settings (migrated from VS Code config)
+  CUSTOM_AGENT_DIR = 'texra.customAgentDir',
+  AUTO_SHOW_REMOTE_AGENTS = 'texra.autoShowRemoteAgents',
 
   // Endpoint settings
   ENDPOINT_OPENAI = 'texra.endpoint.openai',
