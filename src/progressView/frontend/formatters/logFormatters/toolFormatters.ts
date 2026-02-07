@@ -10,6 +10,7 @@
 // Local imports - Lit template utilities
 import {
   html,
+  nothing,
   classMap,
   ifDefined,
   type TemplateResult,
@@ -38,6 +39,9 @@ import {
   getLanguageFromPath,
 } from '../constants';
 import type { WebSearchPayload, LogMessageData } from '@shared/schemas';
+
+// Side-effect import to register <tool-timer> custom element
+import '../../components/ToolTimer';
 
 /** Join template sections with horizontal rule separators. */
 function joinWithSeparator(sections: TemplateResult[]): TemplateResult {
@@ -324,6 +328,10 @@ export function formatToolUseTemplate(
   // prettier-ignore
   const bannerContentTemplate = html`<div class="banner-content log-entry-content" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${contentTemplate}</div>`;
 
+  // Live timer for in-progress tools
+  // prettier-ignore
+  const timerTemplate = isInProgress ? html`<tool-timer .startTime=${timestamp}></tool-timer>` : nothing;
+
   // prettier-ignore
   return html`<details class=${classMap({
     'banner-details': true,
@@ -336,6 +344,7 @@ export function formatToolUseTemplate(
     label: titleText,
     labelClass: 'tool-use-title',
     includeIconClass: false,
+    extraContent: timerTemplate,
   })}${bannerContentTemplate}</details>`;
 }
 
