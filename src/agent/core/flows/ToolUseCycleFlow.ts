@@ -1,4 +1,5 @@
 // Third-party imports
+import stableStringify from 'fast-json-stable-stringify';
 import { z } from 'zod';
 
 // Local imports - core flow primitives
@@ -69,23 +70,6 @@ const DUPLICATE_CALL_ERROR =
   'as an earlier call in this batch that was already executed. ' +
   'If you need to run this tool multiple times with the same arguments, ' +
   'please call them sequentially in separate responses.';
-
-/**
- * Deterministic JSON serialization for deduplication keys.
- * Sorts object keys recursively so `{a:1,b:2}` and `{b:2,a:1}` produce
- * the same string.
- */
-function stableStringify(value: unknown): string {
-  return JSON.stringify(value, (_key, v) =>
-    v && typeof v === 'object' && !Array.isArray(v)
-      ? Object.fromEntries(
-          Object.entries(v as Record<string, unknown>).sort(([a], [b]) =>
-            a.localeCompare(b),
-          ),
-        )
-      : v,
-  );
-}
 
 /**
  * Identify duplicate parallel tool calls (same name + identical arguments).
