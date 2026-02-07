@@ -48,7 +48,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
 import { settingsViewStyles } from './styles';
 
 // Local imports - shared schema types
-import type { AgentSourceType } from '@shared/schemas/agent';
+import type { AgentCategory, AgentSourceType } from '@shared/schemas/agent';
 
 // Local imports - settings view tabs (side-effect: register)
 import './tabs/MemoryTab';
@@ -132,6 +132,7 @@ export class SettingsApp extends BaseWebviewApp {
   @state() private toolUseAgents: AgentSelectionItem[] = [];
   @state() private customAgentDir = '';
   @state() private customAgentDirIsDefault = true;
+  @state() private agentSubTab: AgentCategory | undefined;
 
   protected get readyCommand(): string | null {
     return null;
@@ -167,6 +168,7 @@ export class SettingsApp extends BaseWebviewApp {
         return;
       }
       this.selectedTabIndex = result.data.tabIndex;
+      this.agentSubTab = result.data.agentSubTab;
       return;
     }
 
@@ -606,6 +608,7 @@ export class SettingsApp extends BaseWebviewApp {
               .toolUseAgents=${this.toolUseAgents}
               .customAgentDir=${this.customAgentDir}
               .customAgentDirIsDefault=${this.customAgentDirIsDefault}
+              .initialSubTab=${this.agentSubTab}
               @agent-open-yaml=${this.handleOpenAgentYaml}
               @agent-enabled-set=${this.handleSetAgentEnabled}
               @agent-open-folder=${this.handleOpenAgentFolder}
