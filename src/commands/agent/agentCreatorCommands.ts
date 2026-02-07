@@ -4,6 +4,7 @@ import * as path from 'path';
 // Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
 import * as vscode from 'vscode';
+import * as yaml from 'yaml';
 
 // Local imports - agent runtime
 import { ANTHROPIC_MODELS } from 'llm-zoo';
@@ -11,8 +12,7 @@ import { getBaseName, getMultipleName } from '@agent/index';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { SecretManager } from '@frontend/secretManager';
-import { agentDirectories } from '@frontend/agents';
-import { promptToAddAgentToConfig } from '@frontend/agents';
+import { agentDirectories, promptToAddAgentToConfig } from '@frontend/agents';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 
@@ -26,149 +26,28 @@ export const agentCreatorCommands = {
   createAgentWithAI: 'texra.createAgentWithAI',
 };
 
-const SINGLE_TEMPLATE = `# --- Agent Inheritance (Optional) ---
-# inherits: base
-name: \${agentName}
+interface CreatorConfig {
+  prompts: { generationPrompt: string; retryPrompt: string };
+  templates: { single: string; multiple: string };
+}
 
-# --- Agent Settings ---
-settings:
-  temperature: 0.1
-  isRewrite: true
-  documentTag: latex_document
-  endTag: </latex_document>
-  outputExt: tex
-  prefills:
-    - "<scratchpad>"
-    - "<scratchpad>"
+/** Cached creator config loaded from resources/templates/agentCreator.yaml */
+let creatorConfig: CreatorConfig | null = null;
 
-# --- Agent Prompts ---
-prompts:
-  systemPrompt: |
-    [DESCRIPTION]
-
-    You are operating inside **TeXRA**, a VS Code extension that orchestrates
-    AI agents using YAML files. TeXRA loads selected documents and exposes them
-    as variables, so prompts can reference data like {{ INPUT_CONTENT }} or
-    {{ ALL_INPUTS }}. Agents follow a chain-of-thought workflow with
-    <scratchpad> planning and a final output wrapped in the documentTag.
-
-    Variable Retrieval (VR) exposes runtime data as variables in these prompts:
-      - {{ INPUT_FILE }} / {{ INPUT_CONTENT }}: main file path and text
-      - {{ ALL_INPUTS }}: XML list of all input files
-      - {{ REFERENCE_CONTENT }} / {{ AUXILIARY_CONTENT }}: extra context
-    Use them as needed.
-
-    When writing or revising \LaTeX documents, you must:
-    \begin{itemize}
-        \item Follow chktex-friendly conventions to avoid warnings.
-        \item Use appropriate notation and terminology consistently.
-        \item Preserve comments that start with "%" in the document.
-        \item Use \`\` or '' rather than straight quotes.
-        \item Avoid markdown-style enumerations like 1., 2., 3. in the final output.
-        \item \textbf{IMPORTANT:} Provide a complete output with sections in the original order.
-        \item \textbf{IMPORTANT:} Use math commands defined in commands.tex or preamble.tex.
-    \end{itemize}
-
-  userPrefix: |
-    Project context:
-    <documents>
-    {{ ALL_AUXILIARYS }}
-    {{ ALL_REFERENCES }}
-    {{ ADDITIONAL_INPUTS }}
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
-    </documents>
-
-    {% if INSTRUCTION %}
-    Instruction to follow:
-    <instruction>
-    {{ INSTRUCTION }}
-    </instruction>
-    {% endif %}
-
-  userRequest:
-    - |
-        Brainstorm your plan in <scratchpad> with bullet points.
-        Then output the revised \LaTeX wrapped in <latex_document> tags.
-    - |
-        Reflect on your previous revision and describe the most impactful follow-up edits in <scratchpad> before producing the updated <latex_document> output.
-`;
-
-const MULTI_TEMPLATE = `# --- Agent Inheritance (Optional) ---
-# inherits: base
-name: \${agentName}
-
-# --- Agent Settings ---
-settings:
-  isMultipleOutput: true
-  temperature: 0.1
-  isRewrite: true
-  documentTag: latex_documents
-  endTag: </latex_documents>
-  defaultOutputFiles:
-[OUTPUT_FILES]
-  outputExt: tex
-  prefills:
-    - "<scratchpad>"
-    - "<scratchpad>"
-
-# --- Agent Prompts ---
-prompts:
-  systemPrompt: |
-    [DESCRIPTION]
-
-    You are operating inside **TeXRA**, a VS Code extension that orchestrates
-    AI agents defined in YAML. TeXRA loads selected files and exposes them as
-    variables, allowing prompts to reference {{ INPUT_CONTENT }},
-    {{ ALL_INPUTS }}, or {{ OUTPUT_FILES_ORDER }}. Agents think in
-    <scratchpad> before writing the final output inside the documentTag.
-
-    Variable Retrieval (VR) exposes runtime data as variables in these prompts:
-      - {{ INPUT_FILE }} / {{ INPUT_CONTENT }}: main file path and text
-      - {{ ALL_INPUTS }}: XML list of all input files
-      - {{ OUTPUT_FILES_ORDER }}: expected output files
-      - {{ REFERENCE_CONTENT }} / {{ AUXILIARY_CONTENT }}: extra context
-    Use them as needed.
-
-    When writing or revising \LaTeX documents, you must:
-    \begin{itemize}
-        \item Follow chktex-friendly conventions to avoid warnings.
-        \item Use appropriate notation and terminology consistently.
-        \item Preserve comments that start with "%" in the document.
-        \item Use \`\` or '' rather than straight quotes.
-        \item Avoid markdown-style enumerations like 1., 2., 3. in the final output.
-        \item \textbf{IMPORTANT:} Provide a complete output with sections in the original order.
-        \item \textbf{IMPORTANT:} Use math commands defined in commands.tex or preamble.tex.
-        \item Ensure the structure and formatting of each document is preserved.
-    \end{itemize}
-
-  userPrefix: |
-    Project context:
-    <documents>
-    {{ ALL_AUXILIARYS }}
-    {{ ALL_REFERENCES }}
-    {{ ADDITIONAL_INPUTS }}
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
-    </documents>
-
-    {% if INSTRUCTION %}
-    Instruction to follow:
-    <instruction>
-    {{ INSTRUCTION }}
-    </instruction>
-    {% endif %}
-
-  userRequest:
-    - |
-        Brainstorm your plan in <scratchpad> with bullet points.
-        Then wrap each output in <latex_documents> with <document name="..."> blocks
-        following the order in OUTPUT_FILES_ORDER.
-    - |
-        Review the draft outputs and note targeted refinements for each document in <scratchpad>. Apply the improvements and emit the updated <latex_documents> content in the same order.
-`;
+async function loadCreatorConfig(
+  context: vscode.ExtensionContext,
+): Promise<CreatorConfig> {
+  if (creatorConfig) return creatorConfig;
+  const yamlPath = path.join(
+    context.extensionPath,
+    'resources',
+    'templates',
+    'agentCreator.yaml',
+  );
+  const content = await AbsoluteFS.read(yamlPath);
+  creatorConfig = yaml.parse(content) as CreatorConfig;
+  return creatorConfig;
+}
 
 function validateAgentYamlString(content: string): string | null {
   try {
@@ -189,8 +68,10 @@ export function registerAgentCreatorCommands(context: vscode.ExtensionContext) {
   return agentCreatorCommands;
 }
 
-async function handleCreateAgentWithAI(_context: vscode.ExtensionContext) {
+async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
   try {
+    const config = await loadCreatorConfig(context);
+
     const agentName = await vscode.window.showInputBox({
       prompt: 'Enter a name for the new agent (without .yaml)',
       validateInput: (value) =>
@@ -241,13 +122,9 @@ async function handleCreateAgentWithAI(_context: vscode.ExtensionContext) {
       const apiKey = await SecretManager.getApiKey('anthropic');
       const anthropic = new Anthropic({ apiKey });
 
-      const basePrompt =
-        `You are an expert on the TeXRA codebase, a VS Code extension that runs YAML-defined AI agents.\n` +
-        `Generate a YAML definition for an agent named "${agentName}". The YAML must follow this layout:` +
-        `\nname: ${agentName}\n# inherits: base\nsettings:\n  ...\nprompts:\n  systemPrompt: |\n    ...\n  userPrefix: |\n    ...\n  userRequest:\n    - |\n      ...\n    - |\n      [Optional reflection prompt]\n` +
-        `For reference, built-in agents start like:\nname: polish\nsettings:\n  documentTag: latex_document\n  endTag: </latex_document>\n  outputExt: tex\n` +
-        `Mention variables INPUT_CONTENT, ALL_INPUTS, OUTPUT_FILES_ORDER, REFERENCE_CONTENT, AUXILIARY_CONTENT and ADDITIONAL_INPUTS when relevant.\n` +
-        `Goal: ${description}. Respond only with the YAML wrapped in <yaml> tags.`;
+      const basePrompt = config.prompts.generationPrompt
+        .replaceAll('{{ AGENT_NAME }}', agentName)
+        .replaceAll('{{ DESCRIPTION }}', description);
 
       let prompt = basePrompt;
       for (let attempt = 0; attempt < 2; attempt++) {
@@ -279,7 +156,11 @@ async function handleCreateAgentWithAI(_context: vscode.ExtensionContext) {
           if (choice === 'Try Again' && attempt === 0) {
             prompt =
               basePrompt +
-              `\nThe previous attempt failed validation: ${validationErr}. Please fix and return only the YAML.`;
+              '\n' +
+              config.prompts.retryPrompt.replace(
+                '{{ VALIDATION_ERROR }}',
+                validationErr,
+              );
             continue;
           }
           break;
@@ -292,11 +173,14 @@ async function handleCreateAgentWithAI(_context: vscode.ExtensionContext) {
     if (!yamlContent) {
       const template =
         outputChoice === 'Multiple output files'
-          ? MULTI_TEMPLATE.replace('[OUTPUT_FILES]', outputFilesYaml)
-          : SINGLE_TEMPLATE;
+          ? config.templates.multiple.replace(
+              '{{ OUTPUT_FILES }}',
+              outputFilesYaml,
+            )
+          : config.templates.single;
       yamlContent = template
-        .replace('[DESCRIPTION]', description)
-        .replace('${agentName}', agentName);
+        .replaceAll('{{ DESCRIPTION }}', description)
+        .replaceAll('{{ AGENT_NAME }}', agentName);
     }
 
     await AbsoluteFS.write(filePath.fsPath, yamlContent);

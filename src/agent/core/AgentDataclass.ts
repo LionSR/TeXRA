@@ -2,13 +2,9 @@ import { z } from 'zod';
 
 import { ToolDefinitionSchema } from '@model';
 
-export const AgentSource = z.enum([
-  'custom',
-  'builtIn',
-  'builtInToolUse',
-  'remote',
-]);
-export type AgentSource = z.infer<typeof AgentSource>;
+// AgentSource: single source of truth is @shared/schemas/agent.
+// Re-exported here for backward compatibility with backend consumers.
+export { AgentSource } from '@shared/schemas/agent';
 
 /** Workflow: fixed-round document processing. ToolUse: interactive tool-calling. */
 export enum AgentCategory {
