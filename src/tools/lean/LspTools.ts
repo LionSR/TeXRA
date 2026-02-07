@@ -326,6 +326,14 @@ Requires: Lean 4 VS Code extension installed.`,
 
     try {
       await vscode.commands.executeCommand(config.vscode);
+
+      if (command === 'build') {
+        return {
+          summary: config.description,
+          output: `Build started. Note: this command does not capture build output directly.\n\nTo check for errors and warnings, run lean_diagnostics on the relevant .lean files.`,
+        };
+      }
+
       return {
         summary: config.description,
         output: `Executed "${command}" successfully`,
