@@ -563,6 +563,12 @@ const AgentProposalActionMessageSchema = z.object({
   feedback: z.string().optional(),
 });
 
+const RestoreProposalConfigMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG),
+  toolName: z.string().min(1),
+  input: z.record(z.string(), z.unknown()),
+});
+
 const OpenFileMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_FILE),
   file: z.string().min(1),
@@ -657,6 +663,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     ToggleToolEditApprovalBypassMessageSchema,
     BashApprovalActionMessageSchema,
     AgentProposalActionMessageSchema,
+    RestoreProposalConfigMessageSchema,
     ShowInformationMessageSchema,
     OpenProfileMessageSchema,
     OpenMemoryViewMessageSchema,
