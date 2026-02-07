@@ -46,4 +46,5 @@ export const AgentSelectionEvents = {
   openFolder: (detail: {
     folderType: 'custom' | 'builtIn' | 'builtInToolUse';
   }) => createEvent('agent-open-folder', detail),
+  createAgent: () => createEvent('agent-create', undefined),
 } as const;

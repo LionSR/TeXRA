@@ -110,6 +110,12 @@ export class AgentsTab extends LitElement {
         color: var(--vscode-foreground);
         border-color: var(--vscode-focusBorder);
       }
+
+      .agents-create-btn {
+        color: var(--vscode-foreground);
+        border-color: var(--vscode-focusBorder);
+        font-weight: 500;
+      }
     `,
   ];
 
@@ -126,6 +132,10 @@ export class AgentsTab extends LitElement {
     folderType: 'custom' | 'builtIn' | 'builtInToolUse',
   ): void {
     this.dispatchEvent(AgentSelectionEvents.openFolder({ folderType }));
+  }
+
+  private handleCreateAgent(): void {
+    this.dispatchEvent(AgentSelectionEvents.createAgent());
   }
 
   override render(): TemplateResult {
@@ -164,6 +174,14 @@ export class AgentsTab extends LitElement {
             </button>
           </div>
           <div class="agents-folder-actions">
+            <button
+              class="agents-folder-btn agents-create-btn"
+              @click=${this.handleCreateAgent}
+              title="Create a new agent with AI"
+            >
+              <span class="codicon codicon-add"></span>
+              New Agent
+            </button>
             <button
               class="agents-folder-btn"
               @click=${() => this.handleOpenFolder('custom')}

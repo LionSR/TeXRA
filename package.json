@@ -1338,11 +1338,6 @@
           "group": "navigation"
         },
         {
-          "command": "texra.createAgentWithAI",
-          "when": "view == texra.folderExplorer",
-          "group": "navigation"
-        },
-        {
           "command": "texra.mainView.reset",
           "when": "view == texra.mainView",
           "group": "navigation@0"

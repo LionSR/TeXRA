@@ -1,0 +1,188 @@
+# Agent Creator - prompt and templates used by texra.createAgentWithAI
+# This file is loaded at runtime when creating new agents via AI.
+name: agentCreator
+description: Generates YAML agent definitions using AI, with fallback templates.
+
+settings:
+  # Not a runnable agent; used only by the agent creator command.
+  agentCategory: internal
+  model: opus41
+
+# --- AI Generation Prompt ---
+# Sent to Claude to generate the YAML definition for a new agent.
+prompts:
+  generationPrompt: |
+    You are an expert on the TeXRA codebase, a VS Code extension that runs YAML-defined AI agents.
+    Generate a YAML definition for an agent named "{{ AGENT_NAME }}". The YAML must follow this layout:
+    name: {{ AGENT_NAME }}
+    # inherits: base
+    settings:
+      ...
+    prompts:
+      systemPrompt: |
+        ...
+      userPrefix: |
+        ...
+      userRequest:
+        - |
+          ...
+        - |
+          [Optional reflection prompt]
+    For reference, built-in agents start like:
+    name: polish
+    settings:
+      documentTag: latex_document
+      endTag: </latex_document>
+      outputExt: tex
+    Mention variables INPUT_CONTENT, ALL_INPUTS, OUTPUT_FILES_ORDER, REFERENCE_CONTENT, AUXILIARY_CONTENT and ADDITIONAL_INPUTS when relevant.
+    Goal: {{ DESCRIPTION }}. Respond only with the YAML wrapped in <yaml> tags.
+
+  retryPrompt: |
+    The previous attempt failed validation: {{ VALIDATION_ERROR }}. Please fix and return only the YAML.
+
+# --- Fallback Templates ---
+# Used when AI generation fails or the user lacks an API key.
+templates:
+  single: |
+    # --- Agent Inheritance (Optional) ---
+    # inherits: base
+    name: {{ AGENT_NAME }}
+
+    # --- Agent Settings ---
+    settings:
+      temperature: 0.1
+      isRewrite: true
+      documentTag: latex_document
+      endTag: </latex_document>
+      outputExt: tex
+      prefills:
+        - "<scratchpad>"
+        - "<scratchpad>"
+
+    # --- Agent Prompts ---
+    prompts:
+      systemPrompt: |
+        {{ DESCRIPTION }}
+
+        You are operating inside **TeXRA**, a VS Code extension that orchestrates
+        AI agents using YAML files. TeXRA loads selected documents and exposes them
+        as variables, so prompts can reference data like {{ INPUT_CONTENT }} or
+        {{ ALL_INPUTS }}. Agents follow a chain-of-thought workflow with
+        <scratchpad> planning and a final output wrapped in the documentTag.
+
+        Variable Retrieval (VR) exposes runtime data as variables in these prompts:
+          - {{ INPUT_FILE }} / {{ INPUT_CONTENT }}: main file path and text
+          - {{ ALL_INPUTS }}: XML list of all input files
+          - {{ REFERENCE_CONTENT }} / {{ AUXILIARY_CONTENT }}: extra context
+        Use them as needed.
+
+        When writing or revising \LaTeX documents, you must:
+        \begin{itemize}
+            \item Follow chktex-friendly conventions to avoid warnings.
+            \item Use appropriate notation and terminology consistently.
+            \item Preserve comments that start with "%" in the document.
+            \item Use `` or '' rather than straight quotes.
+            \item Avoid markdown-style enumerations like 1., 2., 3. in the final output.
+            \item \textbf{IMPORTANT:} Provide a complete output with sections in the original order.
+            \item \textbf{IMPORTANT:} Use math commands defined in commands.tex or preamble.tex.
+        \end{itemize}
+
+      userPrefix: |
+        Project context:
+        <documents>
+        {{ ALL_AUXILIARYS }}
+        {{ ALL_REFERENCES }}
+        {{ ADDITIONAL_INPUTS }}
+        <document name="{{ INPUT_FILE }}">
+        {{ INPUT_CONTENT }}
+        </document>
+        </documents>
+
+        {% if INSTRUCTION %}
+        Instruction to follow:
+        <instruction>
+        {{ INSTRUCTION }}
+        </instruction>
+        {% endif %}
+
+      userRequest:
+        - |
+            Brainstorm your plan in <scratchpad> with bullet points.
+            Then output the revised \LaTeX wrapped in <latex_document> tags.
+        - |
+            Reflect on your previous revision and describe the most impactful follow-up edits in <scratchpad> before producing the updated <latex_document> output.
+
+  multiple: |
+    # --- Agent Inheritance (Optional) ---
+    # inherits: base
+    name: {{ AGENT_NAME }}
+
+    # --- Agent Settings ---
+    settings:
+      isMultipleOutput: true
+      temperature: 0.1
+      isRewrite: true
+      documentTag: latex_documents
+      endTag: </latex_documents>
+      defaultOutputFiles:
+    {{ OUTPUT_FILES }}
+      outputExt: tex
+      prefills:
+        - "<scratchpad>"
+        - "<scratchpad>"
+
+    # --- Agent Prompts ---
+    prompts:
+      systemPrompt: |
+        {{ DESCRIPTION }}
+
+        You are operating inside **TeXRA**, a VS Code extension that orchestrates
+        AI agents defined in YAML. TeXRA loads selected files and exposes them as
+        variables, allowing prompts to reference {{ INPUT_CONTENT }},
+        {{ ALL_INPUTS }}, or {{ OUTPUT_FILES_ORDER }}. Agents think in
+        <scratchpad> before writing the final output inside the documentTag.
+
+        Variable Retrieval (VR) exposes runtime data as variables in these prompts:
+          - {{ INPUT_FILE }} / {{ INPUT_CONTENT }}: main file path and text
+          - {{ ALL_INPUTS }}: XML list of all input files
+          - {{ OUTPUT_FILES_ORDER }}: expected output files
+          - {{ REFERENCE_CONTENT }} / {{ AUXILIARY_CONTENT }}: extra context
+        Use them as needed.
+
+        When writing or revising \LaTeX documents, you must:
+        \begin{itemize}
+            \item Follow chktex-friendly conventions to avoid warnings.
+            \item Use appropriate notation and terminology consistently.
+            \item Preserve comments that start with "%" in the document.
+            \item Use `` or '' rather than straight quotes.
+            \item Avoid markdown-style enumerations like 1., 2., 3. in the final output.
+            \item \textbf{IMPORTANT:} Provide a complete output with sections in the original order.
+            \item \textbf{IMPORTANT:} Use math commands defined in commands.tex or preamble.tex.
+            \item Ensure the structure and formatting of each document is preserved.
+        \end{itemize}
+
+      userPrefix: |
+        Project context:
+        <documents>
+        {{ ALL_AUXILIARYS }}
+        {{ ALL_REFERENCES }}
+        {{ ADDITIONAL_INPUTS }}
+        <document name="{{ INPUT_FILE }}">
+        {{ INPUT_CONTENT }}
+        </document>
+        </documents>
+
+        {% if INSTRUCTION %}
+        Instruction to follow:
+        <instruction>
+        {{ INSTRUCTION }}
+        </instruction>
+        {% endif %}
+
+      userRequest:
+        - |
+            Brainstorm your plan in <scratchpad> with bullet points.
+            Then wrap each output in <latex_documents> with <document name="..."> blocks
+            following the order in OUTPUT_FILES_ORDER.
+        - |
+            Review the draft outputs and note targeted refinements for each document in <scratchpad>. Apply the improvements and emit the updated <latex_documents> content in the same order.
