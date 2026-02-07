@@ -35,7 +35,10 @@ import {
 
 // Local imports - shared utilities
 import { getBasename } from '@shared/utils/path';
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import {
+  FEEDBACK_ELIGIBLE_KINDS,
+  PERMISSION_KIND,
+} from '@shared/utils/uiConstants';
 import { postMessage } from '@shared/vscode';
 
 // Local imports - webview commands
@@ -48,11 +51,6 @@ import { getComposedPathElement } from '../utils';
 
 // Local imports - progress view component types
 import type { PermissionState } from './PermissionCard';
-
-const FEEDBACK_KINDS = new Set<PermissionState['kind']>([
-  PERMISSION_KIND.TOOL_EDIT,
-  PERMISSION_KIND.PROPOSAL,
-]);
 
 type PermissionKey = string;
 
@@ -286,15 +284,7 @@ export class RequestPanels extends LitElement {
             title="Approve (y)"
             >Approve</vscode-toolbar-button
           >
-          <vscode-toolbar-button
-            icon=${isFeedbackOpen ? 'check' : 'close'}
-            data-action="reject"
-            data-permission-kind=${permission.kind}
-            data-permission-id=${this.getPermissionId(permission)}
-            label=${isFeedbackOpen ? 'Submit' : 'Reject'}
-            title=${isFeedbackOpen ? 'Submit rejection (n)' : 'Reject (n)'}
-            >${isFeedbackOpen ? 'Submit' : 'Reject'}</vscode-toolbar-button
-          >
+          ${this.renderRejectButton(permission, isFeedbackOpen, 'Reject (n)')}
         </vscode-toolbar-container>
         ${this.renderFeedbackSection(
           permission,
@@ -357,8 +347,16 @@ export class RequestPanels extends LitElement {
 
   private renderBashRequest(permission: PermissionState): TemplateResult {
     const data = permission.data as BashPermission;
+    const key = this.getPermissionKey(permission);
+    const isFeedbackOpen = this.feedbackOpenKeys.has(key);
     return html`
-      <div class="bash-approval-request">
+      <div
+        class=${classMap({
+          'bash-approval-request': true,
+          'bash-approval-request--feedback-active': isFeedbackOpen,
+        })}
+        data-permission-key=${key}
+      >
         <div class="bash-approval-request__details">
           <div class="bash-approval-request__command">
             ${buildCodeBlock(data.command ?? '', { language: 'bash' })}
@@ -374,16 +372,14 @@ export class RequestPanels extends LitElement {
             title="Allow this command to execute (y)"
             >Approve</vscode-toolbar-button
           >
-          <vscode-toolbar-button
-            icon="close"
-            data-action="reject"
-            data-permission-kind=${permission.kind}
-            data-permission-id=${this.getPermissionId(permission)}
-            label="Reject"
-            title="Reject this command (n)"
-            >Reject</vscode-toolbar-button
-          >
+          ${this.renderRejectButton(permission, isFeedbackOpen, 'Reject this command (n)')}
         </vscode-toolbar-container>
+        ${this.renderFeedbackSection(
+          permission,
+          'bash-approval-request__feedback',
+          'bash-approval-request__feedback-input',
+          'Why are you rejecting?',
+        )}
       </div>
     `;
   }
@@ -503,15 +499,7 @@ export class RequestPanels extends LitElement {
             title="Approve (y)"
             >Approve</vscode-toolbar-button
           >
-          <vscode-toolbar-button
-            icon=${isFeedbackOpen ? 'check' : 'close'}
-            data-action="reject"
-            data-permission-kind=${permission.kind}
-            data-permission-id=${this.getPermissionId(permission)}
-            label=${isFeedbackOpen ? 'Submit' : 'Reject'}
-            title=${isFeedbackOpen ? 'Submit rejection (n)' : 'Reject (n)'}
-            >${isFeedbackOpen ? 'Submit' : 'Reject'}</vscode-toolbar-button
-          >
+          ${this.renderRejectButton(permission, isFeedbackOpen, 'Reject (n)')}
           <vscode-toolbar-button
             icon="settings-gear"
             data-action="setup"
@@ -598,7 +586,7 @@ export class RequestPanels extends LitElement {
     const key = this.getPermissionKey(permission);
     if (
       !this.feedbackOpenKeys.has(key) ||
-      !FEEDBACK_KINDS.has(permission.kind)
+      !FEEDBACK_ELIGIBLE_KINDS.has(permission.kind)
     ) {
       return nothing;
     }
@@ -673,7 +661,7 @@ export class RequestPanels extends LitElement {
     if (!permission) return;
 
     const key = this.getPermissionKey(permission);
-    if (action === 'reject' && FEEDBACK_KINDS.has(kind)) {
+    if (action === 'reject' && FEEDBACK_ELIGIBLE_KINDS.has(kind)) {
       if (!this.feedbackOpenKeys.has(key)) {
         this.openFeedback(key);
         return;
@@ -781,7 +769,7 @@ export class RequestPanels extends LitElement {
 
   /** Handle 'n' key for reject with feedback support */
   private handleRejectShortcut(permission: PermissionState): void {
-    if (!FEEDBACK_KINDS.has(permission.kind)) {
+    if (!FEEDBACK_ELIGIBLE_KINDS.has(permission.kind)) {
       this.emitAction(permission, 'reject');
       return;
     }
@@ -880,6 +868,28 @@ export class RequestPanels extends LitElement {
     const raw = input?.value ?? '';
     const trimmed = raw.trim();
     return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  // ===========================================================================
+  // Shared renderers
+  // ===========================================================================
+
+  private renderRejectButton(
+    permission: PermissionState,
+    isFeedbackOpen: boolean,
+    rejectTitle: string,
+  ): TemplateResult {
+    return html`
+      <vscode-toolbar-button
+        icon=${isFeedbackOpen ? 'check' : 'close'}
+        data-action="reject"
+        data-permission-kind=${permission.kind}
+        data-permission-id=${this.getPermissionId(permission)}
+        label=${isFeedbackOpen ? 'Submit' : 'Reject'}
+        title=${isFeedbackOpen ? 'Submit rejection (n)' : rejectTitle}
+        >${isFeedbackOpen ? 'Submit' : 'Reject'}</vscode-toolbar-button
+      >
+    `;
   }
 
   // ===========================================================================
