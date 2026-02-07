@@ -63,6 +63,10 @@ export async function executeCommand(
     timeout?: number;
     cwd?: string;
     stdin?: string;
+    /** Called with stdout chunks as they arrive, enabling live output streaming. */
+    onStdout?: (chunk: string) => void;
+    /** Called with stderr chunks as they arrive, enabling live error streaming. */
+    onStderr?: (chunk: string) => void;
   } = {},
 ): Promise<ExecResult> {
   try {
@@ -93,18 +97,32 @@ export async function executeCommand(
 
     const logChannel = options.channel ?? CHANNEL;
 
-    let result;
+    let subprocess;
     if (Array.isArray(command)) {
       const [cmd, ...args] = command;
       logger.debug(
         logChannel,
         `Running command: ${shellQuote([cmd, ...args])}`,
       );
-      result = await execa(cmd, args, execaOptions);
+      subprocess = execa(cmd, args, execaOptions);
     } else {
       logger.debug(logChannel, `Running command: ${command}`);
-      result = await execa(command, { ...execaOptions, shell: true });
+      subprocess = execa(command, { ...execaOptions, shell: true });
     }
+
+    // Subscribe to stdout/stderr streams for live output if callbacks provided
+    if (options.onStdout && subprocess.stdout) {
+      subprocess.stdout.on('data', (chunk: Buffer | string) => {
+        options.onStdout!(String(chunk));
+      });
+    }
+    if (options.onStderr && subprocess.stderr) {
+      subprocess.stderr.on('data', (chunk: Buffer | string) => {
+        options.onStderr!(String(chunk));
+      });
+    }
+
+    const result = await subprocess;
 
     const stdout = (result.stdout as string) ?? '';
     const stderr = (result.stderr as string) ?? '';
