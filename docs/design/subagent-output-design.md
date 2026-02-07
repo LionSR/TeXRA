@@ -302,26 +302,33 @@ One line. The tool blocks, the orchestrator waits, the result comes back as a `T
 ### Mode B: Launch-and-await (store the Promise)
 
 ```typescript
-// Launch
+// Launch — keep own reference to the promise, separate from lineage
 const promise = executeAgentCore(configPayload);
-pendingSubagents.set(subagentId, promise);
+pendingResults.set(subagentId, promise);
+registerSubagent(subagentId, parentStreamId, childStreamId, agentName, promise);
 return { output: `Launched subagent ${subagentId}` };
 
 // Later, in await_subagent tool:
-const result = await pendingSubagents.get(id);
+const result = await pendingResults.get(id);
+pendingResults.delete(id);
 return formatFlowResult(result);
 ```
 
-`pendingSubagents` is a `Map<string, Promise<AgentFlowResult>>`. That's it. Not a `SubagentTracker` class with `launch()`, `await()`, `status()`, and cleanup hooks. A Map of Promises. JavaScript already solved this problem.
+`pendingResults` is a `Map<string, Promise<AgentFlowResult>>`. It lives in the tool module, not in the lineage module. The lineage map tracks active children for lifecycle; `pendingResults` holds promises for the `await_subagent` tool to resolve. Each map has one job. The promise reference survives lineage auto-cleanup because it's a separate map.
 
 ### Mode C: Fire-and-deliver (via FollowUpQueue)
 
 ```typescript
 const orchestratorStreamId = getRequiredStreamId();
-executeAgentCore(configPayload).then(result => {
-  const msg = formatSubagentDelivery(subagentId, result);
-  ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
-});
+executeAgentCore(configPayload)
+  .then(result => {
+    const msg = formatSubagentDelivery(subagentId, result);
+    ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+  })
+  .catch(err => {
+    const msg = formatSubagentError(subagentId, err);
+    ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+  });
 return { output: `Launched subagent ${subagentId}. Result will be delivered.` };
 ```
 
@@ -496,6 +503,8 @@ Not for some future dream feature. It's needed NOW for:
 
 Don't build a registry class. Use a Map. Lives in `src/agent/runtime/` alongside `executeAgent.ts` and `StreamStatusService.ts` — it's about agent execution lifecycle, not specifically tool-use.
 
+The lineage map tracks **active children only** — for lifecycle queries (`hasActiveChildren`, `isSubagent`, cascading cancellation). It does NOT store promises or results. Mode B keeps its own `Promise` reference; mode C delivers via `.then()`. Each concern has one owner.
+
 ```typescript
 // src/agent/runtime/subagentLineage.ts
 
@@ -503,7 +512,6 @@ interface SubagentEntry {
   parentStreamId: StreamTabId;
   childStreamId: StreamTabId;
   childAgentName: string;
-  promise: Promise<AgentFlowResult>;
 }
 
 const activeSubagents = new Map<string, SubagentEntry>();
@@ -513,14 +521,16 @@ export function registerSubagent(
   parentStreamId: StreamTabId,
   childStreamId: StreamTabId,
   childAgentName: string,
-  promise: Promise<AgentFlowResult>,
+  promise: Promise<unknown>,
 ): void {
   activeSubagents.set(subagentId, {
     parentStreamId,
     childStreamId,
     childAgentName,
-    promise,
   });
+  // Auto-cleanup: entry removed when subagent settles (success or failure).
+  // By this point, Mode B already has its own reference to the promise,
+  // and Mode C has already wired .then()/.catch(). The lineage map's job is done.
   promise.finally(() => activeSubagents.delete(subagentId));
 }
 
@@ -539,9 +549,7 @@ export function isSubagent(streamId: StreamTabId): boolean {
 }
 ```
 
-No schemas. No classes. No timestamps. No `completedAt` field. The entry deletes itself when the promise settles. If you need to know it ran, check the logs.
-
-The `promise` field doubles as the handle for Mode B (launch-and-await). No separate `pendingSubagents` map needed.
+No schemas. No classes. No timestamps. No `completedAt` field. The entry deletes itself when the promise settles.
 
 ---
 
