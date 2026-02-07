@@ -1386,8 +1386,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           this.logger.logProgress(
             `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
           );
-          // Store pending ID so retry logic can resume polling instead of creating new request
-          this.pendingBackgroundResponseId = response.id;
         } else {
           this.logger.debug(
             `Response ${response.id} returned with pending status "${response.status}" despite non-background mode; polling for completion`,
@@ -1625,6 +1623,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     let current = initialResponse;
     const responseId = initialResponse.id;
+
+    // Track which response is being polled so retry logic can resume via
+    // tryResumeBackgroundResponse instead of creating a new request.
+    this.pendingBackgroundResponseId = responseId;
     const pollInterval = ModelHandlerOpenAIResponse.BACKGROUND_POLL_INTERVAL_MS;
     const startTime = Date.now();
     let pollCount = 0;
@@ -1704,6 +1706,30 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         if (err instanceof DOMException && err.name === 'AbortError') {
           // User cancelled during retrieve - clear pending ID
           this.clearPendingBackgroundResponse();
+          throw err;
+        }
+        // Only wrap 404 "response not found" errors. These are retryable because
+        // the response existed but disappeared during polling, and a retry will
+        // create a new request. Wrapping strips the 404 status code so
+        // formatProviderHttpError classifies it as a network-like error (retryable).
+        //
+        // All other errors (401, 403, 5xx, network, etc.) propagate unchanged
+        // so downstream handlers (relay 401 token refresh, retryability checks,
+        // non-retryable classification) work correctly with full HTTP metadata.
+        const statusCode = (err as { status?: number }).status;
+        if (statusCode === 404) {
+          const pollingError = new Error(
+            `Background response polling failed for ${responseId}: ${getSdkErrorMessage(err)}`,
+            { cause: err },
+          );
+          // Forward request_id so formatProviderHttpError can extract it for
+          // logging diagnostics (detectRequestId doesn't follow the cause chain)
+          const origRequestId = (err as { request_id?: string }).request_id;
+          if (origRequestId) {
+            (pollingError as Record<string, unknown>).request_id =
+              origRequestId;
+          }
+          throw pollingError;
         }
         throw err;
       }
