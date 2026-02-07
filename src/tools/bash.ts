@@ -58,10 +58,12 @@ export class BashTool extends defineTool({
 
     // Truncation only applies to internal logging so long-running commands keep
     // the output channel readable while still returning the complete stdout.
+    // Stream both stdout and stderr through the same callback for live UI updates.
     const result = await executeCommand(input.command, {
       truncate: true,
       timeout: timeoutMs,
       onStdout: ctx?.onToolOutput,
+      onStderr: ctx?.onToolOutput,
     });
 
     if (result.timedOut) {
