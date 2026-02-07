@@ -60,6 +60,56 @@ import type {
   ToolUseCycleParams,
 } from './CycleServices';
 
+// ============================================================================
+// Parallel call deduplication
+// ============================================================================
+
+const DUPLICATE_CALL_ERROR =
+  'Duplicate parallel call skipped. This call has the same tool name and arguments ' +
+  'as an earlier call in this batch that was already executed. ' +
+  'If you need to run this tool multiple times with the same arguments, ' +
+  'please call them sequentially in separate responses.';
+
+/**
+ * Deterministic JSON serialization for deduplication keys.
+ * Sorts object keys recursively so `{a:1,b:2}` and `{b:2,a:1}` produce
+ * the same string.
+ */
+function stableStringify(value: unknown): string {
+  return JSON.stringify(value, (_key, v) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.entries(v as Record<string, unknown>).sort(([a], [b]) =>
+            a.localeCompare(b),
+          ),
+        )
+      : v,
+  );
+}
+
+/**
+ * Identify duplicate parallel tool calls (same name + identical arguments).
+ * Returns the set of `callId`s that should be skipped (all but the first
+ * occurrence of each unique call signature).
+ */
+function findDuplicateCallIds(toolCalls: SdkToolCall[]): Set<string> {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const call of toolCalls) {
+    const key = call.name + '\0' + stableStringify(call.input);
+    if (seen.has(key)) {
+      duplicates.add(call.callId);
+    } else {
+      seen.add(key);
+    }
+  }
+  return duplicates;
+}
+
+// ============================================================================
+// Tool input parsing and error handling
+// ============================================================================
+
 /** Parse tool input, handling JSON strings and other formats from model providers. */
 function parseToolInput(
   raw: unknown,
@@ -591,15 +641,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     // and identical arguments, only execute the first one. Later duplicates
     // receive a synthetic error result prompting sequential invocation.
     if (toolCalls.length > 1) {
-      const seen = new Set<string>();
-      for (const call of toolCalls) {
-        const key = call.name + '\0' + JSON.stringify(call.input);
-        if (seen.has(key)) {
-          this._duplicateCallIds.add(call.callId);
-        } else {
-          seen.add(key);
-        }
-      }
+      this._duplicateCallIds = findDuplicateCallIds(toolCalls);
 
       if (this._duplicateCallIds.size > 0) {
         this.services.logger.info(
@@ -623,16 +665,12 @@ class ToolUseDispatchNode<C> extends BatchNode<
       return {
         call,
         result: {
-          error:
-            'Duplicate parallel call skipped. This call has the same tool name and arguments ' +
-            'as an earlier call in this batch that was already executed. ' +
-            'If you need to run this tool multiple times with the same arguments, ' +
-            'please call them sequentially in separate responses.',
+          error: DUPLICATE_CALL_ERROR,
           isError: true,
         },
         parsedInput: call.input,
         sanitizedOutput: {
-          error: 'Duplicate parallel call skipped',
+          error: DUPLICATE_CALL_ERROR,
           isError: true,
         },
         editedFiles: [],
