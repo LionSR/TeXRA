@@ -599,6 +599,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const compactedMessages =
         compactedResponse.output as unknown as ResponseInputItem[];
 
+      // CRITICAL: Clear previousResponseId now that compaction has replaced the
+      // server-side history. Must happen BEFORE estimateTokenCount — otherwise the
+      // count would include the full previous conversation on top of the compacted
+      // messages, massively inflating the result.
+      this.previousResponseId = null;
+
       // Count the actual tokens of the compacted messages rather than relying on
       // usage fields from the compact response (usage.input_tokens is the cost of
       // the compact operation's input, and usage.output_tokens may not match the
@@ -1095,12 +1101,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // compactionResult is set if compaction succeeded
       compactedThisCall = this.compactionResult !== undefined;
       if (compactedThisCall) {
-        // CRITICAL: Clear previousResponseId IMMEDIATELY after successful compaction.
-        // The compacted output replaces the server-side history, so we must not
-        // reference the old response ID - it may have pending tool calls that
-        // aren't in the compacted messages, causing "No tool output found" errors.
-        this.previousResponseId = null;
-        // Capture compacted messages now (used in return value)
+        // Note: previousResponseId is already cleared inside compactConversation()
+        // immediately after the compact endpoint succeeds (before token counting).
         compactedMessages = this.compactionResult!.compactedMessages;
       }
     }
