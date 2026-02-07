@@ -4,6 +4,7 @@ import * as path from 'path';
 // Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
 import * as vscode from 'vscode';
+import * as nunjucks from 'nunjucks';
 import * as yaml from 'yaml';
 
 // Local imports - agent runtime
@@ -30,6 +31,8 @@ interface CreatorConfig {
   prompts: { generationPrompt: string; retryPrompt: string };
   templates: { single: string; multiple: string };
 }
+
+const nunjucksEnv = nunjucks.configure({ autoescape: false });
 
 /** Cached creator config loaded from resources/templates/agentCreator.yaml */
 let creatorConfig: CreatorConfig | null = null;
@@ -117,14 +120,15 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
 
     const filePath = vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`));
 
+    const vars = { AGENT_NAME: agentName, DESCRIPTION: description };
     let yamlContent: string | undefined;
     try {
       const apiKey = await SecretManager.getApiKey('anthropic');
       const anthropic = new Anthropic({ apiKey });
-
-      const basePrompt = config.prompts.generationPrompt
-        .replaceAll('{{ AGENT_NAME }}', agentName)
-        .replaceAll('{{ DESCRIPTION }}', description);
+      const basePrompt = nunjucksEnv.renderString(
+        config.prompts.generationPrompt,
+        vars,
+      );
 
       let prompt = basePrompt;
       for (let attempt = 0; attempt < 2; attempt++) {
@@ -157,10 +161,9 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
             prompt =
               basePrompt +
               '\n' +
-              config.prompts.retryPrompt.replace(
-                '{{ VALIDATION_ERROR }}',
-                validationErr,
-              );
+              nunjucksEnv.renderString(config.prompts.retryPrompt, {
+                VALIDATION_ERROR: validationErr,
+              });
             continue;
           }
           break;
@@ -173,14 +176,12 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
     if (!yamlContent) {
       const template =
         outputChoice === 'Multiple output files'
-          ? config.templates.multiple.replace(
-              '{{ OUTPUT_FILES }}',
-              outputFilesYaml,
-            )
+          ? config.templates.multiple
           : config.templates.single;
-      yamlContent = template
-        .replaceAll('{{ DESCRIPTION }}', description)
-        .replaceAll('{{ AGENT_NAME }}', agentName);
+      yamlContent = nunjucksEnv.renderString(template, {
+        ...vars,
+        OUTPUT_FILES: outputFilesYaml,
+      });
     }
 
     await AbsoluteFS.write(filePath.fsPath, yamlContent);
