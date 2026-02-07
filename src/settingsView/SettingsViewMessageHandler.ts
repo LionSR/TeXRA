@@ -27,10 +27,13 @@ import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   type AgentEntry,
+  createKey,
+  getAgent,
   getAgentsBySource,
   getWorkflowAgents,
   getToolUseAgents,
   loadAgents,
+  type AgentSource,
 } from '@agent/index';
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
 import {
@@ -139,8 +142,7 @@ function entryToSelectionItem(entry: AgentEntry): AgentSelectionItem {
     source: entry.source,
     category: entry.category,
     description: entry.description,
-    path: entry.path,
-    multiplePath: entry.multiplePath,
+    hasPath: Boolean(entry.path),
     tools: entry.tools,
     isCustom: entry.source === 'custom',
     isRemote: entry.source === 'remote',
@@ -849,7 +851,27 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_YAML>,
   ): Promise<void> {
     try {
-      const doc = await vscode.workspace.openTextDocument(data.agentPath);
+      const key = createKey(data.agentSource as AgentSource, data.agentName);
+      const entry = getAgent(key);
+      if (!entry) {
+        await showLoggedErrorMessage(
+          this.channel,
+          `Agent not found: ${data.agentName} (${data.agentSource})`,
+        );
+        return;
+      }
+
+      const agentPath =
+        data.variant === 'multiple' ? entry.multiplePath : entry.path;
+      if (!agentPath) {
+        await showLoggedErrorMessage(
+          this.channel,
+          `No ${data.variant} YAML path for agent: ${data.agentName}`,
+        );
+        return;
+      }
+
+      const doc = await vscode.workspace.openTextDocument(agentPath);
       await vscode.window.showTextDocument(doc, { preview: false });
     } catch (error) {
       await showLoggedErrorMessage(

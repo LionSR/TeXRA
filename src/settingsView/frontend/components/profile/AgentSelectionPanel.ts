@@ -5,7 +5,14 @@
  */
 
 // Third-party imports
-import { LitElement, html, nothing, css, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  nothing,
+  css,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
@@ -224,6 +231,18 @@ export class AgentSelectionPanel extends LitElement {
 
   @state() private selectedAgentName: string | null = null;
 
+  protected override willUpdate(changed: PropertyValues): void {
+    if (changed.has('agents')) {
+      // Auto-select first agent if current selection is stale or missing
+      const stillValid = this.agents.some(
+        (a) => a.name === this.selectedAgentName,
+      );
+      if (!stillValid) {
+        this.selectedAgentName = this.agents[0]?.name ?? null;
+      }
+    }
+  }
+
   private get selectedAgent(): AgentSelectionItem | undefined {
     return this.agents.find((a) => a.name === this.selectedAgentName);
   }
@@ -232,8 +251,17 @@ export class AgentSelectionPanel extends LitElement {
     this.selectedAgentName = name;
   }
 
-  private handleOpenYaml(path: string): void {
-    this.dispatchEvent(AgentSelectionEvents.openYaml({ agentPath: path }));
+  private handleOpenYaml(
+    agent: AgentSelectionItem,
+    variant: 'base' | 'multiple',
+  ): void {
+    this.dispatchEvent(
+      AgentSelectionEvents.openYaml({
+        agentName: agent.name,
+        agentSource: agent.source,
+        variant,
+      }),
+    );
   }
 
   /** Group agents by source for display sections */
@@ -355,11 +383,11 @@ export class AgentSelectionPanel extends LitElement {
         </div>
 
         <div class="agent-detail-actions">
-          ${agent.path
+          ${agent.hasPath
             ? html`
                 <button
                   class="agent-action-btn"
-                  @click=${() => this.handleOpenYaml(agent.path)}
+                  @click=${() => this.handleOpenYaml(agent, 'base')}
                   title="Open agent YAML definition"
                 >
                   <span class="codicon codicon-file-code"></span>
@@ -367,11 +395,11 @@ export class AgentSelectionPanel extends LitElement {
                 </button>
               `
             : nothing}
-          ${agent.multiplePath
+          ${agent.hasMultiple
             ? html`
                 <button
                   class="agent-action-btn"
-                  @click=${() => this.handleOpenYaml(agent.multiplePath!)}
+                  @click=${() => this.handleOpenYaml(agent, 'multiple')}
                   title="Open _multiple variant YAML definition"
                 >
                   <span class="codicon codicon-files"></span>
