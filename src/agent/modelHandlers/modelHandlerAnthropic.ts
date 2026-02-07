@@ -253,17 +253,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /**
-   * Sets or clears the cache control target block.
-   * Pass a block to set it as the cache target, or undefined/null to clear.
+   * Sets cache control on a new target block without removing old markers.
+   * Old markers are cleaned up by enforceCacheControlLimit() before each API call,
+   * which keeps the 4 most strategically placed breakpoints. This accumulation
+   * approach enables better cache coverage: each Anthropic breakpoint provides
+   * ~20-block lookback, so 4 spread-out breakpoints cover more of the conversation
+   * than a single moving marker.
    */
   private updateCacheControlTarget(
     block: CacheControlEligibleBlock | null | undefined,
   ): void {
-    // Clear existing cache_control if switching to different block
-    if (this.cacheControlledBlock && this.cacheControlledBlock !== block) {
-      delete this.cacheControlledBlock.cache_control;
-    }
-
     if (block && this.capabilities.supportsPromptCaching) {
       block.cache_control = EPHEMERAL_CACHE_CONTROL;
     }
@@ -821,13 +820,28 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
     }
 
-    // Remove excess cache control markers, keeping only the last MAX_CACHE_CONTROLLED_BLOCKS
-    const excess = Math.max(
-      0,
-      cacheControlledBlocks.length - MAX_CACHE_CONTROLLED_BLOCKS,
-    );
-    for (let idx = 0; idx < excess; idx += 1) {
-      delete cacheControlledBlocks[idx].cache_control;
+    // Select up to MAX_CACHE_CONTROLLED_BLOCKS breakpoints, evenly spaced.
+    // Each Anthropic breakpoint provides ~20-block lookback for cache matching.
+    // Spreading breakpoints across the conversation maximizes cache coverage
+    // compared to clustering them at the end.
+    if (cacheControlledBlocks.length > MAX_CACHE_CONTROLLED_BLOCKS) {
+      const total = cacheControlledBlocks.length;
+      const keepIndices = new Set<number>();
+
+      // Always keep the last block (most recent content)
+      keepIndices.add(total - 1);
+
+      // Distribute remaining slots evenly across earlier blocks
+      const remainingSlots = MAX_CACHE_CONTROLLED_BLOCKS - 1;
+      for (let i = 0; i < remainingSlots; i += 1) {
+        keepIndices.add(Math.floor((i * (total - 1)) / remainingSlots));
+      }
+
+      for (let idx = 0; idx < total; idx += 1) {
+        if (!keepIndices.has(idx)) {
+          delete cacheControlledBlocks[idx].cache_control;
+        }
+      }
     }
 
     this.cacheControlledBlock = [...cacheControlledBlocks]
