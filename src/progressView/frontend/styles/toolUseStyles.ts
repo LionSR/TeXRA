@@ -138,6 +138,25 @@ export const toolUseStyles = css`
     overflow: auto;
   }
 
+  /* Proposal restore link */
+  .proposal-restore-action {
+    margin: var(--spacing-small) 0;
+  }
+
+  .proposal-restore-link {
+    color: var(--color-text-link);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-tiny);
+  }
+
+  .proposal-restore-link:hover {
+    text-decoration: underline;
+  }
+
   /* Diff styles */
   .diff-add {
     color: var(--vscode-gitDecoration-addedResourceForeground, #3fb950);

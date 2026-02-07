@@ -42,6 +42,7 @@ import { logStyles } from '../styles/logStyles';
 
 // Local imports - progress view formatters
 import { getCopyContent } from '../formatters/copyContentStore';
+import { getProposalInput } from '../formatters/proposalInputStore';
 
 // Local imports - progress view components (type-only for @query reference)
 import type { TaskGroupList } from './TaskGroupList';
@@ -216,6 +217,22 @@ export class LogList extends LitElement {
     const latexRef = this.findTargetInPath<HTMLElement>(event, '.latex-ref');
     if (latexRef?.dataset.label) {
       postMessage(COMMANDS.OPEN_LABEL, { label: latexRef.dataset.label });
+      return;
+    }
+
+    // Handle proposal restore links
+    const proposalLink = this.findTargetInPath<HTMLElement>(
+      event,
+      '.proposal-restore-link',
+    );
+    if (proposalLink?.dataset.proposalId) {
+      const stored = getProposalInput(proposalLink.dataset.proposalId);
+      if (stored) {
+        postMessage(COMMANDS.RESTORE_PROPOSAL_CONFIG, {
+          toolName: stored.toolName,
+          input: stored.input,
+        });
+      }
       return;
     }
 
