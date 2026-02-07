@@ -415,9 +415,17 @@ export class SettingsApp extends BaseWebviewApp {
   }
 
   // Agent selection event handlers
-  private handleOpenAgentYaml(event: CustomEvent<{ agentPath: string }>): void {
+  private handleOpenAgentYaml(
+    event: CustomEvent<{
+      agentName: string;
+      agentSource: string;
+      variant: 'base' | 'multiple';
+    }>,
+  ): void {
     postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML, {
-      agentPath: event.detail.agentPath,
+      agentName: event.detail.agentName,
+      agentSource: event.detail.agentSource,
+      variant: event.detail.variant,
     });
   }
 
