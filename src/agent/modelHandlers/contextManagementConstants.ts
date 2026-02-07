@@ -41,6 +41,13 @@ export const HEURISTIC_TOKEN_BUFFER = 5000;
 export const TOOL_USE_MAX_OUTPUT_FACTOR = 0.7;
 
 /**
+ * Factor to reduce max output tokens when using response chaining
+ * (`previous_response_id`). Chained requests can include additional server-side
+ * context that is not fully reflected in client-side estimates.
+ */
+export const CHAINED_RESPONSE_MAX_OUTPUT_FACTOR = 0.7;
+
+/**
  * Larger safety buffer for tool-use mode token validation.
  * Accounts for tokenization differences between client estimates and
  * server-side counting, API framing overhead, and edge cases in long
