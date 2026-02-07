@@ -13,7 +13,10 @@ import axios from 'axios';
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
+import { isTimeoutErrorCode, buildTimeoutMessage } from '@tools/timeouts';
 import { getConfig } from '@utils/config';
+
+const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
 
 /**
  * Get the configured Zotero port.
@@ -149,7 +152,7 @@ export async function callBetterBibTeX<T = unknown>(
   method: string,
   params: unknown[],
   port: number,
-  timeout: number = 10000,
+  timeout: number = ZOTERO_BBT_TIMEOUT_MS,
 ): Promise<T> {
   const url = `http://127.0.0.1:${port}/better-bibtex/json-rpc`;
 
@@ -174,6 +177,11 @@ export async function callBetterBibTeX<T = unknown>(
 
     return response.data.result as T;
   } catch (error) {
+    if (axios.isAxiosError(error) && isTimeoutErrorCode(error.code)) {
+      throw new ToolError(
+        buildTimeoutMessage('Zotero API request', timeout),
+      );
+    }
     if (axios.isAxiosError(error) && error.code === 'ECONNREFUSED') {
       throw new ToolError(
         'Please start Zotero desktop app. The Connector API is not responding.',

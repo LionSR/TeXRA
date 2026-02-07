@@ -8,8 +8,11 @@ import axios from 'axios';
 import { z } from 'zod';
 
 import { toErrorMessage } from '@common/errors';
-import { ToolResult } from '@tools/result';
+import { ToolResult, ToolError } from '@tools/result';
+import { isTimeoutErrorCode, buildTimeoutMessage } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
+
+const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
 
 // ============================================================================
 // Schema
@@ -115,7 +118,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
         headers: {
           'User-Agent': 'TeXRA-VSCode-Extension',
         },
-        timeout: 10000,
+        timeout: LOOGLE_TIMEOUT_MS,
       });
 
       const data = response.data;
@@ -152,6 +155,11 @@ Useful for finding the right lemma when you know roughly what type it should hav
         results: hits,
       };
     } catch (error) {
+      if (axios.isAxiosError(error) && isTimeoutErrorCode(error.code)) {
+        throw new ToolError(
+          buildTimeoutMessage('Loogle API request', LOOGLE_TIMEOUT_MS),
+        );
+      }
       return {
         summary: 'Loogle search failed',
         output: `Error: ${toErrorMessage(error)}`,
