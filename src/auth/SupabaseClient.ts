@@ -79,10 +79,10 @@ export class SupabaseClient {
   }
 
   /**
-   * Update the cached token expiry time.
-   * Called by SupabaseAuthProvider when a session is stored or loaded.
+   * Update the cached token expiry time, or clear it on sign-out.
+   * Called by SupabaseAuthProvider when a session is stored, loaded, or removed.
    */
-  static setTokenExpiry(expiresAt: number): void {
+  static setTokenExpiry(expiresAt: number | null): void {
     this.tokenExpiresAt = expiresAt;
   }
 
