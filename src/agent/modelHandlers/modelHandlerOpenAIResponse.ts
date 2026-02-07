@@ -567,6 +567,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     messages: ResponseInputItem[],
     systemPrompt?: string,
     signal?: AbortSignal,
+    convertedTools?: unknown[],
   ): Promise<ResponseInputItem[]> {
     const tokensBefore = this.conversationState.cumulativeInputTokens;
     const contextWindow = this.config.contextWindow;
@@ -593,7 +594,37 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const compactedResponse: CompactedResponse =
         await client.responses.compact(compactParams);
 
-      const tokensAfter = compactedResponse.usage.input_tokens;
+      // Note: SDK types CompactedResponse.output as ResponseOutputItem[], but the
+      // compact endpoint returns ResponseInputItem[] suitable for re-submission.
+      const compactedMessages =
+        compactedResponse.output as unknown as ResponseInputItem[];
+
+      // CRITICAL: Clear previousResponseId now that compaction has replaced the
+      // server-side history. Must happen BEFORE estimateTokenCount — otherwise the
+      // count would include the full previous conversation on top of the compacted
+      // messages, massively inflating the result.
+      this.previousResponseId = null;
+
+      // Count the actual tokens of the compacted messages rather than relying on
+      // usage fields from the compact response (usage.input_tokens is the cost of
+      // the compact operation's input, and usage.output_tokens may not match the
+      // input token cost when these items are re-submitted).
+      let tokensAfter: number;
+      try {
+        tokensAfter = await this.estimateTokenCount(compactedMessages, {
+          client,
+          signal,
+          systemPrompt,
+          tools: convertedTools,
+        });
+      } catch {
+        // Fall back to output_tokens if token counting fails.
+        // NOTE: It's unclear what output_tokens represents exactly for the compact
+        // endpoint — it may be the generation cost rather than the reusable content
+        // size. This fallback is a best-effort estimate until OpenAI clarifies.
+        tokensAfter = compactedResponse.usage.output_tokens;
+      }
+
       const utilizationAfter = (tokensAfter / contextWindow) * 100;
       const reduction = tokensBefore - tokensAfter;
       const reductionPercent = ((reduction / tokensBefore) * 100).toFixed(1);
@@ -615,10 +646,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Store compacted messages for use in this request.
       // Mark as pending compaction - state will be finalized after successful API call.
       // This prevents stale state if API call fails and needs retry.
-      // Note: SDK types CompactedResponse.output as ResponseOutputItem[], but the
-      // compact endpoint returns ResponseInputItem[] suitable for re-submission.
-      const compactedMessages =
-        compactedResponse.output as unknown as ResponseInputItem[];
       this.compactionResult = { compactedMessages, tokensAfter };
 
       return compactedMessages;
@@ -1044,6 +1071,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
     }
 
+    // Convert tools early so they're available for both compaction token counting and the API call
+    const convertedTools =
+      tools && tools.length > 0
+        ? toOpenAIResponseTools(tools, {
+            supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
+            supportsFunctionCalling: this.capabilities.supportsFunctionCalling,
+          })
+        : undefined;
+
     // Check if compaction is needed before processing the request
     let effectiveMessages = messages;
     // Track if compaction happened in THIS call (not previous calls)
@@ -1060,16 +1096,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         messages,
         systemPrompt,
         signal,
+        convertedTools,
       );
       // compactionResult is set if compaction succeeded
       compactedThisCall = this.compactionResult !== undefined;
       if (compactedThisCall) {
-        // CRITICAL: Clear previousResponseId IMMEDIATELY after successful compaction.
-        // The compacted output replaces the server-side history, so we must not
-        // reference the old response ID - it may have pending tool calls that
-        // aren't in the compacted messages, causing "No tool output found" errors.
-        this.previousResponseId = null;
-        // Capture compacted messages now (used in return value)
+        // Note: previousResponseId is already cleared inside compactConversation()
+        // immediately after the compact endpoint succeeds (before token counting).
         compactedMessages = this.compactionResult!.compactedMessages;
       }
     }
@@ -1086,13 +1119,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     await this.uploadInlineInputFiles(client, newMessages);
 
     // Build shared params used by both token counting and API call
-    const convertedTools =
-      tools && tools.length > 0
-        ? toOpenAIResponseTools(tools, {
-            supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
-            supportsFunctionCalling: this.capabilities.supportsFunctionCalling,
-          })
-        : undefined;
 
     const reasoningEffort = this.capabilities.supportsReasoning
       ? this.getEffectiveReasoningEffort()
