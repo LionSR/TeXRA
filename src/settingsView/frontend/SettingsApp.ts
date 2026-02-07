@@ -29,12 +29,15 @@ import {
   HistoryClearedMessageSchema,
   type HistoryItem,
   UpdateProfileMessageSchema,
-  type RemoteAgent,
   type ProviderKeyStatus,
   type ModelSelectionItem,
   UpdateModelSelectionMessageSchema,
   SetTabMessageSchema,
 } from '@shared/schemas';
+import {
+  UpdateAgentSelectionMessageSchema,
+  type AgentSelectionItem,
+} from '@shared/schemas/settingsViewMessages';
 import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
 
 // Local imports - settings view commands
@@ -109,7 +112,6 @@ export class SettingsApp extends BaseWebviewApp {
   @state() private userEmail = '';
   @state() private userId = '';
   @state() private tier = 'free';
-  @state() private remoteAgents: RemoteAgent[] = [];
   @state() private apiAccessMode: 'included' | 'personal' = 'personal';
   @state() private enabledProviders: string[] = [];
   @state() private allowedModels: string[] | null = [];
@@ -120,6 +122,10 @@ export class SettingsApp extends BaseWebviewApp {
   // Model selection state
   @state() private modelSelectionItems: ModelSelectionItem[] = [];
   @state() private polishModel = DEFAULT_POLISH_MODEL;
+
+  // Agent selection state
+  @state() private workflowAgents: AgentSelectionItem[] = [];
+  @state() private toolUseAgents: AgentSelectionItem[] = [];
 
   protected get readyCommand(): string | null {
     return null;
@@ -133,6 +139,7 @@ export class SettingsApp extends BaseWebviewApp {
     postMessage(SETTINGS_VIEW_COMMANDS.GET_HISTORY_DATA);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION);
+    postMessage(SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION);
   }
 
   protected override handleMessage(raw: unknown): void {
@@ -231,6 +238,21 @@ export class SettingsApp extends BaseWebviewApp {
       return;
     }
 
+    // Agent selection messages
+    if (command === SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION) {
+      const result = UpdateAgentSelectionMessageSchema.safeParse(raw);
+      if (!result.success) {
+        this.logSchemaError(
+          '[SettingsApp] Update agent selection message validation failed.',
+          result.error,
+        );
+        return;
+      }
+      this.workflowAgents = result.data.workflow;
+      this.toolUseAgents = result.data.toolUse;
+      return;
+    }
+
     // Profile messages
     if (command === SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE) {
       const result = UpdateProfileMessageSchema.safeParse(raw);
@@ -247,7 +269,6 @@ export class SettingsApp extends BaseWebviewApp {
       this.userEmail = data.user?.email ?? 'N/A';
       this.userId = data.user?.id ?? '';
       this.tier = data.tier ?? 'free';
-      this.remoteAgents = data.remoteAgents ?? [];
       this.apiAccessMode = data.apiAccessMode;
       this.enabledProviders = data.enabledProviders ?? [];
       this.allowedModels = data.allowedModels ?? null;
@@ -317,12 +338,6 @@ export class SettingsApp extends BaseWebviewApp {
 
   private handleSignOut(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.SIGN_OUT);
-  }
-
-  private handleSelectAgent(event: CustomEvent<{ agentName: string }>): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SELECT_AGENT, {
-      agentName: event.detail.agentName,
-    });
   }
 
   private handleApiAccessMode(
@@ -396,6 +411,13 @@ export class SettingsApp extends BaseWebviewApp {
   ): void {
     postMessage(SETTINGS_VIEW_COMMANDS.SET_POLISH_MODEL, {
       modelName: event.detail.modelName,
+    });
+  }
+
+  // Agent selection event handlers
+  private handleOpenAgentYaml(event: CustomEvent<{ agentPath: string }>): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML, {
+      agentPath: event.detail.agentPath,
     });
   }
 
@@ -512,9 +534,9 @@ export class SettingsApp extends BaseWebviewApp {
 
           <vscode-tab-panel>
             <agents-tab
-              .authenticated=${this.authenticated}
-              .remoteAgents=${this.remoteAgents}
-              @profile-select-agent=${this.handleSelectAgent}
+              .workflowAgents=${this.workflowAgents}
+              .toolUseAgents=${this.toolUseAgents}
+              @agent-open-yaml=${this.handleOpenAgentYaml}
             ></agents-tab>
           </vscode-tab-panel>
         </vscode-tabs>
