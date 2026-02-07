@@ -2,8 +2,6 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { AgentConfigSchema } from '@agent/core';
-import { executeAgent } from '@agent/runtime/executeAgent';
 import { showLoggedErrorMessage } from '@common/errors';
 import {
   countBySeverity,
@@ -19,7 +17,6 @@ logger.initialize(CHANNEL);
 export const linterCommands = {
   showLinterMessages: 'texra.showLinterMessages',
   countLinterMessages: 'texra.countLinterMessages',
-  fixLinterIssues: 'texra.fixLinterIssues',
 };
 
 function showNoIssuesMessage(): void {
@@ -102,41 +99,6 @@ export async function handleCountLinterMessages(): Promise<void> {
   }
 }
 
-/**
- * Fix linter issues in the current file using Claude
- */
-export async function handleFixLinterIssues(): Promise<void> {
-  try {
-    await withLaTeXGuard(
-      { channel: CHANNEL, action: 'fix linter issues', saveDocument: true },
-      async ({ relativePath }) => {
-        logger.debug(CHANNEL, `Fixing linter issues for ${relativePath}`);
-
-        const issues = await getLinterMessages(relativePath);
-        if (issues.length === 0) {
-          showNoIssuesMessage();
-          return;
-        }
-
-        logger.info(
-          CHANNEL,
-          `Found ${issues.length} linter issues in ${relativePath}`,
-        );
-
-        const agentConfig = AgentConfigSchema.parse({
-          agent: 'tex_linter_fix',
-          model: 'claude-4-5-sonnet-4-5-latest',
-          inputFile: relativePath,
-        });
-
-        await executeAgent(agentConfig);
-      },
-    );
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error fixing linter issues', err);
-  }
-}
-
 export function registerLinterCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -146,10 +108,6 @@ export function registerLinterCommands(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       linterCommands.countLinterMessages,
       handleCountLinterMessages,
-    ),
-    vscode.commands.registerCommand(
-      linterCommands.fixLinterIssues,
-      handleFixLinterIssues,
     ),
   );
 }
