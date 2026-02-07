@@ -429,6 +429,32 @@ export class SettingsApp extends BaseWebviewApp {
     });
   }
 
+  private handleSetAgentEnabled(
+    event: CustomEvent<{
+      agentName: string;
+      agentSource: string;
+      category: 'workflow' | 'toolUse';
+      enabled: boolean;
+    }>,
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED, {
+      agentName: event.detail.agentName,
+      agentSource: event.detail.agentSource,
+      category: event.detail.category,
+      enabled: event.detail.enabled,
+    });
+  }
+
+  private handleOpenAgentFolder(
+    event: CustomEvent<{
+      folderType: 'custom' | 'builtIn' | 'builtInToolUse';
+    }>,
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER, {
+      folderType: event.detail.folderType,
+    });
+  }
+
   private handleOpenVscodeSettings(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS);
   }
@@ -545,6 +571,8 @@ export class SettingsApp extends BaseWebviewApp {
               .workflowAgents=${this.workflowAgents}
               .toolUseAgents=${this.toolUseAgents}
               @agent-open-yaml=${this.handleOpenAgentYaml}
+              @agent-enabled-set=${this.handleSetAgentEnabled}
+              @agent-open-folder=${this.handleOpenAgentFolder}
             ></agents-tab>
           </vscode-tab-panel>
         </vscode-tabs>
