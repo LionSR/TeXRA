@@ -30,3 +30,8 @@ export const ProviderKeyEvents = {
   setGlobalStreaming: (detail: { enabled: boolean }) =>
     createEvent('provider-global-streaming-set', detail),
 } as const;
+
+export const AgentSelectionEvents = {
+  openYaml: (detail: { agentPath: string }) =>
+    createEvent('agent-open-yaml', detail),
+} as const;
