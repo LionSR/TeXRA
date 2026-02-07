@@ -634,7 +634,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
             throw err;
           }
           // Soft failure for token counting API errors - proceed without adjustment
-          this.logger.warn(
+          this.logger.debug(
             `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
           );
         }
