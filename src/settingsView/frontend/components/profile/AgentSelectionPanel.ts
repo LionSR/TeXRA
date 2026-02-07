@@ -30,7 +30,7 @@ function agentKey(agent: AgentSelectionItem): string {
 
 /** Source display names for agent origins */
 const SOURCE_DISPLAY_NAMES: Record<string, string> = {
-  [AGENT_SOURCE.BUILT_IN]: 'Built-in',
+  [AGENT_SOURCE.BUILT_IN_WORKFLOW]: 'Built-in',
   [AGENT_SOURCE.BUILT_IN_TOOL_USE]: 'Built-in',
   [AGENT_SOURCE.CUSTOM]: 'Custom',
   [AGENT_SOURCE.REMOTE]: 'Remote',
@@ -261,7 +261,7 @@ export class AgentSelectionPanel extends LitElement {
   /** Source display order — must match renderList() */
   private static readonly SOURCE_ORDER = [
     AGENT_SOURCE.CUSTOM,
-    AGENT_SOURCE.BUILT_IN,
+    AGENT_SOURCE.BUILT_IN_WORKFLOW,
     AGENT_SOURCE.BUILT_IN_TOOL_USE,
     AGENT_SOURCE.REMOTE,
   ];
@@ -288,9 +288,7 @@ export class AgentSelectionPanel extends LitElement {
       );
       if (!stillValid) {
         this.selectedKey =
-          this.displayOrder.length > 0
-            ? agentKey(this.displayOrder[0])
-            : null;
+          this.displayOrder.length > 0 ? agentKey(this.displayOrder[0]) : null;
       }
     }
   }

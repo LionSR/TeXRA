@@ -108,7 +108,7 @@ export class MainViewProvider
       return;
     }
     // Refresh the agent index to pick up any configuration changes
-    // (e.g., texra.toolUseAgents overrides)
+    // (e.g., tool-use agent overrides)
     await refresh();
 
     // Send delta messages instead of regenerating entire HTML
@@ -121,7 +121,7 @@ export class MainViewProvider
 
   /**
    * Refresh agent options only.
-   * Called when agent config changes (texra.agents, texra.toolUseAgents).
+   * Called when agent visibility changes.
    */
   async refreshAgentOptions() {
     if (!this._view) {

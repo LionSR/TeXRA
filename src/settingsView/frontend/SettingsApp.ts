@@ -471,7 +471,7 @@ export class SettingsApp extends BaseWebviewApp {
 
   private handleOpenAgentFolder(
     event: CustomEvent<{
-      folderType: 'custom' | 'builtIn' | 'builtInToolUse';
+      folderType: 'custom' | 'builtInWorkflow' | 'builtInToolUse';
     }>,
   ): void {
     postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER, {
