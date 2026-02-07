@@ -227,6 +227,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   TOGGLE_TOOL_EDIT_APPROVAL_BYPASS: 'toggleToolEditApprovalBypass',
   AGENT_PROPOSAL_ACTION: 'agentProposalAction',
   BASH_APPROVAL_ACTION: 'bashApprovalAction',
+  RESTORE_PROPOSAL_CONFIG: 'restoreProposalConfig',
 
   // Memory
   OPEN_MEMORY_VIEW: 'openMemoryView',
