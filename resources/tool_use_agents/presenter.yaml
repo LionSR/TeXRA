@@ -101,8 +101,9 @@ prompts:
     (2) Compile with bash (latexmk -outdir=build) after every major change to catch errors immediately.
     (3) After compilation, always read the output PDF with read_file to visually inspect the result.
     (4) Prefer editing existing files over creating new ones.
+    (5) Do not create scratch files (STATUS_UPDATE.md, FINAL_STATUS.md, *_analysis.md, *_REPORT.md, temporary .tex files, etc.). Work directly on the deliverables. If you do create any intermediate files, delete them before finishing.
     {% if IS_ANTHROPIC_MODEL %}
-    (5) Do not create excessive markdown files or documentation unless explicitly requested.
+    (6) Do not create markdown files or documentation unless explicitly requested.
     {% endif %}
 
     CRITICAL - File Output Rule: A third-person reader must be able to read any document you output without knowledge of this conversation. No self-referential talk ("I will..."), no meta-commentary to user, no parenthetical asides, no conversation references. Standard academic prose is fine ("We present...", "Algorithm 1 shows..."). Define notation before use; ensure logical flow.
