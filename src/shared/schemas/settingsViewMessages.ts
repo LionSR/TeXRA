@@ -133,6 +133,19 @@ export type UpdateModelSelectionMessage = z.infer<
 >;
 
 // ============================================================
+// Auto-show remote agents data schema
+// ============================================================
+
+/** Outbound: backend → frontend auto-show remote agents toggle */
+export const UpdateAutoShowRemoteMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AUTO_SHOW_REMOTE),
+  enabled: z.boolean(),
+});
+export type UpdateAutoShowRemoteMessage = z.infer<
+  typeof UpdateAutoShowRemoteMessageSchema
+>;
+
+// ============================================================
 // Custom agent directory data schema
 // ============================================================
 
@@ -303,6 +316,16 @@ const CreateAgentMessageSchema = z.object({
   command: z.literal(CMD.CREATE_AGENT),
 });
 
+// Auto-show remote agents inbound messages
+const GetAutoShowRemoteMessageSchema = z.object({
+  command: z.literal(CMD.GET_AUTO_SHOW_REMOTE),
+});
+
+const SetAutoShowRemoteMessageSchema = z.object({
+  command: z.literal(CMD.SET_AUTO_SHOW_REMOTE),
+  enabled: z.boolean(),
+});
+
 // Custom agent directory inbound messages
 const GetCustomAgentDirMessageSchema = z.object({
   command: z.literal(CMD.GET_CUSTOM_AGENT_DIR),
@@ -365,6 +388,9 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetAgentEnabledMessageSchema,
     OpenAgentFolderMessageSchema,
     CreateAgentMessageSchema,
+    // Auto-show remote agents messages
+    GetAutoShowRemoteMessageSchema,
+    SetAutoShowRemoteMessageSchema,
     // Custom agent directory messages
     GetCustomAgentDirMessageSchema,
     SetCustomAgentDirMessageSchema,

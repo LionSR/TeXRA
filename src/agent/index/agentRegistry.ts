@@ -24,17 +24,20 @@ import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
-import { getConfig } from '@utils/config';
-
 import type { AgentOptionData } from '@shared/schemas';
 
-import { workspaceSM, WorkspaceStateKey } from '@common/state';
+import {
+  GlobalStateKey,
+  WorkspaceStateKey,
+  globalSM,
+  workspaceSM,
+} from '@common/state';
 
 const CHANNEL = 'agentRegistry';
 logger.initialize(CHANNEL);
 
 // =============================================================================
-// TYPES (AgentSource is now imported from @agent/core/AgentDataclass)
+// TYPES (AgentSource canonical source: @shared/schemas/agent)
 // =============================================================================
 
 /**
@@ -425,9 +428,6 @@ async function scanYaml(
 }
 
 async function loadRemoteAgents(): Promise<AgentEntry[]> {
-  const enabled = getConfig<boolean>('texra.remoteAgents.enabled', true);
-  if (!enabled) return [];
-
   try {
     const remotes = await RemoteAgentLoader.listRemoteAgents();
     const grouped = groupByVariants(remotes, (r) => r.name);
@@ -588,10 +588,8 @@ function filterVisible(
 ): AgentEntry[] {
   if (configured.size === 0) return entries;
 
-  const autoShowRemote = getConfig<boolean>(
-    'texra.remoteAgents.autoShow',
-    true,
-  );
+  const autoShowRemote =
+    globalSM?.get<boolean>(GlobalStateKey.AUTO_SHOW_REMOTE_AGENTS, true) ?? true;
 
   return entries.filter(
     (entry) =>
