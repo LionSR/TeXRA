@@ -17,6 +17,7 @@ import {
   SETTINGS_VIEW_CMD,
   SETTINGS_VIEW_COMMANDS,
 } from '@common/webview/commands';
+import { AgentCategorySchema, AgentSourceSchema } from './agent';
 export { SETTINGS_VIEW_CMD };
 
 /** Tab name order - single source of truth for tab indices */
@@ -43,6 +44,7 @@ const MAX_TAB_INDEX = SETTINGS_TAB_ORDER.length - 1;
 export const SetTabMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_CMD.SET_TAB),
   tabIndex: z.int().min(0).max(MAX_TAB_INDEX),
+  agentSubTab: AgentCategorySchema.optional(),
 });
 
 export type SetTabMessage = z.infer<typeof SetTabMessageSchema>;
@@ -81,6 +83,32 @@ export {
 } from './profileViewMessages';
 
 // ============================================================
+// Agent selection data schema
+// ============================================================
+
+export const AgentSelectionItemSchema = z.object({
+  name: z.string(),
+  source: AgentSourceSchema,
+  category: AgentCategorySchema,
+  description: z.string().optional(),
+  hasPath: z.boolean(),
+  tools: z.array(z.string()).optional(),
+  hasMultiple: z.boolean(),
+  enabled: z.boolean(),
+});
+export type AgentSelectionItem = z.infer<typeof AgentSelectionItemSchema>;
+
+/** Outbound: backend → frontend agent selection data */
+export const UpdateAgentSelectionMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION),
+  workflow: z.array(AgentSelectionItemSchema),
+  toolUse: z.array(AgentSelectionItemSchema),
+});
+export type UpdateAgentSelectionMessage = z.infer<
+  typeof UpdateAgentSelectionMessageSchema
+>;
+
+// ============================================================
 // Model selection data schema
 // ============================================================
 
@@ -102,6 +130,33 @@ export const UpdateModelSelectionMessageSchema = z.object({
 });
 export type UpdateModelSelectionMessage = z.infer<
   typeof UpdateModelSelectionMessageSchema
+>;
+
+// ============================================================
+// Auto-show remote agents data schema
+// ============================================================
+
+/** Outbound: backend → frontend auto-show remote agents toggle */
+export const UpdateAutoShowRemoteMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AUTO_SHOW_REMOTE),
+  enabled: z.boolean(),
+});
+export type UpdateAutoShowRemoteMessage = z.infer<
+  typeof UpdateAutoShowRemoteMessageSchema
+>;
+
+// ============================================================
+// Custom agent directory data schema
+// ============================================================
+
+/** Outbound: backend → frontend custom agent directory info */
+export const UpdateCustomAgentDirMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR),
+  path: z.string(),
+  isDefault: z.boolean(),
+});
+export type UpdateCustomAgentDirMessage = z.infer<
+  typeof UpdateCustomAgentDirMessageSchema
 >;
 
 // ============================================================
@@ -232,6 +287,58 @@ const SetPolishModelMessageSchema = z.object({
   modelName: z.string().min(1),
 });
 
+// Agent selection inbound messages
+const GetAgentSelectionMessageSchema = z.object({
+  command: z.literal(CMD.GET_AGENT_SELECTION),
+});
+
+const OpenAgentYamlMessageSchema = z.object({
+  command: z.literal(CMD.OPEN_AGENT_YAML),
+  agentName: z.string().min(1),
+  agentSource: AgentSourceSchema,
+  variant: z.enum(['base', 'multiple']),
+});
+
+const SetAgentEnabledMessageSchema = z.object({
+  command: z.literal(CMD.SET_AGENT_ENABLED),
+  agentName: z.string().min(1),
+  agentSource: AgentSourceSchema,
+  category: AgentCategorySchema,
+  enabled: z.boolean(),
+});
+
+const OpenAgentFolderMessageSchema = z.object({
+  command: z.literal(CMD.OPEN_AGENT_FOLDER),
+  folderType: z.enum(['custom', 'builtInWorkflow', 'builtInToolUse']),
+});
+
+const CreateAgentMessageSchema = z.object({
+  command: z.literal(CMD.CREATE_AGENT),
+});
+
+// Auto-show remote agents inbound messages
+const GetAutoShowRemoteMessageSchema = z.object({
+  command: z.literal(CMD.GET_AUTO_SHOW_REMOTE),
+});
+
+const SetAutoShowRemoteMessageSchema = z.object({
+  command: z.literal(CMD.SET_AUTO_SHOW_REMOTE),
+  enabled: z.boolean(),
+});
+
+// Custom agent directory inbound messages
+const GetCustomAgentDirMessageSchema = z.object({
+  command: z.literal(CMD.GET_CUSTOM_AGENT_DIR),
+});
+
+const SetCustomAgentDirMessageSchema = z.object({
+  command: z.literal(CMD.SET_CUSTOM_AGENT_DIR),
+});
+
+const ResetCustomAgentDirMessageSchema = z.object({
+  command: z.literal(CMD.RESET_CUSTOM_AGENT_DIR),
+});
+
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = z.object({
   command: z.literal(CMD.OPEN_VSCODE_SETTINGS),
@@ -275,6 +382,19 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     GetModelSelectionMessageSchema,
     SetModelEnabledMessageSchema,
     SetPolishModelMessageSchema,
+    // Agent selection messages
+    GetAgentSelectionMessageSchema,
+    OpenAgentYamlMessageSchema,
+    SetAgentEnabledMessageSchema,
+    OpenAgentFolderMessageSchema,
+    CreateAgentMessageSchema,
+    // Auto-show remote agents messages
+    GetAutoShowRemoteMessageSchema,
+    SetAutoShowRemoteMessageSchema,
+    // Custom agent directory messages
+    GetCustomAgentDirMessageSchema,
+    SetCustomAgentDirMessageSchema,
+    ResetCustomAgentDirMessageSchema,
   ],
 );
 

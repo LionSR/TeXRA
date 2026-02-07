@@ -14,6 +14,7 @@ import {
   type SettingsViewInboundMessage,
   SETTINGS_VIEW_CMD,
   type ModelSelectionItem,
+  type AgentSelectionItem,
 } from '@shared/schemas/settingsViewMessages';
 import {
   PROVIDER_DISPLAY_NAMES,
@@ -24,8 +25,17 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, MAX_TIER } from '@auth/config';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import { getAgentsBySource, loadAgents } from '@agent/index';
+import {
+  type AgentEntry,
+  createKey,
+  getAgent,
+  getAgentsBySource,
+  getWorkflowAgents,
+  getToolUseAgents,
+  loadAgents,
+} from '@agent/index';
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import {
   BaseViewMessageHandler,
   SETTINGS_VIEW_COMMANDS,
@@ -35,7 +45,12 @@ import {
   AgentHistoryManager,
   type AgentHistoryItem,
 } from '@common/history/AgentHistoryManager';
-import { GlobalStateKey, globalSM } from '@common/state';
+import {
+  GlobalStateKey,
+  WorkspaceStateKey,
+  globalSM,
+  workspaceSM,
+} from '@common/state';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import {
   DEFAULT_MODELS,
@@ -126,6 +141,46 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
   return items.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+function entryToSelectionItem(
+  entry: AgentEntry,
+  enabledSet: Set<string>,
+): AgentSelectionItem {
+  const key = createKey(entry.source, entry.name);
+  return {
+    name: entry.name,
+    source: entry.source,
+    category: entry.category,
+    description: entry.description,
+    hasPath: Boolean(entry.path),
+    tools: entry.tools,
+    hasMultiple: Boolean(entry.multiplePath),
+    enabled:
+      enabledSet.size === 0 ||
+      enabledSet.has(key) ||
+      enabledSet.has(entry.name),
+  };
+}
+
+function buildAgentSelectionItems(): {
+  workflow: AgentSelectionItem[];
+  toolUse: AgentSelectionItem[];
+} {
+  const workflowEnabled = new Set(
+    workspaceSM.get<string[]>(WorkspaceStateKey.ENABLED_AGENTS, []),
+  );
+  const toolUseEnabled = new Set(
+    workspaceSM.get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, []),
+  );
+
+  const workflow = getWorkflowAgents()
+    .map((e) => entryToSelectionItem(e, workflowEnabled))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const toolUse = getToolUseAgents()
+    .map((e) => entryToSelectionItem(e, toolUseEnabled))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return { workflow, toolUse };
+}
+
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
@@ -196,6 +251,31 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleSetModelEnabled(data),
       [SETTINGS_VIEW_COMMANDS.SET_POLISH_MODEL]: (data) =>
         this.handleSetPolishModel(data),
+
+      // Auto-show remote agents handlers
+      [SETTINGS_VIEW_COMMANDS.GET_AUTO_SHOW_REMOTE]: () =>
+        this.handleGetAutoShowRemote(),
+      [SETTINGS_VIEW_COMMANDS.SET_AUTO_SHOW_REMOTE]: (data) =>
+        this.handleSetAutoShowRemote(data),
+
+      // Custom agent directory handlers
+      [SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR]: () =>
+        this.handleGetCustomAgentDir(),
+      [SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR]: () =>
+        this.handleSetCustomAgentDir(),
+      [SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR]: () =>
+        this.handleResetCustomAgentDir(),
+
+      // Agent selection handlers
+      [SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION]: () =>
+        this.handleGetAgentSelection(),
+      [SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML]: (data) =>
+        this.handleOpenAgentYaml(data),
+      [SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED]: (data) =>
+        this.handleSetAgentEnabled(data),
+      [SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER]: (data) =>
+        this.handleOpenAgentFolder(data),
+      [SETTINGS_VIEW_COMMANDS.CREATE_AGENT]: () => this.handleCreateAgent(),
     };
   }
 
@@ -239,6 +319,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendHistoryData(webview),
       this.sendProfileData(webview),
       this.sendModelSelectionData(webview),
+      this.sendAgentSelectionData(webview),
+      this.sendAutoShowRemote(webview),
+      this.sendCustomAgentDir(webview),
     ]);
   }
 
@@ -357,6 +440,58 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       models,
       polishModel,
     });
+  }
+
+  public async sendAgentSelectionData(webview: vscode.Webview): Promise<void> {
+    await loadAgents();
+    const { workflow, toolUse } = buildAgentSelectionItems();
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+      workflow,
+      toolUse,
+    });
+  }
+
+  public async sendCustomAgentDir(webview: vscode.Webview): Promise<void> {
+    const configuredPath = (
+      globalSM.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, '') ?? ''
+    ).trim();
+    const isDefault = configuredPath === '';
+    const resolvedPath = await agentDirectories.custom();
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
+      path: resolvedPath,
+      isDefault,
+    });
+  }
+
+  // ============================================================
+  // Auto-show remote agents handler implementations
+  // ============================================================
+
+  public async sendAutoShowRemote(webview: vscode.Webview): Promise<void> {
+    const enabled =
+      globalSM.get<boolean>(GlobalStateKey.AUTO_SHOW_REMOTE_AGENTS, true) ??
+      true;
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_AUTO_SHOW_REMOTE,
+      enabled,
+    });
+  }
+
+  private async handleGetAutoShowRemote(): Promise<void> {
+    const view = this.getActiveView();
+    if (view) await this.sendAutoShowRemote(view.webview);
+  }
+
+  private async handleSetAutoShowRemote(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_AUTO_SHOW_REMOTE>,
+  ): Promise<void> {
+    await globalSM.update(GlobalStateKey.AUTO_SHOW_REMOTE_AGENTS, data.enabled);
+    void vscode.commands.executeCommand('texra.refreshAllOptions');
+
+    const view = this.getActiveView();
+    if (view) await this.sendAutoShowRemote(view.webview);
   }
 
   // ============================================================
@@ -780,5 +915,192 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     const view = this.getActiveView();
     if (view) await this.sendModelSelectionData(view.webview);
+  }
+
+  // ============================================================
+  // Agent selection handler implementations
+  // ============================================================
+
+  private async handleGetAgentSelection(): Promise<void> {
+    const view = this.getActiveView();
+    if (view) {
+      await this.sendAgentSelectionData(view.webview);
+    }
+  }
+
+  private async handleOpenAgentYaml(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_YAML>,
+  ): Promise<void> {
+    try {
+      const key = createKey(data.agentSource, data.agentName);
+      const entry = getAgent(key);
+      if (!entry) {
+        await vscode.window.showErrorMessage(
+          `Agent not found: ${data.agentName} (${data.agentSource})`,
+        );
+        return;
+      }
+
+      const agentPath =
+        data.variant === 'multiple' ? entry.multiplePath : entry.path;
+      if (!agentPath) {
+        await vscode.window.showErrorMessage(
+          `No ${data.variant} YAML path for agent: ${data.agentName}`,
+        );
+        return;
+      }
+
+      const doc = await vscode.workspace.openTextDocument(agentPath);
+      await vscode.window.showTextDocument(doc, { preview: false });
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to open agent YAML file',
+        error,
+      );
+    }
+  }
+
+  private async handleSetAgentEnabled(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_AGENT_ENABLED>,
+  ): Promise<void> {
+    try {
+      const stateKey =
+        data.category === 'workflow'
+          ? WorkspaceStateKey.ENABLED_AGENTS
+          : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS;
+      const current = workspaceSM.get<string[]>(stateKey, []);
+      const key = createKey(data.agentSource, data.agentName);
+
+      let updated: string[];
+      if (data.enabled) {
+        // Add by source:name key if not already present (check both formats)
+        if (current.includes(key) || current.includes(data.agentName)) {
+          updated = current;
+        } else {
+          updated = [...current, key];
+        }
+      } else if (current.length === 0) {
+        // Empty config = "all enabled". To disable one agent, seed the config
+        // with all OTHER agents so the transition is: [] → [all except this one].
+        const allAgents =
+          data.category === 'workflow'
+            ? getWorkflowAgents()
+            : getToolUseAgents();
+        updated = allAgents
+          .map((e) => createKey(e.source, e.name))
+          .filter((k) => k !== key);
+      } else {
+        // Remove both name and source:name formats
+        updated = current.filter(
+          (entry) => entry !== key && entry !== data.agentName,
+        );
+      }
+
+      await workspaceSM.update(stateKey, updated);
+
+      void vscode.commands.executeCommand('texra.refreshAllOptions');
+
+      const view = this.getActiveView();
+      if (view) await this.sendAgentSelectionData(view.webview);
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to update agent visibility',
+        error,
+      );
+    }
+  }
+
+  private async handleOpenAgentFolder(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_FOLDER>,
+  ): Promise<void> {
+    try {
+      const folderPath = await agentDirectories.getDirectory(data.folderType);
+      if (!folderPath) {
+        await vscode.window.showErrorMessage(
+          `No local directory for agent source: ${data.folderType}`,
+        );
+        return;
+      }
+      await vscode.commands.executeCommand(
+        'revealFileInOS',
+        vscode.Uri.file(folderPath),
+      );
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to open agent folder',
+        error,
+      );
+    }
+  }
+
+  private async handleCreateAgent(): Promise<void> {
+    await vscode.commands.executeCommand('texra.createAgentWithAI');
+
+    // Refresh agent list after creation
+    const view = this.getActiveView();
+    if (view) await this.sendAgentSelectionData(view.webview);
+  }
+
+  // ============================================================
+  // Custom agent directory handler implementations
+  // ============================================================
+
+  private async handleGetCustomAgentDir(): Promise<void> {
+    const view = this.getActiveView();
+    if (view) {
+      await this.sendCustomAgentDir(view.webview);
+    }
+  }
+
+  private async handleSetCustomAgentDir(): Promise<void> {
+    const view = this.getActiveView();
+    try {
+      const selectedPath = await agentDirectories.promptCustom();
+      if (!selectedPath) return; // User cancelled
+
+      // Reload agents from new directory and refresh UI
+      await agentDirectories.refreshAfterDirChange();
+      await loadAgents();
+      if (view) {
+        await Promise.all([
+          this.sendCustomAgentDir(view.webview),
+          this.sendAgentSelectionData(view.webview),
+        ]);
+      }
+      void vscode.commands.executeCommand('texra.refreshAllOptions');
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to set custom agent directory',
+        error,
+      );
+    }
+  }
+
+  private async handleResetCustomAgentDir(): Promise<void> {
+    const view = this.getActiveView();
+    try {
+      await globalSM.update(GlobalStateKey.CUSTOM_AGENT_DIR, '');
+
+      // Reload agents from default directory and refresh UI
+      await agentDirectories.refreshAfterDirChange();
+      await loadAgents();
+      if (view) {
+        await Promise.all([
+          this.sendCustomAgentDir(view.webview),
+          this.sendAgentSelectionData(view.webview),
+        ]);
+      }
+      void vscode.commands.executeCommand('texra.refreshAllOptions');
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to reset custom agent directory',
+        error,
+      );
+    }
   }
 }

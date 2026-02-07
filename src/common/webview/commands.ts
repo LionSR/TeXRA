@@ -327,6 +327,19 @@ export const SETTINGS_VIEW_CMD = {
   GET_MODEL_SELECTION: 'getModelSelection',
   SET_MODEL_ENABLED: 'setModelEnabled',
   SET_POLISH_MODEL: 'setPolishModel',
+  // Agent selection commands
+  GET_AGENT_SELECTION: 'getAgentSelection',
+  OPEN_AGENT_YAML: 'openAgentYaml',
+  SET_AGENT_ENABLED: 'setAgentEnabled',
+  OPEN_AGENT_FOLDER: 'openAgentFolder',
+  CREATE_AGENT: 'createAgent',
+  // Remote agent auto-show
+  GET_AUTO_SHOW_REMOTE: 'getAutoShowRemote',
+  SET_AUTO_SHOW_REMOTE: 'setAutoShowRemote',
+  // Custom agent directory commands
+  GET_CUSTOM_AGENT_DIR: 'getCustomAgentDir',
+  SET_CUSTOM_AGENT_DIR: 'setCustomAgentDir',
+  RESET_CUSTOM_AGENT_DIR: 'resetCustomAgentDir',
 } as const;
 
 // Settings view specific commands (combines Memory, History, and Profile views)
@@ -341,4 +354,7 @@ export const SETTINGS_VIEW_COMMANDS = {
   HISTORY_CLEARED: 'historyCleared',
   UPDATE_PROFILE: 'updateProfile',
   UPDATE_MODEL_SELECTION: 'updateModelSelection',
+  UPDATE_AGENT_SELECTION: 'updateAgentSelection',
+  UPDATE_AUTO_SHOW_REMOTE: 'updateAutoShowRemote',
+  UPDATE_CUSTOM_AGENT_DIR: 'updateCustomAgentDir',
 } as const;
