@@ -187,7 +187,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
-  it('accumulates cache control markers on message blocks for later enforcement', async () => {
+  it('moves the cache control marker to the newest message block', async () => {
     const handler = createAnthropicHandler();
     const baseMessages = await handler.initializeMessages(
       'prefix',
@@ -213,11 +213,12 @@ describe('ModelHandlerAnthropic message guards', () => {
 
     assert.ok(
       followUpMarker,
-      'expected the newest message block to include a cache control marker',
+      'expected the newest message block to keep the cache marker',
     );
-    assert.ok(
+    assert.equal(
       getCacheMarker(initialBlock),
-      'previous message should retain its cache marker (cleanup happens at API call time)',
+      undefined,
+      'previous message should have its cache marker removed',
     );
   });
 
@@ -341,7 +342,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
-  it('limits cache control markers to four evenly spaced message blocks', () => {
+  it('limits cache control markers to the latest four message blocks', () => {
     const handler = createAnthropicHandler();
     const messageContent: ContentBlockParam[] = [];
 
@@ -368,49 +369,14 @@ describe('ModelHandlerAnthropic message guards', () => {
 
     assert.equal(cacheControlledBlocks.length, 4);
     assert.equal(
-      (messageContent[3] as { cache_control?: unknown }).cache_control,
+      (messageContent[0] as { cache_control?: unknown }).cache_control,
       undefined,
-      'the non-selected block should have its cache marker removed',
+      'the earliest cache markers should be removed',
     );
     assert.deepEqual(
       cacheControlledBlocks.map((block) => (block as { text?: string }).text),
-      ['block-0', 'block-1', 'block-2', 'block-4'],
-      'breakpoints should be evenly spaced with the last always kept',
-    );
-  });
-
-  it('distributes cache breakpoints evenly across many blocks for optimal coverage', () => {
-    const handler = createAnthropicHandler();
-    const messageContent: ContentBlockParam[] = [];
-
-    for (let idx = 0; idx < 10; idx += 1) {
-      messageContent.push({
-        type: 'text',
-        text: `block-${idx}`,
-        citations: null,
-        cache_control: { type: 'ephemeral' },
-      } as ContentBlockParam & { cache_control: { type: 'ephemeral' } });
-    }
-
-    const messages: MessageParam[] = [
-      { role: 'user', content: messageContent },
-    ];
-
-    (handler as any).enforceCacheControlLimit(messages);
-
-    const retained = messageContent
-      .filter(
-        (block) =>
-          'cache_control' in block &&
-          (block as { cache_control?: unknown }).cache_control !== undefined,
-      )
-      .map((block) => (block as { text?: string }).text);
-
-    assert.equal(retained.length, 4, 'should keep exactly 4 breakpoints');
-    assert.deepEqual(
-      retained,
-      ['block-0', 'block-3', 'block-6', 'block-9'],
-      'breakpoints should be spread across conversation for maximum cache lookback coverage',
+      ['block-1', 'block-2', 'block-3', 'block-4'],
+      'the four most recent blocks should retain cache control markers',
     );
   });
 
