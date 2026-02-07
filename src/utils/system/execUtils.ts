@@ -117,8 +117,10 @@ export async function executeCommand(
       // the shell process; the piped children keep stdout open which causes
       // `await subprocess` to hang indefinitely.
       //
-      // Fix: spawn in a new process group (detached) and manually kill the
-      // entire group (-pid) on timeout so all children are terminated.
+      // Fix: when a timeout is configured, spawn in a new process group
+      // (detached) and manually kill the entire group (-pid) on timeout so
+      // all children are terminated.  Without a timeout we use the normal
+      // (non-detached) path to avoid orphan risk on parent crash.
       //
       // On Windows, negative-PID signaling is not supported so we fall back
       // to subprocess.kill() (kills the shell only) + stream destruction.
@@ -130,13 +132,14 @@ export async function executeCommand(
       // path).  Acceptable because the alternative is `await` hanging forever.
       const { timeout: _shellTimeout, ...execaNoTimeout } = execaOptions;
       const isWindows = process.platform === 'win32';
+      // Only use detached when we have a timeout and need process-group killing.
+      // On POSIX, detached creates a process group we can kill as a unit.
+      // On Windows, detached opens a new console window so we always skip it.
+      const useDetached = !!_shellTimeout && !isWindows;
       subprocess = execa(command, {
         ...execaNoTimeout,
         shell: true,
-        // On POSIX, detached creates a process group we can kill as a unit.
-        // On Windows, detached opens a new console window so we skip it and
-        // rely on subprocess.kill() + stream destruction instead.
-        detached: !isWindows,
+        ...(useDetached ? { detached: true } : {}),
       });
 
       if (_shellTimeout) {
