@@ -14,6 +14,7 @@ import {
   type SettingsViewInboundMessage,
   SETTINGS_VIEW_CMD,
   type ModelSelectionItem,
+  type AgentSelectionItem,
 } from '@shared/schemas/settingsViewMessages';
 import {
   PROVIDER_DISPLAY_NAMES,
@@ -24,7 +25,13 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, MAX_TIER } from '@auth/config';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import { getAgentsBySource, loadAgents } from '@agent/index';
+import {
+  type AgentEntry,
+  getAgentsBySource,
+  getWorkflowAgents,
+  getToolUseAgents,
+  loadAgents,
+} from '@agent/index';
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
 import {
   BaseViewMessageHandler,
@@ -126,6 +133,34 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
   return items.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+function entryToSelectionItem(entry: AgentEntry): AgentSelectionItem {
+  return {
+    name: entry.name,
+    source: entry.source,
+    category: entry.category,
+    description: entry.description,
+    path: entry.path,
+    multiplePath: entry.multiplePath,
+    tools: entry.tools,
+    isCustom: entry.source === 'custom',
+    isRemote: entry.source === 'remote',
+    hasMultiple: Boolean(entry.multiplePath),
+  };
+}
+
+function buildAgentSelectionItems(): {
+  workflow: AgentSelectionItem[];
+  toolUse: AgentSelectionItem[];
+} {
+  const workflow = getWorkflowAgents()
+    .map(entryToSelectionItem)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const toolUse = getToolUseAgents()
+    .map(entryToSelectionItem)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return { workflow, toolUse };
+}
+
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
@@ -196,6 +231,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleSetModelEnabled(data),
       [SETTINGS_VIEW_COMMANDS.SET_POLISH_MODEL]: (data) =>
         this.handleSetPolishModel(data),
+
+      // Agent selection handlers
+      [SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION]: () =>
+        this.handleGetAgentSelection(),
+      [SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML]: (data) =>
+        this.handleOpenAgentYaml(data),
     };
   }
 
@@ -239,6 +280,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendHistoryData(webview),
       this.sendProfileData(webview),
       this.sendModelSelectionData(webview),
+      this.sendAgentSelectionData(webview),
     ]);
   }
 
@@ -356,6 +398,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       models,
       polishModel,
+    });
+  }
+
+  public async sendAgentSelectionData(webview: vscode.Webview): Promise<void> {
+    await loadAgents();
+    const { workflow, toolUse } = buildAgentSelectionItems();
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+      workflow,
+      toolUse,
     });
   }
 
@@ -780,5 +832,31 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     const view = this.getActiveView();
     if (view) await this.sendModelSelectionData(view.webview);
+  }
+
+  // ============================================================
+  // Agent selection handler implementations
+  // ============================================================
+
+  private async handleGetAgentSelection(): Promise<void> {
+    const view = this.getActiveView();
+    if (view) {
+      await this.sendAgentSelectionData(view.webview);
+    }
+  }
+
+  private async handleOpenAgentYaml(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_YAML>,
+  ): Promise<void> {
+    try {
+      const doc = await vscode.workspace.openTextDocument(data.agentPath);
+      await vscode.window.showTextDocument(doc, { preview: false });
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to open agent YAML file',
+        error,
+      );
+    }
   }
 }
