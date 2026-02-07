@@ -1,4 +1,5 @@
 import { createEvent } from '@shared/utils/events';
+import type { AgentSourceType } from '@shared/schemas/agent';
 
 export const ProfileViewEvents = {
   signIn: () => createEvent('profile-sign-in', undefined),
@@ -34,12 +35,12 @@ export const ProviderKeyEvents = {
 export const AgentSelectionEvents = {
   openYaml: (detail: {
     agentName: string;
-    agentSource: string;
+    agentSource: AgentSourceType;
     variant: 'base' | 'multiple';
   }) => createEvent('agent-open-yaml', detail),
   setEnabled: (detail: {
     agentName: string;
-    agentSource: string;
+    agentSource: AgentSourceType;
     category: 'workflow' | 'toolUse';
     enabled: boolean;
   }) => createEvent('agent-enabled-set', detail),
@@ -47,4 +48,6 @@ export const AgentSelectionEvents = {
     folderType: 'custom' | 'builtIn' | 'builtInToolUse';
   }) => createEvent('agent-open-folder', detail),
   createAgent: () => createEvent('agent-create', undefined),
+  setCustomDir: () => createEvent('agent-set-custom-dir', undefined),
+  resetCustomDir: () => createEvent('agent-reset-custom-dir', undefined),
 } as const;
