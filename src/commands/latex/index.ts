@@ -9,6 +9,5 @@ export {
   linterCommands,
   handleShowLinterMessages,
   handleCountLinterMessages,
-  handleFixLinterIssues,
   registerLinterCommands,
 } from './linterCommands';
