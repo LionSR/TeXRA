@@ -10,12 +10,13 @@ import { z } from 'zod';
 
 // Local imports - core
 import { ToolError } from '@tools/result';
-import { ZOTERO_EXPORT_TIMEOUT_MS } from '@tools/timeouts';
 import { pluralize } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - zotero
 import { callBetterBibTeX, getZoteroPort } from './bbtClient';
+
+const ZOTERO_EXPORT_TIMEOUT_MS = 30_000; // 30 s
 
 const ZoteroExportInputSchema = z.strictObject({
   citekeys: z

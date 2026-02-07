@@ -3,11 +3,14 @@ import { z } from 'zod';
 
 // Internal imports
 import { ToolResult, ToolError } from '@tools/result';
-import { WOLFRAM_CODE_TIMEOUT_MS, buildTimeoutMessage } from '@tools/timeouts';
+import { buildTimeoutMessage } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - tools
-import { executeWolframCode } from './wolframScriptUtils';
+import {
+  WOLFRAM_CODE_TIMEOUT_MS,
+  executeWolframCode,
+} from './wolframScriptUtils';
 
 const WolframInputSchema = z.strictObject({
   code: z.string(),
