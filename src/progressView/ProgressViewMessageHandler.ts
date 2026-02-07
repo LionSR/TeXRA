@@ -6,6 +6,7 @@ import {
   type ProgressViewInboundHandlerRegistry,
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
+import type { AgentProposal } from '@shared/schemas/prompts';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getAgent } from '@agent/index/agentRegistry';
@@ -546,8 +547,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    const isWorkflow = proposal.agentCategory === 'workflow';
-    const success = await this.restoreProposalToMainView(proposal, isWorkflow);
+    const success = await this.restoreProposalToMainView(proposal);
     if (!success) return;
 
     proposalCoordinator.resolveRequest(proposalId, { action: 'setup' });
@@ -564,70 +564,46 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleRestoreProposalConfig(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG>,
   ): Promise<void> {
-    const { toolName, input } = data;
-    if (!input.agent) {
-      this.logger.warn(
-        this.channel,
-        'Cannot restore proposal config: missing agent field',
-      );
-      return;
-    }
-
-    const isWorkflow = toolName === 'propose_workflow';
-    const success = await this.restoreProposalToMainView(input, isWorkflow);
+    const { proposal } = data;
+    const success = await this.restoreProposalToMainView(proposal);
     if (success) {
-      this.logger.info(
-        this.channel,
-        `Restored proposal config to main view`,
-        { data: { agent: input.agent, toolName } },
-      );
+      this.logger.info(this.channel, `Restored proposal config to main view`, {
+        data: {
+          agent: proposal.agent,
+          agentCategory: proposal.agentCategory,
+        },
+      });
     }
   }
 
   /** Build TaskState from proposal fields and restore to main view. */
   private async restoreProposalToMainView(
-    source: Record<string, unknown>,
-    isWorkflow: boolean,
+    proposal: AgentProposal,
   ): Promise<boolean> {
-    const agentCategory = isWorkflow
-      ? AgentCategory.Workflow
-      : AgentCategory.ToolUse;
+    const hasFiles = (arr: string[]): boolean => arr.length > 0;
+    const isWorkflow = proposal.agentCategory === AgentCategory.Workflow;
 
-    const hasFiles = (arr?: unknown): boolean =>
-      Array.isArray(arr) && arr.length > 0;
-
-    const activeFiles = isWorkflow
-      ? {
-          input: hasFiles(source.inputFiles),
-          reference: hasFiles(source.referenceFiles),
-          auxiliary: hasFiles(source.auxiliaryFiles),
-          media: hasFiles(source.mediaFiles),
-          output: hasFiles(source.outputFiles),
-        }
-      : {
-          input: false,
-          reference: false,
-          auxiliary: false,
-          media: false,
-          output: false,
-        };
+    // Use discriminant directly so TypeScript narrows to WorkflowAgentProposal
+    const activeFiles =
+      proposal.agentCategory === AgentCategory.Workflow
+        ? {
+            input: hasFiles(proposal.inputFiles),
+            reference: hasFiles(proposal.referenceFiles),
+            auxiliary: hasFiles(proposal.auxiliaryFiles),
+            media: hasFiles(proposal.mediaFiles),
+            output: hasFiles(proposal.outputFiles),
+          }
+        : {
+            input: false,
+            reference: false,
+            auxiliary: false,
+            media: false,
+            output: false,
+          };
 
     const result = AgentConfigSchema.safeParse({
-      agent: source.agent,
-      model: source.model,
-      instruction: source.instruction,
-      agentCategory,
+      ...proposal,
       ...(isWorkflow && {
-        inputFile: source.inputFile,
-        inputFiles: source.inputFiles,
-        referenceFile: source.referenceFile,
-        referenceFiles: source.referenceFiles,
-        auxiliaryFile: source.auxiliaryFile,
-        auxiliaryFiles: source.auxiliaryFiles,
-        mediaFile: source.mediaFile,
-        mediaFiles: source.mediaFiles,
-        outputFiles: source.outputFiles,
-        useMultipleOutputs: source.useMultipleOutputs,
         inputFilesActive: activeFiles.input,
         referenceFilesActive: activeFiles.reference,
         auxiliaryFilesActive: activeFiles.auxiliary,
