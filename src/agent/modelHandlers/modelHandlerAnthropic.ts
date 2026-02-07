@@ -314,7 +314,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return;
     }
 
-    // Manual compaction request bypasses the threshold check
+    if (!this.isClaudeOpus46()) {
+      return;
+    }
+
+    // Consume the manual compaction flag only after preconditions pass
     const forceCompaction = this.compactionRequested;
     if (forceCompaction) {
       this.compactionRequested = false;
@@ -322,10 +326,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Only enable context management if threshold is configured (> 0) or manually requested
     if (thresholdPercent <= 0 && !forceCompaction) {
-      return;
-    }
-
-    if (!this.isClaudeOpus46()) {
       return;
     }
 
@@ -339,9 +339,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       !contextManagementEdits.some((edit) => edit.type === 'compact_20260112')
     ) {
       this.ensureBeta(options, COMPACTION_BETA);
-      // When manually requested, use minimal trigger to force immediate compaction
+      // When manually requested, use the minimum threshold to trigger compaction
+      // as early as possible while respecting the API's minimum
       const compactionTriggerTokens = forceCompaction
-        ? 1
+        ? MIN_COMPACTION_TRIGGER_TOKENS
         : Math.max(
             MIN_COMPACTION_TRIGGER_TOKENS,
             Math.floor((thresholdPercent / 100) * contextWindow),
