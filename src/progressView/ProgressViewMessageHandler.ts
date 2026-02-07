@@ -167,6 +167,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       },
       [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]: (data) =>
         this.handleAgentProposalAction(data),
+      [PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG]: (data) =>
+        this.handleRestoreProposalConfig(data),
       [PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION]: (data) =>
         handleProgressViewBashApprovalAction(data),
 
@@ -545,19 +547,62 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
 
     const isWorkflow = proposal.agentCategory === 'workflow';
+    const success = await this.restoreProposalToMainView(proposal, isWorkflow);
+    if (!success) return;
+
+    proposalCoordinator.resolveRequest(proposalId, { action: 'setup' });
+
+    this.logger.info(
+      this.channel,
+      `Agent proposal ${proposalId} set up in main view`,
+      {
+        data: { agent: proposal.agent },
+      },
+    );
+  }
+
+  private async handleRestoreProposalConfig(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG>,
+  ): Promise<void> {
+    const { toolName, input } = data;
+    if (!input.agent) {
+      this.logger.warn(
+        this.channel,
+        'Cannot restore proposal config: missing agent field',
+      );
+      return;
+    }
+
+    const isWorkflow = toolName === 'propose_workflow';
+    const success = await this.restoreProposalToMainView(input, isWorkflow);
+    if (success) {
+      this.logger.info(
+        this.channel,
+        `Restored proposal config to main view`,
+        { data: { agent: input.agent, toolName } },
+      );
+    }
+  }
+
+  /** Build TaskState from proposal fields and restore to main view. */
+  private async restoreProposalToMainView(
+    source: Record<string, unknown>,
+    isWorkflow: boolean,
+  ): Promise<boolean> {
     const agentCategory = isWorkflow
       ? AgentCategory.Workflow
       : AgentCategory.ToolUse;
 
-    const hasFiles = (arr?: string[]): boolean => (arr?.length ?? 0) > 0;
+    const hasFiles = (arr?: unknown): boolean =>
+      Array.isArray(arr) && arr.length > 0;
 
     const activeFiles = isWorkflow
       ? {
-          input: hasFiles(proposal.inputFiles),
-          reference: hasFiles(proposal.referenceFiles),
-          auxiliary: hasFiles(proposal.auxiliaryFiles),
-          media: hasFiles(proposal.mediaFiles),
-          output: hasFiles(proposal.outputFiles),
+          input: hasFiles(source.inputFiles),
+          reference: hasFiles(source.referenceFiles),
+          auxiliary: hasFiles(source.auxiliaryFiles),
+          media: hasFiles(source.mediaFiles),
+          output: hasFiles(source.outputFiles),
         }
       : {
           input: false,
@@ -567,22 +612,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           output: false,
         };
 
-    const agentConfig = AgentConfigSchema.parse({
-      agent: proposal.agent,
-      model: proposal.model,
-      instruction: proposal.instruction,
+    const result = AgentConfigSchema.safeParse({
+      agent: source.agent,
+      model: source.model,
+      instruction: source.instruction,
       agentCategory,
       ...(isWorkflow && {
-        inputFile: proposal.inputFile,
-        inputFiles: proposal.inputFiles,
-        referenceFile: proposal.referenceFile,
-        referenceFiles: proposal.referenceFiles,
-        auxiliaryFile: proposal.auxiliaryFile,
-        auxiliaryFiles: proposal.auxiliaryFiles,
-        mediaFile: proposal.mediaFile,
-        mediaFiles: proposal.mediaFiles,
-        outputFiles: proposal.outputFiles,
-        useMultipleOutputs: proposal.useMultipleOutputs,
+        inputFile: source.inputFile,
+        inputFiles: source.inputFiles,
+        referenceFile: source.referenceFile,
+        referenceFiles: source.referenceFiles,
+        auxiliaryFile: source.auxiliaryFile,
+        auxiliaryFiles: source.auxiliaryFiles,
+        mediaFile: source.mediaFile,
+        mediaFiles: source.mediaFiles,
+        outputFiles: source.outputFiles,
+        useMultipleOutputs: source.useMultipleOutputs,
         inputFilesActive: activeFiles.input,
         referenceFilesActive: activeFiles.reference,
         auxiliaryFilesActive: activeFiles.auxiliary,
@@ -591,22 +636,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       }),
     });
 
-    const taskState = (
-      isWorkflow ? { agentConfig, activeFiles } : { agentConfig }
-    ) as TaskState;
+    if (!result.success) {
+      this.logger.warn(this.channel, 'Invalid proposal config', {
+        data: { errors: result.error.issues },
+      });
+      return false;
+    }
 
-    proposalCoordinator.resolveRequest(proposalId, { action: 'setup' });
+    const taskState = (
+      isWorkflow
+        ? { agentConfig: result.data, activeFiles }
+        : { agentConfig: result.data }
+    ) as TaskState;
 
     await vscode.commands.executeCommand('texra.mainView.focus');
     await vscode.commands.executeCommand('texra.restoreState', taskState);
-
-    this.logger.info(
-      this.channel,
-      `Agent proposal ${proposalId} set up in main view`,
-      {
-        data: { agent: proposal.agent },
-      },
-    );
+    return true;
   }
 
   private async handleOpenTaskStorage(
