@@ -42,49 +42,10 @@ const CompileLatexInputSchema = z.strictObject({
 
 type CompileLatexInput = z.infer<typeof CompileLatexInputSchema>;
 
-/** Maximum number of errors/warnings to include in output. */
-const MAX_ERRORS = 30;
-const MAX_WARNINGS = 20;
-
-/**
- * Parse LaTeX log content to extract structured errors and warnings.
- */
-function parseLatexLog(log: string): {
-  errors: string[];
-  warnings: string[];
-} {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  const lines = log.split('\n');
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    // LaTeX errors start with '!'
-    if (line.startsWith('!')) {
-      let errorMsg = line;
-      // Collect the following line reference (e.g., "l.42 \badcommand")
-      for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
-        if (lines[j].startsWith('l.')) {
-          errorMsg += '\n' + lines[j];
-          break;
-        }
-      }
-      errors.push(errorMsg);
-    } else if (/^LaTeX Warning:/.test(line)) {
-      warnings.push(line.trim());
-    } else if (/^Package \S+ Warning:/.test(line)) {
-      warnings.push(line.trim());
-    }
-  }
-
-  return { errors, warnings };
-}
-
 export class CompileLatexTool extends defineTool({
   name: 'compile_latex',
   description:
-    'Compile a LaTeX file to PDF using latexmk. Returns parsed errors and warnings from the compilation log. Use this to verify LaTeX output compiles correctly and to diagnose issues.',
+    'Compile a LaTeX file to PDF using latexmk. Returns compilation output including any errors or warnings.',
   schema: CompileLatexInputSchema,
 }) {
   protected async execute(input: CompileLatexInput): Promise<ToolResult> {
@@ -104,7 +65,6 @@ export class CompileLatexTool extends defineTool({
     const dir = path.dirname(resolvedPath.absolute);
     const filename = path.basename(resolvedPath.absolute);
 
-    // Map engine to latexmk flag
     const engineFlag =
       engine === 'xelatex'
         ? '-xelatex'
@@ -114,43 +74,13 @@ export class CompileLatexTool extends defineTool({
 
     const result = await executeCommand(
       `latexmk ${engineFlag} -interaction=nonstopmode -file-line-error "${filename}"`,
-      {
-        truncate: true,
-        timeout: timeoutMs,
-        cwd: dir,
-      },
+      { truncate: true, timeout: timeoutMs, cwd: dir },
     );
 
     if (result.timedOut) {
       throw new ToolError(buildTimeoutMessage('LaTeX compilation', timeoutMs));
     }
 
-    // Try to read and parse the .log file for structured error info
-    const logRelative = resolvedPath.relative.replace(/\.tex$/, '.log');
-    let parsed: { errors: string[]; warnings: string[] } = {
-      errors: [],
-      warnings: [],
-    };
-
-    try {
-      const logExists = await WorkspaceFS.exists(logRelative);
-      if (logExists) {
-        const buffer = await WorkspaceFS.readBytes(logRelative);
-        parsed = parseLatexLog(buffer.toString('utf-8'));
-      }
-    } catch {
-      // Fall back to parsing raw command output
-    }
-
-    // If no log file was parsed, try parsing the command output
-    if (parsed.errors.length === 0 && parsed.warnings.length === 0) {
-      const rawOutput = result.stdout || result.stderr || '';
-      if (rawOutput) {
-        parsed = parseLatexLog(rawOutput);
-      }
-    }
-
-    // Clean auxiliary files if requested
     if (input.clean) {
       await executeCommand(`latexmk -c "${filename}"`, {
         truncate: true,
@@ -160,60 +90,16 @@ export class CompileLatexTool extends defineTool({
     }
 
     if (result.success) {
-      const parts: string[] = [`Compiled ${display} successfully.`];
-
-      if (parsed.warnings.length > 0) {
-        parts.push(`\nWarnings (${parsed.warnings.length}):`);
-        const shown = parsed.warnings.slice(0, MAX_WARNINGS);
-        for (const w of shown) {
-          parts.push(`  ${w}`);
-        }
-        if (parsed.warnings.length > MAX_WARNINGS) {
-          parts.push(`  ... and ${parsed.warnings.length - MAX_WARNINGS} more`);
-        }
-      }
-
       const pdfName = filename.replace(/\.tex$/, '.pdf');
-      parts.push(`\nOutput: ${pdfName}`);
-
       return {
-        summary: `Compiled ${display} (${parsed.warnings.length} warning${parsed.warnings.length !== 1 ? 's' : ''})`,
-        output: parts.join('\n'),
+        summary: `Compiled ${display} → ${pdfName}`,
+        output: result.stdout || `Compiled successfully. Output: ${pdfName}`,
       };
     }
 
-    // Compilation failed
-    const parts: string[] = [`Compilation of ${display} failed.`];
-
-    if (parsed.errors.length > 0) {
-      parts.push(`\nErrors (${parsed.errors.length}):`);
-      const shown = parsed.errors.slice(0, MAX_ERRORS);
-      for (const e of shown) {
-        parts.push(e);
-      }
-      if (parsed.errors.length > MAX_ERRORS) {
-        parts.push(`... and ${parsed.errors.length - MAX_ERRORS} more`);
-      }
-    }
-
-    if (parsed.warnings.length > 0) {
-      parts.push(`\nWarnings (${parsed.warnings.length}):`);
-      const shown = parsed.warnings.slice(0, 10);
-      for (const w of shown) {
-        parts.push(`  ${w}`);
-      }
-    }
-
-    // Include raw output if no structured errors were parsed
-    if (parsed.errors.length === 0) {
-      const rawOutput = [result.stderr, result.stdout]
-        .filter(Boolean)
-        .join('\n');
-      if (rawOutput) {
-        parts.push(`\nRaw output:\n${rawOutput.slice(0, 3000)}`);
-      }
-    }
-
-    throw new ToolError(parts.join('\n'));
+    const output = [result.stderr, result.stdout].filter(Boolean).join('\n');
+    throw new ToolError(
+      output.slice(0, 4000) || `Compilation of ${display} failed.`,
+    );
   }
 }
