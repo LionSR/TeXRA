@@ -979,11 +979,6 @@
         "category": "TeXRA"
       },
       {
-        "command": "texra.validateAndFixXml",
-        "title": "Validate and Fix XML using Claude",
-        "category": "TeXRA"
-      },
-      {
         "command": "texra.parseYaml",
         "title": "Parse YAML Structure",
         "category": "TeXRA"
@@ -1093,12 +1088,6 @@
         "command": "texra.countLinterMessages",
         "title": "Count Linter Messages",
         "category": "TeXRA"
-      },
-      {
-        "command": "texra.fixLinterIssues",
-        "title": "Fix Validation Issues with Claude",
-        "category": "TeXRA",
-        "icon": "$(fix-all)"
       },
       {
         "command": "texra.openDoc",
