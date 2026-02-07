@@ -58,8 +58,8 @@ export class AgentSelectionPanel extends LitElement {
 
       /* --- Left: Agent list --- */
       .agent-list-pane {
-        width: 220px;
-        min-width: 180px;
+        width: 240px;
+        min-width: 200px;
         border-right: var(--border-thin) solid var(--color-border);
         overflow-y: auto;
         flex-shrink: 0;
@@ -107,6 +107,12 @@ export class AgentSelectionPanel extends LitElement {
         background: var(--vscode-list-activeSelectionBackground);
         color: var(--vscode-list-activeSelectionForeground);
         border-left-color: var(--vscode-focusBorder);
+      }
+
+      .agent-list-item-checkbox {
+        accent-color: var(--vscode-focusBorder);
+        cursor: pointer;
+        flex-shrink: 0;
       }
 
       .agent-list-item-name {
@@ -242,6 +248,7 @@ export class AgentSelectionPanel extends LitElement {
   ];
 
   @property({ attribute: false }) agents: AgentSelectionItem[] = [];
+  @property({ type: String }) category: 'workflow' | 'toolUse' = 'workflow';
 
   @state() private selectedKey: string | null = null;
 
@@ -326,6 +333,17 @@ export class AgentSelectionPanel extends LitElement {
     );
   }
 
+  private handleToggleEnabled(agent: AgentSelectionItem): void {
+    this.dispatchEvent(
+      AgentSelectionEvents.setEnabled({
+        agentName: agent.name,
+        agentSource: agent.source,
+        category: this.category,
+        enabled: !agent.enabled,
+      }),
+    );
+  }
+
   private renderListItem(agent: AgentSelectionItem): TemplateResult {
     const key = agentKey(agent);
     const isSelected = this.selectedKey === key;
@@ -345,6 +363,16 @@ export class AgentSelectionPanel extends LitElement {
         }}
         title=${agent.description ?? agent.name}
       >
+        <input
+          type="checkbox"
+          class="agent-list-item-checkbox"
+          .checked=${agent.enabled}
+          @click=${(e: Event) => {
+            e.stopPropagation();
+            this.handleToggleEnabled(agent);
+          }}
+          title=${agent.enabled ? 'Hide from dropdowns' : 'Show in dropdowns'}
+        />
         <span class="agent-list-item-name">${agent.name}</span>
         <span class="agent-list-item-badges">
           ${agent.hasMultiple
@@ -428,6 +456,11 @@ export class AgentSelectionPanel extends LitElement {
           <span class="agent-detail-meta-label">Source</span>
           <span class="agent-detail-meta-value">${sourceName}</span>
 
+          <span class="agent-detail-meta-label">Visible</span>
+          <span class="agent-detail-meta-value">
+            ${agent.enabled ? 'Yes' : 'No'}
+          </span>
+
           <span class="agent-detail-meta-label">Multi-output</span>
           <span class="agent-detail-meta-value">
             ${agent.hasMultiple ? 'Yes ⧉' : 'No'}
@@ -482,12 +515,15 @@ export class AgentSelectionPanel extends LitElement {
       return html` <p class="agent-empty-message">No agents available.</p> `;
     }
 
+    const enabledCount = this.agents.filter((a) => a.enabled).length;
+
     return html`
       <div class="agent-split-panel">
         ${this.renderList()} ${this.renderDetail()}
       </div>
       <div class="agent-count">
-        ${this.agents.length} agent${this.agents.length !== 1 ? 's' : ''}
+        ${enabledCount}/${this.agents.length}
+        agent${this.agents.length !== 1 ? 's' : ''} visible
       </div>
     `;
   }

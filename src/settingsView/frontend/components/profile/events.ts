@@ -37,4 +37,13 @@ export const AgentSelectionEvents = {
     agentSource: string;
     variant: 'base' | 'multiple';
   }) => createEvent('agent-open-yaml', detail),
+  setEnabled: (detail: {
+    agentName: string;
+    agentSource: string;
+    category: 'workflow' | 'toolUse';
+    enabled: boolean;
+  }) => createEvent('agent-enabled-set', detail),
+  openFolder: (detail: {
+    folderType: 'custom' | 'builtIn' | 'builtInToolUse';
+  }) => createEvent('agent-open-folder', detail),
 } as const;
