@@ -189,20 +189,6 @@ export const requestPanelStyles: CSSResult = css`
     transform: rotate(180deg);
   }
 
-  .approval-request__feedback {
-    margin-top: var(--spacing-small);
-  }
-
-  .approval-request__feedback-input {
-    width: 100%;
-  }
-
-  .approval-request--feedback-active
-    .approval-request__actions
-    vscode-toolbar-button[data-action='reject']::part(control) {
-    color: var(--vscode-inputValidation-warningBorder);
-  }
-
   /* Bash approval requests */
   .bash-approval-requests {
     border: 1px solid var(--vscode-input-border);
@@ -229,20 +215,6 @@ export const requestPanelStyles: CSSResult = css`
 
   .bash-approval-request__actions vscode-toolbar-button {
     flex: 1 1 12rem;
-  }
-
-  .bash-approval-request__feedback {
-    margin-top: var(--spacing-small);
-  }
-
-  .bash-approval-request__feedback-input {
-    width: 100%;
-  }
-
-  .bash-approval-request--feedback-active
-    .bash-approval-request__actions
-    vscode-toolbar-button[data-action='reject']::part(control) {
-    color: var(--vscode-inputValidation-warningBorder);
   }
 
   /* Retry requests */
@@ -451,14 +423,25 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-textLink-foreground);
   }
 
+  /* Rejection feedback (shared across approval, bash, proposal) */
+  .approval-request__feedback,
+  .bash-approval-request__feedback,
   .workflow-proposal__feedback {
     margin-top: var(--spacing-small);
   }
 
+  .approval-request__feedback-input,
+  .bash-approval-request__feedback-input,
   .workflow-proposal__feedback-input {
     width: 100%;
   }
 
+  .approval-request--feedback-active
+    .approval-request__actions
+    vscode-toolbar-button[data-action='reject']::part(control),
+  .bash-approval-request--feedback-active
+    .bash-approval-request__actions
+    vscode-toolbar-button[data-action='reject']::part(control),
   .workflow-proposal--feedback-active
     .workflow-proposal__actions
     vscode-toolbar-button[data-action='reject']::part(control) {
