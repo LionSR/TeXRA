@@ -11,7 +11,7 @@ import { AgentCategory, type AgentWorkflowSetting } from '@agent/core';
 import { getBaseName, getMultipleName } from '@agent/index';
 import { isValidAgentYaml } from '@agent/runtime/agentLoad';
 import * as logger from '@logger/logUtils';
-import { getConfig, updateConfig } from '@utils/config';
+import { workspaceSM, WorkspaceStateKey } from '@common/state';
 
 const CHANNEL = 'AgentRegister';
 logger.initialize(CHANNEL);
@@ -56,7 +56,7 @@ export async function promptToAddAgentToConfig(
   autoAdd = false,
   variant: AgentVariantMetadata = {},
 ): Promise<void> {
-  const current = getConfig<string[]>('texra.agents', []);
+  const current = workspaceSM.get<string[]>(WorkspaceStateKey.ENABLED_AGENTS, []);
 
   const skipReason = getAgentRegistrationSkipReason(
     agentName,
@@ -83,9 +83,10 @@ export async function promptToAddAgentToConfig(
 
   if (shouldAdd) {
     current.push(agentName);
-    await updateConfig('texra.agents', current, { prefix: false });
+    await workspaceSM.update(WorkspaceStateKey.ENABLED_AGENTS, current);
+    void vscode.commands.executeCommand('texra.refreshAllOptions');
     vscode.window.showInformationMessage(
-      `Added "${agentName}" to texra.agents`,
+      `Agent "${agentName}" is now visible`,
     );
   }
 }
@@ -124,7 +125,7 @@ export async function validateYamlAndPromptAdd(
     return;
   }
 
-  const configuredAgents = getConfig<string[]>('texra.agents', []);
+  const configuredAgents = workspaceSM.get<string[]>(WorkspaceStateKey.ENABLED_AGENTS, []);
   if (configuredAgents.includes(filenameBase)) {
     return;
   }
