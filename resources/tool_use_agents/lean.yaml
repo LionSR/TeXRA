@@ -10,8 +10,7 @@ settings:
     - lean_project
     - lean_inspect
     - lean_loogle
-    - name: bash
-      description: 'Execute shell commands. Returns stdout on success, throws error with stderr on failure. Use as fallback when lean_* tools are insufficient (e.g. lake build, lake env lean <file>, lake exe cache get).'
+    - bash
     - read_file
     - write_file
     - edit_file
