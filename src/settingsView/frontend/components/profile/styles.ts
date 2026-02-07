@@ -84,15 +84,12 @@ export const profileViewStyles: CSSResult = css`
     margin-top: var(--spacing-xlarge);
   }
 
-  .agents-table,
   .provider-keys-table {
     width: 100%;
     border-collapse: collapse;
     margin-top: var(--spacing-medium);
   }
 
-  .agents-table th,
-  .agents-table td,
   .provider-keys-table th,
   .provider-keys-table td {
     padding: var(--spacing-medium);
@@ -100,7 +97,6 @@ export const profileViewStyles: CSSResult = css`
     border-bottom: var(--border-thin) solid var(--color-border);
   }
 
-  .agents-table th,
   .provider-keys-table th {
     background: var(--vscode-editor-background);
     font-weight: 600;
@@ -109,20 +105,8 @@ export const profileViewStyles: CSSResult = css`
     top: 0;
   }
 
-  .agents-table tbody tr:hover,
   .provider-keys-table tbody tr:hover {
     background: var(--vscode-list-hoverBackground);
-  }
-
-  .agent-name {
-    font-weight: 500;
-    color: var(--color-text-link);
-    white-space: nowrap;
-  }
-
-  .agent-description {
-    color: var(--vscode-foreground);
-    max-width: 300px;
   }
 
   /* Profile-specific badge modifiers (base category styles from @shared/styles) */
