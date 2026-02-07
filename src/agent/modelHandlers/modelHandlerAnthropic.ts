@@ -163,6 +163,15 @@ const OPUS_46_FULLNAME = 'claude-opus-4-6';
 /** Compaction must be triggered at or above this minimum input token threshold. */
 const MIN_COMPACTION_TRIGGER_TOKENS = 50_000;
 
+/**
+ * Fixed thinking budget for Opus 4.6 in tool-use mode.
+ * Must stay constant across rounds to preserve the Anthropic messages cache
+ * (changing budget_tokens invalidates cache because thinking tokens are inline).
+ * Value chosen to be below the max_tokens floor at compaction threshold:
+ *   contextWindow(200K) - compaction(150K) - buffer(2K) = 48K > 40960
+ */
+const OPUS_46_TOOL_USE_THINKING_BUDGET = 40_960;
+
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
 /**
@@ -514,8 +523,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
       // budget_tokens must be < max_tokens; use 50% to leave room for actual output
       const maxBudget = Math.floor(options.max_tokens * 0.5);
+      // Opus 4.6 tool-use uses a FIXED budget to preserve the messages cache.
+      // Changing budget_tokens between rounds invalidates cache because thinking
+      // tokens are stored inline. Workflow and non-tool-use modes use maxBudget
+      // (single-round or long-output scenarios where cache stability is less critical).
       const defaultBudget = this.isClaudeOpus46()
-        ? maxBudget
+        ? this.isToolUseMode()
+          ? OPUS_46_TOOL_USE_THINKING_BUDGET
+          : maxBudget
         : useStreaming
           ? 32768
           : 4096;
@@ -616,15 +631,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
             );
             options.max_tokens = validation.adjustedMaxTokens;
 
-            // Adjust thinking budget if max_tokens was reduced
-            if (options.thinking?.type === 'enabled') {
-              const maxBudget = Math.floor(options.max_tokens * 0.5);
-              if (options.thinking.budget_tokens > maxBudget) {
-                this.logger.debug(
-                  `Adjusted thinking budget from ${options.thinking.budget_tokens} to ${maxBudget} due to reduced max_tokens`,
-                );
-                options.thinking.budget_tokens = maxBudget;
-              }
+            // Only adjust thinking budget when it would violate API constraint
+            // (budget_tokens must be < max_tokens). Avoid unnecessary changes
+            // because changing budget_tokens invalidates the Anthropic messages
+            // cache, forcing expensive prefix re-creation.
+            if (
+              options.thinking?.type === 'enabled' &&
+              options.thinking.budget_tokens >= options.max_tokens
+            ) {
+              const newBudget = Math.max(1024, options.max_tokens - 1024);
+              this.logger.debug(
+                `Adjusted thinking budget from ${options.thinking.budget_tokens} to ${newBudget} due to reduced max_tokens`,
+              );
+              options.thinking.budget_tokens = newBudget;
             }
           }
         } catch (err) {
