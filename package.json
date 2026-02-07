@@ -32,38 +32,6 @@
       {
         "title": "TeXRA",
         "properties": {
-          "texra.agents": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "default": [
-              "correct",
-              "polish",
-              "draw",
-              "ocr",
-              "paper2slide",
-              "paper2poster",
-              "transcribe_audio"
-            ],
-            "description": "List of available agents",
-            "scope": "resource"
-          },
-          "texra.toolUseAgents": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "default": [
-              "ask",
-              "chat",
-              "lean",
-              "research",
-              "search"
-            ],
-            "description": "List of tool-use agents shown in the dedicated dropdown",
-            "scope": "resource"
-          },
           "texra.agentOutputs.storageMode": {
             "type": "string",
             "enum": [
@@ -480,7 +448,7 @@
           "texra.remoteAgents.autoShow": {
             "type": "boolean",
             "default": true,
-            "description": "Automatically show remote agents in dropdown without needing to add them to texra.agents list",
+            "description": "Automatically show remote agents in dropdown without needing to add them to the enabled agents list",
             "scope": "resource"
           }
         }
@@ -713,17 +681,6 @@
             ],
             "description": "Default model to use for merge operations. Fast models like Gemini 3 Flash, GPT-4.1, or Kimi or Haiku are recommended.",
             "order": 1
-          }
-        }
-      },
-      {
-        "title": "File Explorer",
-        "properties": {
-          "texra.explorer.agentsDirectory": {
-            "type": "string",
-            "default": "",
-            "description": "Root path for the TeXRA file explorer view. Must be an absolute path.",
-            "scope": "resource"
           }
         }
       },

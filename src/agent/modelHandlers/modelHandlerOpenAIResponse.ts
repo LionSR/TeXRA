@@ -1752,7 +1752,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           // logging diagnostics (detectRequestId doesn't follow the cause chain)
           const origRequestId = (err as { request_id?: string }).request_id;
           if (origRequestId) {
-            (pollingError as Record<string, unknown>).request_id =
+            (pollingError as unknown as Record<string, unknown>).request_id =
               origRequestId;
           }
           throw pollingError;

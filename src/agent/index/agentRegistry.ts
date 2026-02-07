@@ -26,6 +26,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import type { AgentOptionData } from '@shared/schemas';
 
 const CHANNEL = 'agentRegistry';
@@ -168,7 +169,7 @@ async function doLoad(): Promise<void> {
 
   // Apply category overrides from config
   const toolUseOverrides = new Set(
-    getConfig<string[]>('texra.toolUseAgents', []),
+    workspaceSM?.get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, []) ?? [],
   );
 
   for (const entry of allEntries) {
@@ -530,7 +531,9 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
  */
 export function getVisibleWorkflowAgents(): AgentEntry[] {
   const entries = getWorkflowAgents();
-  const configured = new Set(getConfig<string[]>('texra.agents', []));
+  const configured = new Set(
+    workspaceSM?.get<string[]>(WorkspaceStateKey.ENABLED_AGENTS, []) ?? [],
+  );
   return deduplicateByName(filterVisible(entries, configured));
 }
 
@@ -540,7 +543,9 @@ export function getVisibleWorkflowAgents(): AgentEntry[] {
  */
 export function getVisibleToolUseAgents(): AgentEntry[] {
   const entries = getToolUseAgents();
-  const configured = new Set(getConfig<string[]>('texra.toolUseAgents', []));
+  const configured = new Set(
+    workspaceSM?.get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, []) ?? [],
+  );
   return deduplicateByName(filterVisible(entries, configured));
 }
 

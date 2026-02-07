@@ -100,11 +100,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         safeExecuteCommand('texra.showModels', [], this.viewName),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY]: async (m) => {
         if (!m.customDirSet) {
-          await safeExecuteCommand(
-            'workbench.action.openSettings',
-            [SETTINGS_QUERY.AGENT_DIRECTORY],
-            this.viewName,
-          );
+          await safeExecuteCommand('texra.showAgents', [], this.viewName);
           return;
         }
         const dir = await agentDirectories.custom();

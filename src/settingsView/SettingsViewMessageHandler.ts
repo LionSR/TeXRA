@@ -45,7 +45,7 @@ import {
   AgentHistoryManager,
   type AgentHistoryItem,
 } from '@common/history/AgentHistoryManager';
-import { GlobalStateKey, globalSM } from '@common/state';
+import { GlobalStateKey, WorkspaceStateKey, globalSM, workspaceSM } from '@common/state';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import {
   DEFAULT_MODELS,
@@ -55,7 +55,6 @@ import {
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
-import { getConfig, updateConfig } from '@utils/config/configUtils';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
 import {
   getToolUseMemoryEnabled,
@@ -149,8 +148,6 @@ function entryToSelectionItem(
     description: entry.description,
     hasPath: Boolean(entry.path),
     tools: entry.tools,
-    isCustom: entry.source === 'custom',
-    isRemote: entry.source === 'remote',
     hasMultiple: Boolean(entry.multiplePath),
     enabled:
       enabledSet.size === 0 ||
@@ -163,9 +160,11 @@ function buildAgentSelectionItems(): {
   workflow: AgentSelectionItem[];
   toolUse: AgentSelectionItem[];
 } {
-  const workflowEnabled = new Set(getConfig<string[]>('texra.agents', []));
+  const workflowEnabled = new Set(
+    workspaceSM.get<string[]>(WorkspaceStateKey.ENABLED_AGENTS, []),
+  );
   const toolUseEnabled = new Set(
-    getConfig<string[]>('texra.toolUseAgents', []),
+    workspaceSM.get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, []),
   );
 
   const workflow = getWorkflowAgents()
@@ -248,6 +247,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.SET_POLISH_MODEL]: (data) =>
         this.handleSetPolishModel(data),
 
+      // Custom agent directory handlers
+      [SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR]: () =>
+        this.handleGetCustomAgentDir(),
+      [SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR]: () =>
+        this.handleSetCustomAgentDir(),
+      [SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR]: () =>
+        this.handleResetCustomAgentDir(),
+
       // Agent selection handlers
       [SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION]: () =>
         this.handleGetAgentSelection(),
@@ -302,6 +309,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendProfileData(webview),
       this.sendModelSelectionData(webview),
       this.sendAgentSelectionData(webview),
+      this.sendCustomAgentDir(webview),
     ]);
   }
 
@@ -429,6 +437,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
       workflow,
       toolUse,
+    });
+  }
+
+  public async sendCustomAgentDir(webview: vscode.Webview): Promise<void> {
+    const configuredPath = (
+      globalSM.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, '') ?? ''
+    ).trim();
+    const isDefault = configuredPath === '';
+    const resolvedPath = await agentDirectories.custom();
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
+      path: resolvedPath,
+      isDefault,
     });
   }
 
@@ -903,9 +924,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_AGENT_ENABLED>,
   ): Promise<void> {
     try {
-      const configKey =
-        data.category === 'workflow' ? 'texra.agents' : 'texra.toolUseAgents';
-      const current = getConfig<string[]>(configKey, []);
+      const stateKey =
+        data.category === 'workflow'
+          ? WorkspaceStateKey.ENABLED_AGENTS
+          : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS;
+      const current = workspaceSM.get<string[]>(stateKey, []);
       const key = createKey(data.agentSource, data.agentName);
 
       let updated: string[];
@@ -933,7 +956,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         );
       }
 
-      await updateConfig(configKey, updated, { prefix: false });
+      await workspaceSM.update(stateKey, updated);
 
       void vscode.commands.executeCommand('texra.refreshAllOptions');
 
@@ -978,5 +1001,65 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     // Refresh agent list after creation
     const view = this.getActiveView();
     if (view) await this.sendAgentSelectionData(view.webview);
+  }
+
+  // ============================================================
+  // Custom agent directory handler implementations
+  // ============================================================
+
+  private async handleGetCustomAgentDir(): Promise<void> {
+    const view = this.getActiveView();
+    if (view) {
+      await this.sendCustomAgentDir(view.webview);
+    }
+  }
+
+  private async handleSetCustomAgentDir(): Promise<void> {
+    const view = this.getActiveView();
+    try {
+      const selectedPath = await agentDirectories.promptCustom();
+      if (!selectedPath) return; // User cancelled
+
+      // Reload agents from new directory and refresh UI
+      await agentDirectories.refreshAfterDirChange();
+      await loadAgents();
+      if (view) {
+        await Promise.all([
+          this.sendCustomAgentDir(view.webview),
+          this.sendAgentSelectionData(view.webview),
+        ]);
+      }
+      void vscode.commands.executeCommand('texra.refreshAllOptions');
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to set custom agent directory',
+        error,
+      );
+    }
+  }
+
+  private async handleResetCustomAgentDir(): Promise<void> {
+    const view = this.getActiveView();
+    try {
+      await globalSM.update(GlobalStateKey.CUSTOM_AGENT_DIR, '');
+
+      // Reload agents from default directory and refresh UI
+      await agentDirectories.refreshAfterDirChange();
+      await loadAgents();
+      if (view) {
+        await Promise.all([
+          this.sendCustomAgentDir(view.webview),
+          this.sendAgentSelectionData(view.webview),
+        ]);
+      }
+      void vscode.commands.executeCommand('texra.refreshAllOptions');
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to reset custom agent directory',
+        error,
+      );
+    }
   }
 }

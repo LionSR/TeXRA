@@ -13,7 +13,7 @@ export const settingsViewCommands = {
   showHistory: 'texra.showAgentHistory',
   showModels: 'texra.showModels',
   showAgents: 'texra.showAgents',
-};
+} as const;
 
 let settingsViewProvider: SettingsViewProvider | null = null;
 

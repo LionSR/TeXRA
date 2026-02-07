@@ -309,9 +309,4 @@ export const settingsViewStyles: CSSResult = css`
     color: var(--color-text-secondary);
     line-height: 1.6;
   }
-
-  .no-agents {
-    color: var(--color-text-secondary);
-    font-style: italic;
-  }
 `;

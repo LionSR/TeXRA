@@ -12,8 +12,7 @@ import { getBaseName, getMultipleName } from '@agent/index';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { SecretManager } from '@frontend/secretManager';
-import { agentDirectories } from '@frontend/agents';
-import { promptToAddAgentToConfig } from '@frontend/agents';
+import { agentDirectories, promptToAddAgentToConfig } from '@frontend/agents';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 
@@ -27,15 +26,17 @@ export const agentCreatorCommands = {
   createAgentWithAI: 'texra.createAgentWithAI',
 };
 
-/** Cached creator config loaded from resources/templates/agentCreator.yaml */
-let creatorConfig: {
+interface CreatorConfig {
   prompts: { generationPrompt: string; retryPrompt: string };
   templates: { single: string; multiple: string };
-} | null = null;
+}
+
+/** Cached creator config loaded from resources/templates/agentCreator.yaml */
+let creatorConfig: CreatorConfig | null = null;
 
 async function loadCreatorConfig(
   context: vscode.ExtensionContext,
-): Promise<typeof creatorConfig> {
+): Promise<CreatorConfig> {
   if (creatorConfig) return creatorConfig;
   const yamlPath = path.join(
     context.extensionPath,
@@ -44,11 +45,7 @@ async function loadCreatorConfig(
     'agentCreator.yaml',
   );
   const content = await AbsoluteFS.read(yamlPath);
-  const parsed = yaml.parse(content) as {
-    prompts: { generationPrompt: string; retryPrompt: string };
-    templates: { single: string; multiple: string };
-  };
-  creatorConfig = parsed;
+  creatorConfig = yaml.parse(content) as CreatorConfig;
   return creatorConfig;
 }
 
@@ -74,12 +71,6 @@ export function registerAgentCreatorCommands(context: vscode.ExtensionContext) {
 async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
   try {
     const config = await loadCreatorConfig(context);
-    if (!config) {
-      void vscode.window.showErrorMessage(
-        'Failed to load agent creator configuration.',
-      );
-      return;
-    }
 
     const agentName = await vscode.window.showInputBox({
       prompt: 'Enter a name for the new agent (without .yaml)',
@@ -132,8 +123,8 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
       const anthropic = new Anthropic({ apiKey });
 
       const basePrompt = config.prompts.generationPrompt
-        .replace(/\{\{ AGENT_NAME \}\}/g, agentName)
-        .replace(/\{\{ DESCRIPTION \}\}/g, description);
+        .replaceAll('{{ AGENT_NAME }}', agentName)
+        .replaceAll('{{ DESCRIPTION }}', description);
 
       let prompt = basePrompt;
       for (let attempt = 0; attempt < 2; attempt++) {
@@ -188,8 +179,8 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
             )
           : config.templates.single;
       yamlContent = template
-        .replace(/\{\{ DESCRIPTION \}\}/g, description)
-        .replace(/\{\{ AGENT_NAME \}\}/g, agentName);
+        .replaceAll('{{ DESCRIPTION }}', description)
+        .replaceAll('{{ AGENT_NAME }}', agentName);
     }
 
     await AbsoluteFS.write(filePath.fsPath, yamlContent);
