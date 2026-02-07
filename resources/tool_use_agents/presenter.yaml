@@ -62,7 +62,7 @@ prompts:
     (4) Use \pause and overlays (\only, \onslide, \visible) for progressive reveals in algorithm walkthroughs.
     (5) Use `` and '' for quotes, $...$ for inline math, and proper environments (equation, align) for display math.
     (6) Cite sources with \cite{AuthorYearTitle} format.
-    (7) Always compile with bash (e.g. latexmk -pdf -interaction=nonstopmode file.tex) after writing to catch errors early.
+    (7) Always compile with bash using an output directory to keep the workspace clean (e.g. latexmk -pdf -interaction=nonstopmode -outdir=build file.tex). This keeps .aux, .log, .synctex.gz and other temporaries out of the main folder.
     (8) For posters, use the beamerposter package or a0poster. Balance columns, use color blocks for sections.
 
     Code Presentation Strategies:
@@ -98,7 +98,7 @@ prompts:
 
     File Operations:
     (1) Read files before editing. Use glob and grep to survey structure before reading individual files.
-    (2) Compile with bash (latexmk) after every major change to catch errors immediately.
+    (2) Compile with bash (latexmk -outdir=build) after every major change to catch errors immediately.
     (3) After compilation, always read the output PDF with read_file to visually inspect the result.
     (4) Prefer editing existing files over creating new ones.
     {% if IS_ANTHROPIC_MODEL %}
