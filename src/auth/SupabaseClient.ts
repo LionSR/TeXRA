@@ -11,6 +11,7 @@ import {
   type UserTier,
   UserAuthContextSchema,
   SUPABASE_SESSION_KEY,
+  TOKEN_REFRESH_THRESHOLD_MS,
 } from './config';
 
 /** Interface for auth provider to avoid circular imports. */
@@ -41,6 +42,13 @@ export class SupabaseClient {
   private static initError: Error | null = null;
 
   /**
+   * Cached token expiry time (ms since epoch).
+   * Updated by SupabaseAuthProvider whenever a session is stored or loaded.
+   * Used for fast, synchronous expiry checks before each relay call.
+   */
+  private static tokenExpiresAt: number | null = null;
+
+  /**
    * Register an auth provider for token refresh.
    * Called by SupabaseAuthProvider on initialization.
    */
@@ -69,6 +77,26 @@ export class SupabaseClient {
    */
   static getInitError(): Error | null {
     return this.initError;
+  }
+
+  /**
+   * Update the cached token expiry time, or clear it on sign-out.
+   * Called by SupabaseAuthProvider when a session is stored, loaded, or removed.
+   */
+  static setTokenExpiry(expiresAt: number | null): void {
+    this.tokenExpiresAt = expiresAt;
+  }
+
+  /**
+   * Check if the current token will expire within {@link TOKEN_REFRESH_THRESHOLD_MS}.
+   * Synchronous and in-memory — safe to call before every model invocation.
+   * Returns false if no expiry is tracked (e.g., not authenticated or not using relay).
+   */
+  static isTokenExpiringSoon(): boolean {
+    if (this.tokenExpiresAt === null) {
+      return false;
+    }
+    return this.tokenExpiresAt - Date.now() < TOKEN_REFRESH_THRESHOLD_MS;
   }
 
   /**
