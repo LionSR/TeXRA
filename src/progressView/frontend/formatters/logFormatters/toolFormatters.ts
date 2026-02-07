@@ -7,6 +7,9 @@
  * templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
+// Local imports - shared utilities
+import { isPlainObject } from '@shared/utils/string';
+
 // Local imports - Lit template utilities
 import {
   html,
@@ -42,6 +45,30 @@ import type { WebSearchPayload, LogMessageData } from '@shared/schemas';
 
 // Side-effect import to register <tool-timer> custom element
 import '../../components/ToolTimer';
+
+/** Default bash tool timeout (matches BASH_TIMEOUT_MS in src/tools/bash.ts). */
+const BASH_DEFAULT_TIMEOUT_MS = 120_000;
+
+/** Known per-tool default timeouts (ms) for display in the running timer. */
+const TOOL_DEFAULT_TIMEOUTS: Record<string, number> = {
+  bash: BASH_DEFAULT_TIMEOUT_MS,
+};
+
+/**
+ * Extract the effective timeout for a tool call from its input.
+ * Returns undefined for tools without a configurable timeout.
+ */
+function getToolTimeoutMs(
+  toolName: string,
+  input: unknown,
+): number | undefined {
+  const defaultTimeout = TOOL_DEFAULT_TIMEOUTS[toolName];
+  if (defaultTimeout === undefined) return undefined;
+  if (isPlainObject(input) && typeof input.timeout === 'number') {
+    return input.timeout;
+  }
+  return defaultTimeout;
+}
 
 /** Join template sections with horizontal rule separators. */
 function joinWithSeparator(sections: TemplateResult[]): TemplateResult {
@@ -340,9 +367,10 @@ export function formatToolUseTemplate(
   // prettier-ignore
   const bannerContentTemplate = html`<div class="banner-content log-entry-content" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${contentTemplate}</div>`;
 
-  // Live timer for in-progress tools
+  // Live timer for in-progress tools, with timeout limit when available
+  const toolTimeoutMs = getToolTimeoutMs(toolName, input);
   // prettier-ignore
-  const timerTemplate = isInProgress ? html`<tool-timer .startTime=${timestamp}></tool-timer>` : undefined;
+  const timerTemplate = isInProgress ? html`<tool-timer .startTime=${timestamp} .timeoutMs=${toolTimeoutMs ?? 0}></tool-timer>` : undefined;
 
   // prettier-ignore
   return html`<details class=${classMap({
