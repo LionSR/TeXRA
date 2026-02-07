@@ -36,6 +36,40 @@ import {
 const CHANNEL = 'agentRegistry';
 logger.initialize(CHANNEL);
 
+/** Legacy prefix from pre-rename era (builtIn → builtInWorkflow). */
+const LEGACY_BUILTIN_PREFIX = 'builtIn:';
+const NEW_BUILTIN_PREFIX = 'builtInWorkflow:';
+
+/**
+ * Migrate persisted `builtIn:*` keys to `builtInWorkflow:*`.
+ * Idempotent — skips if no legacy keys found.
+ */
+function migrateLegacySourceKeys(): void {
+  if (!workspaceSM) return;
+
+  for (const stateKey of [
+    WorkspaceStateKey.ENABLED_AGENTS,
+    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+  ] as const) {
+    const stored = workspaceSM.get<string[]>(stateKey, []);
+    if (!stored?.length) continue;
+
+    const hasLegacy = stored.some(
+      (k) =>
+        k.startsWith(LEGACY_BUILTIN_PREFIX) && !k.startsWith('builtInToolUse:'),
+    );
+    if (!hasLegacy) continue;
+
+    const migrated = stored.map((k) =>
+      k.startsWith(LEGACY_BUILTIN_PREFIX) && !k.startsWith('builtInToolUse:')
+        ? NEW_BUILTIN_PREFIX + k.slice(LEGACY_BUILTIN_PREFIX.length)
+        : k,
+    );
+    void workspaceSM.update(stateKey, migrated);
+    logger.info(CHANNEL, `Migrated legacy builtIn keys in ${stateKey}`);
+  }
+}
+
 // =============================================================================
 // TYPES (AgentSource canonical source: @shared/schemas/agent)
 // =============================================================================
@@ -148,6 +182,9 @@ async function doLoad(): Promise<void> {
   const startTime = Date.now();
   cache.clear();
 
+  // Migrate legacy builtIn:* → builtInWorkflow:* in persisted state
+  migrateLegacySourceKeys();
+
   // Load from all sources in parallel
   const [customDir, builtInDir, toolUseDir] = await Promise.all([
     agentDirectories.custom(),
@@ -196,7 +233,7 @@ async function doLoad(): Promise<void> {
  * Supports "source:name" format or just "name" (finds first match by priority).
  *
  * When preferToolUse is true, uses tool-use lookup priority:
- * custom → builtInToolUse → builtIn → remote
+ * custom → builtInToolUse → builtInWorkflow → remote
  *
  * This handles name collisions where a workflow agent shadows a tool-use agent.
  */
@@ -533,10 +570,9 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
  */
 export function getVisibleWorkflowAgents(): AgentEntry[] {
   const entries = getWorkflowAgents();
-  const configured = new Set(
-    workspaceSM?.get<string[]>(WorkspaceStateKey.ENABLED_AGENTS, []) ?? [],
-  );
-  return deduplicateByName(filterVisible(entries, configured));
+  // No default → undefined means "never configured" (show all)
+  const raw = workspaceSM?.get<string[]>(WorkspaceStateKey.ENABLED_AGENTS);
+  return deduplicateByName(filterVisible(entries, raw));
 }
 
 /**
@@ -545,11 +581,10 @@ export function getVisibleWorkflowAgents(): AgentEntry[] {
  */
 export function getVisibleToolUseAgents(): AgentEntry[] {
   const entries = getToolUseAgents();
-  const configured = new Set(
-    workspaceSM?.get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, []) ??
-      [],
+  const raw = workspaceSM?.get<string[]>(
+    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
   );
-  return deduplicateByName(filterVisible(entries, configured));
+  return deduplicateByName(filterVisible(entries, raw));
 }
 
 /**
@@ -584,9 +619,11 @@ function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
 
 function filterVisible(
   entries: AgentEntry[],
-  configured: Set<string>,
+  configured: string[] | undefined,
 ): AgentEntry[] {
-  if (configured.size === 0) return entries;
+  // undefined = never configured → show all; [] = explicitly empty → show none
+  if (configured === undefined) return entries;
+  const configuredSet = new Set(configured);
 
   const autoShowRemote =
     globalSM?.get<boolean>(GlobalStateKey.AUTO_SHOW_REMOTE_AGENTS, true) ??
@@ -595,8 +632,8 @@ function filterVisible(
   return entries.filter(
     (entry) =>
       (entry.source === 'remote' && autoShowRemote) ||
-      configured.has(createKey(entry.source, entry.name)) ||
-      configured.has(entry.name),
+      configuredSet.has(createKey(entry.source, entry.name)) ||
+      configuredSet.has(entry.name),
   );
 }
 
