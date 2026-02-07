@@ -104,7 +104,7 @@ export abstract class RetryableInvocationNode<
     return cloned;
   }
 
-  /** Wraps operation with AbortController; refreshes token once on relay 401 errors. */
+  /** Wraps operation with AbortController; proactively refreshes near-expiry relay tokens and reactively handles 401 errors. */
   protected async withAbortController<T>(
     operation: (signal: AbortSignal) => Promise<T>,
   ): Promise<T> {
@@ -116,6 +116,22 @@ export abstract class RetryableInvocationNode<
     let activeController = new AbortController();
     this.signal = activeController.signal;
     services.setAbortController(activeController);
+
+    // Proactive relay token refresh: recreate the SDK client before the
+    // request so it carries a fresh JWT. refreshClient → getClient →
+    // getApiKey → getAccessToken → ensureFreshToken handles the full chain.
+    // On failure tryRefreshClient logs and returns false — the old client
+    // is still usable until actual expiry, and the reactive 401 handler covers it.
+    if (SupabaseClient.isTokenExpiringSoon()) {
+      services.logger.debug(
+        'Token nearing expiry, refreshing client proactively',
+      );
+      await tryRefreshClient(
+        services.refreshClient,
+        services.logger,
+        'proactive pre-invocation',
+      );
+    }
 
     try {
       return await operation(activeController.signal);
