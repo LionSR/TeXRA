@@ -118,6 +118,12 @@ export async function executeCommand(
       //
       // Fix: spawn in a new process group (detached) and manually kill the
       // entire group (-pid) on timeout so all children are terminated.
+      //
+      // Tradeoff: `detached` means the process group is NOT automatically
+      // cleaned up if the extension host is hard-killed (SIGKILL / crash) --
+      // long-running shell commands would be orphaned.  This only affects the
+      // bash tool (all other callers use array-form commands which skip this
+      // path).  Acceptable because the alternative is `await` hanging forever.
       const { timeout: _shellTimeout, ...execaNoTimeout } = execaOptions;
       subprocess = execa(command, {
         ...execaNoTimeout,
