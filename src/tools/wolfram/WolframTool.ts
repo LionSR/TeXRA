@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 // Internal imports
 import { ToolResult, ToolError } from '@tools/result';
+import { WOLFRAM_CODE_TIMEOUT_MS, buildTimeoutMessage } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - tools
@@ -21,8 +22,9 @@ export class WolframTool extends defineTool({
   schema: WolframInputSchema,
 }) {
   protected async execute(input: WolframInput): Promise<ToolResult> {
+    const effectiveTimeout = input.timeout ?? WOLFRAM_CODE_TIMEOUT_MS;
     const result = await executeWolframCode(input.code, {
-      timeout: input.timeout ?? undefined,
+      timeout: effectiveTimeout,
       showErrorsToUser: false,
     });
     if (result.success) {
@@ -37,7 +39,7 @@ export class WolframTool extends defineTool({
 
     // Check for timeout first - most common cause of silent failures
     if (result.timedOut) {
-      errorParts.push('Execution timed out');
+      errorParts.push(buildTimeoutMessage('Execution', effectiveTimeout));
     }
 
     // Include exit code for debugging (non-zero indicates error)
