@@ -18,12 +18,16 @@ import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { codiconStyles, designTokens } from '@shared/styles';
 
-// Local imports - profile view styles and events
-import { profileViewStyles } from './styles';
+// Local imports - profile view events
 import { AgentSelectionEvents } from './events';
 
 // Local imports - shared schemas
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
+
+/** Unique key for an agent: disambiguates agents with same name across sources */
+function agentKey(agent: AgentSelectionItem): string {
+  return `${agent.source}:${agent.name}`;
+}
 
 /** Source display names for agent origins */
 const SOURCE_DISPLAY_NAMES: Record<string, string> = {
@@ -38,7 +42,6 @@ export class AgentSelectionPanel extends LitElement {
   static override styles = [
     designTokens,
     codiconStyles,
-    profileViewStyles,
     css`
       :host {
         display: block;
@@ -88,10 +91,16 @@ export class AgentSelectionPanel extends LitElement {
         color: var(--vscode-foreground);
         border-left: 2px solid transparent;
         transition: background 0.1s ease;
+        outline: none;
       }
 
       .agent-list-item:hover {
         background: var(--vscode-list-hoverBackground);
+      }
+
+      .agent-list-item:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: -1px;
       }
 
       .agent-list-item.selected {
@@ -224,31 +233,84 @@ export class AgentSelectionPanel extends LitElement {
         border-top: var(--border-thin) solid var(--color-border);
         background: var(--vscode-editor-background);
       }
+
+      .agent-empty-message {
+        color: var(--color-text-secondary);
+        font-style: italic;
+      }
     `,
   ];
 
   @property({ attribute: false }) agents: AgentSelectionItem[] = [];
 
-  @state() private selectedAgentName: string | null = null;
+  @state() private selectedKey: string | null = null;
+
+  /** Cached grouped agents, updated in willUpdate */
+  @state() private groupedSources: Map<string, AgentSelectionItem[]> =
+    new Map();
 
   protected override willUpdate(changed: PropertyValues): void {
     if (changed.has('agents')) {
+      // Recompute grouped agents
+      const groups = new Map<string, AgentSelectionItem[]>();
+      for (const agent of this.agents) {
+        const list = groups.get(agent.source) ?? [];
+        list.push(agent);
+        groups.set(agent.source, list);
+      }
+      this.groupedSources = groups;
+
       // Auto-select first agent if current selection is stale or missing
       const stillValid = this.agents.some(
-        (a) => a.name === this.selectedAgentName,
+        (a) => agentKey(a) === this.selectedKey,
       );
       if (!stillValid) {
-        this.selectedAgentName = this.agents[0]?.name ?? null;
+        this.selectedKey =
+          this.agents.length > 0 ? agentKey(this.agents[0]) : null;
       }
     }
   }
 
   private get selectedAgent(): AgentSelectionItem | undefined {
-    return this.agents.find((a) => a.name === this.selectedAgentName);
+    return this.agents.find((a) => agentKey(a) === this.selectedKey);
   }
 
-  private selectAgent(name: string): void {
-    this.selectedAgentName = name;
+  private selectAgent(agent: AgentSelectionItem): void {
+    this.selectedKey = agentKey(agent);
+  }
+
+  private handleListKeydown(event: KeyboardEvent): void {
+    const items = this.agents;
+    if (items.length === 0) return;
+
+    const currentIndex = items.findIndex(
+      (a) => agentKey(a) === this.selectedKey,
+    );
+
+    let nextIndex = currentIndex;
+    if (event.key === 'ArrowDown') {
+      nextIndex = Math.min(currentIndex + 1, items.length - 1);
+    } else if (event.key === 'ArrowUp') {
+      nextIndex = Math.max(currentIndex - 1, 0);
+    } else if (event.key === 'Home') {
+      nextIndex = 0;
+    } else if (event.key === 'End') {
+      nextIndex = items.length - 1;
+    } else {
+      return;
+    }
+
+    event.preventDefault();
+    if (nextIndex !== currentIndex) {
+      this.selectAgent(items[nextIndex]);
+      // Focus the newly selected item
+      requestAnimationFrame(() => {
+        const el = this.shadowRoot?.querySelector(
+          '.agent-list-item.selected',
+        ) as HTMLElement | null;
+        el?.focus();
+      });
+    }
   }
 
   private handleOpenYaml(
@@ -264,25 +326,23 @@ export class AgentSelectionPanel extends LitElement {
     );
   }
 
-  /** Group agents by source for display sections */
-  private groupBySource(): Map<string, AgentSelectionItem[]> {
-    const groups = new Map<string, AgentSelectionItem[]>();
-    for (const agent of this.agents) {
-      const source = agent.source;
-      const list = groups.get(source) ?? [];
-      list.push(agent);
-      groups.set(source, list);
-    }
-    return groups;
-  }
-
   private renderListItem(agent: AgentSelectionItem): TemplateResult {
-    const isSelected = this.selectedAgentName === agent.name;
+    const key = agentKey(agent);
+    const isSelected = this.selectedKey === key;
 
     return html`
       <div
         class="agent-list-item ${isSelected ? 'selected' : ''}"
-        @click=${() => this.selectAgent(agent.name)}
+        role="option"
+        aria-selected=${isSelected}
+        tabindex=${isSelected ? '0' : '-1'}
+        @click=${() => this.selectAgent(agent)}
+        @keydown=${(e: KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            this.selectAgent(agent);
+          }
+        }}
         title=${agent.description ?? agent.name}
       >
         <span class="agent-list-item-name">${agent.name}</span>
@@ -302,7 +362,7 @@ export class AgentSelectionPanel extends LitElement {
   }
 
   private renderList(): TemplateResult {
-    const groups = this.groupBySource();
+    const groups = this.groupedSources;
 
     // Define display order for sources
     const sourceOrder = ['custom', 'builtIn', 'builtInToolUse', 'remote'];
@@ -312,7 +372,12 @@ export class AgentSelectionPanel extends LitElement {
     const showHeaders = orderedSources.length > 1;
 
     return html`
-      <div class="agent-list-pane">
+      <div
+        class="agent-list-pane"
+        role="listbox"
+        aria-label="Agent list"
+        @keydown=${(e: KeyboardEvent) => this.handleListKeydown(e)}
+      >
         ${orderedSources.map((source) => {
           const agents = groups.get(source)!;
           return html`
@@ -371,13 +436,13 @@ export class AgentSelectionPanel extends LitElement {
           ${agent.tools && agent.tools.length > 0
             ? html`
                 <span class="agent-detail-meta-label">Tools</span>
-                <span class="agent-detail-meta-value">
+                <div class="agent-detail-meta-value">
                   <div class="agent-detail-tools">
                     ${agent.tools.map(
                       (t) => html`<span class="agent-tool-badge">${t}</span>`,
                     )}
                   </div>
-                </span>
+                </div>
               `
             : nothing}
         </div>
@@ -414,11 +479,7 @@ export class AgentSelectionPanel extends LitElement {
 
   override render(): TemplateResult {
     if (this.agents.length === 0) {
-      return html`
-        <p style="color: var(--color-text-secondary); font-style: italic;">
-          No agents available.
-        </p>
-      `;
+      return html` <p class="agent-empty-message">No agents available.</p> `;
     }
 
     return html`
