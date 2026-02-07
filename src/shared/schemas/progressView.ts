@@ -18,6 +18,7 @@ import { LogMessageDataSchema } from './log';
 import { AgentOptionDataSchema, ModelOptionDataSchema } from './mainView';
 import { OutputFileInfoSchema } from './output';
 import {
+  AgentProposalSchema,
   AgentProposalPermissionSchema,
   BashPermissionSchema,
   RetryPermissionSchema,
@@ -565,8 +566,7 @@ const AgentProposalActionMessageSchema = z.object({
 
 const RestoreProposalConfigMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG),
-  toolName: z.string().min(1),
-  input: z.record(z.string(), z.unknown()),
+  proposal: AgentProposalSchema,
 });
 
 const OpenFileMessageSchema = z.object({
