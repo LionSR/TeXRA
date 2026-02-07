@@ -712,19 +712,19 @@ Based on settings in package.json:
 
 ### Implemented
 
-| Tab         | Settings Covered                                                                                                                                                                                                                       |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tab         | Settings Covered                                                                                                                                                                                                                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Models**  | `texra.model.apiAccessMode` (included vs personal), provider API key management (9 providers via SecretStorage), `texra.model.useStreaming*` (9 streaming toggles), per-provider custom endpoint (`texra.model.baseUrl*`, 7 providers), model visibility (state manager), polish model selection |
-| **Agents**  | Agent visibility — workflow and tool-use (workspace state), auto-show remote agents (global state), custom agents directory (global state), create agent with AI                                                                        |
-| **Memory**  | Memory file browser (file system, no config needed)                                                                                                                                                                                    |
-| **History** | History browser (existing storage)                                                                                                                                                                                                     |
+| **Agents**  | Agent visibility — workflow and tool-use (workspace state), auto-show remote agents (global state), custom agents directory (global state), create agent with AI                                                                                                                                 |
+| **Memory**  | Memory file browser (file system, no config needed)                                                                                                                                                                                                                                              |
+| **History** | History browser (existing storage)                                                                                                                                                                                                                                                               |
 
 ### Not Yet Implemented
 
-| Tab        | Settings to Cover                                                                                                                   |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **Models** | `texra.model.useOpenRouter`, `texra.model.useImprovedConnection`, `texra.model.improvedConnectionDomain`                             |
-| **Agents** | `texra.agentOutputs.storageMode`, `texra.toolUse.*` (3), `texra.model.compactionThresholdPercent`, `texra.model.retry.*` (2)        |
+| Tab        | Settings to Cover                                                                                                            |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Models** | `texra.model.useOpenRouter`, `texra.model.useImprovedConnection`, `texra.model.improvedConnectionDomain`                     |
+| **Agents** | `texra.agentOutputs.storageMode`, `texra.toolUse.*` (3), `texra.model.compactionThresholdPercent`, `texra.model.retry.*` (2) |
 
 ### Remain as VS Code Settings Only
 
