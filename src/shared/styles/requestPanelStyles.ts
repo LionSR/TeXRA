@@ -231,6 +231,20 @@ export const requestPanelStyles: CSSResult = css`
     flex: 1 1 12rem;
   }
 
+  .bash-approval-request__feedback {
+    margin-top: var(--spacing-small);
+  }
+
+  .bash-approval-request__feedback-input {
+    width: 100%;
+  }
+
+  .bash-approval-request--feedback-active
+    .bash-approval-request__actions
+    vscode-toolbar-button[data-action='reject']::part(control) {
+    color: var(--vscode-inputValidation-warningBorder);
+  }
+
   /* Retry requests */
   .retry-requests {
     border: 1px solid var(--vscode-input-border);
