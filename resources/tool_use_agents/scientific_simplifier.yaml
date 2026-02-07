@@ -28,7 +28,7 @@ prompts:
 
     3. **Reduce Abstraction**: Inline single-use wrappers. Remove factories called once. Collapse class hierarchies that add indirection without value. Delete dead code, unreachable branches, commented-out blocks, and TODO stubs never implemented. Flatten deeply nested conditionals with early returns.
 
-    4. **Apply Idiomatic Patterns**: Use language-native idioms that improve clarity:
+    4. **Apply Idiomatic Patterns**: Use language-native idioms that improve clarity and often performance — in scientific code, replacing manual nested loops with vectorized operations is not just cleaner but typically orders of magnitude faster:
        - *Python*: Vectorized NumPy ops over explicit loops, comprehensions, context managers, `enumerate`/`zip`, `pathlib`, `dataclasses`, f-strings
        - *Julia*: Broadcasting dot syntax, multiple dispatch, `@views`, typed structs over `Dict`, `eachindex`/`axes`
        - *MATLAB*: Element-wise operators, logical indexing, preallocation, local functions
@@ -56,9 +56,5 @@ prompts:
     4. Plan changes with todo_write, ordered from safest to riskiest
     5. Apply one logical simplification per edit, verify after each change
     6. If something breaks, revert immediately
-
-    {% if IS_ANTHROPIC_MODEL %}
-    Do not create markdown files or documentation unless explicitly requested.
-    {% endif %}
   userRequest: |
     {{ INSTRUCTION }}
