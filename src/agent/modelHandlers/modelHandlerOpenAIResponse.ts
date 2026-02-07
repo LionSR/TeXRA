@@ -593,7 +593,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const compactedResponse: CompactedResponse =
         await client.responses.compact(compactParams);
 
-      const tokensAfter = compactedResponse.usage.input_tokens;
+      // Use output_tokens (not input_tokens) to reflect the size of the compacted output.
+      // usage.input_tokens is the cost of the compact operation's input (the original messages),
+      // not the token count of the compacted result.
+      // Subtract reasoning_tokens since they are internal to the compact operation and
+      // won't count as input tokens when the compacted items are sent in the next request.
+      const reasoningTokens =
+        compactedResponse.usage.output_tokens_details?.reasoning_tokens ?? 0;
+      const tokensAfter =
+        compactedResponse.usage.output_tokens - reasoningTokens;
       const utilizationAfter = (tokensAfter / contextWindow) * 100;
       const reduction = tokensBefore - tokensAfter;
       const reductionPercent = ((reduction / tokensBefore) * 100).toFixed(1);
