@@ -204,6 +204,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   // Actions
   RESUME: 'resume',
   RUN_NEW: 'runNew',
+  COMPACT_RESPONSE: 'compactResponse',
   RETRY_STREAM_REQUEST: 'retryStreamRequest',
   CANCEL_RETRY_REQUEST: 'cancelRetryRequest',
   DIFF_STREAM: 'diffStream',
