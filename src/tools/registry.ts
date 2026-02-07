@@ -20,9 +20,7 @@ import {
   ExtractBibliographyTool,
   ExtractLatexFiguresTool,
   ExtractTikzFiguresTool,
-  CompileLatexTool,
 } from './latex';
-import { ExtractCodeStructureTool } from './code';
 import { ArxivDownloadTool, ArxivMetadataTool, ArxivSearchTool } from './arxiv';
 import { ReadFileTool } from './ReadTool';
 import { TextEditorTool } from './TextEditorTool';
@@ -71,8 +69,6 @@ export function getDefaultToolRegistry(): IToolRegistry {
       extract_figures: new ExtractLatexFiguresTool(),
       extract_bib_entries: new ExtractBibliographyTool(),
       extract_tikz_figures: new ExtractTikzFiguresTool(),
-      compile_latex: new CompileLatexTool(),
-      extract_code_structure: new ExtractCodeStructureTool(),
       crossref_doi: new CrossrefDoiTool(),
       crossref_search: new CrossrefSearchTool(),
       zotero_add: new ZoteroAddTool(),
