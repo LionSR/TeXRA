@@ -539,6 +539,9 @@ const STREAMABLE_TOOLS = new Set(['bash']);
 /** Minimum interval between streaming output updates (ms). */
 const STREAM_THROTTLE_MS = 500;
 
+/** Maximum size of the streaming output buffer sent to the UI (bytes). */
+const STREAM_BUFFER_MAX = 50_000;
+
 /**
  * Result of executing a single tool call, capturing everything needed
  * for logging and message creation.
@@ -670,13 +673,18 @@ class ToolUseDispatchNode<C> extends BatchNode<
         }
       : undefined;
 
-    // Build throttled streaming callback for tools that support it
+    // Build throttled streaming callback for tools that support it.
+    // Keeps a rolling tail buffer (max STREAM_BUFFER_MAX) to bound memory.
     let onToolOutput: ((chunk: string) => void) | undefined;
     if (STREAMABLE_TOOLS.has(call.name)) {
       let outputBuffer = '';
       let lastFlush = 0;
       onToolOutput = (chunk: string) => {
         outputBuffer += chunk;
+        // Cap buffer to last STREAM_BUFFER_MAX chars to prevent unbounded growth
+        if (outputBuffer.length > STREAM_BUFFER_MAX) {
+          outputBuffer = outputBuffer.slice(-STREAM_BUFFER_MAX);
+        }
         const now = Date.now();
         if (now - lastFlush < STREAM_THROTTLE_MS) return;
         lastFlush = now;
