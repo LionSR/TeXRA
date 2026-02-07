@@ -51,7 +51,8 @@ export class BashTool extends defineTool({
     }
 
     // Signal execution starting (triggers in-progress log after approval)
-    getCurrentToolFileInteractionContext()?.onExecutionReady?.();
+    const ctx = getCurrentToolFileInteractionContext();
+    ctx?.onExecutionReady?.();
 
     const timeoutMs = input.timeout ?? BASH_TIMEOUT_MS;
 
@@ -60,6 +61,7 @@ export class BashTool extends defineTool({
     const result = await executeCommand(input.command, {
       truncate: true,
       timeout: timeoutMs,
+      onStdout: ctx?.onToolOutput,
     });
 
     if (result.timedOut) {

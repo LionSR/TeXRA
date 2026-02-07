@@ -14,6 +14,8 @@ export interface ToolFileInteractionContext {
   todoState?: TodoState;
   /** Called by tools with approval flows to trigger in-progress log after approval. */
   onExecutionReady?: () => void;
+  /** Called by tools to push partial output for live streaming to the UI. */
+  onToolOutput?: (chunk: string) => void;
 }
 
 const contextStack: ToolFileInteractionContext[] = [];

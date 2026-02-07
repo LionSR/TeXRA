@@ -46,6 +46,7 @@ import {
 import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
@@ -532,6 +533,12 @@ const SLOW_TOOLS = new Set(['bash', 'wolfram', 'web_fetch', 'web_search']);
 /** Tools that defer in-progress logging until after approval. */
 const DEFERRED_LOG_TOOLS = new Set(['bash']);
 
+/** Tools that support streaming partial output to the UI. */
+const STREAMABLE_TOOLS = new Set(['bash']);
+
+/** Minimum interval between streaming output updates (ms). */
+const STREAM_THROTTLE_MS = 500;
+
 /**
  * Result of executing a single tool call, capturing everything needed
  * for logging and message creation.
@@ -608,6 +615,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     tracker: FileInteractionState,
     todoState: TodoState,
     onExecutionReady?: () => void,
+    onToolOutput?: (chunk: string) => void,
   ): Promise<ToolResult> {
     if (!tool) {
       return { error: `Unknown tool ${call.name}`, isError: true };
@@ -622,6 +630,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
           executionId: options.executionId,
           toolCallId: call.callId,
           onExecutionReady,
+          onToolOutput,
         },
         () => tool.call(parsedInput),
       );
@@ -661,6 +670,34 @@ class ToolUseDispatchNode<C> extends BatchNode<
         }
       : undefined;
 
+    // Build throttled streaming callback for tools that support it
+    let onToolOutput: ((chunk: string) => void) | undefined;
+    if (STREAMABLE_TOOLS.has(call.name)) {
+      let outputBuffer = '';
+      let lastFlush = 0;
+      onToolOutput = (chunk: string) => {
+        outputBuffer += chunk;
+        const now = Date.now();
+        if (now - lastFlush < STREAM_THROTTLE_MS) return;
+        lastFlush = now;
+        if (!logRef.logId) return;
+        bus.emit('updateLogMessage', {
+          streamId: options.logger.streamId,
+          logMessage: {
+            id: logRef.logId,
+            groupId: logRef.groupId,
+            messageType: MESSAGE_TYPES.TOOL_USE,
+            data: {
+              toolName: call.name,
+              input: parsedInput ?? call.raw,
+              output: outputBuffer,
+              status: 'in_progress',
+            },
+          },
+        });
+      };
+    }
+
     const result = await this.invokeToolSafely(
       call,
       tool,
@@ -669,6 +706,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
       tracker,
       todoState,
       onExecutionReady,
+      onToolOutput,
     );
 
     const trackedEdits = tracker.recordEdits(result.edits);
