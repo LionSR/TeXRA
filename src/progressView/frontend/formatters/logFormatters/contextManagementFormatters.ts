@@ -9,6 +9,7 @@
 // Local imports - shared schemas
 import {
   ContextManagementDataSchema,
+  type ContextManagementData,
   type LogMessageData,
 } from '@shared/schemas';
 
@@ -70,15 +71,10 @@ const ACTION_CONFIG: Record<
   },
 };
 
-/** Build context management items from data. */
+/** Build context management items from parsed data. */
 function buildContextManagementItems(
-  data: unknown,
-): { config: ActionConfig; items: ContextStatItem[]; summary?: string } | null {
-  const result = ContextManagementDataSchema.safeParse(data);
-  if (!result.success) {
-    return null;
-  }
-
+  data: ContextManagementData,
+): { config: ActionConfig; items: ContextStatItem[]; summary?: string } {
   const {
     action,
     tokensBefore,
@@ -90,7 +86,7 @@ function buildContextManagementItems(
     reducedMaxTokens,
     details,
     summary,
-  } = result.data;
+  } = data;
 
   const config: ActionConfig = ACTION_CONFIG[action] || {
     icon: 'codicon-history',
@@ -163,10 +159,11 @@ export function formatContextManagementTemplate(
 ): FormatResult {
   const { id, data } = message;
 
-  // Hide max_tokens_reduced events when the reduced value is still comfortable
   const parsed = ContextManagementDataSchema.safeParse(data);
+  if (!parsed.success) return null;
+
+  // Hide max_tokens_reduced events when the reduced value is still comfortable
   if (
-    parsed.success &&
     parsed.data.action === 'max_tokens_reduced' &&
     parsed.data.reducedMaxTokens !== undefined &&
     parsed.data.reducedMaxTokens >= MAX_TOKENS_REDUCED_DISPLAY_THRESHOLD
@@ -174,10 +171,7 @@ export function formatContextManagementTemplate(
     return null;
   }
 
-  const result = buildContextManagementItems(data);
-  if (!result) return null;
-
-  const { config, items, summary } = result;
+  const { config, items, summary } = buildContextManagementItems(parsed.data);
 
   return html`
     <context-management
