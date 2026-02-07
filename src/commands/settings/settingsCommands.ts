@@ -11,6 +11,8 @@ export const settingsViewCommands = {
   // Tab-specific commands
   showMemory: 'texra.showMemory',
   showHistory: 'texra.showAgentHistory',
+  showModels: 'texra.showModels',
+  showAgents: 'texra.showAgents',
 };
 
 let settingsViewProvider: SettingsViewProvider | null = null;
@@ -53,6 +55,12 @@ export function registerSettingsViewCommands(
     ),
     vscode.commands.registerCommand(settingsViewCommands.showHistory, () =>
       settingsViewProvider?.showSettingsView(SETTINGS_TAB.HISTORY),
+    ),
+    vscode.commands.registerCommand(settingsViewCommands.showModels, () =>
+      settingsViewProvider?.showSettingsView(SETTINGS_TAB.MODELS),
+    ),
+    vscode.commands.registerCommand(settingsViewCommands.showAgents, () =>
+      settingsViewProvider?.showSettingsView(SETTINGS_TAB.AGENTS),
     ),
   );
 }
