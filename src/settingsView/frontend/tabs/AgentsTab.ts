@@ -4,7 +4,14 @@
  */
 
 // Third-party imports
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  css,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
@@ -174,8 +181,15 @@ export class AgentsTab extends LitElement {
   @property({ attribute: false }) toolUseAgents: AgentSelectionItem[] = [];
   @property({ attribute: false }) customAgentDir = '';
   @property({ attribute: false }) customAgentDirIsDefault = true;
+  @property({ attribute: false }) initialSubTab?: AgentCategory;
 
   @state() private activeSubTab: AgentCategory = 'workflow';
+
+  protected override willUpdate(changed: PropertyValues): void {
+    if (changed.has('initialSubTab') && this.initialSubTab) {
+      this.activeSubTab = this.initialSubTab;
+    }
+  }
 
   private setSubTab(tab: AgentCategory): void {
     this.activeSubTab = tab;
