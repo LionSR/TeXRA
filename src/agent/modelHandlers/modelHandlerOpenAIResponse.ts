@@ -19,7 +19,6 @@ import {
   getSdkErrorMessage,
   isContextWindowError,
   isPreviousResponseIdError,
-  markErrorRetryable,
 } from '@common/errors/sdkErrorUtils';
 
 // Type imports
@@ -1683,13 +1682,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         if (err instanceof DOMException && err.name === 'AbortError') {
           // User cancelled during retrieve - clear pending ID
           this.clearPendingBackgroundResponse();
-        } else {
-          // Polling failures are retryable: the response existed but became
-          // unreachable (e.g., 404 expired/deleted, network error). A retry
-          // will either resume polling or create a new request from scratch.
-          markErrorRetryable(err);
+          throw err;
         }
-        throw err;
+        // Polling failure: the response existed but became unreachable
+        // (e.g., 404 expired/deleted, network error during polling).
+        // Wrap in a plain Error (no status code) so formatProviderHttpError
+        // classifies it as a network-like error (retryable). The retry will
+        // either resume polling via tryResumeBackgroundResponse or create a
+        // new request from scratch.
+        throw new Error(
+          `Background response polling failed for ${responseId}: ${getSdkErrorMessage(err)}`,
+          { cause: err },
+        );
       }
 
       this.logger.debug(
