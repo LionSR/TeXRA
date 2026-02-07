@@ -80,7 +80,7 @@ The [neu-translator](https://github.com/neutree-ai/neu-translator) project uses 
 // Existing implementation in modelHandlerOpenAIResponse.ts
 const compactedResponse = await client.responses.compact(compactParams);
 const compactedMessages = compactedResponse.output as unknown as ResponseInputItem[];
-const tokensAfter = await this.estimateTokenCount(compactedMessages, { client, signal, systemPrompt });
+const tokensAfter = await this.estimateTokenCount(compactedMessages, { client, signal, systemPrompt, tools: convertedTools });
 
 this.logger.logContextManagement(
   `Compacted: ${tokensBefore} → ${tokensAfter} tokens`,
