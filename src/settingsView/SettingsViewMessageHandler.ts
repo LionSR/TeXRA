@@ -45,7 +45,12 @@ import {
   AgentHistoryManager,
   type AgentHistoryItem,
 } from '@common/history/AgentHistoryManager';
-import { GlobalStateKey, WorkspaceStateKey, globalSM, workspaceSM } from '@common/state';
+import {
+  GlobalStateKey,
+  WorkspaceStateKey,
+  globalSM,
+  workspaceSM,
+} from '@common/state';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import {
   DEFAULT_MODELS,

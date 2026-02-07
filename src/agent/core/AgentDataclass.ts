@@ -4,7 +4,7 @@ import { ToolDefinitionSchema } from '@model';
 
 export const AgentSource = z.enum([
   'custom',
-  'builtIn',
+  'builtInWorkflow',
   'builtInToolUse',
   'remote',
 ]);

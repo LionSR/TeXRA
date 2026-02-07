@@ -83,7 +83,7 @@ export class AgentDirectoryManager {
     switch (source) {
       case 'custom':
         return this.custom();
-      case 'builtIn':
+      case 'builtInWorkflow':
         return this.builtIn();
       case 'builtInToolUse':
         return this.builtInToolUse();
@@ -107,7 +107,7 @@ export class AgentDirectoryManager {
 
     return [
       { directory: customDir, source: 'custom' },
-      { directory: builtInDir, source: 'builtIn' },
+      { directory: builtInDir, source: 'builtInWorkflow' },
       { directory: builtInToolUseDir, source: 'builtInToolUse' },
     ];
   }

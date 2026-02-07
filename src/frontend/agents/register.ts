@@ -17,7 +17,7 @@ const CHANNEL = 'AgentRegister';
 logger.initialize(CHANNEL);
 
 /**
- * Prompt to add a newly created agent to the `texra.agents` setting. When
+ * Prompt to add a newly created agent to the visible agents list. When
  * `autoAdd` is true, the agent is added without prompting.
  */
 export interface AgentVariantMetadata {
@@ -56,7 +56,10 @@ export async function promptToAddAgentToConfig(
   autoAdd = false,
   variant: AgentVariantMetadata = {},
 ): Promise<void> {
-  const current = workspaceSM.get<string[]>(WorkspaceStateKey.ENABLED_AGENTS, []);
+  const current = workspaceSM.get<string[]>(
+    WorkspaceStateKey.ENABLED_AGENTS,
+    [],
+  );
 
   const skipReason = getAgentRegistrationSkipReason(
     agentName,
@@ -76,7 +79,7 @@ export async function promptToAddAgentToConfig(
   const shouldAdd =
     autoAdd ||
     (await vscode.window.showInformationMessage(
-      `Agent "${agentName}" was created or modified. Add it to 'texra.agents'?`,
+      `Agent "${agentName}" was created or modified. Show it in the agent dropdown?`,
       'Add Agent',
       'Cancel',
     )) === 'Add Agent';
@@ -85,9 +88,7 @@ export async function promptToAddAgentToConfig(
     current.push(agentName);
     await workspaceSM.update(WorkspaceStateKey.ENABLED_AGENTS, current);
     void vscode.commands.executeCommand('texra.refreshAllOptions');
-    vscode.window.showInformationMessage(
-      `Agent "${agentName}" is now visible`,
-    );
+    vscode.window.showInformationMessage(`Agent "${agentName}" is now visible`);
   }
 }
 
@@ -125,7 +126,10 @@ export async function validateYamlAndPromptAdd(
     return;
   }
 
-  const configuredAgents = workspaceSM.get<string[]>(WorkspaceStateKey.ENABLED_AGENTS, []);
+  const configuredAgents = workspaceSM.get<string[]>(
+    WorkspaceStateKey.ENABLED_AGENTS,
+    [],
+  );
   if (configuredAgents.includes(filenameBase)) {
     return;
   }
