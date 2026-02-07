@@ -45,15 +45,13 @@ export const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000;
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
- * Format a millisecond duration as a human-readable string (e.g. "30s", "2min").
+ * Check whether an axios error code indicates a timeout.
+ *
+ * axios uses ECONNABORTED by default and ETIMEDOUT when
+ * `clarifyTimeoutError` is enabled or via the fetch adapter.
  */
-export function formatTimeoutDuration(ms: number): string {
-  const seconds = ms / 1000;
-  if (seconds >= 60) {
-    const mins = seconds / 60;
-    return Number.isInteger(mins) ? `${mins}min` : `${mins.toFixed(1)}min`;
-  }
-  return `${seconds}s`;
+export function isTimeoutErrorCode(code: string | undefined): boolean {
+  return code === 'ECONNABORTED' || code === 'ETIMEDOUT';
 }
 
 /**
@@ -63,5 +61,5 @@ export function formatTimeoutDuration(ms: number): string {
  * // → "Command execution timed out after 120s."
  */
 export function buildTimeoutMessage(action: string, timeoutMs: number): string {
-  return `${action} timed out after ${formatTimeoutDuration(timeoutMs)}.`;
+  return `${action} timed out after ${timeoutMs / 1000}s.`;
 }
