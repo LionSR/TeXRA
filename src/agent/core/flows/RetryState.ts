@@ -1,7 +1,6 @@
 /** Retry state management: Node retry config, error tracking, and retryable node base class. */
 
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { TOKEN_REFRESH_THRESHOLD_MS } from '@auth/config';
 import {
   MESSAGE_TYPES,
   STREAM_STATUS,
@@ -105,7 +104,7 @@ export abstract class RetryableInvocationNode<
     return cloned;
   }
 
-  /** Wraps operation with AbortController; refreshes token once on relay 401 errors. */
+  /** Wraps operation with AbortController; proactively refreshes near-expiry relay tokens and reactively handles 401 errors. */
   protected async withAbortController<T>(
     operation: (signal: AbortSignal) => Promise<T>,
   ): Promise<T> {
@@ -120,7 +119,7 @@ export abstract class RetryableInvocationNode<
 
     // Proactive relay token refresh: if the token is nearing expiry, refresh
     // it and recreate the client *before* the request so we never hit a 401.
-    if (SupabaseClient.isTokenExpiringSoon(TOKEN_REFRESH_THRESHOLD_MS)) {
+    if (SupabaseClient.isTokenExpiringSoon()) {
       services.logger.debug(
         'Token nearing expiry, refreshing client proactively',
       );
