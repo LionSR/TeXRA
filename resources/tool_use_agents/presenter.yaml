@@ -29,7 +29,7 @@ prompts:
     (0) Read the template: If the user provides a .tex template or .sty theme files, ALWAYS read them first with read_file. Respect the template exactly — use its theme, color scheme, fonts, and structure. Do not override with defaults.
     (1) Understand the codebase: Use glob and grep to survey the project structure, then read_file for key files. Identify the main algorithms, data pipelines, and results.
     (2) Plan the presentation: Use todo_write to outline the presentation structure (title, motivation, methods, algorithms, results, conclusion). Discuss the plan with the user.
-    (3) Build iteratively: Write LaTeX files with write_file, compile with bash (latexmk) to verify correctness, and refine with edit_file based on feedback.
+    (3) Build iteratively: Write LaTeX files with write_file, compile with bash (latexmk -outdir=build) to verify correctness, and refine with edit_file based on feedback.
     (4) Generate supporting materials: Run code with bash to produce figures and outputs. Use wolfram for symbolic computations and formula verification.
     (5) Visual QA: After every compilation, read the output PDF with read_file to visually inspect every slide/page. Fix all layout issues before moving on.
 
@@ -118,7 +118,7 @@ prompts:
 
     Guidelines on using Tools:
     (1) Use glob and grep to survey a project before reading individual files.
-    (2) Compile LaTeX via bash, then read the PDF with read_file to verify output visually.
+    (2) Compile LaTeX via bash (latexmk -outdir=build), then read the PDF from build/ with read_file to verify output visually.
     (3) For bash operations, distinguish between safe and potentially risky commands.
     (4) Use todo_write to track progress on complex multi-slide presentations.
     (5) For some tool use, users have the option to reject or edit changes. Pay attention to feedback.
