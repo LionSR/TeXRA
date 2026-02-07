@@ -65,6 +65,8 @@ export async function executeCommand(
     stdin?: string;
     /** Called with stdout chunks as they arrive, enabling live output streaming. */
     onStdout?: (chunk: string) => void;
+    /** Called with stderr chunks as they arrive, enabling live error streaming. */
+    onStderr?: (chunk: string) => void;
   } = {},
 ): Promise<ExecResult> {
   try {
@@ -108,10 +110,15 @@ export async function executeCommand(
       subprocess = execa(command, { ...execaOptions, shell: true });
     }
 
-    // Subscribe to stdout stream for live output if callback provided
+    // Subscribe to stdout/stderr streams for live output if callbacks provided
     if (options.onStdout && subprocess.stdout) {
       subprocess.stdout.on('data', (chunk: Buffer | string) => {
         options.onStdout!(String(chunk));
+      });
+    }
+    if (options.onStderr && subprocess.stderr) {
+      subprocess.stderr.on('data', (chunk: Buffer | string) => {
+        options.onStderr!(String(chunk));
       });
     }
 
