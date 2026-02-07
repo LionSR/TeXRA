@@ -15,6 +15,7 @@ import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
 import {
   ZOTERO_BBT_TIMEOUT_MS,
+  isTimeoutErrorCode,
   buildTimeoutMessage,
 } from '@tools/timeouts';
 import { getConfig } from '@utils/config';
@@ -178,7 +179,7 @@ export async function callBetterBibTeX<T = unknown>(
 
     return response.data.result as T;
   } catch (error) {
-    if (axios.isAxiosError(error) && error.code === 'ECONNABORTED') {
+    if (axios.isAxiosError(error) && isTimeoutErrorCode(error.code)) {
       throw new ToolError(
         buildTimeoutMessage('Zotero API request', timeout),
       );
