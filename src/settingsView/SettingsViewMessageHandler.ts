@@ -35,6 +35,7 @@ import {
   loadAgents,
 } from '@agent/index';
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import {
   BaseViewMessageHandler,
   SETTINGS_VIEW_COMMANDS,
@@ -54,6 +55,7 @@ import {
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
+import { getConfig, updateConfig } from '@utils/config/configUtils';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
 import {
   getToolUseMemoryEnabled,
@@ -135,7 +137,11 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
   return items.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function entryToSelectionItem(entry: AgentEntry): AgentSelectionItem {
+function entryToSelectionItem(
+  entry: AgentEntry,
+  enabledSet: Set<string>,
+): AgentSelectionItem {
+  const key = createKey(entry.source, entry.name);
   return {
     name: entry.name,
     source: entry.source,
@@ -146,6 +152,10 @@ function entryToSelectionItem(entry: AgentEntry): AgentSelectionItem {
     isCustom: entry.source === 'custom',
     isRemote: entry.source === 'remote',
     hasMultiple: Boolean(entry.multiplePath),
+    enabled:
+      enabledSet.size === 0 ||
+      enabledSet.has(key) ||
+      enabledSet.has(entry.name),
   };
 }
 
@@ -153,11 +163,16 @@ function buildAgentSelectionItems(): {
   workflow: AgentSelectionItem[];
   toolUse: AgentSelectionItem[];
 } {
+  const workflowEnabled = new Set(getConfig<string[]>('texra.agents', []));
+  const toolUseEnabled = new Set(
+    getConfig<string[]>('texra.toolUseAgents', []),
+  );
+
   const workflow = getWorkflowAgents()
-    .map(entryToSelectionItem)
+    .map((e) => entryToSelectionItem(e, workflowEnabled))
     .sort((a, b) => a.name.localeCompare(b.name));
   const toolUse = getToolUseAgents()
-    .map(entryToSelectionItem)
+    .map((e) => entryToSelectionItem(e, toolUseEnabled))
     .sort((a, b) => a.name.localeCompare(b.name));
   return { workflow, toolUse };
 }
@@ -238,6 +253,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleGetAgentSelection(),
       [SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML]: (data) =>
         this.handleOpenAgentYaml(data),
+      [SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED]: (data) =>
+        this.handleSetAgentEnabled(data),
+      [SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER]: (data) =>
+        this.handleOpenAgentFolder(data),
     };
   }
 
@@ -874,6 +893,61 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       await showLoggedErrorMessage(
         this.channel,
         'Failed to open agent YAML file',
+        error,
+      );
+    }
+  }
+
+  private async handleSetAgentEnabled(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_AGENT_ENABLED>,
+  ): Promise<void> {
+    const configKey =
+      data.category === 'workflow' ? 'texra.agents' : 'texra.toolUseAgents';
+    const current = getConfig<string[]>(configKey, []);
+    const agentKey = createKey(data.agentSource, data.agentName);
+
+    let updated: string[];
+    if (data.enabled) {
+      // Add by source:name key if not already present (check both formats)
+      if (current.includes(agentKey) || current.includes(data.agentName)) {
+        updated = current;
+      } else {
+        updated = [...current, agentKey];
+      }
+    } else {
+      // Remove both name and source:name formats
+      updated = current.filter(
+        (entry) => entry !== agentKey && entry !== data.agentName,
+      );
+    }
+
+    await updateConfig(configKey, updated, { prefix: false });
+
+    void vscode.commands.executeCommand('texra.refreshAllOptions');
+
+    const view = this.getActiveView();
+    if (view) await this.sendAgentSelectionData(view.webview);
+  }
+
+  private async handleOpenAgentFolder(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_FOLDER>,
+  ): Promise<void> {
+    try {
+      const folderPath = await agentDirectories.getDirectory(data.folderType);
+      if (!folderPath) {
+        await vscode.window.showErrorMessage(
+          `No local directory for agent source: ${data.folderType}`,
+        );
+        return;
+      }
+      await vscode.commands.executeCommand(
+        'revealFileInOS',
+        vscode.Uri.file(folderPath),
+      );
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to open agent folder',
         error,
       );
     }
