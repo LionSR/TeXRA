@@ -164,50 +164,6 @@ export const settingsViewStyles: CSSResult = css`
     margin-top: var(--spacing-xlarge);
   }
 
-  .agents-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: var(--spacing-medium);
-  }
-
-  .agents-table th,
-  .agents-table td {
-    padding: var(--spacing-medium);
-    text-align: left;
-    border-bottom: var(--border-thin) solid var(--color-border);
-  }
-
-  .agents-table th {
-    background: var(--vscode-editor-background);
-    font-weight: 600;
-    color: var(--vscode-foreground);
-    position: sticky;
-    top: 0;
-  }
-
-  .agents-table tbody tr:hover {
-    background: var(--vscode-list-hoverBackground);
-  }
-
-  .agent-name {
-    font-weight: 500;
-    color: var(--color-text-link);
-    white-space: nowrap;
-  }
-
-  .agent-description {
-    color: var(--vscode-foreground);
-    max-width: 300px;
-  }
-
-  .category-badge {
-    text-transform: capitalize;
-  }
-
-  .visibility-badge {
-    text-transform: lowercase;
-  }
-
   .badge.visibility-badge.public {
     background: var(--vscode-testing-iconPassed);
     color: var(--vscode-button-foreground);
