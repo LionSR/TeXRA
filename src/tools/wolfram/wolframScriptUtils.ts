@@ -5,11 +5,9 @@ import * as vscode from 'vscode';
 import { toErrorMessage } from '@common/errors';
 import { executeCommand, checkToolInstalled } from '@utils/system';
 
-// Wolfram configuration is now in toolUtils.ts
+export const WOLFRAM_CODE_TIMEOUT_MS = 30_000; // 30 s
+export const WOLFRAM_FILE_TIMEOUT_MS = 60_000; // 60 s
 
-// Constants
-const DEFAULT_CODE_TIMEOUT = 30000; // 30 seconds
-const DEFAULT_FILE_TIMEOUT = 60000; // 60 seconds
 const WOLFRAM_NOT_INSTALLED_ERROR =
   'Mathematica/wolframscript is not installed or not in your PATH.';
 const WOLFRAM_CHANNEL = 'WolframTool';
@@ -95,7 +93,7 @@ export async function executeWolframCode(
   } = {},
 ): Promise<WolframScriptResult> {
   return runWolfram(['-code', code], {
-    timeout: options.timeout ?? DEFAULT_CODE_TIMEOUT,
+    timeout: options.timeout ?? WOLFRAM_CODE_TIMEOUT_MS,
     showErrorsToUser: options.showErrorsToUser,
   });
 }
@@ -114,7 +112,7 @@ export async function executeWolframScriptFile(
   } = {},
 ): Promise<WolframScriptResult> {
   return runWolfram(['-file', filePath], {
-    timeout: options.timeout ?? DEFAULT_FILE_TIMEOUT,
+    timeout: options.timeout ?? WOLFRAM_FILE_TIMEOUT_MS,
     showErrorsToUser: options.showErrorsToUser,
   });
 }

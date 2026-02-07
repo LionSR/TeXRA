@@ -23,11 +23,15 @@ import { z } from 'zod';
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
+import { isTimeoutErrorCode, buildTimeoutMessage } from '@tools/timeouts';
 import { pluralize } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - zotero
 import { getZoteroPort } from './bbtClient';
+
+const ZOTERO_PING_TIMEOUT_MS = 2_000; // 2 s
+const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000; // 30 s
 
 /**
  * Schema for a single item to add to Zotero.
@@ -110,7 +114,7 @@ async function checkZoteroRunning(port: number): Promise<void> {
   try {
     const response = await axios.get(
       `http://127.0.0.1:${port}/connector/ping`,
-      { timeout: 2000 },
+      { timeout: ZOTERO_PING_TIMEOUT_MS },
     );
     if (response.status !== 200) {
       throw new Error('Unexpected response');
@@ -134,7 +138,10 @@ async function callZoteroConnector(
     const response = await axios.post(
       `http://127.0.0.1:${port}/connector/${endpoint}`,
       body,
-      { timeout: 30000, headers: { 'Content-Type': 'application/json' } },
+      {
+        timeout: ZOTERO_CONNECTOR_TIMEOUT_MS,
+        headers: { 'Content-Type': 'application/json' },
+      },
     );
     if (response.status === 200 || response.status === 201) {
       return { status: 'success' };
@@ -144,6 +151,15 @@ async function callZoteroConnector(
       message: `Unexpected response status: ${response.status}`,
     };
   } catch (error) {
+    if (error instanceof AxiosError && isTimeoutErrorCode(error.code)) {
+      return {
+        status: 'error',
+        message: buildTimeoutMessage(
+          'Zotero Connector request',
+          ZOTERO_CONNECTOR_TIMEOUT_MS,
+        ),
+      };
+    }
     const message =
       error instanceof AxiosError && error.response?.data?.error
         ? String(error.response.data.error)
