@@ -127,6 +127,8 @@ export interface DetailsSummaryOptions {
     content?: string;
     contentId?: string;
   };
+  /** Extra Lit template content rendered after the label (e.g. a live timer). */
+  extraContent?: TemplateResult;
 }
 
 /** Build a details summary element with icon, label, and optional extras. */
@@ -140,6 +142,7 @@ export function buildDetailsSummary(
     includeIconClass = true,
     timestamp,
     copyButton,
+    extraContent,
   } = options;
   const iconClasses = includeIconClass
     ? `codicon icon ${iconClass}`
@@ -155,9 +158,10 @@ export function buildDetailsSummary(
         contentId: copyButton.contentId,
       })
     : nothing;
+  const extraTemplate = extraContent ?? nothing;
   // Toggle icon uses CSS rotation via details[open] selector - always start with chevron-right
   // prettier-ignore
-  return html`<summary class="details-summary"><i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i> <i class=${iconClasses}></i> <span class=${labelClass}>${label}</span>${timestampTemplate}${copyTemplate}</summary>`;
+  return html`<summary class="details-summary"><i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i> <i class=${iconClasses}></i> <span class=${labelClass}>${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</summary>`;
 }
 
 /** Build rendered templates for file list. */
