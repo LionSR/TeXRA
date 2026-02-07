@@ -330,6 +330,8 @@ export const SETTINGS_VIEW_CMD = {
   // Agent selection commands
   GET_AGENT_SELECTION: 'getAgentSelection',
   OPEN_AGENT_YAML: 'openAgentYaml',
+  SET_AGENT_ENABLED: 'setAgentEnabled',
+  OPEN_AGENT_FOLDER: 'openAgentFolder',
 } as const;
 
 // Settings view specific commands (combines Memory, History, and Profile views)
