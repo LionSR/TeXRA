@@ -485,9 +485,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * - Not running through OpenRouter (which may not support compaction)
    */
   private shouldCompact(): boolean {
-    // Manual compaction request bypasses threshold checks
+    // Manual compaction request bypasses threshold checks.
+    // The flag is NOT cleared here - the caller clears it after compaction
+    // is attempted to preserve the request across retries.
     if (this.compactionRequested) {
-      this.compactionRequested = false;
       if (this.isOpenRouterRoutingEnabled()) {
         return false;
       }
@@ -1108,6 +1109,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Store compacted messages for return value (captured when compaction succeeds)
     let compactedMessages: ResponseInputItem[] | undefined;
     if (this.shouldCompact()) {
+      // Clear manual compaction flag now that compaction is being attempted.
+      // For automatic compaction (threshold-based), this is a no-op since the flag is false.
+      this.compactionRequested = false;
       const threshold = this.getCompactionTokenThreshold();
       this.logger.logProgress(
         `Compacting conversation (${this.conversationState.cumulativeInputTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
