@@ -2,6 +2,8 @@
  * Live elapsed-time timer for in-progress tool calls.
  *
  * Renders a ticking counter (e.g. "3s", "1min 12s") that updates every second.
+ * When a timeout limit is provided, displays "elapsed / limit" so the user
+ * can see how close the command is to being killed.
  * Automatically starts on connect and stops on disconnect.
  */
 
@@ -24,10 +26,16 @@ export class ToolTimer extends LitElement {
       margin-left: 6px;
       font-variant-numeric: tabular-nums;
     }
+    .timer-limit {
+      opacity: 0.6;
+    }
   `;
 
   /** Start timestamp in milliseconds (Date.now() epoch). */
   @property({ type: Number }) startTime = 0;
+
+  /** Timeout limit in milliseconds. When set, displayed as "elapsed / limit". */
+  @property({ type: Number }) timeoutMs = 0;
 
   @state() private _elapsed = '';
 
@@ -55,6 +63,11 @@ export class ToolTimer extends LitElement {
 
   override render(): TemplateResult {
     if (!this._elapsed) return html``;
+    if (this.timeoutMs > 0) {
+      const limit = formatDuration(this.timeoutMs);
+      // prettier-ignore
+      return html`<span class="timer">${this._elapsed}<span class="timer-limit"> / ${limit}</span></span>`;
+    }
     return html`<span class="timer">${this._elapsed}</span>`;
   }
 }
