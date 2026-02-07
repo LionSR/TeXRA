@@ -19,6 +19,7 @@ import {
   getSdkErrorMessage,
   isContextWindowError,
   isPreviousResponseIdError,
+  markErrorRetryable,
 } from '@common/errors/sdkErrorUtils';
 
 // Type imports
@@ -1314,6 +1315,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           this.logger.warn(
             `Streaming response ${response.id} ended with pending status "${response.status}" - polling for completion`,
           );
+          // Store pending ID so retry logic can resume polling instead of creating new request
+          this.pendingBackgroundResponseId = response.id;
           response = await this.waitForBackgroundCompletion(
             client,
             response,
@@ -1362,8 +1365,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           this.logger.logProgress(
             `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
           );
-          // Store pending ID so retry logic can resume polling instead of creating new request
-          this.pendingBackgroundResponseId = response.id;
         } else {
           this.logger.debug(
             `Response ${response.id} returned with pending status "${response.status}" despite non-background mode; polling for completion`,
@@ -1376,6 +1377,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             },
           );
         }
+        // Store pending ID so retry logic can resume polling instead of creating new request
+        this.pendingBackgroundResponseId = response.id;
         response = await this.waitForBackgroundCompletion(
           client,
           response,
@@ -1680,6 +1683,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         if (err instanceof DOMException && err.name === 'AbortError') {
           // User cancelled during retrieve - clear pending ID
           this.clearPendingBackgroundResponse();
+        } else {
+          // Polling failures are retryable: the response existed but became
+          // unreachable (e.g., 404 expired/deleted, network error). A retry
+          // will either resume polling or create a new request from scratch.
+          markErrorRetryable(err);
         }
         throw err;
       }
