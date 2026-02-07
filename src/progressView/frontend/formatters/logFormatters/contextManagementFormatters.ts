@@ -24,6 +24,13 @@ import type {
   ContextStatItem,
 } from '../../components/ContextManagement';
 
+/**
+ * Minimum reduced token threshold below which the "Max Tokens Reduced" event
+ * is surfaced in the UI. When the adjusted max_tokens is still at or above
+ * this value the reduction is minor and not worth distracting the user with.
+ */
+const MAX_TOKENS_REDUCED_DISPLAY_THRESHOLD = 32_768;
+
 // Actions that show tokens freed stat
 const TOKENS_FREED_ACTIONS = new Set([
   'clear_tool_uses',
@@ -155,6 +162,18 @@ export function formatContextManagementTemplate(
   _options?: { defaultOpen?: boolean },
 ): FormatResult {
   const { id, data } = message;
+
+  // Hide max_tokens_reduced events when the reduced value is still comfortable
+  const parsed = ContextManagementDataSchema.safeParse(data);
+  if (
+    parsed.success &&
+    parsed.data.action === 'max_tokens_reduced' &&
+    parsed.data.reducedMaxTokens !== undefined &&
+    parsed.data.reducedMaxTokens >= MAX_TOKENS_REDUCED_DISPLAY_THRESHOLD
+  ) {
+    return null;
+  }
+
   const result = buildContextManagementItems(data);
   if (!result) return null;
 
