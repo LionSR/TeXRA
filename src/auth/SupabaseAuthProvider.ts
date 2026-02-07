@@ -15,10 +15,6 @@ import {
   SUPABASE_SESSION_KEY,
   GITHUB_TOKEN_EXCHANGE_URL,
   GITHUB_TOKEN_REFRESH_URL,
-  PROACTIVE_REFRESH_MIN_DELAY_MS,
-  PROACTIVE_REFRESH_RETRY_BASE_MS,
-  PROACTIVE_REFRESH_RETRY_MAX_MS,
-  PROACTIVE_REFRESH_MAX_RETRIES,
   type OAuthProvider,
 } from './config';
 import { getServerSideKeyService } from './serverKeys';
@@ -160,10 +156,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private refreshPromise: Promise<SupabaseSession | null> | null = null;
   /** Flag to prevent race conditions between OAuth and magic link handlers */
   private isProcessingCallback = false;
-  /** Timer handle for proactive token refresh. */
-  private proactiveRefreshTimer: ReturnType<typeof setTimeout> | null = null;
-  /** Consecutive proactive refresh failure count (for backoff). */
-  private proactiveRefreshRetryCount = 0;
 
   constructor(private context: vscode.ExtensionContext) {
     SupabaseClient.initialize(
@@ -192,8 +184,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       SUPABASE_SESSION_KEY,
       JSON.stringify(session),
     );
-    // Reschedule proactive refresh whenever the session is updated
-    this.scheduleRefreshForSession(session);
+    // Keep in-memory expiry cache in sync for fast pre-invocation checks.
+    SupabaseClient.setTokenExpiry(session.expiresAt);
     if (notify) {
       getServerSideKeyService().clearAllCaches();
       this._onDidChangeSessions.fire({
@@ -278,142 +270,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    * Dispose resources when provider is deactivated.
    */
   dispose(): void {
-    this.cancelScheduledRefresh();
     this.uriHandlerSubscription?.dispose();
     this._onDidChangeSessions.dispose();
-  }
-
-  // ---------------------------------------------------------------------------
-  // Proactive token refresh scheduler
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Start the proactive refresh scheduler.
-   * Reads the current session and schedules a background refresh before the
-   * token expires, so relay requests never encounter an expired token.
-   *
-   * Safe to call at any time — cancels any previously scheduled refresh first.
-   */
-  async startProactiveRefresh(): Promise<void> {
-    this.cancelScheduledRefresh();
-    const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
-    const session = parseStoredSession(sessionData);
-    if (!session) {
-      return;
-    }
-    this.scheduleRefreshForSession(session);
-  }
-
-  /**
-   * Schedule a proactive refresh based on the session's expiry time.
-   *
-   * Fires at `expiresAt - TOKEN_REFRESH_THRESHOLD_MS` so the token is
-   * refreshed well before it expires. On failure, retries with exponential
-   * backoff up to {@link PROACTIVE_REFRESH_MAX_RETRIES} times.
-   */
-  private scheduleRefreshForSession(session: SupabaseSession): void {
-    this.cancelScheduledRefresh();
-
-    const refreshAt = session.expiresAt - TOKEN_REFRESH_THRESHOLD_MS;
-    const delay = Math.max(
-      PROACTIVE_REFRESH_MIN_DELAY_MS,
-      refreshAt - Date.now(),
-    );
-
-    logger.info(
-      'SupabaseAuthProvider',
-      `Proactive refresh scheduled in ${Math.round(delay / 1000)}s`,
-    );
-
-    this.proactiveRefreshTimer = setTimeout(() => {
-      void this.executeProactiveRefresh();
-    }, delay);
-  }
-
-  /**
-   * Execute a single proactive refresh attempt.
-   * On success the retry counter resets (rescheduling happens via
-   * {@link storeSession} → {@link scheduleRefreshForSession}).
-   * On failure, schedules a retry with exponential backoff.
-   */
-  private async executeProactiveRefresh(): Promise<void> {
-    try {
-      const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
-      const session = parseStoredSession(sessionData);
-      if (!session) {
-        logger.debug(
-          'SupabaseAuthProvider',
-          'Proactive refresh skipped: no session',
-        );
-        return;
-      }
-
-      logger.info(
-        'SupabaseAuthProvider',
-        'Proactive refresh: refreshing token',
-      );
-      const refreshed = await this.refreshSession(session);
-
-      if (refreshed) {
-        this.proactiveRefreshRetryCount = 0;
-        logger.info(
-          'SupabaseAuthProvider',
-          'Proactive refresh succeeded, next refresh scheduled',
-        );
-        // storeSession (called inside refreshSession) already calls
-        // scheduleRefreshForSession, so no need to reschedule here.
-      } else {
-        this.handleProactiveRefreshFailure();
-      }
-    } catch (error) {
-      logger.error(
-        'SupabaseAuthProvider',
-        `Proactive refresh error: ${toErrorMessage(error)}`,
-      );
-      this.handleProactiveRefreshFailure();
-    }
-  }
-
-  /**
-   * Handle proactive refresh failure with exponential backoff.
-   * Falls back to on-demand refresh once max retries are exhausted.
-   */
-  private handleProactiveRefreshFailure(): void {
-    this.proactiveRefreshRetryCount++;
-
-    if (this.proactiveRefreshRetryCount > PROACTIVE_REFRESH_MAX_RETRIES) {
-      logger.warn(
-        'SupabaseAuthProvider',
-        `Proactive refresh gave up after ${PROACTIVE_REFRESH_MAX_RETRIES} failures; ` +
-          'on-demand refresh will handle token expiry',
-      );
-      this.proactiveRefreshRetryCount = 0;
-      return;
-    }
-
-    const backoff = Math.min(
-      PROACTIVE_REFRESH_RETRY_BASE_MS *
-        2 ** (this.proactiveRefreshRetryCount - 1),
-      PROACTIVE_REFRESH_RETRY_MAX_MS,
-    );
-
-    logger.info(
-      'SupabaseAuthProvider',
-      `Proactive refresh retry ${this.proactiveRefreshRetryCount}/${PROACTIVE_REFRESH_MAX_RETRIES} ` +
-        `in ${Math.round(backoff / 1000)}s`,
-    );
-
-    this.proactiveRefreshTimer = setTimeout(() => {
-      void this.executeProactiveRefresh();
-    }, backoff);
-  }
-
-  /** Cancel any pending proactive refresh timer. */
-  private cancelScheduledRefresh(): void {
-    if (this.proactiveRefreshTimer !== null) {
-      clearTimeout(this.proactiveRefreshTimer);
-      this.proactiveRefreshTimer = null;
-    }
   }
 
   /**
@@ -573,6 +431,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         return [];
       }
 
+      // Seed in-memory expiry cache on activation so pre-invocation checks work
+      // even before the first token refresh.
+      SupabaseClient.setTokenExpiry(session.expiresAt);
       return [this.toVSCodeSession(session)];
     } catch (error) {
       logger.error(
@@ -882,10 +743,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   /** Remove authentication session. */
   async removeSession(sessionId: string): Promise<void> {
     try {
-      this.cancelScheduledRefresh();
-      this.proactiveRefreshRetryCount = 0;
       await SupabaseClient.getClient().auth.signOut();
       await this.context.secrets.delete(SUPABASE_SESSION_KEY);
+      SupabaseClient.setTokenExpiry(0);
       // Clear server-side key cache when session is removed (handles automatic invalidation)
       getServerSideKeyService().clearAllCaches();
       this._onDidChangeSessions.fire({
