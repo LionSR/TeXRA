@@ -252,6 +252,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.SET_POLISH_MODEL]: (data) =>
         this.handleSetPolishModel(data),
 
+      // Auto-show remote agents handlers
+      [SETTINGS_VIEW_COMMANDS.GET_AUTO_SHOW_REMOTE]: () =>
+        this.handleGetAutoShowRemote(),
+      [SETTINGS_VIEW_COMMANDS.SET_AUTO_SHOW_REMOTE]: (data) =>
+        this.handleSetAutoShowRemote(data),
+
       // Custom agent directory handlers
       [SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR]: () =>
         this.handleGetCustomAgentDir(),
@@ -314,6 +320,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendProfileData(webview),
       this.sendModelSelectionData(webview),
       this.sendAgentSelectionData(webview),
+      this.sendAutoShowRemote(webview),
       this.sendCustomAgentDir(webview),
     ]);
   }
@@ -456,6 +463,38 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       path: resolvedPath,
       isDefault,
     });
+  }
+
+  // ============================================================
+  // Auto-show remote agents handler implementations
+  // ============================================================
+
+  public async sendAutoShowRemote(webview: vscode.Webview): Promise<void> {
+    const enabled =
+      globalSM.get<boolean>(GlobalStateKey.AUTO_SHOW_REMOTE_AGENTS, true) ??
+      true;
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_AUTO_SHOW_REMOTE,
+      enabled,
+    });
+  }
+
+  private async handleGetAutoShowRemote(): Promise<void> {
+    const view = this.getActiveView();
+    if (view) await this.sendAutoShowRemote(view.webview);
+  }
+
+  private async handleSetAutoShowRemote(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_AUTO_SHOW_REMOTE>,
+  ): Promise<void> {
+    await globalSM.update(
+      GlobalStateKey.AUTO_SHOW_REMOTE_AGENTS,
+      data.enabled,
+    );
+    void vscode.commands.executeCommand('texra.refreshAllOptions');
+
+    const view = this.getActiveView();
+    if (view) await this.sendAutoShowRemote(view.webview);
   }
 
   // ============================================================

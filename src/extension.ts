@@ -128,11 +128,8 @@ export async function activate(context: vscode.ExtensionContext) {
     );
   });
 
-  // Initialize Supabase authentication if enabled
-  const authEnabled = getConfig<boolean>('auth.enabled', true);
-
-  if (authEnabled) {
-    try {
+  // Initialize Supabase authentication
+  try {
       // Set the runtime extension ID for OAuth redirects
       // This ensures the redirect URI matches the actual extension ID
       setRuntimeExtensionId(context.extension.id);
@@ -200,7 +197,6 @@ export async function activate(context: vscode.ExtensionContext) {
         `Failed to initialize Supabase authentication: ${toErrorMessage(error)}`,
       );
     }
-  }
 
   // Create the log view provider
   const progressViewProvider = new ProgressViewProvider(context);

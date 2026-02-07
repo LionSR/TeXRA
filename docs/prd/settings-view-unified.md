@@ -435,19 +435,20 @@ LaTeX settings (formatter, latexdiff, TikZ, replacements) and advanced settings 
 ```
 
 **Settings Mapping (for future implementation):**
-| UI Element | VS Code Setting |
-|------------|-----------------|
-| Auto-show remote agents | `texra.remoteAgents.autoShow` |
-| Storage mode dropdown | `texra.agentOutputs.storageMode` |
-| Require approval checkbox | `texra.toolUse.requireEditApproval` |
-| Persist sessions checkbox | `texra.toolUse.persistence.enabled` |
-| Session retention dropdown | `texra.toolUse.persistence.ttlHours` |
-| Compaction threshold | `texra.model.compactionThresholdPercent` |
-| Max attempts | `texra.model.retry.maxAttempts` |
-| Backoff delay | `texra.model.retry.backoffMs` |
-| Custom agents directory | `texra.explorer.agentsDirectory` |
+| UI Element | Storage |
+|------------|---------|
+| Auto-show remote agents | `globalState.autoShowRemoteAgents` |
+| Agent visibility | `workspaceState.enabledAgents`, `workspaceState.enabledToolUseAgents` |
+| Custom agents directory | `globalState.customAgentDir` |
+| Storage mode dropdown | `texra.agentOutputs.storageMode` (VS Code config) |
+| Require approval checkbox | `texra.toolUse.requireEditApproval` (VS Code config) |
+| Persist sessions checkbox | `texra.toolUse.persistence.enabled` (VS Code config) |
+| Session retention dropdown | `texra.toolUse.persistence.ttlHours` (VS Code config) |
+| Compaction threshold | `texra.model.compactionThresholdPercent` (VS Code config) |
+| Max attempts | `texra.model.retry.maxAttempts` (VS Code config) |
+| Backoff delay | `texra.model.retry.backoffMs` (VS Code config) |
 
-**Storage:** `workspaceState.enabledAgents: string[]`, VS Code configuration for settings
+**Storage:** State managers for agent settings, VS Code configuration for remaining settings
 
 ---
 
@@ -496,7 +497,7 @@ await config.update('agents', enabledAgents, ConfigurationTarget.Workspace);
 |---------|---------------------|--------|
 | `texra.models` | Global | Same models everywhere |
 | Provider endpoints | Global | Same API setup everywhere |
-| `texra.agents` | Workspace | Different projects need different agents |
+| Agent visibility | Workspace | Different projects need different agents |
 | `texra.agentOutputs.storageMode` | Workspace | Project-specific output location |
 | `texra.toolUse.*` | Global | Consistent behavior |
 | `texra.latex.*` | Global/Workspace | User choice |
@@ -722,7 +723,7 @@ Based on settings in package.json:
 | Tab        | Settings to Cover                                                                                                                                                                                                                    |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Models** | `texra.models`, `texra.model.useOpenRouter`, `texra.model.useImprovedConnection`, `texra.model.improvedConnectionDomain`                                                                                                             |
-| **Agents** | `texra.agents`, `texra.toolUseAgents`, `texra.remoteAgents.autoShow`, `texra.explorer.agentsDirectory`, `texra.agentOutputs.storageMode`, `texra.toolUse.*` (3), `texra.model.compactionThresholdPercent`, `texra.model.retry.*` (2) |
+| **Agents** | Agent visibility (state managers), auto-show remote (global state), custom directory (global state), `texra.agentOutputs.storageMode`, `texra.toolUse.*` (3), `texra.model.compactionThresholdPercent`, `texra.model.retry.*` (2) |
 
 ### Remain as VS Code Settings Only
 
