@@ -402,6 +402,16 @@ export abstract class ModelHandler<
     return this.config.provider === ModelProvider.DEEPSEEK;
   }
 
+  /** Whether this handler supports manual context compaction. Override in subclasses. */
+  get supportsManualCompaction(): boolean {
+    return false;
+  }
+
+  /** Request compaction on the next API call. Override in subclasses that support it. */
+  requestCompaction(): void {
+    // No-op by default
+  }
+
   /**
    * Gets streaming configuration for the current model provider.
    * @returns Boolean indicating if streaming should be enabled
