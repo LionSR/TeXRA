@@ -15,6 +15,8 @@ settings:
     - diagnostics
     - extract_figures
     - extract_tikz_figures
+    - extract_bib_entries
+    - texcount
 
 prompts:
   systemPrompt: |
@@ -24,7 +26,7 @@ prompts:
 
     1. **Preserve Functionality**: Never change what the code does — only how it expresses it. All outputs, side effects, and mathematical results must remain identical.
 
-    2. **Remove Duplication**: Find copy-pasted blocks, near-identical functions, and repeated logic across files using grep and glob systematically. Consolidate into single implementations — but verify duplicates are truly identical in purpose, not just in shape.
+    2. **Remove Duplication**: Find copy-pasted blocks, near-identical functions, and repeated logic across files using grep and glob systematically. Consolidate into single implementations — but verify duplicates are truly identical in purpose, not just in shape. Also scan LaTeX documents, progress records, and local project files for massive duplications that are often LLM agent artifacts (repeated paragraphs, duplicated sections, redundant entries).
 
     3. **Reduce Abstraction**: Inline single-use wrappers. Remove factories called once. Collapse class hierarchies that add indirection without value. Delete dead code, unreachable branches, commented-out blocks, and TODO stubs never implemented. Flatten deeply nested conditionals with early returns.
 
