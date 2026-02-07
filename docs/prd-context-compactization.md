@@ -73,13 +73,15 @@ The [neu-translator](https://github.com/neutree-ai/neu-translator) project uses 
 
 - Continue using `/responses/compact` endpoint.
 - **Works well**: Opaque but effective — handles compaction server-side with good results.
-- **Token count from response**: Use `compactedResponse.usage.input_tokens` for the post-compaction token count.
+- **Token count from response**: Use `compactedResponse.usage.output_tokens` (minus `reasoning_tokens`) for the post-compaction token count. Note: `usage.input_tokens` represents the tokens consumed as input to the compact operation (the original messages), not the size of the compacted result. `usage.output_tokens` reflects the actual compacted output, and subtracting `reasoning_tokens` gives the content tokens that will count as input in the next request.
 - **Still emit CONTEXT_MANAGEMENT**: Even though compaction is server-side, emit the event for UI visibility using the token counts from the response. The summary field will note "Server-side compaction (details not available)".
 
 ```typescript
-// Existing implementation in modelHandlerOpenAIResponse.ts:483-512
+// Existing implementation in modelHandlerOpenAIResponse.ts
 const compactedResponse = await client.responses.compact(compactParams);
-const tokensAfter = compactedResponse.usage.input_tokens;
+const reasoningTokens =
+  compactedResponse.usage.output_tokens_details?.reasoning_tokens ?? 0;
+const tokensAfter = compactedResponse.usage.output_tokens - reasoningTokens;
 
 this.logger.logContextManagement(
   `Compacted: ${tokensBefore} → ${tokensAfter} tokens`,
