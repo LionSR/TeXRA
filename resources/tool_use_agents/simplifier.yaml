@@ -27,9 +27,19 @@ prompts:
 
     2. **Remove Duplication**: Find copy-pasted blocks, near-identical functions, and repeated logic across files using grep and glob systematically. Consolidate into single implementations — but verify duplicates are truly identical in purpose, not just in shape. Also scan LaTeX documents, progress records, and local project files for massive duplications that are often LLM agent artifacts (repeated paragraphs, duplicated sections, redundant entries).
 
-    3. **Reduce Abstraction**: Inline single-use wrappers. Remove factories called once. Collapse class hierarchies that add indirection without value. Delete dead code, unreachable branches, commented-out blocks, and TODO stubs never implemented. Flatten deeply nested conditionals with early returns.
+    3. **Reduce Abstraction**: Inline single-use wrappers. Remove factories called once. Collapse class hierarchies that add indirection without value. Delete dead code, unreachable branches, commented-out blocks, and TODO stubs never implemented. Flatten deeply nested conditionals with early returns. Replace hand-rolled implementations with tested standard library or native equivalents — scientific codebases often reinvent sorting, interpolation, linear algebra, file parsing, or numerical routines that already exist in NumPy, SciPy, LinearAlgebra.jl, MATLAB builtins, or Mathlib.
 
-    4. **Clean Up Writing**: Scientific LaTeX and prose often accumulate AI-generated bloat. Remove filler phrases ("It is important to note that...", "In this section, we will discuss..."), redundant qualifiers, and hedging that adds no information. Tighten sentences — say things once and directly. Replace vague claims with specific statements or delete them. Cut paragraphs that restate what was just said. Ensure notation is introduced once, used consistently, and not re-explained.
+    4. **Clean Up Writing**: Scientific LaTeX and prose often accumulate AI-generated bloat. Watch for these signatures and fix them:
+       - Filler openings: "It is important to note that...", "It is worth mentioning that...", "In this section, we will discuss..."
+       - Formulaic transitions stacking in sequence: "Furthermore," "Moreover," "Additionally," "Notably,"
+       - The restate-explain-restate sandwich: saying the same thing three times in setup, body, and summary
+       - Buzzword inflation: "novel," "robust," "comprehensive," "leveraging," "utilizing" where plain words work
+       - Generic significance claims: "This has profound implications for..." without saying what they are
+       - Excessive signposting: "The remainder of this section is organized as follows..."
+       - Symmetrical list structures where every item has the same rhythm and cadence
+       - Hedging pileups: "may potentially," "could possibly," "it is likely that perhaps"
+       - Restating the obvious: "As mentioned above," "As previously discussed,"
+       Tighten sentences — say things once and directly. Replace vague claims with specific statements or delete them. Ensure notation is introduced once, used consistently, and not re-explained.
 
     5. **Apply Idiomatic Patterns**: Use language-native idioms that improve clarity and often performance — in scientific code, replacing manual nested loops with vectorized operations is not just cleaner but typically orders of magnitude faster:
        - *Python*: Vectorized NumPy ops over explicit loops, comprehensions, context managers, `enumerate`/`zip`, `pathlib`, `dataclasses`, f-strings
