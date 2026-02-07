@@ -8,7 +8,10 @@ import { when } from 'lit/directives/when.js';
 import { AGENT_CATEGORY } from '@shared/schemas';
 import { getBasename } from '@shared/utils/path';
 import { getTextareaValue } from '@shared/utils/textarea';
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import {
+  FEEDBACK_ELIGIBLE_KINDS,
+  PERMISSION_KIND,
+} from '@shared/utils/uiConstants';
 import { postMessage } from '@shared/vscode';
 import { designTokens } from '@shared/styles/litStyles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
@@ -64,13 +67,6 @@ const PERMISSION_TITLES: Record<PermissionState['kind'], string> = {
   [PERMISSION_KIND.RETRY]: 'Retry request',
   [PERMISSION_KIND.PROPOSAL]: 'Agent proposal',
 };
-
-/** Prompt kinds that support rejection feedback */
-const FEEDBACK_ELIGIBLE_PERMISSIONS = new Set<PermissionState['kind']>([
-  PERMISSION_KIND.TOOL_EDIT,
-  PERMISSION_KIND.BASH,
-  PERMISSION_KIND.PROPOSAL,
-]);
 
 /** Primary actions (approve/reject) for each permission type */
 const PRIMARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
@@ -438,7 +434,7 @@ export class PermissionCard extends LitElement {
   private canCollectFeedback(): boolean {
     return Boolean(
       this.permission &&
-      FEEDBACK_ELIGIBLE_PERMISSIONS.has(this.permission.kind),
+      FEEDBACK_ELIGIBLE_KINDS.has(this.permission.kind),
     );
   }
 

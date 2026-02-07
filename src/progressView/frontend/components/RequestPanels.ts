@@ -35,7 +35,10 @@ import {
 
 // Local imports - shared utilities
 import { getBasename } from '@shared/utils/path';
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import {
+  FEEDBACK_ELIGIBLE_KINDS,
+  PERMISSION_KIND,
+} from '@shared/utils/uiConstants';
 import { postMessage } from '@shared/vscode';
 
 // Local imports - webview commands
@@ -48,12 +51,6 @@ import { getComposedPathElement } from '../utils';
 
 // Local imports - progress view component types
 import type { PermissionState } from './PermissionCard';
-
-const FEEDBACK_KINDS = new Set<PermissionState['kind']>([
-  PERMISSION_KIND.TOOL_EDIT,
-  PERMISSION_KIND.BASH,
-  PERMISSION_KIND.PROPOSAL,
-]);
 
 type PermissionKey = string;
 
@@ -613,7 +610,7 @@ export class RequestPanels extends LitElement {
     const key = this.getPermissionKey(permission);
     if (
       !this.feedbackOpenKeys.has(key) ||
-      !FEEDBACK_KINDS.has(permission.kind)
+      !FEEDBACK_ELIGIBLE_KINDS.has(permission.kind)
     ) {
       return nothing;
     }
@@ -688,7 +685,7 @@ export class RequestPanels extends LitElement {
     if (!permission) return;
 
     const key = this.getPermissionKey(permission);
-    if (action === 'reject' && FEEDBACK_KINDS.has(kind)) {
+    if (action === 'reject' && FEEDBACK_ELIGIBLE_KINDS.has(kind)) {
       if (!this.feedbackOpenKeys.has(key)) {
         this.openFeedback(key);
         return;
@@ -796,7 +793,7 @@ export class RequestPanels extends LitElement {
 
   /** Handle 'n' key for reject with feedback support */
   private handleRejectShortcut(permission: PermissionState): void {
-    if (!FEEDBACK_KINDS.has(permission.kind)) {
+    if (!FEEDBACK_ELIGIBLE_KINDS.has(permission.kind)) {
       this.emitAction(permission, 'reject');
       return;
     }
