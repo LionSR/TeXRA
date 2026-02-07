@@ -1164,7 +1164,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         }
       } catch (err) {
         if (isContextWindowError(err)) throw err;
-        this.logger.warn(
+        this.logger.debug(
           `Token counting failed: ${getSdkErrorMessage(err)}. Applying fallback cap.`,
         );
         // Fallback: cap output based on best available estimate.
@@ -1414,7 +1414,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.clearPendingBackgroundResponse();
       } else if (this.previousResponseId) {
         // Log diagnostic info for other errors when chaining was active
-        this.logger.warn(
+        this.logger.debug(
           `Request failed with previousResponseId=${this.previousResponseId}. ` +
             `Error: ${getSdkErrorMessage(error)}`,
         );
