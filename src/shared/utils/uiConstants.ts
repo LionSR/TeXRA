@@ -16,6 +16,13 @@ export const PERMISSION_KIND = {
 export type PermissionKind =
   (typeof PERMISSION_KIND)[keyof typeof PERMISSION_KIND];
 
+/** Permission kinds that support rejection feedback */
+export const FEEDBACK_ELIGIBLE_KINDS = new Set<PermissionKind>([
+  PERMISSION_KIND.TOOL_EDIT,
+  PERMISSION_KIND.BASH,
+  PERMISSION_KIND.PROPOSAL,
+]);
+
 /** Generates the getting started banner HTML with command links. */
 export function getGettingStartedHtml(prefix = ''): string {
   return (
