@@ -36,6 +36,7 @@ import {
 } from '@shared/schemas';
 import {
   UpdateAgentSelectionMessageSchema,
+  UpdateAutoShowRemoteMessageSchema,
   UpdateCustomAgentDirMessageSchema,
   type AgentSelectionItem,
 } from '@shared/schemas/settingsViewMessages';
@@ -132,6 +133,7 @@ export class SettingsApp extends BaseWebviewApp {
   @state() private toolUseAgents: AgentSelectionItem[] = [];
   @state() private customAgentDir = '';
   @state() private customAgentDirIsDefault = true;
+  @state() private autoShowRemote = true;
   @state() private agentSubTab: AgentCategory | undefined;
 
   protected get readyCommand(): string | null {
@@ -147,6 +149,7 @@ export class SettingsApp extends BaseWebviewApp {
     postMessage(SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION);
+    postMessage(SETTINGS_VIEW_COMMANDS.GET_AUTO_SHOW_REMOTE);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR);
   }
 
@@ -259,6 +262,20 @@ export class SettingsApp extends BaseWebviewApp {
       }
       this.workflowAgents = result.data.workflow;
       this.toolUseAgents = result.data.toolUse;
+      return;
+    }
+
+    // Auto-show remote agents messages
+    if (command === SETTINGS_VIEW_COMMANDS.UPDATE_AUTO_SHOW_REMOTE) {
+      const result = UpdateAutoShowRemoteMessageSchema.safeParse(raw);
+      if (!result.success) {
+        this.logSchemaError(
+          '[SettingsApp] Update auto-show remote message validation failed.',
+          result.error,
+        );
+        return;
+      }
+      this.autoShowRemote = result.data.enabled;
       return;
     }
 
@@ -491,6 +508,14 @@ export class SettingsApp extends BaseWebviewApp {
     postMessage(SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR);
   }
 
+  private handleSetAutoShowRemote(
+    event: CustomEvent<{ enabled: boolean }>,
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_AUTO_SHOW_REMOTE, {
+      enabled: event.detail.enabled,
+    });
+  }
+
   private handleOpenVscodeSettings(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS);
   }
@@ -608,10 +633,12 @@ export class SettingsApp extends BaseWebviewApp {
               .toolUseAgents=${this.toolUseAgents}
               .customAgentDir=${this.customAgentDir}
               .customAgentDirIsDefault=${this.customAgentDirIsDefault}
+              .autoShowRemote=${this.autoShowRemote}
               .initialSubTab=${this.agentSubTab}
               @agent-open-yaml=${this.handleOpenAgentYaml}
               @agent-enabled-set=${this.handleSetAgentEnabled}
               @agent-open-folder=${this.handleOpenAgentFolder}
+              @agent-auto-show-remote=${this.handleSetAutoShowRemote}
               @agent-create=${this.handleCreateAgent}
               @agent-set-custom-dir=${this.handleSetCustomAgentDir}
               @agent-reset-custom-dir=${this.handleResetCustomAgentDir}

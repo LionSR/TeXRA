@@ -19,6 +19,10 @@ export const AGENT_SOURCE = {
   REMOTE: 'remote',
 } as const;
 
+/**
+ * Single source of truth for agent source identifiers.
+ * Backend re-exports this from @agent/core/AgentDataclass as `AgentSource`.
+ */
 export const AgentSourceSchema = z.enum([
   AGENT_SOURCE.CUSTOM,
   AGENT_SOURCE.BUILT_IN_WORKFLOW,
@@ -27,3 +31,8 @@ export const AgentSourceSchema = z.enum([
 ]);
 
 export type AgentSourceType = z.infer<typeof AgentSourceSchema>;
+
+// Backend-compatible alias: value + type share the name "AgentSource"
+// (the standard Zod dual-export pattern used throughout the backend)
+export const AgentSource = AgentSourceSchema;
+export type AgentSource = AgentSourceType;

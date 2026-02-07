@@ -44,8 +44,9 @@ export enum GlobalStateKey {
   STREAMING_MOONSHOT = 'texra.streaming.moonshot',
   STREAMING_DASHSCOPE = 'texra.streaming.dashscope',
 
-  // Agent directory (migrated from VS Code config)
+  // Agent settings (migrated from VS Code config)
   CUSTOM_AGENT_DIR = 'texra.customAgentDir',
+  AUTO_SHOW_REMOTE_AGENTS = 'texra.autoShowRemoteAgents',
 
   // Endpoint settings
   ENDPOINT_OPENAI = 'texra.endpoint.openai',
