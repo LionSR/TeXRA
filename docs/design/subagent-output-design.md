@@ -347,23 +347,6 @@ The difference: 3a requires the orchestrator to still be in an active session (W
 
 ---
 
-## Comparison Matrix
-
-| Dimension | Pattern 1: Sync | Pattern 2: Await-Async | Pattern 3: Come-Back-Later |
-|-----------|-----------------|----------------------|---------------------------|
-| **Complexity** | Low | Medium | Medium-High |
-| **New tools** | 0 | 1-2 (await, check) | 0 |
-| **New infrastructure** | `executeAgentWithResult()` | + `SubagentTracker` | + result formatting + lifetime mgmt |
-| **Blocking** | Full (entire subagent run) | Partial (only at await point) | None |
-| **Parallelism** | None | Yes (launch N, await N) | Yes (natural) |
-| **Result guarantee** | Always available | Available at await | May be lost if session ends |
-| **Model complexity** | Low (call returns result) | Medium (remember IDs) | High (handle async messages) |
-| **Existing infra reuse** | `executeAgent` + `ToolResult` | + `BasePromiseCoordinator` pattern | + `FollowUpQueue` |
-| **Timeout risk** | High (long subagents) | Low-Medium | None |
-| **User interactivity** | Blocked during subagent | Partial | Full |
-
----
-
 ## Recommendation: Phased Implementation
 
 ### Phase 1: Sync (Pattern 1)
@@ -479,17 +462,259 @@ export async function executeAgentWithResult(
 
 ---
 
+## Parallel Tool Calling Considerations
+
+### Current behavior
+
+The orchestrator model can emit **multiple tool calls in a single response** (e.g., two `propose_workflow` calls for different files). Today these are dispatched through `ToolUseDispatchNode` which extends `BatchNode` — executing them **sequentially**, not in parallel (`ToolUseCycleFlow.ts:564`).
+
+A `ParallelBatchNode` exists (`node/index.ts:244-257`) that uses `Promise.all` but is **not currently used** for tool dispatch.
+
+### Impact per pattern
+
+**Pattern 1 (Sync)**: If the orchestrator emits two `propose_workflow` calls in one response, they run sequentially. Subagent A finishes, then subagent B starts. Total time = A + B. This is the worst case for parallel dispatch.
+
+To fix: Switch `ToolUseDispatchNode` from `BatchNode` to `ParallelBatchNode`. Both proposal tools would execute concurrently — each awaits its own subagent, and `Promise.all` collects both results. Total time = max(A, B). However, both tools block simultaneously, which means two approval dialogs may appear and two subagents run in parallel (API quota impact).
+
+**Pattern 2 (Await-Async)**: Natural fit. The orchestrator emits two `propose_workflow` calls in one response. Both launch immediately (non-blocking), both return subagent IDs. Later, the orchestrator emits two `await_subagent` calls in one response. With `ParallelBatchNode`, both awaits resolve concurrently. Even with `BatchNode`, the second `await` resolves near-instantly if the subagent finished while the first was being awaited.
+
+```
+Turn 1: [propose_workflow(A), propose_workflow(B)]  → "id-1", "id-2"
+Turn 2: [await_subagent(id-1), await_subagent(id-2)] → results
+```
+
+**Pattern 3 (Come-Back-Later)**: Parallel dispatch is irrelevant — all launches are non-blocking. Results arrive independently via `FollowUpQueue`.
+
+### Recommendation
+
+For Patterns 1 and 2, switching to `ParallelBatchNode` for `ToolUseDispatchNode` is a prerequisite for true parallel subagent execution. This is a one-line change (`extends ParallelBatchNode` instead of `extends BatchNode`) but has broader implications: **all** tool calls in a response would then execute concurrently, not just subagent proposals. This needs careful validation for tools that have side effects or ordering dependencies.
+
+A safer alternative: keep `BatchNode` as default, but let individual tools declare `parallelSafe: true`. The dispatch node could then partition calls into parallel-safe and sequential groups.
+
+---
+
+## Tool-Use Subagent Output Definition
+
+### Problem
+
+Workflow subagents produce structured `RoundOutput[]` (file locations, diffs, XML summaries). Tool-use subagents produce **conversational output** — there is no equivalent structured result.
+
+### Proposal: Last assistant response as output
+
+For tool-use subagents, define the output as the **last model assistant response text** from the conversation. This is already tracked:
+
+- `ToolUseProcessNode.post()` stores `workspace.assembly.lastResponse = execRes.text` when `endTurn` is true (`ToolUseCycleFlow.ts:513`)
+- The full `shared.conversation` (array of `ProviderMessage[]`) is maintained throughout the session and accessible at flow end (`ToolUseCycleNode.ts:156`)
+
+### Implementation
+
+Extend `RunToolUseFlowResult` to include the output:
+
+```typescript
+// Current
+export interface RunToolUseFlowResult {
+  status: EndGroupStatus;
+}
+
+// Proposed
+export interface RunToolUseFlowResult {
+  status: EndGroupStatus;
+  /** Last assistant text response (for subagent output reporting). */
+  lastResponse?: string;
+  /** Full conversation for detailed inspection (optional, large). */
+  conversation?: ProviderMessage[];
+}
+```
+
+In `runToolUseFlow()`, capture from the shared state before returning:
+
+```typescript
+// At end of runToolUseFlow(), before return:
+const lastAssistantMsg = shared.conversation
+  .filter(m => m.role === 'assistant')
+  .at(-1);
+const lastResponse = extractTextFromMessage(lastAssistantMsg);
+
+return { status, lastResponse };
+```
+
+### SubagentResult for tool-use agents
+
+```typescript
+// Add to the discriminated union:
+z.strictObject({
+  status: z.literal('completed'),
+  agentName: z.string(),
+  model: z.string(),
+  agentCategory: z.literal('toolUse'),
+  lastResponse: z.string(),           // Last assistant message text
+  // No roundOutputs/outputFiles — tool-use agents don't produce these
+})
+```
+
+This keeps the output lightweight (single string) while providing the meaningful content. The orchestrator can parse structured data from the response if the subagent was instructed to produce it (e.g., "return your findings as a JSON list").
+
+---
+
+## Parent-Child Agent Lineage
+
+### Problem
+
+Today, when a subagent is launched, there is no record of which orchestrator spawned it. This prevents:
+- Cascading cancellation (stop orchestrator → stop its subagents)
+- Progress tree views (show subagents nested under their parent)
+- Result routing (deliver subagent output back to the correct orchestrator)
+- Debugging (trace which agent spawned a failing subagent)
+
+### Proposal: SubagentLineage tracking
+
+Introduce a lightweight lineage record that links subagents to their parent orchestrator.
+
+```typescript
+// src/shared/schemas/subagent.ts
+
+export const SubagentLineageSchema = z.strictObject({
+  /** Unique ID for this subagent execution */
+  subagentId: z.string().uuid(),
+  /** StreamTabId of the parent orchestrator that spawned this subagent */
+  parentStreamId: StreamTabIdSchema,
+  /** ExecutionId of the parent orchestrator */
+  parentExecutionId: ExecutionIdSchema,
+  /** StreamTabId of the subagent itself */
+  childStreamId: StreamTabIdSchema,
+  /** ExecutionId of the subagent */
+  childExecutionId: ExecutionIdSchema,
+  /** Agent name of the child */
+  childAgentName: z.string(),
+  /** Agent category of the child */
+  childAgentCategory: z.enum(['workflow', 'toolUse']),
+  /** Timestamp when the subagent was launched */
+  launchedAt: z.number(),
+  /** Timestamp when the subagent completed (null if still running) */
+  completedAt: z.number().nullable(),
+});
+
+export type SubagentLineage = z.infer<typeof SubagentLineageSchema>;
+```
+
+### SubagentRegistry singleton
+
+```typescript
+class SubagentRegistry {
+  private readonly lineage = new Map<string, SubagentLineage>();
+
+  /** Register a new parent-child relationship */
+  register(entry: SubagentLineage): void {
+    this.lineage.set(entry.subagentId, entry);
+  }
+
+  /** Get all children of a parent stream */
+  getChildren(parentStreamId: StreamTabId): SubagentLineage[] {
+    return [...this.lineage.values()]
+      .filter(e => e.parentStreamId === parentStreamId);
+  }
+
+  /** Get the parent of a child stream */
+  getParent(childStreamId: StreamTabId): SubagentLineage | undefined {
+    return [...this.lineage.values()]
+      .find(e => e.childStreamId === childStreamId);
+  }
+
+  /** Mark a subagent as completed */
+  markCompleted(subagentId: string): void {
+    const entry = this.lineage.get(subagentId);
+    if (entry) entry.completedAt = Date.now();
+  }
+
+  /** Get all active (uncompleted) children of a parent */
+  getActiveChildren(parentStreamId: StreamTabId): SubagentLineage[] {
+    return this.getChildren(parentStreamId)
+      .filter(e => e.completedAt === null);
+  }
+
+  /** Clean up entries for a completed parent */
+  cleanupParent(parentStreamId: StreamTabId): void {
+    for (const [id, entry] of this.lineage) {
+      if (entry.parentStreamId === parentStreamId) {
+        this.lineage.delete(id);
+      }
+    }
+  }
+}
+
+export const subagentRegistry = new SubagentRegistry();
+```
+
+### Integration points
+
+1. **At launch time** (`WorkflowTool.ts`): When `executeAgentWithLogging()` / `executeAgentWithResult()` is called after approval, register the lineage entry. The parent's `streamId` and `executionId` are available from the tool's context (`getCurrentToolFileInteractionContext()`).
+
+2. **At completion time**: The `executeAgent()` wrapper marks the entry as completed. For Pattern 2/3, this triggers result delivery.
+
+3. **At cancellation time**: When an orchestrator is interrupted, `getActiveChildren()` can identify running subagents for cascading cancellation via `StreamStatusService`.
+
+4. **For ProgressBoard**: Emit lineage info on the event bus so the UI can render a tree:
+   ```typescript
+   bus.emit('subagentLaunched', {
+     parentStreamId,
+     childStreamId,
+     childAgentName,
+   });
+   ```
+
+### Depth limits
+
+For safety, enforce a maximum nesting depth (e.g., 3 levels). A subagent should not spawn its own subagents beyond this limit. Check at proposal time:
+
+```typescript
+function getLineageDepth(streamId: StreamTabId): number {
+  const parent = subagentRegistry.getParent(streamId);
+  if (!parent) return 0;
+  return 1 + getLineageDepth(parent.parentStreamId);
+}
+```
+
+---
+
+## Updated Comparison Matrix
+
+| Dimension | Pattern 1: Sync | Pattern 2: Await-Async | Pattern 3: Come-Back-Later |
+|-----------|-----------------|----------------------|---------------------------|
+| **Complexity** | Low | Medium | Medium-High |
+| **New tools** | 0 | 1-2 (await, check) | 0 |
+| **New infrastructure** | `executeAgentWithResult()` | + `SubagentTracker` | + result formatting + lifetime mgmt |
+| **Blocking** | Full (entire subagent run) | Partial (only at await point) | None |
+| **Parallelism** | Via ParallelBatchNode only | Yes (launch N, await N) | Yes (natural) |
+| **Parallel tool calls** | Works but serializes subagent duration | Best fit — launch is instant | Trivial — all non-blocking |
+| **Result guarantee** | Always available | Available at await | May be lost if session ends |
+| **Model complexity** | Low (call returns result) | Medium (remember IDs) | High (handle async messages) |
+| **Existing infra reuse** | `executeAgent` + `ToolResult` | + `BasePromiseCoordinator` | + `FollowUpQueue` |
+| **Timeout risk** | High (long subagents) | Low-Medium | None |
+| **User interactivity** | Blocked during subagent | Partial | Full |
+| **Lineage tracking** | Optional | Required (ID tracking) | Required (result routing) |
+| **Workflow output** | `RoundOutput[]` + file paths | Same | Same |
+| **Tool-use output** | `lastResponse` text | Same | Same |
+
+---
+
 ## Open Questions
 
-1. **Tool-use subagents**: Workflow agents produce file outputs. Tool-use agents produce conversational output (no `roundOutputs`). How should tool-use subagent results be structured? Options:
-   - Return the full conversation transcript
-   - Return only the final assistant message
-   - Return a structured summary (tool-use agents could write to a "result" field)
+1. **Output file reading**: Should the orchestrator receive file *contents* or just file *paths*? Paths are smaller but require the orchestrator to read files with a separate tool call. Contents are self-contained but can be large. A middle ground: include a short diff summary (already available in `RoundOutput.outputs[].diff`) and file paths.
 
-2. **Output file reading**: Should the orchestrator receive file *contents* or just file *paths*? Paths are smaller but require the orchestrator to read files. Contents are self-contained but can be large.
+2. **Timeout handling for Pattern 1**: What's the maximum acceptable blocking time? Should there be a configurable timeout that auto-switches to async mode? Provider-specific limits (Anthropic tool calls can run for several minutes; some providers may time out).
 
-3. **Timeout handling for Pattern 1**: What's the maximum acceptable blocking time? Should there be a configurable timeout that auto-switches to async mode?
+3. **Concurrent subagent limits**: Should there be a cap on how many subagents an orchestrator can launch simultaneously? The stream lock system prevents duplicate streams, but multiple distinct subagents could overwhelm API quotas. The `SubagentRegistry` can enforce this via `getActiveChildren().length`.
 
-4. **Concurrent subagent limits**: Should there be a cap on how many subagents an orchestrator can launch simultaneously? The stream lock system already prevents duplicate streams, but multiple distinct subagents could overwhelm API quotas.
+4. **Result formatting for Pattern 3**: How should async results be formatted when injected as follow-up messages? The model needs to distinguish subagent results from user messages. Proposal: XML-wrapped structured format that the model can parse:
+   ```xml
+   <subagent-result id="abc-123" agent="correct" status="completed">
+     <output-files>paper_correct_gemini3p_r0.tex</output-files>
+     <diff-summary>+42 -18 lines</diff-summary>
+   </subagent-result>
+   ```
 
-5. **Result formatting for Pattern 3**: How should async results be formatted when injected as follow-up messages? The model needs to distinguish subagent results from user messages. A structured prefix/wrapper would help: `[subagent-result: id=abc-123, agent=correct, status=completed]`.
+5. **ParallelBatchNode migration**: Should `ToolUseDispatchNode` switch to `ParallelBatchNode` unconditionally, or should it be opt-in per tool? Some tools may have ordering dependencies (e.g., file creation before file read). A `parallelSafe` tool metadata flag could gate this.
+
+6. **Nesting depth for subagent-of-subagent**: Proposed limit of 3 levels. Should this be configurable? What happens when a subagent tries to exceed the limit — hard error or silent degradation to sync?
+
+7. **Lineage persistence**: Should the `SubagentRegistry` persist across extension restarts (write to `ExecutionKVStore`), or is in-memory sufficient? Persistence would allow resume scenarios where the extension restarts mid-subagent-execution.
