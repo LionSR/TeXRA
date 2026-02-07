@@ -816,15 +816,11 @@ class ToolUseDispatchNode<C> extends BatchNode<
       }
     }
 
-    // Process user instructions from tool results
-    for (const execResult of completedResults) {
-      if (isNonEmptyString(execResult.result.userInstruction)) {
-        await services.modelHandler.createUserFollowUpMessages(
-          shared.messages,
-          execResult.result.userInstruction,
-        );
-      }
-    }
+    // Note: userInstruction is already included in the tool_result content
+    // via formatToolResultAsText (as "User feedback: ..."). Do NOT create
+    // separate user text messages for it — non-tool-result user messages cause
+    // Anthropic to strip thinking blocks from context, invalidating the prefix
+    // cache and forcing expensive cache re-creation.
 
     shared.toolCalls = [];
 
