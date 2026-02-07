@@ -44,6 +44,7 @@ const MAX_TAB_INDEX = SETTINGS_TAB_ORDER.length - 1;
 export const SetTabMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_CMD.SET_TAB),
   tabIndex: z.int().min(0).max(MAX_TAB_INDEX),
+  agentSubTab: AgentCategorySchema.optional(),
 });
 
 export type SetTabMessage = z.infer<typeof SetTabMessageSchema>;
