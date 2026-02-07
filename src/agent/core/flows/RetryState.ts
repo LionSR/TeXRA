@@ -117,23 +117,20 @@ export abstract class RetryableInvocationNode<
     this.signal = activeController.signal;
     services.setAbortController(activeController);
 
-    // Proactive relay token refresh: two steps —
-    // 1. Refresh the JWT via ensureFreshToken (network call if near expiry).
-    // 2. Recreate the SDK client so it uses the new token.
-    // If step 1 fails (returns null), skip step 2 — the old client is still
-    // usable until actual expiry, and the reactive 401 handler covers it.
+    // Proactive relay token refresh: recreate the SDK client before the
+    // request so it carries a fresh JWT. refreshClient → getClient →
+    // getApiKey → getAccessToken → ensureFreshToken handles the full chain.
+    // On failure tryRefreshClient logs and returns false — the old client
+    // is still usable until actual expiry, and the reactive 401 handler covers it.
     if (SupabaseClient.isTokenExpiringSoon()) {
       services.logger.debug(
         'Token nearing expiry, refreshing client proactively',
       );
-      const refreshed = await SupabaseClient.getAccessToken();
-      if (refreshed) {
-        await tryRefreshClient(
-          services.refreshClient,
-          services.logger,
-          'proactive pre-invocation',
-        );
-      }
+      await tryRefreshClient(
+        services.refreshClient,
+        services.logger,
+        'proactive pre-invocation',
+      );
     }
 
     try {
