@@ -274,7 +274,7 @@ export function getWorkflowAgents(): AgentEntry[] {
 }
 
 /** Get all tool-use agents. */
-function getToolUseAgents(): AgentEntry[] {
+export function getToolUseAgents(): AgentEntry[] {
   return [...cache.values()].filter(
     (e) => e.category === AgentCategory.ToolUse,
   );

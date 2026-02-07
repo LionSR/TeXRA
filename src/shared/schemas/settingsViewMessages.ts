@@ -81,6 +81,34 @@ export {
 } from './profileViewMessages';
 
 // ============================================================
+// Agent selection data schema
+// ============================================================
+
+export const AgentSelectionItemSchema = z.object({
+  name: z.string(),
+  source: z.string(),
+  category: z.string(),
+  description: z.string().optional(),
+  path: z.string(),
+  multiplePath: z.string().optional(),
+  tools: z.array(z.string()).optional(),
+  isCustom: z.boolean(),
+  isRemote: z.boolean(),
+  hasMultiple: z.boolean(),
+});
+export type AgentSelectionItem = z.infer<typeof AgentSelectionItemSchema>;
+
+/** Outbound: backend → frontend agent selection data */
+export const UpdateAgentSelectionMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION),
+  workflow: z.array(AgentSelectionItemSchema),
+  toolUse: z.array(AgentSelectionItemSchema),
+});
+export type UpdateAgentSelectionMessage = z.infer<
+  typeof UpdateAgentSelectionMessageSchema
+>;
+
+// ============================================================
 // Model selection data schema
 // ============================================================
 
@@ -232,6 +260,16 @@ const SetPolishModelMessageSchema = z.object({
   modelName: z.string().min(1),
 });
 
+// Agent selection inbound messages
+const GetAgentSelectionMessageSchema = z.object({
+  command: z.literal(CMD.GET_AGENT_SELECTION),
+});
+
+const OpenAgentYamlMessageSchema = z.object({
+  command: z.literal(CMD.OPEN_AGENT_YAML),
+  agentPath: z.string().min(1),
+});
+
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = z.object({
   command: z.literal(CMD.OPEN_VSCODE_SETTINGS),
@@ -275,6 +313,9 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     GetModelSelectionMessageSchema,
     SetModelEnabledMessageSchema,
     SetPolishModelMessageSchema,
+    // Agent selection messages
+    GetAgentSelectionMessageSchema,
+    OpenAgentYamlMessageSchema,
   ],
 );
 

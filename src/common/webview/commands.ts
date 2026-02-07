@@ -327,6 +327,9 @@ export const SETTINGS_VIEW_CMD = {
   GET_MODEL_SELECTION: 'getModelSelection',
   SET_MODEL_ENABLED: 'setModelEnabled',
   SET_POLISH_MODEL: 'setPolishModel',
+  // Agent selection commands
+  GET_AGENT_SELECTION: 'getAgentSelection',
+  OPEN_AGENT_YAML: 'openAgentYaml',
 } as const;
 
 // Settings view specific commands (combines Memory, History, and Profile views)
@@ -341,4 +344,5 @@ export const SETTINGS_VIEW_COMMANDS = {
   HISTORY_CLEARED: 'historyCleared',
   UPDATE_PROFILE: 'updateProfile',
   UPDATE_MODEL_SELECTION: 'updateModelSelection',
+  UPDATE_AGENT_SELECTION: 'updateAgentSelection',
 } as const;
