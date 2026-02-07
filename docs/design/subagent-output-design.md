@@ -52,12 +52,12 @@ RoundOutput
 
 What the orchestrator actually cares about from this:
 
-| Field | Why |
-|-------|-----|
-| `outputs[].location.relativePath` | Where to find the generated file |
+| Field                             | Why                               |
+| --------------------------------- | --------------------------------- |
+| `outputs[].location.relativePath` | Where to find the generated file  |
 | `outputs[].diff.added / .removed` | How much changed (quality signal) |
-| `outputs[].lineage.original` | Which input file this came from |
-| `status` | Did it succeed |
+| `outputs[].lineage.original`      | Which input file this came from   |
+| `status`                          | Did it succeed                    |
 
 That's it. Not the XML summary. Not the raw output. Not the conversation. The **files and their diffs**.
 
@@ -66,8 +66,9 @@ That's it. Not the XML summary. Not the raw output. Not the conversation. The **
 Tool-use agents don't produce files through the flow — they produce conversational output. The right output is the **last assistant response text**.
 
 This is already tracked at `ToolUseCycleFlow.ts:513`:
+
 ```typescript
-workspace.assembly.lastResponse = execRes.text;  // stored on endTurn
+workspace.assembly.lastResponse = execRes.text; // stored on endTurn
 ```
 
 And the full conversation is in `shared.conversation` at flow end (`ToolUseCycleNode.ts:156`).
@@ -111,7 +112,7 @@ Capture before return (at `runToolUseFlow.ts:178`):
 ```typescript
 // Extract last assistant text from the conversation
 const lastAssistant = shared.conversation
-  .filter(m => m.role === 'assistant')
+  .filter((m) => m.role === 'assistant')
   .at(-1);
 
 return {
@@ -210,14 +211,14 @@ export async function executeAgentCore(
   return {
     category: 'workflow',
     status: result.status,
-    outputs: result.roundOutputs.flatMap(r =>
-      r.outputs.map(o => ({
+    outputs: result.roundOutputs.flatMap((r) =>
+      r.outputs.map((o) => ({
         relativePath: o.location.relativePath ?? o.location.absolutePath,
         absolutePath: o.location.absolutePath,
         originalPath: o.lineage?.original?.absolutePath ?? null,
         added: o.diff?.added ?? null,
         removed: o.diff?.removed ?? null,
-      }))
+      })),
     ),
   };
 }
@@ -267,6 +268,7 @@ Where `formatFlowResult` for workflow agents returns:
 ```
 
 The orchestrator sees:
+
 ```
 Agent 'correct' completed with status: completed
 
@@ -277,6 +279,7 @@ Generated files:
 Not a 500-line XML dump. Not the raw model response. Just the files and what changed.
 
 For tool-use agents:
+
 ```
 Agent 'search' completed with status: completed
 
@@ -321,11 +324,11 @@ return formatFlowResult(result);
 ```typescript
 const orchestratorStreamId = getRequiredStreamId();
 executeAgentCore(configPayload)
-  .then(result => {
+  .then((result) => {
     const msg = formatSubagentDelivery(subagentId, result);
     ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
   })
-  .catch(err => {
+  .catch((err) => {
     const msg = formatSubagentError(subagentId, err);
     ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
   });
@@ -339,7 +342,9 @@ Add a `mode` parameter to the tool schema:
 ```typescript
 mode: z.enum(['sync', 'async', 'background'])
   .prefault('sync')
-  .describe('sync: wait for result. async: launch and use await_subagent later. background: result delivered as follow-up.')
+  .describe(
+    'sync: wait for result. async: launch and use await_subagent later. background: result delivered as follow-up.',
+  );
 ```
 
 Uses `.prefault('sync')` — consistent with existing tool schemas in `WorkflowTool.ts` (e.g., `model: z.string().prefault('gemini3p')`). Per AGENTS.md, `.prefault()` normalizes input before validation, which is the right pattern for tool defaults where the LLM may omit the field entirely.
@@ -534,9 +539,12 @@ export function registerSubagent(
   promise.finally(() => activeSubagents.delete(subagentId));
 }
 
-export function getActiveChildren(parentStreamId: StreamTabId): SubagentEntry[] {
-  return [...activeSubagents.values()]
-    .filter(e => e.parentStreamId === parentStreamId);
+export function getActiveChildren(
+  parentStreamId: StreamTabId,
+): SubagentEntry[] {
+  return [...activeSubagents.values()].filter(
+    (e) => e.parentStreamId === parentStreamId,
+  );
 }
 
 export function hasActiveChildren(parentStreamId: StreamTabId): boolean {
@@ -545,7 +553,9 @@ export function hasActiveChildren(parentStreamId: StreamTabId): boolean {
 
 /** Check if a stream is itself a subagent (has a parent). */
 export function isSubagent(streamId: StreamTabId): boolean {
-  return [...activeSubagents.values()].some(e => e.childStreamId === streamId);
+  return [...activeSubagents.values()].some(
+    (e) => e.childStreamId === streamId,
+  );
 }
 ```
 
@@ -557,17 +567,17 @@ No schemas. No classes. No timestamps. No `completedAt` field. The entry deletes
 
 ### Changes to existing code (small, surgical)
 
-| File | Change | Lines |
-|------|--------|-------|
-| `runToolUseFlow.ts` | Add `lastResponse` to result | ~5 lines |
-| `executeAgent.ts` | Extract `executeAgentCore()` from `executeAgent()` | ~40 lines (move, not write) |
-| `WorkflowTool.ts` | Await result, format file info | ~20 lines |
+| File                | Change                                             | Lines                       |
+| ------------------- | -------------------------------------------------- | --------------------------- |
+| `runToolUseFlow.ts` | Add `lastResponse` to result                       | ~5 lines                    |
+| `executeAgent.ts`   | Extract `executeAgentCore()` from `executeAgent()` | ~40 lines (move, not write) |
+| `WorkflowTool.ts`   | Await result, format file info                     | ~20 lines                   |
 
 ### New code
 
-| File | Purpose | Lines |
-|------|---------|-------|
-| `AgentFlowResult.ts` | `AgentFlowResult` + `OutputFileSummary` types | ~25 lines |
+| File                 | Purpose                                             | Lines     |
+| -------------------- | --------------------------------------------------- | --------- |
+| `AgentFlowResult.ts` | `AgentFlowResult` + `OutputFileSummary` types       | ~25 lines |
 | `subagentLineage.ts` | Active subagent tracking (one Map, three functions) | ~30 lines |
 
 ### What NOT to build
@@ -580,11 +590,11 @@ No schemas. No classes. No timestamps. No `completedAt` field. The entry deletes
 
 ### Execution modes (all enabled by `executeAgentCore`)
 
-| Mode | Implementation | New tools | Blocking |
-|------|---------------|-----------|----------|
-| `sync` | `await executeAgentCore()` | 0 | Yes |
-| `async` | Store promise, return ID | 1 (`await_subagent`) | At await point |
-| `background` | `.then()` → FollowUpQueue | 0 | No |
+| Mode         | Implementation             | New tools            | Blocking       |
+| ------------ | -------------------------- | -------------------- | -------------- |
+| `sync`       | `await executeAgentCore()` | 0                    | Yes            |
+| `async`      | Store promise, return ID   | 1 (`await_subagent`) | At await point |
+| `background` | `.then()` → FollowUpQueue  | 0                    | No             |
 
 Total new infrastructure: ~95 lines of code. One type file, one lineage file, minor edits to three existing files.
 
