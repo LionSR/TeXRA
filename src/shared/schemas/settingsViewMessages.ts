@@ -286,6 +286,10 @@ const OpenAgentFolderMessageSchema = z.object({
   folderType: z.enum(['custom', 'builtIn', 'builtInToolUse']),
 });
 
+const CreateAgentMessageSchema = z.object({
+  command: z.literal(CMD.CREATE_AGENT),
+});
+
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = z.object({
   command: z.literal(CMD.OPEN_VSCODE_SETTINGS),
@@ -334,6 +338,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     OpenAgentYamlMessageSchema,
     SetAgentEnabledMessageSchema,
     OpenAgentFolderMessageSchema,
+    CreateAgentMessageSchema,
   ],
 );
 
