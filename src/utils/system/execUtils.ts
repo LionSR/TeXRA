@@ -1,5 +1,5 @@
 // Third-party imports
-import { execa, type Options, ExecaError } from 'execa';
+import { execa, type Options, type ResultPromise, ExecaError } from 'execa';
 import { quote as shellQuote } from 'shell-quote';
 
 /**
@@ -31,6 +31,7 @@ const CHANNEL = 'execUtils';
 logger.initialize(CHANNEL);
 
 const MAX_OUTPUT_LENGTH = 150;
+const FORCE_KILL_DELAY_MS = 5_000;
 
 /**
  * Truncate text to maxChars by keeping the end portion.
@@ -97,7 +98,10 @@ export async function executeCommand(
 
     const logChannel = options.channel ?? CHANNEL;
 
-    let subprocess;
+    let subprocess: ResultPromise;
+    let shellTimedOut = false;
+    let shellTimeoutId: ReturnType<typeof setTimeout> | undefined;
+
     if (Array.isArray(command)) {
       const [cmd, ...args] = command;
       logger.debug(
@@ -107,7 +111,46 @@ export async function executeCommand(
       subprocess = execa(cmd, args, execaOptions);
     } else {
       logger.debug(logChannel, `Running command: ${command}`);
-      subprocess = execa(command, { ...execaOptions, shell: true });
+      // Shell commands with pipes (e.g. "find / | head -2") create child
+      // processes that inherit stdout.  execa's built-in timeout only kills
+      // the shell process; the piped children keep stdout open which causes
+      // `await subprocess` to hang indefinitely.
+      //
+      // Fix: spawn in a new process group (detached) and manually kill the
+      // entire group (-pid) on timeout so all children are terminated.
+      const { timeout: _shellTimeout, ...execaNoTimeout } = execaOptions;
+      subprocess = execa(command, {
+        ...execaNoTimeout,
+        shell: true,
+        detached: true,
+      });
+
+      if (_shellTimeout) {
+        shellTimeoutId = setTimeout(() => {
+          shellTimedOut = true;
+          const pid = subprocess.pid;
+          if (!pid) return;
+
+          try {
+            // Kill the entire process group (negative PID)
+            process.kill(-pid, 'SIGTERM');
+          } catch {
+            /* already exited */
+          }
+
+          // Force-kill after FORCE_KILL_DELAY_MS if SIGTERM didn't work,
+          // and destroy streams as a last resort to unblock `await subprocess`.
+          setTimeout(() => {
+            try {
+              process.kill(-pid, 'SIGKILL');
+            } catch {
+              /* already exited */
+            }
+            subprocess.stdout?.destroy();
+            subprocess.stderr?.destroy();
+          }, FORCE_KILL_DELAY_MS);
+        }, _shellTimeout);
+      }
     }
 
     // Subscribe to stdout/stderr streams for live output if callbacks provided
@@ -123,11 +166,12 @@ export async function executeCommand(
     }
 
     const result = await subprocess;
+    if (shellTimeoutId !== undefined) clearTimeout(shellTimeoutId);
 
     const stdout = (result.stdout as string) ?? '';
     const stderr = (result.stderr as string) ?? '';
     const exitCode = result.exitCode ?? 1;
-    const timedOut = result.timedOut ?? false;
+    const timedOut = (result.timedOut ?? false) || shellTimedOut;
 
     const shouldTruncate = options.truncate ?? false;
     const formatForLog = (output: string | null) =>
