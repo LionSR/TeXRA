@@ -26,6 +26,7 @@ import { ToolError } from '@tools/result';
 import {
   ZOTERO_PING_TIMEOUT_MS,
   ZOTERO_CONNECTOR_TIMEOUT_MS,
+  isTimeoutErrorCode,
   buildTimeoutMessage,
 } from '@tools/timeouts';
 import { pluralize } from '@tools/utils';
@@ -152,7 +153,7 @@ async function callZoteroConnector(
       message: `Unexpected response status: ${response.status}`,
     };
   } catch (error) {
-    if (error instanceof AxiosError && error.code === 'ECONNABORTED') {
+    if (error instanceof AxiosError && isTimeoutErrorCode(error.code)) {
       return {
         status: 'error',
         message: buildTimeoutMessage(
