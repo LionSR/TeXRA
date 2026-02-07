@@ -11,7 +11,15 @@ import { executeWolframCode } from './wolframScriptUtils';
 
 const WolframInputSchema = z.strictObject({
   code: z.string(),
-  timeout: z.number().nullish(),
+  timeout: z
+    .number()
+    .int()
+    .min(1000)
+    .max(600_000)
+    .nullish()
+    .describe(
+      'Timeout in milliseconds (max 600,000 ms / 10 min, default 30,000 ms / 30 s).',
+    ),
 });
 
 export type WolframInput = z.infer<typeof WolframInputSchema>;

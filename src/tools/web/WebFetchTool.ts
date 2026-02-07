@@ -10,7 +10,11 @@ import { z } from 'zod';
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
 import { ToolError, ToolResult } from '@tools/result';
-import { WEB_FETCH_TIMEOUT_MS, buildTimeoutMessage } from '@tools/timeouts';
+import {
+  WEB_FETCH_TIMEOUT_MS,
+  isTimeoutErrorCode,
+  buildTimeoutMessage,
+} from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 
 const WebFetchInputSchema = z.strictObject({
@@ -92,7 +96,7 @@ export class WebFetchTool extends defineTool({
       });
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        if (error.code === 'ECONNABORTED') {
+        if (isTimeoutErrorCode(error.code)) {
           throw new ToolError(
             buildTimeoutMessage(`Request to ${url}`, WEB_FETCH_TIMEOUT_MS),
           );

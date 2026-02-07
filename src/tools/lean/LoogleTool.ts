@@ -8,8 +8,12 @@ import axios from 'axios';
 import { z } from 'zod';
 
 import { toErrorMessage } from '@common/errors';
-import { ToolResult } from '@tools/result';
-import { LOOGLE_TIMEOUT_MS, buildTimeoutMessage } from '@tools/timeouts';
+import { ToolResult, ToolError } from '@tools/result';
+import {
+  LOOGLE_TIMEOUT_MS,
+  isTimeoutErrorCode,
+  buildTimeoutMessage,
+} from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 
 // ============================================================================
@@ -153,12 +157,10 @@ Useful for finding the right lemma when you know roughly what type it should hav
         results: hits,
       };
     } catch (error) {
-      if (axios.isAxiosError(error) && error.code === 'ECONNABORTED') {
-        return {
-          summary: 'Loogle search timed out',
-          output: buildTimeoutMessage('Loogle API request', LOOGLE_TIMEOUT_MS),
-          isError: true,
-        };
+      if (axios.isAxiosError(error) && isTimeoutErrorCode(error.code)) {
+        throw new ToolError(
+          buildTimeoutMessage('Loogle API request', LOOGLE_TIMEOUT_MS),
+        );
       }
       return {
         summary: 'Loogle search failed',
