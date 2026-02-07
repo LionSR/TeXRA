@@ -17,7 +17,7 @@ import {
   SETTINGS_VIEW_CMD,
   SETTINGS_VIEW_COMMANDS,
 } from '@common/webview/commands';
-import { AgentSourceSchema } from './agent';
+import { AgentCategorySchema, AgentSourceSchema } from './agent';
 export { SETTINGS_VIEW_CMD };
 
 /** Tab name order - single source of truth for tab indices */
@@ -88,7 +88,7 @@ export {
 export const AgentSelectionItemSchema = z.object({
   name: z.string(),
   source: AgentSourceSchema,
-  category: z.string(),
+  category: AgentCategorySchema,
   description: z.string().optional(),
   hasPath: z.boolean(),
   tools: z.array(z.string()).optional(),
