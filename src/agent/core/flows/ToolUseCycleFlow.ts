@@ -566,8 +566,16 @@ class ToolUseDispatchNode<C> extends BatchNode<
   ToolUseCycleParams<C>,
   ToolUseCycleServices<C>
 > {
+  /**
+   * Call IDs of duplicate parallel calls detected during prep().
+   * These are skipped during exec() and receive a synthetic error result
+   * instructing the model to call them sequentially instead.
+   */
+  private _duplicateCallIds = new Set<string>();
+
   /** Returns tool calls to execute, or empty array if skipped/interrupted. */
   async prep(shared: ToolUseCycleShared): Promise<SdkToolCall[]> {
+    this._duplicateCallIds.clear();
     const toolCalls = shared.toolCalls ?? [];
 
     if (shared.shouldStop || toolCalls.length === 0) {
@@ -579,6 +587,27 @@ class ToolUseDispatchNode<C> extends BatchNode<
       return [];
     }
 
+    // Deduplicate parallel calls: when multiple calls have the same tool name
+    // and identical arguments, only execute the first one. Later duplicates
+    // receive a synthetic error result prompting sequential invocation.
+    if (toolCalls.length > 1) {
+      const seen = new Set<string>();
+      for (const call of toolCalls) {
+        const key = call.name + '\0' + JSON.stringify(call.input);
+        if (seen.has(key)) {
+          this._duplicateCallIds.add(call.callId);
+        } else {
+          seen.add(key);
+        }
+      }
+
+      if (this._duplicateCallIds.size > 0) {
+        this.services.logger.info(
+          `Deduplicated ${this._duplicateCallIds.size} parallel tool call(s) with identical name and arguments.`,
+        );
+      }
+    }
+
     return toolCalls;
   }
 
@@ -586,6 +615,32 @@ class ToolUseDispatchNode<C> extends BatchNode<
   async exec(call: SdkToolCall): Promise<ToolExecutionResult | null> {
     if (this.services.checkInterruption()) {
       return null;
+    }
+
+    // Skip duplicate parallel calls — return a synthetic error result so
+    // the model is informed and can retry sequentially if needed.
+    if (this._duplicateCallIds.has(call.callId)) {
+      return {
+        call,
+        result: {
+          error:
+            'Duplicate parallel call skipped. This call has the same tool name and arguments ' +
+            'as an earlier call in this batch that was already executed. ' +
+            'If you need to run this tool multiple times with the same arguments, ' +
+            'please call them sequentially in separate responses.',
+          isError: true,
+        },
+        parsedInput: call.input,
+        sanitizedOutput: {
+          error: 'Duplicate parallel call skipped',
+          isError: true,
+        },
+        editedFiles: [],
+        logRef: {
+          logId: undefined,
+          groupId: this.services.logger.resolveActiveGroupId(),
+        },
+      };
     }
 
     const services = this.services;
@@ -597,6 +652,12 @@ class ToolUseDispatchNode<C> extends BatchNode<
       workspace.interactions,
       workspace.todos,
     );
+  }
+
+  clone(): this {
+    const cloned = super.clone();
+    cloned._duplicateCallIds = new Set();
+    return cloned;
   }
 
   /** Invoke a tool with error handling, returning an error result if the tool is missing. */
