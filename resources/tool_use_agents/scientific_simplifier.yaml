@@ -15,8 +15,7 @@ settings:
     - diagnostics
     - extract_figures
     - extract_tikz_figures
-    - extract_bib_entries
-    - texcount
+    - memory
 
 prompts:
   systemPrompt: |
