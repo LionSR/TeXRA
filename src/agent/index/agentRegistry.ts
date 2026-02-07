@@ -14,7 +14,6 @@
 import * as path from 'path';
 import { glob } from 'glob';
 import * as yaml from 'yaml';
-import { z } from 'zod';
 
 import {
   AgentCategory,
@@ -25,14 +24,20 @@ import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
-import { getConfig } from '@utils/config';
 import type { AgentOptionData } from '@shared/schemas';
+
+import {
+  GlobalStateKey,
+  WorkspaceStateKey,
+  globalSM,
+  workspaceSM,
+} from '@common/state';
 
 const CHANNEL = 'agentRegistry';
 logger.initialize(CHANNEL);
 
 // =============================================================================
-// TYPES (AgentSource is now imported from @agent/core/AgentDataclass)
+// TYPES (AgentSource canonical source: @shared/schemas/agent)
 // =============================================================================
 
 /**
@@ -76,7 +81,7 @@ const MULTIPLE_SUFFIX = '_multiple';
 /** Source priority for lookups (higher priority first). */
 const LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
-  'builtIn',
+  'builtInWorkflow',
   'builtInToolUse',
   'remote',
 ];
@@ -85,7 +90,7 @@ const LOOKUP_PRIORITY: AgentSource[] = [
 const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
   'builtInToolUse',
-  'builtIn',
+  'builtInWorkflow',
   'remote',
 ];
 
@@ -153,7 +158,7 @@ async function doLoad(): Promise<void> {
   const [customEntries, builtInEntries, toolUseEntries, remoteEntries] =
     await Promise.all([
       scanDirectory(customDir, 'custom'),
-      scanDirectory(builtInDir, 'builtIn'),
+      scanDirectory(builtInDir, 'builtInWorkflow'),
       scanDirectory(toolUseDir, 'builtInToolUse'),
       loadRemoteAgents(),
     ]);
@@ -168,7 +173,8 @@ async function doLoad(): Promise<void> {
 
   // Apply category overrides from config
   const toolUseOverrides = new Set(
-    getConfig<string[]>('texra.toolUseAgents', []),
+    workspaceSM?.get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, []) ??
+      [],
   );
 
   for (const entry of allEntries) {
@@ -274,7 +280,7 @@ export function getWorkflowAgents(): AgentEntry[] {
 }
 
 /** Get all tool-use agents. */
-function getToolUseAgents(): AgentEntry[] {
+export function getToolUseAgents(): AgentEntry[] {
   return [...cache.values()].filter(
     (e) => e.category === AgentCategory.ToolUse,
   );
@@ -422,9 +428,6 @@ async function scanYaml(
 }
 
 async function loadRemoteAgents(): Promise<AgentEntry[]> {
-  const enabled = getConfig<boolean>('texra.remoteAgents.enabled', true);
-  if (!enabled) return [];
-
   try {
     const remotes = await RemoteAgentLoader.listRemoteAgents();
     const grouped = groupByVariants(remotes, (r) => r.name);
@@ -530,7 +533,9 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
  */
 export function getVisibleWorkflowAgents(): AgentEntry[] {
   const entries = getWorkflowAgents();
-  const configured = new Set(getConfig<string[]>('texra.agents', []));
+  const configured = new Set(
+    workspaceSM?.get<string[]>(WorkspaceStateKey.ENABLED_AGENTS, []) ?? [],
+  );
   return deduplicateByName(filterVisible(entries, configured));
 }
 
@@ -540,7 +545,10 @@ export function getVisibleWorkflowAgents(): AgentEntry[] {
  */
 export function getVisibleToolUseAgents(): AgentEntry[] {
   const entries = getToolUseAgents();
-  const configured = new Set(getConfig<string[]>('texra.toolUseAgents', []));
+  const configured = new Set(
+    workspaceSM?.get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, []) ??
+      [],
+  );
   return deduplicateByName(filterVisible(entries, configured));
 }
 
@@ -580,10 +588,9 @@ function filterVisible(
 ): AgentEntry[] {
   if (configured.size === 0) return entries;
 
-  const autoShowRemote = getConfig<boolean>(
-    'texra.remoteAgents.autoShow',
-    true,
-  );
+  const autoShowRemote =
+    globalSM?.get<boolean>(GlobalStateKey.AUTO_SHOW_REMOTE_AGENTS, true) ??
+    true;
 
   return entries.filter(
     (entry) =>

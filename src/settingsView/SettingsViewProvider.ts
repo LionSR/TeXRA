@@ -10,6 +10,7 @@ import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';
 
 // Local imports - shared schemas
 import { type SettingsTab } from '@shared/schemas/settingsViewMessages';
+import type { AgentCategory } from '@shared/schemas/agent';
 
 export class SettingsViewProvider
   extends BaseWebviewProvider
@@ -41,8 +42,12 @@ export class SettingsViewProvider
   /**
    * Create and show the webview panel (for command palette activation)
    * @param tabIndex Optional tab to switch to after showing
+   * @param agentSubTab Optional sub-tab for the agents tab ('workflow' | 'toolUse')
    */
-  public async showSettingsView(tabIndex?: SettingsTab): Promise<void> {
+  public async showSettingsView(
+    tabIndex?: SettingsTab,
+    agentSubTab?: AgentCategory,
+  ): Promise<void> {
     const isNew = this.createOrShowPanel({
       viewType: SettingsViewProvider.viewType,
       title: 'TeXRA Dashboard',
@@ -58,6 +63,7 @@ export class SettingsViewProvider
       await this._view.webview.postMessage({
         command: SETTINGS_VIEW_COMMANDS.SET_TAB,
         tabIndex,
+        ...(agentSubTab ? { agentSubTab } : {}),
       });
     }
   }

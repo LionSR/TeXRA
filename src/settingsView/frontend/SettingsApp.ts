@@ -29,12 +29,17 @@ import {
   HistoryClearedMessageSchema,
   type HistoryItem,
   UpdateProfileMessageSchema,
-  type RemoteAgent,
   type ProviderKeyStatus,
   type ModelSelectionItem,
   UpdateModelSelectionMessageSchema,
   SetTabMessageSchema,
 } from '@shared/schemas';
+import {
+  UpdateAgentSelectionMessageSchema,
+  UpdateAutoShowRemoteMessageSchema,
+  UpdateCustomAgentDirMessageSchema,
+  type AgentSelectionItem,
+} from '@shared/schemas/settingsViewMessages';
 import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
 
 // Local imports - settings view commands
@@ -42,6 +47,9 @@ import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - settings view styles
 import { settingsViewStyles } from './styles';
+
+// Local imports - shared schema types
+import type { AgentCategory, AgentSourceType } from '@shared/schemas/agent';
 
 // Local imports - settings view tabs (side-effect: register)
 import './tabs/MemoryTab';
@@ -109,7 +117,6 @@ export class SettingsApp extends BaseWebviewApp {
   @state() private userEmail = '';
   @state() private userId = '';
   @state() private tier = 'free';
-  @state() private remoteAgents: RemoteAgent[] = [];
   @state() private apiAccessMode: 'included' | 'personal' = 'personal';
   @state() private enabledProviders: string[] = [];
   @state() private allowedModels: string[] | null = [];
@@ -120,6 +127,14 @@ export class SettingsApp extends BaseWebviewApp {
   // Model selection state
   @state() private modelSelectionItems: ModelSelectionItem[] = [];
   @state() private polishModel = DEFAULT_POLISH_MODEL;
+
+  // Agent selection state
+  @state() private workflowAgents: AgentSelectionItem[] = [];
+  @state() private toolUseAgents: AgentSelectionItem[] = [];
+  @state() private customAgentDir = '';
+  @state() private customAgentDirIsDefault = true;
+  @state() private autoShowRemote = true;
+  @state() private agentSubTab: AgentCategory | undefined;
 
   protected get readyCommand(): string | null {
     return null;
@@ -133,6 +148,9 @@ export class SettingsApp extends BaseWebviewApp {
     postMessage(SETTINGS_VIEW_COMMANDS.GET_HISTORY_DATA);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION);
+    postMessage(SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION);
+    postMessage(SETTINGS_VIEW_COMMANDS.GET_AUTO_SHOW_REMOTE);
+    postMessage(SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR);
   }
 
   protected override handleMessage(raw: unknown): void {
@@ -153,6 +171,7 @@ export class SettingsApp extends BaseWebviewApp {
         return;
       }
       this.selectedTabIndex = result.data.tabIndex;
+      this.agentSubTab = result.data.agentSubTab;
       return;
     }
 
@@ -231,6 +250,50 @@ export class SettingsApp extends BaseWebviewApp {
       return;
     }
 
+    // Agent selection messages
+    if (command === SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION) {
+      const result = UpdateAgentSelectionMessageSchema.safeParse(raw);
+      if (!result.success) {
+        this.logSchemaError(
+          '[SettingsApp] Update agent selection message validation failed.',
+          result.error,
+        );
+        return;
+      }
+      this.workflowAgents = result.data.workflow;
+      this.toolUseAgents = result.data.toolUse;
+      return;
+    }
+
+    // Auto-show remote agents messages
+    if (command === SETTINGS_VIEW_COMMANDS.UPDATE_AUTO_SHOW_REMOTE) {
+      const result = UpdateAutoShowRemoteMessageSchema.safeParse(raw);
+      if (!result.success) {
+        this.logSchemaError(
+          '[SettingsApp] Update auto-show remote message validation failed.',
+          result.error,
+        );
+        return;
+      }
+      this.autoShowRemote = result.data.enabled;
+      return;
+    }
+
+    // Custom agent directory messages
+    if (command === SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR) {
+      const result = UpdateCustomAgentDirMessageSchema.safeParse(raw);
+      if (!result.success) {
+        this.logSchemaError(
+          '[SettingsApp] Update custom agent dir message validation failed.',
+          result.error,
+        );
+        return;
+      }
+      this.customAgentDir = result.data.path;
+      this.customAgentDirIsDefault = result.data.isDefault;
+      return;
+    }
+
     // Profile messages
     if (command === SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE) {
       const result = UpdateProfileMessageSchema.safeParse(raw);
@@ -247,7 +310,6 @@ export class SettingsApp extends BaseWebviewApp {
       this.userEmail = data.user?.email ?? 'N/A';
       this.userId = data.user?.id ?? '';
       this.tier = data.tier ?? 'free';
-      this.remoteAgents = data.remoteAgents ?? [];
       this.apiAccessMode = data.apiAccessMode;
       this.enabledProviders = data.enabledProviders ?? [];
       this.allowedModels = data.allowedModels ?? null;
@@ -317,12 +379,6 @@ export class SettingsApp extends BaseWebviewApp {
 
   private handleSignOut(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.SIGN_OUT);
-  }
-
-  private handleSelectAgent(event: CustomEvent<{ agentName: string }>): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SELECT_AGENT, {
-      agentName: event.detail.agentName,
-    });
   }
 
   private handleApiAccessMode(
@@ -396,6 +452,67 @@ export class SettingsApp extends BaseWebviewApp {
   ): void {
     postMessage(SETTINGS_VIEW_COMMANDS.SET_POLISH_MODEL, {
       modelName: event.detail.modelName,
+    });
+  }
+
+  // Agent selection event handlers
+  private handleOpenAgentYaml(
+    event: CustomEvent<{
+      agentName: string;
+      agentSource: AgentSourceType;
+      variant: 'base' | 'multiple';
+    }>,
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML, {
+      agentName: event.detail.agentName,
+      agentSource: event.detail.agentSource,
+      variant: event.detail.variant,
+    });
+  }
+
+  private handleSetAgentEnabled(
+    event: CustomEvent<{
+      agentName: string;
+      agentSource: AgentSourceType;
+      category: 'workflow' | 'toolUse';
+      enabled: boolean;
+    }>,
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED, {
+      agentName: event.detail.agentName,
+      agentSource: event.detail.agentSource,
+      category: event.detail.category,
+      enabled: event.detail.enabled,
+    });
+  }
+
+  private handleOpenAgentFolder(
+    event: CustomEvent<{
+      folderType: 'custom' | 'builtInWorkflow' | 'builtInToolUse';
+    }>,
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER, {
+      folderType: event.detail.folderType,
+    });
+  }
+
+  private handleCreateAgent(): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.CREATE_AGENT);
+  }
+
+  private handleSetCustomAgentDir(): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR);
+  }
+
+  private handleResetCustomAgentDir(): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR);
+  }
+
+  private handleSetAutoShowRemote(
+    event: CustomEvent<{ enabled: boolean }>,
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_AUTO_SHOW_REMOTE, {
+      enabled: event.detail.enabled,
     });
   }
 
@@ -512,9 +629,19 @@ export class SettingsApp extends BaseWebviewApp {
 
           <vscode-tab-panel>
             <agents-tab
-              .authenticated=${this.authenticated}
-              .remoteAgents=${this.remoteAgents}
-              @profile-select-agent=${this.handleSelectAgent}
+              .workflowAgents=${this.workflowAgents}
+              .toolUseAgents=${this.toolUseAgents}
+              .customAgentDir=${this.customAgentDir}
+              .customAgentDirIsDefault=${this.customAgentDirIsDefault}
+              .autoShowRemote=${this.autoShowRemote}
+              .initialSubTab=${this.agentSubTab}
+              @agent-open-yaml=${this.handleOpenAgentYaml}
+              @agent-enabled-set=${this.handleSetAgentEnabled}
+              @agent-open-folder=${this.handleOpenAgentFolder}
+              @agent-auto-show-remote=${this.handleSetAutoShowRemote}
+              @agent-create=${this.handleCreateAgent}
+              @agent-set-custom-dir=${this.handleSetCustomAgentDir}
+              @agent-reset-custom-dir=${this.handleResetCustomAgentDir}
             ></agents-tab>
           </vscode-tab-panel>
         </vscode-tabs>

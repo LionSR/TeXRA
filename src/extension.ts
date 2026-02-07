@@ -24,7 +24,7 @@ import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
 import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
 import { StorageFS } from '@utils/files';
-import { watchConfig, getConfig } from '@utils/config';
+import { getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
 import { initializeServerSideKeyAccess } from '@auth/serverKeys';
@@ -128,78 +128,72 @@ export async function activate(context: vscode.ExtensionContext) {
     );
   });
 
-  // Initialize Supabase authentication if enabled
-  const authEnabled = getConfig<boolean>('auth.enabled', true);
+  // Initialize Supabase authentication
+  try {
+    // Set the runtime extension ID for OAuth redirects
+    // This ensures the redirect URI matches the actual extension ID
+    setRuntimeExtensionId(context.extension.id);
 
-  if (authEnabled) {
-    try {
-      // Set the runtime extension ID for OAuth redirects
-      // This ensures the redirect URI matches the actual extension ID
-      setRuntimeExtensionId(context.extension.id);
+    // Check if Supabase credentials are configured
+    if (!isSupabaseConfigured()) {
+      logger.warn(
+        'extension',
+        'Supabase authentication is enabled but credentials are not configured. Please configure credentials in src/auth/config.ts before building.',
+      );
+    } else {
+      // Register authentication provider
+      const authProvider = new SupabaseAuthProvider(context);
+      context.subscriptions.push(
+        vscode.authentication.registerAuthenticationProvider(
+          'texra-supabase',
+          'TeXRA Account',
+          authProvider,
+          { supportsMultipleAccounts: false },
+        ),
+      );
 
-      // Check if Supabase credentials are configured
-      if (!isSupabaseConfigured()) {
+      // Register URI handler for OAuth callbacks
+      const uriHandler = new SupabaseUriHandler();
+      context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
+
+      // Connect URI handler to auth provider
+      authProvider.setUriHandler(uriHandler);
+
+      // Mark provider as registered AFTER all auth-critical setup succeeds
+      SupabaseClient.setVSCodeProviderRegistered();
+
+      logger.info('extension', 'Supabase authentication provider registered');
+
+      // Note: Auth state change listener is handled in MainViewProvider.setupAuthListener()
+      // to avoid duplicate refresh calls when user logs in/out.
+
+      // Initialize usage logging service for backend analytics (only when auth is available)
+      // This is separate from auth - failures here shouldn't block sign-in
+      try {
+        const extensionVersion =
+          typeof context.extension.packageJSON?.version === 'string'
+            ? context.extension.packageJSON.version
+            : undefined;
+        UsageLogService.initialize({}, extensionVersion);
+        // Add safety net disposable in case deactivate() isn't called
+        context.subscriptions.push({
+          dispose: () => void UsageLogService.dispose(),
+        });
+      } catch (usageError) {
         logger.warn(
           'extension',
-          'Supabase authentication is enabled but credentials are not configured. Please configure credentials in src/auth/config.ts before building.',
+          `Usage logging service failed to initialize: ${toErrorMessage(usageError)}`,
         );
-      } else {
-        // Register authentication provider
-        const authProvider = new SupabaseAuthProvider(context);
-        context.subscriptions.push(
-          vscode.authentication.registerAuthenticationProvider(
-            'texra-supabase',
-            'TeXRA Account',
-            authProvider,
-            { supportsMultipleAccounts: false },
-          ),
-        );
-
-        // Register URI handler for OAuth callbacks
-        const uriHandler = new SupabaseUriHandler();
-        context.subscriptions.push(
-          vscode.window.registerUriHandler(uriHandler),
-        );
-
-        // Connect URI handler to auth provider
-        authProvider.setUriHandler(uriHandler);
-
-        // Mark provider as registered AFTER all auth-critical setup succeeds
-        SupabaseClient.setVSCodeProviderRegistered();
-
-        logger.info('extension', 'Supabase authentication provider registered');
-
-        // Note: Auth state change listener is handled in MainViewProvider.setupAuthListener()
-        // to avoid duplicate refresh calls when user logs in/out.
-
-        // Initialize usage logging service for backend analytics (only when auth is available)
-        // This is separate from auth - failures here shouldn't block sign-in
-        try {
-          const extensionVersion =
-            typeof context.extension.packageJSON?.version === 'string'
-              ? context.extension.packageJSON.version
-              : undefined;
-          UsageLogService.initialize({}, extensionVersion);
-          // Add safety net disposable in case deactivate() isn't called
-          context.subscriptions.push({
-            dispose: () => void UsageLogService.dispose(),
-          });
-        } catch (usageError) {
-          logger.warn(
-            'extension',
-            `Usage logging service failed to initialize: ${toErrorMessage(usageError)}`,
-          );
-        }
       }
-    } catch (error) {
-      const initError =
-        error instanceof Error ? error : new Error(toErrorMessage(error));
-      SupabaseClient.setInitError(initError);
-      logger.error(
-        'extension',
-        `Failed to initialize Supabase authentication: ${toErrorMessage(error)}`,
-      );
     }
+  } catch (error) {
+    const initError =
+      error instanceof Error ? error : new Error(toErrorMessage(error));
+    SupabaseClient.setInitError(initError);
+    logger.error(
+      'extension',
+      `Failed to initialize Supabase authentication: ${toErrorMessage(error)}`,
+    );
   }
 
   // Create the log view provider
@@ -294,12 +288,6 @@ export async function activate(context: vscode.ExtensionContext) {
     // Add disposable for cleanup
     { dispose: () => watcherManager.dispose() },
   );
-
-  // Watch for agents directory changes
-  watchConfig(context, 'texra.explorer.agentsDirectory', () => {
-    watcherManager.setup();
-    folderExplorer.refresh();
-  });
 
   const welcomeKey = 'texra.welcomeShown';
   if (!context.globalState.get<boolean>(welcomeKey)) {

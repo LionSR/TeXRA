@@ -1,4 +1,5 @@
 import { createEvent } from '@shared/utils/events';
+import type { AgentSourceType } from '@shared/schemas/agent';
 
 export const ProfileViewEvents = {
   signIn: () => createEvent('profile-sign-in', undefined),
@@ -29,4 +30,26 @@ export const ProviderKeyEvents = {
     createEvent('provider-endpoint-set', detail),
   setGlobalStreaming: (detail: { enabled: boolean }) =>
     createEvent('provider-global-streaming-set', detail),
+} as const;
+
+export const AgentSelectionEvents = {
+  openYaml: (detail: {
+    agentName: string;
+    agentSource: AgentSourceType;
+    variant: 'base' | 'multiple';
+  }) => createEvent('agent-open-yaml', detail),
+  setEnabled: (detail: {
+    agentName: string;
+    agentSource: AgentSourceType;
+    category: 'workflow' | 'toolUse';
+    enabled: boolean;
+  }) => createEvent('agent-enabled-set', detail),
+  openFolder: (detail: {
+    folderType: 'custom' | 'builtInWorkflow' | 'builtInToolUse';
+  }) => createEvent('agent-open-folder', detail),
+  createAgent: () => createEvent('agent-create', undefined),
+  setCustomDir: () => createEvent('agent-set-custom-dir', undefined),
+  resetCustomDir: () => createEvent('agent-reset-custom-dir', undefined),
+  setAutoShowRemote: (detail: { enabled: boolean }) =>
+    createEvent('agent-auto-show-remote', detail),
 } as const;

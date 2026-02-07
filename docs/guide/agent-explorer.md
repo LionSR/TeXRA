@@ -9,7 +9,7 @@ The TeXRA extension includes a dedicated **Agent Explorer** view within the VS C
 The Agent Explorer is organized into two main sections:
 
 1.  **Built-in Agents**: This section displays the standard agents that come bundled with the TeXRA extension. These files (`.yaml`) define the core functionalities like `correct`, `polish`, `draw`, etc.
-2.  **Custom Agents**: This section displays agents that you have created or added yourself. When the `texra.explorer.agentsDirectory` setting is left blank, TeXRA seeds a `custom_agents` folder inside its global storage and shows it here automatically. You can override the location with an absolute path in VS Code settings if you want to manage the files elsewhere.
+2.  **Custom Agents**: This section displays agents that you have created or added yourself. By default TeXRA seeds a `custom_agents` folder inside its global storage. You can change the location from the **Agents** tab in the TeXRA Dashboard (click **Change** in the directory info bar).
 
 ## Browsing and Viewing Agents
 
@@ -32,8 +32,8 @@ Available actions for **Custom Agents** include:
 - **New Folder** <i class="codicon codicon-new-folder"></i>: Creates a new folder within the selected folder. You will be prompted to rename it.
 - **Rename** <i class="codicon codicon-edit"></i>: Renames the selected custom file or folder.
 - **Delete** <i class="codicon codicon-trash"></i>: Deletes the selected custom file or folder (with confirmation).
-- **Add Agent to Config** <i class="codicon codicon-diff-added"></i>: Validates a YAML file and adds its agent name to `texra.agents`.
-- **Create AI Agent** <i class="codicon codicon-sparkle"></i>: Launches a wizard that collects a short description and output style (single vs. multiple files) then generates a starter YAML using Claude. See [Strict XML Extraction](./custom-agents.md#strict-xml-extraction) for why the YAML must be precise.
+- **Add Agent to Config** <i class="codicon codicon-diff-added"></i>: Validates a YAML file and adds the agent to the visible agents list.
+- **Create AI Agent** <i class="codicon codicon-sparkle"></i>: Launches a wizard that collects a short description and output style (single vs. multiple files) then generates a starter YAML using Claude. This is also accessible from the **New Agent** button in the Agents tab of the TeXRA Dashboard. See [Strict XML Extraction](./custom-agents.md#strict-xml-extraction) for why the YAML must be precise.
 - **Reveal in OS** <i class="codicon codicon-folder-opened"></i>: Opens the selected
   folder in your operating system's file explorer so you can paste or manage files
   directly.
@@ -46,8 +46,8 @@ The Agent Explorer is where you manage the files you create following the steps 
 
 ## Agent Configuration Alerts
 
-When an agent name is listed in `texra.agents` but its YAML file is missing, the
-agent appears disabled in the main view dropdown. Choosing such an entry shows a
-banner offering to edit the agent list, open or set the custom agents directory,
-or view documentation. Agents that include a companion `<agent>_multiple.yaml`
-are flagged with a codicon in the dropdown to indicate multi-output support.
+When an agent is enabled in the Agents tab but its YAML file is missing, it
+appears disabled in the main view dropdown. Choosing such an entry shows a
+banner offering to open the custom agents directory or view documentation.
+Agents that include a companion `<agent>_multiple.yaml` are flagged with a
+badge in the dropdown to indicate multi-output support.

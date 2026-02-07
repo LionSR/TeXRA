@@ -2,7 +2,7 @@
  * Agent index module - public API for the agent registry.
  */
 
-// AgentSource is defined in @agent/core/AgentDataclass (value + type with same name)
+// AgentSource: canonical definition in @shared/schemas/agent, re-exported via AgentDataclass
 export { AgentSource } from '@agent/core/AgentDataclass';
 
 export {
@@ -14,6 +14,7 @@ export {
   getAgent,
   resolveAgent,
   getWorkflowAgents,
+  getToolUseAgents,
   getAgentsBySource,
   refresh,
   // Typed data options
