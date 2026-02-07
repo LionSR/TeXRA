@@ -89,8 +89,7 @@ export const AgentSelectionItemSchema = z.object({
   source: z.string(),
   category: z.string(),
   description: z.string().optional(),
-  path: z.string(),
-  multiplePath: z.string().optional(),
+  hasPath: z.boolean(),
   tools: z.array(z.string()).optional(),
   isCustom: z.boolean(),
   isRemote: z.boolean(),
@@ -267,7 +266,9 @@ const GetAgentSelectionMessageSchema = z.object({
 
 const OpenAgentYamlMessageSchema = z.object({
   command: z.literal(CMD.OPEN_AGENT_YAML),
-  agentPath: z.string().min(1),
+  agentName: z.string().min(1),
+  agentSource: z.string().min(1),
+  variant: z.enum(['base', 'multiple']),
 });
 
 // Navigation inbound messages
