@@ -901,32 +901,50 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetAgentEnabled(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_AGENT_ENABLED>,
   ): Promise<void> {
-    const configKey =
-      data.category === 'workflow' ? 'texra.agents' : 'texra.toolUseAgents';
-    const current = getConfig<string[]>(configKey, []);
-    const agentKey = createKey(data.agentSource, data.agentName);
+    try {
+      const configKey =
+        data.category === 'workflow' ? 'texra.agents' : 'texra.toolUseAgents';
+      const current = getConfig<string[]>(configKey, []);
+      const key = createKey(data.agentSource, data.agentName);
 
-    let updated: string[];
-    if (data.enabled) {
-      // Add by source:name key if not already present (check both formats)
-      if (current.includes(agentKey) || current.includes(data.agentName)) {
-        updated = current;
+      let updated: string[];
+      if (data.enabled) {
+        // Add by source:name key if not already present (check both formats)
+        if (current.includes(key) || current.includes(data.agentName)) {
+          updated = current;
+        } else {
+          updated = [...current, key];
+        }
+      } else if (current.length === 0) {
+        // Empty config = "all enabled". To disable one agent, seed the config
+        // with all OTHER agents so the transition is: [] → [all except this one].
+        const allAgents =
+          data.category === 'workflow'
+            ? getWorkflowAgents()
+            : getToolUseAgents();
+        updated = allAgents
+          .map((e) => createKey(e.source, e.name))
+          .filter((k) => k !== key);
       } else {
-        updated = [...current, agentKey];
+        // Remove both name and source:name formats
+        updated = current.filter(
+          (entry) => entry !== key && entry !== data.agentName,
+        );
       }
-    } else {
-      // Remove both name and source:name formats
-      updated = current.filter(
-        (entry) => entry !== agentKey && entry !== data.agentName,
+
+      await updateConfig(configKey, updated, { prefix: false });
+
+      void vscode.commands.executeCommand('texra.refreshAllOptions');
+
+      const view = this.getActiveView();
+      if (view) await this.sendAgentSelectionData(view.webview);
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to update agent visibility',
+        error,
       );
     }
-
-    await updateConfig(configKey, updated, { prefix: false });
-
-    void vscode.commands.executeCommand('texra.refreshAllOptions');
-
-    const view = this.getActiveView();
-    if (view) await this.sendAgentSelectionData(view.webview);
   }
 
   private async handleOpenAgentFolder(
