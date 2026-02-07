@@ -28,6 +28,7 @@ import {
   buildDetailsSummary,
 } from '../htmlBuilders';
 import { normalizeToolUseData } from '../logDataParsers';
+import { registerProposalInput } from '../proposalInputStore';
 import { stringifyWithLanguage, extractCodeOnlyInput } from '../parseUtils';
 import {
   TOOLS_WITH_DIFF_INPUT,
@@ -70,6 +71,16 @@ const STATUS_ICONS: Record<string, string> = {
   failed: 'codicon codicon-error',
   in_progress: 'codicon codicon-sync spin',
 };
+
+/** Tools that represent agent proposals (have restorable config). */
+const PROPOSAL_TOOLS = new Set(['propose_agent', 'propose_workflow']);
+
+/** Check if input is a plain object suitable for proposal restore. */
+function isProposalInput(
+  input: unknown,
+): input is Record<string, unknown> {
+  return input !== null && typeof input === 'object' && !Array.isArray(input);
+}
 
 type ToolSectionOptions = {
   toolName?: string;
@@ -293,6 +304,17 @@ export function formatToolUseTemplate(
         extraClass: 'tool-output-full',
       }),
     );
+  }
+
+  // Add "Setup" restore link for completed proposal tools (including rejected/timed-out)
+  if (
+    PROPOSAL_TOOLS.has(toolName) &&
+    !isInProgress &&
+    isProposalInput(input)
+  ) {
+    const proposalId = registerProposalInput(input, toolName);
+    // prettier-ignore
+    sections.push(html`<div class="proposal-restore-action"><span class="proposal-restore-link" data-proposal-id=${proposalId} title="Restore this proposal configuration to the main view"><i class="codicon codicon-reply"></i> Setup</span></div>`);
   }
 
   // Show error if present
