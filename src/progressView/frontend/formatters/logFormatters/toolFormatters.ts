@@ -10,7 +10,6 @@
 // Local imports - Lit template utilities
 import {
   html,
-  nothing,
   classMap,
   ifDefined,
   type TemplateResult,
@@ -74,13 +73,6 @@ const STATUS_ICONS: Record<string, string> = {
 
 /** Tools that represent agent proposals (have restorable config). */
 const PROPOSAL_TOOLS = new Set(['propose_agent', 'propose_workflow']);
-
-/** Check if input is a plain object suitable for proposal restore. */
-function isProposalInput(
-  input: unknown,
-): input is Record<string, unknown> {
-  return input !== null && typeof input === 'object' && !Array.isArray(input);
-}
 
 type ToolSectionOptions = {
   toolName?: string;
@@ -307,14 +299,12 @@ export function formatToolUseTemplate(
   }
 
   // Add "Setup" restore link for completed proposal tools (including rejected/timed-out)
-  if (
-    PROPOSAL_TOOLS.has(toolName) &&
-    !isInProgress &&
-    isProposalInput(input)
-  ) {
+  if (PROPOSAL_TOOLS.has(toolName) && !isInProgress) {
     const proposalId = registerProposalInput(input, toolName);
-    // prettier-ignore
-    sections.push(html`<div class="proposal-restore-action"><span class="proposal-restore-link" data-proposal-id=${proposalId} title="Restore this proposal configuration to the main view"><i class="codicon codicon-reply"></i> Setup</span></div>`);
+    if (proposalId) {
+      // prettier-ignore
+      sections.push(html`<div class="proposal-restore-action"><span class="proposal-restore-link" data-proposal-id=${proposalId} title="Restore this proposal configuration to the main view"><i class="codicon codicon-reply"></i> Setup</span></div>`);
+    }
   }
 
   // Show error if present
@@ -352,7 +342,7 @@ export function formatToolUseTemplate(
 
   // Live timer for in-progress tools
   // prettier-ignore
-  const timerTemplate = isInProgress ? html`<tool-timer .startTime=${timestamp}></tool-timer>` : nothing;
+  const timerTemplate = isInProgress ? html`<tool-timer .startTime=${timestamp}></tool-timer>` : undefined;
 
   // prettier-ignore
   return html`<details class=${classMap({
