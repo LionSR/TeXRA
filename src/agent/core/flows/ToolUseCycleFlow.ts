@@ -1,4 +1,5 @@
 // Third-party imports
+import stableStringify from 'fast-json-stable-stringify';
 import { z } from 'zod';
 
 // Local imports - core flow primitives
@@ -60,6 +61,39 @@ import type {
   ToolUseCycleServices,
   ToolUseCycleParams,
 } from './CycleServices';
+
+// ============================================================================
+// Parallel call deduplication
+// ============================================================================
+
+const DUPLICATE_CALL_ERROR =
+  'Duplicate parallel call skipped. This call has the same tool name and arguments ' +
+  'as an earlier call in this batch that was already executed. ' +
+  'If you need to run this tool multiple times with the same arguments, ' +
+  'please call them sequentially in separate responses.';
+
+/**
+ * Identify duplicate parallel tool calls (same name + identical arguments).
+ * Returns the set of `callId`s that should be skipped (all but the first
+ * occurrence of each unique call signature).
+ */
+function findDuplicateCallIds(toolCalls: SdkToolCall[]): Set<string> {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const call of toolCalls) {
+    const key = call.name + '\0' + stableStringify(call.input);
+    if (seen.has(key)) {
+      duplicates.add(call.callId);
+    } else {
+      seen.add(key);
+    }
+  }
+  return duplicates;
+}
+
+// ============================================================================
+// Tool input parsing and error handling
+// ============================================================================
 
 /** Parse tool input, handling JSON strings and other formats from model providers. */
 function parseToolInput(
@@ -576,8 +610,16 @@ class ToolUseDispatchNode<C> extends BatchNode<
   ToolUseCycleParams<C>,
   ToolUseCycleServices<C>
 > {
+  /**
+   * Call IDs of duplicate parallel calls detected during prep().
+   * These are skipped during exec() and receive a synthetic error result
+   * instructing the model to call them sequentially instead.
+   */
+  private _duplicateCallIds = new Set<string>();
+
   /** Returns tool calls to execute, or empty array if skipped/interrupted. */
   async prep(shared: ToolUseCycleShared): Promise<SdkToolCall[]> {
+    this._duplicateCallIds.clear();
     const toolCalls = shared.toolCalls ?? [];
 
     if (shared.shouldStop || toolCalls.length === 0) {
@@ -589,6 +631,27 @@ class ToolUseDispatchNode<C> extends BatchNode<
       return [];
     }
 
+    // Deduplicate parallel calls: when multiple calls have the same tool name
+    // and identical arguments, only execute the first one. Later duplicates
+    // receive a synthetic error result prompting sequential invocation.
+    if (toolCalls.length > 1) {
+      this._duplicateCallIds = findDuplicateCallIds(toolCalls);
+
+      if (this._duplicateCallIds.size > 0) {
+        const dupNames = [
+          ...new Set(
+            toolCalls
+              .filter((c) => this._duplicateCallIds.has(c.callId))
+              .map((c) => c.name),
+          ),
+        ];
+        this.services.logger.debug(
+          `Deduplicated ${this._duplicateCallIds.size} parallel tool call(s) ` +
+            `with identical name and arguments: ${dupNames.join(', ')}`,
+        );
+      }
+    }
+
     return toolCalls;
   }
 
@@ -596,6 +659,28 @@ class ToolUseDispatchNode<C> extends BatchNode<
   async exec(call: SdkToolCall): Promise<ToolExecutionResult | null> {
     if (this.services.checkInterruption()) {
       return null;
+    }
+
+    // Skip duplicate parallel calls — return a synthetic error result so
+    // the model is informed and can retry sequentially if needed.
+    if (this._duplicateCallIds.has(call.callId)) {
+      return {
+        call,
+        result: {
+          error: DUPLICATE_CALL_ERROR,
+          isError: true,
+        },
+        parsedInput: call.input,
+        sanitizedOutput: {
+          error: DUPLICATE_CALL_ERROR,
+          isError: true,
+        },
+        editedFiles: [],
+        logRef: {
+          logId: undefined,
+          groupId: this.services.logger.resolveActiveGroupId(),
+        },
+      };
     }
 
     const services = this.services;
@@ -607,6 +692,12 @@ class ToolUseDispatchNode<C> extends BatchNode<
       workspace.interactions,
       workspace.todos,
     );
+  }
+
+  clone(): this {
+    const cloned = super.clone();
+    cloned._duplicateCallIds = new Set();
+    return cloned;
   }
 
   /** Invoke a tool with error handling, returning an error result if the tool is missing. */

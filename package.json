@@ -1516,6 +1516,7 @@
     "diff-match-patch": "^1.0.5",
     "dotenv": "^17.2.4",
     "execa": "^9.6.1",
+    "fast-json-stable-stringify": "^2.1.0",
     "fast-xml-parser": "^5.3.4",
     "fs-extra": "^11.3.3",
     "glob": "^13.0.1",
