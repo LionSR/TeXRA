@@ -29,6 +29,7 @@ export { TaskGroupHeader } from './TaskGroupHeader';
 export { TaskGroupItem } from './TaskGroupItem';
 export { TaskGroupList } from './TaskGroupList';
 export { TodoList } from './TodoList';
+export { ToolTimer } from './ToolTimer';
 export { ToolUseStreamContent } from './ToolUseStreamContent';
 export { UsagePanel } from './UsagePanel';
 export { UserMessage } from './UserMessage';
