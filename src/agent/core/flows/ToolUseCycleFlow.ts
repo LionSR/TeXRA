@@ -628,8 +628,16 @@ class ToolUseDispatchNode<C> extends BatchNode<
       this._duplicateCallIds = findDuplicateCallIds(toolCalls);
 
       if (this._duplicateCallIds.size > 0) {
-        this.services.logger.info(
-          `Deduplicated ${this._duplicateCallIds.size} parallel tool call(s) with identical name and arguments.`,
+        const dupNames = [
+          ...new Set(
+            toolCalls
+              .filter((c) => this._duplicateCallIds.has(c.callId))
+              .map((c) => c.name),
+          ),
+        ];
+        this.services.logger.debug(
+          `Deduplicated ${this._duplicateCallIds.size} parallel tool call(s) ` +
+            `with identical name and arguments: ${dupNames.join(', ')}`,
         );
       }
     }
