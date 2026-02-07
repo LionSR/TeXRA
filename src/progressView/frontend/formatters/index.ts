@@ -48,6 +48,7 @@ const NULLABLE_TYPES: Set<MessageType> = new Set([
   'scratchpad',
   'modelResponse',
   'contextState',
+  'contextManagement',
 ]);
 
 /** Create an error fallback template when formatting fails. */
