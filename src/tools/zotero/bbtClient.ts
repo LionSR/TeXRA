@@ -13,12 +13,10 @@ import axios from 'axios';
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
-import {
-  ZOTERO_BBT_TIMEOUT_MS,
-  isTimeoutErrorCode,
-  buildTimeoutMessage,
-} from '@tools/timeouts';
+import { isTimeoutErrorCode, buildTimeoutMessage } from '@tools/timeouts';
 import { getConfig } from '@utils/config';
+
+const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
 
 /**
  * Get the configured Zotero port.

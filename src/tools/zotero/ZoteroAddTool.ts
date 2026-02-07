@@ -23,17 +23,15 @@ import { z } from 'zod';
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
-import {
-  ZOTERO_PING_TIMEOUT_MS,
-  ZOTERO_CONNECTOR_TIMEOUT_MS,
-  isTimeoutErrorCode,
-  buildTimeoutMessage,
-} from '@tools/timeouts';
+import { isTimeoutErrorCode, buildTimeoutMessage } from '@tools/timeouts';
 import { pluralize } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - zotero
 import { getZoteroPort } from './bbtClient';
+
+const ZOTERO_PING_TIMEOUT_MS = 2_000; // 2 s
+const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000; // 30 s
 
 /**
  * Schema for a single item to add to Zotero.

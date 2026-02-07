@@ -10,12 +10,10 @@ import { z } from 'zod';
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
 import { ToolError, ToolResult } from '@tools/result';
-import {
-  WEB_FETCH_TIMEOUT_MS,
-  isTimeoutErrorCode,
-  buildTimeoutMessage,
-} from '@tools/timeouts';
+import { isTimeoutErrorCode, buildTimeoutMessage } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
+
+const WEB_FETCH_TIMEOUT_MS = 30_000; // 30 s
 
 const WebFetchInputSchema = z.strictObject({
   url: z

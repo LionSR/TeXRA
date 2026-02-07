@@ -3,11 +3,11 @@ import * as vscode from 'vscode';
 
 // Local imports - system utilities
 import { toErrorMessage } from '@common/errors';
-import {
-  WOLFRAM_CODE_TIMEOUT_MS,
-  WOLFRAM_FILE_TIMEOUT_MS,
-} from '@tools/timeouts';
 import { executeCommand, checkToolInstalled } from '@utils/system';
+
+export const WOLFRAM_CODE_TIMEOUT_MS = 30_000; // 30 s
+export const WOLFRAM_FILE_TIMEOUT_MS = 60_000; // 60 s
+
 const WOLFRAM_NOT_INSTALLED_ERROR =
   'Mathematica/wolframscript is not installed or not in your PATH.';
 const WOLFRAM_CHANNEL = 'WolframTool';
