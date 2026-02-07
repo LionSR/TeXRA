@@ -229,8 +229,7 @@ export class LogList extends LitElement {
       const stored = getProposalInput(proposalLink.dataset.proposalId);
       if (stored) {
         postMessage(COMMANDS.RESTORE_PROPOSAL_CONFIG, {
-          toolName: stored.toolName,
-          input: stored.input,
+          proposal: stored.proposal,
         });
       }
       return;
