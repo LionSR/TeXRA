@@ -616,15 +616,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
             );
             options.max_tokens = validation.adjustedMaxTokens;
 
-            // Adjust thinking budget if max_tokens was reduced
-            if (options.thinking?.type === 'enabled') {
-              const maxBudget = Math.floor(options.max_tokens * 0.5);
-              if (options.thinking.budget_tokens > maxBudget) {
-                this.logger.debug(
-                  `Adjusted thinking budget from ${options.thinking.budget_tokens} to ${maxBudget} due to reduced max_tokens`,
-                );
-                options.thinking.budget_tokens = maxBudget;
-              }
+            // Only adjust thinking budget when it would violate API constraint
+            // (budget_tokens must be < max_tokens). Avoid unnecessary changes
+            // because changing budget_tokens invalidates the Anthropic messages
+            // cache, forcing expensive prefix re-creation.
+            if (
+              options.thinking?.type === 'enabled' &&
+              options.thinking.budget_tokens >= options.max_tokens
+            ) {
+              const newBudget = Math.max(1024, options.max_tokens - 1024);
+              this.logger.debug(
+                `Adjusted thinking budget from ${options.thinking.budget_tokens} to ${newBudget} due to reduced max_tokens`,
+              );
+              options.thinking.budget_tokens = newBudget;
             }
           }
         } catch (err) {
