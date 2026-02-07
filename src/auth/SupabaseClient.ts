@@ -41,6 +41,13 @@ export class SupabaseClient {
   private static initError: Error | null = null;
 
   /**
+   * Cached token expiry time (ms since epoch).
+   * Updated by SupabaseAuthProvider whenever a session is stored or loaded.
+   * Used for fast, synchronous expiry checks before each relay call.
+   */
+  private static tokenExpiresAt: number | null = null;
+
+  /**
    * Register an auth provider for token refresh.
    * Called by SupabaseAuthProvider on initialization.
    */
@@ -69,6 +76,26 @@ export class SupabaseClient {
    */
   static getInitError(): Error | null {
     return this.initError;
+  }
+
+  /**
+   * Update the cached token expiry time.
+   * Called by SupabaseAuthProvider when a session is stored or loaded.
+   */
+  static setTokenExpiry(expiresAt: number): void {
+    this.tokenExpiresAt = expiresAt;
+  }
+
+  /**
+   * Check if the current token will expire within the given threshold.
+   * Synchronous and in-memory — safe to call before every model invocation.
+   * Returns false if no expiry is tracked (e.g., not authenticated or not using relay).
+   */
+  static isTokenExpiringSoon(thresholdMs: number): boolean {
+    if (this.tokenExpiresAt === null) {
+      return false;
+    }
+    return this.tokenExpiresAt - Date.now() < thresholdMs;
   }
 
   /**
