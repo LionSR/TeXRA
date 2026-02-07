@@ -123,6 +123,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
       [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: (data) =>
         this.handleStopStream(data),
+      [PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE]: (data) =>
+        this.handleCompactResponse(data),
 
       // Actions
       [PROGRESS_VIEW_COMMANDS.RESUME]: (data) => this.handleResume(data),
@@ -315,6 +317,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.STOP_STREAM>,
   ): Promise<void> {
     await vscode.commands.executeCommand('texra.stopAgent', data.stream);
+  }
+
+  private async handleCompactResponse(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE>,
+  ): Promise<void> {
+    await vscode.commands.executeCommand(
+      'texra.compactResponse',
+      data.stream,
+    );
   }
 
   // ============================================================
