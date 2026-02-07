@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
+import type { AgentCategory } from '@shared/schemas/agent';
 
 export const settingsViewCommands = {
   showSettingsView: 'texra.showSettingsView',
@@ -11,7 +12,9 @@ export const settingsViewCommands = {
   // Tab-specific commands
   showMemory: 'texra.showMemory',
   showHistory: 'texra.showAgentHistory',
-};
+  showModels: 'texra.showModels',
+  showAgents: 'texra.showAgents',
+} as const;
 
 let settingsViewProvider: SettingsViewProvider | null = null;
 
@@ -53,6 +56,14 @@ export function registerSettingsViewCommands(
     ),
     vscode.commands.registerCommand(settingsViewCommands.showHistory, () =>
       settingsViewProvider?.showSettingsView(SETTINGS_TAB.HISTORY),
+    ),
+    vscode.commands.registerCommand(settingsViewCommands.showModels, () =>
+      settingsViewProvider?.showSettingsView(SETTINGS_TAB.MODELS),
+    ),
+    vscode.commands.registerCommand(
+      settingsViewCommands.showAgents,
+      (subTab?: AgentCategory) =>
+        settingsViewProvider?.showSettingsView(SETTINGS_TAB.AGENTS, subTab),
     ),
   );
 }

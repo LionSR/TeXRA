@@ -19,7 +19,7 @@ Follow these steps to create a new custom agent:
 Custom agents reside in a dedicated directory that TeXRA prepares for you.
 
 1.  **Find the Default Folder**: TeXRA automatically seeds a `custom_agents` directory inside its global storage. Look for the "Custom Agents" section in the [Agent Explorer](./agent-explorer.md); it points to this location by default.
-2.  **Override (Optional)**: If you prefer to manage agents elsewhere, set an absolute path in VS Code Settings (`Ctrl+,`) under `texra.explorer.agentsDirectory`. TeXRA will ensure that directory exists and use it instead of the default.
+2.  **Override (Optional)**: If you prefer to manage agents elsewhere, open the **Agents** tab in the TeXRA Dashboard and click **Change** in the directory info bar to select a new folder. TeXRA will ensure that directory exists and use it instead of the default.
 
 ### Automatic Creation
 

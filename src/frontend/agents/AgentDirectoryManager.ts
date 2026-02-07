@@ -8,8 +8,8 @@ import { minimatch } from 'minimatch';
 // Local imports
 import type { AgentSource } from '@agent/index';
 import { showLoggedMessageWithDocs, toErrorMessage } from '@common/errors';
+import { GlobalStateKey, globalSM } from '@common/state';
 import * as logger from '@logger/logUtils';
-import { getConfig, updateConfig, watchConfig } from '@utils/config';
 import { GlobalStorageFS, StorageFS, AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'AgentLoad';
@@ -40,7 +40,6 @@ export class AgentDirectoryManager {
   private context: vscode.ExtensionContext | undefined;
   private watcherDisposables: vscode.FileSystemWatcher[] = [];
   private watcherSubscriptions = new Set<AgentDirectoryWatcherSubscription>();
-  private watcherConfigDisposable: vscode.Disposable | null = null;
   private watcherDirectories: Array<{
     directory: string;
     source: AgentSource;
@@ -84,7 +83,7 @@ export class AgentDirectoryManager {
     switch (source) {
       case 'custom':
         return this.custom();
-      case 'builtIn':
+      case 'builtInWorkflow':
         return this.builtIn();
       case 'builtInToolUse':
         return this.builtInToolUse();
@@ -108,7 +107,7 @@ export class AgentDirectoryManager {
 
     return [
       { directory: customDir, source: 'custom' },
-      { directory: builtInDir, source: 'builtIn' },
+      { directory: builtInDir, source: 'builtInWorkflow' },
       { directory: builtInToolUseDir, source: 'builtInToolUse' },
     ];
   }
@@ -184,9 +183,8 @@ export class AgentDirectoryManager {
 
   async custom(): Promise<string> {
     this.ensureInitialized();
-    const configuredPath = getConfig<string>(
-      'texra.explorer.agentsDirectory',
-      '',
+    const configuredPath = (
+      globalSM?.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, '') ?? ''
     ).trim();
 
     const resolvedPath = await this.resolveConfiguredCustomDir(configuredPath);
@@ -212,9 +210,7 @@ export class AgentDirectoryManager {
     const selectedPath = folder[0].fsPath;
     await AbsoluteFS.ensureDir(selectedPath);
 
-    await updateConfig('texra.explorer.agentsDirectory', selectedPath, {
-      prefix: false,
-    });
+    await globalSM.update(GlobalStateKey.CUSTOM_AGENT_DIR, selectedPath);
 
     return selectedPath;
   }
@@ -238,7 +234,6 @@ export class AgentDirectoryManager {
 
     this.watcherSubscriptions.add(subscription);
     void this.ensureAgentWatchers();
-    this.ensureAgentDirectoryWatcherConfig();
 
     return {
       dispose: () => {
@@ -258,18 +253,12 @@ export class AgentDirectoryManager {
     return p.replaceAll('\\', '/');
   }
 
-  private ensureAgentDirectoryWatcherConfig(): void {
-    if (this.watcherConfigDisposable || !this.context) {
-      return;
-    }
-
-    this.watcherConfigDisposable = watchConfig(
-      this.context,
-      'texra.explorer.agentsDirectory',
-      () => {
-        void this.refreshAgentWatchers();
-      },
-    );
+  /**
+   * Refresh file watchers after the custom agent directory changes.
+   * Called by the settings view after updating CUSTOM_AGENT_DIR in globalSM.
+   */
+  async refreshAfterDirChange(): Promise<void> {
+    await this.refreshAgentWatchers();
   }
 
   private sameDirectories(
@@ -374,26 +363,14 @@ export class AgentDirectoryManager {
   }
 
   /**
-   * Dispose only the file system watchers, preserving config watcher.
-   * Used during rebuilds when directories change.
+   * Dispose all file system watchers.
+   * Used when all subscriptions are removed.
    */
-  private disposeFileWatchers(): void {
+  private disposeAgentWatchers(): void {
     this.watcherDisposables.forEach((watcher) => watcher.dispose());
     this.watcherDisposables = [];
     this.watcherDirectories = null;
     this.watcherSetupPromise = null;
-  }
-
-  /**
-   * Dispose all watchers including the config listener.
-   * Used when all subscriptions are removed.
-   */
-  private disposeAgentWatchers(): void {
-    this.disposeFileWatchers();
-    if (this.watcherConfigDisposable) {
-      this.watcherConfigDisposable.dispose();
-      this.watcherConfigDisposable = null;
-    }
   }
 }
 
