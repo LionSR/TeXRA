@@ -17,6 +17,7 @@ import {
   SETTINGS_VIEW_CMD,
   SETTINGS_VIEW_COMMANDS,
 } from '@common/webview/commands';
+import { AgentSourceSchema } from './agent';
 export { SETTINGS_VIEW_CMD };
 
 /** Tab name order - single source of truth for tab indices */
@@ -86,7 +87,7 @@ export {
 
 export const AgentSelectionItemSchema = z.object({
   name: z.string(),
-  source: z.string(),
+  source: AgentSourceSchema,
   category: z.string(),
   description: z.string().optional(),
   hasPath: z.boolean(),
@@ -267,7 +268,7 @@ const GetAgentSelectionMessageSchema = z.object({
 const OpenAgentYamlMessageSchema = z.object({
   command: z.literal(CMD.OPEN_AGENT_YAML),
   agentName: z.string().min(1),
-  agentSource: z.string().min(1),
+  agentSource: AgentSourceSchema,
   variant: z.enum(['base', 'multiple']),
 });
 
