@@ -72,9 +72,11 @@ const ACTION_CONFIG: Record<
 };
 
 /** Build context management items from parsed data. */
-function buildContextManagementItems(
-  data: ContextManagementData,
-): { config: ActionConfig; items: ContextStatItem[]; summary?: string } {
+function buildContextManagementItems(data: ContextManagementData): {
+  config: ActionConfig;
+  items: ContextStatItem[];
+  summary?: string;
+} {
   const {
     action,
     tokensBefore,
