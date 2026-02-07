@@ -16,25 +16,10 @@ You can configure TeXRA through VS Code's settings:
 
 ### Agent Configuration
 
-Control which agents are available in the dropdown menu. Below is the default list:
-
-```json
-"texra.agents": [
-  "correct",
-  "polish",
-  "draw",
-  "ocr",
-  "paper2slide",
-  "paper2poster",
-  "transcribe_audio"
-]
-```
-
-If an agent listed here lacks a corresponding `.yaml` file, it appears disabled
-in the main view. A banner provides quick actions to edit the list, set or open
-the custom agents directory, or read the documentation. Agents with a matching
-`_multiple.yaml` file show a codicon next to their name to indicate multi-output
-support.
+Agent visibility is managed through the **Agents** tab in the TeXRA Dashboard
+(`TeXRA: Show Agents` from the Command Palette). The split-panel browser lets
+you toggle individual agents on or off for the current workspace. Agents with a
+matching `_multiple.yaml` file are flagged with a multi-output badge.
 
 ### Model Configuration
 
@@ -225,15 +210,11 @@ Configure Git integration features:
 
 This setting controls how many recent commits are shown in the commit selection dropdown for LaTeX diff operations.
 
-## Explorer Configuration
+## Custom Agents Directory
 
-Configure the folder explorer view:
-
-```json
-"texra.explorer.agentsDirectory": "/path/to/custom/agents"
-```
-
-This setting specifies a custom root path for the TeXRA file explorer view and must be an absolute path.
+The custom agents directory can be changed from the **Agents** tab in the TeXRA
+Dashboard. Click **Change** in the directory info bar to select a new folder, or
+**Reset** to return to the default location inside global storage.
 
 ## Logger Configuration
 
