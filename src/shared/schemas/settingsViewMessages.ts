@@ -296,7 +296,7 @@ const SetAgentEnabledMessageSchema = z.object({
 
 const OpenAgentFolderMessageSchema = z.object({
   command: z.literal(CMD.OPEN_AGENT_FOLDER),
-  folderType: z.enum(['custom', 'builtIn', 'builtInToolUse']),
+  folderType: z.enum(['custom', 'builtInWorkflow', 'builtInToolUse']),
 });
 
 const CreateAgentMessageSchema = z.object({

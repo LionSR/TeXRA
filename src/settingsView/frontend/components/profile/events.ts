@@ -45,7 +45,7 @@ export const AgentSelectionEvents = {
     enabled: boolean;
   }) => createEvent('agent-enabled-set', detail),
   openFolder: (detail: {
-    folderType: 'custom' | 'builtIn' | 'builtInToolUse';
+    folderType: 'custom' | 'builtInWorkflow' | 'builtInToolUse';
   }) => createEvent('agent-open-folder', detail),
   createAgent: () => createEvent('agent-create', undefined),
   setCustomDir: () => createEvent('agent-set-custom-dir', undefined),

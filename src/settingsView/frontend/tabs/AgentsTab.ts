@@ -196,7 +196,7 @@ export class AgentsTab extends LitElement {
   }
 
   private handleOpenFolder(
-    folderType: 'custom' | 'builtIn' | 'builtInToolUse',
+    folderType: 'custom' | 'builtInWorkflow' | 'builtInToolUse',
   ): void {
     this.dispatchEvent(AgentSelectionEvents.openFolder({ folderType }));
   }
@@ -296,7 +296,7 @@ export class AgentsTab extends LitElement {
             </button>
             <button
               class="agents-folder-btn"
-              @click=${() => this.handleOpenFolder('builtIn')}
+              @click=${() => this.handleOpenFolder('builtInWorkflow')}
               title="Open built-in agents folder"
             >
               Built-in
