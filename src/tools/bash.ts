@@ -36,7 +36,7 @@ export type BashInput = z.infer<typeof BashInputSchema>;
 export class BashTool extends defineTool({
   name: 'bash',
   description:
-    'Execute shell commands. Returns stdout on success, throws error with stderr on failure.',
+    'Execute shell commands. Commands run from the workspace directory — do not cd to it first. Never use `find /` as it searches the entire filesystem; use the glob tool or limit searches to the workspace. Returns stdout on success, throws error with stderr on failure.',
   schema: BashInputSchema,
 }) {
   protected async execute(input: BashInput): Promise<ToolResult> {
