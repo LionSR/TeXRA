@@ -593,10 +593,27 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const compactedResponse: CompactedResponse =
         await client.responses.compact(compactParams);
 
-      // Use output_tokens (not input_tokens) to reflect the size of the compacted output.
-      // usage.input_tokens is the cost of the compact operation's input (the original messages),
-      // not the token count of the compacted result.
-      const tokensAfter = compactedResponse.usage.output_tokens;
+      // Note: SDK types CompactedResponse.output as ResponseOutputItem[], but the
+      // compact endpoint returns ResponseInputItem[] suitable for re-submission.
+      const compactedMessages =
+        compactedResponse.output as unknown as ResponseInputItem[];
+
+      // Count the actual tokens of the compacted messages rather than relying on
+      // usage fields from the compact response (usage.input_tokens is the cost of
+      // the compact operation's input, and usage.output_tokens may not match the
+      // input token cost when these items are re-submitted).
+      let tokensAfter: number;
+      try {
+        tokensAfter = await this.estimateTokenCount(compactedMessages, {
+          client,
+          signal,
+          systemPrompt,
+        });
+      } catch {
+        // Fall back to output_tokens if token counting fails
+        tokensAfter = compactedResponse.usage.output_tokens;
+      }
+
       const utilizationAfter = (tokensAfter / contextWindow) * 100;
       const reduction = tokensBefore - tokensAfter;
       const reductionPercent = ((reduction / tokensBefore) * 100).toFixed(1);
@@ -618,10 +635,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Store compacted messages for use in this request.
       // Mark as pending compaction - state will be finalized after successful API call.
       // This prevents stale state if API call fails and needs retry.
-      // Note: SDK types CompactedResponse.output as ResponseOutputItem[], but the
-      // compact endpoint returns ResponseInputItem[] suitable for re-submission.
-      const compactedMessages =
-        compactedResponse.output as unknown as ResponseInputItem[];
       this.compactionResult = { compactedMessages, tokensAfter };
 
       return compactedMessages;
