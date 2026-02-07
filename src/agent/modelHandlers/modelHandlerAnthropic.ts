@@ -512,6 +512,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (this.capabilities.supportsReasoning) {
       this.logger.debug('Enabling thinking for model with reasoning support');
 
+      // In tool-use mode, halve max_tokens so that validateTokenLimits doesn't
+      // trigger before compaction. With full max_tokens (89K for Opus 4.6),
+      // token validation fires at ~110K input — well before compaction at 150K.
+      // Halving pushes the trigger to ~155K, ensuring compaction resets context
+      // first. This keeps budget_tokens stable, which is critical because
+      // changing budget_tokens invalidates the Anthropic messages cache.
+      if (this.isToolUseMode()) {
+        options.max_tokens = Math.floor(options.max_tokens * 0.5);
+      }
+
       // budget_tokens must be < max_tokens; use 50% to leave room for actual output
       const maxBudget = Math.floor(options.max_tokens * 0.5);
       const defaultBudget = this.isClaudeOpus46()
