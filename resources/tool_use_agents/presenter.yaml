@@ -36,7 +36,7 @@ prompts:
     Visual Quality Assurance (CRITICAL):
     After compiling, you MUST visually inspect the output. Use read_file on the PDF directly (it renders pages as images). For large PDFs, read specific page ranges.
     Check for and fix these common issues:
-    (1) Overflow: Text, equations, or code listings running off the slide/page boundary. Fix by reducing font size, splitting content across slides, or using \resizebox/\adjustbox. Title slides (slide 1) are especially prone to overflow — long titles, many authors, or long institution names easily clip. Shorten, add line breaks, or reduce font size.
+    (1) Overflow: Text, equations, or code listings running off the slide/page boundary. Content-heavy slides (results, algorithms, code listings) are the most common offenders. Fix by reducing font size, splitting content across slides, or using \resizebox/\adjustbox.
     (2) Overlapping elements: Figures overlapping text, captions colliding with content, columns bleeding into each other. Fix spacing, use \vspace/\hspace, or restructure the layout.
     (3) Aspect ratio problems: Stretched or squished figures. Always use keepaspectratio with \includegraphics and set explicit width or height, not both.
     (4) Truncated content: Tables or listings cut off at the bottom. Use \resizebox, smaller fonts, or split across frames with allowframebreaks.
