@@ -1314,8 +1314,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           this.logger.warn(
             `Streaming response ${response.id} ended with pending status "${response.status}" - polling for completion`,
           );
-          // Store pending ID so retry logic can resume polling instead of creating new request
-          this.pendingBackgroundResponseId = response.id;
           response = await this.waitForBackgroundCompletion(
             client,
             response,
@@ -1376,8 +1374,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             },
           );
         }
-        // Store pending ID so retry logic can resume polling instead of creating new request
-        this.pendingBackgroundResponseId = response.id;
         response = await this.waitForBackgroundCompletion(
           client,
           response,
@@ -1603,6 +1599,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     let current = initialResponse;
     const responseId = initialResponse.id;
+
+    // Track which response is being polled so retry logic can resume via
+    // tryResumeBackgroundResponse instead of creating a new request.
+    this.pendingBackgroundResponseId = responseId;
     const pollInterval = ModelHandlerOpenAIResponse.BACKGROUND_POLL_INTERVAL_MS;
     const startTime = Date.now();
     let pollCount = 0;
@@ -1694,10 +1694,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // non-retryable classification) work correctly with full HTTP metadata.
         const statusCode = (err as { status?: number }).status;
         if (statusCode === 404) {
-          throw new Error(
+          const pollingError = new Error(
             `Background response polling failed for ${responseId}: ${getSdkErrorMessage(err)}`,
             { cause: err },
           );
+          // Forward request_id so formatProviderHttpError can extract it for
+          // logging diagnostics (detectRequestId doesn't follow the cause chain)
+          const origRequestId = (err as { request_id?: string }).request_id;
+          if (origRequestId) {
+            (pollingError as Record<string, unknown>).request_id =
+              origRequestId;
+          }
+          throw pollingError;
         }
         throw err;
       }
