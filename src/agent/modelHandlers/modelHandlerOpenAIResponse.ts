@@ -50,6 +50,7 @@ import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
 import {
+  CHAINED_RESPONSE_MAX_OUTPUT_FACTOR,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
   TOKEN_SAFETY_BUFFER,
   TOOL_USE_SAFETY_BUFFER,
@@ -522,6 +523,28 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const needsLargerBuffer =
       this.isToolUseMode() || this.previousResponseId !== null;
     return needsLargerBuffer ? TOOL_USE_SAFETY_BUFFER : TOKEN_SAFETY_BUFFER;
+  }
+
+  /**
+   * Reduces max_output_tokens when response chaining is active.
+   * This mirrors the existing tool-use output-budgeting pattern and reserves
+   * headroom for server-side context framing with previous_response_id.
+   */
+  private applyChainedOutputTokenBudget(maxOutputTokens: number): number {
+    if (!this.previousResponseId) {
+      return maxOutputTokens;
+    }
+
+    const budgeted = Math.max(
+      1,
+      Math.floor(maxOutputTokens * CHAINED_RESPONSE_MAX_OUTPUT_FACTOR),
+    );
+    if (budgeted !== maxOutputTokens) {
+      this.logger.debug(
+        `Applied chained max_output_tokens budget: ${maxOutputTokens} -> ${budgeted}`,
+      );
+    }
+    return budgeted;
   }
 
   /**
@@ -1088,6 +1111,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     };
 
     let maxOutputTokens = this.getEffectiveMaxOutputTokens();
+    maxOutputTokens = this.applyChainedOutputTokenBudget(maxOutputTokens);
 
     // Phase 2: COUNT - Estimate input tokens using built params
     // Phase 3: VALIDATE - Adjust max_output_tokens if needed
