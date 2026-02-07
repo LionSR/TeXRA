@@ -180,7 +180,10 @@ Useful for finding the right lemma when you know roughly what type it should hav
           query,
           result: {
             summary: 'Timeout',
-            output: buildTimeoutMessage('Loogle API request', LOOGLE_TIMEOUT_MS),
+            output: buildTimeoutMessage(
+              'Loogle API request',
+              LOOGLE_TIMEOUT_MS,
+            ),
             isError: true,
           },
         };
