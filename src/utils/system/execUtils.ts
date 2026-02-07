@@ -70,6 +70,10 @@ export async function executeCommand(
     onStderr?: (chunk: string) => void;
   } = {},
 ): Promise<ExecResult> {
+  // Hoisted so the finally block can clear them on both success and error paths.
+  let shellTimeoutId: ReturnType<typeof setTimeout> | undefined;
+  let forceKillTimeoutId: ReturnType<typeof setTimeout> | undefined;
+
   try {
     const workspacePath = options.cwd ?? WorkspaceFS.getPath();
     if (!workspacePath) {
@@ -100,8 +104,6 @@ export async function executeCommand(
 
     let subprocess: ResultPromise;
     let shellTimedOut = false;
-    let shellTimeoutId: ReturnType<typeof setTimeout> | undefined;
-    let forceKillTimeoutId: ReturnType<typeof setTimeout> | undefined;
 
     if (Array.isArray(command)) {
       const [cmd, ...args] = command;
@@ -190,8 +192,6 @@ export async function executeCommand(
     }
 
     const result = await subprocess;
-    if (shellTimeoutId !== undefined) clearTimeout(shellTimeoutId);
-    if (forceKillTimeoutId !== undefined) clearTimeout(forceKillTimeoutId);
 
     const stdout = (result.stdout as string) ?? '';
     const stderr = (result.stderr as string) ?? '';
@@ -242,5 +242,8 @@ export async function executeCommand(
       timedOut: false, // Real timeouts are handled in the main flow via result.timedOut
       exitCode: 127, // Convention for command not found / execution failure
     };
+  } finally {
+    if (shellTimeoutId !== undefined) clearTimeout(shellTimeoutId);
+    if (forceKillTimeoutId !== undefined) clearTimeout(forceKillTimeoutId);
   }
 }
