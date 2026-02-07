@@ -3,8 +3,6 @@ import * as vscode from 'vscode';
 import { XMLParser } from 'fast-xml-parser';
 
 // Local imports - core
-import { AgentConfigSchema } from '@agent/core';
-import { executeAgent } from '@agent/runtime/executeAgent';
 import { showLoggedErrorMessage } from '@common/errors';
 import {
   getActiveEditorWithGuards,
@@ -17,7 +15,6 @@ logger.initialize(CHANNEL);
 
 export const xmlCommands = {
   parseXml: 'texra.parseXml',
-  validateAndFixXml: 'texra.validateAndFixXml',
 };
 
 export async function handleParseXml(): Promise<void> {
@@ -60,44 +57,8 @@ export async function handleParseXml(): Promise<void> {
   }
 }
 
-/**
- * Validate and fix XML errors using Claude
- */
-export async function handleValidateAndFixXml(): Promise<void> {
-  try {
-    const guardResult = await getActiveEditorWithGuards({
-      allowedExtensions: ['.xml'],
-      resourceName: 'XML',
-      saveDocument: true,
-    });
-
-    if (guardResult.status !== 'ok') {
-      logGuardFailure(CHANNEL, 'validate XML', guardResult.status, 'XML');
-      return;
-    }
-
-    const { relativePath } = guardResult;
-
-    logger.info(CHANNEL, `Starting XML validation for ${relativePath}`);
-
-    const agentConfig = AgentConfigSchema.parse({
-      agent: 'xml_validator',
-      model: 'claude-3-7-sonnet-latest',
-      inputFile: relativePath,
-    });
-
-    await executeAgent(agentConfig);
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error validating XML', err);
-  }
-}
-
 export function registerXmlCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(xmlCommands.parseXml, handleParseXml),
-    vscode.commands.registerCommand(
-      xmlCommands.validateAndFixXml,
-      handleValidateAndFixXml,
-    ),
   );
 }
