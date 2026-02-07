@@ -117,8 +117,11 @@ export abstract class RetryableInvocationNode<
     this.signal = activeController.signal;
     services.setAbortController(activeController);
 
-    // Proactive relay token refresh: if the token is nearing expiry, refresh
-    // it and recreate the client *before* the request so we never hit a 401.
+    // Proactive relay token refresh: two steps —
+    // 1. Refresh the JWT via ensureFreshToken (network call if near expiry).
+    // 2. Recreate the SDK client so it uses the new token.
+    // If step 1 fails (returns null), skip step 2 — the old client is still
+    // usable until actual expiry, and the reactive 401 handler covers it.
     if (SupabaseClient.isTokenExpiringSoon()) {
       services.logger.debug(
         'Token nearing expiry, refreshing client proactively',
