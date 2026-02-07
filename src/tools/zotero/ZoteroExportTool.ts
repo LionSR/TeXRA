@@ -10,6 +10,7 @@ import { z } from 'zod';
 
 // Local imports - core
 import { ToolError } from '@tools/result';
+import { ZOTERO_EXPORT_TIMEOUT_MS } from '@tools/timeouts';
 import { pluralize } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
@@ -56,7 +57,7 @@ export class ZoteroExportTool extends defineTool({
       'item.export',
       params,
       port,
-      30000, // Longer timeout for export
+      ZOTERO_EXPORT_TIMEOUT_MS,
     );
 
     if (typeof result !== 'string' || result.trim() === '') {

@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import { toErrorMessage } from '@common/errors';
 import { ToolResult } from '@tools/result';
+import { LOOGLE_TIMEOUT_MS, buildTimeoutMessage } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 
 // ============================================================================
@@ -115,7 +116,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
         headers: {
           'User-Agent': 'TeXRA-VSCode-Extension',
         },
-        timeout: 10000,
+        timeout: LOOGLE_TIMEOUT_MS,
       });
 
       const data = response.data;
@@ -152,6 +153,13 @@ Useful for finding the right lemma when you know roughly what type it should hav
         results: hits,
       };
     } catch (error) {
+      if (axios.isAxiosError(error) && error.code === 'ECONNABORTED') {
+        return {
+          summary: 'Loogle search timed out',
+          output: buildTimeoutMessage('Loogle API request', LOOGLE_TIMEOUT_MS),
+          isError: true,
+        };
+      }
       return {
         summary: 'Loogle search failed',
         output: `Error: ${toErrorMessage(error)}`,
