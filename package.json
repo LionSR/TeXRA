@@ -1113,6 +1113,18 @@
         "icon": "$(database)"
       },
       {
+        "command": "texra.showModels",
+        "title": "Show Models",
+        "category": "TeXRA",
+        "icon": "$(hubot)"
+      },
+      {
+        "command": "texra.showAgents",
+        "title": "Show Agents",
+        "category": "TeXRA",
+        "icon": "$(symbol-method)"
+      },
+      {
         "command": "texra.openSettings",
         "title": "Open TeXRA Settings",
         "category": "TeXRA",
