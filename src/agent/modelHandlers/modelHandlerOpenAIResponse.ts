@@ -567,6 +567,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     messages: ResponseInputItem[],
     systemPrompt?: string,
     signal?: AbortSignal,
+    convertedTools?: unknown[],
   ): Promise<ResponseInputItem[]> {
     const tokensBefore = this.conversationState.cumulativeInputTokens;
     const contextWindow = this.config.contextWindow;
@@ -608,9 +609,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           client,
           signal,
           systemPrompt,
+          tools: convertedTools,
         });
       } catch {
-        // Fall back to output_tokens if token counting fails
+        // Fall back to output_tokens if token counting fails.
+        // NOTE: It's unclear what output_tokens represents exactly for the compact
+        // endpoint — it may be the generation cost rather than the reusable content
+        // size. This fallback is a best-effort estimate until OpenAI clarifies.
         tokensAfter = compactedResponse.usage.output_tokens;
       }
 
@@ -1060,6 +1065,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
     }
 
+    // Convert tools early so they're available for both compaction token counting and the API call
+    const convertedTools =
+      tools && tools.length > 0
+        ? toOpenAIResponseTools(tools, {
+            supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
+            supportsFunctionCalling: this.capabilities.supportsFunctionCalling,
+          })
+        : undefined;
+
     // Check if compaction is needed before processing the request
     let effectiveMessages = messages;
     // Track if compaction happened in THIS call (not previous calls)
@@ -1076,6 +1090,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         messages,
         systemPrompt,
         signal,
+        convertedTools,
       );
       // compactionResult is set if compaction succeeded
       compactedThisCall = this.compactionResult !== undefined;
@@ -1102,13 +1117,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     await this.uploadInlineInputFiles(client, newMessages);
 
     // Build shared params used by both token counting and API call
-    const convertedTools =
-      tools && tools.length > 0
-        ? toOpenAIResponseTools(tools, {
-            supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
-            supportsFunctionCalling: this.capabilities.supportsFunctionCalling,
-          })
-        : undefined;
 
     const reasoningEffort = this.capabilities.supportsReasoning
       ? this.getEffectiveReasoningEffort()
