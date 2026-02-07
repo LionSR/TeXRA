@@ -143,9 +143,14 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
 
 function entryToSelectionItem(
   entry: AgentEntry,
-  enabledSet: Set<string>,
+  enabledKeys: string[] | undefined,
 ): AgentSelectionItem {
   const key = createKey(entry.source, entry.name);
+  // undefined = never configured → all enabled; [] = explicitly empty → none enabled
+  const enabled =
+    enabledKeys === undefined ||
+    enabledKeys.includes(key) ||
+    enabledKeys.includes(entry.name);
   return {
     name: entry.name,
     source: entry.source,
@@ -154,10 +159,7 @@ function entryToSelectionItem(
     hasPath: Boolean(entry.path),
     tools: entry.tools,
     hasMultiple: Boolean(entry.multiplePath),
-    enabled:
-      enabledSet.size === 0 ||
-      enabledSet.has(key) ||
-      enabledSet.has(entry.name),
+    enabled,
   };
 }
 
@@ -165,11 +167,12 @@ function buildAgentSelectionItems(): {
   workflow: AgentSelectionItem[];
   toolUse: AgentSelectionItem[];
 } {
-  const workflowEnabled = new Set(
-    workspaceSM.get<string[]>(WorkspaceStateKey.ENABLED_AGENTS, []),
+  // No default → undefined means "never configured" (all enabled)
+  const workflowEnabled = workspaceSM.get<string[]>(
+    WorkspaceStateKey.ENABLED_AGENTS,
   );
-  const toolUseEnabled = new Set(
-    workspaceSM.get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, []),
+  const toolUseEnabled = workspaceSM.get<string[]>(
+    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
   );
 
   const workflow = getWorkflowAgents()
@@ -969,7 +972,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         data.category === 'workflow'
           ? WorkspaceStateKey.ENABLED_AGENTS
           : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS;
-      const current = workspaceSM.get<string[]>(stateKey, []);
+      // No default → undefined means "never configured" (all enabled)
+      const current = workspaceSM.get<string[]>(stateKey) ?? [];
       const key = createKey(data.agentSource, data.agentName);
 
       let updated: string[];
@@ -980,9 +984,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         } else {
           updated = [...current, key];
         }
-      } else if (current.length === 0) {
-        // Empty config = "all enabled". To disable one agent, seed the config
-        // with all OTHER agents so the transition is: [] → [all except this one].
+      } else if (!workspaceSM.get<string[]>(stateKey)) {
+        // Never configured (undefined) = "all enabled". To disable one agent,
+        // seed the config with all OTHER agents: undefined → [all except this one].
         const allAgents =
           data.category === 'workflow'
             ? getWorkflowAgents()
@@ -991,7 +995,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           .map((e) => createKey(e.source, e.name))
           .filter((k) => k !== key);
       } else {
-        // Remove both name and source:name formats
+        // Remove both name and source:name formats.
+        // An empty result means "nothing enabled" (not "all enabled").
         updated = current.filter(
           (entry) => entry !== key && entry !== data.agentName,
         );
