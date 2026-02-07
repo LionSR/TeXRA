@@ -16,6 +16,8 @@ import { defineTool } from '@tools/core/define';
 // Local imports - zotero
 import { callBetterBibTeX, getZoteroPort } from './bbtClient';
 
+const ZOTERO_EXPORT_TIMEOUT_MS = 30_000; // 30 s
+
 const ZoteroExportInputSchema = z.strictObject({
   citekeys: z
     .array(z.string().min(1))
@@ -56,7 +58,7 @@ export class ZoteroExportTool extends defineTool({
       'item.export',
       params,
       port,
-      30000, // Longer timeout for export
+      ZOTERO_EXPORT_TIMEOUT_MS,
     );
 
     if (typeof result !== 'string' || result.trim() === '') {
