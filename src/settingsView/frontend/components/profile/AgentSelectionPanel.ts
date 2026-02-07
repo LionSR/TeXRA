@@ -18,10 +18,9 @@ import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { codiconStyles, designTokens } from '@shared/styles';
 
-// Local imports - profile view events
+// Local imports - shared schemas and events
+import { AGENT_SOURCE, type AgentCategory } from '@shared/schemas/agent';
 import { AgentSelectionEvents } from './events';
-
-// Local imports - shared schemas
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
 
 /** Unique key for an agent: disambiguates agents with same name across sources */
@@ -31,10 +30,10 @@ function agentKey(agent: AgentSelectionItem): string {
 
 /** Source display names for agent origins */
 const SOURCE_DISPLAY_NAMES: Record<string, string> = {
-  builtIn: 'Built-in',
-  builtInToolUse: 'Built-in',
-  custom: 'Custom',
-  remote: 'Remote',
+  [AGENT_SOURCE.BUILT_IN]: 'Built-in',
+  [AGENT_SOURCE.BUILT_IN_TOOL_USE]: 'Built-in',
+  [AGENT_SOURCE.CUSTOM]: 'Custom',
+  [AGENT_SOURCE.REMOTE]: 'Remote',
 };
 
 @customElement('agent-selection-panel')
@@ -248,7 +247,7 @@ export class AgentSelectionPanel extends LitElement {
   ];
 
   @property({ attribute: false }) agents: AgentSelectionItem[] = [];
-  @property({ type: String }) category: 'workflow' | 'toolUse' = 'workflow';
+  @property({ type: String }) category: AgentCategory = 'workflow';
 
   @state() private selectedKey: string | null = null;
 
@@ -378,10 +377,10 @@ export class AgentSelectionPanel extends LitElement {
           ${agent.hasMultiple
             ? html`<span title="Multiple outputs">⧉</span>`
             : nothing}
-          ${agent.isRemote
+          ${agent.source === AGENT_SOURCE.REMOTE
             ? html`<span title="Remote agent">☁</span>`
             : nothing}
-          ${agent.isCustom
+          ${agent.source === AGENT_SOURCE.CUSTOM
             ? html`<span title="Custom agent">★</span>`
             : nothing}
         </span>
@@ -393,7 +392,12 @@ export class AgentSelectionPanel extends LitElement {
     const groups = this.groupedSources;
 
     // Define display order for sources
-    const sourceOrder = ['custom', 'builtIn', 'builtInToolUse', 'remote'];
+    const sourceOrder = [
+      AGENT_SOURCE.CUSTOM,
+      AGENT_SOURCE.BUILT_IN,
+      AGENT_SOURCE.BUILT_IN_TOOL_USE,
+      AGENT_SOURCE.REMOTE,
+    ];
     const orderedSources = sourceOrder.filter((s) => groups.has(s));
 
     // If only one source, don't show section headers
@@ -438,10 +442,10 @@ export class AgentSelectionPanel extends LitElement {
       <div class="agent-detail-pane">
         <div class="agent-detail-header">
           <span class="agent-detail-name">${agent.name}</span>
-          ${agent.isCustom
+          ${agent.source === AGENT_SOURCE.CUSTOM
             ? html`<span title="Custom agent">★</span>`
             : nothing}
-          ${agent.isRemote
+          ${agent.source === AGENT_SOURCE.REMOTE
             ? html`<span title="Remote agent">☁</span>`
             : nothing}
         </div>

@@ -36,6 +36,7 @@ import {
 } from '@shared/schemas';
 import {
   UpdateAgentSelectionMessageSchema,
+  UpdateCustomAgentDirMessageSchema,
   type AgentSelectionItem,
 } from '@shared/schemas/settingsViewMessages';
 import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
@@ -45,6 +46,9 @@ import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - settings view styles
 import { settingsViewStyles } from './styles';
+
+// Local imports - shared schema types
+import type { AgentSourceType } from '@shared/schemas/agent';
 
 // Local imports - settings view tabs (side-effect: register)
 import './tabs/MemoryTab';
@@ -126,6 +130,8 @@ export class SettingsApp extends BaseWebviewApp {
   // Agent selection state
   @state() private workflowAgents: AgentSelectionItem[] = [];
   @state() private toolUseAgents: AgentSelectionItem[] = [];
+  @state() private customAgentDir = '';
+  @state() private customAgentDirIsDefault = true;
 
   protected get readyCommand(): string | null {
     return null;
@@ -140,6 +146,7 @@ export class SettingsApp extends BaseWebviewApp {
     postMessage(SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION);
+    postMessage(SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR);
   }
 
   protected override handleMessage(raw: unknown): void {
@@ -250,6 +257,21 @@ export class SettingsApp extends BaseWebviewApp {
       }
       this.workflowAgents = result.data.workflow;
       this.toolUseAgents = result.data.toolUse;
+      return;
+    }
+
+    // Custom agent directory messages
+    if (command === SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR) {
+      const result = UpdateCustomAgentDirMessageSchema.safeParse(raw);
+      if (!result.success) {
+        this.logSchemaError(
+          '[SettingsApp] Update custom agent dir message validation failed.',
+          result.error,
+        );
+        return;
+      }
+      this.customAgentDir = result.data.path;
+      this.customAgentDirIsDefault = result.data.isDefault;
       return;
     }
 
@@ -418,7 +440,7 @@ export class SettingsApp extends BaseWebviewApp {
   private handleOpenAgentYaml(
     event: CustomEvent<{
       agentName: string;
-      agentSource: string;
+      agentSource: AgentSourceType;
       variant: 'base' | 'multiple';
     }>,
   ): void {
@@ -432,7 +454,7 @@ export class SettingsApp extends BaseWebviewApp {
   private handleSetAgentEnabled(
     event: CustomEvent<{
       agentName: string;
-      agentSource: string;
+      agentSource: AgentSourceType;
       category: 'workflow' | 'toolUse';
       enabled: boolean;
     }>,
@@ -457,6 +479,14 @@ export class SettingsApp extends BaseWebviewApp {
 
   private handleCreateAgent(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.CREATE_AGENT);
+  }
+
+  private handleSetCustomAgentDir(): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR);
+  }
+
+  private handleResetCustomAgentDir(): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR);
   }
 
   private handleOpenVscodeSettings(): void {
@@ -574,10 +604,14 @@ export class SettingsApp extends BaseWebviewApp {
             <agents-tab
               .workflowAgents=${this.workflowAgents}
               .toolUseAgents=${this.toolUseAgents}
+              .customAgentDir=${this.customAgentDir}
+              .customAgentDirIsDefault=${this.customAgentDirIsDefault}
               @agent-open-yaml=${this.handleOpenAgentYaml}
               @agent-enabled-set=${this.handleSetAgentEnabled}
               @agent-open-folder=${this.handleOpenAgentFolder}
               @agent-create=${this.handleCreateAgent}
+              @agent-set-custom-dir=${this.handleSetCustomAgentDir}
+              @agent-reset-custom-dir=${this.handleResetCustomAgentDir}
             ></agents-tab>
           </vscode-tab-panel>
         </vscode-tabs>

@@ -24,7 +24,7 @@ import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
 import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
 import { StorageFS } from '@utils/files';
-import { watchConfig, getConfig } from '@utils/config';
+import { getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
 import { initializeServerSideKeyAccess } from '@auth/serverKeys';
@@ -294,12 +294,6 @@ export async function activate(context: vscode.ExtensionContext) {
     // Add disposable for cleanup
     { dispose: () => watcherManager.dispose() },
   );
-
-  // Watch for agents directory changes
-  watchConfig(context, 'texra.explorer.agentsDirectory', () => {
-    watcherManager.setup();
-    folderExplorer.refresh();
-  });
 
   const welcomeKey = 'texra.welcomeShown';
   if (!context.globalState.get<boolean>(welcomeKey)) {
