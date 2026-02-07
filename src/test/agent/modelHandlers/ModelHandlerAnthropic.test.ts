@@ -342,7 +342,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
-  it('limits cache control markers to the latest four blocks', () => {
+  it('limits cache control markers to the latest four message blocks', () => {
     const handler = createAnthropicHandler();
     const messageContent: ContentBlockParam[] = [];
 
@@ -371,7 +371,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.equal(
       (messageContent[0] as { cache_control?: unknown }).cache_control,
       undefined,
-      'the earliest cache marker should be removed',
+      'the earliest cache markers should be removed',
     );
     assert.deepEqual(
       cacheControlledBlocks.map((block) => (block as { text?: string }).text),
