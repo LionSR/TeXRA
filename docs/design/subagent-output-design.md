@@ -162,6 +162,8 @@ export interface OutputFileSummary {
 
 This is **not** a Zod schema. It's a plain TypeScript type. It doesn't need runtime validation — it's an internal boundary between two functions in the same process. No serialization, no persistence, no over-engineering.
 
+If `OutputFileSummary` later needs to cross a serialization boundary (e.g., sent to a webview, persisted to KVStore), convert to a Zod schema at that point per CLAUDE.md: "Define schemas first, then derive TypeScript types using `z.infer<typeof Schema>`." Until then, a plain interface is correct.
+
 `OutputFileSummary` is a projection of `OutputFileInfo` — it extracts the 5 fields the orchestrator cares about and drops the rest. The orchestrator doesn't need `FileLocation` discriminated unions, `xmlSummary`, `rawOutput`, or `lineage.diffFile`.
 
 ### Step 3: Extract `executeAgentCore()`
@@ -333,6 +335,8 @@ mode: z.enum(['sync', 'async', 'background'])
   .describe('sync: wait for result. async: launch and use await_subagent later. background: result delivered as follow-up.')
 ```
 
+Uses `.prefault('sync')` — consistent with existing tool schemas in `WorkflowTool.ts` (e.g., `model: z.string().prefault('gemini3p')`). Per AGENTS.md, `.prefault()` normalizes input before validation, which is the right pattern for tool defaults where the LLM may omit the field entirely.
+
 Default is `sync` because it's the simplest and most useful. The model can choose `async` when it wants to launch multiple subagents in parallel.
 
 ---
@@ -437,6 +441,27 @@ So results are NOT lost — they persist in the queue until the session resumes 
 
 ---
 
+## Nesting Constraint: No Subagent-of-Subagent
+
+Subagents **cannot** spawn their own subagents. Only top-level tool-use orchestrator agents may call `propose_workflow` / `propose_agent`. If a subagent's tool list includes these proposal tools, they must be stripped at launch time.
+
+**Why**: Nesting adds cascading lifecycle complexity (cascading cancellation, recursive depth tracking, multi-level result routing) for no demonstrated use case. The orchestrator dispatches work; the workers do work and return results. If a task needs further decomposition, the orchestrator handles it in its next turn after collecting the subagent's output.
+
+**Enforcement**: When `executeAgentCore()` is called from a proposal tool, the calling context knows it's a subagent (the parent's `streamId` is in the tool context). Pass an `isSubagent: true` flag through `AgentConfigPayload` or resolve it from lineage. The tool resolver strips `propose_workflow` and `propose_agent` from the tool list when `isSubagent` is true.
+
+```typescript
+// In resolveTools() or at tool-use flow setup:
+if (isSubagent) {
+  resolvedTools = resolvedTools.filter(
+    t => t.name !== 'propose_workflow' && t.name !== 'propose_agent'
+  );
+}
+```
+
+This is a hard constraint, not a depth limit. No configuration, no exceptions.
+
+---
+
 ## Parent-Child Lineage
 
 ### Why it's needed
@@ -446,10 +471,11 @@ Not for some future dream feature. It's needed NOW for:
 1. **Result routing** (Mode C): which orchestrator does the subagent deliver to?
 2. **Queue lifetime**: don't dispose the orchestrator's queue while subagents are running
 3. **Cascading cancellation**: stopping the orchestrator should stop its subagents
+4. **Nesting enforcement**: reject proposal tools if calling agent is already a subagent
 
 ### Minimal implementation
 
-Don't build a registry class. Use a Map.
+Don't build a registry class. Use a Map. Lives in `src/agent/runtime/` alongside `executeAgent.ts` and `StreamStatusService.ts` — it's about agent execution lifecycle, not specifically tool-use.
 
 ```typescript
 // src/agent/runtime/subagentLineage.ts
@@ -486,6 +512,11 @@ export function getActiveChildren(parentStreamId: StreamTabId): SubagentEntry[] 
 
 export function hasActiveChildren(parentStreamId: StreamTabId): boolean {
   return getActiveChildren(parentStreamId).length > 0;
+}
+
+/** Check if a stream is itself a subagent (has a parent). */
+export function isSubagent(streamId: StreamTabId): boolean {
+  return [...activeSubagents.values()].some(e => e.childStreamId === streamId);
 }
 ```
 
@@ -532,14 +563,28 @@ Total new infrastructure: ~95 lines of code. One type file, one lineage file, mi
 
 ---
 
+## Decisions Made
+
+1. **No nested subagents**: Subagents cannot spawn subagents. Proposal tools stripped from subagent tool lists at launch time. Hard constraint, no configuration.
+
+2. **Workflow output = file artifacts**: `OutputFileSummary[]` (paths + diffs), not raw model response text. Projection of `OutputFileInfo`.
+
+3. **Tool-use output = last assistant response**: `lastResponse` string from `workspace.assembly.lastResponse`.
+
+4. **`.prefault('sync')` for mode default**: Consistent with existing tool schema patterns in the codebase.
+
+5. **Plain TypeScript types for internal boundary**: `AgentFlowResult` and `OutputFileSummary` are not Zod schemas. Convert to schema only if they cross a serialization boundary later.
+
+6. **Lineage in `src/agent/runtime/`**: Alongside `executeAgent.ts` and `StreamStatusService.ts` — it's execution lifecycle infrastructure.
+
+---
+
 ## Open Questions
 
 1. **Default mode**: Should the default be `sync` (simple, blocking) or `async` (parallel-friendly)? Recommendation: `sync` — it's the mode where the model needs to understand the least.
 
 2. **Queue lifetime for background mode**: When should the orchestrator's FollowUpQueue be released if subagents are still running? Proposal: `hasActiveChildren(streamId)` check in `ToolUseSessionLifecycle.dispose()`.
 
-3. **Depth limit**: Should subagents be allowed to spawn their own subagents? Proposal: yes, with a max depth of 2 (orchestrator → subagent → sub-subagent). Check lineage depth at proposal time.
+3. **File content vs. path**: The `ToolResult` returns file paths. Should it also include a short content preview (first N lines of the output)? Probably not for v1 — the orchestrator can use `read_file` if it needs the content.
 
-4. **File content vs. path**: The `ToolResult` returns file paths. Should it also include a short content preview (first N lines of the output)? Probably not for v1 — the orchestrator can use `read_file` if it needs the content.
-
-5. **Streaming progress for sync mode**: The orchestrator blocks for the full subagent duration. Should we emit progress events that the ProgressBoard shows? Already happens — the event bus is independent of the tool call. No extra work needed.
+4. **Streaming progress for sync mode**: The orchestrator blocks for the full subagent duration. Should we emit progress events that the ProgressBoard shows? Already happens — the event bus is independent of the tool call. No extra work needed.
