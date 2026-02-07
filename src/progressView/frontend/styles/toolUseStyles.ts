@@ -101,6 +101,10 @@ export const toolUseStyles = css`
     animation: spin 1s linear infinite;
   }
 
+  .tool-use-in-progress > .details-summary tool-timer {
+    color: var(--vscode-charts-yellow, #cca700);
+  }
+
   :is(.tool-user-feedback, .tool-error-content, .tool-output-full) {
     white-space: pre-wrap;
     word-break: break-word;
