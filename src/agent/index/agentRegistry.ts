@@ -14,7 +14,6 @@
 import * as path from 'path';
 import { glob } from 'glob';
 import * as yaml from 'yaml';
-import { z } from 'zod';
 
 import {
   AgentCategory,
@@ -26,8 +25,10 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
-import { workspaceSM, WorkspaceStateKey } from '@common/state';
+
 import type { AgentOptionData } from '@shared/schemas';
+
+import { workspaceSM, WorkspaceStateKey } from '@common/state';
 
 const CHANNEL = 'agentRegistry';
 logger.initialize(CHANNEL);
@@ -77,7 +78,7 @@ const MULTIPLE_SUFFIX = '_multiple';
 /** Source priority for lookups (higher priority first). */
 const LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
-  'builtIn',
+  'builtInWorkflow',
   'builtInToolUse',
   'remote',
 ];
@@ -86,7 +87,7 @@ const LOOKUP_PRIORITY: AgentSource[] = [
 const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
   'builtInToolUse',
-  'builtIn',
+  'builtInWorkflow',
   'remote',
 ];
 
@@ -154,7 +155,7 @@ async function doLoad(): Promise<void> {
   const [customEntries, builtInEntries, toolUseEntries, remoteEntries] =
     await Promise.all([
       scanDirectory(customDir, 'custom'),
-      scanDirectory(builtInDir, 'builtIn'),
+      scanDirectory(builtInDir, 'builtInWorkflow'),
       scanDirectory(toolUseDir, 'builtInToolUse'),
       loadRemoteAgents(),
     ]);
@@ -169,7 +170,8 @@ async function doLoad(): Promise<void> {
 
   // Apply category overrides from config
   const toolUseOverrides = new Set(
-    workspaceSM?.get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, []) ?? [],
+    workspaceSM?.get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, []) ??
+      [],
   );
 
   for (const entry of allEntries) {
@@ -544,7 +546,8 @@ export function getVisibleWorkflowAgents(): AgentEntry[] {
 export function getVisibleToolUseAgents(): AgentEntry[] {
   const entries = getToolUseAgents();
   const configured = new Set(
-    workspaceSM?.get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, []) ?? [],
+    workspaceSM?.get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, []) ??
+      [],
   );
   return deduplicateByName(filterVisible(entries, configured));
 }

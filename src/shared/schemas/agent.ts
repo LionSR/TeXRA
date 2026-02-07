@@ -14,14 +14,14 @@ export type AgentCategory = z.infer<typeof AgentCategorySchema>;
 
 export const AGENT_SOURCE = {
   CUSTOM: 'custom',
-  BUILT_IN: 'builtIn',
+  BUILT_IN_WORKFLOW: 'builtInWorkflow',
   BUILT_IN_TOOL_USE: 'builtInToolUse',
   REMOTE: 'remote',
 } as const;
 
 export const AgentSourceSchema = z.enum([
   AGENT_SOURCE.CUSTOM,
-  AGENT_SOURCE.BUILT_IN,
+  AGENT_SOURCE.BUILT_IN_WORKFLOW,
   AGENT_SOURCE.BUILT_IN_TOOL_USE,
   AGENT_SOURCE.REMOTE,
 ]);
