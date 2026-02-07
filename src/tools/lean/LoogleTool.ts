@@ -8,7 +8,7 @@ import axios from 'axios';
 import { z } from 'zod';
 
 import { toErrorMessage } from '@common/errors';
-import { ToolResult, ToolError } from '@tools/result';
+import { ToolResult } from '@tools/result';
 import { isTimeoutErrorCode, buildTimeoutMessage } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 
@@ -19,15 +19,19 @@ const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
 // ============================================================================
 
 const LeanLoogleInputSchema = z.strictObject({
-  /** Search query - can be a type signature like "Nat → Nat → Nat" or name pattern */
-  query: z.string().describe('Search query (type signature or name pattern)'),
-  /** Maximum number of results to return */
+  /** Search query - single string or array for batched searches */
+  query: z
+    .union([z.string(), z.array(z.string()).min(1).max(10)])
+    .describe(
+      'Search query (type signature or name pattern). Pass an array of strings to batch multiple searches in one call.',
+    ),
+  /** Maximum number of results to return per query */
   limit: z
     .int()
     .min(1)
     .max(20)
     .prefault(10)
-    .describe('Max results (default: 10)'),
+    .describe('Max results per query (default: 10)'),
 });
 
 export type LeanLoogleInput = z.infer<typeof LeanLoogleInputSchema>;
@@ -104,14 +108,21 @@ Example queries:
 - "|- tsum _ = _ * tsum _" - search by main conclusion
 - "|- _ < _ → tsum _ < tsum _" - search by hypothesis pattern
 
+Supports batched queries: pass an array of strings to search multiple identifiers in one call.
+Example: query: ["Matrix.mul_assoc", "Matrix.transpose_mul", "List.map_append"]
+
 Returns: name, type signature, module (for imports), and documentation.
 
 Useful for finding the right lemma when you know roughly what type it should have.`,
   schema: LeanLoogleInputSchema,
 }) {
-  protected async execute(input: LeanLoogleInput): Promise<ToolResult> {
-    const { query, limit } = input;
-
+  /**
+   * Execute a single Loogle query and return a per-query result.
+   */
+  private async executeSingle(
+    query: string,
+    limit: number,
+  ): Promise<{ query: string; result: ToolResult }> {
     try {
       const response = await axios.get<LoogleResponse>(LOOGLE_API_URL, {
         params: { q: query },
@@ -130,9 +141,12 @@ Useful for finding the right lemma when you know roughly what type it should hav
             ? `\n\nSuggestions:\n${suggestions.map((s) => `  - ${s}`).join('\n')}`
             : '';
         return {
-          summary: 'No results',
-          output: `Error: ${data.error}${suggestionText}`,
-          isError: true,
+          query,
+          result: {
+            summary: 'No results',
+            output: `Error: ${data.error}${suggestionText}`,
+            isError: true,
+          },
         };
       }
 
@@ -140,8 +154,11 @@ Useful for finding the right lemma when you know roughly what type it should hav
 
       if (hits.length === 0) {
         return {
-          summary: 'No results',
-          output: `No theorems found matching: ${query}\n\nTry a different type signature or name pattern.`,
+          query,
+          result: {
+            summary: 'No results',
+            output: `No theorems found matching: ${query}\n\nTry a different type signature or name pattern.`,
+          },
         };
       }
 
@@ -150,21 +167,80 @@ Useful for finding the right lemma when you know roughly what type it should hav
         .join('\n\n');
 
       return {
-        summary: `${hits.length} result${hits.length > 1 ? 's' : ''}`,
-        output: formatted,
-        results: hits,
+        query,
+        result: {
+          summary: `${hits.length} result${hits.length > 1 ? 's' : ''}`,
+          output: formatted,
+          results: hits,
+        },
       };
     } catch (error) {
       if (axios.isAxiosError(error) && isTimeoutErrorCode(error.code)) {
-        throw new ToolError(
-          buildTimeoutMessage('Loogle API request', LOOGLE_TIMEOUT_MS),
-        );
+        return {
+          query,
+          result: {
+            summary: 'Timeout',
+            output: buildTimeoutMessage(
+              'Loogle API request',
+              LOOGLE_TIMEOUT_MS,
+            ),
+            isError: true,
+          },
+        };
       }
       return {
-        summary: 'Loogle search failed',
-        output: `Error: ${toErrorMessage(error)}`,
-        isError: true,
+        query,
+        result: {
+          summary: 'Loogle search failed',
+          output: `Error: ${toErrorMessage(error)}`,
+          isError: true,
+        },
       };
     }
+  }
+
+  protected async execute(input: LeanLoogleInput): Promise<ToolResult> {
+    const { query, limit } = input;
+    const queries = Array.isArray(query) ? query : [query];
+
+    // Single query: return directly (backward-compatible format)
+    if (queries.length === 1) {
+      const { result } = await this.executeSingle(queries[0], limit);
+      return result;
+    }
+
+    // Batched queries: run concurrently and combine results
+    const results = await Promise.all(
+      queries.map((q) => this.executeSingle(q, limit)),
+    );
+
+    const allResults: LoogleHit[] = [];
+    const sections: string[] = [];
+    let errorCount = 0;
+
+    for (const { query: q, result } of results) {
+      sections.push(`## Query: \`${q}\`\n\n${result.output}`);
+      if (result.isError) {
+        errorCount++;
+      }
+      if (result.results) {
+        allResults.push(...(result.results as LoogleHit[]));
+      }
+    }
+
+    const totalHits = allResults.length;
+    const summary =
+      totalHits > 0
+        ? `${totalHits} result${totalHits > 1 ? 's' : ''} across ${queries.length} queries`
+        : errorCount === queries.length
+          ? `All ${queries.length} queries failed`
+          : `No results across ${queries.length} queries`;
+
+    return {
+      summary,
+      output: sections.join('\n\n---\n\n'),
+      results: allResults.length > 0 ? allResults : undefined,
+      isError: errorCount === queries.length ? true : undefined,
+    };
   }
 }
