@@ -255,6 +255,17 @@ export class AgentSelectionPanel extends LitElement {
   @state() private groupedSources: Map<string, AgentSelectionItem[]> =
     new Map();
 
+  /** Flat list in visual display order (source-grouped), for keyboard navigation */
+  private displayOrder: AgentSelectionItem[] = [];
+
+  /** Source display order — must match renderList() */
+  private static readonly SOURCE_ORDER = [
+    AGENT_SOURCE.CUSTOM,
+    AGENT_SOURCE.BUILT_IN,
+    AGENT_SOURCE.BUILT_IN_TOOL_USE,
+    AGENT_SOURCE.REMOTE,
+  ];
+
   protected override willUpdate(changed: PropertyValues): void {
     if (changed.has('agents')) {
       // Recompute grouped agents
@@ -266,13 +277,20 @@ export class AgentSelectionPanel extends LitElement {
       }
       this.groupedSources = groups;
 
+      // Build flat display order matching visual render order
+      this.displayOrder = AgentSelectionPanel.SOURCE_ORDER.flatMap(
+        (source) => groups.get(source) ?? [],
+      );
+
       // Auto-select first agent if current selection is stale or missing
-      const stillValid = this.agents.some(
+      const stillValid = this.displayOrder.some(
         (a) => agentKey(a) === this.selectedKey,
       );
       if (!stillValid) {
         this.selectedKey =
-          this.agents.length > 0 ? agentKey(this.agents[0]) : null;
+          this.displayOrder.length > 0
+            ? agentKey(this.displayOrder[0])
+            : null;
       }
     }
   }
@@ -286,7 +304,7 @@ export class AgentSelectionPanel extends LitElement {
   }
 
   private handleListKeydown(event: KeyboardEvent): void {
-    const items = this.agents;
+    const items = this.displayOrder;
     if (items.length === 0) return;
 
     const currentIndex = items.findIndex(
@@ -390,15 +408,9 @@ export class AgentSelectionPanel extends LitElement {
 
   private renderList(): TemplateResult {
     const groups = this.groupedSources;
-
-    // Define display order for sources
-    const sourceOrder = [
-      AGENT_SOURCE.CUSTOM,
-      AGENT_SOURCE.BUILT_IN,
-      AGENT_SOURCE.BUILT_IN_TOOL_USE,
-      AGENT_SOURCE.REMOTE,
-    ];
-    const orderedSources = sourceOrder.filter((s) => groups.has(s));
+    const orderedSources = AgentSelectionPanel.SOURCE_ORDER.filter((s) =>
+      groups.has(s),
+    );
 
     // If only one source, don't show section headers
     const showHeaders = orderedSources.length > 1;
