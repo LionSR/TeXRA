@@ -184,6 +184,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       SUPABASE_SESSION_KEY,
       JSON.stringify(session),
     );
+    // Keep in-memory expiry cache in sync for fast pre-invocation checks.
+    SupabaseClient.setTokenExpiry(session.expiresAt);
     if (notify) {
       getServerSideKeyService().clearAllCaches();
       this._onDidChangeSessions.fire({
@@ -410,6 +412,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     if (!session) {
       return [];
     }
+
+    // Seed in-memory expiry cache unconditionally so pre-invocation checks
+    // work even if the getUser() validation below throws.
+    SupabaseClient.setTokenExpiry(session.expiresAt);
 
     try {
       if (Date.now() >= session.expiresAt) {
@@ -740,6 +746,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     try {
       await SupabaseClient.getClient().auth.signOut();
       await this.context.secrets.delete(SUPABASE_SESSION_KEY);
+      SupabaseClient.setTokenExpiry(null);
       // Clear server-side key cache when session is removed (handles automatic invalidation)
       getServerSideKeyService().clearAllCaches();
       this._onDidChangeSessions.fire({
