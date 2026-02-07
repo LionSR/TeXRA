@@ -11,6 +11,7 @@ import {
   type UserTier,
   UserAuthContextSchema,
   SUPABASE_SESSION_KEY,
+  TOKEN_REFRESH_THRESHOLD_MS,
 } from './config';
 
 /** Interface for auth provider to avoid circular imports. */
@@ -87,15 +88,15 @@ export class SupabaseClient {
   }
 
   /**
-   * Check if the current token will expire within the given threshold.
+   * Check if the current token will expire within {@link TOKEN_REFRESH_THRESHOLD_MS}.
    * Synchronous and in-memory — safe to call before every model invocation.
    * Returns false if no expiry is tracked (e.g., not authenticated or not using relay).
    */
-  static isTokenExpiringSoon(thresholdMs: number): boolean {
+  static isTokenExpiringSoon(): boolean {
     if (this.tokenExpiresAt === null) {
       return false;
     }
-    return this.tokenExpiresAt - Date.now() < thresholdMs;
+    return this.tokenExpiresAt - Date.now() < TOKEN_REFRESH_THRESHOLD_MS;
   }
 
   /**
