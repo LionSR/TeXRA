@@ -47,6 +47,7 @@ export const ELEMENT_IDS = {
   QUEUED_FOLLOW_UPS_COLLAPSIBLE: 'queuedFollowUpsCollapsible',
   QUEUED_FOLLOW_UPS_LIST: 'queuedFollowUpsList',
   RECORD_FOLLOW_UP_BTN: 'recordFollowUpBtn',
+  COMPACT_RESPONSE_BTN: 'compactResponseBtn',
   YOLO_TOGGLE_BTN: 'yoloToggleBtn',
   POLISH_FOLLOW_UP_BTN: 'polishFollowUpBtn',
   CLEAR_FOLLOW_UP_BTN: 'clearFollowUpBtn',
@@ -162,9 +163,19 @@ const YOLO_TOGGLE_BUTTON = Object.freeze({
   isToggle: true,
 });
 
+const COMPACT_RESPONSE_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.COMPACT_RESPONSE_BTN,
+  icon: 'fold',
+  command: COMMANDS.COMPACT_RESPONSE,
+  title: 'Compact conversation context (summarize history to reduce token usage)',
+  className: 'compact-button',
+  disabled: true,
+});
+
 const TOOL_USE_TOOLBAR = [
   STOP_STREAM_BUTTON,
   YOLO_TOGGLE_BUTTON,
+  COMPACT_RESPONSE_BUTTON,
   RESTORE_STATE_BUTTON,
   { ...OPEN_TASK_STORAGE_BUTTON },
 ];

@@ -212,6 +212,16 @@ export interface IModelHandler<
   /** Check if background mode is active for this handler. */
   isBackgroundModeActive(): boolean;
 
+  /** Whether this handler supports manual context compaction. */
+  readonly supportsManualCompaction: boolean;
+
+  /**
+   * Request context compaction on the next API call.
+   * For handlers that support it, this forces compaction regardless of the
+   * automatic threshold. No-op for handlers that don't support compaction.
+   */
+  requestCompaction(): void;
+
   /** Indicates if the model is served by Google. */
   readonly isGoogle: boolean;
 

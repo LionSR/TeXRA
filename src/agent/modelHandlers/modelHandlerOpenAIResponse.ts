@@ -130,6 +130,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   OpenAI,
   Response
 > {
+  /** Flag to force compaction on the next API call, set by requestCompaction(). */
+  private compactionRequested = false;
+
   private isOpenRouterRoutingEnabled(): boolean {
     return (
       this.config.openRouterOnly ||
@@ -166,6 +169,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   protected override backgroundModeSupported = true;
+
+  override get supportsManualCompaction(): boolean {
+    return !this.isOpenRouterRoutingEnabled();
+  }
+
+  override requestCompaction(): void {
+    this.compactionRequested = true;
+  }
 
   /**
    * Determines if background mode should be enabled for this request.
@@ -474,6 +485,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * - Not running through OpenRouter (which may not support compaction)
    */
   private shouldCompact(): boolean {
+    // Manual compaction request bypasses threshold checks
+    if (this.compactionRequested) {
+      this.compactionRequested = false;
+      if (this.isOpenRouterRoutingEnabled()) {
+        return false;
+      }
+      // Only compact if there are tokens to compact
+      return this.conversationState.cumulativeInputTokens > 0;
+    }
+
     const thresholdPercent = this.getCompactionThresholdPercent();
     if (thresholdPercent <= 0) {
       return false;
