@@ -101,6 +101,7 @@ export async function executeCommand(
     let subprocess: ResultPromise;
     let shellTimedOut = false;
     let shellTimeoutId: ReturnType<typeof setTimeout> | undefined;
+    let forceKillTimeoutId: ReturnType<typeof setTimeout> | undefined;
 
     if (Array.isArray(command)) {
       const [cmd, ...args] = command;
@@ -119,16 +120,23 @@ export async function executeCommand(
       // Fix: spawn in a new process group (detached) and manually kill the
       // entire group (-pid) on timeout so all children are terminated.
       //
+      // On Windows, negative-PID signaling is not supported so we fall back
+      // to subprocess.kill() (kills the shell only) + stream destruction.
+      //
       // Tradeoff: `detached` means the process group is NOT automatically
       // cleaned up if the extension host is hard-killed (SIGKILL / crash) --
       // long-running shell commands would be orphaned.  This only affects the
       // bash tool (all other callers use array-form commands which skip this
       // path).  Acceptable because the alternative is `await` hanging forever.
       const { timeout: _shellTimeout, ...execaNoTimeout } = execaOptions;
+      const isWindows = process.platform === 'win32';
       subprocess = execa(command, {
         ...execaNoTimeout,
         shell: true,
-        detached: true,
+        // On POSIX, detached creates a process group we can kill as a unit.
+        // On Windows, detached opens a new console window so we skip it and
+        // rely on subprocess.kill() + stream destruction instead.
+        detached: !isWindows,
       });
 
       if (_shellTimeout) {
@@ -137,20 +145,27 @@ export async function executeCommand(
           const pid = subprocess.pid;
           if (!pid) return;
 
-          try {
-            // Kill the entire process group (negative PID)
-            process.kill(-pid, 'SIGTERM');
-          } catch {
-            /* already exited */
+          if (isWindows) {
+            subprocess.kill('SIGTERM');
+          } else {
+            try {
+              process.kill(-pid, 'SIGTERM');
+            } catch {
+              /* already exited */
+            }
           }
 
           // Force-kill after FORCE_KILL_DELAY_MS if SIGTERM didn't work,
           // and destroy streams as a last resort to unblock `await subprocess`.
-          setTimeout(() => {
-            try {
-              process.kill(-pid, 'SIGKILL');
-            } catch {
-              /* already exited */
+          forceKillTimeoutId = setTimeout(() => {
+            if (isWindows) {
+              subprocess.kill('SIGKILL');
+            } else {
+              try {
+                process.kill(-pid, 'SIGKILL');
+              } catch {
+                /* already exited */
+              }
             }
             subprocess.stdout?.destroy();
             subprocess.stderr?.destroy();
@@ -173,6 +188,7 @@ export async function executeCommand(
 
     const result = await subprocess;
     if (shellTimeoutId !== undefined) clearTimeout(shellTimeoutId);
+    if (forceKillTimeoutId !== undefined) clearTimeout(forceKillTimeoutId);
 
     const stdout = (result.stdout as string) ?? '';
     const stderr = (result.stderr as string) ?? '';
