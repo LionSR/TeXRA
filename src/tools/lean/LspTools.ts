@@ -317,6 +317,8 @@ Setup commands:
 - "update_elan": Update Elan to the latest version
 - "select_toolchain": Select the default Lean toolchain version
 
+Note: These commands do not capture output. For build output or other cases where you need captured stdout/stderr, use bash with lake CLI commands as fallback (e.g. lake build, lake env lean <file>, lake exe cache get).
+
 Requires: Lean 4 VS Code extension installed.`,
   schema: LeanProjectInputSchema,
 }) {
@@ -326,6 +328,14 @@ Requires: Lean 4 VS Code extension installed.`,
 
     try {
       await vscode.commands.executeCommand(config.vscode);
+
+      if (command === 'build') {
+        return {
+          summary: config.description,
+          output: `Build started. Note: this command does not capture build output directly.\n\nTo check for errors and warnings, run lean_diagnostics on the relevant .lean files.`,
+        };
+      }
+
       return {
         summary: config.description,
         output: `Executed "${command}" successfully`,
