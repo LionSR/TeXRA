@@ -6,6 +6,7 @@ import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInt
 
 // Local imports - tools
 import { ToolError, ToolResult } from '@tools/result';
+import { buildTimeoutMessage } from '@tools/timeouts';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
@@ -15,8 +16,19 @@ import { executeCommand } from '@utils/system/execUtils';
 // Local file imports
 import { defineTool } from './core/define';
 
+const BASH_TIMEOUT_MS = 120_000; // 120 s
+
 const BashInputSchema = z.strictObject({
   command: z.string(),
+  timeout: z
+    .number()
+    .int()
+    .min(1000)
+    .max(600_000)
+    .nullish()
+    .describe(
+      'Timeout in milliseconds (max 600,000 ms / 10 min, default 120,000 ms / 2 min).',
+    ),
 });
 
 export type BashInput = z.infer<typeof BashInputSchema>;
@@ -41,9 +53,27 @@ export class BashTool extends defineTool({
     // Signal execution starting (triggers in-progress log after approval)
     getCurrentToolFileInteractionContext()?.onExecutionReady?.();
 
+    const timeoutMs = input.timeout ?? BASH_TIMEOUT_MS;
+
     // Truncation only applies to internal logging so long-running commands keep
     // the output channel readable while still returning the complete stdout.
-    const result = await executeCommand(input.command, { truncate: true });
+    const result = await executeCommand(input.command, {
+      truncate: true,
+      timeout: timeoutMs,
+    });
+
+    if (result.timedOut) {
+      const parts: string[] = [
+        buildTimeoutMessage('Command execution', timeoutMs),
+      ];
+      if (result.stdout) parts.push(`<stdout>${result.stdout}</stdout>`);
+      if (result.stderr) parts.push(`<stderr>${result.stderr}</stderr>`);
+      parts.push(
+        'Increase the timeout parameter (in milliseconds) if the command needs more time.',
+      );
+      throw new ToolError(parts.join('\n'));
+    }
+
     if (result.success) {
       const commandPreview =
         input.command.length > 60
