@@ -487,10 +487,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetAutoShowRemote(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_AUTO_SHOW_REMOTE>,
   ): Promise<void> {
-    await globalSM.update(
-      GlobalStateKey.AUTO_SHOW_REMOTE_AGENTS,
-      data.enabled,
-    );
+    await globalSM.update(GlobalStateKey.AUTO_SHOW_REMOTE_AGENTS, data.enabled);
     void vscode.commands.executeCommand('texra.refreshAllOptions');
 
     const view = this.getActiveView();
