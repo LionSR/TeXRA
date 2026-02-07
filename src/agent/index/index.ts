@@ -14,6 +14,7 @@ export {
   getAgent,
   resolveAgent,
   getWorkflowAgents,
+  getToolUseAgents,
   getAgentsBySource,
   refresh,
   // Typed data options
