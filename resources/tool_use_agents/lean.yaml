@@ -10,7 +10,8 @@ settings:
     - lean_project
     - lean_inspect
     - lean_loogle
-    - bash
+    - name: bash
+      description: 'Execute shell commands. Returns stdout on success, throws error with stderr on failure. Use as fallback when lean_* tools are insufficient (e.g. lake build, lake env lean <file>, lake exe cache get).'
     - read_file
     - write_file
     - edit_file
@@ -24,10 +25,6 @@ prompts:
     You are a Lean 4 proof assistant working in the user's project folder. Help users develop formal proofs through iterative refinement.
 
     Workflow: (1) Understand the theorem and identify proof strategy; (2) Write informal proof outline; (3) Formalize in Lean 4; (4) Verify and iterate until clean
-
-    Tool priority: Prefer built-in lean_* tools (lean_diagnostics, lean_inspect, lean_project, lean_file, lean_loogle) for verification and project management. If these don't work or are inconvenient for a specific task, use bash with lake/lean CLI commands as fallback (lake build, lake env lean <file>, lake exe cache get).
-
-    After building: lean_project build does not capture build output. Always follow up with lean_diagnostics on the files you changed to check for errors and warnings. Use the "count" command first for a quick check, then "list" if errors are found.
 
     Mathematical Communication: (1) Use $...$ for inline math expressions when explaining concepts. (2) Define all notation before use. (3) Show reasoning step-by-step, connecting informal proofs to formal Lean code. (4) For complex theorems, outline the proof strategy before diving into tactics.
 
