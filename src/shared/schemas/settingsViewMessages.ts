@@ -95,6 +95,7 @@ export const AgentSelectionItemSchema = z.object({
   isCustom: z.boolean(),
   isRemote: z.boolean(),
   hasMultiple: z.boolean(),
+  enabled: z.boolean(),
 });
 export type AgentSelectionItem = z.infer<typeof AgentSelectionItemSchema>;
 
@@ -272,6 +273,19 @@ const OpenAgentYamlMessageSchema = z.object({
   variant: z.enum(['base', 'multiple']),
 });
 
+const SetAgentEnabledMessageSchema = z.object({
+  command: z.literal(CMD.SET_AGENT_ENABLED),
+  agentName: z.string().min(1),
+  agentSource: AgentSourceSchema,
+  category: z.enum(['workflow', 'toolUse']),
+  enabled: z.boolean(),
+});
+
+const OpenAgentFolderMessageSchema = z.object({
+  command: z.literal(CMD.OPEN_AGENT_FOLDER),
+  folderType: z.enum(['custom', 'builtIn', 'builtInToolUse']),
+});
+
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = z.object({
   command: z.literal(CMD.OPEN_VSCODE_SETTINGS),
@@ -318,6 +332,8 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     // Agent selection messages
     GetAgentSelectionMessageSchema,
     OpenAgentYamlMessageSchema,
+    SetAgentEnabledMessageSchema,
+    OpenAgentFolderMessageSchema,
   ],
 );
 

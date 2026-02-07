@@ -10,6 +10,9 @@ import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
 
+// Local imports - events
+import { AgentSelectionEvents } from '../components/profile/events';
+
 // Local imports - shared schemas
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
 
@@ -32,6 +35,13 @@ export class AgentsTab extends LitElement {
       .agents-container {
         max-width: 1000px;
         margin: 0 auto;
+      }
+
+      .agents-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: var(--spacing-medium);
       }
 
       .agents-sub-tabs {
@@ -73,6 +83,33 @@ export class AgentsTab extends LitElement {
         color: var(--color-text-secondary);
         opacity: 0.8;
       }
+
+      .agents-folder-actions {
+        display: flex;
+        gap: var(--spacing-small);
+      }
+
+      .agents-folder-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        padding: 2px var(--spacing-small);
+        font-size: var(--font-size-xs, 11px);
+        font-family: inherit;
+        color: var(--color-text-secondary);
+        background: none;
+        border: var(--border-thin) solid var(--color-border);
+        border-radius: var(--border-radius);
+        cursor: pointer;
+        transition:
+          color 0.1s ease,
+          border-color 0.1s ease;
+      }
+
+      .agents-folder-btn:hover {
+        color: var(--vscode-foreground);
+        border-color: var(--vscode-focusBorder);
+      }
     `,
   ];
 
@@ -85,6 +122,12 @@ export class AgentsTab extends LitElement {
     this.activeSubTab = tab;
   }
 
+  private handleOpenFolder(
+    folderType: 'custom' | 'builtIn' | 'builtInToolUse',
+  ): void {
+    this.dispatchEvent(AgentSelectionEvents.openFolder({ folderType }));
+  }
+
   override render(): TemplateResult {
     const activeAgents =
       this.activeSubTab === 'workflow'
@@ -93,34 +136,65 @@ export class AgentsTab extends LitElement {
 
     return html`
       <div class="agents-container">
-        <div class="agents-sub-tabs">
-          <button
-            class="agents-sub-tab ${this.activeSubTab === 'workflow'
-              ? 'active'
-              : ''}"
-            @click=${() => this.setSubTab('workflow')}
-          >
-            <span class="codicon codicon-symbol-method"></span>
-            Workflow
-            <span class="agents-sub-tab-count"
-              >(${this.workflowAgents.length})</span
+        <div class="agents-header">
+          <div class="agents-sub-tabs">
+            <button
+              class="agents-sub-tab ${this.activeSubTab === 'workflow'
+                ? 'active'
+                : ''}"
+              @click=${() => this.setSubTab('workflow')}
             >
-          </button>
-          <button
-            class="agents-sub-tab ${this.activeSubTab === 'toolUse'
-              ? 'active'
-              : ''}"
-            @click=${() => this.setSubTab('toolUse')}
-          >
-            <span class="codicon codicon-tools"></span>
-            Tool Use
-            <span class="agents-sub-tab-count"
-              >(${this.toolUseAgents.length})</span
+              <span class="codicon codicon-symbol-method"></span>
+              Workflow
+              <span class="agents-sub-tab-count"
+                >(${this.workflowAgents.length})</span
+              >
+            </button>
+            <button
+              class="agents-sub-tab ${this.activeSubTab === 'toolUse'
+                ? 'active'
+                : ''}"
+              @click=${() => this.setSubTab('toolUse')}
             >
-          </button>
+              <span class="codicon codicon-tools"></span>
+              Tool Use
+              <span class="agents-sub-tab-count"
+                >(${this.toolUseAgents.length})</span
+              >
+            </button>
+          </div>
+          <div class="agents-folder-actions">
+            <button
+              class="agents-folder-btn"
+              @click=${() => this.handleOpenFolder('custom')}
+              title="Open custom agents folder"
+            >
+              <span class="codicon codicon-folder"></span>
+              Custom
+            </button>
+            <button
+              class="agents-folder-btn"
+              @click=${() => this.handleOpenFolder('builtIn')}
+              title="Open built-in agents folder"
+            >
+              <span class="codicon codicon-folder"></span>
+              Built-in
+            </button>
+            <button
+              class="agents-folder-btn"
+              @click=${() => this.handleOpenFolder('builtInToolUse')}
+              title="Open tool-use agents folder"
+            >
+              <span class="codicon codicon-folder"></span>
+              Tool Use
+            </button>
+          </div>
         </div>
 
-        <agent-selection-panel .agents=${activeAgents}></agent-selection-panel>
+        <agent-selection-panel
+          .agents=${activeAgents}
+          .category=${this.activeSubTab}
+        ></agent-selection-panel>
       </div>
     `;
   }
