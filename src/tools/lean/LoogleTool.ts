@@ -9,12 +9,10 @@ import { z } from 'zod';
 
 import { toErrorMessage } from '@common/errors';
 import { ToolResult, ToolError } from '@tools/result';
-import {
-  LOOGLE_TIMEOUT_MS,
-  isTimeoutErrorCode,
-  buildTimeoutMessage,
-} from '@tools/timeouts';
+import { isTimeoutErrorCode, buildTimeoutMessage } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
+
+const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
 
 // ============================================================================
 // Schema

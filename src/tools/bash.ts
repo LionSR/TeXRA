@@ -6,7 +6,7 @@ import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInt
 
 // Local imports - tools
 import { ToolError, ToolResult } from '@tools/result';
-import { BASH_TIMEOUT_MS, buildTimeoutMessage } from '@tools/timeouts';
+import { buildTimeoutMessage } from '@tools/timeouts';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
@@ -15,6 +15,8 @@ import { executeCommand } from '@utils/system/execUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
+
+const BASH_TIMEOUT_MS = 120_000; // 120 s
 
 const BashInputSchema = z.strictObject({
   command: z.string(),
