@@ -92,8 +92,6 @@ export const AgentSelectionItemSchema = z.object({
   description: z.string().optional(),
   hasPath: z.boolean(),
   tools: z.array(z.string()).optional(),
-  isCustom: z.boolean(),
-  isRemote: z.boolean(),
   hasMultiple: z.boolean(),
   enabled: z.boolean(),
 });
@@ -131,6 +129,20 @@ export const UpdateModelSelectionMessageSchema = z.object({
 });
 export type UpdateModelSelectionMessage = z.infer<
   typeof UpdateModelSelectionMessageSchema
+>;
+
+// ============================================================
+// Custom agent directory data schema
+// ============================================================
+
+/** Outbound: backend → frontend custom agent directory info */
+export const UpdateCustomAgentDirMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR),
+  path: z.string(),
+  isDefault: z.boolean(),
+});
+export type UpdateCustomAgentDirMessage = z.infer<
+  typeof UpdateCustomAgentDirMessageSchema
 >;
 
 // ============================================================
@@ -277,7 +289,7 @@ const SetAgentEnabledMessageSchema = z.object({
   command: z.literal(CMD.SET_AGENT_ENABLED),
   agentName: z.string().min(1),
   agentSource: AgentSourceSchema,
-  category: z.enum(['workflow', 'toolUse']),
+  category: AgentCategorySchema,
   enabled: z.boolean(),
 });
 
@@ -288,6 +300,19 @@ const OpenAgentFolderMessageSchema = z.object({
 
 const CreateAgentMessageSchema = z.object({
   command: z.literal(CMD.CREATE_AGENT),
+});
+
+// Custom agent directory inbound messages
+const GetCustomAgentDirMessageSchema = z.object({
+  command: z.literal(CMD.GET_CUSTOM_AGENT_DIR),
+});
+
+const SetCustomAgentDirMessageSchema = z.object({
+  command: z.literal(CMD.SET_CUSTOM_AGENT_DIR),
+});
+
+const ResetCustomAgentDirMessageSchema = z.object({
+  command: z.literal(CMD.RESET_CUSTOM_AGENT_DIR),
 });
 
 // Navigation inbound messages
@@ -339,6 +364,10 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetAgentEnabledMessageSchema,
     OpenAgentFolderMessageSchema,
     CreateAgentMessageSchema,
+    // Custom agent directory messages
+    GetCustomAgentDirMessageSchema,
+    SetCustomAgentDirMessageSchema,
+    ResetCustomAgentDirMessageSchema,
   ],
 );
 
