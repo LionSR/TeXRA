@@ -163,6 +163,15 @@ const OPUS_46_FULLNAME = 'claude-opus-4-6';
 /** Compaction must be triggered at or above this minimum input token threshold. */
 const MIN_COMPACTION_TRIGGER_TOKENS = 50_000;
 
+/**
+ * Fixed thinking budget for Opus 4.6 in tool-use mode.
+ * Must stay constant across rounds to preserve the Anthropic messages cache
+ * (changing budget_tokens invalidates cache because thinking tokens are inline).
+ * Value chosen to be below the max_tokens floor at compaction threshold:
+ *   contextWindow(200K) - compaction(150K) - buffer(2K) = 48K > 40960
+ */
+const OPUS_46_TOOL_USE_THINKING_BUDGET = 40_960;
+
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
 /**
@@ -514,14 +523,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
       // budget_tokens must be < max_tokens; use 50% to leave room for actual output
       const maxBudget = Math.floor(options.max_tokens * 0.5);
-      // Use FIXED budget values to prevent cache invalidation. Changing
-      // budget_tokens between rounds invalidates the Anthropic messages cache
-      // because thinking tokens are stored inline. Dynamic values (like
-      // max_tokens * 0.5) change when validateTokenLimits adjusts max_tokens,
-      // causing expensive cache re-creation every round.
+      // Opus 4.6 tool-use uses a FIXED budget to preserve the messages cache.
+      // Changing budget_tokens between rounds invalidates cache because thinking
+      // tokens are stored inline. Workflow and non-tool-use modes use maxBudget
+      // (single-round or long-output scenarios where cache stability is less critical).
       const defaultBudget = this.isClaudeOpus46()
         ? this.isToolUseMode()
-          ? 32768
+          ? OPUS_46_TOOL_USE_THINKING_BUDGET
           : maxBudget
         : useStreaming
           ? 32768
