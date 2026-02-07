@@ -284,5 +284,17 @@ export const TOKEN_REFRESH_THRESHOLD_MS = 30 * 60 * 1000;
 /** Default session expiry time (1 hour). */
 export const DEFAULT_SESSION_EXPIRY_MS = 60 * 60 * 1000;
 
+/** Minimum delay before a scheduled proactive refresh fires (10 seconds). */
+export const PROACTIVE_REFRESH_MIN_DELAY_MS = 10 * 1000;
+
+/** Base delay for retry backoff when proactive refresh fails (30 seconds). */
+export const PROACTIVE_REFRESH_RETRY_BASE_MS = 30 * 1000;
+
+/** Maximum delay between proactive refresh retry attempts (5 minutes). */
+export const PROACTIVE_REFRESH_RETRY_MAX_MS = 5 * 60 * 1000;
+
+/** Maximum number of consecutive proactive refresh failures before giving up. */
+export const PROACTIVE_REFRESH_MAX_RETRIES = 5;
+
 /** Storage key for Supabase session in VS Code SecretStorage. */
 export const SUPABASE_SESSION_KEY = 'texra.supabase.session';
