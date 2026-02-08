@@ -167,7 +167,8 @@ const COMPACT_RESPONSE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.COMPACT_RESPONSE_BTN,
   icon: 'fold',
   command: COMMANDS.COMPACT_RESPONSE,
-  title: 'Compact conversation context (summarize history to reduce token usage)',
+  title:
+    'Compact conversation context (summarize history to reduce token usage)',
   className: 'compact-button',
   disabled: true,
 });
