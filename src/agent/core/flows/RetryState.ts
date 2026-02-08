@@ -104,7 +104,59 @@ export abstract class RetryableInvocationNode<
     return cloned;
   }
 
-  /** Wraps operation with AbortController; proactively refreshes near-expiry relay tokens and reactively handles 401 errors. */
+  /**
+   * Attempts a reactive token refresh after a relay 401 error, then retries the operation once.
+   * Returns the retry result on success, or rethrows on persistent 401 / refresh failure.
+   */
+  private async attemptRelay401Recovery<T>(
+    originalError: unknown,
+    operation: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    const services = this.services;
+    this._hasAttemptedTokenRefresh = true;
+    services.logger.debug('Relay 401, refreshing token before retry loop');
+
+    const refreshed = await SupabaseClient.getAccessToken(true);
+    if (!refreshed) {
+      services.logger.debug('Token refresh failed, skipping auto-retries');
+      this._persistent401Error =
+        originalError instanceof Error
+          ? originalError
+          : new Error(String(originalError));
+      throw originalError;
+    }
+
+    await tryRefreshClient(
+      services.refreshClient,
+      services.logger,
+      'after token refresh',
+    );
+
+    // Retry with a fresh AbortController
+    const retryController = new AbortController();
+    this.signal = retryController.signal;
+    services.setAbortController(retryController);
+    services.logger.debug('Token refreshed, retrying immediately');
+
+    try {
+      const result = await operation(retryController.signal);
+      // Success — reset flag so future expirations can trigger refresh again
+      this._hasAttemptedTokenRefresh = false;
+      return result;
+    } catch (retryErr) {
+      const retryFormatted = formatProviderHttpError(retryErr);
+      if (retryFormatted.isRelayError && retryFormatted.statusCode === 401) {
+        services.logger.debug(
+          'Still 401 after token refresh, skipping auto-retries',
+        );
+        this._persistent401Error =
+          retryErr instanceof Error ? retryErr : new Error(String(retryErr));
+      }
+      throw retryErr;
+    }
+  }
+
+  /** Wraps operation with AbortController management and relay token refresh. */
   protected async withAbortController<T>(
     operation: (signal: AbortSignal) => Promise<T>,
   ): Promise<T> {
@@ -113,15 +165,11 @@ export abstract class RetryableInvocationNode<
     }
 
     const services = this.services;
-    let activeController = new AbortController();
-    this.signal = activeController.signal;
-    services.setAbortController(activeController);
+    const controller = new AbortController();
+    this.signal = controller.signal;
+    services.setAbortController(controller);
 
-    // Proactive relay token refresh: recreate the SDK client before the
-    // request so it carries a fresh JWT. refreshClient → getClient →
-    // getApiKey → getAccessToken → ensureFreshToken handles the full chain.
-    // On failure tryRefreshClient logs and returns false — the old client
-    // is still usable until actual expiry, and the reactive 401 handler covers it.
+    // Proactive relay token refresh before the request
     if (SupabaseClient.isTokenExpiringSoon()) {
       services.logger.debug(
         'Token nearing expiry, refreshing client proactively',
@@ -134,58 +182,19 @@ export abstract class RetryableInvocationNode<
     }
 
     try {
-      return await operation(activeController.signal);
+      return await operation(controller.signal);
     } catch (err) {
+      // Reactive 401 recovery: refresh token and retry once
       const formatted = formatProviderHttpError(err);
       if (
         formatted.isRelayError &&
         formatted.statusCode === 401 &&
         !this._hasAttemptedTokenRefresh
       ) {
-        this._hasAttemptedTokenRefresh = true;
-        services.logger.debug('Relay 401, refreshing token before retry loop');
-        const refreshed = await SupabaseClient.getAccessToken(true);
-        if (refreshed) {
-          await tryRefreshClient(
-            services.refreshClient,
-            services.logger,
-            'after token refresh',
-          );
-          activeController = new AbortController();
-          this.signal = activeController.signal;
-          services.setAbortController(activeController);
-          services.logger.debug('Token refreshed, retrying immediately');
-          try {
-            const result = await operation(activeController.signal);
-            // Refresh succeeded and request worked — reset flag so future
-            // expirations (in long-running conversations) can trigger refresh again.
-            this._hasAttemptedTokenRefresh = false;
-            return result;
-          } catch (retryErr) {
-            const retryFormatted = formatProviderHttpError(retryErr);
-            if (
-              retryFormatted.isRelayError &&
-              retryFormatted.statusCode === 401
-            ) {
-              services.logger.debug(
-                'Still 401 after token refresh, skipping auto-retries',
-              );
-              this._persistent401Error =
-                retryErr instanceof Error
-                  ? retryErr
-                  : new Error(String(retryErr));
-            }
-            throw retryErr;
-          }
-        } else {
-          services.logger.debug('Token refresh failed, skipping auto-retries');
-          this._persistent401Error =
-            err instanceof Error ? err : new Error(String(err));
-        }
+        return this.attemptRelay401Recovery(err, operation);
       }
       throw err;
     } finally {
-      // Clear service reference for GC; keep this.signal for Node._exec() isAborted check
       services.setAbortController(null);
     }
   }
