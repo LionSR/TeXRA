@@ -2,7 +2,7 @@
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import { AgentCategory, type AgentSetting } from '@agent/core/AgentDataclass';
-import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
+import type { ConversationRoundStateSnapshot, AgentRunStateSnapshot } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ProviderUsage } from '@agent/core/ResponseUsage';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -337,8 +337,8 @@ export interface IModelHandler<
   checkStopConditions(
     stopReason: ProviderStopReason,
     newResponse: string,
-    stateRound: ConversationRoundState,
-    stateGlobal: AgentRunState,
+    stateRound: ConversationRoundStateSnapshot,
+    stateGlobal: AgentRunStateSnapshot,
     agentSetting: AgentSetting,
   ): StopConditionsResult;
 
