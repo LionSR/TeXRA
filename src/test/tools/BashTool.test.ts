@@ -140,6 +140,7 @@ describe('BashTool', () => {
     };
     const handler = new BashMockHandler(config);
     const workspaceState = AgentWorkspaceState.create();
+    const run = createRunState();
     const options: ToolUseCycleOptions<OpenAI> = {
       modelHandler: handler,
       setting: {
@@ -167,9 +168,9 @@ describe('BashTool', () => {
       modelName: 'test',
       streamId: 'bash-tool' as StreamTabId,
       executionId: 'test-execution-id',
+      run,
+      workspace: workspaceState,
     };
-
-    const run = createRunState();
 
     const messages: ProviderMessage[] = [];
 
@@ -191,13 +192,8 @@ describe('BashTool', () => {
     };
 
     // Create and run the flow directly
-    // Note: Tool-use cycles don't need round - metrics tracked in state
     const flow = createToolUseCycleFlow();
-    flow.setServices({
-      ...options,
-      run,
-      workspace: workspaceState,
-    });
+    flow.setServices(options);
     await flow.run(shared);
 
     const toolOutputMessage = messages.find(
