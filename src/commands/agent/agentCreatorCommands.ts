@@ -6,10 +6,16 @@ import Anthropic from '@anthropic-ai/sdk';
 import * as vscode from 'vscode';
 import * as nunjucks from 'nunjucks';
 import * as yaml from 'yaml';
+import { z } from 'zod';
 
 // Local imports - agent runtime
 import { ANTHROPIC_MODELS } from 'llm-zoo';
 import { getBaseName, getMultipleName } from '@agent/index';
+import {
+  AgentWorkflowSettingSchema,
+  AgentToolUseSettingSchema,
+  AgentPromptSchema,
+} from '@agent/core/AgentDataclass';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { SecretManager } from '@frontend/secretManager';
@@ -29,14 +35,50 @@ export const agentCreatorCommands = {
 
 interface CreatorConfig {
   prompts: {
-    generationPrompt: string;
-    generationPromptToolUse: string;
+    systemPrompt: string;
+    userRequest: string;
+    systemPromptToolUse: string;
+    userRequestToolUse: string;
     retryPrompt: string;
   };
   templates: { workflowSingle: string; workflowMultiple: string; toolUse: string };
 }
 
 const nunjucksEnv = nunjucks.configure({ autoescape: false });
+
+// ============================================================
+// Schema reference generation
+// ============================================================
+
+/** Cached schema reference, generated once from Zod schemas. */
+let schemaRefCache: Record<'workflow' | 'toolUse', string> | null = null;
+
+/** Build a JSON Schema string for the given agent category's settings + prompts. */
+function getSchemaReference(category: 'workflow' | 'toolUse'): string {
+  if (!schemaRefCache) {
+    schemaRefCache = {
+      workflow: buildSchemaRef(AgentWorkflowSettingSchema),
+      toolUse: buildSchemaRef(AgentToolUseSettingSchema),
+    };
+  }
+  return schemaRefCache[category];
+}
+
+function buildSchemaRef(settingsSchema: z.ZodObject<z.ZodRawShape>): string {
+  return [
+    '## Agent YAML Schema (JSON Schema)',
+    '',
+    '### settings',
+    JSON.stringify(z.toJSONSchema(settingsSchema), null, 2),
+    '',
+    '### prompts',
+    JSON.stringify(z.toJSONSchema(AgentPromptSchema), null, 2),
+  ].join('\n');
+}
+
+// ============================================================
+// Config loading
+// ============================================================
 
 /** Cached creator config loaded from resources/templates/ */
 let creatorConfig: CreatorConfig | null = null;
@@ -45,15 +87,27 @@ async function loadCreatorConfig(
   context: vscode.ExtensionContext,
 ): Promise<CreatorConfig> {
   if (creatorConfig) return creatorConfig;
-  const templatesDir = path.join(context.extensionPath, 'resources', 'templates');
-  const [mainYaml, workflowSingle, workflowMultiple, toolUse] = await Promise.all([
-    AbsoluteFS.read(path.join(templatesDir, 'agentCreator.yaml')),
-    AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-workflowSingle.yaml')),
-    AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-workflowMultiple.yaml')),
-    AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-toolUse.yaml')),
-  ]);
+  const templatesDir = path.join(
+    context.extensionPath,
+    'resources',
+    'templates',
+  );
+  const [mainYaml, workflowSingle, workflowMultiple, toolUse] =
+    await Promise.all([
+      AbsoluteFS.read(path.join(templatesDir, 'agentCreator.yaml')),
+      AbsoluteFS.read(
+        path.join(templatesDir, 'agentTemplate-workflowSingle.yaml'),
+      ),
+      AbsoluteFS.read(
+        path.join(templatesDir, 'agentTemplate-workflowMultiple.yaml'),
+      ),
+      AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-toolUse.yaml')),
+    ]);
   const parsed = yaml.parse(mainYaml) as Omit<CreatorConfig, 'templates'>;
-  creatorConfig = { ...parsed, templates: { workflowSingle, workflowMultiple, toolUse } };
+  creatorConfig = {
+    ...parsed,
+    templates: { workflowSingle, workflowMultiple, toolUse },
+  };
   return creatorConfig;
 }
 
@@ -66,7 +120,13 @@ function validateAgentYamlString(content: string): string | null {
   }
 }
 
-export function registerAgentCreatorCommands(context: vscode.ExtensionContext) {
+// ============================================================
+// Command registration and handlers
+// ============================================================
+
+export function registerAgentCreatorCommands(
+  context: vscode.ExtensionContext,
+) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       agentCreatorCommands.createAgentWithAI,
@@ -144,11 +204,7 @@ async function createWorkflowAgent(
   const filePath = vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`));
 
   const vars = { AGENT_NAME: agentName, DESCRIPTION: description };
-  let yamlContent = await tryAIGeneration(
-    config,
-    config.prompts.generationPrompt,
-    vars,
-  );
+  let yamlContent = await tryAIGeneration(config, 'workflow', vars);
 
   if (!yamlContent) {
     const template =
@@ -184,11 +240,7 @@ async function createToolUseAgent(
   const filePath = vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`));
 
   const vars = { AGENT_NAME: agentName, DESCRIPTION: description };
-  let yamlContent = await tryAIGeneration(
-    config,
-    config.prompts.generationPromptToolUse,
-    vars,
-  );
+  let yamlContent = await tryAIGeneration(config, 'toolUse', vars);
 
   if (!yamlContent) {
     yamlContent = config.templates.toolUse
@@ -213,21 +265,42 @@ async function writeAndRegisterAgent(
   await vscode.window.showTextDocument(doc);
 }
 
+// ============================================================
+// AI generation
+// ============================================================
+
 async function tryAIGeneration(
   config: CreatorConfig,
-  promptTemplate: string,
+  category: 'workflow' | 'toolUse',
   vars: Record<string, string>,
 ): Promise<string | undefined> {
   try {
     const apiKey = await SecretManager.getApiKey('anthropic');
     const anthropic = new Anthropic({ apiKey });
-    const basePrompt = nunjucksEnv.renderString(promptTemplate, vars);
 
-    let prompt = basePrompt;
+    const schemaRef = getSchemaReference(category);
+    const systemTemplate =
+      category === 'toolUse'
+        ? config.prompts.systemPromptToolUse
+        : config.prompts.systemPrompt;
+    const systemPrompt =
+      nunjucksEnv.renderString(systemTemplate, vars) + '\n' + schemaRef;
+
+    const userRequestTemplate =
+      category === 'toolUse'
+        ? config.prompts.userRequestToolUse
+        : config.prompts.userRequest;
+    const baseUserRequest = nunjucksEnv.renderString(
+      userRequestTemplate,
+      vars,
+    );
+
+    let userMessage = baseUserRequest;
     for (let attempt = 0; attempt < 2; attempt++) {
       const params: MessageCreateParams = {
         model: ANTHROPIC_MODELS.opus41.fullName,
-        messages: [{ role: 'user', content: prompt }],
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
         max_tokens: 2048,
       };
       const response = await anthropic.messages.create(params);
@@ -250,8 +323,8 @@ async function tryAIGeneration(
           ...options,
         );
         if (choice === 'Try Again' && attempt === 0) {
-          prompt =
-            basePrompt +
+          userMessage =
+            baseUserRequest +
             '\n' +
             nunjucksEnv.renderString(config.prompts.retryPrompt, {
               VALIDATION_ERROR: validationErr,
