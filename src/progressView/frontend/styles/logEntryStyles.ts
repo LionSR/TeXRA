@@ -138,6 +138,11 @@ export const logEntryStyles = css`
     margin-right: 4px;
   }
 
+  .memory-path .file-source {
+    opacity: 0.6;
+    font-size: 0.85em;
+  }
+
   /* Web search result styles */
   .detail-list {
     list-style: none;
