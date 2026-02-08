@@ -214,7 +214,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const occurrences = content.split(oldStr).length - 1;
     if (occurrences === 0) {
       throw new ToolError(
-        `No replacement was performed, old_str \`${oldStr}\` did not appear verbatim in ${inputPath}.`,
+        `No replacement was performed, old_str did not appear verbatim in ${inputPath}.`,
       );
     }
 
@@ -224,7 +224,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
         .map((line, index) => (line.includes(oldStr) ? index + 1 : -1))
         .filter((n) => n !== -1);
       throw new ToolError(
-        `No replacement was performed. Multiple occurrences of old_str \`${oldStr}\` in lines: ${lineNumbers.join(
+        `No replacement was performed. Multiple occurrences of old_str in lines: ${lineNumbers.join(
           ', ',
         )}. Please ensure it is unique`,
       );
