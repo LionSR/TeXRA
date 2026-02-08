@@ -12,6 +12,8 @@ import {
   type StreamTabId,
   type ExecutionId,
   type StorageKey,
+  type OutputFileInfo,
+  type RoundOutput,
 } from '@shared/schemas';
 import {
   resolveAgent,
@@ -68,6 +70,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
 import { createInterruptCallbacks } from './InterruptManager';
+import type { AgentFlowResult, OutputFileSummary } from './AgentFlowResult';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -282,22 +285,41 @@ function isApiKeyError(err: unknown): boolean {
   return msg.includes('Missing API key') || msg.includes('API key not found');
 }
 
+/** Map workflow RoundOutput[] to OutputFileSummary[] for AgentFlowResult. */
+function toOutputSummaries(roundOutputs: RoundOutput[]): OutputFileSummary[] {
+  return roundOutputs.flatMap((r) =>
+    r.outputs.map((o: OutputFileInfo) => ({
+      round: r.round,
+      relativePath:
+        'relativePath' in o.location
+          ? o.location.relativePath
+          : o.location.absolutePath,
+      absolutePath: o.location.absolutePath,
+      location: o.location.kind,
+      originalPath: o.lineage?.original?.absolutePath ?? null,
+      added: o.diff?.added ?? null,
+      removed: o.diff?.removed ?? null,
+    })),
+  );
+}
+
 async function runFlowWithLifecycle(
   ctx: ResolvedAgentBase,
   streamId: StreamTabId,
   agentName: string,
-  runner: () => Promise<EndGroupStatus>,
-): Promise<void> {
+  runner: () => Promise<AgentFlowResult>,
+): Promise<AgentFlowResult> {
   try {
-    const flowStatus = await runner();
-    ctx.parentStage.end(flowStatus);
+    const result = await runner();
+    ctx.parentStage.end(result.status);
 
     if (!StreamStatusService.shouldPreserveOnCompletion(streamId)) {
       const status =
-        flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED;
+        result.status === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED;
       StreamStatusService.set(streamId, status);
     }
-    logger.debug(`Task completed with status: ${flowStatus}`);
+    logger.debug(`Task completed with status: ${result.status}`);
+    return result;
   } catch (err) {
     const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
@@ -489,10 +511,19 @@ async function prepareAgentUI(
 // Public Entry Points
 // ============================================================================
 
+/** Options for executeAgent. */
+export interface ExecuteAgentOptions {
+  /** When true, proposal tools are filtered out to prevent nesting. */
+  isSubagent?: boolean;
+  /** Fires early with the real streamId, before flow execution starts. */
+  onStreamResolved?: (streamId: StreamTabId) => void;
+}
+
 export async function executeAgent(
   configPayload: AgentConfigPayload,
   executionId?: ExecutionId,
-): Promise<void> {
+  options?: ExecuteAgentOptions,
+): Promise<AgentFlowResult> {
   if (!configPayload.model || !configPayload.agent) {
     throw new Error('Missing required fields: model and/or agent');
   }
@@ -501,7 +532,9 @@ export async function executeAgent(
   const { setting, streamId, config } = ctx;
   const agentName = config.agent;
 
-  await runFlowWithLifecycle(ctx, streamId, agentName, async () => {
+  options?.onStreamResolved?.(streamId);
+
+  return runFlowWithLifecycle(ctx, streamId, agentName, async () => {
     await prepareAgentUI(ctx, executionId);
 
     const taskStage = await logger.stage(`Task: ${agentName}@${config.model}`);
@@ -513,10 +546,16 @@ export async function executeAgent(
         const result = await runToolUseFlow({
           ...flowContext,
           setting: ctx.setting as AgentToolUseSetting,
+          isSubagent: options?.isSubagent,
           onFollowUpConsumed: () =>
             bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
         });
-        return result.status;
+        return {
+          category: 'toolUse' as const,
+          status: result.status,
+          lastResponse: result.lastResponse,
+          streamId,
+        };
       }
 
       const flowContext = createFlowContext(ctx, 'workflow');
@@ -525,7 +564,12 @@ export async function executeAgent(
         setting: ctx.setting as AgentWorkflowSetting,
         parentStage: ctx.parentStage,
       });
-      return result.status;
+      return {
+        category: 'workflow' as const,
+        status: result.status,
+        outputs: toOutputSummaries(result.roundOutputs),
+        streamId,
+      };
     });
   });
 }
@@ -565,7 +609,12 @@ export async function executeMergeAgent(
         ),
         parentStage: ctx.parentStage,
       });
-      return result.status;
+      return {
+        category: 'workflow' as const,
+        status: result.status,
+        outputs: toOutputSummaries(result.roundOutputs),
+        streamId,
+      };
     });
   });
 }
@@ -606,7 +655,12 @@ export async function resumeToolUseFromSnapshot(
         undefined,
         setupSession ? (context) => setupSession(context.session) : undefined,
       );
-      return result.status;
+      return {
+        category: 'toolUse' as const,
+        status: result.status,
+        lastResponse: result.lastResponse,
+        streamId,
+      };
     },
   );
 }
