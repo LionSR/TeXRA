@@ -72,17 +72,6 @@ import { createInterruptCallbacks } from './InterruptManager';
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
 
-/**
- * Creates a usage recorder callback for flows.
- * Wraps UsageMonitor.recordUsage with the appropriate run kind.
- */
-function createUsageRecorder(
-  usageMonitor: UsageMonitor,
-  runKind: 'workflow' | 'tool-use',
-): () => (run: Parameters<UsageMonitor['recordUsage']>[0]) => Promise<void> {
-  return () => (run) => usageMonitor.recordUsage(run, { runKind });
-}
-
 interface ResolvedAgentBase extends AgentCore {
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
@@ -378,19 +367,36 @@ async function showApiKeyErrorNotification(): Promise<void> {
   );
 }
 
-export async function executeAgent(
+// ============================================================================
+// Shared Orchestration
+// ============================================================================
+
+/**
+ * Resolves agent context and acquires stream lock, handling the preliminary→final
+ * stream ID correction that occurs when useMultipleOutputs changes during resolution.
+ *
+ * Consolidates the acquire → resolve → correct pattern duplicated across entry points.
+ */
+async function resolveAndAcquireStream(
   configPayload: AgentConfigPayload,
   executionId?: ExecutionId,
-): Promise<void> {
-  if (!configPayload.model || !configPayload.agent) {
-    throw new Error('Missing required fields: model and/or agent');
+  options?: {
+    streamTabIdOverride?: StreamTabId;
+    taskType?: string;
+  },
+): Promise<ResolvedAgentBase> {
+  if (options?.streamTabIdOverride) {
+    // Direct resolution with known stream ID (e.g., resume from snapshot)
+    return resolveAgentBase(configPayload, executionId, {
+      streamTabIdOverride: options.streamTabIdOverride,
+    });
   }
 
   const preliminaryStreamId = computePreliminaryStreamId(
     configPayload,
     executionId,
   );
-  acquireStreamOrThrow(preliminaryStreamId);
+  acquireStreamOrThrow(preliminaryStreamId, options?.taskType);
 
   let ctx: ResolvedAgentBase;
   try {
@@ -403,77 +409,109 @@ export async function executeAgent(
     throw err;
   }
 
-  const { setting, streamId, config } = ctx;
-  const agentName = config.agent;
-
-  if (streamId !== preliminaryStreamId) {
+  // Stream ID may change when useMultipleOutputs is resolved from agent settings
+  if (ctx.streamId !== preliminaryStreamId) {
     logger.debug(
-      `Stream ID changed: preliminary=${preliminaryStreamId}, resolved=${streamId}. ` +
+      `Stream ID changed: preliminary=${preliminaryStreamId}, resolved=${ctx.streamId}. ` +
         'Corrected useMultipleOutputs based on agent support.',
     );
     StreamStatusService.releaseIfInitializing(preliminaryStreamId);
     try {
-      acquireStreamOrThrow(streamId);
+      acquireStreamOrThrow(ctx.streamId);
     } catch (err) {
       ctx.parentStage.end(END_GROUP_STATUS.ERROR);
       throw err;
     }
   }
 
+  return ctx;
+}
+
+/** Creates a flow context with interrupt callbacks and a usage recorder for the given flow kind. */
+function createFlowContext(
+  ctx: ResolvedAgentBase,
+  runKind: 'workflow' | 'tool-use',
+) {
+  return {
+    ...ctx,
+    ...createInterruptCallbacks(),
+    getUsageRecorder: () => (run: Parameters<UsageMonitor['recordUsage']>[0]) =>
+      ctx.usageMonitor.recordUsage(run, { runKind }),
+  };
+}
+
+/** Pre-execution UI setup: progress board visibility, notifications, task state emission. */
+async function prepareAgentUI(
+  ctx: ResolvedAgentBase,
+  executionId: ExecutionId | undefined,
+): Promise<void> {
+  if (executionId) await ensureRunDir(executionId);
+  const { streamId, config } = ctx;
+  const agentName = config.agent;
+
+  const runStorage = getRunStorageService();
+  StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
+
+  logger.info(`Starting task execution for ${streamId}`);
+  logger.info(`Input file: ${config.inputFile}`);
+  logger.debug(
+    `Stream ID: ${streamId}, Agent: ${agentName}, Model: ${config.model}`,
+  );
+  logger.debug(
+    `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
+  );
+
+  if (!runStorage.isViewVisible()) {
+    await vscode.commands.executeCommand('texra.showProgressView');
+  }
+  if (!runStorage.isViewVisible()) {
+    showAgentNotification(config);
+  }
+  bus.emit('setTaskState', {
+    streamId,
+    executionId,
+    taskState: agentConfigToTaskState(config),
+  });
+
+  const { outputFiles, useMultipleOutputs } = config;
+  if (
+    Array.isArray(outputFiles) &&
+    outputFiles.length > 1 &&
+    !useMultipleOutputs
+  ) {
+    logger.warn(
+      `Multiple output files provided (${outputFiles.length}) but useMultipleOutputs flag is disabled.`,
+    );
+  }
+}
+
+// ============================================================================
+// Public Entry Points
+// ============================================================================
+
+export async function executeAgent(
+  configPayload: AgentConfigPayload,
+  executionId?: ExecutionId,
+): Promise<void> {
+  if (!configPayload.model || !configPayload.agent) {
+    throw new Error('Missing required fields: model and/or agent');
+  }
+
+  const ctx = await resolveAndAcquireStream(configPayload, executionId);
+  const { setting, streamId, config } = ctx;
+  const agentName = config.agent;
+
   await runFlowWithLifecycle(ctx, streamId, agentName, async () => {
-    if (executionId) await ensureRunDir(executionId);
-
-    const runStorage = getRunStorageService();
-
-    StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
-
-    logger.info(`Starting task execution for ${streamId}`);
-    logger.info(`Input file: ${config.inputFile}`);
-    logger.debug(
-      `Stream ID: ${streamId}, Agent: ${agentName}, Model: ${config.model}`,
-    );
-    logger.debug(
-      `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
-    );
-
-    if (!runStorage.isViewVisible()) {
-      await vscode.commands.executeCommand('texra.showProgressView');
-    }
-    if (!runStorage.isViewVisible()) {
-      showAgentNotification(config);
-    }
-    bus.emit('setTaskState', {
-      streamId,
-      executionId,
-      taskState: agentConfigToTaskState(config),
-    });
-
-    const { outputFiles, useMultipleOutputs } = config;
-    if (
-      Array.isArray(outputFiles) &&
-      outputFiles.length > 1 &&
-      !useMultipleOutputs
-    ) {
-      logger.warn(
-        `Multiple output files provided (${outputFiles.length}) but useMultipleOutputs flag is disabled.`,
-      );
-    }
+    await prepareAgentUI(ctx, executionId);
 
     const taskStage = await logger.stage(`Task: ${agentName}@${config.model}`);
     return taskStage.run(async () => {
       logger.info(`Executing ${agentName} with model ${config.model}`);
 
-      const interruptCallbacks = createInterruptCallbacks();
-
-      const flowContext = {
-        ...ctx,
-        ...interruptCallbacks,
-      };
-
       if (setting.agentCategory === AgentCategory.ToolUse) {
+        const flowContext = createFlowContext(ctx, 'tool-use');
         const result = await runToolUseFlow({
           ...flowContext,
-          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
           setting: ctx.setting as AgentToolUseSetting,
           onFollowUpConsumed: () =>
             bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
@@ -481,9 +519,9 @@ export async function executeAgent(
         return result.status;
       }
 
+      const flowContext = createFlowContext(ctx, 'workflow');
       const result = await runReflectionFlow({
         ...flowContext,
-        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
         setting: ctx.setting as AgentWorkflowSetting,
         parentStage: ctx.parentStage,
       });
@@ -497,30 +535,16 @@ export async function executeMergeAgent(
   inputFile: string,
   editedFile: string,
 ): Promise<void> {
-  const preliminaryStreamId = computePreliminaryStreamId({
+  const configPayload: AgentConfigPayload = {
     agent: 'merge',
     model,
     inputFile,
+    editedFile,
+  };
+  const ctx = await resolveAndAcquireStream(configPayload, undefined, {
+    taskType: 'Merge task',
   });
-  acquireStreamOrThrow(preliminaryStreamId, 'Merge task');
-
-  let ctx: ResolvedAgentBase;
-  let resolutionSucceeded = false;
-  try {
-    ctx = await resolveAgentBase({
-      agent: 'merge',
-      model,
-      inputFile,
-      editedFile,
-    });
-    resolutionSucceeded = true;
-  } finally {
-    if (!resolutionSucceeded) {
-      StreamStatusService.releaseIfInitializing(preliminaryStreamId);
-    }
-  }
-
-  const { streamId, config, executionId } = ctx;
+  const { streamId, executionId } = ctx;
 
   await runFlowWithLifecycle(ctx, streamId, 'merge', async () => {
     StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
@@ -530,18 +554,15 @@ export async function executeMergeAgent(
       logger.info(`Executing merge with model ${model}`);
 
       const fileService = new TaskRunFileService(executionId);
-      const getOutputFileLocation = createMergeOutputFileLocationGetter(
-        inputFile,
-        editedFile,
-        fileService,
-      );
-
+      const flowContext = createFlowContext(ctx, 'workflow');
       const result = await runReflectionFlow({
-        ...ctx,
-        ...createInterruptCallbacks(),
-        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
+        ...flowContext,
         setting: ctx.setting as AgentWorkflowSetting,
-        getOutputFileLocation,
+        getOutputFileLocation: createMergeOutputFileLocationGetter(
+          inputFile,
+          editedFile,
+          fileService,
+        ),
         parentStage: ctx.parentStage,
       });
       return result.status;
@@ -553,12 +574,10 @@ export async function resumeToolUseFromSnapshot(
   snapshot: ToolUseSessionSnapshot,
   setupSession?: (session: IToolUseSession) => void,
 ): Promise<void> {
-  const ctx = await resolveAgentBase(
+  const ctx = await resolveAndAcquireStream(
     snapshot.agentConfig,
     snapshot.executionId,
-    {
-      streamTabIdOverride: snapshot.streamId,
-    },
+    { streamTabIdOverride: snapshot.streamId },
   );
   const { setting, streamId } = ctx;
 
@@ -568,11 +587,6 @@ export async function resumeToolUseFromSnapshot(
     );
   }
 
-  const flowContext = {
-    ...ctx,
-    ...createInterruptCallbacks(),
-  };
-
   await runFlowWithLifecycle(
     ctx,
     streamId,
@@ -580,16 +594,16 @@ export async function resumeToolUseFromSnapshot(
     async () => {
       StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
 
+      const flowContext = createFlowContext(ctx, 'tool-use');
       const result = await runToolUseFlow(
         {
           ...flowContext,
-          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
           setting: setting as AgentToolUseSetting,
           resumeSnapshot: snapshot,
           onFollowUpConsumed: () =>
             bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
         },
-        undefined, // use default tool registry
+        undefined,
         setupSession ? (context) => setupSession(context.session) : undefined,
       );
       return result.status;
