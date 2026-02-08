@@ -276,7 +276,7 @@ export class RoundPersistedFlow<
     let status: ExecutionStatus = EXECUTION_STATUS.COMPLETED;
 
     // Initialize flow record with initial shared state
-    await this.init(shared);
+    await this.ensureRecord(shared);
 
     // Current shared state reference (updated from stepWithResult)
     let currentShared = shared;
