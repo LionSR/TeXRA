@@ -157,33 +157,16 @@ export class RequestPanels extends LitElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    const approvals = this.permissions.filter(
-      (p) => p.kind === PERMISSION_KIND.TOOL_EDIT,
-    );
-    const bashApprovals = this.permissions.filter(
-      (p) => p.kind === PERMISSION_KIND.BASH,
-    );
-    const retries = this.permissions.filter(
-      (p) => p.kind === PERMISSION_KIND.RETRY,
-    );
-    const proposals = this.permissions.filter(
-      (p) => p.kind === PERMISSION_KIND.PROPOSAL,
-    );
+    if (this.permissions.length === 0) return nothing;
 
-    if (
-      approvals.length === 0 &&
-      bashApprovals.length === 0 &&
-      retries.length === 0 &&
-      proposals.length === 0
-    ) {
-      return nothing;
-    }
+    const byKind = (kind: PermissionState['kind']) =>
+      this.permissions.filter((p) => p.kind === kind);
 
     return html`
-      ${this.renderApprovalSection(approvals)}
-      ${this.renderBashSection(bashApprovals)}
-      ${this.renderRetrySection(retries)}
-      ${this.renderProposalSection(proposals)}
+      ${this.renderApprovalSection(byKind(PERMISSION_KIND.TOOL_EDIT))}
+      ${this.renderBashSection(byKind(PERMISSION_KIND.BASH))}
+      ${this.renderRetrySection(byKind(PERMISSION_KIND.RETRY))}
+      ${this.renderProposalSection(byKind(PERMISSION_KIND.PROPOSAL))}
     `;
   }
 

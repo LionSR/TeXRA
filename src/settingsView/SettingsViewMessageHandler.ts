@@ -93,15 +93,11 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
         SecretManager.getApiKeySecretName(provider),
       );
       const envValue = process.env[`${provider.toUpperCase()}_API_KEY`];
-
-      let status: ProviderKeyStatus['status'];
-      if (secretValue) {
-        status = 'set';
-      } else if (envValue) {
-        status = 'env';
-      } else {
-        status = 'not-set';
-      }
+      const status: ProviderKeyStatus['status'] = secretValue
+        ? 'set'
+        : envValue
+          ? 'env'
+          : 'not-set';
 
       return {
         provider,
@@ -974,7 +970,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           ? WorkspaceStateKey.ENABLED_AGENTS
           : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS;
       // No default → undefined means "never configured" (all enabled)
-      const current = workspaceSM.get<string[]>(stateKey) ?? [];
+      const raw = workspaceSM.get<string[]>(stateKey);
+      const current = raw ?? [];
       const key = createKey(data.agentSource, data.agentName);
 
       let updated: string[];
@@ -985,7 +982,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         } else {
           updated = [...current, key];
         }
-      } else if (!workspaceSM.get<string[]>(stateKey)) {
+      } else if (raw === undefined) {
         // Never configured (undefined) = "all enabled". To disable one agent,
         // seed the config with all OTHER agents: undefined → [all except this one].
         const allAgents =

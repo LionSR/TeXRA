@@ -45,7 +45,9 @@ const NEW_BUILTIN_PREFIX = 'builtInWorkflow:';
  * Idempotent — skips if no legacy keys found.
  */
 function isLegacyBuiltInKey(k: string): boolean {
-  return k.startsWith(LEGACY_BUILTIN_PREFIX) && !k.startsWith('builtInToolUse:');
+  return (
+    k.startsWith(LEGACY_BUILTIN_PREFIX) && !k.startsWith('builtInToolUse:')
+  );
 }
 
 function migrateLegacySourceKeys(): void {
@@ -564,26 +566,27 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
 // =============================================================================
 
 /**
- * Get visible workflow agents (filtered and deduplicated).
- * Returns the same agents shown in the main webview dropdown.
+ * Get visible agents for a category (filtered and deduplicated).
+ * No default → undefined means "never configured" (show all).
  */
-export function getVisibleWorkflowAgents(): AgentEntry[] {
-  const entries = getWorkflowAgents();
-  // No default → undefined means "never configured" (show all)
-  const raw = workspaceSM?.get<string[]>(WorkspaceStateKey.ENABLED_AGENTS);
+function getVisibleAgents(category: 'workflow' | 'toolUse'): AgentEntry[] {
+  const isToolUse = category === 'toolUse';
+  const entries = isToolUse ? getToolUseAgents() : getWorkflowAgents();
+  const stateKey = isToolUse
+    ? WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
+    : WorkspaceStateKey.ENABLED_AGENTS;
+  const raw = workspaceSM?.get<string[]>(stateKey);
   return deduplicateByName(filterVisible(entries, raw));
 }
 
-/**
- * Get visible tool-use agents (filtered and deduplicated).
- * Returns the same agents shown in the main webview dropdown.
- */
+/** Get visible workflow agents for the main webview dropdown. */
+export function getVisibleWorkflowAgents(): AgentEntry[] {
+  return getVisibleAgents('workflow');
+}
+
+/** Get visible tool-use agents for the main webview dropdown. */
 export function getVisibleToolUseAgents(): AgentEntry[] {
-  const entries = getToolUseAgents();
-  const raw = workspaceSM?.get<string[]>(
-    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-  );
-  return deduplicateByName(filterVisible(entries, raw));
+  return getVisibleAgents('toolUse');
 }
 
 /**
