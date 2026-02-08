@@ -10,6 +10,7 @@ import fortran from 'highlight.js/lib/languages/fortran';
 import javascript from 'highlight.js/lib/languages/javascript';
 import json from 'highlight.js/lib/languages/json';
 import julia from 'highlight.js/lib/languages/julia';
+import lean from 'highlight.js/lib/languages/lean';
 import latex from 'highlight.js/lib/languages/latex';
 import makefile from 'highlight.js/lib/languages/makefile';
 import markdown from 'highlight.js/lib/languages/markdown';
@@ -23,6 +24,7 @@ import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
 
+
 // Register languages with common aliases
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -34,6 +36,7 @@ hljs.registerLanguage('javascript', javascript);
 hljs.registerLanguage('js', javascript);
 hljs.registerLanguage('json', json);
 hljs.registerLanguage('julia', julia);
+hljs.registerLanguage('lean', lean);
 hljs.registerLanguage('latex', latex);
 hljs.registerLanguage('makefile', makefile);
 hljs.registerLanguage('markdown', markdown);
@@ -51,6 +54,7 @@ hljs.registerLanguage('typescript', typescript);
 hljs.registerLanguage('ts', typescript);
 hljs.registerLanguage('xml', xml);
 hljs.registerLanguage('yaml', yaml);
+
 
 export { hljs };
 export default hljs;
