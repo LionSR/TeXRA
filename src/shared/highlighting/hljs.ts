@@ -24,7 +24,6 @@ import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
 
-
 // Register languages with common aliases
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -54,7 +53,6 @@ hljs.registerLanguage('typescript', typescript);
 hljs.registerLanguage('ts', typescript);
 hljs.registerLanguage('xml', xml);
 hljs.registerLanguage('yaml', yaml);
-
 
 export { hljs };
 export default hljs;
