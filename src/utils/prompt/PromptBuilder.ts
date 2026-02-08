@@ -24,7 +24,8 @@ Call tools sequentially and wait for the output before calling another.
 For math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.
 The current working directory is {{ CWD }}. Use relative paths when working with files.
 Bash commands already execute from the workspace directory — do not cd to the absolute workspace path as a first step; it is unnecessary.
-Never use \`find /\` or \`find / -name\` as it searches the entire filesystem and is extremely slow. Use the glob or grep tools to find files, or limit find to the workspace directory.
+NEVER use \`find /\`, \`find / -name\`, \`ls /\`, \`du /\`, or any command that scans from the root filesystem (/). These commands are blocked and will fail. Use the glob or grep tools to find files, or limit commands to the workspace directory.
+NEVER attempt to access directories outside the workspace (e.g., /home/user/OtherProject). You only have access to the current workspace at {{ CWD }}. Do not guess or search for project directories elsewhere on the filesystem.
 {% if DEFAULT_BIB_PATH %}The default bibliography file is {{ DEFAULT_BIB_PATH }}. You can grep or read this file to search for citations and references.{% endif %}
 </tool_use_instructions>`;
 
