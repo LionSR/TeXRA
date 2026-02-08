@@ -53,6 +53,13 @@ export class ProgressViewProvider
   private _hasResolved = false;
   private readonly logger: AgentLogger;
 
+  /** TTL-cached model options to avoid redundant async work for rapid proposals. */
+  private static readonly MODEL_OPTIONS_TTL_MS = 30_000;
+  private _cachedModelOptions?: {
+    data: import('@shared/schemas').ModelOptionData[];
+    expiry: number;
+  };
+
   private readonly toolEditHandler: ApprovalRequestHandler<
     ToolEditPermission,
     'requestId'
@@ -166,16 +173,34 @@ export class ProgressViewProvider
    * Sent as a second SHOW message — the frontend upserts it over the initial
    * (model-option-less) permission. If the proposal was resolved in the meantime,
    * the frontend's resolvedBeforeShown stash drops the late message.
+   *
+   * Uses a 30-second TTL cache to avoid redundant async work when
+   * multiple proposals arrive in quick succession.
    */
   private async sendProposalModelOptions(
     proposal: AgentProposalPermission,
   ): Promise<void> {
     try {
-      const modelOptions = await computeModelOptionsData();
+      const modelOptions = await this.getCachedModelOptions();
       this.webviewUpdater.showAgentProposal(proposal, modelOptions);
     } catch {
       // Model dropdown won't appear — static label fallback is fine
     }
+  }
+
+  private async getCachedModelOptions(): Promise<
+    import('@shared/schemas').ModelOptionData[]
+  > {
+    const now = Date.now();
+    if (this._cachedModelOptions && now < this._cachedModelOptions.expiry) {
+      return this._cachedModelOptions.data;
+    }
+    const data = await computeModelOptionsData();
+    this._cachedModelOptions = {
+      data,
+      expiry: now + ProgressViewProvider.MODEL_OPTIONS_TTL_MS,
+    };
+    return data;
   }
 
   public static getInstance(): ProgressViewProvider | undefined {
