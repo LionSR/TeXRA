@@ -433,8 +433,7 @@ export class PermissionCard extends LitElement {
 
   private canCollectFeedback(): boolean {
     return Boolean(
-      this.permission &&
-      FEEDBACK_ELIGIBLE_KINDS.has(this.permission.kind),
+      this.permission && FEEDBACK_ELIGIBLE_KINDS.has(this.permission.kind),
     );
   }
 

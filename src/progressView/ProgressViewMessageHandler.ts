@@ -322,10 +322,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleCompactResponse(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE>,
   ): Promise<void> {
-    await vscode.commands.executeCommand(
-      'texra.compactResponse',
-      data.stream,
-    );
+    await vscode.commands.executeCommand('texra.compactResponse', data.stream);
   }
 
   // ============================================================

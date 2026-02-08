@@ -10,8 +10,8 @@ settings:
   endTag: </latex_document>
   outputExt: tex
   prefills:
-    - "<scratchpad>"
-    - "<scratchpad>"
+    - '<scratchpad>'
+    - '<scratchpad>'
 
 # --- Agent Prompts ---
 prompts:
@@ -61,7 +61,7 @@ prompts:
 
   userRequest:
     - |
-        Brainstorm your plan in <scratchpad> with bullet points.
-        Then output the revised \LaTeX wrapped in <latex_document> tags.
+      Brainstorm your plan in <scratchpad> with bullet points.
+      Then output the revised \LaTeX wrapped in <latex_document> tags.
     - |
-        Reflect on your previous revision and describe the most impactful follow-up edits in <scratchpad> before producing the updated <latex_document> output.
+      Reflect on your previous revision and describe the most impactful follow-up edits in <scratchpad> before producing the updated <latex_document> output.
