@@ -48,14 +48,13 @@ const RunUsageTotalsSchema = z.object({
     .number()
     .prefault(DEFAULT_TOTALS.totalServerToolRequests),
 });
-type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
+export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
 
 /** Schema for normalized usage snapshot. Internal only. */
 const NormalizedUsageSnapshotSchema = z.object({
   round: z.number(),
   usage: NormalizedUsageSchema,
 });
-type NormalizedUsageSnapshot = z.infer<typeof NormalizedUsageSnapshotSchema>;
 
 /**
  * Schema for RunUsageAccumulator JSON serialization.
@@ -74,68 +73,106 @@ export type RunUsageAccumulatorJSON = z.output<
   typeof RunUsageAccumulatorJSONSchema
 >;
 
-export class RunUsageAccumulator {
-  private totals: RunUsageTotals = { ...DEFAULT_TOTALS };
-  private readonly normalizedSnapshots: NormalizedUsageSnapshot[] = [];
+// ============================================================================
+// Standalone functions operating on RunUsageAccumulatorJSON
+// ============================================================================
 
-  /** Deserialize from a snapshot. Schema transform handles default merging. */
+/** Create a fresh accumulator (all zeros). */
+export function createUsageAccumulator(): RunUsageAccumulatorJSON {
+  return { totals: { ...DEFAULT_TOTALS }, normalizedSnapshots: [] };
+}
+
+/** Parse a snapshot, applying schema defaults. */
+export function parseUsageAccumulator(snapshot: unknown): RunUsageAccumulatorJSON {
+  return RunUsageAccumulatorJSONSchema.parse(snapshot);
+}
+
+/** Record a normalized usage entry. Mutates acc in place. */
+export function recordNormalizedUsage(
+  acc: RunUsageAccumulatorJSON,
+  round: number,
+  usage: NormalizedUsage,
+): void {
+  if (acc.totals.firstInputTokens === 0) {
+    acc.totals.firstInputTokens = usage.inputTokens;
+  }
+
+  acc.totals.totalInputTokens += usage.inputTokens;
+  acc.totals.totalOutputTokens += usage.outputTokens;
+  acc.totals.totalCost += usage.cost;
+  acc.totals.totalCacheReadInputTokens += usage.cachedInputTokens ?? 0;
+  acc.totals.totalCacheCreationInputTokens += usage.cacheCreationTokens ?? 0;
+  acc.totals.totalReasoningTokens += usage.reasoningTokens ?? 0;
+  acc.totals.totalToolUsePromptTokens += usage.toolUsePromptTokens ?? 0;
+  acc.totals.totalServerToolRequests += usage.serverToolRequests ?? 0;
+
+  acc.normalizedSnapshots.push({ round, usage });
+}
+
+/** Merge another accumulator's data into this one. Mutates target in place. */
+export function mergeAccumulators(
+  target: RunUsageAccumulatorJSON,
+  source: RunUsageAccumulatorJSON,
+): void {
+  const src = source.totals;
+  if (target.totals.firstInputTokens === 0) {
+    target.totals.firstInputTokens = src.firstInputTokens;
+  }
+
+  target.totals.totalInputTokens += src.totalInputTokens;
+  target.totals.totalOutputTokens += src.totalOutputTokens;
+  target.totals.totalCost += src.totalCost;
+  target.totals.totalCacheReadInputTokens += src.totalCacheReadInputTokens;
+  target.totals.totalCacheCreationInputTokens +=
+    src.totalCacheCreationInputTokens;
+  target.totals.totalReasoningTokens += src.totalReasoningTokens;
+  target.totals.totalToolUsePromptTokens += src.totalToolUsePromptTokens;
+  target.totals.totalServerToolRequests += src.totalServerToolRequests;
+
+  target.normalizedSnapshots.push(...source.normalizedSnapshots);
+}
+
+// ============================================================================
+// Backward-compatible class (delegates to standalone functions)
+// ============================================================================
+
+/**
+ * @deprecated Use plain RunUsageAccumulatorJSON + standalone functions instead.
+ * Kept for backward compatibility during migration.
+ */
+export class RunUsageAccumulator {
+  private data: RunUsageAccumulatorJSON;
+
+  constructor() {
+    this.data = createUsageAccumulator();
+  }
+
   static fromSnapshot(snapshot: unknown): RunUsageAccumulator {
-    const parsed = RunUsageAccumulatorJSONSchema.parse(snapshot);
     const acc = new RunUsageAccumulator();
-    acc.totals = parsed.totals;
-    acc.normalizedSnapshots.push(...parsed.normalizedSnapshots);
+    acc.data = parseUsageAccumulator(snapshot);
     return acc;
   }
 
-  /** Serialize to a snapshot. */
   toSnapshot(): RunUsageAccumulatorJSON {
     return {
-      totals: this.totals,
-      normalizedSnapshots: [...this.normalizedSnapshots],
+      totals: this.data.totals,
+      normalizedSnapshots: [...this.data.normalizedSnapshots],
     };
   }
 
   recordNormalizedUsage(round: number, usage: NormalizedUsage): void {
-    if (this.totals.firstInputTokens === 0) {
-      this.totals.firstInputTokens = usage.inputTokens;
-    }
-
-    this.totals.totalInputTokens += usage.inputTokens;
-    this.totals.totalOutputTokens += usage.outputTokens;
-    this.totals.totalCost += usage.cost;
-    this.totals.totalCacheReadInputTokens += usage.cachedInputTokens ?? 0;
-    this.totals.totalCacheCreationInputTokens += usage.cacheCreationTokens ?? 0;
-    this.totals.totalReasoningTokens += usage.reasoningTokens ?? 0;
-    this.totals.totalToolUsePromptTokens += usage.toolUsePromptTokens ?? 0;
-    this.totals.totalServerToolRequests += usage.serverToolRequests ?? 0;
-
-    this.normalizedSnapshots.push({ round, usage });
+    recordNormalizedUsage(this.data, round, usage);
   }
 
   merge(other: RunUsageAccumulator): void {
-    const src = other.totals;
-    if (this.totals.firstInputTokens === 0) {
-      this.totals.firstInputTokens = src.firstInputTokens;
-    }
-
-    this.totals.totalInputTokens += src.totalInputTokens;
-    this.totals.totalOutputTokens += src.totalOutputTokens;
-    this.totals.totalCost += src.totalCost;
-    this.totals.totalCacheReadInputTokens += src.totalCacheReadInputTokens;
-    this.totals.totalCacheCreationInputTokens +=
-      src.totalCacheCreationInputTokens;
-    this.totals.totalReasoningTokens += src.totalReasoningTokens;
-    this.totals.totalToolUsePromptTokens += src.totalToolUsePromptTokens;
-    this.totals.totalServerToolRequests += src.totalServerToolRequests;
-
-    this.normalizedSnapshots.push(...other.normalizedSnapshots);
+    mergeAccumulators(this.data, other.data);
   }
 
   getTotals(): RunUsageTotals {
-    return this.totals;
+    return this.data.totals;
   }
 
-  getNormalizedSnapshots(): readonly NormalizedUsageSnapshot[] {
-    return this.normalizedSnapshots;
+  getNormalizedSnapshots(): readonly { round: number; usage: NormalizedUsage }[] {
+    return this.data.normalizedSnapshots;
   }
 }

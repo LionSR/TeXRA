@@ -6,7 +6,7 @@
  */
 
 import { Node } from '@agent/node';
-import { ConversationRoundState } from '@agent/core/AgentState';
+import { createRoundState } from '@agent/core/AgentState';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
@@ -32,7 +32,7 @@ export class PrepareContextNode<C = unknown> extends Node<
     const { promptBuilder, modelHandler, logger } = this.services;
     const { currentRound, conversation } = shared;
 
-    const stateRound = new ConversationRoundState(currentRound);
+    const stateRound = createRoundState(currentRound);
     const isFirstRound = currentRound === 0;
 
     let messages: ProviderMessage[];
@@ -62,7 +62,7 @@ export class PrepareContextNode<C = unknown> extends Node<
     return {
       messages,
       prefill: prefill ?? '',
-      stateRoundSnapshot: stateRound.toSnapshot(),
+      stateRoundSnapshot: stateRound,
     };
   }
 
