@@ -1,255 +1,190 @@
-# Top 5 Abstraction Overheads in Agent Execution Lifecycle
+# Agent Execution Lifecycle — Abstraction Overhead Audit
 
-Analysis of the largest sources of indirection, mixed concerns, dual logic, and
-unnecessary re-packing in the agent execute → flow → PocketFlow call chain.
-
----
-
-## 1. `resolveAndAcquireStream` + `resolveAgentBase` — Mixed Concerns & Dual Stream ID
-
-**Files:** `src/agent/runtime/executeAgent.ts:81-258, 380-428`
-
-The path from "user wants to run an agent" to "flow starts" passes through
-5 nested resolution functions with entangled concerns and a dual stream-ID
-computation that requires acquire → release → reacquire:
-
-```
-executeAgent()                             L492
- └─ resolveAndAcquireStream()              L380  ← Mixed: stream + resolution + error recovery
-     ├─ computePreliminaryStreamId()       L81   ← FIRST stream ID (from registry category)
-     │   └─ getAgent()                     L89   ← Registry lookup #1
-     ├─ acquireStreamOrThrow()             L399  ← FIRST acquire
-     ├─ resolveAgentBase()                 L142  ← 7+ concerns in 116 lines
-     │   ├─ AgentConfigSchema.parse()      L150  ← Redundant with L496 guard
-     │   ├─ getAgentPath()→resolveAgent()  L151  ← Registry lookup #2
-     │   ├─ loadAgentSettingAndPrompts()   L154  ← YAML load + inheritance
-     │   ├─ ensureAgentCategoryForSource() L160
-     │   ├─ validateAndGetModelConfig()    L165  ← Late (after expensive work)
-     │   ├─ getStreamTabId()               L179  ← SECOND stream ID (from YAML)
-     │   ├─ bus.emit('setActiveStream')    L196  ← UI event in resolution fn
-     │   ├─ buildUserVars()                L209
-     │   └─ new UsageMonitor()             L233
-     ├─ releaseIfInitializing()            L418  ← Release FIRST if IDs differ
-     └─ acquireStreamOrThrow()             L420  ← SECOND acquire
-```
-
-### Problems
-
-**(a) Dual stream ID computation.** `computePreliminaryStreamId` (L81-102) uses
-`getAgent().category` from the registry. `resolveAgentBase` (L179-185) recomputes
-using `setting.agentCategory` from loaded YAML, which can differ when YAML overrides
-the category. When they differ, the code must release the first stream and acquire
-a second — a fragile acquire→resolve→maybe-reacquire state machine.
-
-**(b) `resolveAgentBase` has 7+ mixed concerns:** schema validation, agent resolution,
-YAML loading, inheritance resolution, model validation with UI warning, stream ID
-computation, event bus emission, logging setup, user variable building, and usage
-monitor creation. These are separate responsibilities.
-
-**(c) Redundant validation.** The `!model || !agent` guard fires at L496, L85-86,
-and implicitly via `AgentConfigSchema.parse()` at L150. Model validation at L165
-runs after expensive operations when it could fail fast.
-
-### Refactoring
-
-- Compute the stream ID **once** after full resolution. Eliminate
-  `computePreliminaryStreamId` — acquire the stream after resolution, not before.
-- Split `resolveAgentBase` into `resolveAgentConfig` (pure data: parse + load +
-  validate) and `initializeAgentRuntime` (side effects: logging, events, monitors).
-- Move model validation to the entry point for fail-fast behavior.
+Analysis of the agent execute → flow → PocketFlow call chain, searching for
+unnecessary indirection, mixed concerns, dual logic, and single-source-of-truth
+violations.
 
 ---
 
-## 2. Cycle Service Re-packing — 15+ Fields Manually Reassembled Per Cycle
+## Methodology
 
-**Files:** `src/agent/implementations/flows/reflection/nodes/ResponseCycleNode.ts:156-180`,
-`src/agent/implementations/flows/tooluse/nodes/ToolUseCycleNode.ts:82-108`
-
-Both cycle nodes manually destructure their parent services and reassemble a new
-flat service object for the inner cycle flow. This happens on **every cycle
-invocation** (5-15× per agent run):
-
-```typescript
-// ResponseCycleNode L156-180: 11 of 16 fields are identity copies
-const flowServices: ResponseCycleServices<C> = {
-  modelHandler: this.services.modelHandler,
-  setting: this.services.setting,
-  prompt: this.services.prompt,
-  logger: this.services.logger,
-  streamId: this.services.streamId,
-  executionId: this.services.executionId,
-  userVarChannels: this.services.userVarChannels,
-  checkInterruption: this.services.checkInterruption,
-  setAbortController: this.services.setAbortController,
-  config: this.services.config,
-  fileService: this.services.fileService,
-  client: clientRef.current,       // ← per-cycle
-  round: prepRes.round,            // ← per-cycle
-  run: prepRes.run,                // ← per-cycle
-  workspace: prepRes.workspace,    // ← per-cycle
-  onRoundFinalized,                // ← per-cycle
-};
-```
-
-ToolUseCycleNode has the same pattern at L82-108 with 12 identity copies out of 17.
-
-### Root cause
-
-The flat `ResponseCycleServices`/`ToolUseCycleServices` design
-(`CycleServices.ts:57-117`). The comment at L4-5 says *"Flattened design"* — but
-this flattening forced upstream code to manually reassemble every field.
-
-### Refactoring
-
-Compose cycle services instead of flattening them:
-
-```typescript
-interface ResponseCycleServices<C> {
-  readonly core: AgentCore<C>;           // Pass-through from parent
-  readonly interrupt: InterruptHandlers;  // Pass-through from parent
-  readonly cycle: CycleStateSlices;       // Per-cycle (round, run, workspace)
-  readonly client: C;                     // Per-cycle
-  readonly fileService: TaskRunFileService;
-}
-```
-
-Reduces re-packing from 16 field assignments to ~4. Inner nodes access
-`this.services.core.modelHandler` — a trivial change.
+Initial analysis identified 5 candidate overheads. Deep verification with code
+tracing debunked all 5 as false positives — each apparent "overhead" turned out to
+be a justified design decision. This document records both the original claims and
+the reasons they were wrong, then presents what the verification actually found.
 
 ---
 
-## 3. ResponseContinuationNode — Dual Stop-Condition Decisions + Mixed Concerns
+## Debunked Findings (Not Real Overhead)
 
-**File:** `src/agent/core/flows/ResponseCycleFlow.ts:691-815`
+### ~~1. Dual Stream ID Computation~~ — Actually a Concurrency Guard
 
-This 125-line node makes **two separate calls** to the model handler with
-overlapping inputs to answer the same question: should the cycle continue?
+**Original claim:** `computePreliminaryStreamId` (L81) and `getStreamTabId` inside
+`resolveAgentBase` (L179) compute the same thing twice, creating a fragile
+acquire→release→reacquire state machine.
 
-```typescript
-// L733-740: Decision #1 — hard limits
-const { endTurn: shouldEndTurn, shouldStop } =
-  modelHandler.checkStopConditions(stopReason, processedResponse, round, run, setting);
+**Why it's wrong:** The preliminary acquire is a **concurrency guard**. Without it,
+two rapid clicks on "Run Agent" would both enter the expensive `resolveAgentBase()`
+(~100-500ms of YAML I/O, inheritance resolution, variable building) before either
+could claim the stream. The preliminary acquire uses a fast O(1) registry lookup to
+claim the stream immediately, causing the duplicate request to fail fast with a
+clear error message. The IDs can differ (YAML can override the registry category),
+so the re-acquisition at L413-425 is a necessary correction, not a design flaw.
 
-// L742-746: Decision #2 — soft heuristics (3 of 5 args identical)
-const shouldContinue = modelHandler.shouldContinue(stopReason, processedResponse, setting);
-```
-
-Then `post()` combines them with yet another condition:
-
-```typescript
-// L777-782: Decision #3 — token limit override
-const reachedTokenLimit = isTokenLimitStopReason(prepRes.stopReason);
-const willContinue = shouldContinue || reachedTokenLimit;
-```
-
-Three decisions on the same data, split across two model handler methods and
-inline logic.
-
-Beyond the dual decision, `post()` handles 4 additional concerns:
-- Setting `shared.endTurn` / `shared.shouldStop` (state mutation)
-- Incrementing `round.continuationCount` (counter management)
-- Logging continuation messages
-- Calling `addContinueMessageWithPrefill/WithoutPrefill` (message mutation, L799-810)
-
-Additionally, the ResponseCycleFlow has **7 separate decision points** that set
-`shouldStop = true` or return `COMPLETE` (across PrepNode, InvocationNode,
-ProcessNode, ContinuationNode). ToolUseCycleFlow has 5. This fragmentation makes
-it hard to trace when a cycle stops.
-
-### Refactoring
-
-Consolidate `checkStopConditions()` and `shouldContinue()` into a single
-`determineCycleOutcome()` on the model handler returning a discriminated union:
-
-```typescript
-type CycleOutcome =
-  | { action: 'end_turn' }
-  | { action: 'stop'; reason: string }
-  | { action: 'continue'; prefillMode: 'with' | 'without' };
-```
-
-Extract message mutation into a helper or separate node. This reduces the
-3-decision chain to 1 and separates the 5 concerns in `post()`.
+`StreamStatusService.tryAcquire()` is a check-then-set status flag that works as
+an atomic lock in Node.js's cooperative event loop. This is pragmatic and correct.
 
 ---
 
-## 4. ResponseCycleNode vs ToolUseCycleNode — Asymmetric Nesting Patterns
+### ~~2. Cycle Service Re-packing~~ — Intentional Flat Design
 
-**Files:** `ResponseCycleNode.ts:85-268` vs `ToolUseCycleNode.ts:31-175`
+**Original claim:** ResponseCycleNode (L156-180) and ToolUseCycleNode (L82-108)
+manually copy 11-12 fields from parent services into a new object per cycle.
 
-These two nodes do the same conceptual job — bridge outer flow ↔ inner cycle
-flow — but use fundamentally different patterns:
+**Why it's wrong:** The flat `CycleServices` design is **documented and intentional**
+(`CycleServices.ts:4-5`: "Flattened design: each service interface directly declares
+all its fields instead of composing through 4 levels of Pick/extend/intersection").
 
-| Aspect | ResponseCycleNode | ToolUseCycleNode |
-|--------|-------------------|------------------|
-| Inner shared state | Runs on outer `ReflectionFlowShared` directly (native nesting) | Creates separate `ToolUseCycleShared` (L65-78) |
-| Initialization | `initializeCycleFields()` typed helper (L150) | Manual 13-field object literal (L65-78) |
-| Result extraction | Reads directly from `shared` (L185) | Copies `cycleShared.messages` back (L161) |
-| Object allocation | 0 per cycle | 1 per cycle (discarded after) |
-| Finalization | Dedicated `ResponseCycleFinalizeNode` (L667-680), all exit paths | Inline in `ToolUseProcessNode.post()` (L531-540) |
+The alternative (nested `this.services.core.modelHandler`) would make every line of
+cycle node code uglier. The current pattern trades ~16 property assignments per cycle
+(microseconds, 1-3× per execution) for clean `this.services.modelHandler` access
+throughout all cycle nodes. The 5 per-cycle fields (client, round, run, workspace,
+onRoundFinalized) require a new object anyway since they change each cycle.
 
-### Problems
-
-- **Maintenance risk:** Changing `BaseCycleFields` requires updating
-  `initializeCycleFields()` in one place for Response, but hunting down the
-  object literal in ToolUseCycleNode.
-- **Finalization gap:** ToolUseCycleFlow embeds finalization (`recordCycleMetrics`
-  + `onRoundFinalized`) inside `ToolUseProcessNode.post()` (L531-540) instead of
-  a dedicated finalize node. If the cycle exits through a different path (e.g.,
-  dispatch node interrupt at L631), finalization may not run.
-- **Semantic confusion:** Two implementations of the same concept make it harder
-  to learn and modify the codebase.
-
-### Refactoring
-
-Align ToolUseCycleNode to use native nesting like ResponseCycleNode:
-- Add cycle fields to `ToolUseRunShared` (or extend with a mixin)
-- Use a shared `initializeCycleFields()` helper
-- Extract a `ToolUseCycleFinalizeNode` reachable from all exit paths
+This is a justified readability tradeoff, not overhead.
 
 ---
 
-## 5. Triple Re-pack Chain: resolveAgentBase → createFlowContext → runFlow Input
+### ~~3. Dual Stop-Condition Decisions~~ — Legitimate Two-Phase Decision
 
-**File:** `src/agent/runtime/executeAgent.ts:245-528`
+**Original claim:** `checkStopConditions()` and `shouldContinue()` are redundant
+dual decisions on the same data.
 
-Resolved agent data is packed into an object, spread into a new object, then
-spread again into the flow function's input — three re-packs with no transformation:
+**Why it's wrong:** These are **architecturally distinct** methods serving different
+concerns:
 
-```
-Step 1: resolveAgentBase returns ResolvedAgentBase          (L245-257) → 11 fields
-Step 2: createFlowContext({...ctx, ...interrupts, recorder}) (L435-440) → 14 fields
-Step 3: Caller spreads:  {...flowContext, setting, ...}      (L513-518) → 16 fields
-Step 4: runFlow spreads: {...input, outputState, ...}        (L365-378) → 23 fields
-```
+| Aspect | `checkStopConditions` | `shouldContinue` |
+|--------|----------------------|------------------|
+| Purpose | Safety circuit breaker | Semantic completion heuristic |
+| Scope | Cumulative state (token counts, continuation limits) | Current response only |
+| Provider variation | None (same logic for all providers) | High (per-provider overrides) |
+| Parameters | 5 (includes round + run state) | 3 (stopReason, response, setting) |
 
-Concrete issues:
+They form sequential gates: first check hard safety limits, then check provider-
+specific completion heuristics. Merging them would force all provider implementations
+to accept cumulative state parameters they don't need, polluting the interface.
 
-- **`createFlowContext` (L431-441) is trivial.** Spreads `ctx` unchanged, adds
-  interrupt callbacks and a `getUsageRecorder` wrapper. Called 3× with the same
-  pattern.
-- **`runFlowWithLifecycle` (L285-320) has redundant params.** Takes `ctx`,
-  `streamId`, `agentName` — but `streamId === ctx.streamId` and
-  `agentName === ctx.config.agent`.
-- **`prepareAgentUI` (L443-486) mixes 5 concerns:** filesystem (`ensureRunDir`),
-  status service, logging, VS Code commands, event bus emission, config validation.
-
-### Refactoring
-
-- Make `resolveAgentBase` directly return a type that includes interrupt callbacks
-  and the usage recorder. Eliminate `createFlowContext`.
-- Remove redundant `streamId`/`agentName` params from `runFlowWithLifecycle`.
-- Split `prepareAgentUI` concerns or inline trivial parts.
-- Collapse the 4-step repack chain to 1-2 steps.
+The `isTokenLimitStopReason` check at L777 is a third concern (whether to force
+continuation after hitting a token limit), not a redundant decision.
 
 ---
 
-## Impact Summary
+### ~~4. Asymmetric Cycle Nesting~~ — ToolUse Pattern Is Better
 
-| # | Overhead | Primary Symptom | Key Files | Estimated Code Reduction |
-|---|----------|----------------|-----------|-------------------------|
-| 1 | Dual stream ID + mixed resolution | Acquire-release-reacquire state machine | `executeAgent.ts:81-428` | ~60 lines |
-| 2 | Cycle service re-packing | 15+ identity field copies per cycle | `ResponseCycleNode.ts`, `ToolUseCycleNode.ts`, `CycleServices.ts` | ~50 lines × 2 |
-| 3 | Dual stop-condition decisions | 3-part decision chain + 7 stop points | `ResponseCycleFlow.ts:691-815` | ~40 lines, cleaner model handler API |
-| 4 | Asymmetric cycle nesting | Two patterns for one concept + finalization gap | `ToolUseCycleNode.ts`, `ToolUseCycleFlow.ts` | ~30 lines + correctness fix |
-| 5 | Triple re-pack chain | Same 11 fields spread 3-4× | `executeAgent.ts:245-528` | ~40 lines + param cleanup |
+**Original claim:** ResponseCycleNode's native nesting and ToolUseCycleNode's
+separate object are inconsistent; ToolUse has a "finalization gap."
+
+**Why it's wrong:** The asymmetry is **justified by different persistence needs**.
+`ToolUseRunShared` is persisted via `PersistedFlow` after every node. If cycle
+fields (cycleIndex, cycleResponseTimeMs, cycleNormalizedUsage) were added to it,
+they'd be serialized on every persistence step — wasted I/O for ephemeral data.
+The separate `ToolUseCycleShared` keeps the persistence boundary clean.
+
+The "finalization gap" claim is false. `ToolUseProcessNode.post()` (L531-540) runs
+finalization **before** the dispatch node, covering all paths that process a
+response. Paths that skip processing (interrupts in prep/call nodes) correctly skip
+finalization because there's nothing to finalize.
+
+If anything, ToolUse's approach is the better pattern — ResponseCycleFlow's native
+nesting puts transient cycle fields into persisted `ReflectionFlowShared`, which is
+semantically messier.
+
+---
+
+### ~~5. Triple Re-pack Chain~~ — Normal TypeScript Composition
+
+**Original claim:** The resolveAgentBase → createFlowContext → runFlow chain
+spreads the same fields 3-4× wastefully.
+
+**Why it's wrong:** Each spread adds **meaningful fields or type transformations**:
+
+1. `resolveAgentBase` → `ResolvedAgentBase` (11 fields: core identity)
+2. `createFlowContext` wraps `usageMonitor.recordUsage` with `runKind` baked in
+   and adds interrupt callbacks — this is semantic transformation, not re-packing
+3. Caller narrows `setting` type (e.g., `as AgentToolUseSetting`) for type safety
+4. Flow function adds domain-specific services (xmlManager, diffManager, etc.)
+
+This runs once per execution (not in loops). The alternative — inlining everything
+into `executeAgent` — would create 50+ lines of manual field assignment, harder to
+maintain and less type-safe. `runFlowWithLifecycle`'s `streamId`/`agentName` params
+are explicitly destructured for the error message at L302, which is reasonable.
+
+---
+
+## What Verification Actually Found
+
+### The codebase is well-designed
+
+After examining:
+- All agent execution entry points and resolution functions
+- Both cycle flow implementations and their node hierarchies
+- PocketFlow core (Node, Flow, PersistedFlow, RoundPersistedFlow)
+- Service type hierarchy (AgentCore → BaseFlowContextInit → flow services → cycle services)
+- State management (snapshots, workspace, cycle fields)
+- Model handler interface and implementations
+- Agent loading and inheritance
+- Output pipeline (OutputNode → file extraction → lineage → diff)
+- Event bus emission patterns (34 total `bus.emit` calls, clean single-source)
+- Prompt building
+
+...no significant abstraction overhead, dual logic, or single-source-of-truth
+violations were found. The architecture shows evidence of prior refactoring that
+already addressed these concerns (deleted wrapper files like ResponseCycle.ts and
+ToolUseCycle.ts, flattened cycle services, inline service creation in flow runners).
+
+### One performance opportunity: PersistedFlow KVStore caching
+
+**File:** `src/agent/node/persisted-flow.ts:107-148`
+
+`stepWithResult()` reads the flow record from KVStore on **every step** (L109),
+even though the previous step just wrote it (L141). Since `PersistedFlow` is the
+sole owner/mutator of its flow record, the read is redundant after the first step.
+
+For a typical 3-round, 6-nodes/round reflection flow (18 total nodes):
+
+| Operation | Count | Necessary? |
+|-----------|-------|------------|
+| KVStore reads (stepWithResult L109) | 18 | Only 1st is necessary |
+| KVStore writes (stepWithResult L141) | 18 | All necessary (persistence) |
+| KVStore reads (transitionToNextRound → setShared) | 2 | Cacheable |
+| KVStore read (getShared after run) | 1 | Cacheable if run() cached final state |
+| **Total** | **39 ops** | **~20 reads are redundant** |
+
+The KVStore is filesystem-based (`StorageFSKVStore`): each read involves
+`fs.readFile` + `JSON.parse`, each write involves `JSON.stringify` + `fs.writeFile`.
+Caching the last-written `FlowRecord` in memory would eliminate ~20 filesystem reads
+per execution (51% I/O reduction) with no loss of crash-recovery guarantees, since
+writes would remain unchanged.
+
+This is a **performance optimization**, not an abstraction simplification.
+
+---
+
+## Why the Original Analysis Was Wrong
+
+The original analysis pattern-matched on surface-level code structure without
+verifying whether each pattern served a purpose:
+
+| Pattern observed | Assumed meaning | Actual purpose |
+|-----------------|----------------|----------------|
+| Two calls to `getStreamTabId` | Redundant computation | Concurrency guard (fail-fast on duplicates) |
+| 16 field assignments per cycle | Wasteful re-packing | Intentional flat design for readability |
+| Two model handler methods | Dual logic | Two-phase decision (safety vs heuristics) |
+| Two different nesting patterns | Inconsistency | Different persistence requirements |
+| Object spreads across functions | Unnecessary re-packing | Type-safe composition with semantic transforms |
+
+**Lesson:** "Looks like overhead" is not the same as "is overhead." Each
+apparent redundancy had a concrete justification rooted in concurrency safety,
+framework constraints, provider abstraction boundaries, persistence requirements,
+or TypeScript type narrowing. Code that appears complex from a structural scan may
+be necessary complexity driven by real constraints.
