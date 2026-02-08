@@ -261,7 +261,23 @@ async function createWorkflowAgent(
   }
 
   const filePath = await resolveAgentFilePath(agentName);
-  const vars = { AGENT_NAME: agentName, DESCRIPTION: description };
+  const multipleNote = isMultipleOutput
+    ? [
+        'IMPORTANT: This agent must handle MULTIPLE output files. Adjust the structure above:',
+        '- Set isMultipleOutput: true',
+        '- Use documentTag: "latex_documents" (plural) and endTag: "</latex_documents>"',
+        '- Add defaultOutputFiles with the file list below',
+        '- In userRequest, instruct the model to wrap each file in <latex_documents> with <document name="..."> blocks',
+        '- Reference {{ OUTPUT_FILES_ORDER }} for the expected output order',
+        'Default output files:',
+        outputFilesYaml,
+      ].join('\n')
+    : '';
+  const vars = {
+    AGENT_NAME: agentName,
+    DESCRIPTION: description,
+    MULTIPLE_OUTPUT_NOTE: multipleNote,
+  };
   let yamlContent = await tryAIGeneration(config, 'workflow', vars);
 
   if (!yamlContent) {
