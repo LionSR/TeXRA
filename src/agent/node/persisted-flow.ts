@@ -146,6 +146,9 @@ export class PersistedFlow<
     cursor.setServices(this._services);
     const action = await cursor._run(shared);
 
+    // Invalidate cache before mutation: if kv.write fails, the next read
+    // falls through to KVStore which has the correct pre-mutation state.
+    this.cachedRecord = null;
     flow.nodes.push({ action });
     flow.shared = this.serializeShared(shared);
     await this.kv.write(key, flow);
@@ -186,6 +189,7 @@ export class PersistedFlow<
   async getShared(): Promise<S | undefined> {
     const flow =
       this.cachedRecord ?? (await this.kv.read<FlowRecord>(`flow:${this.runId}`));
+    if (flow) this.cachedRecord = flow;
     return flow?.shared as S | undefined;
   }
 
@@ -193,6 +197,7 @@ export class PersistedFlow<
     const key = `flow:${this.runId}`;
     const flow =
       this.cachedRecord ?? (await this.kv.read<FlowRecord>(key))!;
+    this.cachedRecord = null;
     flow.shared = this.serializeShared(newShared);
     await this.kv.write(key, flow);
     this.cachedRecord = flow;
