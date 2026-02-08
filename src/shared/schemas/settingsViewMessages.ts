@@ -314,6 +314,7 @@ const OpenAgentFolderMessageSchema = z.object({
 
 const CreateAgentMessageSchema = z.object({
   command: z.literal(CMD.CREATE_AGENT),
+  category: AgentCategorySchema,
 });
 
 // Auto-show remote agents inbound messages
