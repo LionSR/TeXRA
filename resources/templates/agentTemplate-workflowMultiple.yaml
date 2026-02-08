@@ -57,12 +57,12 @@ prompts:
     </document>
     </documents>
 
-    {% if INSTRUCTION %}
+    {% raw %}{% if INSTRUCTION %}{% endraw %}
     Instruction to follow:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
-    {% endif %}
+    {% raw %}{% endif %}{% endraw %}
 
   userRequest:
     - |
