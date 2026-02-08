@@ -1,9 +1,11 @@
 # --- Agent Inheritance (Optional) ---
 # inherits: base
 name: {{ AGENT_NAME }}
+description: {{ DESCRIPTION }}
 
 # --- Agent Settings ---
 settings:
+  agentCategory: workflow
   temperature: 0.1
   isRewrite: true
   documentTag: latex_document
