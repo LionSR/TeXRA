@@ -5,7 +5,12 @@
  * and state persistence via PersistedFlow.
  */
 
-import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
+import {
+  END_GROUP_STATUS,
+  EXECUTION_STATUS,
+  type EndGroupStatus,
+} from '@shared/schemas';
+import { executionToEndStatus } from '@common/constants/streamStatus';
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import {
   registerInterruptible,
@@ -17,17 +22,17 @@ import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
 
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
+import type { ToolDefinition } from '@model';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { getDefaultToolRegistry } from '@tools/registry';
-import {
-  toEndStatus,
-  getExecutionStatus,
-  ERROR_STATUS,
-} from '../common/FlowLifecycle';
-import { createToolUseFlow, type ToolUseRunShared } from './ToolUseFlow';
-import { resolveTools } from './ToolUseFlowContext';
+import { getToolUseMemoryEnabled } from '@utils/config/constants';
+import { Flow } from '@agent/node';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
+import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
+import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
+import { migrateSharedState, type ToolUseRunShared } from './nodes/types';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
-import { migrateSharedState } from './nodes';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
 
@@ -66,6 +71,33 @@ export interface ToolUseFlowContext<C = unknown> {
 export type ToolUseFlowSetupCallback = (
   context: ToolUseFlowContext<unknown>,
 ) => void;
+
+/** Resolve tool definitions from agent settings, validating against registry. */
+function resolveTools(
+  tools: AgentToolUseSetting['tools'],
+  registry: IToolRegistry,
+  logger: { warn: (msg: string) => void },
+): ToolDefinition[] {
+  const toolConfigs = Array.isArray(tools) ? tools : [];
+  const resolved = toolConfigs
+    .map((config) => (typeof config === 'string' ? { name: config } : config))
+    .filter((def) => {
+      if (!registry.has(def.name)) {
+        logger.warn(`Tool "${def.name}" not found in registry`);
+        return false;
+      }
+      return true;
+    });
+  if (getToolUseMemoryEnabled() && !resolved.some((d) => d.name === 'memory')) {
+    const memoryTool = registry.get('memory');
+    if (memoryTool) {
+      resolved.push(memoryTool.definition);
+    } else {
+      logger.warn('Memory tool not found in registry');
+    }
+  }
+  return resolved;
+}
 
 /**
  * Run a tool-use flow. Interrupt registration is handled automatically.
@@ -144,7 +176,14 @@ export async function runToolUseFlow<C = unknown>(
       }
     }
 
-    const startNode = createToolUseFlow<C>().start;
+    // Create flow nodes and wire transitions inline
+    const prepareNode = new ToolUsePrepareNode<C>();
+    const cycleNode = new ToolUseCycleNode<C>();
+    const waitNode = new ToolUseWaitNode<C>();
+    prepareNode.next(cycleNode);
+    cycleNode.next(waitNode);
+    waitNode.on(FlowTransition.CONTINUE, cycleNode);
+    const startNode = prepareNode;
     const pf = new PersistedFlow<
       ToolUseRunShared,
       Record<string, unknown>,
@@ -153,9 +192,12 @@ export async function runToolUseFlow<C = unknown>(
     pf.setServices(flowContext.services);
     await pf.run(shared);
 
-    status = toEndStatus(getExecutionStatus(input.checkInterruption));
+    const execStatus = input.checkInterruption()
+      ? EXECUTION_STATUS.INTERRUPTED
+      : EXECUTION_STATUS.COMPLETED;
+    status = executionToEndStatus(execStatus) as EndGroupStatus;
   } catch (error) {
-    status = ERROR_STATUS;
+    status = END_GROUP_STATUS.ERROR;
     throw error;
   } finally {
     // Preserve flow record if user cancelled retry (for resume), otherwise delete
