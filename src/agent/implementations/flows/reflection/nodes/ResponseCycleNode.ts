@@ -23,7 +23,7 @@
 
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { recordRound, parseRunState } from '@agent/core/AgentState';
+import { recordRound } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createResponseCycleFlow,
@@ -97,7 +97,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
       shared.workspaceSnapshot,
     );
     // Run and round are plain data — use directly from shared state
-    const run = parseRunState(shared.runStateSnapshot);
+    const run = shared.runStateSnapshot;
     const round = context.stateRoundSnapshot;
 
     return {
