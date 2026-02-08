@@ -153,6 +153,25 @@ export class SettingsApp extends BaseWebviewApp {
     postMessage(SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR);
   }
 
+  private parseMessage<T>(
+    raw: unknown,
+    schema: {
+      safeParse(
+        data: unknown,
+      ): { success: true; data: T } | { success: false; error: unknown };
+    },
+  ): T | null {
+    const result = schema.safeParse(raw);
+    if (!result.success) {
+      this.logSchemaError(
+        '[SettingsApp] Message validation failed.',
+        result.error,
+      );
+      return null;
+    }
+    return result.data;
+  }
+
   protected override handleMessage(raw: unknown): void {
     if (!raw || typeof raw !== 'object' || !('command' in raw)) {
       return;
@@ -160,163 +179,94 @@ export class SettingsApp extends BaseWebviewApp {
 
     const command = (raw as { command: string }).command;
 
-    // Navigation messages
-    if (command === SETTINGS_VIEW_COMMANDS.SET_TAB) {
-      const result = SetTabMessageSchema.safeParse(raw);
-      if (!result.success) {
-        this.logSchemaError(
-          '[SettingsApp] Set tab message validation failed.',
-          result.error,
-        );
+    switch (command) {
+      case SETTINGS_VIEW_COMMANDS.SET_TAB: {
+        const data = this.parseMessage(raw, SetTabMessageSchema);
+        if (!data) return;
+        this.selectedTabIndex = data.tabIndex;
+        this.agentSubTab = data.agentSubTab;
         return;
       }
-      this.selectedTabIndex = result.data.tabIndex;
-      this.agentSubTab = result.data.agentSubTab;
-      return;
-    }
 
-    // Memory messages
-    if (command === SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY) {
-      const result = UpdateMemoryMessageSchema.safeParse(raw);
-      if (!result.success) {
-        this.logSchemaError(
-          '[SettingsApp] Update memory message validation failed.',
-          result.error,
-        );
+      case SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY: {
+        const data = this.parseMessage(raw, UpdateMemoryMessageSchema);
+        if (!data) return;
+        this.memoryItems = data.items ?? [];
         return;
       }
-      this.memoryItems = result.data.items ?? [];
-      return;
-    }
 
-    if (command === SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED) {
-      const result = UpdateMemoryEnabledMessageSchema.safeParse(raw);
-      if (!result.success) {
-        this.logSchemaError(
-          '[SettingsApp] Update memory enabled message validation failed.',
-          result.error,
-        );
+      case SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED: {
+        const data = this.parseMessage(raw, UpdateMemoryEnabledMessageSchema);
+        if (!data) return;
+        this.memoryEnabled = data.enabled;
+        this.memoryToggleDisabled = false;
         return;
       }
-      this.memoryEnabled = result.data.enabled;
-      this.memoryToggleDisabled = false;
-      return;
-    }
 
-    // History messages
-    if (command === SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY) {
-      const result = UpdateHistoryMessageSchema.safeParse(raw);
-      if (!result.success) {
-        this.logSchemaError(
-          '[SettingsApp] Update history message validation failed.',
-          result.error,
-        );
-        return;
-      }
-      this.historyItems = [...result.data.historyItems].sort(
-        (a, b) =>
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-      );
-      return;
-    }
-
-    if (command === SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED) {
-      const result = HistoryClearedMessageSchema.safeParse(raw);
-      if (!result.success) {
-        this.logSchemaError(
-          '[SettingsApp] History cleared message validation failed.',
-          result.error,
-        );
-        return;
-      }
-      this.historyItems = [];
-      // Clear search state when history is cleared
-      this.historyTab?.clearSearch();
-      return;
-    }
-
-    // Model selection messages
-    if (command === SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION) {
-      const result = UpdateModelSelectionMessageSchema.safeParse(raw);
-      if (!result.success) {
-        this.logSchemaError(
-          '[SettingsApp] Update model selection message validation failed.',
-          result.error,
-        );
-        return;
-      }
-      this.modelSelectionItems = result.data.models;
-      this.polishModel = result.data.polishModel;
-      return;
-    }
-
-    // Agent selection messages
-    if (command === SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION) {
-      const result = UpdateAgentSelectionMessageSchema.safeParse(raw);
-      if (!result.success) {
-        this.logSchemaError(
-          '[SettingsApp] Update agent selection message validation failed.',
-          result.error,
-        );
-        return;
-      }
-      this.workflowAgents = result.data.workflow;
-      this.toolUseAgents = result.data.toolUse;
-      return;
-    }
-
-    // Auto-show remote agents messages
-    if (command === SETTINGS_VIEW_COMMANDS.UPDATE_AUTO_SHOW_REMOTE) {
-      const result = UpdateAutoShowRemoteMessageSchema.safeParse(raw);
-      if (!result.success) {
-        this.logSchemaError(
-          '[SettingsApp] Update auto-show remote message validation failed.',
-          result.error,
-        );
-        return;
-      }
-      this.autoShowRemote = result.data.enabled;
-      return;
-    }
-
-    // Custom agent directory messages
-    if (command === SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR) {
-      const result = UpdateCustomAgentDirMessageSchema.safeParse(raw);
-      if (!result.success) {
-        this.logSchemaError(
-          '[SettingsApp] Update custom agent dir message validation failed.',
-          result.error,
-        );
-        return;
-      }
-      this.customAgentDir = result.data.path;
-      this.customAgentDirIsDefault = result.data.isDefault;
-      return;
-    }
-
-    // Profile messages
-    if (command === SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE) {
-      const result = UpdateProfileMessageSchema.safeParse(raw);
-      if (!result.success) {
-        this.logSchemaError(
-          '[SettingsApp] Update profile message validation failed.',
-          result.error,
+      case SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY: {
+        const data = this.parseMessage(raw, UpdateHistoryMessageSchema);
+        if (!data) return;
+        this.historyItems = [...data.historyItems].sort(
+          (a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
         );
         return;
       }
 
-      const data = result.data;
-      this.authenticated = data.authenticated;
-      this.userEmail = data.user?.email ?? 'N/A';
-      this.userId = data.user?.id ?? '';
-      this.tier = data.tier ?? 'free';
-      this.apiAccessMode = data.apiAccessMode;
-      this.enabledProviders = data.enabledProviders ?? [];
-      this.allowedModels = data.allowedModels ?? null;
-      this.accessExpiresAt = data.accessExpiresAt ?? null;
-      this.providerKeyStatuses = data.providerKeyStatuses ?? [];
-      this.globalStreamingDefault = data.globalStreamingDefault ?? true;
-      return;
+      case SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED: {
+        const data = this.parseMessage(raw, HistoryClearedMessageSchema);
+        if (!data) return;
+        this.historyItems = [];
+        this.historyTab?.clearSearch();
+        return;
+      }
+
+      case SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION: {
+        const data = this.parseMessage(raw, UpdateModelSelectionMessageSchema);
+        if (!data) return;
+        this.modelSelectionItems = data.models;
+        this.polishModel = data.polishModel;
+        return;
+      }
+
+      case SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION: {
+        const data = this.parseMessage(raw, UpdateAgentSelectionMessageSchema);
+        if (!data) return;
+        this.workflowAgents = data.workflow;
+        this.toolUseAgents = data.toolUse;
+        return;
+      }
+
+      case SETTINGS_VIEW_COMMANDS.UPDATE_AUTO_SHOW_REMOTE: {
+        const data = this.parseMessage(raw, UpdateAutoShowRemoteMessageSchema);
+        if (!data) return;
+        this.autoShowRemote = data.enabled;
+        return;
+      }
+
+      case SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR: {
+        const data = this.parseMessage(raw, UpdateCustomAgentDirMessageSchema);
+        if (!data) return;
+        this.customAgentDir = data.path;
+        this.customAgentDirIsDefault = data.isDefault;
+        return;
+      }
+
+      case SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE: {
+        const data = this.parseMessage(raw, UpdateProfileMessageSchema);
+        if (!data) return;
+        this.authenticated = data.authenticated;
+        this.userEmail = data.user?.email ?? 'N/A';
+        this.userId = data.user?.id ?? '';
+        this.tier = data.tier ?? 'free';
+        this.apiAccessMode = data.apiAccessMode;
+        this.enabledProviders = data.enabledProviders ?? [];
+        this.allowedModels = data.allowedModels ?? null;
+        this.accessExpiresAt = data.accessExpiresAt ?? null;
+        this.providerKeyStatuses = data.providerKeyStatuses ?? [];
+        this.globalStreamingDefault = data.globalStreamingDefault ?? true;
+        return;
+      }
     }
   }
 
