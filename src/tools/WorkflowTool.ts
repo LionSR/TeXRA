@@ -372,9 +372,11 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
     );
     if (nonApproveResult) return nonApproveResult;
 
-    // Apply model override if user changed it in the proposal UI
-    const effective = result.model
-      ? { ...proposal, model: result.model }
+    // After guard, result is the 'approve' variant
+    const approvedModel =
+      result.action === 'approve' ? result.model : undefined;
+    const effective = approvedModel
+      ? { ...proposal, model: approvedModel }
       : proposal;
     const configPayload = toConfigPayload(effective);
     return executeSubagent(
@@ -465,9 +467,11 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
     );
     if (nonApproveResult) return nonApproveResult;
 
-    // Apply model override if user changed it in the proposal UI
-    const effective = result.model
-      ? { ...proposal, model: result.model }
+    // After guard, result is the 'approve' variant
+    const approvedModel =
+      result.action === 'approve' ? result.model : undefined;
+    const effective = approvedModel
+      ? { ...proposal, model: approvedModel }
       : proposal;
     const configPayload = toConfigPayload(effective);
     return executeSubagent(configPayload, input.agent, effective.mode, streamId);
