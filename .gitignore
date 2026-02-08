@@ -21,3 +21,5 @@ resources/poster
 resources/poster-app
 
 supabase/.temp
+
+output/

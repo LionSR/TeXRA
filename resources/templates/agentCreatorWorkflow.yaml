@@ -1,0 +1,49 @@
+# Agent Creator (Workflow) - prompts for generating workflow agents
+# Structured like a standard agent definition for consistency.
+# Fallback templates live in separate agentTemplate-*.yaml files.
+name: agentCreatorWorkflow
+description: Generates workflow agent YAML definitions using AI.
+
+settings:
+  agentCategory: internal
+
+# The schema reference is injected at runtime from the Zod schemas.
+# Tool-use prompts live in agentCreatorToolUse.yaml.
+prompts:
+  systemPrompt: |
+    You are an expert on the TeXRA codebase, a VS Code extension that runs YAML-defined AI agents.
+    When generating workflow agent YAML definitions, follow the schema below exactly.
+    Workflow agents process documents in fixed rounds, producing LaTeX or text output
+    wrapped in a documentTag. They use a chain-of-thought workflow with <scratchpad>
+    planning and support single or multiple output files.
+    All fields with defaults can be omitted if the default value is acceptable.
+    Respond only with the YAML wrapped in <yaml> tags.
+
+  userRequest: |
+    Generate a YAML definition for a workflow agent named "{{ AGENT_NAME }}".
+    The YAML must follow this layout:
+    name: {{ AGENT_NAME }}
+    # inherits: base
+    settings:
+      ...
+    prompts:
+      systemPrompt: |
+        ...
+      userPrefix: |
+        ...
+      userRequest:
+        - |
+          ...
+        - |
+          [Optional reflection prompt]
+    For reference, built-in agents start like:
+    name: polish
+    settings:
+      documentTag: latex_document
+      endTag: </latex_document>
+      outputExt: tex
+    Mention variables INPUT_CONTENT, ALL_INPUTS, OUTPUT_FILES_ORDER, REFERENCE_CONTENT, AUXILIARY_CONTENT and ADDITIONAL_INPUTS when relevant.
+    Goal: {{ DESCRIPTION }}.
+
+  retryPrompt: |
+    The previous attempt failed validation: {{ VALIDATION_ERROR }}. Please fix and return only the YAML.
