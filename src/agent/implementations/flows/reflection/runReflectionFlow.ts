@@ -22,10 +22,14 @@
 import * as path from 'path';
 
 import {
+  END_GROUP_STATUS,
+  EXECUTION_STATUS,
   type EndGroupStatus,
+  type ExecutionStatus,
   type RoundOutput,
   type StorageKey,
 } from '@shared/schemas';
+import { executionToEndStatus } from '@common/constants/streamStatus';
 import {
   getExecutionStore,
   type ExecutionKVStore,
@@ -64,16 +68,18 @@ import {
 import { PromptBuilder } from '@utils/prompt';
 import { LatexMediaManager } from '@latex';
 
+import { Flow } from '@agent/node';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { TeXCountNode } from './nodes/TeXCountNode';
+import { MediaExtractionNode } from './nodes/MediaExtractionNode';
+import { PrepareContextNode } from './nodes/PrepareContextNode';
+import { ResponseCycleNode } from './nodes/ResponseCycleNode';
+import { OutputNode } from './nodes/OutputNode';
+import { RoundCompleteNode } from './nodes/RoundCompleteNode';
 import {
-  toEndStatus,
-  ERROR_STATUS,
-  COMPLETED_STATUS,
-} from '../common/FlowLifecycle';
-import {
-  createReflectionFlow,
+  ReflectionFlowStateSchema,
   type ReflectionFlowShared,
-} from './ReflectionFlow';
-import { ReflectionFlowStateSchema } from './ReflectionFlowState';
+} from './ReflectionFlowState';
 import type { ReflectionServices } from './ReflectionServices';
 
 // ============================================================================
@@ -194,7 +200,7 @@ export async function runReflectionFlow<C = unknown>(
     usageMonitor,
   } = input;
 
-  let status: EndGroupStatus = COMPLETED_STATUS;
+  let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
   let shared: ReflectionFlowShared | undefined;
   let services: ReflectionServices<C> | undefined;
 
@@ -317,8 +323,22 @@ export async function runReflectionFlow<C = unknown>(
       };
     }
 
-    // Create RoundPersistedFlow with the start node
-    const startNode = createReflectionFlow<C>().start;
+    // Create flow nodes and wire transitions inline
+    const prepContextNode = new PrepareContextNode<C>();
+    const texCountNode = new TeXCountNode<C>();
+    const mediaNode = new MediaExtractionNode<C>();
+    const responseCycleNode = new ResponseCycleNode<C>();
+    const outputNode = new OutputNode<C>();
+    const roundCompleteNode = new RoundCompleteNode<C>();
+
+    prepContextNode.next(texCountNode);
+    texCountNode.next(mediaNode);
+    mediaNode.next(responseCycleNode);
+    responseCycleNode.next(outputNode);
+    outputNode.next(roundCompleteNode);
+    roundCompleteNode.on(FlowTransition.CONTINUE_NEXT_ROUND, prepContextNode);
+
+    const startNode = prepContextNode;
     const pf = new RoundPersistedFlow<
       ReflectionFlowShared,
       Record<string, unknown>,
@@ -364,15 +384,15 @@ export async function runReflectionFlow<C = unknown>(
 
     const flowStatus = await pf.run(shared);
     shared = await pf.getShared();
-    status = toEndStatus(flowStatus);
+    status = executionToEndStatus(flowStatus) as EndGroupStatus;
   } catch (error) {
-    status = ERROR_STATUS;
+    status = END_GROUP_STATUS.ERROR;
     throw error;
   } finally {
     // Only delete flow record on successful completion
     // Keep it for interrupted/error flows to enable resume
-    // Note: COMPLETED_STATUS means "completed" (not user-stopped)
-    if (status === COMPLETED_STATUS) {
+    // Note: END_GROUP_STATUS.STOPPED means "completed" (not user-stopped)
+    if (status === END_GROUP_STATUS.STOPPED) {
       try {
         const kv = getExecutionStore(executionId);
         await kv.delete(`flow:${executionId}`);
