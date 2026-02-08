@@ -257,7 +257,7 @@ async function createWorkflowAgent(
       .split(',')
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
-    outputFilesYaml = files.map((f) => `    - ${f}`).join('\n');
+    outputFilesYaml = files.map((f) => `- ${f}`).join('\n    ');
   }
 
   const filePath = await resolveAgentFilePath(agentName);
