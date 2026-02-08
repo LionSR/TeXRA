@@ -5,6 +5,7 @@
  * language APIs and the Lean 4 extension's exported API.
  */
 
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { Hover } from 'vscode-languageserver-protocol';
 
@@ -22,16 +23,47 @@ export interface PlainGoal {
   rendered: string;
 }
 
+/**
+ * Duck-typed FileUri compatible with the Lean 4 extension's ExtUri.
+ * The Lean 4 extension uses custom FileUri/UntitledUri classes (not vscode.Uri)
+ * with an `isInFolder` method for client lookup. We replicate the interface here
+ * since those classes are internal to the Lean 4 extension.
+ * @see https://github.com/leanprover/vscode-lean4/blob/master/vscode-lean4/src/utils/exturi.ts
+ */
+interface LeanFileUri {
+  scheme: 'file';
+  fsPath: string;
+  isInFolder(folderUri: LeanFileUri): boolean;
+  toString(): string;
+}
+
+function createLeanFileUri(absolutePath: string): LeanFileUri {
+  const uri = vscode.Uri.file(absolutePath);
+  return {
+    scheme: 'file',
+    fsPath: absolutePath,
+    isInFolder(folderUri: LeanFileUri): boolean {
+      const relative = path.relative(folderUri.fsPath, absolutePath);
+      return (
+        relative.length > 0 &&
+        !relative.startsWith('..') &&
+        !path.isAbsolute(relative)
+      );
+    },
+    toString: () => uri.toString(),
+  };
+}
+
 /** Lean 4 extension's client interface */
 interface LeanClient {
   isRunning(): boolean;
-  isInFolderManagedByThisClient(uri: vscode.Uri): boolean;
+  isInFolderManagedByThisClient(uri: LeanFileUri): boolean;
   sendRequest(method: string, params: unknown): Promise<unknown>;
 }
 
 /** Lean 4 extension's client provider interface */
 interface LeanClientProvider {
-  findClient(uri: vscode.Uri): LeanClient | undefined;
+  findClient(uri: LeanFileUri): LeanClient | undefined;
 }
 
 interface Lean4EnabledFeatures {
@@ -163,7 +195,8 @@ async function sendPositionRequest<T>(
   method: string,
 ): Promise<LspResult<T>> {
   const absolutePath = WorkspaceFS.toAbsolute(filePath);
-  const extUri = vscode.Uri.file(absolutePath);
+  const leanUri = createLeanFileUri(absolutePath);
+  const vscodeUri = vscode.Uri.file(absolutePath);
 
   // Get client provider
   const clientProvider = await getClientProvider().catch(() => null);
@@ -173,16 +206,16 @@ async function sendPositionRequest<T>(
 
   // Open file in editor so LSP server has processed it
   try {
-    const document = await vscode.workspace.openTextDocument(extUri);
+    const document = await vscode.workspace.openTextDocument(vscodeUri);
     await vscode.window.showTextDocument(document, { preserveFocus: true });
   } catch (e) {
     return errorResult(`Failed to open file ${absolutePath}: ${e}`);
   }
 
-  // Find and validate Lean client
+  // Find and validate Lean client (uses duck-typed FileUri for Lean 4 extension compatibility)
   let client: LeanClient | undefined;
   try {
-    client = clientProvider.findClient(extUri);
+    client = clientProvider.findClient(leanUri);
   } catch {
     return errorResult(
       `Error finding Lean client for ${absolutePath}. Is this file in a Lean project?`,
@@ -202,7 +235,7 @@ async function sendPositionRequest<T>(
   // Send LSP request
   try {
     const params = {
-      textDocument: { uri: extUri.toString() },
+      textDocument: { uri: leanUri.toString() },
       position: { line, character: column },
     };
     const result = await client.sendRequest(method, params);
