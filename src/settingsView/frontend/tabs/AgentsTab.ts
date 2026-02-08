@@ -221,7 +221,9 @@ export class AgentsTab extends LitElement {
   }
 
   private handleCreateAgent(): void {
-    this.dispatchEvent(AgentSelectionEvents.createAgent());
+    this.dispatchEvent(
+      AgentSelectionEvents.createAgent({ category: this.activeSubTab }),
+    );
   }
 
   private handleChangeCustomDir(): void {
