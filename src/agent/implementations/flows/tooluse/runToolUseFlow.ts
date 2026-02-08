@@ -161,7 +161,7 @@ export async function runToolUseFlow<C = unknown>(
 
   // Shared state is declared outside try block for access in finally (cleanup decision based on userCancelledRetry)
   const shared: ToolUseRunShared = {
-    conversation: [],
+    messages: [],
     shouldSkipCycle: false,
     stateSlices: null,
   };
