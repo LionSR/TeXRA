@@ -261,7 +261,23 @@ async function createWorkflowAgent(
   }
 
   const filePath = await resolveAgentFilePath(agentName);
-  const vars = { AGENT_NAME: agentName, DESCRIPTION: description };
+  const multipleNote = isMultipleOutput
+    ? [
+        'IMPORTANT: This agent must handle MULTIPLE output files. Adjust the structure above:',
+        '- Set isMultipleOutput: true',
+        '- Use documentTag: "latex_documents" (plural) and endTag: "</latex_documents>"',
+        '- Add defaultOutputFiles with the file list below',
+        '- In userRequest, instruct the model to wrap each file in <latex_documents> with <document name="..."> blocks',
+        '- Reference {{ OUTPUT_FILES_ORDER }} for the expected output order',
+        'Default output files:',
+        outputFilesYaml,
+      ].join('\n')
+    : '';
+  const vars = {
+    AGENT_NAME: agentName,
+    DESCRIPTION: description,
+    MULTIPLE_OUTPUT_NOTE: multipleNote,
+  };
   let yamlContent = await tryAIGeneration(config, 'workflow', vars);
 
   if (!yamlContent) {
@@ -350,12 +366,20 @@ async function tryAIGeneration(
     handler.setProgressViewEnabled(false);
     const client = await handler.getClient();
 
-    // Build prompts
+    // Build prompts – include RUNTIME_PASSTHROUGH so that template variable
+    // references like {{ INPUT_FILE }} in the creator prompts survive Nunjucks
+    // rendering as literal text for the AI to see.
     const prompts = config[category];
     const schemaRef = getSchemaReference(category);
+    const renderVars = { ...RUNTIME_PASSTHROUGH, ...vars };
     const systemPrompt =
-      nunjucksEnv.renderString(prompts.systemPrompt, vars) + '\n' + schemaRef;
-    const baseUserRequest = nunjucksEnv.renderString(prompts.userRequest, vars);
+      nunjucksEnv.renderString(prompts.systemPrompt, renderVars) +
+      '\n' +
+      schemaRef;
+    const baseUserRequest = nunjucksEnv.renderString(
+      prompts.userRequest,
+      renderVars,
+    );
 
     let userMessage = baseUserRequest;
     for (let attempt = 0; attempt < 2; attempt++) {
