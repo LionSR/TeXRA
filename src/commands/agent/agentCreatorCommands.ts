@@ -77,7 +77,9 @@ function renderFallbackTemplate(
       ...vars,
     });
   } catch (err) {
-    throw new Error(`Failed to render fallback template: ${toErrorMessage(err)}`);
+    throw new Error(
+      `Failed to render fallback template: ${toErrorMessage(err)}`,
+    );
   }
 }
 
@@ -150,7 +152,8 @@ async function loadCreatorConfig(
   ]);
   const wf = yaml.parse(workflowYaml) as ParsedCreatorYaml;
   const tu = yaml.parse(toolUseYaml) as ParsedCreatorYaml;
-  const defaultRetry = 'The previous attempt failed validation: {{ VALIDATION_ERROR }}. Please fix and return only the YAML.';
+  const defaultRetry =
+    'The previous attempt failed validation: {{ VALIDATION_ERROR }}. Please fix and return only the YAML.';
   creatorConfig = {
     workflow: wf.prompts,
     toolUse: tu.prompts,

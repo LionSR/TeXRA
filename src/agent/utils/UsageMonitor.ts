@@ -107,9 +107,8 @@ export class UsageMonitor {
 
     try {
       const totals = stateGlobal.usageAccumulator.totals;
-      const latestUsage = stateGlobal.usageAccumulator
-        .normalizedSnapshots
-        .at(-1)?.usage;
+      const latestUsage =
+        stateGlobal.usageAccumulator.normalizedSnapshots.at(-1)?.usage;
 
       // Per-round usage - sent to both UI (for accumulation) and backend analytics
       const roundInputTokens = latestUsage?.inputTokens ?? 0;
