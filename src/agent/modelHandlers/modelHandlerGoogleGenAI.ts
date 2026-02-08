@@ -437,18 +437,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   /** Creates a chat completion response using Google's GenAI API with specified parameters and optional system prompt. */
-  async createResponse(
-    options: CreateResponseOptions<Content, GoogleGenAI>,
-  ): Promise<CreateResponseResult<GenerateContentResponse, Content>> {
-    this.applyOutputStreamingOverride(options.outputStreaming);
-    try {
-      return await this._createResponseImpl(options);
-    } finally {
-      this.clearOutputStreamingOverride();
-    }
-  }
-
-  private async _createResponseImpl(
+  protected override async createResponseCore(
     options: CreateResponseOptions<Content, GoogleGenAI>,
   ): Promise<CreateResponseResult<GenerateContentResponse, Content>> {
     const {

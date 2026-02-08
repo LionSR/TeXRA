@@ -474,18 +474,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /** Creates a chat completion response using Anthropic's API with specified parameters and optional system prompt. */
-  async createResponse(
-    requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
-  ): Promise<CreateResponseResult<BetaMessage, MessageParam>> {
-    this.applyOutputStreamingOverride(requestOptions.outputStreaming);
-    try {
-      return await this._createResponseImpl(requestOptions);
-    } finally {
-      this.clearOutputStreamingOverride();
-    }
-  }
-
-  private async _createResponseImpl(
+  protected override async createResponseCore(
     requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
   ): Promise<CreateResponseResult<BetaMessage, MessageParam>> {
     const {

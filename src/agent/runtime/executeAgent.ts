@@ -394,13 +394,10 @@ export interface RunAgentFlowInput {
   core: ResolvedAgentBase;
   /** Interrupt callbacks for this flow (each subagent should get its own) */
   interruptCallbacks: InterruptCallbacks;
-  /** Optional overrides for flow-specific behavior */
-  overrides?: {
-    /** Custom output file location getter (used by merge) */
-    getOutputFileLocation?: (round: number) => import('@utils/files').AgentFileLocation;
-    /** Callback when a queued follow-up is consumed */
-    onFollowUpConsumed?: () => void;
-  };
+  /** Custom output file location getter (used by merge) */
+  getOutputFileLocation?: (round: number) => import('@utils/files').AgentFileLocation;
+  /** Callback when a queued follow-up is consumed */
+  onFollowUpConsumed?: () => void;
 }
 
 /**
@@ -416,7 +413,7 @@ export interface RunAgentFlowInput {
 export async function runAgentFlow(
   input: RunAgentFlowInput,
 ): Promise<import('@shared/schemas').EndGroupStatus> {
-  const { core, interruptCallbacks, overrides } = input;
+  const { core, interruptCallbacks, getOutputFileLocation, onFollowUpConsumed } = input;
   const { setting } = core;
 
   const flowContext = {
@@ -429,7 +426,7 @@ export async function runAgentFlow(
       ...flowContext,
       getUsageRecorder: createUsageRecorder(core.usageMonitor, 'tool-use'),
       setting: core.setting as AgentToolUseSetting,
-      onFollowUpConsumed: overrides?.onFollowUpConsumed,
+      onFollowUpConsumed,
     });
     return result.status;
   }
@@ -439,7 +436,7 @@ export async function runAgentFlow(
     getUsageRecorder: createUsageRecorder(core.usageMonitor, 'workflow'),
     setting: core.setting as AgentWorkflowSetting,
     parentStage: core.parentStage,
-    getOutputFileLocation: overrides?.getOutputFileLocation,
+    getOutputFileLocation,
   });
   return result.status;
 }
@@ -536,10 +533,8 @@ export async function executeAgent(
       return runAgentFlow({
         core: ctx,
         interruptCallbacks: createInterruptCallbacks(),
-        overrides: {
-          onFollowUpConsumed: () =>
-            bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
-        },
+        onFollowUpConsumed: () =>
+          bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
       });
     });
   });

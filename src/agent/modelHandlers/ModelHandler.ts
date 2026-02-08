@@ -107,9 +107,10 @@ export abstract class ModelHandler<
   protected logger: AgentLogger;
   protected outputStreaming = false;
   /**
-   * Per-call override for output streaming, set via `applyOutputStreamingOverride()`.
-   * When defined, takes precedence over the instance `outputStreaming` field.
-   * This enables safe concurrent use when callers pass `outputStreaming` in options.
+   * Per-call override for output streaming, set by `createResponse()` from
+   * `CreateResponseOptions.outputStreaming`.  When defined, takes precedence
+   * over the instance-level `outputStreaming` field so concurrent callers
+   * can safely pass different streaming preferences.
    */
   private _outputStreamingOverride: boolean | undefined;
   protected backgroundModeSupported = false;
@@ -212,23 +213,6 @@ export abstract class ModelHandler<
    */
   public isOutputStreamingEnabled(): boolean {
     return this._outputStreamingOverride ?? this.outputStreaming;
-  }
-
-  /**
-   * Apply a per-call output streaming override. Called by handlers at the start
-   * of createResponse() when `options.outputStreaming` is defined.
-   */
-  protected applyOutputStreamingOverride(
-    override: boolean | undefined,
-  ): void {
-    this._outputStreamingOverride = override;
-  }
-
-  /**
-   * Clear the per-call override. Called in finally blocks of createResponse().
-   */
-  protected clearOutputStreamingOverride(): void {
-    this._outputStreamingOverride = undefined;
   }
 
   /**
@@ -621,10 +605,27 @@ export abstract class ModelHandler<
 
   /**
    * Generates a model response using the provider's API.
-   * @param options Options for creating the response
-   * @returns Promise resolving to result containing response and optionally updated messages
+   *
+   * This concrete wrapper applies the per-call `outputStreaming` override
+   * from options, delegates to the provider-specific `createResponseCore()`,
+   * and cleans up the override in a `finally` block.  Handlers implement
+   * `createResponseCore()` instead of overriding this method.
    */
-  abstract createResponse(
+  async createResponse(
+    options: CreateResponseOptions<M, C>,
+  ): Promise<CreateResponseResult<Resp, M>> {
+    this._outputStreamingOverride = options.outputStreaming;
+    try {
+      return await this.createResponseCore(options);
+    } finally {
+      this._outputStreamingOverride = undefined;
+    }
+  }
+
+  /**
+   * Provider-specific response generation.  Implemented by each handler.
+   */
+  protected abstract createResponseCore(
     options: CreateResponseOptions<M, C>,
   ): Promise<CreateResponseResult<Resp, M>>;
 
