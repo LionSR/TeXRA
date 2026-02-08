@@ -1109,13 +1109,21 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Store compacted messages for return value (captured when compaction succeeds)
     let compactedMessages: ResponseInputItem[] | undefined;
     if (this.shouldCompact()) {
+      // Capture whether this was a manual request before clearing the flag.
+      const wasManualRequest = this.compactionRequested;
       // Clear manual compaction flag now that compaction is being attempted.
       // For automatic compaction (threshold-based), this is a no-op since the flag is false.
       this.compactionRequested = false;
-      const threshold = this.getCompactionTokenThreshold();
-      this.logger.logProgress(
-        `Compacting conversation (${this.conversationState.cumulativeInputTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
-      );
+      if (wasManualRequest) {
+        this.logger.logProgress(
+          `Compacting conversation (manually requested, ${this.conversationState.cumulativeInputTokens} input tokens)`,
+        );
+      } else {
+        const threshold = this.getCompactionTokenThreshold();
+        this.logger.logProgress(
+          `Compacting conversation (${this.conversationState.cumulativeInputTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
+        );
+      }
       effectiveMessages = await this.compactConversation(
         client,
         messages,
