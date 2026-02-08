@@ -41,7 +41,7 @@ interface AgentPromptPair {
 interface CreatorConfig {
   workflow: AgentPromptPair;
   toolUse: AgentPromptPair;
-  retryPrompt: string;
+  retryPrompts: Record<'workflow' | 'toolUse', string>;
   templates: {
     workflowSingle: string;
     workflowMultiple: string;
@@ -66,6 +66,20 @@ const RUNTIME_PASSTHROUGH = Object.fromEntries(
     'OUTPUT_FILES_ORDER',
   ].map((v) => [v, `{{ ${v} }}`]),
 );
+
+function renderFallbackTemplate(
+  template: string,
+  vars: Record<string, string>,
+): string {
+  try {
+    return nunjucksEnv.renderString(template, {
+      ...RUNTIME_PASSTHROUGH,
+      ...vars,
+    });
+  } catch (err) {
+    throw new Error(`Failed to render fallback template: ${toErrorMessage(err)}`);
+  }
+}
 
 // ============================================================
 // Schema reference generation
@@ -136,10 +150,14 @@ async function loadCreatorConfig(
   ]);
   const wf = yaml.parse(workflowYaml) as ParsedCreatorYaml;
   const tu = yaml.parse(toolUseYaml) as ParsedCreatorYaml;
+  const defaultRetry = 'The previous attempt failed validation: {{ VALIDATION_ERROR }}. Please fix and return only the YAML.';
   creatorConfig = {
     workflow: wf.prompts,
     toolUse: tu.prompts,
-    retryPrompt: wf.prompts.retryPrompt ?? '',
+    retryPrompts: {
+      workflow: wf.prompts.retryPrompt ?? defaultRetry,
+      toolUse: tu.prompts.retryPrompt ?? defaultRetry,
+    },
     templates: { workflowSingle, workflowMultiple, toolUse: toolUseTpl },
   };
   return creatorConfig;
@@ -247,8 +265,7 @@ async function createWorkflowAgent(
     const template = isMultipleOutput
       ? config.templates.workflowMultiple
       : config.templates.workflowSingle;
-    yamlContent = nunjucksEnv.renderString(template, {
-      ...RUNTIME_PASSTHROUGH,
+    yamlContent = renderFallbackTemplate(template, {
       AGENT_NAME: agentName,
       DESCRIPTION: description,
       OUTPUT_FILES: outputFilesYaml,
@@ -278,8 +295,7 @@ async function createToolUseAgent(
   let yamlContent = await tryAIGeneration(config, 'toolUse', vars);
 
   if (!yamlContent) {
-    yamlContent = nunjucksEnv.renderString(config.templates.toolUse, {
-      ...RUNTIME_PASSTHROUGH,
+    yamlContent = renderFallbackTemplate(config.templates.toolUse, {
       AGENT_NAME: agentName,
       DESCRIPTION: description,
     });
@@ -358,6 +374,7 @@ async function tryAIGeneration(
         const candidate = (extracted || text).trim();
         const validationErr = validateAgentYamlString(candidate);
         if (!validationErr) {
+          logger.info(CHANNEL, `AI generation succeeded for ${category} agent`);
           return candidate;
         }
 
@@ -373,7 +390,7 @@ async function tryAIGeneration(
           userMessage =
             baseUserRequest +
             '\n' +
-            nunjucksEnv.renderString(config.retryPrompt, {
+            nunjucksEnv.renderString(config.retryPrompts[category], {
               VALIDATION_ERROR: validationErr,
             });
           continue;
