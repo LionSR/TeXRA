@@ -27,14 +27,13 @@ import { recordRound } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createResponseCycleFlow,
-  assertCycleFieldsPopulated,
+  initializeCycleFields,
 } from '@agent/core/flows/ResponseCycleFlow';
 import {
   interpretCycleCompletion,
   type CycleCompletionResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import {
-  createClientRef,
   type CycleStateSlices,
   type ResponseCycleServices,
 } from '@agent/core/flows/CycleServices';
@@ -147,30 +146,16 @@ export class ResponseCycleNode<C = unknown> extends Node<
     const onRoundFinalized = this.services.getUsageRecorder();
 
     try {
-      // Initialize cycle fields for native nesting
-      shared.messages = initializedMessages;
-      shared.outputLocation = prepRes.outputLocation;
-      shared.endTurn = false;
-      shared.shouldStop = false;
-      shared.outputExists = false;
-      shared.systemPrompt = undefined;
-      shared.responseObject = undefined;
-      shared.responseTimeMs = undefined;
-      shared.stopReason = undefined;
-      shared.processedResponse = undefined;
-      shared.lastError = undefined;
+      // Initialize all cycle fields in one call (replaces 11 individual assignments + assertion)
+      initializeCycleFields(shared, initializedMessages, prepRes.outputLocation);
 
       // Create and run the flow directly on shared (native nesting)
       const flow = createResponseCycleFlow<C>();
       const modelHandler = this.services.modelHandler;
-      const [clientRef, refreshClient] = createClientRef<C>(
-        await modelHandler.getClient(),
-        () => modelHandler.getClient(),
-      );
+      const clientRef = { current: await modelHandler.getClient() };
       const flowServices: ResponseCycleServices<C> & {
         refreshClient: () => Promise<void>;
       } = {
-        // Explicit field selection — only pass what cycle flow actually uses
         modelHandler: this.services.modelHandler,
         setting: this.services.setting,
         prompt: this.services.prompt,
@@ -189,12 +174,11 @@ export class ResponseCycleNode<C = unknown> extends Node<
         run: prepRes.run,
         workspace: prepRes.workspace,
         onRoundFinalized,
-        refreshClient,
+        async refreshClient() {
+          clientRef.current = await modelHandler.getClient();
+        },
       };
       flow.setServices(flowServices);
-
-      // Validate and narrow type - asserts all required cycle fields are populated
-      assertCycleFieldsPopulated(shared);
       await flow.run(shared);
 
       // Interpret completion from shared
