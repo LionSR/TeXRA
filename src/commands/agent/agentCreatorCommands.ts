@@ -160,8 +160,6 @@ async function createWorkflowAgent(
       .replaceAll('{{ OUTPUT_FILES }}', outputFilesYaml);
   }
 
-  await AbsoluteFS.write(filePath.fsPath, yamlContent);
-  vscode.window.showInformationMessage(`Created agent at ${filePath.fsPath}`);
   const isMultipleOutput = outputChoice === 'Multiple output files';
   const configOptions = isMultipleOutput
     ? {
@@ -173,9 +171,7 @@ async function createWorkflowAgent(
         isMultipleOutput: false as const,
         multipleAgentName: getMultipleName(agentName),
       };
-  await promptToAddAgentToConfig(agentName, false, configOptions);
-  const doc = await vscode.workspace.openTextDocument(filePath);
-  await vscode.window.showTextDocument(doc);
+  await writeAndRegisterAgent(filePath, yamlContent, agentName, configOptions);
 }
 
 async function createToolUseAgent(
@@ -199,9 +195,19 @@ async function createToolUseAgent(
       .replaceAll('{{ DESCRIPTION }}', description);
   }
 
+  await writeAndRegisterAgent(filePath, yamlContent, agentName, {}, 'toolUse');
+}
+
+async function writeAndRegisterAgent(
+  filePath: vscode.Uri,
+  yamlContent: string,
+  agentName: string,
+  configOptions: Parameters<typeof promptToAddAgentToConfig>[2] = {},
+  category: 'workflow' | 'toolUse' = 'workflow',
+): Promise<void> {
   await AbsoluteFS.write(filePath.fsPath, yamlContent);
   vscode.window.showInformationMessage(`Created agent at ${filePath.fsPath}`);
-  await promptToAddAgentToConfig(agentName, false, {}, 'toolUse');
+  await promptToAddAgentToConfig(agentName, false, configOptions, category);
   const doc = await vscode.workspace.openTextDocument(filePath);
   await vscode.window.showTextDocument(doc);
 }

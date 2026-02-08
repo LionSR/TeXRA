@@ -59,7 +59,7 @@ prompts:
     crossref_search, crossref_doi, extract_figures, extract_bib_entries,
     texcount, memory, wolfram, todo_write, diagnostics.
     Pick the tools that are most relevant for the agent's purpose.
-    The userRequest should be a single string (not an array) containing {{ INSTRUCTION }}.
+    The userRequest should be a single string (not an array) containing the template variable INSTRUCTION wrapped in double curly braces.
     Goal: {{ DESCRIPTION }}. Respond only with the YAML wrapped in <yaml> tags.
 
   retryPrompt: |
