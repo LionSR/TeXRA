@@ -8,9 +8,15 @@ import {
 } from '@agent/types/NormalizedUsage';
 import {
   DEFAULT_TOTALS,
-  RunUsageAccumulator,
   RunUsageAccumulatorJSONSchema,
+  createUsageAccumulator,
+  recordNormalizedUsage,
+  type RunUsageAccumulatorJSON,
 } from './RunUsageAccumulator';
+
+// ============================================================================
+// ConversationRoundState — plain data + functions
+// ============================================================================
 
 /**
  * Schema for ConversationRoundState snapshot.
@@ -31,44 +37,21 @@ export type ConversationRoundStateSnapshot = z.output<
   typeof ConversationRoundStateSnapshotSchema
 >;
 
-export class ConversationRoundState {
-  public roundIndex: number;
-  public continuationCount = 0;
-  public responseTimeMs = 0;
-  public normalizedUsage: NormalizedUsage | null = null;
-
-  constructor(roundIndex: number) {
-    this.roundIndex = roundIndex;
-  }
-
-  /** Deserialize from a snapshot. Validates and applies schema defaults. */
-  static fromSnapshot(snapshot: unknown): ConversationRoundState {
-    const parsed = ConversationRoundStateSnapshotSchema.parse(snapshot);
-    const state = new ConversationRoundState(parsed.roundIndex);
-    state.continuationCount = parsed.continuationCount;
-    state.responseTimeMs = parsed.responseTimeMs;
-    state.normalizedUsage = parsed.normalizedUsage;
-    return state;
-  }
-
-  /** Serialize to a snapshot. */
-  toSnapshot(): ConversationRoundStateSnapshot {
-    return {
-      roundIndex: this.roundIndex,
-      continuationCount: this.continuationCount,
-      responseTimeMs: this.responseTimeMs,
-      normalizedUsage: this.normalizedUsage,
-    };
-  }
-
-  incrementContinuation(): void {
-    this.continuationCount += 1;
-  }
-
-  addResponseTime(durationMs: number): void {
-    this.responseTimeMs += durationMs;
-  }
+/** Create a fresh round state for the given round index. */
+export function createRoundState(
+  roundIndex: number,
+): ConversationRoundStateSnapshot {
+  return {
+    roundIndex,
+    continuationCount: 0,
+    responseTimeMs: 0,
+    normalizedUsage: null,
+  };
 }
+
+// ============================================================================
+// AgentRunState — plain data + functions
+// ============================================================================
 
 /**
  * Schema for AgentRunState snapshot.
@@ -91,64 +74,43 @@ export type AgentRunStateSnapshot = z.output<
   typeof AgentRunStateSnapshotSchema
 >;
 
-export class AgentRunState {
-  public totalRounds = 0;
-  public totalResponseTimeMs = 0;
-  public readonly usageAccumulator: RunUsageAccumulator;
+/** Create a fresh run state (all zeros). */
+export function createRunState(): AgentRunStateSnapshot {
+  return {
+    totalRounds: 0,
+    totalResponseTimeMs: 0,
+    usageAccumulator: createUsageAccumulator(),
+  };
+}
 
-  constructor(accumulator?: RunUsageAccumulator) {
-    this.usageAccumulator = accumulator ?? new RunUsageAccumulator();
+/**
+ * Record cycle metrics into run state. Mutates run in place.
+ * Used by both reflection flows (via recordRound) and tool-use flows (directly).
+ */
+export function recordCycleMetrics(
+  run: AgentRunStateSnapshot,
+  cycleIndex: number,
+  responseTimeMs: number,
+  normalizedUsage: NormalizedUsage | null,
+): void {
+  if (normalizedUsage) {
+    recordNormalizedUsage(run.usageAccumulator, cycleIndex, normalizedUsage);
   }
+  run.totalResponseTimeMs += responseTimeMs;
+}
 
-  /** Deserialize from a snapshot. Validates and applies schema defaults. */
-  static fromSnapshot(snapshot: unknown): AgentRunState {
-    const parsed = AgentRunStateSnapshotSchema.parse(snapshot);
-    const usageAccumulator = RunUsageAccumulator.fromSnapshot(
-      parsed.usageAccumulator,
-    );
-    const state = new AgentRunState(usageAccumulator);
-    state.totalRounds = parsed.totalRounds;
-    state.totalResponseTimeMs = parsed.totalResponseTimeMs;
-    return state;
-  }
-
-  /** Serialize to a snapshot. */
-  toSnapshot(): AgentRunStateSnapshot {
-    return {
-      totalRounds: this.totalRounds,
-      totalResponseTimeMs: this.totalResponseTimeMs,
-      usageAccumulator: this.usageAccumulator.toSnapshot(),
-    };
-  }
-
-  incrementRounds(): void {
-    this.totalRounds += 1;
-  }
-
-  /**
-   * Record cycle metrics (single source of truth).
-   * Used by both reflection flows (via recordRound) and tool-use flows (directly).
-   */
+/**
+ * Record round metrics from a ConversationRoundState snapshot.
+ * Delegates to recordCycleMetrics() for the actual work.
+ */
+export function recordRound(
+  run: AgentRunStateSnapshot,
+  roundState: ConversationRoundStateSnapshot,
+): void {
   recordCycleMetrics(
-    cycleIndex: number,
-    responseTimeMs: number,
-    normalizedUsage: NormalizedUsage | null,
-  ): void {
-    if (normalizedUsage) {
-      this.usageAccumulator.recordNormalizedUsage(cycleIndex, normalizedUsage);
-    }
-    this.totalResponseTimeMs += responseTimeMs;
-  }
-
-  /**
-   * Record round metrics from a ConversationRoundState object.
-   * Delegates to recordCycleMetrics() for the actual work.
-   */
-  recordRound(roundState: ConversationRoundState): void {
-    this.recordCycleMetrics(
-      roundState.roundIndex,
-      roundState.responseTimeMs,
-      roundState.normalizedUsage,
-    );
-  }
+    run,
+    roundState.roundIndex,
+    roundState.responseTimeMs,
+    roundState.normalizedUsage,
+  );
 }

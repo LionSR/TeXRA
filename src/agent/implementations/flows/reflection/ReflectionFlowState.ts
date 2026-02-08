@@ -14,7 +14,6 @@ import { z } from 'zod';
 import { AgentFileLocationSchema, RoundOutputSchema } from '@shared/schemas';
 import {
   AgentRunStateSnapshotSchema,
-  ConversationRoundState,
   ConversationRoundStateSnapshotSchema,
   type AgentRunStateSnapshot,
   type ConversationRoundStateSnapshot,
