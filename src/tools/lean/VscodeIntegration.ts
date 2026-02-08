@@ -28,6 +28,8 @@ export interface PlainGoal {
  * The Lean 4 extension uses custom FileUri/UntitledUri classes (not vscode.Uri)
  * with an `isInFolder` method for client lookup. We replicate the interface here
  * since those classes are internal to the Lean 4 extension.
+ *
+ * Mirrors: leanprover/vscode-lean4 (tested against v0.4.x)
  * @see https://github.com/leanprover/vscode-lean4/blob/master/vscode-lean4/src/utils/exturi.ts
  */
 interface LeanFileUri {
@@ -42,6 +44,9 @@ function createLeanFileUri(absolutePath: string): LeanFileUri {
   return {
     scheme: 'file',
     fsPath: absolutePath,
+    // Matches Lean 4 extension's FileUri.isInFolder → isFileInFolder logic.
+    // path.relative() is platform-safe here: both fsPath values use OS-native
+    // separators (guaranteed by vscode.Uri.file().fsPath).
     isInFolder(folderUri: LeanFileUri): boolean {
       const relative = path.relative(folderUri.fsPath, absolutePath);
       return (
@@ -54,14 +59,18 @@ function createLeanFileUri(absolutePath: string): LeanFileUri {
   };
 }
 
-/** Lean 4 extension's client interface */
+/**
+ * Lean 4 extension client interfaces.
+ * Mirrors: leanprover/vscode-lean4 (tested against v0.4.x)
+ * @see https://github.com/leanprover/vscode-lean4/blob/master/vscode-lean4/src/leanclient.ts
+ * @see https://github.com/leanprover/vscode-lean4/blob/master/vscode-lean4/src/utils/clientProvider.ts
+ */
 interface LeanClient {
   isRunning(): boolean;
   isInFolderManagedByThisClient(uri: LeanFileUri): boolean;
   sendRequest(method: string, params: unknown): Promise<unknown>;
 }
 
-/** Lean 4 extension's client provider interface */
 interface LeanClientProvider {
   findClient(uri: LeanFileUri): LeanClient | undefined;
 }
@@ -195,8 +204,8 @@ async function sendPositionRequest<T>(
   method: string,
 ): Promise<LspResult<T>> {
   const absolutePath = WorkspaceFS.toAbsolute(filePath);
+  const uri = vscode.Uri.file(absolutePath);
   const leanUri = createLeanFileUri(absolutePath);
-  const vscodeUri = vscode.Uri.file(absolutePath);
 
   // Get client provider
   const clientProvider = await getClientProvider().catch(() => null);
@@ -206,7 +215,7 @@ async function sendPositionRequest<T>(
 
   // Open file in editor so LSP server has processed it
   try {
-    const document = await vscode.workspace.openTextDocument(vscodeUri);
+    const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preserveFocus: true });
   } catch (e) {
     return errorResult(`Failed to open file ${absolutePath}: ${e}`);
