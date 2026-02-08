@@ -372,12 +372,15 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
     );
     if (nonApproveResult) return nonApproveResult;
 
-    // Approved - execute via executeAgent with requested mode
-    const configPayload = toConfigPayload(proposal);
+    // Apply model override if user changed it in the proposal UI
+    const effective = result.model
+      ? { ...proposal, model: result.model }
+      : proposal;
+    const configPayload = toConfigPayload(effective);
     return executeSubagent(
       configPayload,
       input.agent,
-      proposal.mode,
+      effective.mode,
       streamId,
       input.inputFile,
     );
@@ -462,8 +465,11 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
     );
     if (nonApproveResult) return nonApproveResult;
 
-    // Approved - execute via executeAgent with requested mode
-    const configPayload = toConfigPayload(proposal);
-    return executeSubagent(configPayload, input.agent, proposal.mode, streamId);
+    // Apply model override if user changed it in the proposal UI
+    const effective = result.model
+      ? { ...proposal, model: result.model }
+      : proposal;
+    const configPayload = toConfigPayload(effective);
+    return executeSubagent(configPayload, input.agent, effective.mode, streamId);
   }
 }

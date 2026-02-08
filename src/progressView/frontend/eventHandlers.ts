@@ -253,7 +253,7 @@ export function sendFollowupCommand(
 export function handlePermissionAction(
   event: CustomEvent<PermissionActionDetail>,
 ): void {
-  const { permission, action, feedback } = event.detail;
+  const { permission, action, feedback, modelOverride } = event.detail;
 
   switch (permission.kind) {
     case PERMISSION_KIND.TOOL_EDIT:
@@ -287,6 +287,7 @@ export function handlePermissionAction(
         proposalId: permission.data.proposalId,
         action,
         feedback,
+        model: modelOverride,
       });
       break;
   }
