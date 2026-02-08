@@ -14,7 +14,7 @@ import type { FollowupOptionsState, StreamState } from '../store';
 import type { PermissionState } from '../components/PermissionCard';
 
 // Local imports - shared schemas
-import type { ModelOptionData, StreamTabInfo } from '@shared/schemas';
+import type { StreamTabInfo } from '@shared/schemas';
 
 /** Context value for stream state, providing all data needed by stream content components. */
 export interface StreamContextValue {
@@ -44,8 +44,4 @@ export const streamStateContext = createContext<StreamContextValue>(
 
 export const permissionsContext = createContext<PermissionState[]>(
   'progress-permissions',
-);
-
-export const proposalModelOptionsContext = createContext<ModelOptionData[]>(
-  'progress-proposal-model-options',
 );

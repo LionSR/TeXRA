@@ -6,7 +6,6 @@ import {
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
-import { consume } from '@lit/context';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -32,7 +31,6 @@ import {
   AGENT_CATEGORY,
   type AgentProposalPermission,
   type BashPermission,
-  type ModelOptionData,
   type ProviderErrorPartial,
   type RetryPermission,
   type ToolEditPermission,
@@ -49,9 +47,6 @@ import { postMessage } from '@shared/vscode';
 
 // Local imports - webview commands
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
-
-// Local imports - progress view contexts
-import { proposalModelOptionsContext } from '../contexts/streamContexts';
 
 // Local imports - progress view events
 import { ProgressEvents } from '../events';
@@ -128,10 +123,6 @@ export class RequestPanels extends LitElement {
 
   @property({ type: Array }) permissions: PermissionState[] = [];
 
-  @consume({ context: proposalModelOptionsContext, subscribe: true })
-  @state()
-  private modelOptions: ModelOptionData[] = [];
-
   @state() private feedbackOpenKeys: Set<PermissionKey> = new Set();
   @state() private openDiffMenuKey: PermissionKey | null = null;
 
@@ -193,6 +184,7 @@ export class RequestPanels extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     this.addEventListener('click', this.handleActionClick);
+    this.addEventListener('change', this.handleSelectChange);
     this.addEventListener('keydown', this.handleKeydown);
     document.addEventListener('click', this.handleOutsideClick, true);
     document.addEventListener('keydown', this.handleGlobalKeydown);
@@ -200,6 +192,7 @@ export class RequestPanels extends LitElement {
 
   override disconnectedCallback(): void {
     this.removeEventListener('click', this.handleActionClick);
+    this.removeEventListener('change', this.handleSelectChange);
     this.removeEventListener('keydown', this.handleKeydown);
     document.removeEventListener('click', this.handleOutsideClick, true);
     document.removeEventListener('keydown', this.handleGlobalKeydown);
@@ -490,12 +483,16 @@ export class RequestPanels extends LitElement {
 
   private renderProposalRequest(permission: PermissionState): TemplateResult {
     const data = permission.data as AgentProposalPermission;
+    const modelOptions =
+      permission.kind === PERMISSION_KIND.PROPOSAL
+        ? (permission.modelOptions ?? [])
+        : [];
     const key = this.getPermissionKey(permission);
     const isFeedbackOpen = this.feedbackOpenKeys.has(key);
     const isWorkflow = data.agentCategory === AGENT_CATEGORY.WORKFLOW;
     const categoryLabel = isWorkflow ? 'Workflow' : 'Tool-Use';
     const selectedModel = this.getSelectedModel(data);
-    const hasModelOptions = this.modelOptions.length > 0;
+    const hasModelOptions = modelOptions.length > 0;
 
     return html`
       <div
@@ -523,11 +520,10 @@ export class RequestPanels extends LitElement {
                     <vscode-single-select
                       class="proposal-model-dropdown"
                       position="below"
+                      data-proposal-id=${data.proposalId}
                       .value=${selectedModel}
-                      @change=${(e: Event) =>
-                        this.handleProposalModelChange(e, data.proposalId)}
                     >
-                      ${renderModelOptions(this.modelOptions, selectedModel)}
+                      ${renderModelOptions(modelOptions, selectedModel)}
                     </vscode-single-select>
                   </div>
                 `
@@ -978,15 +974,17 @@ export class RequestPanels extends LitElement {
     return this.selectedModels.get(data.proposalId) ?? data.model;
   }
 
-  /** Handle model dropdown change for a proposal. */
-  private handleProposalModelChange(event: Event, proposalId: string): void {
-    const target = event.currentTarget as HTMLSelectElement | null;
-    const value = target?.value;
+  /** Delegated change handler for model dropdowns in proposal cards. */
+  private handleSelectChange = (event: Event): void => {
+    const target = event.target as HTMLElement | null;
+    const proposalId = target?.dataset?.proposalId;
+    if (!proposalId) return;
+    const value = (target as HTMLSelectElement).value;
     if (!value) return;
     const next = new Map(this.selectedModels);
     next.set(proposalId, value);
     this.selectedModels = next;
-  }
+  };
 
   /** Get the model override for a proposal if different from original. */
   private getModelOverride(permission: PermissionState): string | undefined {
