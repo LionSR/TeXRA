@@ -111,32 +111,34 @@ export interface CycleTransientFields {
 export type ResponseCycleShared = CycleFields & CycleTransientFields;
 
 /**
- * Assert that a shared object has all required cycle fields populated.
+ * Initialize cycle fields on a shared state object for native nesting.
  *
- * Use this before running a cycle flow on an outer flow's shared state
- * to get type-safe access without `as unknown as` double cast.
- *
- * @throws Error if required cycle fields are missing
+ * Replaces the error-prone pattern of setting 11 fields individually
+ * followed by assertCycleFieldsPopulated(). All required fields are
+ * initialized in one place — impossible to forget a field.
  */
-export function assertCycleFieldsPopulated<T extends object>(
+export function initializeCycleFields<T extends object>(
   shared: T,
+  messages: ProviderMessage[],
+  outputLocation: AgentFileLocation,
 ): asserts shared is T & ResponseCycleShared {
-  const obj = shared as Record<string, unknown>;
-  const requiredFields = ['messages', 'shouldStop', 'endTurn', 'outputExists'];
-
-  for (const field of requiredFields) {
-    if (obj[field] === undefined) {
-      throw new Error(
-        `Cycle field '${field}' must be populated before running cycle flow`,
-      );
-    }
-  }
-
-  if (obj['outputLocation'] == null) {
-    throw new Error(
-      `Cycle field 'outputLocation' must be set to a valid location before running cycle flow`,
-    );
-  }
+  // Typed literal ensures compile-time checking: missing fields, typos, and
+  // wrong types are all caught. Object.assign mutates shared in place so the
+  // flow's reference stays valid.
+  const defaults: ResponseCycleShared = {
+    messages,
+    outputLocation,
+    endTurn: false,
+    shouldStop: false,
+    outputExists: false,
+    systemPrompt: undefined,
+    responseObject: undefined,
+    responseTimeMs: undefined,
+    stopReason: undefined,
+    processedResponse: undefined,
+    lastError: undefined,
+  };
+  Object.assign(shared, defaults);
 }
 
 // Each node in the response cycle progressively hydrates the shared cycle
