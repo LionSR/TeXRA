@@ -44,6 +44,10 @@ const NEW_BUILTIN_PREFIX = 'builtInWorkflow:';
  * Migrate persisted `builtIn:*` keys to `builtInWorkflow:*`.
  * Idempotent — skips if no legacy keys found.
  */
+function isLegacyBuiltInKey(k: string): boolean {
+  return k.startsWith(LEGACY_BUILTIN_PREFIX) && !k.startsWith('builtInToolUse:');
+}
+
 function migrateLegacySourceKeys(): void {
   if (!workspaceSM) return;
 
@@ -53,15 +57,10 @@ function migrateLegacySourceKeys(): void {
   ] as const) {
     const stored = workspaceSM.get<string[]>(stateKey, []);
     if (!stored?.length) continue;
-
-    const hasLegacy = stored.some(
-      (k) =>
-        k.startsWith(LEGACY_BUILTIN_PREFIX) && !k.startsWith('builtInToolUse:'),
-    );
-    if (!hasLegacy) continue;
+    if (!stored.some(isLegacyBuiltInKey)) continue;
 
     const migrated = stored.map((k) =>
-      k.startsWith(LEGACY_BUILTIN_PREFIX) && !k.startsWith('builtInToolUse:')
+      isLegacyBuiltInKey(k)
         ? NEW_BUILTIN_PREFIX + k.slice(LEGACY_BUILTIN_PREFIX.length)
         : k,
     );
