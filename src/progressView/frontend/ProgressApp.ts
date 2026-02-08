@@ -15,6 +15,7 @@ import { PersistedState, createWebviewStorage } from '@shared/state';
 import {
   AGENT_CATEGORY,
   AgentCategoryFilterSchema,
+  type ModelOptionData,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
@@ -65,6 +66,7 @@ import { dispatchMessage } from './messageDispatcher';
 import {
   EMPTY_STREAM_CONTEXT,
   permissionsContext,
+  proposalModelOptionsContext,
   streamStateContext,
   type StreamContextValue,
 } from './contexts/streamContexts';
@@ -136,6 +138,10 @@ export class ProgressApp extends BaseWebviewApp {
   @provide({ context: permissionsContext })
   @state()
   private permissionsContextValue: PermissionState[] = [];
+
+  @provide({ context: proposalModelOptionsContext })
+  @state()
+  private proposalModelOptions: ModelOptionData[] = [];
 
   // Container ref for accessing child component methods (FollowUpInput)
   private toolUseContentRef = createRef<ToolUseStreamContent>();
@@ -350,6 +356,9 @@ export class ProgressApp extends BaseWebviewApp {
       getPermissions: () => this.permissions,
       setPermissions: (permissions) => {
         this.permissions = permissions;
+      },
+      setProposalModelOptions: (options) => {
+        this.proposalModelOptions = options;
       },
     };
   }

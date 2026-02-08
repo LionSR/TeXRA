@@ -7,6 +7,7 @@ import {
   getSharedLocalResourceRoots,
 } from '@common/webview';
 import { AgentLogger } from '@logger/AgentLogger';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
 import { isApprovalBypassedForStream } from '@tools/approval/toolEditApproval';
@@ -105,7 +106,7 @@ export class ProgressViewProvider
     );
     this.agentProposalHandler = new ApprovalRequestHandler(
       'proposalId',
-      (p) => u.showAgentProposal(p),
+      (p) => void this.showAgentProposalWithOptions(p),
       (id) => u.resolveAgentProposal(id),
       canSend,
     );
@@ -155,6 +156,19 @@ export class ProgressViewProvider
     await this.state.load();
     this._disposables.push(...this.eventHandler.setupEventListeners());
     this.logger.debug('ProgressViewProvider initialized');
+  }
+
+  /** Load model options and send agent proposal to the webview. */
+  private async showAgentProposalWithOptions(
+    proposal: AgentProposalPermission,
+  ): Promise<void> {
+    try {
+      const modelOptions = await computeModelOptionsData();
+      this.webviewUpdater.showAgentProposal(proposal, modelOptions);
+    } catch {
+      // Fall back to sending without model options
+      this.webviewUpdater.showAgentProposal(proposal);
+    }
   }
 
   public static getInstance(): ProgressViewProvider | undefined {
