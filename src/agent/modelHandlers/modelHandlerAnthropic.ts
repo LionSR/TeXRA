@@ -250,8 +250,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
 > {
   private cacheControlledBlock?: CacheControlEligibleBlock;
 
+  /** Flag to force compaction on the next API call, set by requestCompaction(). */
+  private compactionRequested = false;
+
   private isClaudeOpus46(): boolean {
     return this.config.fullName === OPUS_46_FULLNAME;
+  }
+
+  override get supportsManualCompaction(): boolean {
+    return this.isClaudeOpus46() && this.isToolUseMode();
+  }
+
+  override requestCompaction(): void {
+    this.compactionRequested = true;
   }
 
   /**
@@ -303,12 +314,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return;
     }
 
-    // Only enable context management if threshold is configured (> 0)
-    if (thresholdPercent <= 0) {
+    if (!this.isClaudeOpus46()) {
       return;
     }
 
-    if (!this.isClaudeOpus46()) {
+    // Consume the manual compaction flag only after preconditions pass
+    const forceCompaction = this.compactionRequested;
+    if (forceCompaction) {
+      this.compactionRequested = false;
+    }
+
+    // Only enable context management if threshold is configured (> 0) or manually requested
+    if (thresholdPercent <= 0 && !forceCompaction) {
       return;
     }
 
@@ -322,10 +339,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
       !contextManagementEdits.some((edit) => edit.type === 'compact_20260112')
     ) {
       this.ensureBeta(options, COMPACTION_BETA);
-      const compactionTriggerTokens = Math.max(
-        MIN_COMPACTION_TRIGGER_TOKENS,
-        Math.floor((thresholdPercent / 100) * contextWindow),
-      );
+      // When manually requested, set trigger to 1 to compact on any conversation.
+      // MIN_COMPACTION_TRIGGER_TOKENS is an app-level floor for automatic compaction;
+      // the API itself accepts any positive integer as a trigger value.
+      const compactionTriggerTokens = forceCompaction
+        ? 1
+        : Math.max(
+            MIN_COMPACTION_TRIGGER_TOKENS,
+            Math.floor((thresholdPercent / 100) * contextWindow),
+          );
 
       contextManagementEdits.push({
         type: 'compact_20260112',
