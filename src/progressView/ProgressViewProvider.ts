@@ -20,6 +20,7 @@ import { ProgressViewState } from './state/ProgressViewState';
 import type {
   AgentProposalPermission,
   BashPermission,
+  ModelOptionData,
   OutputFileInfo,
   StorageKey,
   StreamTabId,
@@ -158,17 +159,23 @@ export class ProgressViewProvider
     this.logger.debug('ProgressViewProvider initialized');
   }
 
-  /** Load model options and send agent proposal to the webview. */
+  /**
+   * Load model options and send agent proposal to the webview.
+   * Guards against the proposal being resolved while model options are loading
+   * (e.g., by timeout) — if the proposal is no longer pending, the show is skipped.
+   */
   private async showAgentProposalWithOptions(
     proposal: AgentProposalPermission,
   ): Promise<void> {
+    let modelOptions: ModelOptionData[] | undefined;
     try {
-      const modelOptions = await computeModelOptionsData();
-      this.webviewUpdater.showAgentProposal(proposal, modelOptions);
+      modelOptions = await computeModelOptionsData();
     } catch {
-      // Fall back to sending without model options
-      this.webviewUpdater.showAgentProposal(proposal);
+      // Fall back to no model options
     }
+    // Proposal may have been resolved while we were loading model options
+    if (!this.agentProposalHandler.get(proposal.proposalId)) return;
+    this.webviewUpdater.showAgentProposal(proposal, modelOptions);
   }
 
   public static getInstance(): ProgressViewProvider | undefined {
