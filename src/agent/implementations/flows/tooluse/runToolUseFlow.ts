@@ -26,8 +26,8 @@ import type { ToolDefinition } from '@model';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
-import { Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
@@ -47,11 +47,14 @@ export interface RunToolUseFlowInput<
   setting: AgentToolUseSetting;
   resumeSnapshot?: ToolUseSessionSnapshot | null;
   onFollowUpConsumed?: () => void;
+  /** When true, proposal tools are filtered out to prevent nesting. */
+  isSubagent?: boolean;
 }
 
 /** Result from running a tool-use flow. */
 export interface RunToolUseFlowResult {
   status: EndGroupStatus;
+  lastResponse?: string;
 }
 
 /**
@@ -72,16 +75,31 @@ export type ToolUseFlowSetupCallback = (
   context: ToolUseFlowContext<unknown>,
 ) => void;
 
+/** Proposal tool names (and their companion) that subagents must not receive. */
+const PROPOSAL_TOOLS = new Set([
+  'propose_workflow',
+  'propose_agent',
+  'await_subagent',
+]);
+
+/** Options for tool resolution. */
+interface ResolveToolsOptions {
+  /** When true, proposal tools are filtered out to prevent nesting. */
+  isSubagent?: boolean;
+}
+
 /** Resolve tool definitions from agent settings, validating against registry. */
 function resolveTools(
   tools: AgentToolUseSetting['tools'],
   registry: IToolRegistry,
   logger: { warn: (msg: string) => void },
+  options?: ResolveToolsOptions,
 ): ToolDefinition[] {
   const toolConfigs = Array.isArray(tools) ? tools : [];
   const resolved = toolConfigs
     .map((config) => (typeof config === 'string' ? { name: config } : config))
     .filter((def) => {
+      if (options?.isSubagent && PROPOSAL_TOOLS.has(def.name)) return false;
       if (!registry.has(def.name)) {
         logger.warn(`Tool "${def.name}" not found in registry`);
         return false;
@@ -114,7 +132,9 @@ export async function runToolUseFlow<C = unknown>(
   const snapshot = input.resumeSnapshot ?? null;
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const registry = toolRegistry ?? getDefaultToolRegistry();
-  const resolvedTools = resolveTools(setting.tools, registry, logger);
+  const resolvedTools = resolveTools(setting.tools, registry, logger, {
+    isSubagent: input.isSubagent,
+  });
 
   // Build services: spread input + add computed fields (matches reflection flow pattern)
   const services: ToolUseServices<C> = {
@@ -217,5 +237,58 @@ export async function runToolUseFlow<C = unknown>(
     unregisterInterruptible(streamId);
   }
 
-  return { status };
+  return {
+    status,
+    lastResponse: extractLastAssistantText(shared.conversation),
+  };
+}
+
+/**
+ * Extract text from the last assistant message in a provider conversation.
+ * Handles OpenAI (string content), Anthropic (content blocks), and
+ * Google (parts array) message formats.
+ */
+function extractLastAssistantText(
+  conversation: ProviderMessage[],
+): string | undefined {
+  for (let i = conversation.length - 1; i >= 0; i--) {
+    const msg = conversation[i] as Record<string, unknown>;
+    if (!msg || typeof msg !== 'object') continue;
+
+    // OpenAI / Anthropic use role='assistant', Google uses role='model'
+    if (msg.role !== 'assistant' && msg.role !== 'model') continue;
+
+    // OpenAI: content is string
+    if (typeof msg.content === 'string') return msg.content;
+
+    // Anthropic / OpenAI: content is array of blocks with .text
+    if (Array.isArray(msg.content)) {
+      const texts = (msg.content as unknown[])
+        .map((c) => {
+          if (typeof c === 'string') return c;
+          if (typeof c === 'object' && c !== null && 'text' in c) {
+            const text = (c as { text: unknown }).text;
+            return typeof text === 'string' ? text : '';
+          }
+          return '';
+        })
+        .filter(Boolean);
+      if (texts.length > 0) return texts.join('\n');
+    }
+
+    // Google: parts array
+    if (Array.isArray(msg.parts)) {
+      const texts = (msg.parts as unknown[])
+        .map((p) => {
+          if (typeof p === 'object' && p !== null && 'text' in p) {
+            const text = (p as { text: unknown }).text;
+            return typeof text === 'string' ? text : '';
+          }
+          return '';
+        })
+        .filter(Boolean);
+      if (texts.length > 0) return texts.join('\n');
+    }
+  }
+  return undefined;
 }
