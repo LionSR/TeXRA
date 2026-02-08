@@ -121,6 +121,12 @@ export class RequestPanels extends LitElement {
   @state() private feedbackOpenKeys: Set<PermissionKey> = new Set();
   @state() private openDiffMenuKey: PermissionKey | null = null;
 
+  /** Memoized permission groups - recomputed in willUpdate() when permissions change */
+  private approvalPermissions: PermissionState[] = [];
+  private bashPermissions: PermissionState[] = [];
+  private retryPermissions: PermissionState[] = [];
+  private proposalPermissions: PermissionState[] = [];
+
   protected override willUpdate(changedProperties: PropertyValues<this>): void {
     if (!changedProperties.has('permissions')) {
       return;
@@ -136,6 +142,20 @@ export class RequestPanels extends LitElement {
     if (this.openDiffMenuKey && !activeKeys.has(this.openDiffMenuKey)) {
       this.openDiffMenuKey = null;
     }
+
+    // Memoize filtered permission groups so render() doesn't re-filter
+    this.approvalPermissions = this.permissions.filter(
+      (p) => p.kind === PERMISSION_KIND.TOOL_EDIT,
+    );
+    this.bashPermissions = this.permissions.filter(
+      (p) => p.kind === PERMISSION_KIND.BASH,
+    );
+    this.retryPermissions = this.permissions.filter(
+      (p) => p.kind === PERMISSION_KIND.RETRY,
+    );
+    this.proposalPermissions = this.permissions.filter(
+      (p) => p.kind === PERMISSION_KIND.PROPOSAL,
+    );
   }
 
   override connectedCallback(): void {
@@ -157,14 +177,11 @@ export class RequestPanels extends LitElement {
   override render(): TemplateResult | typeof nothing {
     if (this.permissions.length === 0) return nothing;
 
-    const byKind = (kind: PermissionState['kind']) =>
-      this.permissions.filter((p) => p.kind === kind);
-
     return html`
-      ${this.renderApprovalSection(byKind(PERMISSION_KIND.TOOL_EDIT))}
-      ${this.renderBashSection(byKind(PERMISSION_KIND.BASH))}
-      ${this.renderRetrySection(byKind(PERMISSION_KIND.RETRY))}
-      ${this.renderProposalSection(byKind(PERMISSION_KIND.PROPOSAL))}
+      ${this.renderApprovalSection(this.approvalPermissions)}
+      ${this.renderBashSection(this.bashPermissions)}
+      ${this.renderRetrySection(this.retryPermissions)}
+      ${this.renderProposalSection(this.proposalPermissions)}
     `;
   }
 
