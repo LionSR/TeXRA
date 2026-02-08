@@ -42,7 +42,11 @@ interface CreatorConfig {
   workflow: AgentPromptPair;
   toolUse: AgentPromptPair;
   retryPrompt: string;
-  templates: { workflowSingle: string; workflowMultiple: string; toolUse: string };
+  templates: {
+    workflowSingle: string;
+    workflowMultiple: string;
+    toolUse: string;
+  };
 }
 
 const nunjucksEnv = nunjucks.configure({ autoescape: false });
@@ -50,9 +54,15 @@ const nunjucksEnv = nunjucks.configure({ autoescape: false });
 /** Runtime variables that must pass through Nunjucks unchanged in fallback templates. */
 const RUNTIME_PASSTHROUGH = Object.fromEntries(
   [
-    'INPUT_CONTENT', 'INPUT_FILE', 'ALL_INPUTS',
-    'ALL_AUXILIARYS', 'ALL_REFERENCES', 'ADDITIONAL_INPUTS',
-    'INSTRUCTION', 'REFERENCE_CONTENT', 'AUXILIARY_CONTENT',
+    'INPUT_CONTENT',
+    'INPUT_FILE',
+    'ALL_INPUTS',
+    'ALL_AUXILIARYS',
+    'ALL_REFERENCES',
+    'ADDITIONAL_INPUTS',
+    'INSTRUCTION',
+    'REFERENCE_CONTENT',
+    'AUXILIARY_CONTENT',
     'OUTPUT_FILES_ORDER',
   ].map((v) => [v, `{{ ${v} }}`]),
 );
@@ -107,14 +117,23 @@ async function loadCreatorConfig(
     'resources',
     'templates',
   );
-  const [workflowYaml, toolUseYaml, workflowSingle, workflowMultiple, toolUseTpl] =
-    await Promise.all([
-      AbsoluteFS.read(path.join(templatesDir, 'agentCreatorWorkflow.yaml')),
-      AbsoluteFS.read(path.join(templatesDir, 'agentCreatorToolUse.yaml')),
-      AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-workflowSingle.yaml')),
-      AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-workflowMultiple.yaml')),
-      AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-toolUse.yaml')),
-    ]);
+  const [
+    workflowYaml,
+    toolUseYaml,
+    workflowSingle,
+    workflowMultiple,
+    toolUseTpl,
+  ] = await Promise.all([
+    AbsoluteFS.read(path.join(templatesDir, 'agentCreatorWorkflow.yaml')),
+    AbsoluteFS.read(path.join(templatesDir, 'agentCreatorToolUse.yaml')),
+    AbsoluteFS.read(
+      path.join(templatesDir, 'agentTemplate-workflowSingle.yaml'),
+    ),
+    AbsoluteFS.read(
+      path.join(templatesDir, 'agentTemplate-workflowMultiple.yaml'),
+    ),
+    AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-toolUse.yaml')),
+  ]);
   const wf = yaml.parse(workflowYaml) as ParsedCreatorYaml;
   const tu = yaml.parse(toolUseYaml) as ParsedCreatorYaml;
   creatorConfig = {
@@ -139,9 +158,7 @@ function validateAgentYamlString(content: string): string | null {
 // Command registration and handlers
 // ============================================================
 
-export function registerAgentCreatorCommands(
-  context: vscode.ExtensionContext,
-) {
+export function registerAgentCreatorCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       agentCreatorCommands.createAgentWithAI,
@@ -187,6 +204,11 @@ async function handleCreateAgentWithAI(
   }
 }
 
+async function resolveAgentFilePath(agentName: string): Promise<vscode.Uri> {
+  const targetDir = await agentDirectories.custom();
+  return vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`));
+}
+
 async function createWorkflowAgent(
   config: CreatorConfig,
   agentName: string,
@@ -200,8 +222,10 @@ async function createWorkflowAgent(
     return;
   }
 
+  const isMultipleOutput = outputChoice === 'Multiple output files';
+
   let outputFilesYaml = '';
-  if (outputChoice === 'Multiple output files') {
+  if (isMultipleOutput) {
     const filesInput = await vscode.window.showInputBox({
       prompt: 'Enter default output filenames (comma separated)',
     });
@@ -215,17 +239,14 @@ async function createWorkflowAgent(
     outputFilesYaml = files.map((f) => `    - ${f}`).join('\n');
   }
 
-  const targetDir = await agentDirectories.custom();
-  const filePath = vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`));
-
+  const filePath = await resolveAgentFilePath(agentName);
   const vars = { AGENT_NAME: agentName, DESCRIPTION: description };
   let yamlContent = await tryAIGeneration(config, 'workflow', vars);
 
   if (!yamlContent) {
-    const template =
-      outputChoice === 'Multiple output files'
-        ? config.templates.workflowMultiple
-        : config.templates.workflowSingle;
+    const template = isMultipleOutput
+      ? config.templates.workflowMultiple
+      : config.templates.workflowSingle;
     yamlContent = nunjucksEnv.renderString(template, {
       ...RUNTIME_PASSTHROUGH,
       AGENT_NAME: agentName,
@@ -234,7 +255,6 @@ async function createWorkflowAgent(
     });
   }
 
-  const isMultipleOutput = outputChoice === 'Multiple output files';
   const configOptions = isMultipleOutput
     ? {
         isMultipleOutput: true as const,
@@ -253,9 +273,7 @@ async function createToolUseAgent(
   agentName: string,
   description: string,
 ) {
-  const targetDir = await agentDirectories.custom();
-  const filePath = vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`));
-
+  const filePath = await resolveAgentFilePath(agentName);
   const vars = { AGENT_NAME: agentName, DESCRIPTION: description };
   let yamlContent = await tryAIGeneration(config, 'toolUse', vars);
 
@@ -318,10 +336,7 @@ async function tryAIGeneration(
     const schemaRef = getSchemaReference(category);
     const systemPrompt =
       nunjucksEnv.renderString(prompts.systemPrompt, vars) + '\n' + schemaRef;
-    const baseUserRequest = nunjucksEnv.renderString(
-      prompts.userRequest,
-      vars,
-    );
+    const baseUserRequest = nunjucksEnv.renderString(prompts.userRequest, vars);
 
     let userMessage = baseUserRequest;
     for (let attempt = 0; attempt < 2; attempt++) {
