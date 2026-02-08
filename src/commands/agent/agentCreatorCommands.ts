@@ -2,29 +2,29 @@
 import * as path from 'path';
 
 // Third-party imports
-import Anthropic from '@anthropic-ai/sdk';
 import * as vscode from 'vscode';
 import * as nunjucks from 'nunjucks';
 import * as yaml from 'yaml';
 import { z } from 'zod';
+import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports - agent runtime
-import { ANTHROPIC_MODELS } from 'llm-zoo';
 import { getBaseName, getMultipleName } from '@agent/index';
 import {
   AgentWorkflowSettingSchema,
   AgentToolUseSettingSchema,
   AgentPromptSchema,
 } from '@agent/core/AgentDataclass';
+import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
-import { SecretManager } from '@frontend/secretManager';
+import { globalSM, GlobalStateKey } from '@common/state';
 import { agentDirectories, promptToAddAgentToConfig } from '@frontend/agents';
+import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
-
-// Type imports
-import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
+import { isNonEmptyString } from '@utils/core/stringCore';
+import { extractTextFromTag } from '@utils/text/xmlExtraction';
 
 const CHANNEL = 'AgentCreator';
 logger.initialize(CHANNEL);
@@ -280,9 +280,26 @@ async function tryAIGeneration(
   vars: Record<string, string>,
 ): Promise<string | undefined> {
   try {
-    const apiKey = await SecretManager.getApiKey('anthropic');
-    const anthropic = new Anthropic({ apiKey });
+    // Resolve model (reuse the polish model setting)
+    const configuredModel = globalSM.get<string>(
+      GlobalStateKey.POLISH_MODEL,
+      DEFAULT_POLISH_MODEL,
+    );
+    const modelName = isNonEmptyString(configuredModel)
+      ? configuredModel.trim()
+      : DEFAULT_POLISH_MODEL;
+    const modelConfig = MODEL_CONFIGS[modelName];
+    if (!modelConfig) {
+      logger.error(CHANNEL, `Unknown model "${modelName}" for agent creation`);
+      return undefined;
+    }
 
+    const handler = createModelHandler(modelConfig);
+    handler.setOutputStreaming(false);
+    handler.setProgressViewEnabled(false);
+    const client = await handler.getClient();
+
+    // Build prompts
     const prompts = config[category];
     const schemaRef = getSchemaReference(category);
     const systemPrompt =
@@ -294,18 +311,22 @@ async function tryAIGeneration(
 
     let userMessage = baseUserRequest;
     for (let attempt = 0; attempt < 2; attempt++) {
-      const params: MessageCreateParams = {
-        model: ANTHROPIC_MODELS.opus41.fullName,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-        max_tokens: 2048,
-      };
-      const response = await anthropic.messages.create(params);
-      const firstContent = response.content[0];
-      if (firstContent?.type === 'text') {
-        const text = firstContent.text.trim();
-        const match = text.match(/<yaml>([\s\S]*?)<\/yaml>/i);
-        const candidate = match ? match[1].trim() : text;
+      const messages = await handler.initializeMessages(
+        '',
+        userMessage,
+        undefined,
+        systemPrompt,
+      );
+      const result = await handler.createResponse({
+        client,
+        messages,
+        temperature: 0,
+      });
+      const { text } = handler.extractResponse(result.response, '');
+
+      if (isNonEmptyString(text)) {
+        const extracted = extractTextFromTag(text, 'yaml');
+        const candidate = (extracted || text).trim();
         const validationErr = validateAgentYamlString(candidate);
         if (!validationErr) {
           return candidate;
