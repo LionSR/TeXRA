@@ -147,7 +147,11 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
     try {
       // Initialize all cycle fields in one call (replaces 11 individual assignments + assertion)
-      initializeCycleFields(shared, initializedMessages, prepRes.outputLocation);
+      initializeCycleFields(
+        shared,
+        initializedMessages,
+        prepRes.outputLocation,
+      );
 
       // Create and run the flow directly on shared (native nesting)
       const flow = createResponseCycleFlow<C>();

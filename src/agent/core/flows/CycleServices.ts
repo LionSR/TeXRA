@@ -128,4 +128,3 @@ type CycleParams = Record<string, unknown>;
 // Re-export for backward compatibility with existing node definitions
 export type ResponseCycleParams<_C = unknown> = CycleParams;
 export type ToolUseCycleParams<_C = unknown> = CycleParams;
-
