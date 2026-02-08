@@ -496,8 +496,12 @@ export class SettingsApp extends BaseWebviewApp {
     });
   }
 
-  private handleCreateAgent(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.CREATE_AGENT);
+  private handleCreateAgent(
+    event: CustomEvent<{ category: 'workflow' | 'toolUse' }>,
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.CREATE_AGENT, {
+      category: event.detail.category,
+    });
   }
 
   private handleSetCustomAgentDir(): void {
