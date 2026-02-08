@@ -56,6 +56,16 @@ export class PersistedFlow<
   protected readonly kv: ExecutionKVStore;
 
   /**
+   * In-memory cache of the flow record.
+   *
+   * Since a PersistedFlow instance is the sole owner/mutator of its record,
+   * we can serve reads from cache after the first KVStore read or any write.
+   * This eliminates one filesystem read per node execution (the read in
+   * stepWithResult that immediately follows the previous step's write).
+   */
+  private cachedRecord: FlowRecord | null = null;
+
+  /**
    * Create a new PersistedFlow.
    *
    * @param start - The starting node of the flow graph
@@ -81,8 +91,7 @@ export class PersistedFlow<
     while (await this.step()) {
       // Do nothing
     }
-    const flow = await this.kv.read<FlowRecord>(`flow:${this.runId}`);
-    return flow?.nodes.at(-1)?.action as Action | undefined;
+    return this.cachedRecord?.nodes.at(-1)?.action as Action | undefined;
   }
 
   /**
@@ -106,7 +115,7 @@ export class PersistedFlow<
    */
   protected async stepWithResult(): Promise<StepResult<S>> {
     const key = `flow:${this.runId}`;
-    const flow = await this.kv.read<FlowRecord>(key);
+    const flow = this.cachedRecord ?? (await this.kv.read<FlowRecord>(key));
 
     if (!flow || !Array.isArray(flow.nodes)) {
       throw new Error('Invalid or corrupted flow record');
@@ -118,6 +127,7 @@ export class PersistedFlow<
 
     // No more nodes to execute
     if (!cursor) {
+      this.cachedRecord = flow;
       return {
         hasMore: false,
         action: flow.nodes.at(-1)?.action,
@@ -136,9 +146,13 @@ export class PersistedFlow<
     cursor.setServices(this._services);
     const action = await cursor._run(shared);
 
+    // Invalidate cache before mutation: if kv.write fails, the next read
+    // falls through to KVStore which has the correct pre-mutation state.
+    this.cachedRecord = null;
     flow.nodes.push({ action });
     flow.shared = this.serializeShared(shared);
     await this.kv.write(key, flow);
+    this.cachedRecord = flow;
 
     return {
       hasMore: true,
@@ -168,19 +182,25 @@ export class PersistedFlow<
     if (!flow) throw new Error(`flow "${effectiveRunId}" not found`);
     const pf = new PersistedFlow<S, P, Svc>(start, kv, effectiveRunId);
     pf.setParams(flow.params as P);
+    pf.cachedRecord = flow;
     return pf;
   }
 
   async getShared(): Promise<S | undefined> {
-    const flow = await this.kv.read<FlowRecord>(`flow:${this.runId}`);
+    const flow =
+      this.cachedRecord ?? (await this.kv.read<FlowRecord>(`flow:${this.runId}`));
+    if (flow) this.cachedRecord = flow;
     return flow?.shared as S | undefined;
   }
 
   async setShared(newShared: S): Promise<void> {
     const key = `flow:${this.runId}`;
-    const flow = (await this.kv.read<FlowRecord>(key))!;
+    const flow =
+      this.cachedRecord ?? (await this.kv.read<FlowRecord>(key))!;
+    this.cachedRecord = null;
     flow.shared = this.serializeShared(newShared);
     await this.kv.write(key, flow);
+    this.cachedRecord = flow;
   }
 
   getRunId(): string {
@@ -193,8 +213,11 @@ export class PersistedFlow<
 
   private async ensureRecord(shared: S): Promise<void> {
     const key = `flow:${this.runId}`;
-    const exists = await this.kv.read(key);
-    if (exists) return;
+    const existing = await this.kv.read<FlowRecord>(key);
+    if (existing) {
+      this.cachedRecord = existing;
+      return;
+    }
 
     const record: FlowRecord = {
       flowName: 'texra',
@@ -204,5 +227,6 @@ export class PersistedFlow<
       nodes: [],
     };
     await this.kv.write(key, record);
+    this.cachedRecord = record;
   }
 }
