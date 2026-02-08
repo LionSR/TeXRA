@@ -56,6 +56,9 @@ type FileVarsResult = {
 
 /**
  * Build all user variables needed for prompt rendering.
+ *
+ * @param workspaceRoot - Working directory for the execution (used as CWD in prompts).
+ *   Falls back to WorkspaceFS.getPath() if not provided.
  */
 export async function buildUserVars(
   agentConfig: AgentConfig,
@@ -64,6 +67,7 @@ export async function buildUserVars(
   agentPath: string,
   providerFlags: ModelProviderFlags,
   logger: AgentLogger,
+  workspaceRoot?: string,
 ): Promise<UserVars> {
   const allLoadedFiles: LoadedFileEntry[] = [];
 
@@ -77,7 +81,7 @@ export async function buildUserVars(
 
   // Merge all variable sources using spread operator
   const userVars: UserVars = {
-    ...getBasicVars(agentConfig, providerFlags),
+    ...getBasicVars(agentConfig, providerFlags, workspaceRoot),
     ...(await getFileVars(agentConfig, agentSetting, logger)),
     ...requiredVars,
     ...patternVars,
@@ -96,6 +100,7 @@ export async function buildUserVars(
 function getBasicVars(
   agentConfig: AgentConfig,
   providerFlags: ModelProviderFlags,
+  workspaceRoot?: string,
 ): UserVars {
   // Build agent lists for template use
   const formatAgentList = (agents: { name: string; description?: string }[]) =>
@@ -128,7 +133,7 @@ function getBasicVars(
     IS_GOOGLE_MODEL: providerFlags.isGoogle,
     WORKFLOW_AGENTS: workflowAgentsList,
     TOOL_USE_AGENTS: toolUseAgentsList,
-    CWD: WorkspaceFS.getPath() ?? '.',
+    CWD: workspaceRoot ?? WorkspaceFS.getPath() ?? '.',
     DEFAULT_BIB_PATH: defaultBibPath,
   };
 }

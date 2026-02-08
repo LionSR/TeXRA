@@ -42,6 +42,13 @@ export class LatexMediaManager {
     private readonly fileService?: TaskRunFileService,
   ) {}
 
+  /** Resolve a path to a FileLocation, preferring fileService when available. */
+  private toLocation(filePath: string): FileLocation {
+    return this.fileService
+      ? this.fileService.createLocation(filePath)
+      : pathToLocation(filePath);
+  }
+
   private async mirrorFigureDependencies(
     latexFile: FileLocation,
     figures: string[],
@@ -58,8 +65,8 @@ export class LatexMediaManager {
         continue;
       }
       const absolutePath = path.normalize(path.join(baseDir, trimmed));
-      // Convert to FileLocation using pathToLocation (boundary conversion)
-      targetLocations.add(pathToLocation(absolutePath));
+      // Convert to FileLocation, using fileService when available for correct workspace root
+      targetLocations.add(this.toLocation(absolutePath));
     }
 
     if (targetLocations.size === 0) {
@@ -96,7 +103,7 @@ export class LatexMediaManager {
       async (file): Promise<FileLocation | undefined> => {
         try {
           const buildDir = path.join(path.dirname(file.absolutePath), 'build');
-          await flexibleFS.ensureDir(pathToLocation(buildDir));
+          await flexibleFS.ensureDir(this.toLocation(buildDir));
           const compiled = await compileLatex2Pdf(file, {
             outputDirectory: buildDir,
             compiler: 'latexmk',
@@ -108,7 +115,7 @@ export class LatexMediaManager {
             buildDir,
             path.basename(file.absolutePath).replace(/\.tex$/, '.pdf'),
           );
-          const pdfLocation = pathToLocation(pdfFile);
+          const pdfLocation = this.toLocation(pdfFile);
           if (!(await flexibleFS.exists(pdfLocation))) {
             return undefined;
           }
@@ -181,7 +188,7 @@ export class LatexMediaManager {
       const baseDir = path.dirname(file.absolutePath);
       const fileLocations = figures.map((relativePath) => {
         const absolutePath = path.normalize(path.join(baseDir, relativePath));
-        return pathToLocation(absolutePath);
+        return this.toLocation(absolutePath);
       });
 
       // Debug validation: batch existence checks for performance
@@ -283,7 +290,7 @@ export class LatexMediaManager {
 
     if (extraMediaFiles.length > 0) {
       const fileLocations = extraMediaFiles.map((input) =>
-        typeof input === 'string' ? pathToLocation(input) : input,
+        typeof input === 'string' ? this.toLocation(input) : input,
       );
       workspaceState.media.addMediaFiles(fileLocations);
     }

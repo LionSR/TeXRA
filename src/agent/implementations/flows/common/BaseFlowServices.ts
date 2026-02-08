@@ -23,6 +23,8 @@ export interface AgentCore<C = unknown> {
   streamId: StreamTabId;
   executionId: ExecutionId;
   userVarChannels: UserVariableChannels;
+  /** Working directory for file operations. Defaults to VS Code workspace root. */
+  workspaceRoot: string;
 }
 
 /** AgentCore + interrupt handling for flow execution. */

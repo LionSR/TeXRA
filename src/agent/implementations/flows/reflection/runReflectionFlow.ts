@@ -194,6 +194,7 @@ export async function runReflectionFlow<C = unknown>(
     checkInterruption,
     getUsageRecorder = () => async () => {},
     usageMonitor,
+    workspaceRoot,
   } = input;
 
   let status: EndGroupStatus = COMPLETED_STATUS;
@@ -204,7 +205,7 @@ export async function runReflectionFlow<C = unknown>(
   // Create services inline (previously in createReflectionFlowContext)
   // ========================================================================
 
-  const fileService = new TaskRunFileService(executionId);
+  const fileService = new TaskRunFileService(executionId, workspaceRoot);
 
   // Create workspace file locations for latexdiff base files
   const baseFiles: WorkspaceFileLocation[] = (

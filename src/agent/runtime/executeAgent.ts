@@ -60,7 +60,7 @@ import {
   getStreamTabId,
   type AgentLogStage,
 } from '@logger/index';
-import { TaskRunFileService } from '@utils/files';
+import { TaskRunFileService, WorkspaceFS } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -217,6 +217,7 @@ async function resolveAgentBase(
     : (executionId as StorageKey);
 
   const agentPath = path.dirname(resolution.definitionPath);
+  const workspaceRoot = WorkspaceFS.getPath() ?? process.cwd();
   const buildVars = () =>
     buildUserVars(
       config,
@@ -229,6 +230,7 @@ async function resolveAgentBase(
         isGoogle: modelHandler.isGoogle,
       },
       agentLogger,
+      workspaceRoot,
     );
 
   const baseVars =
@@ -265,6 +267,7 @@ async function resolveAgentBase(
     storageKey,
     userVarChannels,
     usageMonitor,
+    workspaceRoot,
   };
 }
 
@@ -529,7 +532,7 @@ export async function executeMergeAgent(
     return taskStage.run(async () => {
       logger.info(`Executing merge with model ${model}`);
 
-      const fileService = new TaskRunFileService(executionId);
+      const fileService = new TaskRunFileService(executionId, ctx.workspaceRoot);
       const getOutputFileLocation = createMergeOutputFileLocationGetter(
         inputFile,
         editedFile,

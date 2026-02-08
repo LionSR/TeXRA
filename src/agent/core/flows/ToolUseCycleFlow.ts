@@ -723,6 +723,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
           streamId: options.logger.streamId,
           executionId: options.executionId,
           toolCallId: call.callId,
+          workspaceRoot: options.workspaceRoot,
           onExecutionReady,
           onToolOutput,
         },
@@ -870,7 +871,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
         if (typeof filePath !== 'string' || filePath.trim() === '') {
           continue;
         }
-        const location = pathToLocation(filePath);
+        const location = pathToLocation(filePath, options.workspaceRoot);
         try {
           if (await AbsoluteFS.exists(location.absolutePath)) {
             validLocations.push(location);

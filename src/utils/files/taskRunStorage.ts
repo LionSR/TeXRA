@@ -240,8 +240,10 @@ export class TaskRunFileService {
   };
   private hasPreparedSnapshot = false;
   private readonly mirroredDependencies = new Set<string>();
+  private readonly workspaceRootOverride?: string;
 
-  constructor(executionId?: ExecutionId) {
+  constructor(executionId?: ExecutionId, workspaceRoot?: string) {
+    this.workspaceRootOverride = workspaceRoot;
     this.metadata = {
       mode: 'workspace',
       executionId: undefined,
@@ -286,7 +288,7 @@ export class TaskRunFileService {
   }
 
   private get workspaceRoot(): string | undefined {
-    return WorkspaceFS.getPath();
+    return this.workspaceRootOverride ?? WorkspaceFS.getPath();
   }
 
   public getExecutionId(): ExecutionId | undefined {
@@ -575,10 +577,14 @@ export function getComparablePath(location: FileLocation): string {
  * (path.normalize() is idempotent).
  *
  * @param target - Absolute or workspace-relative path
+ * @param workspaceRootOverride - Optional override for the workspace root (e.g., for worktree contexts)
  * @returns FileLocation (workspace or external, never runStorage)
  */
-export function pathToLocation(target: string): FileLocation {
-  const workspaceRoot = WorkspaceFS.getPath();
+export function pathToLocation(
+  target: string,
+  workspaceRootOverride?: string,
+): FileLocation {
+  const workspaceRoot = workspaceRootOverride ?? WorkspaceFS.getPath();
 
   // Special case: empty path requires workspace
   if (!target) {

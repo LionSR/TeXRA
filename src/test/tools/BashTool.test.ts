@@ -167,6 +167,7 @@ describe('BashTool', () => {
       modelName: 'test',
       streamId: 'bash-tool' as StreamTabId,
       executionId: 'test-execution-id',
+      workspaceRoot: '/tmp/test-workspace',
     };
 
     const run = new AgentRunState();

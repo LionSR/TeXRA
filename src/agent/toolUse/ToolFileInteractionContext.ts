@@ -12,6 +12,8 @@ export interface ToolFileInteractionContext {
   tracker: FileInteractionState;
   /** Todo state for managing task lists. Optional for backward compatibility. */
   todoState?: TodoState;
+  /** Working directory for file operations (overrides WorkspaceFS.getPath()). */
+  workspaceRoot?: string;
   /** Called by tools with approval flows to trigger in-progress log after approval. */
   onExecutionReady?: () => void;
   /** Called by tools to push partial output for live streaming to the UI. */

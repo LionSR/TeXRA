@@ -7,6 +7,9 @@ import { Minimatch } from 'minimatch';
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
 
+// Local imports - agent context
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+
 // Local imports - tools
 import { ToolError, type ToolFileAttachment } from '@tools/result';
 
@@ -20,16 +23,33 @@ export interface WorkspacePathResolution {
 }
 
 /**
+ * Resolve the effective workspace root for the current execution.
+ *
+ * Priority: explicit override > tool execution context > VS Code workspace.
+ */
+function getEffectiveWorkspaceRoot(overrideRoot?: string): string {
+  if (overrideRoot) return overrideRoot;
+  const ctx = getCurrentToolFileInteractionContext();
+  return ctx?.workspaceRoot ?? WorkspaceFS.getPath() ?? '';
+}
+
+/**
  * Resolve a potentially absolute or relative path against the workspace root.
  *
  * The returned relative path is normalized and guaranteed to remain inside the
  * workspace. Throws if the workspace folder cannot be determined or if the
  * resolved location would escape the workspace root.
+ *
+ * The workspace root is resolved in priority order:
+ * 1. Explicit `overrideRoot` parameter (for callers that know the root)
+ * 2. Current ToolFileInteractionContext.workspaceRoot (set per-stream)
+ * 3. VS Code workspace folder (global singleton fallback)
  */
 export function resolveWorkspaceRelativePath(
   targetPath?: string,
+  overrideRoot?: string,
 ): WorkspacePathResolution {
-  const workspacePath = WorkspaceFS.getPath();
+  const workspacePath = getEffectiveWorkspaceRoot(overrideRoot);
   if (!workspacePath) {
     throw new ToolError('Workspace path is not available.');
   }
@@ -43,7 +63,11 @@ export function resolveWorkspaceRelativePath(
   }
 
   if (path.isAbsolute(trimmed)) {
-    const relative = WorkspaceFS.relativePath(trimmed);
+    // When using an override root (e.g., worktree), use path.relative() directly
+    // since WorkspaceFS.relativePath() always resolves against the VS Code workspace.
+    const relative = overrideRoot
+      ? path.relative(workspacePath, trimmed)
+      : WorkspaceFS.relativePath(trimmed);
     if (relative === trimmed || relative.startsWith('..')) {
       throw new ToolError('Path must stay within the workspace.');
     }

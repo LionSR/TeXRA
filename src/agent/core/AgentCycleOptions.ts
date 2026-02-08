@@ -38,6 +38,7 @@ export type AgentCycleBaseOptions<C = unknown> = Pick<
   | 'userVarChannels'
   | 'checkInterruption'
   | 'setAbortController'
+  | 'workspaceRoot'
 > & {
   /** Fresh API client for this cycle */
   client: C;
