@@ -114,4 +114,3 @@ export function recordRound(
     roundState.normalizedUsage,
   );
 }
-
