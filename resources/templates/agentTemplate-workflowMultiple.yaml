@@ -12,7 +12,7 @@ settings:
   documentTag: latex_documents
   endTag: </latex_documents>
   defaultOutputFiles:
-{{ OUTPUT_FILES }}
+    {{ OUTPUT_FILES }}
   outputExt: tex
   prefills:
     - "<scratchpad>"
