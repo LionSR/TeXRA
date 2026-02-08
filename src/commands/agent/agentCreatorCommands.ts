@@ -33,26 +33,27 @@ interface CreatorConfig {
     generationPromptToolUse: string;
     retryPrompt: string;
   };
-  templates: { single: string; multiple: string; toolUse: string };
+  templates: { workflowSingle: string; workflowMultiple: string; toolUse: string };
 }
 
 const nunjucksEnv = nunjucks.configure({ autoescape: false });
 
-/** Cached creator config loaded from resources/templates/agentCreator.yaml */
+/** Cached creator config loaded from resources/templates/ */
 let creatorConfig: CreatorConfig | null = null;
 
 async function loadCreatorConfig(
   context: vscode.ExtensionContext,
 ): Promise<CreatorConfig> {
   if (creatorConfig) return creatorConfig;
-  const yamlPath = path.join(
-    context.extensionPath,
-    'resources',
-    'templates',
-    'agentCreator.yaml',
-  );
-  const content = await AbsoluteFS.read(yamlPath);
-  creatorConfig = yaml.parse(content) as CreatorConfig;
+  const templatesDir = path.join(context.extensionPath, 'resources', 'templates');
+  const [mainYaml, workflowSingle, workflowMultiple, toolUse] = await Promise.all([
+    AbsoluteFS.read(path.join(templatesDir, 'agentCreator.yaml')),
+    AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-workflowSingle.yaml')),
+    AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-workflowMultiple.yaml')),
+    AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-toolUse.yaml')),
+  ]);
+  const parsed = yaml.parse(mainYaml) as Omit<CreatorConfig, 'templates'>;
+  creatorConfig = { ...parsed, templates: { workflowSingle, workflowMultiple, toolUse } };
   return creatorConfig;
 }
 
@@ -152,8 +153,8 @@ async function createWorkflowAgent(
   if (!yamlContent) {
     const template =
       outputChoice === 'Multiple output files'
-        ? config.templates.multiple
-        : config.templates.single;
+        ? config.templates.workflowMultiple
+        : config.templates.workflowSingle;
     yamlContent = template
       .replaceAll('{{ AGENT_NAME }}', agentName)
       .replaceAll('{{ DESCRIPTION }}', description)
