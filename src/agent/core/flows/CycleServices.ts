@@ -4,8 +4,8 @@
  */
 
 import type {
-  AgentRunState,
-  ConversationRoundState,
+  AgentRunStateSnapshot,
+  ConversationRoundStateSnapshot,
 } from '@agent/core/AgentState';
 import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -20,19 +20,19 @@ import type { TaskRunFileService } from '@utils/files';
 
 /** Callback invoked when a round/cycle completes for usage tracking. */
 export type RoundFinalizedCallback = (
-  run: AgentRunState,
+  run: AgentRunStateSnapshot,
 ) => void | Promise<void>;
 
 /** Base state slices common to all cycle flows. */
 export interface BaseCycleStateSlices {
-  readonly run: AgentRunState;
+  readonly run: AgentRunStateSnapshot;
   readonly workspace: AgentWorkspaceState;
   readonly onRoundFinalized?: RoundFinalizedCallback;
 }
 
 /** State slices for response cycle flows (includes round for workflow agents). */
 export interface CycleStateSlices extends BaseCycleStateSlices {
-  round: ConversationRoundState;
+  round: ConversationRoundStateSnapshot;
 }
 
 // ---------------------------------------------------------------------------
