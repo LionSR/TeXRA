@@ -33,14 +33,15 @@ export const agentCreatorCommands = {
   createAgentWithAI: 'texra.createAgentWithAI',
 };
 
+interface AgentPromptPair {
+  systemPrompt: string;
+  userRequest: string;
+}
+
 interface CreatorConfig {
-  prompts: {
-    systemPrompt: string;
-    userRequest: string;
-    systemPromptToolUse: string;
-    userRequestToolUse: string;
-    retryPrompt: string;
-  };
+  workflow: AgentPromptPair;
+  toolUse: AgentPromptPair;
+  retryPrompt: string;
   templates: { workflowSingle: string; workflowMultiple: string; toolUse: string };
 }
 
@@ -83,6 +84,10 @@ function buildSchemaRef(settingsSchema: z.ZodObject<z.ZodRawShape>): string {
 /** Cached creator config loaded from resources/templates/ */
 let creatorConfig: CreatorConfig | null = null;
 
+interface ParsedCreatorYaml {
+  prompts: { systemPrompt: string; userRequest: string; retryPrompt?: string };
+}
+
 async function loadCreatorConfig(
   context: vscode.ExtensionContext,
 ): Promise<CreatorConfig> {
@@ -92,21 +97,21 @@ async function loadCreatorConfig(
     'resources',
     'templates',
   );
-  const [mainYaml, workflowSingle, workflowMultiple, toolUse] =
+  const [workflowYaml, toolUseYaml, workflowSingle, workflowMultiple, toolUseTpl] =
     await Promise.all([
-      AbsoluteFS.read(path.join(templatesDir, 'agentCreator.yaml')),
-      AbsoluteFS.read(
-        path.join(templatesDir, 'agentTemplate-workflowSingle.yaml'),
-      ),
-      AbsoluteFS.read(
-        path.join(templatesDir, 'agentTemplate-workflowMultiple.yaml'),
-      ),
+      AbsoluteFS.read(path.join(templatesDir, 'agentCreatorWorkflow.yaml')),
+      AbsoluteFS.read(path.join(templatesDir, 'agentCreatorToolUse.yaml')),
+      AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-workflowSingle.yaml')),
+      AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-workflowMultiple.yaml')),
       AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-toolUse.yaml')),
     ]);
-  const parsed = yaml.parse(mainYaml) as Omit<CreatorConfig, 'templates'>;
+  const wf = yaml.parse(workflowYaml) as ParsedCreatorYaml;
+  const tu = yaml.parse(toolUseYaml) as ParsedCreatorYaml;
   creatorConfig = {
-    ...parsed,
-    templates: { workflowSingle, workflowMultiple, toolUse },
+    workflow: wf.prompts,
+    toolUse: tu.prompts,
+    retryPrompt: wf.prompts.retryPrompt ?? '',
+    templates: { workflowSingle, workflowMultiple, toolUse: toolUseTpl },
   };
   return creatorConfig;
 }
@@ -278,20 +283,12 @@ async function tryAIGeneration(
     const apiKey = await SecretManager.getApiKey('anthropic');
     const anthropic = new Anthropic({ apiKey });
 
+    const prompts = config[category];
     const schemaRef = getSchemaReference(category);
-    const systemTemplate =
-      category === 'toolUse'
-        ? config.prompts.systemPromptToolUse
-        : config.prompts.systemPrompt;
     const systemPrompt =
-      nunjucksEnv.renderString(systemTemplate, vars) + '\n' + schemaRef;
-
-    const userRequestTemplate =
-      category === 'toolUse'
-        ? config.prompts.userRequestToolUse
-        : config.prompts.userRequest;
+      nunjucksEnv.renderString(prompts.systemPrompt, vars) + '\n' + schemaRef;
     const baseUserRequest = nunjucksEnv.renderString(
-      userRequestTemplate,
+      prompts.userRequest,
       vars,
     );
 
@@ -326,7 +323,7 @@ async function tryAIGeneration(
           userMessage =
             baseUserRequest +
             '\n' +
-            nunjucksEnv.renderString(config.prompts.retryPrompt, {
+            nunjucksEnv.renderString(config.retryPrompt, {
               VALIDATION_ERROR: validationErr,
             });
           continue;
