@@ -4,7 +4,12 @@
  */
 
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - formatters
@@ -28,6 +33,15 @@ export class LogEntry extends LitElement {
 
   @property({ type: Object }) message!: LogMessageData;
   @property({ type: Boolean }) defaultOpen = false;
+
+  /** Only re-render when message or defaultOpen actually change. */
+  protected override shouldUpdate(
+    changedProperties: PropertyValues<this>,
+  ): boolean {
+    return (
+      changedProperties.has('message') || changedProperties.has('defaultOpen')
+    );
+  }
 
   override render(): TemplateResult {
     if (!this.message) return html``;
