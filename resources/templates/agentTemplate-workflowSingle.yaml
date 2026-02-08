@@ -1,6 +1,6 @@
 # --- Agent Inheritance (Optional) ---
 # inherits: base
-name: { { AGENT_NAME } }
+name: {{ AGENT_NAME }}
 
 # --- Agent Settings ---
 settings:
