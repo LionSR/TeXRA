@@ -11,6 +11,7 @@ import type {
   ContextState,
   InstructionUpdate,
   LogMessageData,
+  ModelOptionData,
   OutputFileInfo,
   ProgressViewOutboundMessage,
   RetryPermission,
@@ -249,10 +250,14 @@ export class WebviewUpdater {
     });
   }
 
-  showAgentProposal(proposal: AgentProposalPermission): void {
+  showAgentProposal(
+    proposal: AgentProposalPermission,
+    modelOptionsData?: ModelOptionData[],
+  ): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL,
       proposal,
+      modelOptionsData,
     });
   }
 

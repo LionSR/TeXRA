@@ -6,6 +6,7 @@ import {
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
+import { consume } from '@lit/context';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -17,7 +18,11 @@ import {
   commonViewStyles,
   designTokens,
   requestPanelStyles,
+  selectStyles,
 } from '@shared/styles';
+
+// Local imports - shared utils
+import { renderModelOptions } from '@shared/utils/selectTemplates';
 
 // Local imports - progress view styles
 import { codeBlockStyles } from '../styles/codeBlockStyles';
@@ -27,6 +32,7 @@ import {
   AGENT_CATEGORY,
   type AgentProposalPermission,
   type BashPermission,
+  type ModelOptionData,
   type ProviderErrorPartial,
   type RetryPermission,
   type ToolEditPermission,
@@ -43,6 +49,9 @@ import { postMessage } from '@shared/vscode';
 
 // Local imports - webview commands
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+
+// Local imports - progress view contexts
+import { proposalModelOptionsContext } from '../contexts/streamContexts';
 
 // Local imports - progress view events
 import { ProgressEvents } from '../events';
@@ -114,9 +123,14 @@ export class RequestPanels extends LitElement {
     codiconIconClasses,
     codeBlockStyles,
     requestPanelStyles,
+    selectStyles,
   ];
 
   @property({ type: Array }) permissions: PermissionState[] = [];
+
+  @consume({ context: proposalModelOptionsContext, subscribe: true })
+  @state()
+  private modelOptions: ModelOptionData[] = [];
 
   @state() private feedbackOpenKeys: Set<PermissionKey> = new Set();
   @state() private openDiffMenuKey: PermissionKey | null = null;
@@ -126,6 +140,9 @@ export class RequestPanels extends LitElement {
   private bashPermissions: PermissionState[] = [];
   private retryPermissions: PermissionState[] = [];
   private proposalPermissions: PermissionState[] = [];
+
+  /** Per-proposal selected model overrides (proposalId → model value). */
+  @state() private selectedModels: Map<string, string> = new Map();
 
   protected override willUpdate(changedProperties: PropertyValues<this>): void {
     if (!changedProperties.has('permissions')) {
@@ -156,6 +173,21 @@ export class RequestPanels extends LitElement {
     this.proposalPermissions = this.permissions.filter(
       (p) => p.kind === PERMISSION_KIND.PROPOSAL,
     );
+
+    // Clean up selected models for removed proposals
+    const activeProposalIds = new Set(
+      this.proposalPermissions.map(
+        (p) => (p.data as AgentProposalPermission).proposalId,
+      ),
+    );
+    if (this.selectedModels.size > 0) {
+      const nextModels = new Map(
+        [...this.selectedModels].filter(([id]) => activeProposalIds.has(id)),
+      );
+      if (nextModels.size !== this.selectedModels.size) {
+        this.selectedModels = nextModels;
+      }
+    }
   }
 
   override connectedCallback(): void {
@@ -462,6 +494,8 @@ export class RequestPanels extends LitElement {
     const isFeedbackOpen = this.feedbackOpenKeys.has(key);
     const isWorkflow = data.agentCategory === AGENT_CATEGORY.WORKFLOW;
     const categoryLabel = isWorkflow ? 'Workflow' : 'Tool-Use';
+    const selectedModel = this.getSelectedModel(data);
+    const hasModelOptions = this.modelOptions.length > 0;
 
     return html`
       <div
@@ -482,7 +516,24 @@ export class RequestPanels extends LitElement {
               ${categoryLabel}
             </span>
             <span class="workflow-proposal__agent">${data.agent}</span>
-            <span class="workflow-proposal__model">${data.model}</span>
+            ${hasModelOptions
+              ? html`
+                  <div class="workflow-proposal__model-select">
+                    <i class="codicon codicon-robot"></i>
+                    <vscode-single-select
+                      class="proposal-model-dropdown"
+                      position="below"
+                      .value=${selectedModel}
+                      @change=${(e: Event) =>
+                        this.handleProposalModelChange(e, data.proposalId)}
+                    >
+                      ${renderModelOptions(this.modelOptions, selectedModel)}
+                    </vscode-single-select>
+                  </div>
+                `
+              : html`<span class="workflow-proposal__model"
+                  >${data.model}</span
+                >`}
             ${data.mode === 'async'
               ? html`<span class="workflow-proposal__mode-badge">async</span>`
               : nothing}
@@ -922,13 +973,43 @@ export class RequestPanels extends LitElement {
     postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, { file: filePath });
   }
 
+  /** Get the selected model for a proposal, falling back to the proposal's original model. */
+  private getSelectedModel(data: AgentProposalPermission): string {
+    return this.selectedModels.get(data.proposalId) ?? data.model;
+  }
+
+  /** Handle model dropdown change for a proposal. */
+  private handleProposalModelChange(event: Event, proposalId: string): void {
+    const target = event.currentTarget as HTMLSelectElement | null;
+    const value = target?.value;
+    if (!value) return;
+    const next = new Map(this.selectedModels);
+    next.set(proposalId, value);
+    this.selectedModels = next;
+  }
+
+  /** Get the model override for a proposal if different from original. */
+  private getModelOverride(permission: PermissionState): string | undefined {
+    if (permission.kind !== PERMISSION_KIND.PROPOSAL) return undefined;
+    const data = permission.data as AgentProposalPermission;
+    const selected = this.selectedModels.get(data.proposalId);
+    return selected && selected !== data.model ? selected : undefined;
+  }
+
   private emitAction(
     permission: PermissionState,
     action: string,
     feedback?: string,
   ): void {
+    const modelOverride =
+      action === 'approve' ? this.getModelOverride(permission) : undefined;
     this.dispatchEvent(
-      ProgressEvents.permissionAction({ permission, action, feedback }),
+      ProgressEvents.permissionAction({
+        permission,
+        action,
+        feedback,
+        modelOverride,
+      }),
     );
   }
 
