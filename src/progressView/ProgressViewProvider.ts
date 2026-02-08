@@ -20,7 +20,6 @@ import { ProgressViewState } from './state/ProgressViewState';
 import type {
   AgentProposalPermission,
   BashPermission,
-  ModelOptionData,
   OutputFileInfo,
   StorageKey,
   StreamTabId,
@@ -107,7 +106,10 @@ export class ProgressViewProvider
     );
     this.agentProposalHandler = new ApprovalRequestHandler(
       'proposalId',
-      (p) => void this.showAgentProposalWithOptions(p),
+      (p) => {
+        u.showAgentProposal(p); // Synchronous — proposal appears immediately
+        void this.sendProposalModelOptions(p); // Progressive enhancement
+      },
       (id) => u.resolveAgentProposal(id),
       canSend,
     );
@@ -160,22 +162,20 @@ export class ProgressViewProvider
   }
 
   /**
-   * Load model options and send agent proposal to the webview.
-   * Guards against the proposal being resolved while model options are loading
-   * (e.g., by timeout) — if the proposal is no longer pending, the show is skipped.
+   * Load model options and re-send the proposal with the dropdown data.
+   * Sent as a second SHOW message — the frontend upserts it over the initial
+   * (model-option-less) permission. If the proposal was resolved in the meantime,
+   * the frontend's resolvedBeforeShown stash drops the late message.
    */
-  private async showAgentProposalWithOptions(
+  private async sendProposalModelOptions(
     proposal: AgentProposalPermission,
   ): Promise<void> {
-    let modelOptions: ModelOptionData[] | undefined;
     try {
-      modelOptions = await computeModelOptionsData();
+      const modelOptions = await computeModelOptionsData();
+      this.webviewUpdater.showAgentProposal(proposal, modelOptions);
     } catch {
-      // Fall back to no model options
+      // Model dropdown won't appear — static label fallback is fine
     }
-    // Proposal may have been resolved while we were loading model options
-    if (!this.agentProposalHandler.get(proposal.proposalId)) return;
-    this.webviewUpdater.showAgentProposal(proposal, modelOptions);
   }
 
   public static getInstance(): ProgressViewProvider | undefined {
