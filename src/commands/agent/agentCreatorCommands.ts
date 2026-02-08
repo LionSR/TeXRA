@@ -47,6 +47,16 @@ interface CreatorConfig {
 
 const nunjucksEnv = nunjucks.configure({ autoescape: false });
 
+/** Runtime variables that must pass through Nunjucks unchanged in fallback templates. */
+const RUNTIME_PASSTHROUGH = Object.fromEntries(
+  [
+    'INPUT_CONTENT', 'INPUT_FILE', 'ALL_INPUTS',
+    'ALL_AUXILIARYS', 'ALL_REFERENCES', 'ADDITIONAL_INPUTS',
+    'INSTRUCTION', 'REFERENCE_CONTENT', 'AUXILIARY_CONTENT',
+    'OUTPUT_FILES_ORDER',
+  ].map((v) => [v, `{{ ${v} }}`]),
+);
+
 // ============================================================
 // Schema reference generation
 // ============================================================
@@ -216,10 +226,12 @@ async function createWorkflowAgent(
       outputChoice === 'Multiple output files'
         ? config.templates.workflowMultiple
         : config.templates.workflowSingle;
-    yamlContent = template
-      .replaceAll('{{ AGENT_NAME }}', agentName)
-      .replaceAll('{{ DESCRIPTION }}', description)
-      .replaceAll('{{ OUTPUT_FILES }}', outputFilesYaml);
+    yamlContent = nunjucksEnv.renderString(template, {
+      ...RUNTIME_PASSTHROUGH,
+      AGENT_NAME: agentName,
+      DESCRIPTION: description,
+      OUTPUT_FILES: outputFilesYaml,
+    });
   }
 
   const isMultipleOutput = outputChoice === 'Multiple output files';
@@ -248,9 +260,11 @@ async function createToolUseAgent(
   let yamlContent = await tryAIGeneration(config, 'toolUse', vars);
 
   if (!yamlContent) {
-    yamlContent = config.templates.toolUse
-      .replaceAll('{{ AGENT_NAME }}', agentName)
-      .replaceAll('{{ DESCRIPTION }}', description);
+    yamlContent = nunjucksEnv.renderString(config.templates.toolUse, {
+      ...RUNTIME_PASSTHROUGH,
+      AGENT_NAME: agentName,
+      DESCRIPTION: description,
+    });
   }
 
   await writeAndRegisterAgent(filePath, yamlContent, agentName, {}, 'toolUse');
