@@ -201,6 +201,7 @@ async function createToolUseAgent(
 
   await AbsoluteFS.write(filePath.fsPath, yamlContent);
   vscode.window.showInformationMessage(`Created agent at ${filePath.fsPath}`);
+  await promptToAddAgentToConfig(agentName, false, {}, 'toolUse');
   const doc = await vscode.workspace.openTextDocument(filePath);
   await vscode.window.showTextDocument(doc);
 }
