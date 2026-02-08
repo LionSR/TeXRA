@@ -122,18 +122,23 @@ export function initializeCycleFields<T extends object>(
   messages: ProviderMessage[],
   outputLocation: AgentFileLocation,
 ): asserts shared is T & ResponseCycleShared {
-  const target = shared as Record<string, unknown>;
-  target.messages = messages;
-  target.outputLocation = outputLocation;
-  target.endTurn = false;
-  target.shouldStop = false;
-  target.outputExists = false;
-  target.systemPrompt = undefined;
-  target.responseObject = undefined;
-  target.responseTimeMs = undefined;
-  target.stopReason = undefined;
-  target.processedResponse = undefined;
-  target.lastError = undefined;
+  // Typed literal ensures compile-time checking: missing fields, typos, and
+  // wrong types are all caught. Object.assign mutates shared in place so the
+  // flow's reference stays valid.
+  const defaults: ResponseCycleShared = {
+    messages,
+    outputLocation,
+    endTurn: false,
+    shouldStop: false,
+    outputExists: false,
+    systemPrompt: undefined,
+    responseObject: undefined,
+    responseTimeMs: undefined,
+    stopReason: undefined,
+    processedResponse: undefined,
+    lastError: undefined,
+  };
+  Object.assign(shared, defaults);
 }
 
 // Each node in the response cycle progressively hydrates the shared cycle
