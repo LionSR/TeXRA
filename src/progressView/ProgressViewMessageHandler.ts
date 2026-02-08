@@ -537,12 +537,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleAgentProposalAction(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION>,
   ): Promise<void> {
-    const { proposalId, action, feedback } = data;
+    const { proposalId, action, feedback, model } = data;
     if (action === 'setup') {
       await this.handleAgentProposalSetup(proposalId);
       return;
     }
-    proposalCoordinator.resolveRequest(proposalId, { action, feedback });
+    proposalCoordinator.resolveRequest(proposalId, { action, feedback, model });
   }
 
   private async handleAgentProposalSetup(proposalId: string): Promise<void> {

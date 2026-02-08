@@ -356,6 +356,23 @@ export const requestPanelStyles: CSSResult = css`
     margin-right: var(--spacing-small);
   }
 
+  .workflow-proposal__model-select {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    margin-left: auto;
+  }
+
+  .workflow-proposal__model-select .codicon {
+    color: var(--vscode-descriptionForeground);
+    flex-shrink: 0;
+  }
+
+  .proposal-model-dropdown {
+    min-width: 8rem;
+    max-width: 12rem;
+  }
+
   .workflow-proposal__mode-badge {
     font-size: var(--font-size-xs);
     font-weight: 600;
