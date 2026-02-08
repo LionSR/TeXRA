@@ -154,10 +154,10 @@ async function createWorkflowAgent(
       outputChoice === 'Multiple output files'
         ? config.templates.multiple
         : config.templates.single;
-    yamlContent = nunjucksEnv.renderString(template, {
-      ...vars,
-      OUTPUT_FILES: outputFilesYaml,
-    });
+    yamlContent = template
+      .replaceAll('{{ AGENT_NAME }}', agentName)
+      .replaceAll('{{ DESCRIPTION }}', description)
+      .replaceAll('{{ OUTPUT_FILES }}', outputFilesYaml);
   }
 
   await AbsoluteFS.write(filePath.fsPath, yamlContent);
@@ -194,7 +194,9 @@ async function createToolUseAgent(
   );
 
   if (!yamlContent) {
-    yamlContent = nunjucksEnv.renderString(config.templates.toolUse, vars);
+    yamlContent = config.templates.toolUse
+      .replaceAll('{{ AGENT_NAME }}', agentName)
+      .replaceAll('{{ DESCRIPTION }}', description);
   }
 
   await AbsoluteFS.write(filePath.fsPath, yamlContent);
