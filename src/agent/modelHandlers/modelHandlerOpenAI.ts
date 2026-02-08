@@ -233,9 +233,10 @@ export class ModelHandlerOpenAI<
     client: OpenAI,
     baseParams: ChatCompletionRequestBase,
     signal?: AbortSignal,
+    outputStreaming?: boolean,
   ): Promise<ChatCompletion> {
     const thinking = this.createThinkingStream();
-    const output = this.isOutputStreamingEnabled()
+    const output = (outputStreaming ?? this.outputStreaming)
       ? this.createOutputStream()
       : undefined;
 
@@ -363,7 +364,7 @@ export class ModelHandlerOpenAI<
   }
 
   /** Creates a chat completion with model-specific parameters. */
-  protected override async createResponseCore(
+  async createResponse(
     options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
   ): Promise<CreateResponseResult<ChatCompletion, ChatCompletionMessageParam>> {
     const {
@@ -452,6 +453,7 @@ export class ModelHandlerOpenAI<
         client,
         baseParams,
         signal,
+        options.outputStreaming,
       );
       return { response };
     }

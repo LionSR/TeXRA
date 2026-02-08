@@ -47,16 +47,6 @@ export interface StepResult<S> {
  * @template P - Params type (must be serializable)
  * @template Svc - Services type (NOT serialized - injected at runtime)
  */
-export interface PersistedFlowOptions {
-  /**
-   * Whether to persist shared state to KV store after every node execution.
-   * When false, only the node action history is tracked in memory and state
-   * is persisted on explicit `setShared()` calls (e.g., at round boundaries).
-   * Default: true (backward compatible — persists after every step).
-   */
-  persistEveryStep?: boolean;
-}
-
 export class PersistedFlow<
   S = Record<string, unknown>,
   P extends Record<string, unknown> = Record<string, unknown>,
@@ -64,28 +54,25 @@ export class PersistedFlow<
 > extends Flow<S, P, Svc> {
   protected readonly runId: string;
   protected readonly kv: ExecutionKVStore;
+  /**
+   * Whether to persist shared state to KV store after every node execution.
+   * When false, only the node action history is tracked in memory and state
+   * is persisted on explicit `setShared()` calls (e.g., at round boundaries).
+   */
   protected readonly persistEveryStep: boolean;
   /** In-memory cache of the flow record when persistEveryStep is false. */
   private _cachedRecord: FlowRecord | undefined;
 
-  /**
-   * Create a new PersistedFlow.
-   *
-   * @param start - The starting node of the flow graph
-   * @param kv - Storage backend (ExecutionKVStore)
-   * @param runId - Optional run identifier. Defaults to kv.getExecutionId().
-   * @param options - Optional configuration
-   */
   constructor(
     start: BaseNode<any, any>,
     kv: ExecutionKVStore,
     runId?: string,
-    options?: PersistedFlowOptions,
+    persistEveryStep = true,
   ) {
     super(start);
     this.kv = kv;
     this.runId = runId ?? kv.getExecutionId();
-    this.persistEveryStep = options?.persistEveryStep ?? true;
+    this.persistEveryStep = persistEveryStep;
   }
 
   /**

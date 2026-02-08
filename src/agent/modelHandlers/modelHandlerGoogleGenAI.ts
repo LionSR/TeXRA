@@ -437,7 +437,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   /** Creates a chat completion response using Google's GenAI API with specified parameters and optional system prompt. */
-  protected override async createResponseCore(
+  async createResponse(
     options: CreateResponseOptions<Content, GoogleGenAI>,
   ): Promise<CreateResponseResult<GenerateContentResponse, Content>> {
     const {
@@ -575,7 +575,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const stream = await chat.sendMessageStream(streamParams);
 
         const thinking = this.createThinkingStream();
-        const output = this.isOutputStreamingEnabled()
+        const output = (options.outputStreaming ?? this.outputStreaming)
           ? this.createOutputStream()
           : undefined;
 

@@ -1055,7 +1055,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    *
    * @returns Result containing the response and optionally updated messages if compaction occurred
    */
-  protected override async createResponseCore(
+  async createResponse(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
     // Clear any stale compaction result from previous attempts (ensures clean state on retries)
@@ -1346,7 +1346,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // GPT can: think → web_search → think more → web_search → text
         const state = {
           thinkingStream: this.createThinkingStream(),
-          outputStream: this.isOutputStreamingEnabled()
+          outputStream: (options.outputStreaming ?? this.outputStreaming)
             ? this.createOutputStream()
             : null,
           emittedWebSearchIds: new Set<string>(),

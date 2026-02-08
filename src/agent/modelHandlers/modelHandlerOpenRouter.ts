@@ -109,7 +109,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
   }
 
   /** Creates a response using OpenRouter's API with model-specific configuration. */
-  protected override async createResponseCore(
+  async createResponse(
     options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
   ): Promise<CreateResponseResult<ChatCompletion, ChatCompletionMessageParam>> {
     const { client, messages, temperature, endTag, signal, tools } = options;
@@ -159,7 +159,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       kwargs.stream_options = { include_usage: true }; // Assuming OpenRouter passes this through
       const stream = await client.chat.completions.stream(kwargs, { signal });
       const thinking = this.createThinkingStream();
-      const output = this.isOutputStreamingEnabled()
+      const output = (options.outputStreaming ?? this.outputStreaming)
         ? this.createOutputStream()
         : undefined;
       for await (const chunk of stream) {
