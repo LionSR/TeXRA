@@ -465,6 +465,11 @@ const StopStreamMessageSchema = z.object({
   stream: StreamTabIdSchema,
 });
 
+const CompactResponseMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE),
+  stream: StreamTabIdSchema,
+});
+
 const ResumeMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RESUME),
   stream: StreamTabIdSchema,
@@ -644,6 +649,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     InboundDeleteStreamMessageSchema,
     InboundDeleteAllMessageSchema,
     StopStreamMessageSchema,
+    CompactResponseMessageSchema,
     ResumeMessageSchema,
     RunNewMessageSchema,
     DiffStreamMessageSchema,
