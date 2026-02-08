@@ -130,6 +130,14 @@ export const logEntryStyles = css`
     text-decoration: none;
   }
 
+  .memory-path {
+    color: var(--color-text-secondary);
+  }
+
+  .memory-path .codicon {
+    margin-right: 4px;
+  }
+
   /* Web search result styles */
   .detail-list {
     list-style: none;
