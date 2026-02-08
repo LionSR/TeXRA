@@ -3,7 +3,8 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Internal imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { AgentRunState } from '@agent/core/AgentState';
+import type { AgentRunStateSnapshot } from '@agent/core/AgentState';
+import type { RunUsageTotals } from '@agent/core/RunUsageAccumulator';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 import {
   UsageLogService,
@@ -98,16 +99,16 @@ export class UsageMonitor {
   }
 
   async recordUsage(
-    stateGlobal: AgentRunState,
+    stateGlobal: AgentRunStateSnapshot,
     options?: { runKind?: UsageMonitorRunKind },
   ): Promise<void> {
     const { logger, usageReporter } = this.context;
     const runKind: UsageMonitorRunKind = options?.runKind ?? 'workflow';
 
     try {
-      const totals = stateGlobal.usageAccumulator.getTotals();
+      const totals = stateGlobal.usageAccumulator.totals;
       const latestUsage = stateGlobal.usageAccumulator
-        .getNormalizedSnapshots()
+        .normalizedSnapshots
         .at(-1)?.usage;
 
       // Per-round usage - sent to both UI (for accumulation) and backend analytics
@@ -178,7 +179,7 @@ export class UsageMonitor {
    */
   private calculateCachePercentage(
     supportsCaching: boolean,
-    totals: ReturnType<AgentRunState['usageAccumulator']['getTotals']>,
+    totals: RunUsageTotals,
   ): number {
     if (!supportsCaching) return 0;
 

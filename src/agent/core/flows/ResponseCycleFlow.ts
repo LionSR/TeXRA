@@ -9,6 +9,7 @@ import {
 } from '@shared/schemas';
 import { isRemoteAgent } from '@agent/index';
 import { BaseNode, Flow } from '@agent/node';
+import { recordRound } from '@agent/core/AgentState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   BaseCycleFieldsSchema,
@@ -556,7 +557,7 @@ class ResponseProcessNode<C> extends BaseNode<
     const result = execRes.value;
 
     if (shared.responseTimeMs !== undefined) {
-      round.addResponseTime(shared.responseTimeMs);
+      round.responseTimeMs += shared.responseTimeMs;
     }
 
     if (result.normalizedUsage) {
@@ -669,7 +670,7 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
   /** Finalize the round by recording stats and invoking callback. */
   async exec(): Promise<void> {
     const { round, run, onRoundFinalized } = this.services;
-    run.recordRound(round);
+    recordRound(run, round);
     if (onRoundFinalized) {
       await onRoundFinalized(run);
     }
@@ -778,7 +779,7 @@ class ResponseContinuationNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    round.incrementContinuation();
+    round.continuationCount += 1;
     logger.info(`Starting continuation #${round.continuationCount}`, {
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
