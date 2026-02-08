@@ -11,10 +11,7 @@ import {
   type ToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
 import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
-import {
-  createClientRef,
-  type ToolUseCycleServices,
-} from '@agent/core/flows/CycleServices';
+import { type ToolUseCycleServices } from '@agent/core/flows/CycleServices';
 import { bus } from '@eventBus/ProgressEventBus';
 
 import {
@@ -81,14 +78,10 @@ export class ToolUseCycleNode<C> extends Node<
     };
 
     const flow = createToolUseCycleFlow<C>();
-    const [clientRef, refreshClient] = createClientRef<C>(
-      await modelHandler.getClient(),
-      () => modelHandler.getClient(),
-    );
+    const clientRef = { current: await modelHandler.getClient() };
     const flowServices: ToolUseCycleServices<C> & {
       refreshClient: () => Promise<void>;
     } = {
-      // Explicit field selection — only pass what cycle flow actually uses
       modelHandler,
       setting: { ...setting, tools: resolvedTools },
       prompt: this.services.prompt,
@@ -109,7 +102,9 @@ export class ToolUseCycleNode<C> extends Node<
       onRoundFinalized: getUsageRecorder(),
       modelName: config.model,
       agentName: config.agent,
-      refreshClient,
+      async refreshClient() {
+        clientRef.current = await modelHandler.getClient();
+      },
     };
     flow.setServices(flowServices);
 
