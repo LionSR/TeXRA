@@ -9,7 +9,6 @@ import type {
   AgentWorkspaceSnapshot,
 } from '@agent/core/AgentWorkspaceState';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
-import type { InvocationResult } from '@agent/core/flows/RetryState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 export interface StateSlicesSnapshot {
@@ -37,9 +36,6 @@ export interface PrepareResult extends NodeResultStateBase {
   messages: ProviderMessage[];
   shouldSkipCycle: boolean;
 }
-
-/** Result from ToolUseCycleNode exec phase. */
-export type CycleExecResult = InvocationResult<{ messages: ProviderMessage[] }>;
 
 /** Result from ToolUseWaitNode exec phase. */
 export type WaitExecResult =
