@@ -171,8 +171,12 @@ export class ProgressViewProvider
   /**
    * Load model options and re-send the proposal with the dropdown data.
    * Sent as a second SHOW message — the frontend upserts it over the initial
-   * (model-option-less) permission. If the proposal was resolved in the meantime,
-   * the frontend's resolvedBeforeShown stash drops the late message.
+   * (model-option-less) permission.
+   *
+   * Guards against the RESOLVE-between-two-SHOWs race: if the user
+   * approves/rejects while model options are loading, the proposal is
+   * removed from agentProposalHandler. We check before sending so the
+   * late SHOW doesn't re-create an undismissable ghost proposal.
    *
    * Uses a 30-second TTL cache to avoid redundant async work when
    * multiple proposals arrive in quick succession.
@@ -182,6 +186,7 @@ export class ProgressViewProvider
   ): Promise<void> {
     try {
       const modelOptions = await this.getCachedModelOptions();
+      if (!this.agentProposalHandler.get(proposal.proposalId)) return;
       this.webviewUpdater.showAgentProposal(proposal, modelOptions);
     } catch {
       // Model dropdown won't appear — static label fallback is fine
