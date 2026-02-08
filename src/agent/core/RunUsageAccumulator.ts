@@ -126,4 +126,3 @@ export function mergeAccumulators(
 
   target.normalizedSnapshots.push(...source.normalizedSnapshots);
 }
-
