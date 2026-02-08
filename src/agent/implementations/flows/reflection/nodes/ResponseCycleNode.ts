@@ -29,10 +29,7 @@ import {
   createResponseCycleFlow,
   initializeCycleFields,
 } from '@agent/core/flows/ResponseCycleFlow';
-import {
-  type CycleStateSlices,
-  type ResponseCycleServices,
-} from '@agent/core/flows/CycleServices';
+import { type CycleStateSlices } from '@agent/core/flows/CycleServices';
 import type { AgentFileLocation } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -148,22 +145,11 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
       // Create and run the flow directly on shared (native nesting)
       const flow = createResponseCycleFlow<C>();
-      const modelHandler = this.services.modelHandler;
+      const { modelHandler } = this.services;
       const clientRef = { current: await modelHandler.getClient() };
-      const flowServices: ResponseCycleServices<C> & {
-        refreshClient: () => Promise<void>;
-      } = {
-        modelHandler: this.services.modelHandler,
-        setting: this.services.setting,
-        prompt: this.services.prompt,
-        logger: this.services.logger,
-        streamId: this.services.streamId,
-        executionId: this.services.executionId,
-        userVarChannels: this.services.userVarChannels,
-        checkInterruption: this.services.checkInterruption,
-        setAbortController: this.services.setAbortController,
-        config: this.services.config,
-        fileService: this.services.fileService,
+      // Spread outer services (core fields pass through), add cycle-specific fields
+      flow.setServices({
+        ...this.services,
         get client() {
           return clientRef.current;
         },
@@ -174,8 +160,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
         async refreshClient() {
           clientRef.current = await modelHandler.getClient();
         },
-      };
-      flow.setServices(flowServices);
+      });
       await flow.run(shared);
 
       // Determine outcome directly from shared state flags (single interpretation)

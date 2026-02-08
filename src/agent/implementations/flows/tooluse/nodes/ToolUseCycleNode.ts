@@ -10,7 +10,6 @@ import {
   createToolUseCycleFlow,
   type ToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
-import { type ToolUseCycleServices } from '@agent/core/flows/CycleServices';
 import { bus } from '@eventBus/ProgressEventBus';
 
 import {
@@ -89,21 +88,10 @@ export class ToolUseCycleNode<C> extends Node<
 
     const flow = createToolUseCycleFlow<C>();
     const clientRef = { current: await modelHandler.getClient() };
-    const flowServices: ToolUseCycleServices<C> & {
-      refreshClient: () => Promise<void>;
-    } = {
-      modelHandler,
+    // Spread outer services (core fields pass through), add/override cycle-specific fields
+    flow.setServices({
+      ...this.services,
       setting: { ...setting, tools: resolvedTools },
-      prompt: this.services.prompt,
-      logger: this.services.logger,
-      streamId,
-      executionId: this.services.executionId,
-      userVarChannels: this.services.userVarChannels,
-      checkInterruption: this.services.checkInterruption,
-      setAbortController: this.services.setAbortController,
-      toolRegistry: this.services.toolRegistry,
-      session: this.services.session,
-      onFollowUpConsumed: this.services.onFollowUpConsumed,
       get client() {
         return clientRef.current;
       },
@@ -115,8 +103,7 @@ export class ToolUseCycleNode<C> extends Node<
       async refreshClient() {
         clientRef.current = await modelHandler.getClient();
       },
-    };
-    flow.setServices(flowServices);
+    });
 
     prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {
       bus.emit('updateTodos', {
