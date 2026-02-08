@@ -82,11 +82,6 @@ export function createUsageAccumulator(): RunUsageAccumulatorJSON {
   return { totals: { ...DEFAULT_TOTALS }, normalizedSnapshots: [] };
 }
 
-/** Parse a snapshot, applying schema defaults. */
-export function parseUsageAccumulator(snapshot: unknown): RunUsageAccumulatorJSON {
-  return RunUsageAccumulatorJSONSchema.parse(snapshot);
-}
-
 /** Record a normalized usage entry. Mutates acc in place. */
 export function recordNormalizedUsage(
   acc: RunUsageAccumulatorJSON,
@@ -132,47 +127,3 @@ export function mergeAccumulators(
   target.normalizedSnapshots.push(...source.normalizedSnapshots);
 }
 
-// ============================================================================
-// Backward-compatible class (delegates to standalone functions)
-// ============================================================================
-
-/**
- * @deprecated Use plain RunUsageAccumulatorJSON + standalone functions instead.
- * Kept for backward compatibility during migration.
- */
-export class RunUsageAccumulator {
-  private data: RunUsageAccumulatorJSON;
-
-  constructor() {
-    this.data = createUsageAccumulator();
-  }
-
-  static fromSnapshot(snapshot: unknown): RunUsageAccumulator {
-    const acc = new RunUsageAccumulator();
-    acc.data = parseUsageAccumulator(snapshot);
-    return acc;
-  }
-
-  toSnapshot(): RunUsageAccumulatorJSON {
-    return {
-      totals: this.data.totals,
-      normalizedSnapshots: [...this.data.normalizedSnapshots],
-    };
-  }
-
-  recordNormalizedUsage(round: number, usage: NormalizedUsage): void {
-    recordNormalizedUsage(this.data, round, usage);
-  }
-
-  merge(other: RunUsageAccumulator): void {
-    mergeAccumulators(this.data, other.data);
-  }
-
-  getTotals(): RunUsageTotals {
-    return this.data.totals;
-  }
-
-  getNormalizedSnapshots(): readonly { round: number; usage: NormalizedUsage }[] {
-    return this.data.normalizedSnapshots;
-  }
-}

@@ -18,4 +18,3 @@ export { AgentConfigSchema, type AgentConfig } from './AgentConfig';
 
 // State classes - commonly instantiated
 export { AgentWorkspaceState } from './AgentWorkspaceState';
-export { ConversationRoundState } from './AgentState';
