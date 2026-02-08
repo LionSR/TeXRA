@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - agent
 import { STREAM_STATUS } from '@shared/schemas';
 import {
-  getInterruptible,
+  interruptAll,
   getToolUseFlowContext,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
@@ -15,7 +15,7 @@ export function registerAgentCommands(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       'texra.stopAgent',
       (streamId: StreamTabId) => {
-        getInterruptible(streamId)?.interrupt();
+        interruptAll(streamId);
         StreamStatusService.set(streamId, STREAM_STATUS.STOPPED);
       },
     ),

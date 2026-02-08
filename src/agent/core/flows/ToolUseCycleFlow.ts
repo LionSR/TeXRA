@@ -320,13 +320,13 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     const start = Date.now();
 
     return this.withAbortController(async (signal) => {
-      services.modelHandler.setOutputStreaming(true);
       const result = await services.modelHandler.createResponse({
         client: services.client,
         messages: prepRes.messages,
         temperature: services.setting.temperature,
         signal,
         tools: services.setting.tools as ToolDefinition[] | undefined,
+        outputStreaming: true,
       });
 
       const responseTimeMs = Date.now() - start;

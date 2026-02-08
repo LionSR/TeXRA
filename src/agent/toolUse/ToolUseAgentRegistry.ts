@@ -1,9 +1,9 @@
 /**
  * Unified execution registry for agent interruption.
  *
- * This module provides a single registry for all interruptible executions,
- * primarily tool-use flow contexts. The registry enables unified interrupt
- * handling from agentCommands.
+ * Supports hierarchical parent/child registrations for subagent execution.
+ * Each stream has a stack of interruptibles — interrupting the top-level
+ * entry propagates to all children.
  */
 
 // Local imports - agent
@@ -31,32 +31,62 @@ export interface IInterruptible {
   interrupt(): void;
 }
 
-const registry = new Map<StreamTabId, IInterruptible>();
+/**
+ * Stack of interruptibles per stream. The last entry is the active one
+ * (innermost subagent). Interrupting a stream interrupts all entries in
+ * the stack (parent + children).
+ */
+const registry = new Map<StreamTabId, IInterruptible[]>();
 
 /**
  * Register an interruptible execution by stream ID.
+ * Multiple registrations on the same stream form a stack (for subagents).
  */
 export function registerInterruptible(
   streamTabId: StreamTabId,
   interruptible: IInterruptible,
 ): void {
-  registry.set(streamTabId, interruptible);
+  const stack = registry.get(streamTabId);
+  if (stack) {
+    stack.push(interruptible);
+  } else {
+    registry.set(streamTabId, [interruptible]);
+  }
 }
 
 /**
- * Unregister an execution from the registry.
+ * Unregister the most recent interruptible for a stream.
+ * Removes the stack entry when the last registration is popped.
  */
 export function unregisterInterruptible(streamTabId: StreamTabId): void {
-  registry.delete(streamTabId);
+  const stack = registry.get(streamTabId);
+  if (!stack) return;
+  stack.pop();
+  if (stack.length === 0) {
+    registry.delete(streamTabId);
+  }
 }
 
 /**
- * Get the interruptible execution for a stream.
+ * Get the active (innermost) interruptible execution for a stream.
  */
 export function getInterruptible(
   streamTabId: StreamTabId,
 ): IInterruptible | undefined {
-  return registry.get(streamTabId);
+  const stack = registry.get(streamTabId);
+  return stack?.[stack.length - 1];
+}
+
+/**
+ * Interrupt all interruptibles registered for a stream (parent + children).
+ * Interrupts in reverse order (innermost first).
+ */
+export function interruptAll(streamTabId: StreamTabId): void {
+  const stack = registry.get(streamTabId);
+  if (!stack) return;
+  for (let i = stack.length - 1; i >= 0; i--) {
+    stack[i].interrupt();
+  }
 }
 
 /**
@@ -70,13 +100,13 @@ function isToolUseFlowContext(
 }
 
 /**
- * Get a tool-use flow context by stream ID.
+ * Get a tool-use flow context by stream ID (active/innermost entry).
  * Returns undefined if the entry is not a ToolUseFlowContext.
  */
 export function getToolUseFlowContext(
   streamTabId: StreamTabId,
 ): ToolUseFlowContext<unknown> | undefined {
-  const entry = registry.get(streamTabId);
+  const entry = getInterruptible(streamTabId);
   return isToolUseFlowContext(entry) ? entry : undefined;
 }
 

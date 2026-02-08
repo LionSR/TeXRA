@@ -112,6 +112,17 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
   async createResponse(
     options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
   ): Promise<CreateResponseResult<ChatCompletion, ChatCompletionMessageParam>> {
+    this.applyOutputStreamingOverride(options.outputStreaming);
+    try {
+      return await this._createOpenRouterResponseImpl(options);
+    } finally {
+      this.clearOutputStreamingOverride();
+    }
+  }
+
+  private async _createOpenRouterResponseImpl(
+    options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
+  ): Promise<CreateResponseResult<ChatCompletion, ChatCompletionMessageParam>> {
     const { client, messages, temperature, endTag, signal, tools } = options;
     // Get streaming config
     const useStreaming = this.getStreamingConfig();

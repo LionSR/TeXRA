@@ -67,7 +67,10 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
-import { createInterruptCallbacks } from './InterruptManager';
+import {
+  createInterruptCallbacks,
+  type InterruptCallbacks,
+} from './InterruptManager';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -150,7 +153,7 @@ interface ResolveAgentOptions {
   streamTabIdOverride?: StreamTabId;
 }
 
-async function resolveAgentBase(
+export async function resolveAgentBase(
   configPayload: AgentConfigPayload,
   providedExecutionId?: ExecutionId,
   options?: ResolveAgentOptions,
@@ -378,6 +381,73 @@ async function showApiKeyErrorNotification(): Promise<void> {
   );
 }
 
+// ============================================================================
+// Headless Agent Flow Runner
+// ============================================================================
+
+/**
+ * Input for running an agent flow without UI lifecycle overhead.
+ * Suitable for subagent execution — no stream lock, no progress view, no notifications.
+ */
+export interface RunAgentFlowInput {
+  /** Resolved agent core (config, model handler, setting, prompt, etc.) */
+  core: ResolvedAgentBase;
+  /** Interrupt callbacks for this flow (each subagent should get its own) */
+  interruptCallbacks: InterruptCallbacks;
+  /** Optional overrides for flow-specific behavior */
+  overrides?: {
+    /** Custom output file location getter (used by merge) */
+    getOutputFileLocation?: (round: number) => import('@utils/files').AgentFileLocation;
+    /** Callback when a queued follow-up is consumed */
+    onFollowUpConsumed?: () => void;
+  };
+}
+
+/**
+ * Run an agent flow without UI lifecycle overhead.
+ *
+ * This is the headless entry point for agent execution, suitable for:
+ * - Subagent spawning from a parent agent
+ * - Parallel multi-agent execution
+ * - Testing without VS Code UI dependencies
+ *
+ * Callers are responsible for stream lock management and interrupt registration.
+ */
+export async function runAgentFlow(
+  input: RunAgentFlowInput,
+): Promise<import('@shared/schemas').EndGroupStatus> {
+  const { core, interruptCallbacks, overrides } = input;
+  const { setting } = core;
+
+  const flowContext = {
+    ...core,
+    ...interruptCallbacks,
+  };
+
+  if (setting.agentCategory === AgentCategory.ToolUse) {
+    const result = await runToolUseFlow({
+      ...flowContext,
+      getUsageRecorder: createUsageRecorder(core.usageMonitor, 'tool-use'),
+      setting: core.setting as AgentToolUseSetting,
+      onFollowUpConsumed: overrides?.onFollowUpConsumed,
+    });
+    return result.status;
+  }
+
+  const result = await runReflectionFlow({
+    ...flowContext,
+    getUsageRecorder: createUsageRecorder(core.usageMonitor, 'workflow'),
+    setting: core.setting as AgentWorkflowSetting,
+    parentStage: core.parentStage,
+    getOutputFileLocation: overrides?.getOutputFileLocation,
+  });
+  return result.status;
+}
+
+// ============================================================================
+// VS Code Command Entry Points (with UI lifecycle)
+// ============================================================================
+
 export async function executeAgent(
   configPayload: AgentConfigPayload,
   executionId?: ExecutionId,
@@ -463,31 +533,14 @@ export async function executeAgent(
     return taskStage.run(async () => {
       logger.info(`Executing ${agentName} with model ${config.model}`);
 
-      const interruptCallbacks = createInterruptCallbacks();
-
-      const flowContext = {
-        ...ctx,
-        ...interruptCallbacks,
-      };
-
-      if (setting.agentCategory === AgentCategory.ToolUse) {
-        const result = await runToolUseFlow({
-          ...flowContext,
-          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
-          setting: ctx.setting as AgentToolUseSetting,
+      return runAgentFlow({
+        core: ctx,
+        interruptCallbacks: createInterruptCallbacks(),
+        overrides: {
           onFollowUpConsumed: () =>
             bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
-        });
-        return result.status;
-      }
-
-      const result = await runReflectionFlow({
-        ...flowContext,
-        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
-        setting: ctx.setting as AgentWorkflowSetting,
-        parentStage: ctx.parentStage,
+        },
       });
-      return result.status;
     });
   });
 }

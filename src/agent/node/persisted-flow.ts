@@ -47,6 +47,16 @@ export interface StepResult<S> {
  * @template P - Params type (must be serializable)
  * @template Svc - Services type (NOT serialized - injected at runtime)
  */
+export interface PersistedFlowOptions {
+  /**
+   * Whether to persist shared state to KV store after every node execution.
+   * When false, only the node action history is tracked in memory and state
+   * is persisted on explicit `setShared()` calls (e.g., at round boundaries).
+   * Default: true (backward compatible — persists after every step).
+   */
+  persistEveryStep?: boolean;
+}
+
 export class PersistedFlow<
   S = Record<string, unknown>,
   P extends Record<string, unknown> = Record<string, unknown>,
@@ -54,6 +64,9 @@ export class PersistedFlow<
 > extends Flow<S, P, Svc> {
   protected readonly runId: string;
   protected readonly kv: ExecutionKVStore;
+  protected readonly persistEveryStep: boolean;
+  /** In-memory cache of the flow record when persistEveryStep is false. */
+  private _cachedRecord: FlowRecord | undefined;
 
   /**
    * Create a new PersistedFlow.
@@ -61,11 +74,18 @@ export class PersistedFlow<
    * @param start - The starting node of the flow graph
    * @param kv - Storage backend (ExecutionKVStore)
    * @param runId - Optional run identifier. Defaults to kv.getExecutionId().
+   * @param options - Optional configuration
    */
-  constructor(start: BaseNode<any, any>, kv: ExecutionKVStore, runId?: string) {
+  constructor(
+    start: BaseNode<any, any>,
+    kv: ExecutionKVStore,
+    runId?: string,
+    options?: PersistedFlowOptions,
+  ) {
     super(start);
     this.kv = kv;
     this.runId = runId ?? kv.getExecutionId();
+    this.persistEveryStep = options?.persistEveryStep ?? true;
   }
 
   /**
@@ -76,12 +96,38 @@ export class PersistedFlow<
     return structuredClone(shared) as Record<string, unknown>;
   }
 
+  /**
+   * Read the flow record, using the in-memory cache when persistEveryStep is false.
+   */
+  private async readFlowRecord(key: string): Promise<FlowRecord | undefined> {
+    if (!this.persistEveryStep && this._cachedRecord) {
+      return this._cachedRecord;
+    }
+    const record = await this.kv.read<FlowRecord>(key);
+    if (!this.persistEveryStep && record) {
+      this._cachedRecord = record;
+    }
+    return record;
+  }
+
+  /**
+   * Write the flow record to KV store and update the cache.
+   */
+  private async writeFlowRecord(
+    key: string,
+    record: FlowRecord,
+  ): Promise<void> {
+    this._cachedRecord = record;
+    await this.kv.write(key, record);
+  }
+
   async run(shared: S): Promise<Action | undefined> {
     await this.ensureRecord(shared);
     while (await this.step()) {
       // Do nothing
     }
-    const flow = await this.kv.read<FlowRecord>(`flow:${this.runId}`);
+    const key = `flow:${this.runId}`;
+    const flow = await this.readFlowRecord(key);
     return flow?.nodes.at(-1)?.action as Action | undefined;
   }
 
@@ -106,7 +152,7 @@ export class PersistedFlow<
    */
   protected async stepWithResult(): Promise<StepResult<S>> {
     const key = `flow:${this.runId}`;
-    const flow = await this.kv.read<FlowRecord>(key);
+    const flow = await this.readFlowRecord(key);
 
     if (!flow || !Array.isArray(flow.nodes)) {
       throw new Error('Invalid or corrupted flow record');
@@ -137,8 +183,10 @@ export class PersistedFlow<
     const action = await cursor._run(shared);
 
     flow.nodes.push({ action });
-    flow.shared = this.serializeShared(shared);
-    await this.kv.write(key, flow);
+    if (this.persistEveryStep) {
+      flow.shared = this.serializeShared(shared);
+      await this.writeFlowRecord(key, flow);
+    }
 
     return {
       hasMore: true,
@@ -172,15 +220,16 @@ export class PersistedFlow<
   }
 
   async getShared(): Promise<S | undefined> {
-    const flow = await this.kv.read<FlowRecord>(`flow:${this.runId}`);
+    const key = `flow:${this.runId}`;
+    const flow = await this.readFlowRecord(key);
     return flow?.shared as S | undefined;
   }
 
   async setShared(newShared: S): Promise<void> {
     const key = `flow:${this.runId}`;
-    const flow = (await this.kv.read<FlowRecord>(key))!;
+    const flow = (await this.readFlowRecord(key))!;
     flow.shared = this.serializeShared(newShared);
-    await this.kv.write(key, flow);
+    await this.writeFlowRecord(key, flow);
   }
 
   getRunId(): string {
@@ -193,7 +242,7 @@ export class PersistedFlow<
 
   private async ensureRecord(shared: S): Promise<void> {
     const key = `flow:${this.runId}`;
-    const exists = await this.kv.read(key);
+    const exists = await this.readFlowRecord(key);
     if (exists) return;
 
     const record: FlowRecord = {
@@ -203,6 +252,6 @@ export class PersistedFlow<
       createdAt: new Date().toISOString(),
       nodes: [],
     };
-    await this.kv.write(key, record);
+    await this.writeFlowRecord(key, record);
   }
 }

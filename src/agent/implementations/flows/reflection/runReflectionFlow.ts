@@ -329,6 +329,7 @@ export async function runReflectionFlow<C = unknown>(
       Record<string, unknown>,
       ReflectionServices<C>
     >(startNode, kv, {
+      persistEveryStep: false,
       parentStage,
       hooks: {
         createRoundStage: async (roundIndex, parent) => {

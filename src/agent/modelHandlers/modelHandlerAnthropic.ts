@@ -477,6 +477,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
   async createResponse(
     requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
   ): Promise<CreateResponseResult<BetaMessage, MessageParam>> {
+    this.applyOutputStreamingOverride(requestOptions.outputStreaming);
+    try {
+      return await this._createResponseImpl(requestOptions);
+    } finally {
+      this.clearOutputStreamingOverride();
+    }
+  }
+
+  private async _createResponseImpl(
+    requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
+  ): Promise<CreateResponseResult<BetaMessage, MessageParam>> {
     const {
       client,
       messages,

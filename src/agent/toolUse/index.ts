@@ -12,6 +12,7 @@ export {
   registerInterruptible,
   unregisterInterruptible,
   getInterruptible,
+  interruptAll,
   getToolUseFlowContext,
   cleanupInactiveAgents,
 } from './ToolUseAgentRegistry';

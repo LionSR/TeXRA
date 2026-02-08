@@ -1058,6 +1058,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   async createResponse(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
+    this.applyOutputStreamingOverride(options.outputStreaming);
+    try {
+      return await this._createResponseImpl(options);
+    } finally {
+      this.clearOutputStreamingOverride();
+    }
+  }
+
+  private async _createResponseImpl(
+    options: CreateResponseOptions<ResponseInputItem, OpenAI>,
+  ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
     // Clear any stale compaction result from previous attempts (ensures clean state on retries)
     this.compactionResult = undefined;
 

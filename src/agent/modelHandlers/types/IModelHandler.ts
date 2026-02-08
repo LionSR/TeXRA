@@ -74,6 +74,13 @@ export interface CreateResponseOptions<
   signal?: AbortSignal;
   /** Optional tool definitions for function calling */
   tools?: ToolDefinition[];
+  /**
+   * Whether to stream output text to the UI.
+   * When provided, overrides the handler's `outputStreaming` state,
+   * enabling safe concurrent use of the same handler by multiple flows.
+   * If omitted, falls back to the handler's `isOutputStreamingEnabled()`.
+   */
+  outputStreaming?: boolean;
 }
 
 /**

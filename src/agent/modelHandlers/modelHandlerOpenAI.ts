@@ -366,6 +366,17 @@ export class ModelHandlerOpenAI<
   async createResponse(
     options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
   ): Promise<CreateResponseResult<ChatCompletion, ChatCompletionMessageParam>> {
+    this.applyOutputStreamingOverride(options.outputStreaming);
+    try {
+    return await this._createResponseImpl(options);
+    } finally {
+      this.clearOutputStreamingOverride();
+    }
+  }
+
+  private async _createResponseImpl(
+    options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
+  ): Promise<CreateResponseResult<ChatCompletion, ChatCompletionMessageParam>> {
     const {
       client,
       messages: rawMessages,

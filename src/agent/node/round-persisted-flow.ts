@@ -50,7 +50,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
 import { BaseNode } from './index';
-import { PersistedFlow } from './persisted-flow';
+import { PersistedFlow, type PersistedFlowOptions } from './persisted-flow';
 import { isRoundAtOrBeyondLimit } from './round-bounds';
 
 // ============================================================================
@@ -178,7 +178,8 @@ export interface RoundLifecycleHooks<S extends RoundAwareState, Svc = unknown> {
 /**
  * Configuration for RoundPersistedFlow.
  */
-export interface RoundFlowConfig<S extends RoundAwareState, Svc = unknown> {
+export interface RoundFlowConfig<S extends RoundAwareState, Svc = unknown>
+  extends PersistedFlowOptions {
   /** Lifecycle hooks (all optional) */
   hooks?: RoundLifecycleHooks<S, Svc>;
 
@@ -240,7 +241,9 @@ export class RoundPersistedFlow<
     config?: RoundFlowConfig<S, Svc>,
     runId?: string,
   ) {
-    super(start, kv, runId);
+    super(start, kv, runId, {
+      persistEveryStep: config?.persistEveryStep,
+    });
     this.config = config ?? {};
   }
 

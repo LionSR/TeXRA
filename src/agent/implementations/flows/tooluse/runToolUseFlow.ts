@@ -149,7 +149,7 @@ export async function runToolUseFlow<C = unknown>(
       ToolUseRunShared,
       Record<string, unknown>,
       ToolUseServices<C>
-    >(startNode, kv);
+    >(startNode, kv, undefined, { persistEveryStep: false });
     pf.setServices(flowContext.services);
     await pf.run(shared);
 

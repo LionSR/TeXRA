@@ -260,8 +260,6 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
       return { kind: 'skipped' };
     }
 
-    services.modelHandler.setOutputStreaming(false);
-
     const stage = await services.logger.stage('Model invocation', {
       skip: true,
     });
@@ -281,6 +279,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
             tools: services.modelHandler.capabilities.supportsFunctionCalling
               ? services.setting.tools
               : undefined,
+            outputStreaming: false,
           });
 
           const elapsedMs = Date.now() - start;

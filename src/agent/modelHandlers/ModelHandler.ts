@@ -106,6 +106,12 @@ export abstract class ModelHandler<
   public maxOutputTokensFactor: number;
   protected logger: AgentLogger;
   protected outputStreaming = false;
+  /**
+   * Per-call override for output streaming, set via `applyOutputStreamingOverride()`.
+   * When defined, takes precedence over the instance `outputStreaming` field.
+   * This enables safe concurrent use when callers pass `outputStreaming` in options.
+   */
+  private _outputStreamingOverride: boolean | undefined;
   protected backgroundModeSupported = false;
   protected progressViewEnabled = true;
   protected agentCategory?: AgentCategory;
@@ -201,9 +207,28 @@ export abstract class ModelHandler<
 
   /**
    * Indicates whether model output streaming is enabled.
+   * Checks the per-call override first (set via CreateResponseOptions.outputStreaming),
+   * then falls back to the instance-level `outputStreaming` field.
    */
   public isOutputStreamingEnabled(): boolean {
-    return this.outputStreaming;
+    return this._outputStreamingOverride ?? this.outputStreaming;
+  }
+
+  /**
+   * Apply a per-call output streaming override. Called by handlers at the start
+   * of createResponse() when `options.outputStreaming` is defined.
+   */
+  protected applyOutputStreamingOverride(
+    override: boolean | undefined,
+  ): void {
+    this._outputStreamingOverride = override;
+  }
+
+  /**
+   * Clear the per-call override. Called in finally blocks of createResponse().
+   */
+  protected clearOutputStreamingOverride(): void {
+    this._outputStreamingOverride = undefined;
   }
 
   /**
