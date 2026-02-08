@@ -61,7 +61,8 @@ export async function promptToAddAgentToConfig(
     category === 'toolUse'
       ? WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
       : WorkspaceStateKey.ENABLED_AGENTS;
-  const current = workspaceSM.get<string[]>(stateKey, []);
+  const raw = workspaceSM.get<string[]>(stateKey);
+  const current = raw ?? [];
 
   const skipReason = getAgentRegistrationSkipReason(
     agentName,
