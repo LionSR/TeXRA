@@ -396,10 +396,16 @@ type ContinuationNodeResult = SkippableNodeResult<{
  * Transforms the raw model response into output-ready text, updates usage metrics,
  * and persists incremental tool-state derived from the result.
  *
+ * Responsibilities are decomposed into focused helpers:
+ * - extractResponse: model response extraction + metadata logging
+ * - processResponseText: replacement engine + TeX connection + repetition detection
+ * - writeOutputFile: file I/O (create or append)
+ * - updateConversationMessages: message prefill management
+ *
  * PocketFlow compliance:
  * - prep() extracts only the data needed by exec()
  * - exec() performs pure computation, no side effects
- * - post() applies all side effects (store updates)
+ * - post() applies all side effects (store updates, file I/O)
  */
 class ResponseProcessNode<C> extends BaseNode<
   ResponseCycleShared,
@@ -418,128 +424,233 @@ class ResponseProcessNode<C> extends BaseNode<
     };
   }
 
-  async exec(prepRes: ProcessPrepResult): Promise<ProcessNodeResult> {
+  /** Extract model response and emit thinking/scratchpad content. */
+  private async extractResponse(
+    prepRes: ProcessPrepResult,
+  ): Promise<{
+    newResponse: string;
+    responseUsage: ProviderUsage;
+    stopReason: ProviderStopReason;
+    normalizedUsage: NormalizedUsage;
+    thinkingContent: string | null | undefined;
+    useStreaming: boolean;
+  }> {
     const { workspace, logger, modelHandler, setting } = this.services;
+
+    const {
+      text: newResponse,
+      usage: responseUsage,
+      stopReason,
+    } = modelHandler.extractResponse(prepRes.responseObject, setting.endTag);
+
+    if (newResponse) {
+      logger.debug(`Model response: ${newResponse.slice(0, 100)}`);
+    }
+    if (prepRes.responseTimeMs !== undefined) {
+      logger.debug(
+        `Response time: ${(prepRes.responseTimeMs / 1000).toFixed(2)}s`,
+      );
+    }
+    logger.debug(`Stop reason: ${stopReason}`);
+    logger.debug(`Token usage: ${JSON.stringify(responseUsage)}`);
+
+    const thinkingContent = modelHandler.processThinkingBlock(
+      prepRes.responseObject,
+      workspace,
+    );
+    const useStreaming = modelHandler.getStreamingConfig();
+
+    if (thinkingContent && !useStreaming) {
+      logger.info(thinkingContent, { messageType: MESSAGE_TYPES.THINKING });
+    }
+
+    const scratchpad = await extractScratchpad(newResponse, 'scratchpad');
+    if (scratchpad) {
+      logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
+    }
+
+    const normalizedUsage = modelHandler.normalizeUsage(
+      responseUsage,
+      prepRes.responseTimeMs ?? 0,
+    );
+    const { inputTokens } = normalizedUsage;
+    const { contextWindow } = modelHandler.config;
+    if (inputTokens > 0 && contextWindow > 0) {
+      logger.logContextState(inputTokens, contextWindow);
+    }
+
+    return {
+      newResponse,
+      responseUsage,
+      stopReason,
+      normalizedUsage,
+      thinkingContent,
+      useStreaming,
+    };
+  }
+
+  /**
+   * Apply replacement engine, check for repetition, and determine TeX connection.
+   * Returns undefined if response was empty or repetition was detected.
+   */
+  private async processResponseText(
+    newResponse: string,
+    prepRes: ProcessPrepResult,
+  ): Promise<
+    | {
+        processedResponse: string;
+        bestConnector: string | undefined;
+        updatedLastResponse: string;
+        updatedAccumulatedOutput: string;
+        repetitionDetected: false;
+      }
+    | { repetitionDetected: true }
+  > {
+    const { logger } = this.services;
+    const processedResponse = replacementEngine.applyAll(newResponse);
+
+    const repetitionResult = checkForMassiveRepetition(
+      prepRes.lastResponse,
+      newResponse,
+    );
+
+    if (repetitionResult.massiveRepetitionDetected) {
+      const preview = newResponse.substring(0, REPETITION_DETECTION_THRESHOLD);
+      const skeleton = JSON.stringify(
+        messageToSkeleton(prepRes.messages),
+        null,
+        2,
+      );
+      logger.error(
+        `Massive repetition detected - skipping this response\n` +
+          `First ${REPETITION_DETECTION_THRESHOLD} chars: ${preview}\n` +
+          `Message structure:\n${skeleton}`,
+      );
+      return { repetitionDetected: true };
+    }
+
+    const connector = await bestConnectionMethod(
+      prepRes.lastResponse.slice(-K_SLICE),
+      processedResponse.slice(0, K_SLICE),
+    );
+
+    return {
+      processedResponse,
+      bestConnector: connector.connector,
+      updatedLastResponse: processedResponse,
+      updatedAccumulatedOutput:
+        prepRes.accumulatedOutput +
+        (connector.connector ?? '') +
+        processedResponse,
+      repetitionDetected: false,
+    };
+  }
+
+  async exec(prepRes: ProcessPrepResult): Promise<ProcessNodeResult> {
+    const { logger } = this.services;
 
     if (prepRes.shouldStop || !prepRes.responseObject) {
       return { kind: 'skipped' };
     }
 
-    const stage = await logger.stage('Process response', {
-      skip: true,
-    });
+    const stage = await logger.stage('Process response', { skip: true });
 
     return stage.run(async () => {
-      const {
-        text: newResponse,
-        usage: responseUsage,
-        stopReason,
-      } = modelHandler.extractResponse(prepRes.responseObject, setting.endTag);
+      const extracted = await this.extractResponse(prepRes);
 
-      if (newResponse) {
-        logger.debug(`Model response: ${newResponse.slice(0, 100)}`);
+      if (!extracted.newResponse) {
+        return {
+          kind: 'success',
+          value: {
+            ...extracted,
+            processedResponse: undefined,
+            bestConnector: undefined,
+            repetitionDetected: false,
+            updatedLastResponse: undefined,
+            updatedAccumulatedOutput: undefined,
+          },
+        };
       }
 
-      if (prepRes.responseTimeMs !== undefined) {
-        logger.debug(
-          `Response time: ${(prepRes.responseTimeMs / 1000).toFixed(2)}s`,
-        );
-      }
-
-      logger.debug(`Stop reason: ${stopReason}`);
-      logger.debug(`Token usage: ${JSON.stringify(responseUsage)}`);
-
-      const thinkingContent = modelHandler.processThinkingBlock(
-        prepRes.responseObject,
-        workspace,
-      );
-      const useStreaming = modelHandler.getStreamingConfig();
-
-      if (thinkingContent && !useStreaming) {
-        logger.info(thinkingContent, {
-          messageType: MESSAGE_TYPES.THINKING,
-        });
-      }
-
-      const scratchpad = await extractScratchpad(newResponse, 'scratchpad');
-      if (scratchpad) {
-        logger.info(scratchpad, {
-          messageType: MESSAGE_TYPES.SCRATCHPAD,
-        });
-      }
-
-      const normalizedUsage = modelHandler.normalizeUsage(
-        responseUsage,
-        prepRes.responseTimeMs ?? 0,
+      const textResult = await this.processResponseText(
+        extracted.newResponse,
+        prepRes,
       );
 
-      const { inputTokens } = normalizedUsage;
-      const { contextWindow } = modelHandler.config;
-      if (inputTokens > 0 && contextWindow > 0) {
-        logger.logContextState(inputTokens, contextWindow);
-      }
-
-      const repetitionResult = checkForMassiveRepetition(
-        prepRes.lastResponse,
-        newResponse,
-      );
-
-      if (repetitionResult.massiveRepetitionDetected && newResponse) {
-        const preview = newResponse.substring(
-          0,
-          REPETITION_DETECTION_THRESHOLD,
-        );
-        const skeleton = JSON.stringify(
-          messageToSkeleton(prepRes.messages),
-          null,
-          2,
-        );
-        logger.error(
-          `Massive repetition detected - skipping this response\n` +
-            `First ${REPETITION_DETECTION_THRESHOLD} chars: ${preview}\n` +
-            `Message structure:\n${skeleton}`,
-        );
-      }
-
-      let processedResponse: string | undefined;
-      let bestConnector: string | undefined;
-      let updatedLastResponse: string | undefined;
-      let updatedAccumulatedOutput: string | undefined;
-
-      if (newResponse) {
-        processedResponse = replacementEngine.applyAll(newResponse);
-
-        if (!repetitionResult.massiveRepetitionDetected) {
-          const connector = await bestConnectionMethod(
-            prepRes.lastResponse.slice(-K_SLICE),
-            processedResponse.slice(0, K_SLICE),
-          );
-          bestConnector = connector.connector;
-          updatedLastResponse = processedResponse;
-          updatedAccumulatedOutput =
-            prepRes.accumulatedOutput +
-            (bestConnector ?? '') +
-            processedResponse;
-        }
+      if (textResult.repetitionDetected) {
+        return {
+          kind: 'success',
+          value: {
+            ...extracted,
+            processedResponse: undefined,
+            bestConnector: undefined,
+            repetitionDetected: true,
+            updatedLastResponse: undefined,
+            updatedAccumulatedOutput: undefined,
+          },
+        };
       }
 
       return {
         kind: 'success',
         value: {
-          stopReason,
-          newResponse,
-          processedResponse,
-          bestConnector,
-          thinkingContent,
-          useStreaming,
-          responseUsage,
-          normalizedUsage,
-          repetitionDetected: repetitionResult.massiveRepetitionDetected,
-          updatedLastResponse,
-          updatedAccumulatedOutput,
+          ...extracted,
+          ...textResult,
         },
       };
     });
+  }
+
+  /** Write processed response to the output file (create or append). */
+  private async writeOutputFile(
+    shared: ResponseCycleShared,
+    processedResponse: string,
+    connector: string,
+  ): Promise<void> {
+    const { logger } = this.services;
+    const outputLocation = shared.outputLocation!;
+
+    await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
+
+    if (!shared.outputExists) {
+      logger.debug(`Creating new file: ${outputLocation.absolutePath}`);
+      await AbsoluteFS.write(outputLocation.absolutePath, processedResponse);
+      shared.outputExists = true;
+    } else {
+      logger.debug(
+        `Appending to existing file: ${outputLocation.absolutePath}`,
+      );
+      await flexibleFS.appendFile(
+        outputLocation,
+        connector + processedResponse,
+      );
+    }
+  }
+
+  /** Update conversation messages with the new response content. */
+  private updateConversationMessages(
+    shared: ResponseCycleShared,
+    connector: string,
+    processedResponse: string,
+  ): void {
+    const { modelHandler } = this.services;
+    const { workspace } = this.services;
+
+    if (modelHandler.capabilities.supportsAssistantPrefill) {
+      modelHandler.updateMessageContentWithPrefill(
+        shared.messages,
+        connector,
+        processedResponse,
+        workspace,
+      );
+    } else {
+      modelHandler.updateMessageContentWithoutPrefill(
+        shared.messages,
+        connector,
+        processedResponse,
+        workspace,
+      );
+    }
   }
 
   async post(
@@ -547,7 +658,7 @@ class ResponseProcessNode<C> extends BaseNode<
     prepRes: ProcessPrepResult,
     execRes: ProcessNodeResult,
   ): Promise<string | undefined> {
-    const { round, workspace, logger, modelHandler } = this.services;
+    const { round, workspace, logger } = this.services;
 
     if (execRes.kind === 'skipped') {
       shared.endTurn = false;
@@ -556,18 +667,18 @@ class ResponseProcessNode<C> extends BaseNode<
 
     const result = execRes.value;
 
+    // Update round statistics
     if (shared.responseTimeMs !== undefined) {
       round.responseTimeMs += shared.responseTimeMs;
     }
-
     if (result.normalizedUsage) {
       round.normalizedUsage = result.normalizedUsage;
     }
 
+    // Update workspace assembly state
     if (result.updatedLastResponse !== undefined) {
       workspace.assembly.lastResponse = result.updatedLastResponse;
     }
-
     if (result.updatedAccumulatedOutput !== undefined) {
       workspace.assembly.accumulatedOutput = result.updatedAccumulatedOutput;
     }
@@ -575,52 +686,28 @@ class ResponseProcessNode<C> extends BaseNode<
     shared.stopReason = result.stopReason;
     shared.processedResponse = result.processedResponse;
 
-    if (result.repetitionDetected) {
+    // Early exit: repetition or empty response
+    if (result.repetitionDetected || !result.processedResponse) {
       shared.endTurn = false;
       shared.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
-    if (!result.processedResponse) {
-      shared.endTurn = false;
-      shared.shouldStop = true;
-      return FlowTransition.COMPLETE;
-    }
-
-    const outputLocation = shared.outputLocation!;
     const connector = result.bestConnector ?? '';
 
-    await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
+    // File I/O
+    await this.writeOutputFile(shared, result.processedResponse, connector);
 
-    if (!shared.outputExists) {
-      logger.debug(`Creating new file: ${outputLocation.absolutePath}`);
-      await AbsoluteFS.write(
-        outputLocation.absolutePath,
-        result.processedResponse,
-      );
-      shared.outputExists = true;
-    } else {
-      logger.debug(
-        `Appending to existing file: ${outputLocation.absolutePath}`,
-      );
-      await flexibleFS.appendFile(
-        outputLocation,
-        connector + result.processedResponse,
-      );
-    }
-
+    // Logging
     const responseUsage = result.responseUsage ?? {};
     const usageSummary = Object.entries(responseUsage)
       .map(([key, value]) => `${key}: ${value}`)
       .join(', ');
     logger.debug(`Usage summary: ${usageSummary}`);
-
     logger.info(`Stop reason: ${result.stopReason}`, {
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
-
     logger.debug(`Normalized usage: ${JSON.stringify(result.normalizedUsage)}`);
-
     logger.debug('Response preview:');
     logger.debug(
       `First ${K_SLICE} chars:\n${result.processedResponse.slice(0, K_SLICE)}`,
@@ -629,21 +716,8 @@ class ResponseProcessNode<C> extends BaseNode<
       `Last ${K_SLICE} chars:\n${result.processedResponse.slice(-K_SLICE)}`,
     );
 
-    if (modelHandler.capabilities.supportsAssistantPrefill) {
-      modelHandler.updateMessageContentWithPrefill(
-        shared.messages,
-        connector,
-        result.processedResponse,
-        workspace,
-      );
-    } else {
-      modelHandler.updateMessageContentWithoutPrefill(
-        shared.messages,
-        connector,
-        result.processedResponse,
-        workspace,
-      );
-    }
+    // Update conversation messages
+    this.updateConversationMessages(shared, connector, result.processedResponse);
 
     if (result.useStreaming) {
       logger.debug(
