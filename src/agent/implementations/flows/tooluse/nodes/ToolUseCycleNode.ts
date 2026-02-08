@@ -42,7 +42,7 @@ export class ToolUseCycleNode<C> extends Node<
 
     return {
       shouldSkip: shared.shouldSkipCycle,
-      conversation: shared.conversation,
+      messages: shared.messages,
       runState: shared.stateSlices.runStateSnapshot,
       workspaceState: AgentWorkspaceState.fromSnapshot(
         shared.stateSlices.workspaceSnapshot,
@@ -72,7 +72,7 @@ export class ToolUseCycleNode<C> extends Node<
     }
 
     const cycleShared: ToolUseCycleShared = {
-      messages: prepRes.conversation,
+      messages: prepRes.messages,
       shouldStop: false,
       endTurn: false,
       response: undefined,
@@ -159,7 +159,7 @@ export class ToolUseCycleNode<C> extends Node<
 
     switch (execRes.outcome) {
       case 'completed':
-        shared.conversation = execRes.messages;
+        shared.messages = execRes.messages;
         return FlowTransition.DEFAULT;
 
       case 'skipped':
