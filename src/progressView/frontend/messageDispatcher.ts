@@ -14,7 +14,6 @@ import {
   createStreamState,
   ProgressViewOutboundMessageSchema,
   type LogMessageData,
-  type ModelOptionData,
   type ProgressViewOutboundMessage,
   type StreamTabInfo,
   type TokenUsageStats,
@@ -51,7 +50,6 @@ import type { PermissionState } from './components/PermissionCard';
 export interface MessageHandlerContext extends FrontendEventHandlerContext {
   getPermissions(): PermissionState[];
   setPermissions(permissions: PermissionState[]): void;
-  setProposalModelOptions(options: ModelOptionData[]): void;
 }
 
 // ============================================================
@@ -632,10 +630,11 @@ const handlers: HandlerRegistry = {
   },
 
   [PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL]: (data, ctx) => {
-    addPermission(ctx, { kind: PERMISSION_KIND.PROPOSAL, data: data.proposal });
-    if (data.modelOptionsData) {
-      ctx.setProposalModelOptions(data.modelOptionsData);
-    }
+    addPermission(ctx, {
+      kind: PERMISSION_KIND.PROPOSAL,
+      data: data.proposal,
+      modelOptions: data.modelOptionsData,
+    });
   },
 
   [PROGRESS_VIEW_COMMANDS.RESOLVE_AGENT_PROPOSAL]: (data, ctx) => {
