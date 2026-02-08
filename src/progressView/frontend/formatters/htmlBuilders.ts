@@ -295,6 +295,18 @@ export function buildFileLinkWithLines(
 }
 
 // ============================================================================
+// Memory Path Display (non-clickable, virtual paths)
+// ============================================================================
+
+/** Build a memory path display with database icon. Memory paths are virtual (/memories/...) and not directly openable in the editor. */
+export function buildMemoryPathDisplay(memoryPath: string): TemplateResult {
+  if (!memoryPath) return html``;
+  const fileName = getBasename(memoryPath) || memoryPath;
+  // prettier-ignore
+  return html`<span class="memory-path"><i class="codicon codicon-database"></i> ${fileName} <span class="file-source">(${memoryPath})</span></span>`;
+}
+
+// ============================================================================
 // Edit Diff Display (Inline Word-Level Diff)
 // ============================================================================
 
