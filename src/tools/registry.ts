@@ -41,6 +41,7 @@ import {
   LeanLoogleTool,
 } from './lean';
 import { WorkflowAgentTool, DelegateAgentTool } from './WorkflowTool';
+import { AwaitSubagentTool } from './AwaitSubagentTool';
 import { RunsTool } from './RunsTool';
 
 /** Singleton IToolRegistry instance for the default tools. */
@@ -88,6 +89,7 @@ export function getDefaultToolRegistry(): IToolRegistry {
       lean_loogle: new LeanLoogleTool(),
       propose_workflow: new WorkflowAgentTool(),
       propose_agent: new DelegateAgentTool(),
+      await_subagent: new AwaitSubagentTool(),
       runs: new RunsTool(),
     });
   }
