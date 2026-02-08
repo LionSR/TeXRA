@@ -355,7 +355,11 @@ export class RequestPanels extends LitElement {
             title="Allow this command to execute (y)"
             >Approve</vscode-toolbar-button
           >
-          ${this.renderRejectButton(permission, isFeedbackOpen, 'Reject this command (n)')}
+          ${this.renderRejectButton(
+            permission,
+            isFeedbackOpen,
+            'Reject this command (n)',
+          )}
         </vscode-toolbar-container>
         ${this.renderFeedbackSection(
           permission,
