@@ -55,11 +55,14 @@ export async function promptToAddAgentToConfig(
   agentName: string,
   autoAdd = false,
   variant: AgentVariantMetadata = {},
+  category: 'workflow' | 'toolUse' = 'workflow',
 ): Promise<void> {
-  const current = workspaceSM.get<string[]>(
-    WorkspaceStateKey.ENABLED_AGENTS,
-    [],
-  );
+  const stateKey =
+    category === 'toolUse'
+      ? WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
+      : WorkspaceStateKey.ENABLED_AGENTS;
+  const raw = workspaceSM.get<string[]>(stateKey);
+  const current = raw ?? [];
 
   const skipReason = getAgentRegistrationSkipReason(
     agentName,
@@ -86,7 +89,7 @@ export async function promptToAddAgentToConfig(
 
   if (shouldAdd) {
     current.push(agentName);
-    await workspaceSM.update(WorkspaceStateKey.ENABLED_AGENTS, current);
+    await workspaceSM.update(stateKey, current);
     void vscode.commands.executeCommand('texra.refreshAllOptions');
     vscode.window.showInformationMessage(`Agent "${agentName}" is now visible`);
   }
