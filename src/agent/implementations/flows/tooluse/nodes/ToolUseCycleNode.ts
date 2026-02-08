@@ -5,7 +5,6 @@
  */
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { parseRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createToolUseCycleFlow,
@@ -38,7 +37,7 @@ export class ToolUseCycleNode<C> extends Node<
     return {
       shouldSkip: shared.shouldSkipCycle,
       conversation: shared.conversation,
-      runState: parseRunState(shared.stateSlices.runStateSnapshot),
+      runState: shared.stateSlices.runStateSnapshot,
       workspaceState: AgentWorkspaceState.fromSnapshot(
         shared.stateSlices.workspaceSnapshot,
       ),
