@@ -5,7 +5,7 @@
  */
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { AgentRunState } from '@agent/core/AgentState';
+import { createRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { buildInitialToolUsePrompts } from '@utils/prompt';
 
@@ -33,7 +33,7 @@ export class ToolUsePrepareNode<C> extends Node<
         kind: 'success',
         result: {
           messages: snapshot.messages,
-          runState: AgentRunState.fromSnapshot(snapshot.run),
+          runState: snapshot.run,
           workspaceState: AgentWorkspaceState.fromSnapshot(snapshot.workspace),
           userChannels: {
             input: Object.freeze({ ...snapshot.user.input }),
@@ -44,7 +44,7 @@ export class ToolUsePrepareNode<C> extends Node<
       };
     }
 
-    const runState = new AgentRunState();
+    const runState = createRunState();
     const workspaceState = AgentWorkspaceState.create();
     const memoryEnabled = this.services.resolvedTools.some(
       (t) => t.name === 'memory',
@@ -113,7 +113,7 @@ export class ToolUsePrepareNode<C> extends Node<
     shared.conversation = [...messages];
     shared.shouldSkipCycle = shouldSkipCycle;
     shared.stateSlices = {
-      runStateSnapshot: runState.toSnapshot(),
+      runStateSnapshot: runState,
       workspaceSnapshot: workspaceState.toSnapshot(),
       userChannels,
     };

@@ -3,10 +3,7 @@
  */
 import { z } from 'zod';
 
-import type {
-  AgentRunState,
-  AgentRunStateSnapshot,
-} from '@agent/core/AgentState';
+import type { AgentRunStateSnapshot } from '@agent/core/AgentState';
 import type {
   AgentWorkspaceState,
   AgentWorkspaceSnapshot,
@@ -30,7 +27,7 @@ export interface ToolUseRunShared {
 }
 
 interface NodeResultStateBase {
-  runState: AgentRunState;
+  runState: AgentRunStateSnapshot;
   workspaceState: AgentWorkspaceState;
   userChannels: UserVariableChannels;
 }

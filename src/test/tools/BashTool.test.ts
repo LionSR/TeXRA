@@ -4,7 +4,7 @@ import { strict as assert } from 'assert';
 // Local imports - agent core
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
-import { AgentRunState } from '@agent/core/AgentState';
+import { createRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createToolUseCycleFlow,
@@ -169,7 +169,7 @@ describe('BashTool', () => {
       executionId: 'test-execution-id',
     };
 
-    const run = new AgentRunState();
+    const run = createRunState();
 
     const messages: ProviderMessage[] = [];
 
