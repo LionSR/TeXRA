@@ -286,7 +286,11 @@ export function formatToolUseTemplate(
     );
   }
   // Handle memory tool with specialized formatting based on command
-  else if (toolName === 'memory' && typeof input === 'object' && input !== null) {
+  else if (
+    toolName === 'memory' &&
+    typeof input === 'object' &&
+    input !== null
+  ) {
     const memInput = input as MemoryToolInput;
     const command = memInput.command;
     const memPath = memInput.path ?? '';
@@ -312,7 +316,9 @@ export function formatToolUseTemplate(
       );
     } else if (command === 'create' && memInput.file_text != null) {
       // create: show file content (like write_file)
-      const contentLanguage = memPath ? getLanguageFromPath(memPath) : 'plaintext';
+      const contentLanguage = memPath
+        ? getLanguageFromPath(memPath)
+        : 'plaintext';
       sections.push(
         buildToolSection('Content:', memInput.file_text, {
           language: contentLanguage,
@@ -326,7 +332,9 @@ export function formatToolUseTemplate(
           memInput.insert_line != null
             ? `Insert at line ${memInput.insert_line}:`
             : 'Insert:';
-        const contentLanguage = memPath ? getLanguageFromPath(memPath) : 'plaintext';
+        const contentLanguage = memPath
+          ? getLanguageFromPath(memPath)
+          : 'plaintext';
         sections.push(
           buildToolSection(lineLabel, insertText, {
             language: contentLanguage,
@@ -339,10 +347,7 @@ export function formatToolUseTemplate(
       const newPath = memInput.new_path;
       if (oldPath != null && newPath != null) {
         sections.push(
-          buildToolUseSection(
-            'Rename:',
-            wrapInPre(`${oldPath} → ${newPath}`),
-          ),
+          buildToolUseSection('Rename:', wrapInPre(`${oldPath} → ${newPath}`)),
         );
       }
     }
