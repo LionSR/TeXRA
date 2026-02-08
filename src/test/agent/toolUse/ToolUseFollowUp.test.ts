@@ -4,7 +4,7 @@ import { strict as assert } from 'assert';
 // Local imports - agent
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import { AgentRunState } from '@agent/core/AgentState';
+import { createRunState } from '@agent/core/AgentState';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 // Type imports
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
@@ -15,7 +15,6 @@ describe('ToolUseFollowUp', () => {
   const streamId = 'stream-follow-up' as StreamTabId;
 
   // Create state snapshots directly (no store wrapper needed)
-  const runState = new AgentRunState();
   const workspaceState = AgentWorkspaceState.create();
 
   const snapshot: ToolUseSessionSnapshot = {
@@ -29,7 +28,7 @@ describe('ToolUseFollowUp', () => {
     }),
     messages: [],
     // State slices stored directly (v2 schema)
-    run: runState.toSnapshot(),
+    run: createRunState(),
     workspace: workspaceState.toSnapshot(),
     user: {
       input: {},

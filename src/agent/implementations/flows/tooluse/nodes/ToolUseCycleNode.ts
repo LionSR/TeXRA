@@ -5,7 +5,7 @@
  */
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { AgentRunState } from '@agent/core/AgentState';
+import { parseRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createToolUseCycleFlow,
@@ -38,7 +38,7 @@ export class ToolUseCycleNode<C> extends Node<
     return {
       shouldSkip: shared.shouldSkipCycle,
       conversation: shared.conversation,
-      runState: AgentRunState.fromSnapshot(shared.stateSlices.runStateSnapshot),
+      runState: parseRunState(shared.stateSlices.runStateSnapshot),
       workspaceState: AgentWorkspaceState.fromSnapshot(
         shared.stateSlices.workspaceSnapshot,
       ),
@@ -89,8 +89,19 @@ export class ToolUseCycleNode<C> extends Node<
     const flowServices: ToolUseCycleServices<C> & {
       refreshClient: () => Promise<void>;
     } = {
-      ...this.services,
+      // Explicit field selection — only pass what cycle flow actually uses
+      modelHandler,
       setting: { ...setting, tools: resolvedTools },
+      prompt: this.services.prompt,
+      logger: this.services.logger,
+      streamId,
+      executionId: this.services.executionId,
+      userVarChannels: this.services.userVarChannels,
+      checkInterruption: this.services.checkInterruption,
+      setAbortController: this.services.setAbortController,
+      toolRegistry: this.services.toolRegistry,
+      session: this.services.session,
+      onFollowUpConsumed: this.services.onFollowUpConsumed,
       get client() {
         return clientRef.current;
       },
@@ -146,7 +157,7 @@ export class ToolUseCycleNode<C> extends Node<
     }
 
     shared.stateSlices = {
-      runStateSnapshot: prepRes.runState.toSnapshot(),
+      runStateSnapshot: prepRes.runState,
       workspaceSnapshot: prepRes.workspaceState.toSnapshot(),
       userChannels: prepRes.userChannels,
     };
