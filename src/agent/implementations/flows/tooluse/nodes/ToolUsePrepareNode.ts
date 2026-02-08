@@ -5,7 +5,7 @@
  */
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { createRunState, parseRunState } from '@agent/core/AgentState';
+import { createRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { buildInitialToolUsePrompts } from '@utils/prompt';
 
@@ -33,7 +33,7 @@ export class ToolUsePrepareNode<C> extends Node<
         kind: 'success',
         result: {
           messages: snapshot.messages,
-          runState: parseRunState(snapshot.run),
+          runState: snapshot.run,
           workspaceState: AgentWorkspaceState.fromSnapshot(snapshot.workspace),
           userChannels: {
             input: Object.freeze({ ...snapshot.user.input }),

@@ -8,7 +8,6 @@ import {
 } from '@agent/types/NormalizedUsage';
 import {
   DEFAULT_TOTALS,
-  RunUsageAccumulator,
   RunUsageAccumulatorJSONSchema,
   createUsageAccumulator,
   recordNormalizedUsage,
@@ -50,13 +49,6 @@ export function createRoundState(
   };
 }
 
-/** Parse and validate a round state snapshot. */
-export function parseRoundState(
-  snapshot: unknown,
-): ConversationRoundStateSnapshot {
-  return ConversationRoundStateSnapshotSchema.parse(snapshot);
-}
-
 // ============================================================================
 // AgentRunState — plain data + functions
 // ============================================================================
@@ -91,11 +83,6 @@ export function createRunState(): AgentRunStateSnapshot {
   };
 }
 
-/** Parse and validate a run state snapshot. */
-export function parseRunState(snapshot: unknown): AgentRunStateSnapshot {
-  return AgentRunStateSnapshotSchema.parse(snapshot);
-}
-
 /**
  * Record cycle metrics into run state. Mutates run in place.
  * Used by both reflection flows (via recordRound) and tool-use flows (directly).
@@ -128,101 +115,3 @@ export function recordRound(
   );
 }
 
-// ============================================================================
-// Backward-compatible classes (delegate to standalone functions)
-// ============================================================================
-
-/**
- * @deprecated Use ConversationRoundStateSnapshot + standalone functions instead.
- */
-export class ConversationRoundState {
-  public roundIndex: number;
-  public continuationCount = 0;
-  public responseTimeMs = 0;
-  public normalizedUsage: NormalizedUsage | null = null;
-
-  constructor(roundIndex: number) {
-    this.roundIndex = roundIndex;
-  }
-
-  static fromSnapshot(snapshot: unknown): ConversationRoundState {
-    const parsed = ConversationRoundStateSnapshotSchema.parse(snapshot);
-    const state = new ConversationRoundState(parsed.roundIndex);
-    state.continuationCount = parsed.continuationCount;
-    state.responseTimeMs = parsed.responseTimeMs;
-    state.normalizedUsage = parsed.normalizedUsage;
-    return state;
-  }
-
-  toSnapshot(): ConversationRoundStateSnapshot {
-    return {
-      roundIndex: this.roundIndex,
-      continuationCount: this.continuationCount,
-      responseTimeMs: this.responseTimeMs,
-      normalizedUsage: this.normalizedUsage,
-    };
-  }
-
-  incrementContinuation(): void {
-    this.continuationCount += 1;
-  }
-
-  addResponseTime(durationMs: number): void {
-    this.responseTimeMs += durationMs;
-  }
-}
-
-/**
- * @deprecated Use AgentRunStateSnapshot + standalone functions instead.
- */
-export class AgentRunState {
-  public totalRounds = 0;
-  public totalResponseTimeMs = 0;
-  public readonly usageAccumulator: RunUsageAccumulator;
-
-  constructor(accumulator?: RunUsageAccumulator) {
-    this.usageAccumulator = accumulator ?? new RunUsageAccumulator();
-  }
-
-  static fromSnapshot(snapshot: unknown): AgentRunState {
-    const parsed = AgentRunStateSnapshotSchema.parse(snapshot);
-    const usageAccumulator = RunUsageAccumulator.fromSnapshot(
-      parsed.usageAccumulator,
-    );
-    const state = new AgentRunState(usageAccumulator);
-    state.totalRounds = parsed.totalRounds;
-    state.totalResponseTimeMs = parsed.totalResponseTimeMs;
-    return state;
-  }
-
-  toSnapshot(): AgentRunStateSnapshot {
-    return {
-      totalRounds: this.totalRounds,
-      totalResponseTimeMs: this.totalResponseTimeMs,
-      usageAccumulator: this.usageAccumulator.toSnapshot(),
-    };
-  }
-
-  incrementRounds(): void {
-    this.totalRounds += 1;
-  }
-
-  recordCycleMetrics(
-    cycleIndex: number,
-    responseTimeMs: number,
-    normalizedUsage: NormalizedUsage | null,
-  ): void {
-    if (normalizedUsage) {
-      this.usageAccumulator.recordNormalizedUsage(cycleIndex, normalizedUsage);
-    }
-    this.totalResponseTimeMs += responseTimeMs;
-  }
-
-  recordRound(roundState: ConversationRoundState): void {
-    this.recordCycleMetrics(
-      roundState.roundIndex,
-      roundState.responseTimeMs,
-      roundState.normalizedUsage,
-    );
-  }
-}
