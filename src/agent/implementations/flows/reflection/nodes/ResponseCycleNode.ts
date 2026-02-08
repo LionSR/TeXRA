@@ -23,7 +23,7 @@
 
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
+import { recordRound } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createResponseCycleFlow,
@@ -92,14 +92,13 @@ export class ResponseCycleNode<C = unknown> extends Node<
       );
     }
 
-    // Reconstruct state instances from snapshots
+    // Reconstruct workspace from snapshot (has internal data structures: Sets, Maps)
     const workspace = AgentWorkspaceState.fromSnapshot(
       shared.workspaceSnapshot,
     );
-    const run = AgentRunState.fromSnapshot(shared.runStateSnapshot);
-    const round = ConversationRoundState.fromSnapshot(
-      context.stateRoundSnapshot,
-    );
+    // Run and round are plain data — use directly from shared state
+    const run = shared.runStateSnapshot;
+    const round = context.stateRoundSnapshot;
 
     return {
       shared,
@@ -171,7 +170,18 @@ export class ResponseCycleNode<C = unknown> extends Node<
       const flowServices: ResponseCycleServices<C> & {
         refreshClient: () => Promise<void>;
       } = {
-        ...this.services,
+        // Explicit field selection — only pass what cycle flow actually uses
+        modelHandler: this.services.modelHandler,
+        setting: this.services.setting,
+        prompt: this.services.prompt,
+        logger: this.services.logger,
+        streamId: this.services.streamId,
+        executionId: this.services.executionId,
+        userVarChannels: this.services.userVarChannels,
+        checkInterruption: this.services.checkInterruption,
+        setAbortController: this.services.setAbortController,
+        config: this.services.config,
+        fileService: this.services.fileService,
         get client() {
           return clientRef.current;
         },
@@ -197,7 +207,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
       };
     } catch (error) {
       // Error path: finalize round on unexpected errors
-      prepRes.run.recordRound(prepRes.round);
+      recordRound(prepRes.run, prepRes.round);
       if (onRoundFinalized) {
         await onRoundFinalized(prepRes.run);
       }
@@ -260,7 +270,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
     shared.lastError = undefined;
 
     // Update snapshots from slices (accessed via prepRes, not execRes)
-    shared.runStateSnapshot = prepRes.run.toSnapshot();
+    shared.runStateSnapshot = prepRes.run;
     shared.workspaceSnapshot = prepRes.workspace.toSnapshot();
 
     // Sync conversation state - messages modified in-place during cycle

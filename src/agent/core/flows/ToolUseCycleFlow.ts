@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { isRemoteAgent } from '@agent/index';
 import { BaseNode, BatchNode, Flow } from '@agent/node';
+import { recordCycleMetrics } from '@agent/core/AgentState';
 import {
   BaseCycleFieldsSchema,
   BaseInvocationPrepResult,
@@ -527,7 +528,8 @@ class ToolUseProcessNode<C> extends BaseNode<
       shared.cycleNormalizedUsage = execRes.normalizedUsage;
     }
 
-    run.recordCycleMetrics(
+    recordCycleMetrics(
+      run,
       shared.cycleIndex,
       shared.cycleResponseTimeMs,
       shared.cycleNormalizedUsage ?? null,
@@ -535,7 +537,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     if (onRoundFinalized) {
       await onRoundFinalized(run);
     }
-    run.incrementRounds();
+    run.totalRounds += 1;
 
     shared.stopReason = execRes.stopReason;
 

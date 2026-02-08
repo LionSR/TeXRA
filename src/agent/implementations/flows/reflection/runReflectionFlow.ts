@@ -22,9 +22,7 @@
 import * as path from 'path';
 
 import {
-  EXECUTION_STATUS,
   type EndGroupStatus,
-  type ExecutionStatus,
   type RoundOutput,
   type StorageKey,
 } from '@shared/schemas';
@@ -49,7 +47,7 @@ import {
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
-import { AgentRunState } from '@agent/core/AgentState';
+import { createRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { type FlowRecord } from '@agent/node/persisted-flow';
@@ -311,7 +309,7 @@ export async function runReflectionFlow<C = unknown>(
         context: null,
         outputLocation: null,
         conversation: [],
-        runStateSnapshot: new AgentRunState().toSnapshot(),
+        runStateSnapshot: createRunState(),
         roundStateSnapshots: [],
         roundOutputs: [],
         continueRounds: true,
@@ -321,34 +319,25 @@ export async function runReflectionFlow<C = unknown>(
 
     // Create RoundPersistedFlow with the start node
     const startNode = createReflectionFlow<C>().start;
-    const flowResult = {
-      status: EXECUTION_STATUS.COMPLETED as ExecutionStatus,
-    };
     const pf = new RoundPersistedFlow<
       ReflectionFlowShared,
       Record<string, unknown>,
       ReflectionServices<C>
     >(startNode, kv, {
       parentStage,
-      hooks: {
+      callbacks: {
         createRoundStage: async (roundIndex, parent) => {
           return await logger.stage(`r${roundIndex}`, {
             parent: parent ?? undefined,
           });
         },
-        onRoundStart: (context) => {
-          // Set the active group ID for statistics logging so that
-          // statistics are associated with the current round (r0, r1, etc.)
-          // instead of the parent stage
-          usageMonitor?.setActiveGroupId(context.roundStage?.id);
+        onStageCreated: (stage) => {
+          usageMonitor?.setActiveGroupId(stage.id);
         },
         resetForNextRound: (s) => {
           s.workspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
         },
         checkInterruption,
-        onFlowEnd: (_shared, flowEndStatus) => {
-          flowResult.status = flowEndStatus;
-        },
       },
     });
 
@@ -373,9 +362,9 @@ export async function runReflectionFlow<C = unknown>(
       logger.debug('Resuming reflection flow from persistence');
     }
 
-    await pf.run(shared);
+    const flowStatus = await pf.run(shared);
     shared = await pf.getShared();
-    status = toEndStatus(flowResult.status);
+    status = toEndStatus(flowStatus);
   } catch (error) {
     status = ERROR_STATUS;
     throw error;
