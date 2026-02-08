@@ -9,6 +9,7 @@
 
 // Local imports - shared utilities
 import { isPlainObject } from '@shared/utils/string';
+import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 
 // Local imports - Lit template utilities
 import {
@@ -26,6 +27,7 @@ import {
   getToolIconClass,
   buildFileLinkWithLines,
   buildEditDiffSection,
+  buildMemoryPathDisplay,
   buildCodeBlock,
   buildDetailsSummary,
 } from '../htmlBuilders';
@@ -282,6 +284,69 @@ export function formatToolUseTemplate(
         language: contentLanguage,
       }),
     );
+  }
+  // Handle memory tool with specialized formatting based on command
+  else if (toolName === 'memory' && typeof input === 'object' && input !== null) {
+    const memInput = input as MemoryToolInput;
+    const command = memInput.command;
+    const memPath = memInput.path ?? '';
+
+    // Show memory file path for commands that operate on a single path
+    if (memPath) {
+      sections.push(
+        buildToolUseSection('File:', buildMemoryPathDisplay(memPath)),
+      );
+    }
+
+    if (
+      command === 'str_replace' &&
+      memInput.old_str != null &&
+      memInput.new_str != null
+    ) {
+      // str_replace: show diff (like edit_file)
+      sections.push(
+        buildToolUseSection(
+          'Changes:',
+          buildEditDiffSection(memInput.old_str, memInput.new_str),
+        ),
+      );
+    } else if (command === 'create' && memInput.file_text != null) {
+      // create: show file content (like write_file)
+      const contentLanguage = memPath ? getLanguageFromPath(memPath) : 'plaintext';
+      sections.push(
+        buildToolSection('Content:', memInput.file_text, {
+          language: contentLanguage,
+        }),
+      );
+    } else if (command === 'insert') {
+      // insert: show inserted text at line number (tool accepts insert_text or new_str)
+      const insertText = memInput.insert_text ?? memInput.new_str;
+      if (insertText != null) {
+        const lineLabel =
+          memInput.insert_line != null
+            ? `Insert at line ${memInput.insert_line}:`
+            : 'Insert:';
+        const contentLanguage = memPath ? getLanguageFromPath(memPath) : 'plaintext';
+        sections.push(
+          buildToolSection(lineLabel, insertText, {
+            language: contentLanguage,
+          }),
+        );
+      }
+    } else if (command === 'rename') {
+      // rename: show old → new path (both required)
+      const oldPath = memInput.old_path;
+      const newPath = memInput.new_path;
+      if (oldPath != null && newPath != null) {
+        sections.push(
+          buildToolUseSection(
+            'Rename:',
+            wrapInPre(`${oldPath} → ${newPath}`),
+          ),
+        );
+      }
+    }
+    // view and delete: file path section above is sufficient
   }
   // Default handling for other tools
   else if (input !== undefined && input !== null) {
