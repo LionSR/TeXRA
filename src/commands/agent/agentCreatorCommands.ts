@@ -350,12 +350,20 @@ async function tryAIGeneration(
     handler.setProgressViewEnabled(false);
     const client = await handler.getClient();
 
-    // Build prompts
+    // Build prompts – include RUNTIME_PASSTHROUGH so that template variable
+    // references like {{ INPUT_FILE }} in the creator prompts survive Nunjucks
+    // rendering as literal text for the AI to see.
     const prompts = config[category];
     const schemaRef = getSchemaReference(category);
+    const renderVars = { ...RUNTIME_PASSTHROUGH, ...vars };
     const systemPrompt =
-      nunjucksEnv.renderString(prompts.systemPrompt, vars) + '\n' + schemaRef;
-    const baseUserRequest = nunjucksEnv.renderString(prompts.userRequest, vars);
+      nunjucksEnv.renderString(prompts.systemPrompt, renderVars) +
+      '\n' +
+      schemaRef;
+    const baseUserRequest = nunjucksEnv.renderString(
+      prompts.userRequest,
+      renderVars,
+    );
 
     let userMessage = baseUserRequest;
     for (let attempt = 0; attempt < 2; attempt++) {
