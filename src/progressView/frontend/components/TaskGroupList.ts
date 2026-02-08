@@ -77,6 +77,14 @@ export class TaskGroupList extends LitElement {
   /** Track previous group statuses to detect completion */
   @state() private previousStatuses = new Map<string, string>();
 
+  /** Memoized tree output from buildGroupTree() - recomputed only when inputs change */
+  private cachedTree: GroupTree[] = [];
+  private cachedUserMessages: LogMessageData[] = [];
+  private cachedOtherUngrouped: LogMessageData[] = [];
+
+  /** Memoized set of root group IDs for isGroupVisible() */
+  private cachedRootGroupIds: Set<string> = new Set();
+
   /** Reference to the scroll container */
   @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
   private scrollContainer?: HTMLElement;
@@ -98,6 +106,22 @@ export class TaskGroupList extends LitElement {
   override willUpdate(changedProperties: Map<string, unknown>): void {
     if (changedProperties.has('groups')) {
       this.checkForCompletedRuns();
+    }
+    // Recompute tree only when groups or messages actually change
+    if (changedProperties.has('groups') || changedProperties.has('messages')) {
+      const [tree, userMessages, otherUngrouped] = this.buildGroupTree();
+      this.cachedTree = tree;
+      this.cachedUserMessages = userMessages;
+      this.cachedOtherUngrouped = otherUngrouped;
+    }
+    // Recompute root group IDs when groups or activeRunId change
+    if (
+      changedProperties.has('groups') ||
+      changedProperties.has('activeRunId')
+    ) {
+      this.cachedRootGroupIds = new Set(
+        this.groups.filter((g) => !g.parentGroupId).map((g) => g.id),
+      );
     }
   }
 
@@ -212,10 +236,7 @@ export class TaskGroupList extends LitElement {
 
     // Fallback: if activeRunId doesn't match any root group, show all
     // This prevents blank content when run IDs are mismatched
-    const rootGroupIds = new Set(
-      this.groups.filter((g) => !g.parentGroupId).map((g) => g.id),
-    );
-    if (!rootGroupIds.has(this.activeRunId)) return true;
+    if (!this.cachedRootGroupIds.has(this.activeRunId)) return true;
 
     // Normal case: only show the selected run
     return groupId === this.activeRunId;
@@ -296,8 +317,6 @@ export class TaskGroupList extends LitElement {
   }
 
   override render(): TemplateResult {
-    const [tree, userMessages, otherUngrouped] = this.buildGroupTree();
-
     // Show placeholder only when there are no streams in the current filter
     // (not when a specific stream is empty)
     if (!this.hasStreams) {
@@ -310,6 +329,11 @@ export class TaskGroupList extends LitElement {
         </vscode-scrollable>
       `;
     }
+
+    // Use memoized tree data computed in willUpdate()
+    const tree = this.cachedTree;
+    const userMessages = this.cachedUserMessages;
+    const otherUngrouped = this.cachedOtherUngrouped;
 
     // Tool-use: user messages first, then tree, then other ungrouped (errors etc)
     // This preserves chronological order for errors while ensuring user prompts appear first.
