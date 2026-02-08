@@ -12,29 +12,54 @@ prompts:
     When generating tool-use agent YAML definitions, follow the schema below exactly.
     Tool-use agents call tools interactively instead of producing a single document output.
     They have access to tools like file I/O, shell commands, web search, and academic APIs.
-    All fields with defaults can be omitted if the default value is acceptable.
+
+    CRITICAL RULES:
+    - agentCategory MUST be "toolUse" (not "workflow").
+    - Pick only the tools relevant to the agent's purpose from the available list.
+    - userRequest MUST be a single string (not an array), and MUST contain {{ INSTRUCTION }}
+      so the user's free-text instruction is passed through at runtime.
+    - temperature should be 0.7 for exploratory tasks, lower for precise tasks.
+    - All fields with defaults can be omitted if the default value is acceptable.
     Respond only with the YAML wrapped in <yaml> tags.
+
+    TEMPLATE VARIABLES available in prompts (Nunjucks double-brace syntax):
+    - {{ INPUT_FILE }}: path of the main input file
+    - {{ INPUT_CONTENT }}: full text of the main input file
+    - {{ ALL_AUXILIARYS }}: auxiliary files (preamble.tex, commands.tex, etc.)
+    - {{ ALL_REFERENCES }}: reference/bibliography files
+    - {{ ADDITIONAL_INPUTS }}: extra context files
+    - {{ INSTRUCTION }}: the user's free-text instruction for this run
 
   userRequest: |
     Generate a YAML definition for a **tool-use** agent named "{{ AGENT_NAME }}".
-    The YAML must follow this layout:
+    Goal: {{ DESCRIPTION }}.
+
+    The YAML must follow this exact structure:
+
     name: {{ AGENT_NAME }}
+    description: <one-line description>
     settings:
       agentCategory: toolUse
+      temperature: 0.7
       tools:
         - <tool1>
         - <tool2>
     prompts:
       systemPrompt: |
-        ...
+        <Role and task description. Explain what the agent does and how it should use tools.>
       userPrefix: |
-        ...
+        <Context block with input documents. Use {{ ALL_AUXILIARYS }}, {{ ALL_REFERENCES }},
+         {{ ADDITIONAL_INPUTS }}, and wrap {{ INPUT_CONTENT }} in <document> tags.>
       userRequest: |
-        ...
-    Available tools include: bash, read_file, write_file, edit_file, glob, grep, ls,
-    web_search, web_fetch, arxiv_search, arxiv_metadata, download_arxiv_source,
-    crossref_search, crossref_doi, extract_figures, extract_bib_entries,
-    texcount, memory, wolfram, todo_write, diagnostics.
-    Pick the tools that are most relevant for the agent's purpose.
-    The userRequest should be a single string (not an array) containing the template variable INSTRUCTION wrapped in double curly braces.
-    Goal: {{ DESCRIPTION }}.
+        {{ INSTRUCTION }}
+
+    Available tools (pick only what is relevant):
+      File I/O: bash, read_file, write_file, edit_file, glob, grep, ls
+      Web: web_search, web_fetch
+      Academic: arxiv_search, arxiv_metadata, download_arxiv_source, crossref_search, crossref_doi
+      LaTeX: extract_figures, extract_bib_entries, texcount
+      Other: memory, wolfram, todo_write, diagnostics
+
+    IMPORTANT REMINDERS:
+    - userRequest must be a single string containing {{ INSTRUCTION }} (not an array).
+    - Only include tools that the agent actually needs.
