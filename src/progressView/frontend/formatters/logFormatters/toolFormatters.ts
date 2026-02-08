@@ -9,6 +9,7 @@
 
 // Local imports - shared utilities
 import { isPlainObject } from '@shared/utils/string';
+import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 
 // Local imports - Lit template utilities
 import {
@@ -286,9 +287,9 @@ export function formatToolUseTemplate(
   }
   // Handle memory tool with specialized formatting based on command
   else if (toolName === 'memory' && typeof input === 'object' && input !== null) {
-    const memInput = input as Record<string, unknown>;
+    const memInput = input as MemoryToolInput;
     const command = memInput.command;
-    const memPath = typeof memInput.path === 'string' ? memInput.path : '';
+    const memPath = memInput.path ?? '';
 
     // Show memory file path for commands that operate on a single path
     if (memPath) {
@@ -299,8 +300,8 @@ export function formatToolUseTemplate(
 
     if (
       command === 'str_replace' &&
-      typeof memInput.old_str === 'string' &&
-      typeof memInput.new_str === 'string'
+      memInput.old_str != null &&
+      memInput.new_str != null
     ) {
       // str_replace: show diff (like edit_file)
       sections.push(
@@ -309,10 +310,7 @@ export function formatToolUseTemplate(
           buildEditDiffSection(memInput.old_str, memInput.new_str),
         ),
       );
-    } else if (
-      command === 'create' &&
-      typeof memInput.file_text === 'string'
-    ) {
+    } else if (command === 'create' && memInput.file_text != null) {
       // create: show file content (like write_file)
       const contentLanguage = memPath ? getLanguageFromPath(memPath) : 'plaintext';
       sections.push(
@@ -321,16 +319,11 @@ export function formatToolUseTemplate(
         }),
       );
     } else if (command === 'insert') {
-      // insert: show inserted text at line number
-      const insertText =
-        typeof memInput.insert_text === 'string'
-          ? memInput.insert_text
-          : typeof memInput.new_str === 'string'
-            ? memInput.new_str
-            : '';
-      if (insertText) {
+      // insert: show inserted text at line number (tool accepts insert_text or new_str)
+      const insertText = memInput.insert_text ?? memInput.new_str;
+      if (insertText != null) {
         const lineLabel =
-          typeof memInput.insert_line === 'number'
+          memInput.insert_line != null
             ? `Insert at line ${memInput.insert_line}:`
             : 'Insert:';
         const contentLanguage = memPath ? getLanguageFromPath(memPath) : 'plaintext';
@@ -341,10 +334,10 @@ export function formatToolUseTemplate(
         );
       }
     } else if (command === 'rename') {
-      // rename: show old → new path
-      const oldPath = typeof memInput.old_path === 'string' ? memInput.old_path : '';
-      const newPath = typeof memInput.new_path === 'string' ? memInput.new_path : '';
-      if (oldPath || newPath) {
+      // rename: show old → new path (both required)
+      const oldPath = memInput.old_path;
+      const newPath = memInput.new_path;
+      if (oldPath != null && newPath != null) {
         sections.push(
           buildToolUseSection(
             'Rename:',
