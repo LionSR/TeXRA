@@ -12,14 +12,24 @@ export interface MementoStorage {
   update<T>(key: string, value: T): Thenable<void>;
 }
 
+/** Default debounce interval for persistence writes (ms). */
+const SAVE_DEBOUNCE_MS = 300;
+
 /**
  * Generic manager for map-based state with persistence support.
  * Handles common map operations and storage serialization.
+ *
+ * Persistence writes are debounced: rapid-fire mutations (e.g. streaming log
+ * messages) coalesce into a single write at the trailing edge. In-memory state
+ * is always immediately up-to-date; only the disk write is deferred.
  */
 export abstract class PersistentMapManager<K extends string, V> {
   protected items: Map<K, V> = new Map();
   protected readonly storage: MementoStorage;
   protected readonly storageKey: WorkspaceStateKey;
+
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  private savePromise: Promise<void> | null = null;
 
   constructor(storageKey: WorkspaceStateKey, storage?: MementoStorage) {
     const resolvedStorage = storage ?? workspaceSM;
@@ -120,13 +130,50 @@ export abstract class PersistentMapManager<K extends string, V> {
     return result.data;
   }
 
-  /** Save current state to persistence */
+  /**
+   * Schedule a debounced persistence write.
+   * In-memory state is already updated by callers before calling save(),
+   * so this only defers the disk write. Multiple rapid calls coalesce into
+   * one write at the trailing edge of the debounce window.
+   */
   async save(): Promise<void> {
+    // If a timer is already pending, reset it (trailing-edge debounce).
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer);
+    }
+
+    this.savePromise = new Promise<void>((resolve) => {
+      this.saveTimer = setTimeout(() => {
+        this.saveTimer = null;
+        this.writeToStorage().then(resolve, resolve);
+      }, SAVE_DEBOUNCE_MS);
+    });
+
+    return this.savePromise;
+  }
+
+  /**
+   * Flush any pending debounced save immediately.
+   * Call this during dispose / shutdown to avoid data loss.
+   */
+  async flush(): Promise<void> {
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+      await this.writeToStorage();
+    } else if (this.savePromise) {
+      await this.savePromise;
+    }
+  }
+
+  /** Perform the actual serialization + storage write. */
+  private async writeToStorage(): Promise<void> {
     const record: Record<string, unknown> = {};
     for (const [key, value] of this.items) {
       record[key] = this.serialize(value, key);
     }
     await this.storage.update(this.storageKey, record);
+    this.savePromise = null;
   }
 
   private async populateFromRecord(

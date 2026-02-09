@@ -53,9 +53,8 @@ function handleUpdateLogMessage(
       // Guard: don't create phantom streams for updates to non-existent streams
       if (!ctx.state.streamTabs.has(streamId)) return;
 
-      // Find existing message
-      const messages = ctx.state.streamTabs.getMessages(streamId);
-      const existing = messages.find((m) => m.id === logMessage.id);
+      // Find existing message directly (avoids copying the entire message array)
+      const existing = ctx.state.streamTabs.findMessage(streamId, logMessage.id);
       if (!existing || existing.messageType === MESSAGE_TYPES.INTERNAL) return;
 
       // Update state and notify webview
