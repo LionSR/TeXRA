@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-export const ProposalModeSchema = z.enum(['sync', 'async']).catch('sync');
+/** Always async. Catch ensures backward compat if legacy 'sync' values are persisted. */
+export const ProposalModeSchema = z
+  .enum(['sync', 'async'])
+  .transform(() => 'async' as const)
+  .catch('async' as const);
 
 export const BaseProposalFieldsSchema = z.object({
   agent: z.string(),
