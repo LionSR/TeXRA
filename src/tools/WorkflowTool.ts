@@ -3,6 +3,10 @@
  * Two separate tools for clean separation of concerns:
  * - workflow_agent: For workflow agents (document processing with file I/O)
  * - delegate_agent: For tool-use agents (interactive assistants)
+ *
+ * Two execution modes:
+ * - sync: Await result inline (default, simplest)
+ * - async: Launch, check progress via runs tool, result delivered as follow-up
  */
 
 // Third-party imports
@@ -16,6 +20,8 @@ import {
   ToolUseAgentProposalSchema,
   type WorkflowAgentProposal,
   type ToolUseAgentProposal,
+  type StreamTabId,
+  type ExecutionId,
 } from '@shared/schemas';
 import {
   getAgent,
@@ -26,7 +32,9 @@ import type { AgentConfigPayload } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
+import { registerSubagent } from '@agent/runtime/subagentLineage';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
@@ -36,12 +44,15 @@ import { resolveVisibleModel } from '@model/computeModelOptions';
 
 // Local imports - tools
 import { ToolResult } from '@tools/result';
+import {
+  formatFlowResult,
+  formatSubagentDelivery,
+  formatSubagentError,
+} from '@tools/subagentResults';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
-
-// Local imports - shared schemas
 
 // ============================================================================
 // Shared utilities
@@ -50,27 +61,16 @@ import { WorkspaceFS } from '@utils/files';
 const LOG_CHANNEL = 'WorkflowTool';
 logger.initialize(LOG_CHANNEL);
 
-/** Execute agent with error logging. */
-function executeAgentWithLogging(
-  proposal: WorkflowAgentProposal | ToolUseAgentProposal,
-): void {
-  const configPayload: AgentConfigPayload = {
-    ...proposal,
-    agentCategory:
-      proposal.agentCategory === AGENT_CATEGORY.TOOL_USE
-        ? AgentCategory.ToolUse
-        : AgentCategory.Workflow,
-  };
-
-  executeAgent(configPayload).catch((error: unknown) => {
-    logger.error(LOG_CHANNEL, `Failed to start agent '${proposal.agent}'`, {
-      data: error,
-    });
-  });
-}
+/** Execution mode schema for proposal tools. */
+const ModeSchema = z
+  .enum(['sync', 'async'])
+  .nullish()
+  .describe(
+    'sync: wait for result inline. async: launch, check progress via runs tool, result delivered as follow-up message.',
+  );
 
 /** Get streamId from context, throwing if unavailable. */
-function getRequiredStreamId(): string {
+function getRequiredStreamId(): StreamTabId {
   const streamId = getCurrentToolFileInteractionContext()?.streamId;
   if (!streamId) {
     throw new Error(
@@ -78,6 +78,72 @@ function getRequiredStreamId(): string {
     );
   }
   return streamId;
+}
+
+/** Build config payload from a proposal. */
+function toConfigPayload(
+  proposal: WorkflowAgentProposal | ToolUseAgentProposal,
+): AgentConfigPayload {
+  return {
+    ...proposal,
+    agentCategory:
+      proposal.agentCategory === AGENT_CATEGORY.TOOL_USE
+        ? AgentCategory.ToolUse
+        : AgentCategory.Workflow,
+  };
+}
+
+/**
+ * Execute a subagent in the requested mode.
+ * Pre-generates executionId so all IDs (tool return, XML delivery, error)
+ * are consistent and usable with the runs tool.
+ */
+function executeSubagent(
+  configPayload: AgentConfigPayload,
+  agentName: string,
+  mode: 'sync' | 'async',
+  orchestratorStreamId: StreamTabId,
+  inputFile?: string,
+): ToolResult | Promise<ToolResult> {
+  const executionId = randomUUID() as ExecutionId;
+
+  if (mode === 'sync') {
+    return executeAgent(configPayload, executionId, {
+      isSubagent: true,
+    }).then((result) => formatFlowResult(result, agentName, inputFile));
+  }
+
+  // Async: launch, deliver result via FollowUpQueue, return execution ID for progress checks
+  const promise = executeAgent(configPayload, executionId, {
+    isSubagent: true,
+    onStreamResolved: (childStreamId) => {
+      registerSubagent(
+        executionId,
+        orchestratorStreamId,
+        childStreamId,
+        agentName,
+        promise,
+      );
+    },
+  });
+  promise
+    .then((result) => {
+      const msg = formatSubagentDelivery(agentName, result);
+      ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+    })
+    .catch((err: unknown) => {
+      const msg = formatSubagentError(executionId, agentName, err);
+      ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+    });
+  return {
+    summary: `Launched '${agentName}' (async)`,
+    output: [
+      `Subagent '${agentName}' launched in async mode.`,
+      `Execution ID: ${executionId}`,
+      `Check progress: runs tool with path /runs/${executionId}`,
+      'Result will be delivered as a follow-up message when complete.',
+    ].join('\n'),
+  };
 }
 
 /** Format an agent list for tool descriptions. */
@@ -192,6 +258,7 @@ const WorkflowAgentInputSchema = z.object({
     .describe(
       'Set true when outputFiles has multiple entries. Enables multi-file extraction from agent response.',
     ),
+  mode: ModeSchema,
 });
 
 export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
@@ -277,6 +344,7 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       agent: input.agent,
       model,
       instruction: input.instruction,
+      mode: input.mode ?? 'sync',
       inputFile: input.inputFile,
       inputFiles: input.inputFiles,
       referenceFile: input.referenceFile,
@@ -304,24 +372,15 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
     );
     if (nonApproveResult) return nonApproveResult;
 
-    // Approved - execute with error logging
-    executeAgentWithLogging(proposal);
-
-    const outputInfo =
-      input.outputFiles.length > 0
-        ? `Output: ${input.outputFiles.join(', ')}`
-        : 'Output: default location';
-
-    return {
-      summary: `Started '${input.agent}' on ${input.inputFile}`,
-      output: [
-        `Workflow agent '${input.agent}' started.`,
-        `Input: ${input.inputFile}`,
-        `Model: ${model}`,
-        outputInfo,
-        'Monitor ProgressBoard for status.',
-      ].join('\n'),
-    };
+    // Approved - execute via executeAgent with requested mode
+    const configPayload = toConfigPayload(proposal);
+    return executeSubagent(
+      configPayload,
+      input.agent,
+      proposal.mode,
+      streamId,
+      input.inputFile,
+    );
   }
 }
 
@@ -341,6 +400,7 @@ const DelegateAgentInputSchema = z.object({
   instruction: z
     .string()
     .describe('Plain prose instruction with file paths included naturally'),
+  mode: ModeSchema,
 });
 
 export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
@@ -384,6 +444,7 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
       agent: input.agent,
       model,
       instruction: input.instruction,
+      mode: input.mode ?? 'sync',
     } satisfies ToolUseAgentProposal);
 
     const streamId = getRequiredStreamId();
@@ -401,17 +462,8 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
     );
     if (nonApproveResult) return nonApproveResult;
 
-    // Approved - execute with error logging
-    executeAgentWithLogging(proposal);
-
-    return {
-      summary: `Delegated task to '${input.agent}'`,
-      output: [
-        `Tool-use agent '${input.agent}' started.`,
-        `Model: ${model}`,
-        `Task: ${input.instruction.slice(0, 100)}${input.instruction.length > 100 ? '...' : ''}`,
-        'Monitor ProgressBoard for status.',
-      ].join('\n'),
-    };
+    // Approved - execute via executeAgent with requested mode
+    const configPayload = toConfigPayload(proposal);
+    return executeSubagent(configPayload, input.agent, proposal.mode, streamId);
   }
 }
