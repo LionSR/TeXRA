@@ -257,7 +257,8 @@ export class ArxivSourceProcessor {
     } else {
       // For non-archive files, rename to main.tex and move to paper root
       const downloadedRel = WorkspaceFS.relativePath(downloadedPath);
-      const targetRel = path.join(paperDirRelative, 'main.tex');
+      // Use forward slashes to match WorkspaceFS.relativePath() convention
+      const targetRel = [paperDirRelative, 'main.tex'].join('/');
       // Always move the file to paper root, even if already named main.tex
       if (downloadedRel !== targetRel) {
         await WorkspaceFS.rename(downloadedRel, targetRel);
