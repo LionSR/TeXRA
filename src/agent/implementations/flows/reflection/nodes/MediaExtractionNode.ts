@@ -15,15 +15,15 @@ import type {
 } from '../ReflectionServices';
 
 /**
- * Prep result carries shared reference and computed values.
+ * Prep result: computed values needed by exec.
  * - workspaceState: reconstructed from snapshot, modified in exec, saved in post
  * - files/extraMediaFiles: computed once to avoid redundant calls
  */
 interface PrepInput {
-  shared: ReflectionFlowShared;
   files: FileLocation[];
   extraMediaFiles: FileLocation[];
   workspaceState: AgentWorkspaceState;
+  currentRound: number;
 }
 
 export class MediaExtractionNode<C = unknown> extends Node<
@@ -50,7 +50,7 @@ export class MediaExtractionNode<C = unknown> extends Node<
     }
 
     return {
-      shared,
+      currentRound,
       files: getFilesForRound(currentRound, roundOutputs, config, fileService),
       extraMediaFiles,
       workspaceState,
@@ -67,7 +67,7 @@ export class MediaExtractionNode<C = unknown> extends Node<
       return null;
     }
 
-    if (prepRes.shared.currentRound === 0) {
+    if (prepRes.currentRound === 0) {
       await latexMediaManager.processInputFiles(
         prepRes.files,
         prepRes.workspaceState,
@@ -97,15 +97,15 @@ export class MediaExtractionNode<C = unknown> extends Node<
   }
 
   async post(
-    _shared: ReflectionFlowShared,
+    shared: ReflectionFlowShared,
     prepRes: PrepInput,
     mediaFiles: FileLocation[] | null,
   ): Promise<string | undefined> {
-    prepRes.shared.workspaceSnapshot = prepRes.workspaceState.toSnapshot();
+    shared.workspaceSnapshot = prepRes.workspaceState.toSnapshot();
 
-    if (mediaFiles && mediaFiles.length > 0 && prepRes.shared.context) {
+    if (mediaFiles && mediaFiles.length > 0 && shared.context) {
       await this.services.modelHandler.addMediaToUserMessage(
-        prepRes.shared.context.messages,
+        shared.context.messages,
         mediaFiles,
       );
     }
