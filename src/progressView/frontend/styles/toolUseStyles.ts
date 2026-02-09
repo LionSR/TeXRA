@@ -138,11 +138,7 @@ export const toolUseStyles = css`
     overflow: auto;
   }
 
-  /* Proposal restore link */
-  .proposal-restore-action {
-    margin: var(--spacing-small) 0;
-  }
-
+  /* Proposal setup link (in summary row and body) */
   .proposal-restore-link {
     color: var(--color-text-link);
     cursor: pointer;
@@ -155,6 +151,10 @@ export const toolUseStyles = css`
 
   .proposal-restore-link:hover {
     text-decoration: underline;
+  }
+
+  .proposal-banner-setup {
+    margin-left: auto;
   }
 
   /* Diff styles */

@@ -14,6 +14,7 @@ import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 // Local imports - Lit template utilities
 import {
   html,
+  nothing,
   classMap,
   ifDefined,
   type TemplateResult,
@@ -395,15 +396,6 @@ export function formatToolUseTemplate(
     );
   }
 
-  // Add "Setup" restore link for completed proposal tools (including rejected/timed-out)
-  if (PROPOSAL_TOOLS.has(toolName) && !isInProgress) {
-    const proposalId = registerProposalInput(input, toolName);
-    if (proposalId) {
-      // prettier-ignore
-      sections.push(html`<div class="proposal-restore-action"><span class="proposal-restore-link" data-proposal-id=${proposalId} title="Restore this proposal configuration to the main view"><i class="codicon codicon-reply"></i> Setup</span></div>`);
-    }
-  }
-
   // Show error if present
   if (errorText && !isUserFeedback) {
     sections.push(
@@ -442,6 +434,22 @@ export function formatToolUseTemplate(
   // prettier-ignore
   const timerTemplate = isInProgress ? html`<tool-timer .startTime=${timestamp} .timeoutMs=${toolTimeoutMs ?? 0}></tool-timer>` : undefined;
 
+  // Proposal banner extras: mode badge + setup link (shown in summary row)
+  const isProposal = PROPOSAL_TOOLS.has(toolName);
+  const proposalMode =
+    isProposal && isPlainObject(input) && typeof input.mode === 'string'
+      ? input.mode
+      : isProposal
+        ? 'sync'
+        : '';
+  const proposalId =
+    isProposal && !isInProgress
+      ? registerProposalInput(input, toolName)
+      : null;
+
+  // prettier-ignore
+  const extraContent = html`${timerTemplate ?? nothing}${proposalMode ? html`<span class=${classMap({ 'proposal-mode-badge': true, 'proposal-mode-badge--async': proposalMode === 'async', 'proposal-mode-badge--sync': proposalMode === 'sync' })}>${proposalMode}</span>` : nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Restore this proposal configuration"><i class="codicon codicon-reply"></i> Setup</span>` : nothing}`;
+
   // prettier-ignore
   return html`<details class=${classMap({
     'banner-details': true,
@@ -454,7 +462,7 @@ export function formatToolUseTemplate(
     label: titleText,
     labelClass: 'tool-use-title',
     includeIconClass: false,
-    extraContent: timerTemplate,
+    extraContent,
   })}${bannerContentTemplate}</details>`;
 }
 
