@@ -22,18 +22,11 @@
 import * as path from 'path';
 
 import {
-  END_GROUP_STATUS,
-  EXECUTION_STATUS,
   type EndGroupStatus,
-  type ExecutionStatus,
   type RoundOutput,
   type StorageKey,
 } from '@shared/schemas';
-import { executionToEndStatus } from '@common/constants/streamStatus';
-import {
-  getExecutionStore,
-  type ExecutionKVStore,
-} from '@agent/storage/ExecutionKVStore';
+import { Flow } from '@agent/node';
 import {
   createOutputState,
   setActiveRun,
@@ -42,20 +35,18 @@ import {
 } from '@agent/output/outputState';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
-import {
-  registerInterruptible,
-  unregisterInterruptible,
-  type IInterruptible,
-} from '@agent/toolUse/ToolUseAgentRegistry';
+import type { IInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { createRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import { type FlowRecord } from '@agent/node/persisted-flow';
-import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
+import { PersistedFlow } from '@agent/node/persisted-flow';
+import { runWithRounds } from '@agent/node/round-runner';
 import type { UsageMonitor } from '@agent/utils/UsageMonitor';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import {
   TaskRunFileService,
@@ -66,9 +57,8 @@ import {
 } from '@utils/files';
 import { PromptBuilder } from '@utils/prompt';
 import { LatexMediaManager } from '@latex';
+import { runPersistedFlow } from '../common/runPersistedFlow';
 
-import { Flow } from '@agent/node';
-import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { TeXCountNode } from './nodes/TeXCountNode';
 import { MediaExtractionNode } from './nodes/MediaExtractionNode';
 import { PrepareContextNode } from './nodes/PrepareContextNode';
@@ -199,13 +189,7 @@ export async function runReflectionFlow<C = unknown>(
     usageMonitor,
   } = input;
 
-  let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
   let shared: ReflectionFlowShared | undefined;
-  let services: ReflectionServices<C> | undefined;
-
-  // ========================================================================
-  // Create services inline (previously in createReflectionFlowContext)
-  // ========================================================================
 
   const fileService = new TaskRunFileService(executionId);
 
@@ -264,7 +248,6 @@ export async function runReflectionFlow<C = unknown>(
       return fileService.createLocation(fileName) as AgentFileLocation;
     });
 
-  // Create interruptible object for registration
   const interruptible: IInterruptible = {
     interrupt(): void {
       input.onInterrupt?.();
@@ -272,37 +255,28 @@ export async function runReflectionFlow<C = unknown>(
     },
   };
 
-  // Set active run for output state (inline deps — services not yet assembled)
   setActiveRun(
     outputState,
     { setting, config, baseFiles, logger, fileService, executionId, streamId },
     storageKey,
   );
 
-  try {
-    // Register for interrupt handling
-    registerInterruptible(streamId, interruptible);
+  const status = await runPersistedFlow<ReflectionFlowShared>({
+    ctx: { streamId, executionId, logger },
+    interruptible,
 
-    // Get execution-scoped storage for persistence
-    const kv: ExecutionKVStore = getExecutionStore(executionId);
-
-    // Try to restore full state from persisted flow (resume scenario)
-    const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
-    const validated = flowRecord?.shared
-      ? ReflectionFlowStateSchema.safeParse(flowRecord.shared)
-      : null;
-    const isResume = validated?.success ?? false;
-
-    if (validated?.success) {
-      shared = validated.data as ReflectionFlowShared;
+    validateResume: (raw) => {
+      const result = ReflectionFlowStateSchema.safeParse(raw);
+      if (!result.success) return null;
+      const parsed = result.data as ReflectionFlowShared;
       logger.debug(
-        `Resuming reflection flow from round ${shared.currentRound}/${shared.totalRounds}`,
+        `Resuming reflection flow from round ${parsed.currentRound}/${parsed.totalRounds}`,
       );
-    }
+      return parsed;
+    },
 
-    // Create fresh state if not resuming
-    if (!shared) {
-      shared = {
+    execute: async (resume) => {
+      shared = resume.shared ?? {
         currentRound: 0,
         totalRounds,
         workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
@@ -315,92 +289,67 @@ export async function runReflectionFlow<C = unknown>(
         continueRounds: true,
         endTurn: false,
       };
-    }
 
-    // Create flow nodes and wire transitions inline
-    const prepContextNode = new PrepareContextNode<C>();
-    const texCountNode = new TeXCountNode<C>();
-    const mediaNode = new MediaExtractionNode<C>();
-    const responseCycleNode = new ResponseCycleNode<C>();
-    const outputNode = new OutputNode<C>();
-    const roundCompleteNode = new RoundCompleteNode<C>();
+      // Create flow nodes and wire transitions
+      const prepContextNode = new PrepareContextNode<C>();
+      const texCountNode = new TeXCountNode<C>();
+      const mediaNode = new MediaExtractionNode<C>();
+      const responseCycleNode = new ResponseCycleNode<C>();
+      const outputNode = new OutputNode<C>();
+      const roundCompleteNode = new RoundCompleteNode<C>();
 
-    prepContextNode.next(texCountNode);
-    texCountNode.next(mediaNode);
-    mediaNode.next(responseCycleNode);
-    responseCycleNode.next(outputNode);
-    outputNode.next(roundCompleteNode);
-    roundCompleteNode.on(FlowTransition.CONTINUE_NEXT_ROUND, prepContextNode);
+      prepContextNode.next(texCountNode);
+      texCountNode.next(mediaNode);
+      mediaNode.next(responseCycleNode);
+      responseCycleNode.next(outputNode);
+      outputNode.next(roundCompleteNode);
+      roundCompleteNode.on(FlowTransition.CONTINUE_NEXT_ROUND, prepContextNode);
 
-    const startNode = prepContextNode;
-    const pf = new RoundPersistedFlow<
-      ReflectionFlowShared,
-      Record<string, unknown>,
-      ReflectionServices<C>
-    >(startNode, kv, {
-      parentStage,
-      callbacks: {
-        createRoundStage: async (roundIndex, parent) => {
-          return await logger.stage(`r${roundIndex}`, {
-            parent: parent ?? undefined,
-          });
-        },
-        onStageCreated: (stage) => {
-          usageMonitor?.setActiveGroupId(stage.id);
-        },
-        resetForNextRound: (s) => {
-          s.workspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
-        },
-        checkInterruption,
-      },
-    });
+      const pf = new PersistedFlow<
+        ReflectionFlowShared,
+        Record<string, unknown>,
+        ReflectionServices<C>
+      >(prepContextNode, resume.kv);
 
-    // Build services: spread input + add computed fields
-    // ReflectionServices structurally satisfies OutputDependencies, so no
-    // separate outputDeps object is needed — output functions accept services directly.
-    services = {
-      ...input,
-      onRoundFinalized,
-      outputState,
-      xmlManager,
-      diffManager,
-      latexMediaManager,
-      promptBuilder,
-      fileService,
-      getOutputFileLocation,
-      shouldEnsureXmlStructure,
-      baseFiles,
-    };
-    pf.setServices(services);
+      pf.setServices({
+        ...input,
+        onRoundFinalized,
+        outputState,
+        xmlManager,
+        diffManager,
+        latexMediaManager,
+        promptBuilder,
+        fileService,
+        getOutputFileLocation,
+        shouldEnsureXmlStructure,
+        baseFiles,
+      });
 
-    if (isResume) {
-      logger.debug('Resuming reflection flow from persistence');
-    }
-
-    const flowStatus = await pf.run(shared);
-    shared = await pf.getShared();
-    status = executionToEndStatus(flowStatus) as EndGroupStatus;
-  } catch (error) {
-    status = END_GROUP_STATUS.ERROR;
-    throw error;
-  } finally {
-    // Only delete flow record on successful completion
-    // Keep it for interrupted/error flows to enable resume
-    // Note: END_GROUP_STATUS.STOPPED means "completed" (not user-stopped)
-    if (status === END_GROUP_STATUS.STOPPED) {
-      try {
-        const kv = getExecutionStore(executionId);
-        await kv.delete(`flow:${executionId}`);
-      } catch {
-        // Ignore cleanup errors
+      if (resume.shared) {
+        logger.debug('Resuming reflection flow from persistence');
       }
-    }
 
-    // Clean up retry coordinator
-    retryCoordinator.clearRequest(streamId);
-
-    unregisterInterruptible(streamId);
-  }
+      const flowStatus = await runWithRounds(pf, shared, {
+        parentStage,
+        hooks: {
+          createRoundStage: async (roundIndex, parent) => {
+            return await logger.stage(`r${roundIndex}`, {
+              parent: parent ?? undefined,
+            });
+          },
+          onStageCreated: (stage) => {
+            usageMonitor?.setActiveGroupId(stage.id);
+          },
+          resetForNextRound: (s) => {
+            s.workspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
+          },
+          checkInterruption,
+        },
+      });
+      shared = await pf.getShared();
+      return executionToEndStatus(flowStatus) as EndGroupStatus;
+    },
+  });
 
   return {
     roundOutputs: shared?.roundOutputs ?? [],

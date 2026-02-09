@@ -5,28 +5,19 @@
  * and state persistence via PersistedFlow.
  */
 
-import {
-  END_GROUP_STATUS,
-  EXECUTION_STATUS,
-  type EndGroupStatus,
-} from '@shared/schemas';
-import { executionToEndStatus } from '@common/constants/streamStatus';
-import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
-import {
-  registerInterruptible,
-  unregisterInterruptible,
-} from '@agent/toolUse/ToolUseAgentRegistry';
+import { EXECUTION_STATUS, type EndGroupStatus } from '@shared/schemas';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
-
-import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
+import { PersistedFlow } from '@agent/node/persisted-flow';
 
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
-import type { ToolDefinition } from '@model';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { executionToEndStatus } from '@common/constants/streamStatus';
+import type { ToolDefinition } from '@model';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
-import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { runPersistedFlow } from '../common/runPersistedFlow';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
@@ -154,82 +145,64 @@ export async function runToolUseFlow<C = unknown>(
     },
   };
 
-  let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
-
-  // Shared state is declared outside try block for access in finally (cleanup decision based on userCancelledRetry)
+  // Track shared across the execute closure for lastResponse extraction
   const shared: ToolUseRunShared = {
     messages: [],
     shouldSkipCycle: false,
     stateSlices: null,
   };
 
+  let status: EndGroupStatus;
   try {
-    registerInterruptible(streamId, flowContext);
-    onSetup?.(flowContext);
+    status = await runPersistedFlow<ToolUseRunShared>({
+      ctx: { streamId, executionId, logger },
+      interruptible: flowContext,
 
-    const kv: ExecutionKVStore = getExecutionStore(executionId);
-    let flowRecord: FlowRecord | null = null;
-    try {
-      flowRecord = (await kv.read<FlowRecord>(`flow:${executionId}`)) ?? null;
-    } catch (error) {
-      logger.debug(
-        `Resume parse failed, starting fresh: ${error instanceof Error ? error.message : 'unknown'}`,
-      );
-    }
-    if (flowRecord?.shared) {
-      logger.debug('Resuming tool-use flow from persistence');
-      // Migrate legacy nested format to flat format if needed
-      const migrationResult = migrateSharedState(flowRecord.shared);
-      if (migrationResult === null) {
-        logger.warn('Failed to parse flow record shared state, starting fresh');
-        await kv.delete(`flow:${executionId}`);
-        flowRecord = null;
-      } else if (migrationResult.migrated) {
-        logger.debug('Migrated legacy shared state to flat format');
-        flowRecord.shared = migrationResult.data;
-        await kv.write(`flow:${executionId}`, flowRecord);
-      }
-    }
+      migrateResume: async (flowRecord, kv) => {
+        const migrationResult = migrateSharedState(flowRecord.shared);
+        if (migrationResult === null) return null;
+        if (migrationResult.migrated) {
+          logger.debug('Migrated legacy shared state to flat format');
+          flowRecord.shared = migrationResult.data;
+          await kv.write(`flow:${executionId}`, flowRecord);
+        }
+        return flowRecord;
+      },
 
-    // Create flow nodes and wire transitions inline
-    const prepareNode = new ToolUsePrepareNode<C>();
-    const cycleNode = new ToolUseCycleNode<C>();
-    const waitNode = new ToolUseWaitNode<C>();
-    prepareNode.next(cycleNode);
-    cycleNode.next(waitNode);
-    waitNode.on(FlowTransition.CONTINUE, cycleNode);
-    const startNode = prepareNode;
-    const pf = new PersistedFlow<
-      ToolUseRunShared,
-      Record<string, unknown>,
-      ToolUseServices<C>
-    >(startNode, kv);
-    pf.setServices(flowContext.services);
-    await pf.run(shared);
+      execute: async (resume) => {
+        onSetup?.(flowContext);
 
-    const execStatus = input.checkInterruption()
-      ? EXECUTION_STATUS.INTERRUPTED
-      : EXECUTION_STATUS.COMPLETED;
-    status = executionToEndStatus(execStatus) as EndGroupStatus;
-  } catch (error) {
-    status = END_GROUP_STATUS.ERROR;
-    throw error;
+        const prepareNode = new ToolUsePrepareNode<C>();
+        const cycleNode = new ToolUseCycleNode<C>();
+        const waitNode = new ToolUseWaitNode<C>();
+        prepareNode.next(cycleNode);
+        cycleNode.next(waitNode);
+        waitNode.on(FlowTransition.CONTINUE, cycleNode);
+
+        const pf = new PersistedFlow<
+          ToolUseRunShared,
+          Record<string, unknown>,
+          ToolUseServices<C>
+        >(prepareNode, resume.kv);
+        pf.setServices(flowContext.services);
+        await pf.run(shared);
+
+        const execStatus = input.checkInterruption()
+          ? EXECUTION_STATUS.INTERRUPTED
+          : EXECUTION_STATUS.COMPLETED;
+        return executionToEndStatus(execStatus) as EndGroupStatus;
+      },
+
+      preserveFlowRecord: () => {
+        if (shared.userCancelledRetry) {
+          logger.debug('Flow record preserved for resume after retry cancellation');
+          return true;
+        }
+        return false;
+      },
+    });
   } finally {
-    // Preserve flow record if user cancelled retry (for resume), otherwise delete
-    // Use the local shared object directly - it's updated in place during pf.run()
-    if (shared.userCancelledRetry) {
-      logger.debug('Flow record preserved for resume after retry cancellation');
-    } else {
-      try {
-        const kv = getExecutionStore(executionId);
-        await kv.delete(`flow:${executionId}`);
-      } catch {
-        // Ignore cleanup errors
-      }
-    }
-
     flowContext.dispose();
-    unregisterInterruptible(streamId);
   }
 
   // Extract last assistant text using the model handler's typed extraction

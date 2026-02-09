@@ -186,6 +186,15 @@ export class PersistedFlow<
     return pf;
   }
 
+  /** Public accessor for stepWithResult(), enabling composition over inheritance. */
+  async publicStepWithResult(): Promise<StepResult<S>> {
+    return this.stepWithResult();
+  }
+
+  getServices(): Svc {
+    return this._services;
+  }
+
   async getShared(): Promise<S | undefined> {
     const flow =
       this.cachedRecord ??

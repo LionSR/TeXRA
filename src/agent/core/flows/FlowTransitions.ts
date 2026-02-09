@@ -12,12 +12,11 @@ export const FlowTransition = {
   /** Exit the flow entirely after running any finalisation hooks. */
   FINALIZE: 'finalize',
 
-  // === Round-aware transitions (used by RoundPersistedFlow) ===
+  // === Round-aware transitions (used by runWithRounds) ===
 
   /**
    * Signal to continue to the next round after successful completion.
-   * RoundPersistedFlow will increment currentRound and trigger lifecycle hooks.
-   * Used by RoundCompleteNode when a round finishes successfully.
+   * runWithRounds() will increment currentRound and trigger lifecycle hooks.
    */
   CONTINUE_NEXT_ROUND: 'continue_next_round',
 } as const;

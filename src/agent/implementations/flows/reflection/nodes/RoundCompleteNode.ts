@@ -2,7 +2,7 @@
  * RoundCompleteNode - Determines whether to continue to next round or finalize.
  *
  * Checks bounds, interruption, and continue flag to decide next action.
- * RoundPersistedFlow owns round lifecycle; this node only signals intent.
+ * runWithRounds() owns round lifecycle; this node only signals intent.
  */
 
 import { Node } from '@agent/node';
@@ -76,7 +76,7 @@ export class RoundCompleteNode<C = unknown> extends Node<
   }
 
   /**
-   * Route based on decision. RoundPersistedFlow owns all round lifecycle
+   * Route based on decision. runWithRounds() owns all round lifecycle
    * (incrementing, stages, workspace reset) - this node only signals intent.
    */
   async post(
