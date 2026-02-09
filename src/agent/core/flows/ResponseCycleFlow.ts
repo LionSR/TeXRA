@@ -657,6 +657,7 @@ export function createResponseCycleFlow<C>(): Flow<
   >({
     operationName: 'Model invocation',
     streaming: false,
+    backgroundModeAware: true,
     getSystemPrompt: (shared) => shared.systemPrompt,
     getEndTag: (services) => services.setting.endTag,
     getTools: (services) =>
