@@ -50,7 +50,7 @@ export async function checkExpectedOutputs(
     stage,
     async (_scope): Promise<ValidationResult> => {
       const storageKey = getStorageKey(state);
-      const expected = deps.agentConfig.outputFiles;
+      const expected = deps.config.outputFiles;
       if (!expected || expected.length === 0) {
         deps.logger.debug(
           `No expected outputs for round ${currRound} storageKey=${storageKey}`,
@@ -71,7 +71,7 @@ export async function checkExpectedOutputs(
         deps.logger.missingOutputs({
           missing,
           xmlFile: xmlExists ? outputLocation.absolutePath : null,
-          documentTag: deps.agentSetting.documentTag,
+          documentTag: deps.setting.documentTag,
         });
         deps.logger.debug(
           `Missing expected outputs for round ${currRound}: ${missing.join(', ')}`,
