@@ -1503,17 +1503,40 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.resetConversationState();
         // Also clear pending background response if present
         this.clearPendingBackgroundResponse();
-      } else if (isContextWindowError(error) && this.previousResponseId) {
-        // Context window overflow with chained response: the server-side context
-        // (via previous_response_id) may be larger than the pre-flight estimate.
-        // Clear the chain so retry rebuilds from local history with accurate counting.
-        this.logger.info(
-          `Context window exceeded with previousResponseId=${this.previousResponseId} - ` +
-            'clearing chain so next retry rebuilds conversation from local history',
+      } else if (
+        isContextWindowError(error) &&
+        this.previousResponseId &&
+        !compactedThisCall
+      ) {
+        // Recovery: When using previous_response_id, accumulated reasoning tokens
+        // from prior turns are stored server-side and count against the context
+        // window, but inputTokens.count() may not fully reflect them. This causes
+        // pre-flight validation to pass while the API rejects the request.
+        //
+        // Fix: Drop server-side state (clearing previous_response_id discards the
+        // hidden reasoning tokens) and compact client-side messages, then retry.
+        // The guard !compactedThisCall prevents infinite recursion.
+        this.logger.logProgress(
+          'Context window exceeded despite pre-flight check — ' +
+            'accumulated server-side reasoning tokens likely exceeded limit. ' +
+            'Clearing chained state and compacting for retry.',
         );
         this.previousResponseId = null;
-        this.resetConversationState();
+        // Don't call resetConversationState() — it zeroes cumulativeInputTokens
+        // which would prevent shouldCompact() from triggering on the retry.
         this.clearPendingBackgroundResponse();
+        this.compactionRequested = true;
+        this._diagPreFlightTokens = null;
+        // Retry internally: the recursive call will compact (shouldCompact()=true)
+        // and send all messages without server-side state.
+        return this.createResponse({
+          client,
+          messages,
+          temperature,
+          systemPrompt,
+          signal,
+          tools,
+        });
       } else if (this.previousResponseId) {
         // Log diagnostic info for other errors when chaining was active
         this.logger.debug(
