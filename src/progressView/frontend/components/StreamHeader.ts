@@ -342,7 +342,7 @@ export class StreamHeader extends LitElement {
     const agentCategory = this.stream.agentCategory;
     const toolbarButtons =
       TOOLBAR_BUTTONS[agentCategory] ?? TOOLBAR_BUTTONS.workflow;
-    const subagentCount = this.streamState?.activeSubagents?.length ?? 0;
+    const activeSubagents = this.streamState?.activeSubagents ?? [];
 
     return html`
       <div class="log-header">
@@ -365,15 +365,16 @@ export class StreamHeader extends LitElement {
               })}
               data-status=${statusLabel}
             ></span>
-            ${subagentCount > 0
+            ${activeSubagents.length > 0
               ? html`<span
                   class="subagent-badge"
-                  title=${this.streamState!.activeSubagents
+                  title=${activeSubagents
                     .map((s) => s.agentName)
                     .join(', ')}
                 >
                   <i class="codicon codicon-server-process"></i>
-                  ${subagentCount} subagent${subagentCount > 1 ? 's' : ''}
+                  ${activeSubagents.length}
+                  subagent${activeSubagents.length > 1 ? 's' : ''}
                 </span>`
               : nothing}
           </div>
