@@ -635,6 +635,20 @@ export class ModelHandlerOpenAI<
     return { role: 'assistant', content: [{ type: 'text', text }] };
   }
 
+  override extractAssistantText(
+    message: ChatCompletionMessageParam,
+  ): string | undefined {
+    if (message.role !== 'assistant') return undefined;
+    const { content } = message;
+    if (typeof content === 'string') return content;
+    if (!Array.isArray(content)) return undefined;
+    const texts = content
+      .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+      .map((p) => p.text)
+      .filter(Boolean);
+    return texts.length > 0 ? texts.join('\n') : undefined;
+  }
+
   /** Builds the default content parts for inline vision requests. */
   protected buildStandardVisionParts(
     media: MediaEntry,
