@@ -31,8 +31,11 @@ function handleAddLogMessage(
     'failed to handle addLogMessage',
     () => {
       const isNew = ctx.state.streamTabs.addMessage(streamId, logMessage);
-      // Send to webview if available (regardless of active stream - messages persist)
-      if (isNew && ctx.webviewUpdater.isAvailable()) {
+      // Only send to webview for the active stream. Inactive streams get
+      // their full log history via UPDATE_LOGS on tab switch, so sending
+      // APPEND_LOG for them is wasted work (serialization + frontend state churn).
+      const isActive = streamId === ctx.state.activeStream;
+      if (isNew && isActive && ctx.webviewUpdater.isAvailable()) {
         ctx.webviewUpdater.appendLogMessage(streamId, logMessage);
       }
     },
