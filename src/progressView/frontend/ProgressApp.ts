@@ -140,6 +140,13 @@ export class ProgressApp extends BaseWebviewApp {
   // Container ref for accessing child component methods (FollowUpInput)
   private toolUseContentRef = createRef<ToolUseStreamContent>();
 
+  /**
+   * Memoized filtered+sorted stream list, recomputed once per willUpdate()
+   * cycle. Shared between render() and updateStreamContext() to avoid
+   * redundant sort/filter on every call.
+   */
+  private cachedFilteredStreams: StreamTabInfo[] = [];
+
   private prefsManager = new PersistedState(
     createWebviewStorage(vscode),
     'progressViewPrefs',
@@ -163,6 +170,11 @@ export class ProgressApp extends BaseWebviewApp {
 
   protected override willUpdate(changed: Map<string, unknown>): void {
     if (changed.has('appState') || changed.has('permissions')) {
+      // Recompute filtered streams once per update cycle (used by render + updateStreamContext)
+      if (changed.has('appState')) {
+        this.cachedFilteredStreams = getFilteredStreams(this.appState);
+      }
+
       const previousState = changed.get('appState') as
         | ProgressState
         | undefined;
@@ -197,7 +209,7 @@ export class ProgressApp extends BaseWebviewApp {
 
           <stream-tabs
             slot="end"
-            .streams=${getFilteredStreams(this.appState)}
+            .streams=${this.cachedFilteredStreams}
             .activeStreamId=${this.appState.activeStreamId}
             .filter=${this.appState.streamFilter}
             .sort=${this.appState.streamSort}
@@ -262,16 +274,15 @@ export class ProgressApp extends BaseWebviewApp {
 
   private getActiveStreamInfo(): StreamTabInfo | null {
     if (!this.appState.activeStreamId) return null;
-    const filtered = getFilteredStreams(this.appState);
     return (
-      filtered.find((stream) => stream.name === this.appState.activeStreamId) ??
-      null
+      this.cachedFilteredStreams.find(
+        (stream) => stream.name === this.appState.activeStreamId,
+      ) ?? null
     );
   }
 
   private updateStreamContext(): void {
-    const filteredStreams = getFilteredStreams(this.appState);
-    const hasStreams = filteredStreams.length > 0;
+    const hasStreams = this.cachedFilteredStreams.length > 0;
     const activeStream = this.getActiveStreamInfo();
 
     if (!activeStream) {
