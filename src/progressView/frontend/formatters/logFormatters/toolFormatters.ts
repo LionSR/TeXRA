@@ -446,7 +446,7 @@ export function formatToolUseTemplate(
       : null;
 
   // prettier-ignore
-  const extraContent = html`${timerTemplate ?? nothing}${proposalMode ? html`<span class=${classMap({ 'proposal-banner-badge': true, 'proposal-banner-badge--async': proposalMode === 'async', 'proposal-banner-badge--sync': proposalMode === 'sync' })}>${proposalMode}</span>` : nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Restore this proposal configuration"><i class="codicon codicon-reply"></i> Setup</span>` : nothing}`;
+  const extraContent = html`${timerTemplate ?? nothing}${proposalMode ? html`<span class=${classMap({ 'proposal-mode-badge': true, 'proposal-mode-badge--async': proposalMode === 'async', 'proposal-mode-badge--sync': proposalMode === 'sync' })}>${proposalMode}</span>` : nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Restore this proposal configuration"><i class="codicon codicon-reply"></i> Setup</span>` : nothing}`;
 
   // prettier-ignore
   return html`<details class=${classMap({

@@ -220,12 +220,13 @@ export class LogList extends LitElement {
       return;
     }
 
-    // Handle proposal restore links
+    // Handle proposal restore links (may be inside <summary>, so prevent toggle)
     const proposalLink = this.findTargetInPath<HTMLElement>(
       event,
       '.proposal-restore-link',
     );
     if (proposalLink?.dataset.proposalId) {
+      event.preventDefault();
       const stored = getProposalInput(proposalLink.dataset.proposalId);
       if (stored) {
         postMessage(COMMANDS.RESTORE_PROPOSAL_CONFIG, {

@@ -138,27 +138,6 @@ export const toolUseStyles = css`
     overflow: auto;
   }
 
-  /* Proposal banner badge (sync/async mode indicator in summary row) */
-  .proposal-banner-badge {
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 1px 5px;
-    border-radius: var(--border-radius);
-    white-space: nowrap;
-  }
-
-  .proposal-banner-badge--async {
-    background: var(--vscode-editorWarning-foreground);
-    color: var(--vscode-editor-background);
-  }
-
-  .proposal-banner-badge--sync {
-    background: var(--vscode-editorWidget-border);
-    color: var(--vscode-editor-foreground);
-  }
-
   /* Proposal setup link (in summary row and body) */
   .proposal-restore-link {
     color: var(--color-text-link);
