@@ -368,12 +368,13 @@ Use view_range: [start, end] to paginate large outputs.`,
       const entries = await StorageFS.readDir(fullPath);
 
       for (const [name, type] of entries) {
-        // Use path.join for correct OS joining, then normalize to forward
-        // slashes so display output is consistent across platforms.
-        const entryRelative = relativePath
-          ? path.join(relativePath, name).replaceAll('\\', '/')
+        // Build raw path for filesystem access (preserves platform separators),
+        // then normalize to forward slashes only for display output.
+        const entryRaw = relativePath
+          ? path.join(relativePath, name)
           : name;
-        const entryFull = path.join(basePath, entryRelative);
+        const entryRelative = entryRaw.replaceAll('\\', '/');
+        const entryFull = path.join(basePath, entryRaw);
         const isDir = type === vscode.FileType.Directory;
 
         try {
@@ -383,7 +384,7 @@ Use view_range: [start, end] to paginate large outputs.`,
           if (isDir && maxDepth > 1) {
             const children = await this.walkDirectory(
               basePath,
-              entryRelative,
+              entryRaw,
               maxDepth - 1,
             );
             results.push(...children);
