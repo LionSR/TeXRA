@@ -30,6 +30,7 @@ export abstract class PersistentMapManager<K extends string, V> {
 
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private savePromise: Promise<void> | null = null;
+  private pendingResolve: (() => void) | null = null;
 
   constructor(storageKey: WorkspaceStateKey, storage?: MementoStorage) {
     const resolvedStorage = storage ?? workspaceSM;
@@ -135,6 +136,9 @@ export abstract class PersistentMapManager<K extends string, V> {
    * In-memory state is already updated by callers before calling save(),
    * so this only defers the disk write. Multiple rapid calls coalesce into
    * one write at the trailing edge of the debounce window.
+   *
+   * When a new save supersedes a pending one, the previous promise is
+   * resolved immediately — its data will be captured by the newer write.
    */
   async save(): Promise<void> {
     // If a timer is already pending, reset it (trailing-edge debounce).
@@ -142,9 +146,15 @@ export abstract class PersistentMapManager<K extends string, V> {
       clearTimeout(this.saveTimer);
     }
 
+    // Resolve any previously pending save — its data will be included
+    // in this newer write (which captures current in-memory state).
+    this.pendingResolve?.();
+
     this.savePromise = new Promise<void>((resolve) => {
+      this.pendingResolve = resolve;
       this.saveTimer = setTimeout(() => {
         this.saveTimer = null;
+        this.pendingResolve = null;
         this.writeToStorage().then(resolve, resolve);
       }, SAVE_DEBOUNCE_MS);
     });
@@ -160,6 +170,7 @@ export abstract class PersistentMapManager<K extends string, V> {
     if (this.saveTimer !== null) {
       clearTimeout(this.saveTimer);
       this.saveTimer = null;
+      this.pendingResolve = null;
       await this.writeToStorage();
     } else if (this.savePromise) {
       await this.savePromise;
