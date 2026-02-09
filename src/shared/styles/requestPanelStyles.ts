@@ -389,8 +389,8 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .workflow-proposal__mode-badge--sync {
-    background: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
+    background: var(--vscode-editorWidget-border);
+    color: var(--vscode-editor-foreground);
   }
 
   .workflow-proposal__instruction {
