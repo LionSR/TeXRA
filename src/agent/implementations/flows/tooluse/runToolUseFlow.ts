@@ -75,10 +75,7 @@ export type ToolUseFlowSetupCallback = (
 ) => void;
 
 /** Proposal tool names that subagents must not receive. */
-const PROPOSAL_TOOLS = new Set([
-  'propose_workflow',
-  'propose_agent',
-]);
+const PROPOSAL_TOOLS = new Set(['propose_workflow', 'propose_agent']);
 
 /** Options for tool resolution. */
 interface ResolveToolsOptions {
@@ -141,7 +138,7 @@ export async function runToolUseFlow<C = unknown>(
     resolvedTools,
     toolRegistry: registry,
     snapshot,
-    getUsageRecorder: input.getUsageRecorder ?? (() => async () => {}),
+    onRoundFinalized: input.onRoundFinalized ?? (async () => {}),
   };
 
   const flowContext: ToolUseFlowContext<C> = {
@@ -161,7 +158,7 @@ export async function runToolUseFlow<C = unknown>(
 
   // Shared state is declared outside try block for access in finally (cleanup decision based on userCancelledRetry)
   const shared: ToolUseRunShared = {
-    conversation: [],
+    messages: [],
     shouldSkipCycle: false,
     stateSlices: null,
   };
@@ -237,8 +234,8 @@ export async function runToolUseFlow<C = unknown>(
 
   // Extract last assistant text using the model handler's typed extraction
   let lastResponse: string | undefined;
-  for (let i = shared.conversation.length - 1; i >= 0; i--) {
-    const text = input.modelHandler.extractAssistantText(shared.conversation[i]);
+  for (let i = shared.messages.length - 1; i >= 0; i--) {
+    const text = input.modelHandler.extractAssistantText(shared.messages[i]);
     if (text !== undefined) {
       lastResponse = text;
       break;
