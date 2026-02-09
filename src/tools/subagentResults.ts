@@ -53,7 +53,7 @@ function formatWorkflowOutputs(outputs: OutputFileSummary[]): string[] {
 
 /** Build the opening <subagent-result> tag. */
 function resultTag(result: AgentFlowResult, agentName: string): string {
-  return `<subagent-result id="${result.streamId}" agent="${agentName}" category="${result.category}" status="${result.status}">`;
+  return `<subagent-result id="${result.executionId}" agent="${agentName}" category="${result.category}" status="${result.status}">`;
 }
 
 /** Format an AgentFlowResult into a ToolResult for sync mode. */
@@ -110,13 +110,13 @@ export function formatSubagentDelivery(
  * Format an error as a delivery message for async mode.
  */
 export function formatSubagentError(
-  subagentId: string,
+  executionId: string,
   agentName: string,
   err: unknown,
 ): string {
   const message = err instanceof Error ? err.message : String(err);
   return [
-    `<subagent-error id="${subagentId}" agent="${agentName}">`,
+    `<subagent-error id="${executionId}" agent="${agentName}">`,
     `<message>${message}</message>`,
     '</subagent-error>',
   ].join('\n');
