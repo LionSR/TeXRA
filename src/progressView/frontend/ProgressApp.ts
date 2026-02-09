@@ -217,8 +217,18 @@ export class ProgressApp extends BaseWebviewApp {
 
   protected override willUpdate(changed: Map<string, unknown>): void {
     if (changed.has('appState') || changed.has('permissions')) {
+      // Only re-sort streams when the streams list or sort/filter criteria change.
+      // Log updates change streamStates but not streams — skip the redundant sort.
       if (changed.has('appState')) {
-        this.cachedFilteredStreams = getFilteredStreams(this.appState);
+        const prev = changed.get('appState') as ProgressState | undefined;
+        if (
+          !prev ||
+          prev.streams !== this.appState.streams ||
+          prev.streamFilter !== this.appState.streamFilter ||
+          prev.streamSort !== this.appState.streamSort
+        ) {
+          this.cachedFilteredStreams = getFilteredStreams(this.appState);
+        }
       }
 
       const previousState = changed.get('appState') as
