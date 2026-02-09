@@ -54,7 +54,7 @@ The project has two build systems with different trade-offs:
 
 ## Coding style
 
-- All code in `src/` is written in TypeScript targeting ES2022, except some javascript files in `src/(webview,progressView)/modules/`.
+- All code in `src/` is written in TypeScript targeting ES2022.
 - Use the provided ESLint configuration (`eslint.config.mjs`) and Prettier settings (`.prettierrc`). Run `npm run format` before committing.
 - Prefer `const` and `let` over `var`.
 - Group imports by source and prefix each block with a descriptive comment (e.g., `// Third-party imports`, `// Local imports - component`).
@@ -84,8 +84,7 @@ The project has two build systems with different trade-offs:
   - `frontend/media/` - Image and audio handling
 - `src/common/` holds backend-only helpers (errors, state, files, base webview classes). Import them through the `@common/*` alias for clarity.
   - `common/state/` - State managers including `pendingStateManager`
-  - `common/modules/` - Shared webview modules (`BaseDomHandler`, `domUtils`, `templateUtils`)
-  - `common/webview/` - Base classes (`BaseViewContentProvider`, `BaseViewMessageHandler`), theme handlers
+  - `common/webview/` - Base classes (`BaseViewContentProvider`, `BaseViewMessageHandler`), command constants
 - `src/utils/` is reserved for utilities used by both the extension host and webviews. If a helper is specific to one side, place it under `frontend/` or `common/` instead of `utils/`.
   - `utils/core/` - Async utilities (`debounce`, `withTimeout`, `delay`)
   - `utils/files/` - Filesystem utilities, rules, and vars
@@ -253,8 +252,8 @@ Aim for code that looks like it was designed correctly from the start:
 
 **Agent execution and tool-use**
 
-- Implement new agents against `IAgent` (`src/agent/core/IAgent.ts`) and compose them via the factories in `src/agent/runtime`.
-- Persist interactive runs with `ToolUseSessionManager` (`src/agent/toolUse/ToolUseSessionManager.ts`) and launch/resume executions via `executeAgent` or `runPreparedAgent` (`src/agent/runtime/executeAgent.ts`) so session filters, run directories, and resume actions stay synchronized.
+- Define agents using `AgentDataclass` and `AgentConfig` (`src/agent/core/`) and compose them via the factories in `src/agent/runtime`.
+- Launch and resume executions via `executeAgent` (`src/agent/runtime/executeAgent.ts`) so session filters, run directories, and resume actions stay synchronized.
 - Add new model handlers under `src/agent/modelHandlers/`, export them through the index, and register capabilities/pricing in `src/model/ModelRegistry.ts`.
 
 **PocketFlow architecture**
@@ -276,16 +275,14 @@ See `docs/pocketflow/` for full framework documentation.
 
 **Webviews and UI**
 
-- Generate HTML through `BaseViewContentProvider` (`src/common/webview/BaseViewContentProvider.ts`) and `buildWebviewHtml` (`src/frontend/webview/html.ts`). Extend `BaseViewMessageHandler` and `BaseDomHandler` for consistent lifecycle management across views.
-- Register webview message handlers with `registerMessageHandlers` (`src/common/modules/webviewContext.js`). When adding UI managers (e.g., under `src/webview/modules/uiManagers/` or `src/progressView/modules/uiManagers/`), expose their URIs in the relevant content provider and import map.
-- Use codicon-based controls and the shared helpers in `src/common/modules/` (`iconConstants`, `templateUtils`, `domUtils`, `stringUtils`, `pathUtils`, `webviewState`) and `src/common/webview/themeHandlers.js` alongside `src/webview/modules/pasteHandler.js` for consistent interactions.
-- Map every module dependency in the import map, including transitives, and generate URIs via helper methods (`getHistoryViewUri`, `getCommonUri`, etc.). Missing entries will prevent modules from loading in the sandboxed webview.
+- Generate HTML through `BaseViewContentProvider` (`src/common/webview/BaseViewContentProvider.ts`) and `buildWebviewHtml` (`src/frontend/webview/html.ts`). Extend `BaseViewMessageHandler` for consistent lifecycle management across views.
+- Use codicon-based controls and shared utilities from `@utils/text/stringUtils` and `@utils/files/pathUtils` for consistent interactions.
 - For webview dependencies, prefer CDN builds (jsdelivr for static assets, esm.sh for ES modules) for complex packages like markdown-it, KaTeX, or highlight.js, while keeping lightweight bundles (split.js, `@vscode/codicons`) local to reduce extension size.
 - Keep CSS modular (per-component styles in `src/progressView/styles`, shared tokens in `src/common/styles/common.css`) and use codicon chevrons (e.g., `<i class="codicon codicon-chevron-down"></i>`) for toggle affordances.
 
 **Progress view**
 
-- Extend the existing managers coordinated by `ProgressViewDomHandler` (`src/progressView/modules/domHandlers.js`). `StreamTabs`, `Toolbar`, `UsageSummary`, `UsageGroup`, `TaskGroupManager`, and `LogEntryManager` own their respective UI surfaces—augment them rather than manipulating the DOM directly.
+- Extend the existing Lit components in `src/progressView/frontend/components/` (`StreamTabs`, `LogEntry`, `LogList`, `UsagePanel`, `TaskGroupList`, etc.) and managers in `src/progressView/managers/` (`StreamTabsManager`, `TaskGroupManager`, `UsageStatsManager`, `WebviewUpdater`) — augment them rather than manipulating the DOM directly.
 - Tool-use and workflow sessions surface in separate filters; continue emitting usage, status, and log events through the established progress event commands so filters, counts, and badges update automatically.
 
 **Error handling and types**
@@ -302,13 +299,13 @@ See `docs/pocketflow/` for full framework documentation.
 - Dispose event listeners and watchers when webviews close to prevent leaks.
 - Prefer enums or discriminated unions over bare booleans in configuration objects.
 - Favor debug logs for routine events and reserve info/error levels for notable outcomes.
-- Use the helpers in `src/frontend/ui/messageUtils.ts` for consistent casing and notification primitives shared across the extension.
+- Use the helpers in `src/frontend/ui/dialogs.ts` and `src/frontend/ui/instruction.ts` for consistent notification primitives shared across the extension.
 
 ### Webview Consistency Patterns
 
-- **Base Classes**: All webviews (webview, progressView, settingsView) extend `BaseViewContentProvider`, `BaseViewMessageHandler`, and use DOM managers built on `BaseDomHandler` from `src/common/modules/BaseDomHandler.js` for consistent error handling, logging, and cleanup.
+- **Base Classes**: All webviews (webview, progressView, settingsView) extend `BaseViewContentProvider` and `BaseViewMessageHandler` from `src/common/webview/` for consistent error handling, logging, and cleanup.
 - **Naming Convention**: Follow `[Domain]View[Component]` pattern (e.g., `MainViewContentProvider`, `SettingsViewMessageHandler`, `ProgressViewDomHandler`)
-- **Command Constants**: Define all commands in `src/common/webview/commands.js` and `.ts` - use constants, not string literals
+- **Command Constants**: Define all commands in `src/common/webview/commands.ts` - use constants, not string literals
 - **Message Handlers**: Delegate to domain-specific manager classes (FileManager, SettingsManager, etc.) for separation of concerns
 - **Client-Side State**: Add empty handlers with `/* State saved client-side */` comment for checkbox/toggle operations
 - **Resource Access**: Include all common module paths in `localResourceRoots` to prevent 401 errors
@@ -319,7 +316,7 @@ See `docs/pocketflow/` for full framework documentation.
 
 ### Source Organization
 
-Commands live under `src/commands/` and are grouped by domain. Key folders include `agent/` for agent lifecycle and merge commands, `housekeeping/` for cleanup and packaging, `latex/` for LaTeX document tasks, `wolfram/` for Wolfram Alpha and script utilities, and `system/` for editor helpers along with XML/YAML utilities. This structure keeps each area focused and aligns with the design philosophy of deep modules.
+Commands live under `src/commands/` and are grouped by domain. Key folders include `agent/` for agent lifecycle and merge commands, `housekeeping/` for cleanup and packaging, `latex/` for LaTeX document tasks, `settings/` for settings view commands, and `system/` for editor helpers along with XML/YAML utilities. This structure keeps each area focused and aligns with the design philosophy of deep modules.
 
 ## Design and refactoring
 
