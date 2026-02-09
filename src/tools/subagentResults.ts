@@ -9,8 +9,6 @@ import type {
   AgentFlowResult,
   OutputFileSummary,
 } from '@agent/runtime/AgentFlowResult';
-import type { ToolResult } from './result';
-
 // ============================================================================
 // Formatting helpers
 // ============================================================================
@@ -54,36 +52,6 @@ function formatWorkflowOutputs(outputs: OutputFileSummary[]): string[] {
 /** Build the opening <subagent-result> tag. */
 function resultTag(result: AgentFlowResult, agentName: string): string {
   return `<subagent-result id="${result.executionId}" agent="${agentName}" category="${result.category}" status="${result.status}">`;
-}
-
-/** Format an AgentFlowResult into a ToolResult for sync mode. */
-export function formatFlowResult(
-  result: AgentFlowResult,
-  agentName: string,
-  inputFile?: string,
-): ToolResult {
-  if (result.category === 'workflow') {
-    const lines = [resultTag(result, agentName)];
-    if (result.outputs.length > 0) {
-      lines.push(...formatWorkflowOutputs(result.outputs));
-    }
-    lines.push('</subagent-result>');
-    return {
-      summary: `'${agentName}' completed on ${inputFile ?? 'input'}`,
-      output: lines.join('\n'),
-    };
-  }
-
-  // Tool-use agent
-  const lines = [resultTag(result, agentName)];
-  if (result.lastResponse) {
-    lines.push('<response>', result.lastResponse, '</response>');
-  }
-  lines.push('</subagent-result>');
-  return {
-    summary: `'${agentName}' completed`,
-    output: lines.join('\n'),
-  };
 }
 
 /**
