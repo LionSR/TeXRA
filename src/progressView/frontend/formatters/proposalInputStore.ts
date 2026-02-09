@@ -26,10 +26,12 @@ import { hashString } from './hashUtils';
  */
 const LenientToolUseProposalSchema = ToolUseAgentProposalSchema.extend({
   model: z.string().prefault('gemini3p'),
+  mode: z.enum(['sync', 'async']).catch('sync'),
 });
 
 const LenientWorkflowProposalSchema = WorkflowAgentProposalSchema.extend({
   model: z.string().prefault('gemini3p'),
+  mode: z.enum(['sync', 'async']).catch('sync'),
   inputFiles: z.array(z.string()).prefault([]),
   referenceFile: z.string().nullable().prefault(null),
   referenceFiles: z.array(z.string()).prefault([]),
