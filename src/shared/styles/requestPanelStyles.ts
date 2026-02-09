@@ -381,8 +381,16 @@ export const requestPanelStyles: CSSResult = css`
     padding: 2px 6px;
     border-radius: var(--border-radius);
     white-space: nowrap;
+  }
+
+  .workflow-proposal__mode-badge--async {
     background: var(--vscode-editorWarning-foreground);
     color: var(--vscode-editor-background);
+  }
+
+  .workflow-proposal__mode-badge--sync {
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
   }
 
   .workflow-proposal__instruction {
