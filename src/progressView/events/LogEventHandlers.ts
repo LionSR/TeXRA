@@ -29,8 +29,8 @@ function handleAddLogMessage(
   withEventErrorHandling(
     'LogEvents',
     'failed to handle addLogMessage',
-    async () => {
-      const isNew = await ctx.state.streamTabs.addMessage(streamId, logMessage);
+    () => {
+      const isNew = ctx.state.streamTabs.addMessage(streamId, logMessage);
       // Send to webview if available (regardless of active stream - messages persist)
       if (isNew && ctx.webviewUpdater.isAvailable()) {
         ctx.webviewUpdater.appendLogMessage(streamId, logMessage);
