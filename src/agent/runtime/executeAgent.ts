@@ -458,19 +458,6 @@ async function resolveAndAcquireStream(
   return ctx;
 }
 
-/** Creates a flow context with interrupt callbacks and a usage recorder for the given flow kind. */
-function createFlowContext(
-  ctx: ResolvedAgentBase,
-  runKind: 'workflow' | 'tool-use',
-) {
-  return {
-    ...ctx,
-    ...createInterruptCallbacks(),
-    getUsageRecorder: () => (run: Parameters<UsageMonitor['recordUsage']>[0]) =>
-      ctx.usageMonitor.recordUsage(run, { runKind }),
-  };
-}
-
 /** Pre-execution UI setup: progress board visibility, notifications, task state emission. */
 async function prepareAgentUI(
   ctx: ResolvedAgentBase,
@@ -538,10 +525,6 @@ export async function executeAgent(
   executionId?: ExecutionId,
   options?: ExecuteAgentOptions,
 ): Promise<AgentFlowResult> {
-  if (!configPayload.model || !configPayload.agent) {
-    throw new Error('Missing required fields: model and/or agent');
-  }
-
   const ctx = await resolveAndAcquireStream(configPayload, executionId);
   const { setting, streamId, config } = ctx;
   const agentName = config.agent;
@@ -561,11 +544,14 @@ export async function executeAgent(
       );
       return taskStage.run(async () => {
         logger.info(`Executing ${agentName} with model ${config.model}`);
+        const interrupts = createInterruptCallbacks();
 
         if (setting.agentCategory === AgentCategory.ToolUse) {
-          const flowContext = createFlowContext(ctx, 'tool-use');
           const result = await runToolUseFlow({
-            ...flowContext,
+            ...ctx,
+            ...interrupts,
+            onRoundFinalized: (run) =>
+              ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
             setting: ctx.setting as AgentToolUseSetting,
             isSubagent,
             onFollowUpConsumed: () =>
@@ -580,9 +566,11 @@ export async function executeAgent(
           };
         }
 
-        const flowContext = createFlowContext(ctx, 'workflow');
         const result = await runReflectionFlow({
-          ...flowContext,
+          ...ctx,
+          ...interrupts,
+          onRoundFinalized: (run) =>
+            ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
           setting: ctx.setting as AgentWorkflowSetting,
           parentStage: ctx.parentStage,
         });
@@ -623,9 +611,11 @@ export async function executeMergeAgent(
       logger.info(`Executing merge with model ${model}`);
 
       const fileService = new TaskRunFileService(executionId);
-      const flowContext = createFlowContext(ctx, 'workflow');
       const result = await runReflectionFlow({
-        ...flowContext,
+        ...ctx,
+        ...createInterruptCallbacks(),
+        onRoundFinalized: (run) =>
+          ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
         setting: ctx.setting as AgentWorkflowSetting,
         getOutputFileLocation: createMergeOutputFileLocationGetter(
           inputFile,
@@ -669,10 +659,12 @@ export async function resumeToolUseFromSnapshot(
     async () => {
       StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
 
-      const flowContext = createFlowContext(ctx, 'tool-use');
       const result = await runToolUseFlow(
         {
-          ...flowContext,
+          ...ctx,
+          ...createInterruptCallbacks(),
+          onRoundFinalized: (run) =>
+            ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
           setting: setting as AgentToolUseSetting,
           resumeSnapshot: snapshot,
           onFollowUpConsumed: () =>

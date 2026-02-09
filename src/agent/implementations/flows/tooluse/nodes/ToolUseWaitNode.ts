@@ -58,8 +58,8 @@ export class ToolUseWaitNode<C> extends Node<
     onFollowUpConsumed?.();
     StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
     logger.userMessage(execRes.followUp);
-    shared.conversation = await modelHandler.createUserFollowUpMessages(
-      shared.conversation,
+    shared.messages = await modelHandler.createUserFollowUpMessages(
+      shared.messages,
       execRes.followUp,
     );
 

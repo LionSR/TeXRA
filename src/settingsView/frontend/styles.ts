@@ -246,5 +246,4 @@ export const settingsViewStyles: CSSResult = css`
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
   }
-
 `;

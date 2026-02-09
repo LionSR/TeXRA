@@ -102,38 +102,3 @@ export function replaceMessagesInPlace<T>(target: T[], newContents: T[]): void {
   target.length = 0;
   target.push(...newContents);
 }
-
-// --- Cycle Result Interpretation ---
-
-/** Interpreted result from cycle completion: error, cancellation, or success. */
-export interface CycleCompletionResult {
-  failedWithError: boolean;
-  errorMessage?: string;
-  userCancelled: boolean;
-}
-
-interface CycleCompletionInput {
-  shouldStop: boolean;
-  endTurn?: boolean;
-  lastError?: { message: string };
-}
-
-/**
- * Interprets cycle completion from shared state:
- * - Error: shouldStop + lastError → failedWithError
- * - Cancelled: shouldStop + no lastError + no endTurn → userCancelled
- * - Success: shouldStop + endTurn → neither
- */
-export function interpretCycleCompletion(
-  shared: CycleCompletionInput,
-): CycleCompletionResult {
-  const failedWithError = shared.shouldStop && !!shared.lastError;
-  const userCancelled =
-    shared.shouldStop && !shared.lastError && !shared.endTurn;
-
-  return {
-    failedWithError,
-    errorMessage: shared.lastError?.message,
-    userCancelled,
-  };
-}
