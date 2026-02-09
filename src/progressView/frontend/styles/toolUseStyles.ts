@@ -138,11 +138,28 @@ export const toolUseStyles = css`
     overflow: auto;
   }
 
-  /* Proposal restore link */
-  .proposal-restore-action {
-    margin: var(--spacing-small) 0;
+  /* Proposal banner badge (sync/async mode indicator in summary row) */
+  .proposal-banner-badge {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 1px 5px;
+    border-radius: var(--border-radius);
+    white-space: nowrap;
   }
 
+  .proposal-banner-badge--async {
+    background: var(--vscode-editorWarning-foreground);
+    color: var(--vscode-editor-background);
+  }
+
+  .proposal-banner-badge--sync {
+    background: var(--vscode-editorWidget-border);
+    color: var(--vscode-editor-foreground);
+  }
+
+  /* Proposal setup link (in summary row and body) */
   .proposal-restore-link {
     color: var(--color-text-link);
     cursor: pointer;
@@ -155,6 +172,10 @@ export const toolUseStyles = css`
 
   .proposal-restore-link:hover {
     text-decoration: underline;
+  }
+
+  .proposal-banner-setup {
+    margin-left: auto;
   }
 
   /* Diff styles */
