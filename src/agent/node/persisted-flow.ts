@@ -207,6 +207,21 @@ export class PersistedFlow<
     return this.runId;
   }
 
+  /**
+   * Reset the node history so the next stepWithResult() starts from the
+   * beginning of the flow graph. Used by RoundPersistedFlow to loop rounds
+   * without embedding loop edges in the graph itself.
+   */
+  protected async resetNodeHistory(shared: S): Promise<void> {
+    const key = `flow:${this.runId}`;
+    const flow = this.cachedRecord ?? (await this.kv.read<FlowRecord>(key))!;
+    this.cachedRecord = null;
+    flow.nodes = [];
+    flow.shared = this.serializeShared(shared);
+    await this.kv.write(key, flow);
+    this.cachedRecord = flow;
+  }
+
   async init(shared: S): Promise<void> {
     await this.ensureRecord(shared);
   }

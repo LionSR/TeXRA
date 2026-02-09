@@ -14,43 +14,31 @@ import type {
   ReflectionServices,
 } from '../ReflectionServices';
 
-/**
- * Prep result carries shared reference and computed files.
- * Files are computed once in prep() to avoid redundant calls.
- */
-interface PrepInput {
-  shared: ReflectionFlowShared;
-  files: FileLocation[];
-}
-
 export class TeXCountNode<C = unknown> extends Node<
   ReflectionFlowShared,
   ReflectionFlowParams,
   ReflectionServices<C>
 > {
-  async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
+  async prep(shared: ReflectionFlowShared): Promise<FileLocation[]> {
     const { config, fileService } = this.services;
-    return {
-      shared,
-      files: getFilesForRound(
-        shared.currentRound,
-        shared.roundOutputs,
-        config,
-        fileService,
-      ),
-    };
+    return getFilesForRound(
+      shared.currentRound,
+      shared.roundOutputs,
+      config,
+      fileService,
+    );
   }
 
-  async exec(prepRes: PrepInput): Promise<string | null> {
+  async exec(files: FileLocation[]): Promise<string | null> {
     const { config } = this.services;
-    if (!config.toolConfig.attachTeXCount || prepRes.files.length === 0) {
+    if (!config.toolConfig.attachTeXCount || files.length === 0) {
       return null;
     }
-    return getTeXCountStats(prepRes.files.map((f) => f.absolutePath));
+    return getTeXCountStats(files.map((f) => f.absolutePath));
   }
 
   async execFallback(
-    _prepRes: PrepInput,
+    _files: FileLocation[],
     error: Error,
   ): Promise<string | null> {
     const { logger } = this.services;
@@ -59,13 +47,13 @@ export class TeXCountNode<C = unknown> extends Node<
   }
 
   async post(
-    _shared: ReflectionFlowShared,
-    prepRes: PrepInput,
+    shared: ReflectionFlowShared,
+    _files: FileLocation[],
     execRes: string | null,
   ): Promise<string | undefined> {
-    if (execRes && prepRes.shared.context) {
+    if (execRes && shared.context) {
       this.services.modelHandler.prependTextToUserMessage(
-        prepRes.shared.context.messages,
+        shared.context.messages,
         execRes,
       );
     }
