@@ -246,6 +246,7 @@ async function createWorkflowAgent(
   const isMultipleOutput = outputChoice === 'Multiple output files';
 
   let outputFilesYaml = '';
+  let outputFilesNote = '';
   if (isMultipleOutput) {
     const filesInput = await vscode.window.showInputBox({
       prompt: 'Enter default output filenames (comma separated)',
@@ -258,6 +259,7 @@ async function createWorkflowAgent(
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
     outputFilesYaml = files.map((f) => `- ${f}`).join('\n    ');
+    outputFilesNote = files.map((f) => `    - ${f}`).join('\n');
   }
 
   const filePath = await resolveAgentFilePath(agentName);
@@ -270,7 +272,7 @@ async function createWorkflowAgent(
         '- In userRequest, instruct the model to wrap each file in <latex_documents> with <document name="..."> blocks',
         '- Reference {{ OUTPUT_FILES_ORDER }} for the expected output order',
         'Default output files:',
-        outputFilesYaml,
+        outputFilesNote,
       ].join('\n')
     : '';
   const vars = {
