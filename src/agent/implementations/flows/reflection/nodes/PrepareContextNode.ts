@@ -19,18 +19,27 @@ import type {
   ReflectionServices,
 } from '../ReflectionServices';
 
+/** Fields extracted from shared for exec (avoids passing entire shared object). */
+interface PrepInput {
+  currentRound: number;
+  conversation: ProviderMessage[];
+}
+
 export class PrepareContextNode<C = unknown> extends Node<
   ReflectionFlowShared,
   ReflectionFlowParams,
   ReflectionServices<C>
 > {
-  async prep(shared: ReflectionFlowShared): Promise<ReflectionFlowShared> {
-    return shared;
+  async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
+    return {
+      currentRound: shared.currentRound,
+      conversation: shared.conversation,
+    };
   }
 
-  async exec(shared: ReflectionFlowShared): Promise<RoundContext> {
+  async exec(prepRes: PrepInput): Promise<RoundContext> {
     const { promptBuilder, modelHandler, logger } = this.services;
-    const { currentRound, conversation } = shared;
+    const { currentRound, conversation } = prepRes;
 
     const stateRound = createRoundState(currentRound);
     const isFirstRound = currentRound === 0;
@@ -68,7 +77,7 @@ export class PrepareContextNode<C = unknown> extends Node<
 
   async post(
     shared: ReflectionFlowShared,
-    _prepRes: ReflectionFlowShared,
+    _prepRes: PrepInput,
     context: RoundContext,
   ): Promise<string | undefined> {
     shared.context = context;

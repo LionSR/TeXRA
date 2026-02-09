@@ -67,14 +67,11 @@ import {
 import { PromptBuilder } from '@utils/prompt';
 import { LatexMediaManager } from '@latex';
 
-import { Flow } from '@agent/node';
-import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { TeXCountNode } from './nodes/TeXCountNode';
 import { MediaExtractionNode } from './nodes/MediaExtractionNode';
 import { PrepareContextNode } from './nodes/PrepareContextNode';
 import { ResponseCycleNode } from './nodes/ResponseCycleNode';
 import { OutputNode } from './nodes/OutputNode';
-import { RoundCompleteNode } from './nodes/RoundCompleteNode';
 import {
   ReflectionFlowStateSchema,
   type ReflectionFlowShared,
@@ -318,19 +315,18 @@ export async function runReflectionFlow<C = unknown>(
     }
 
     // Create flow nodes and wire transitions inline
+    // Wire the linear node chain: prep → texcount → media → cycle → output.
+    // Round looping is handled by RoundPersistedFlow (no dedicated decision node).
     const prepContextNode = new PrepareContextNode<C>();
     const texCountNode = new TeXCountNode<C>();
     const mediaNode = new MediaExtractionNode<C>();
     const responseCycleNode = new ResponseCycleNode<C>();
     const outputNode = new OutputNode<C>();
-    const roundCompleteNode = new RoundCompleteNode<C>();
 
     prepContextNode.next(texCountNode);
     texCountNode.next(mediaNode);
     mediaNode.next(responseCycleNode);
     responseCycleNode.next(outputNode);
-    outputNode.next(roundCompleteNode);
-    roundCompleteNode.on(FlowTransition.CONTINUE_NEXT_ROUND, prepContextNode);
 
     const startNode = prepContextNode;
     const pf = new RoundPersistedFlow<
