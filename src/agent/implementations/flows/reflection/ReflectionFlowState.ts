@@ -23,10 +23,7 @@ import {
   type AgentWorkspaceSnapshot,
 } from '@agent/core/AgentWorkspaceState';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
-import {
-  CycleFieldsSchema,
-  type CycleTransientFields,
-} from '@agent/core/flows/ResponseCycleFlow';
+import { RetryErrorInfoSchema } from '@shared/schemas';
 
 /** Natively serializable context prepared for a round (snapshots, not class instances). */
 const RoundContextSchema = z.object({
@@ -38,54 +35,41 @@ const RoundContextSchema = z.object({
 export type RoundContext = z.infer<typeof RoundContextSchema>;
 
 /**
- * Optional cycle fields for native nesting. Omits endTurn and outputLocation because
- * they have different semantics at reflection vs cycle level (required vs optional,
- * nullable vs enforced). The base schema defines these directly.
- */
-const OptionalCycleFieldsSchema = CycleFieldsSchema.partial().omit({
-  endTurn: true,
-  outputLocation: true,
-});
-
-/**
  * Shared state for reflection flow (flat structure).
  *
  * Uses snapshots (not class instances) for all complex state objects to ensure
  * structuredClone() works. Nodes reconstruct classes from snapshots when needed.
  *
- * Includes optional cycle fields for native nesting - see CycleFieldsSchema for details.
+ * Cycle fields are NOT on this type — ResponseCycleNode creates a separate
+ * ResponseCycleShared for the cycle flow and syncs results back in post().
  */
-export const ReflectionFlowStateSchema = z
-  .object({
-    // Round tracking
-    currentRound: z.number(),
-    totalRounds: z.number(),
+export const ReflectionFlowStateSchema = z.object({
+  // Round tracking
+  currentRound: z.number(),
+  totalRounds: z.number(),
 
-    // Per-round state (natively serializable)
-    workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
-    context: RoundContextSchema.nullable(),
-    outputLocation: AgentFileLocationSchema.nullable(),
+  // Per-round state (natively serializable)
+  workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
+  context: RoundContextSchema.nullable(),
+  outputLocation: AgentFileLocationSchema.nullable(),
 
-    // Accumulated state (natively serializable)
-    conversation: z.array(ProviderMessageSchema),
-    runStateSnapshot: AgentRunStateSnapshotSchema,
+  // Accumulated state (natively serializable)
+  conversation: z.array(ProviderMessageSchema),
+  runStateSnapshot: AgentRunStateSnapshotSchema,
 
-    // Results (natively serializable)
-    roundStateSnapshots: z.array(ConversationRoundStateSnapshotSchema),
-    roundOutputs: z.array(RoundOutputSchema),
+  // Results (natively serializable)
+  roundStateSnapshots: z.array(ConversationRoundStateSnapshotSchema),
+  roundOutputs: z.array(RoundOutputSchema),
 
-    // Control flags
-    continueRounds: z.boolean(),
-    endTurn: z.boolean(),
+  // Control flags
+  continueRounds: z.boolean(),
+  endTurn: z.boolean(),
 
-    // lastError from OptionalCycleFieldsSchema distinguishes failure from cancellation during resume.
-  })
-  .extend(OptionalCycleFieldsSchema.shape);
+  // Distinguishes failure from cancellation during resume
+  lastError: RetryErrorInfoSchema.optional(),
+});
 
 export type ReflectionFlowState = z.infer<typeof ReflectionFlowStateSchema>;
 
-/**
- * Combines serializable state with transient cycle fields for native flow nesting.
- * Serializable fields are persisted; transient fields are cleared between checkpoints.
- */
-export type ReflectionFlowShared = ReflectionFlowState & CycleTransientFields;
+/** Shared state type for reflection flow nodes. */
+export type ReflectionFlowShared = ReflectionFlowState;
