@@ -1,2 +1,10 @@
-# YAML templates contain Nunjucks {{ }} syntax that conflicts with YAML flow mapping parsing
-resources/templates/agentTemplate-*.yaml
+# Build output
+dist/
+out/
+releases/
+
+# Dependencies
+node_modules/
+
+# YAML templates with {{ }} placeholders - Prettier rewrites these as { { } }
+resources/templates/
