@@ -77,6 +77,37 @@ Configure how TeXRA connects to AI model providers:
 
 **Note:** Only the providers marked with ✅ are supported by the proxy. Other providers will use their direct API endpoints even when proxy is enabled.
 
+### Anthropic 1M Context Window
+
+Enable the extended 1M-token context window for Claude Opus 4.6 and Sonnet 4/4.5:
+
+```json
+"texra.model.useAnthropic1MBeta": true
+```
+
+This attaches the `context-1m-2025-08-07` beta header to Anthropic requests. Usage is capped at 200K tokens by the extension.
+
+### Bibliography Settings
+
+Configure the default bibliography file path for Zotero exports and bibliography tools:
+
+```json
+"texra.bib.defaultPath": "${workspaceFolder}/references.bib"
+```
+
+When set, bibliography tools will use this path when no explicit file is provided. Works with Zotero auto-exported `.bib` files.
+
+### Agent Output Storage
+
+Control where agent-generated files are saved:
+
+```json
+"texra.agentOutputs.storageMode": "workspace"
+```
+
+- `workspace`: Write output files beside the source files (default)
+- `taskRunStorage`: Isolate artifacts inside the extension storage
+
 ### Audio Settings
 
 Specify a custom path to the [SoX](http://sox.sourceforge.net/) binary when automatic detection fails:

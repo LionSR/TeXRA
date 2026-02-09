@@ -43,10 +43,33 @@ For documentation, project pages, or general info:
 Find the official PyTorch documentation for attention mechanisms.
 ```
 
+### Manage References with Zotero
+
+If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly:
+
+```
+Search my Zotero library for papers by Vaswani on attention mechanisms.
+```
+
+```
+Export the selected Zotero items as a .bib file for my project.
+```
+
+```
+Add this arXiv paper to my Zotero library.
+```
+
+The Zotero tools (`zotero_search`, `zotero_export`, `zotero_add`) communicate with Better BibTeX's JSON-RPC interface. Make sure Zotero is running with Better BibTeX installed when using these tools.
+
+::: tip Default Bibliography Path
+Set `texra.bib.defaultPath` in your VS Code settings to specify the default `.bib` file for Zotero exports, so agents know where to save bibliography entries.
+:::
+
 ## Which Agent to Use
 
-| Agent     | Best for                                                  |
-| --------- | --------------------------------------------------------- |
-| `search`  | Finding papers, literature reviews, fact-checking         |
-| `discuss` | Brainstorming research directions with literature context |
-| `ask`     | Quick lookups about your documents and related work       |
+| Agent      | Best for                                                  |
+| ---------- | --------------------------------------------------------- |
+| `search`   | Finding papers, literature reviews, fact-checking         |
+| `research` | Computational verification with Wolfram and literature    |
+| `discuss`  | Brainstorming research directions with literature context |
+| `ask`      | Quick lookups about your documents and related work       |
