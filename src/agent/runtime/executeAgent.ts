@@ -12,6 +12,8 @@ import {
   type StreamTabId,
   type ExecutionId,
   type StorageKey,
+  type OutputFileInfo,
+  type RoundOutput,
 } from '@shared/schemas';
 import {
   resolveAgent,
@@ -68,6 +70,8 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
 import { createInterruptCallbacks } from './InterruptManager';
+import { trackExecution, untrackExecution } from './executionRegistry';
+import type { AgentFlowResult, OutputFileSummary } from './AgentFlowResult';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -282,23 +286,46 @@ function isApiKeyError(err: unknown): boolean {
   return msg.includes('Missing API key') || msg.includes('API key not found');
 }
 
+/** Map workflow RoundOutput[] to OutputFileSummary[] for AgentFlowResult. */
+function toOutputSummaries(roundOutputs: RoundOutput[]): OutputFileSummary[] {
+  return roundOutputs.flatMap((r) =>
+    r.outputs.map((o: OutputFileInfo) => ({
+      round: r.round,
+      relativePath:
+        'relativePath' in o.location
+          ? o.location.relativePath
+          : o.location.absolutePath,
+      absolutePath: o.location.absolutePath,
+      location: o.location.kind,
+      originalPath: o.lineage?.original?.absolutePath ?? null,
+      added: o.diff?.added ?? null,
+      removed: o.diff?.removed ?? null,
+    })),
+  );
+}
+
 async function runFlowWithLifecycle(
   ctx: ResolvedAgentBase,
   streamId: StreamTabId,
   agentName: string,
-  runner: () => Promise<EndGroupStatus>,
-): Promise<void> {
+  runner: () => Promise<AgentFlowResult>,
+  options?: { isSubagent?: boolean },
+): Promise<AgentFlowResult> {
+  trackExecution(ctx.executionId, streamId);
   try {
-    const flowStatus = await runner();
-    ctx.parentStage.end(flowStatus);
+    const result = await runner();
+    untrackExecution(ctx.executionId);
+    ctx.parentStage.end(result.status);
 
     if (!StreamStatusService.shouldPreserveOnCompletion(streamId)) {
       const status =
-        flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED;
+        result.status === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED;
       StreamStatusService.set(streamId, status);
     }
-    logger.debug(`Task completed with status: ${flowStatus}`);
+    logger.debug(`Task completed with status: ${result.status}`);
+    return result;
   } catch (err) {
+    untrackExecution(ctx.executionId);
     const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
     // Log error BEFORE ending the group so it gets the correct groupId
@@ -309,10 +336,14 @@ async function runFlowWithLifecycle(
     ctx.parentStage.end(END_GROUP_STATUS.ERROR);
     StreamStatusService.set(streamId, STREAM_STATUS.ERROR);
 
-    if (isApiKeyError(err)) {
-      await showApiKeyErrorNotification();
-    } else {
-      vscode.window.showErrorMessage(errorMsg);
+    // Subagents propagate errors to the orchestrator via FollowUpQueue —
+    // don't show VS Code popups that would confuse the user.
+    if (!options?.isSubagent) {
+      if (isApiKeyError(err)) {
+        await showApiKeyErrorNotification();
+      } else {
+        vscode.window.showErrorMessage(errorMsg);
+      }
     }
 
     throw new Error(errorMsg);
@@ -444,6 +475,7 @@ function createFlowContext(
 async function prepareAgentUI(
   ctx: ResolvedAgentBase,
   executionId: ExecutionId | undefined,
+  options?: { isSubagent?: boolean },
 ): Promise<void> {
   if (executionId) await ensureRunDir(executionId);
   const { streamId, config } = ctx;
@@ -461,11 +493,15 @@ async function prepareAgentUI(
     `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
   );
 
-  if (!runStorage.isViewVisible()) {
-    await vscode.commands.executeCommand('texra.showProgressView');
-  }
-  if (!runStorage.isViewVisible()) {
-    showAgentNotification(config);
+  // Subagents don't need to force-open the progress board or show notifications —
+  // the orchestrator's stream is already visible.
+  if (!options?.isSubagent) {
+    if (!runStorage.isViewVisible()) {
+      await vscode.commands.executeCommand('texra.showProgressView');
+    }
+    if (!runStorage.isViewVisible()) {
+      showAgentNotification(config);
+    }
   }
   bus.emit('setTaskState', {
     streamId,
@@ -489,10 +525,19 @@ async function prepareAgentUI(
 // Public Entry Points
 // ============================================================================
 
+/** Options for executeAgent. */
+export interface ExecuteAgentOptions {
+  /** When true, proposal tools are filtered out to prevent nesting. */
+  isSubagent?: boolean;
+  /** Fires early with the real streamId, before flow execution starts. */
+  onStreamResolved?: (streamId: StreamTabId) => void;
+}
+
 export async function executeAgent(
   configPayload: AgentConfigPayload,
   executionId?: ExecutionId,
-): Promise<void> {
+  options?: ExecuteAgentOptions,
+): Promise<AgentFlowResult> {
   if (!configPayload.model || !configPayload.agent) {
     throw new Error('Missing required fields: model and/or agent');
   }
@@ -501,33 +546,57 @@ export async function executeAgent(
   const { setting, streamId, config } = ctx;
   const agentName = config.agent;
 
-  await runFlowWithLifecycle(ctx, streamId, agentName, async () => {
-    await prepareAgentUI(ctx, executionId);
+  options?.onStreamResolved?.(streamId);
 
-    const taskStage = await logger.stage(`Task: ${agentName}@${config.model}`);
-    return taskStage.run(async () => {
-      logger.info(`Executing ${agentName} with model ${config.model}`);
+  const isSubagent = options?.isSubagent;
+  return runFlowWithLifecycle(
+    ctx,
+    streamId,
+    agentName,
+    async () => {
+      await prepareAgentUI(ctx, executionId, { isSubagent });
 
-      if (setting.agentCategory === AgentCategory.ToolUse) {
-        const flowContext = createFlowContext(ctx, 'tool-use');
-        const result = await runToolUseFlow({
+      const taskStage = await logger.stage(
+        `Task: ${agentName}@${config.model}`,
+      );
+      return taskStage.run(async () => {
+        logger.info(`Executing ${agentName} with model ${config.model}`);
+
+        if (setting.agentCategory === AgentCategory.ToolUse) {
+          const flowContext = createFlowContext(ctx, 'tool-use');
+          const result = await runToolUseFlow({
+            ...flowContext,
+            setting: ctx.setting as AgentToolUseSetting,
+            isSubagent,
+            onFollowUpConsumed: () =>
+              bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
+          });
+          return {
+            category: 'toolUse' as const,
+            status: result.status,
+            lastResponse: result.lastResponse,
+            executionId: ctx.executionId,
+            streamId,
+          };
+        }
+
+        const flowContext = createFlowContext(ctx, 'workflow');
+        const result = await runReflectionFlow({
           ...flowContext,
-          setting: ctx.setting as AgentToolUseSetting,
-          onFollowUpConsumed: () =>
-            bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
+          setting: ctx.setting as AgentWorkflowSetting,
+          parentStage: ctx.parentStage,
         });
-        return result.status;
-      }
-
-      const flowContext = createFlowContext(ctx, 'workflow');
-      const result = await runReflectionFlow({
-        ...flowContext,
-        setting: ctx.setting as AgentWorkflowSetting,
-        parentStage: ctx.parentStage,
+        return {
+          category: 'workflow' as const,
+          status: result.status,
+          outputs: toOutputSummaries(result.roundOutputs),
+          executionId: ctx.executionId,
+          streamId,
+        };
       });
-      return result.status;
-    });
-  });
+    },
+    { isSubagent },
+  );
 }
 
 export async function executeMergeAgent(
@@ -565,7 +634,13 @@ export async function executeMergeAgent(
         ),
         parentStage: ctx.parentStage,
       });
-      return result.status;
+      return {
+        category: 'workflow' as const,
+        status: result.status,
+        outputs: toOutputSummaries(result.roundOutputs),
+        executionId: ctx.executionId,
+        streamId,
+      };
     });
   });
 }
@@ -606,7 +681,13 @@ export async function resumeToolUseFromSnapshot(
         undefined,
         setupSession ? (context) => setupSession(context.session) : undefined,
       );
-      return result.status;
+      return {
+        category: 'toolUse' as const,
+        status: result.status,
+        lastResponse: result.lastResponse,
+        executionId: ctx.executionId,
+        streamId,
+      };
     },
   );
 }
