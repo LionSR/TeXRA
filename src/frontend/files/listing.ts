@@ -4,9 +4,9 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-/** Convert forward slashes to platform-native separators */
-function toPlatformSeparators(str: string): string {
-  return str.replaceAll('/', path.sep);
+/** Normalize path to forward slashes for cross-platform consistency */
+function toForwardSlashes(str: string): string {
+  return str.replaceAll('\\', '/');
 }
 
 /** Normalize and clean directory paths for filtering */
@@ -46,6 +46,8 @@ function containsHiddenSegment(relativePath: string): boolean {
  * Get path relative to root, preserving symlink structure within workspace.
  * Uses VS Code's asRelativePath for symlink awareness, then computes
  * the path relative to the specified root.
+ *
+ * Always returns forward slashes for cross-platform consistency.
  */
 function getRelativePathPreservingSymlinks(
   absolutePath: string,
@@ -56,30 +58,29 @@ function getRelativePathPreservingSymlinks(
 
   // If outside workspace, asRelativePath returns the original absolute path
   if (wsRelative === absolutePath) {
-    return path.relative(root, absolutePath);
+    return toForwardSlashes(path.relative(root, absolutePath));
   }
 
   // If root is the workspace root, return the workspace-relative path
   if (workspaceRoot && path.normalize(root) === path.normalize(workspaceRoot)) {
-    return toPlatformSeparators(wsRelative);
+    return toForwardSlashes(wsRelative);
   }
 
   // root is a subdirectory - compute path from workspace-relative path
   const rootRelative = vscode.workspace.asRelativePath(root, false);
   if (rootRelative === root) {
-    return path.relative(root, absolutePath);
+    return toForwardSlashes(path.relative(root, absolutePath));
   }
 
   // Both paths are workspace-relative, compute relative path between them
-  const wsRelativeNorm = wsRelative.replaceAll('\\', '/');
-  const rootRelativeNorm = rootRelative.replaceAll('\\', '/');
+  const wsRelativeNorm = toForwardSlashes(wsRelative);
+  const rootRelativeNorm = toForwardSlashes(rootRelative);
 
   if (wsRelativeNorm.startsWith(rootRelativeNorm + '/')) {
-    const result = wsRelativeNorm.slice(rootRelativeNorm.length + 1);
-    return toPlatformSeparators(result);
+    return wsRelativeNorm.slice(rootRelativeNorm.length + 1);
   }
 
-  return path.relative(root, absolutePath);
+  return toForwardSlashes(path.relative(root, absolutePath));
 }
 
 /** Check if path contains an excluded directory segment */
