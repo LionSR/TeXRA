@@ -56,6 +56,17 @@ export const CHAINED_RESPONSE_MAX_OUTPUT_FACTOR = 0.7;
 export const TOOL_USE_SAFETY_BUFFER = 2000;
 
 /**
+ * Percentage-based safety margin for chained responses (previous_response_id).
+ * The pre-flight /responses/input_tokens endpoint can undercount server-side
+ * context (reasoning tokens, framing overhead, etc.). A proportional margin
+ * scales with conversation size - critical at high utilization where even a
+ * small percentage error in a 270k-token count can exceed the context window.
+ * 5% of context window provides adequate headroom without unnecessarily
+ * limiting output at low utilization.
+ */
+export const CHAINED_RESPONSE_SAFETY_MARGIN_PERCENT = 5;
+
+/**
  * Maximum character length for tool result text sent to models.
  * Tool results exceeding this limit return an error to prevent context window overflow.
  * Set to 200KB (200,000 characters) which is roughly 50,000-66,000 tokens depending on content.
