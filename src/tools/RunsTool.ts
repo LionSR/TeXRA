@@ -368,8 +368,10 @@ Use view_range: [start, end] to paginate large outputs.`,
       const entries = await StorageFS.readDir(fullPath);
 
       for (const [name, type] of entries) {
+        // Use path.join for correct OS joining, then normalize to forward
+        // slashes so display output is consistent across platforms.
         const entryRelative = relativePath
-          ? path.join(relativePath, name)
+          ? path.join(relativePath, name).replaceAll('\\', '/')
           : name;
         const entryFull = path.join(basePath, entryRelative);
         const isDir = type === vscode.FileType.Directory;
