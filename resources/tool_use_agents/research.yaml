@@ -80,7 +80,7 @@ prompts:
 
     Guidelines on using Tools:
     (1) For bash operations, distinguish between safe and potentially risky commands.
-    (2) Safe commands (execute without confirmation): ls, pwd, cat, echo, grep, find, which, date, whoami.
+    (2) Safe commands (execute without confirmation): ls, pwd, cat, echo, grep, which, date, whoami.
     (3) Potentially complicated operations: Ask for confirmation before executing.
     (4) Clearly explain what any command will do before executing it.
 
