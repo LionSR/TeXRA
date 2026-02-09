@@ -10,6 +10,8 @@ import {
 import {
   getMultipleName,
   getBaseName,
+  getAgent,
+  extractToolNames,
   updateAgentDescription,
   updateAgentTools,
   updateAgentDefaultOutputFiles,
@@ -138,20 +140,21 @@ export class RemoteAgentLoader {
           isLastCandidate,
         );
 
-        // Update registry cache with metadata from YAML
+        // Update registry cache with metadata from YAML.
+        // Try base name first (normal case), then full name (_multiple-only agents
+        // are registered under their full name, not the stripped base).
         const baseName = getBaseName(agentName);
+        const registryId = getAgent(`remote:${baseName}`)
+          ? `remote:${baseName}`
+          : `remote:${agentName}`;
         if (config.description) {
-          updateAgentDescription(`remote:${baseName}`, config.description);
+          updateAgentDescription(registryId, config.description);
         }
-        if (config.tools?.length) {
-          updateAgentTools(`remote:${baseName}`, config.tools);
-        }
-        if (config.defaultOutputFiles?.length) {
-          updateAgentDefaultOutputFiles(
-            `remote:${baseName}`,
-            config.defaultOutputFiles,
-          );
-        }
+        updateAgentTools(registryId, config.tools);
+        updateAgentDefaultOutputFiles(
+          registryId,
+          config.defaultOutputFiles,
+        );
 
         logger.info(
           CHANNEL,
@@ -286,10 +289,7 @@ async function fetchAgentConfig(
   // Extract metadata before resolving tools to full definitions (for registry cache)
   const settings: Partial<AgentSetting> = validated.settings;
   const rawTools = settings.tools as (string | { name: string })[] | undefined;
-  const toolNames = rawTools?.flatMap((t) => {
-    if (typeof t === 'string') return t;
-    return typeof t?.name === 'string' ? t.name : [];
-  });
+  const toolNames = extractToolNames(rawTools);
   const defaultOutputFiles = settings.defaultOutputFiles as
     | string[]
     | undefined;
