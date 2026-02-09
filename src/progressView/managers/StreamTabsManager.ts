@@ -33,11 +33,11 @@ export class StreamTabsManager extends PersistentMapManager<
   /**
    * Add a log message to a stream.
    * Returns true if message was added, false if it updated an existing message.
+   *
+   * Uses fire-and-forget persistence (void this.save()) so callers can
+   * send webview notifications immediately without waiting for disk I/O.
    */
-  async addMessage(
-    stream: StreamTabId,
-    message: LogMessageData,
-  ): Promise<boolean> {
+  addMessage(stream: StreamTabId, message: LogMessageData): boolean {
     const messages = this.ensureMessages(stream);
 
     const existingIndex = messages.findIndex(
@@ -47,7 +47,7 @@ export class StreamTabsManager extends PersistentMapManager<
     // Update existing message
     if (existingIndex >= 0) {
       messages[existingIndex] = message;
-      await this.save();
+      void this.save();
       return false;
     }
 
@@ -62,17 +62,17 @@ export class StreamTabsManager extends PersistentMapManager<
       );
     }
 
-    await this.save();
+    void this.save();
     return true;
   }
 
   /**
    * Create an empty stream if it doesn't exist
    */
-  async ensureStream(stream: StreamTabId): Promise<void> {
+  ensureStream(stream: StreamTabId): void {
     if (!this.has(stream)) {
       this.ensureMessages(stream);
-      await this.save();
+      void this.save();
     }
   }
 
