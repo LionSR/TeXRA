@@ -118,7 +118,6 @@ export class SettingsApp extends BaseWebviewApp {
   @state() private userId = '';
   @state() private tier = 'free';
   @state() private apiAccessMode: 'included' | 'personal' = 'personal';
-  @state() private enabledProviders: string[] = [];
   @state() private allowedModels: string[] | null = [];
   @state() private accessExpiresAt: string | null = null;
   @state() private providerKeyStatuses: ProviderKeyStatus[] = [];
@@ -260,7 +259,6 @@ export class SettingsApp extends BaseWebviewApp {
         this.userId = data.user?.id ?? '';
         this.tier = data.tier ?? 'free';
         this.apiAccessMode = data.apiAccessMode;
-        this.enabledProviders = data.enabledProviders ?? [];
         this.allowedModels = data.allowedModels ?? null;
         this.accessExpiresAt = data.accessExpiresAt ?? null;
         this.providerKeyStatuses = data.providerKeyStatuses ?? [];
@@ -563,7 +561,6 @@ export class SettingsApp extends BaseWebviewApp {
             <models-tab
               .authenticated=${this.authenticated}
               .apiAccessMode=${this.apiAccessMode}
-              .enabledProviders=${this.enabledProviders}
               .allowedModels=${this.allowedModels}
               .providerKeyStatuses=${this.providerKeyStatuses}
               .globalStreamingDefault=${this.globalStreamingDefault}
