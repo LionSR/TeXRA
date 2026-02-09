@@ -10,10 +10,7 @@ import { recordRound } from '@agent/core/AgentState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   BaseCycleFieldsSchema,
-  BaseInvocationPrepResult,
-  BaseInvocationSuccessData,
   getDebugContext,
-  replaceMessagesInPlace,
   resetCycleState,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
@@ -34,11 +31,7 @@ import { extractScratchpad } from '@utils/text/xmlUtils';
 import { bestConnectionMethod } from '@latex';
 
 import { FlowTransition } from './FlowTransitions';
-import {
-  type InvocationResult,
-  RetryableInvocationNode,
-  handleInvocationResult,
-} from './RetryState';
+import { ModelInvocationNode } from './ModelInvocationNode';
 import { type CycleParams, type ResponseCycleServices } from './CycleServices';
 
 // All debug options (context + file options) are derived at maybeSaveDebugObject call sites.
@@ -171,143 +164,6 @@ class ResponsePrepNode<C> extends BaseNode<
   }
 }
 
-/**
- * Data extracted by prep() for model invocation.
- * Extends base with optional system prompt for response generation.
- */
-interface InvocationPrepResult extends BaseInvocationPrepResult {
-  systemPrompt?: string;
-}
-
-/**
- * Handles model invocation with PocketFlow's built-in retry.
- *
- * Extends RetryableInvocationNode for shared retry logic:
- * - maxRetries and wait configured from user settings
- * - exec() throws on error, Node retries automatically
- * - retryPrompt() shows UI when auto-retries exhausted (if error is retryable)
- * - execFallback() called only when user cancels or error is non-retryable
- *
- * Flow transitions:
- * - default: Continue to next node on success
- * - COMPLETE: All retries exhausted, non-retryable error, or user cancelled
- *
- * Services accessed via `this.services` following PocketFlow service injection.
- */
-class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
-  ResponseCycleShared,
-  CycleParams,
-  ResponseCycleServices<C>
-> {
-  protected getOperationName(): string {
-    return 'Model invocation';
-  }
-
-  /** Check if background mode is active (enables minimum retry count). */
-  protected override isBackgroundModeActive(): boolean {
-    return this.services.modelHandler.isBackgroundModeActive();
-  }
-
-  async prep(shared: ResponseCycleShared): Promise<InvocationPrepResult> {
-    return {
-      shouldStop: shared.shouldStop,
-      messages: shared.messages,
-      systemPrompt: shared.systemPrompt,
-    };
-  }
-
-  async exec(
-    prepRes: InvocationPrepResult,
-  ): Promise<InvocationResult<BaseInvocationSuccessData>> {
-    const services = this.services;
-
-    if (prepRes.shouldStop) {
-      return { kind: 'skipped' };
-    }
-
-    services.modelHandler.setOutputStreaming(false);
-
-    const stage = await services.logger.stage('Model invocation', {
-      skip: true,
-    });
-
-    const start = Date.now();
-
-    return this.withAbortController(async (signal) => {
-      const { response, responseTimeMs, updatedMessages } = await stage.run(
-        async () => {
-          const result = await services.modelHandler.createResponse({
-            client: services.client,
-            messages: prepRes.messages,
-            temperature: services.setting.temperature,
-            systemPrompt: prepRes.systemPrompt,
-            endTag: services.setting.endTag,
-            signal,
-            tools: services.modelHandler.capabilities.supportsFunctionCalling
-              ? services.setting.tools
-              : undefined,
-          });
-
-          const elapsedMs = Date.now() - start;
-
-          return {
-            response: result.response,
-            responseTimeMs: elapsedMs,
-            updatedMessages: result.updatedMessages,
-          };
-        },
-      );
-
-      return { kind: 'success', response, responseTimeMs, updatedMessages };
-    });
-  }
-
-  async execFallback(
-    _prepRes: InvocationPrepResult,
-    error: Error,
-  ): Promise<InvocationResult<BaseInvocationSuccessData>> {
-    return this.getFallbackResult(error);
-  }
-
-  async post(
-    shared: ResponseCycleShared,
-    _prepRes: InvocationPrepResult,
-    execRes: InvocationResult<BaseInvocationSuccessData>,
-  ): Promise<string | undefined> {
-    const successRes = handleInvocationResult(execRes, shared, shared, {
-      logger: this.services.logger,
-      operationName: this.getOperationName(),
-    });
-
-    if (!successRes) {
-      return FlowTransition.COMPLETE;
-    }
-
-    // Handle message updates from compaction (explicit in post, not via callback)
-    if (successRes.updatedMessages !== undefined) {
-      replaceMessagesInPlace(shared.messages, successRes.updatedMessages);
-    }
-
-    shared.responseObject = successRes.response;
-    shared.responseTimeMs = successRes.responseTimeMs;
-
-    await maybeSaveDebugObject({
-      object: successRes.response,
-      objectType: 'response',
-      context: getDebugContext(this.services, {
-        modelName: this.services.config.model,
-        isRemote: isRemoteAgent(this.services.config.agent),
-      }),
-      fileOptions: {
-        continuationCount: this.services.round.continuationCount,
-        baseName: 'response',
-        outputFile: shared.outputLocation!.relativePath,
-      },
-    });
-
-    return FlowTransition.DEFAULT;
-  }
-}
 
 /**
  * Data extracted by prep() for response processing.
@@ -795,7 +651,37 @@ export function createResponseCycleFlow<C>(): Flow<
   CycleParams
 > {
   const prepNode = new ResponsePrepNode<C>();
-  const invokeNode = new ResponseModelInvocationNode<C>();
+  const invokeNode = new ModelInvocationNode<
+    ResponseCycleShared,
+    CycleParams,
+    ResponseCycleServices<C>
+  >({
+    operationName: 'Model invocation',
+    streaming: false,
+    getSystemPrompt: (shared) => shared.systemPrompt,
+    getEndTag: (services) => services.setting.endTag,
+    getTools: (services) =>
+      services.modelHandler.capabilities.supportsFunctionCalling
+        ? services.setting.tools
+        : undefined,
+    storeResponse: (shared, response, responseTimeMs) => {
+      shared.responseObject = response;
+      shared.responseTimeMs = responseTimeMs;
+    },
+    isBackgroundModeActive: (services) =>
+      services.modelHandler.isBackgroundModeActive(),
+    getDebugSaveOptions: (shared, services) => ({
+      context: {
+        modelName: services.config.model,
+        isRemote: isRemoteAgent(services.config.agent),
+      },
+      fileOptions: {
+        continuationCount: services.round.continuationCount,
+        baseName: 'response',
+        outputFile: shared.outputLocation!.relativePath,
+      },
+    }),
+  });
   const processNode = new ResponseProcessNode<C>();
   const continuationNode = new ResponseContinuationNode<C>();
   const finalizeNode = new ResponseCycleFinalizeNode<C>();
