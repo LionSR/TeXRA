@@ -550,7 +550,7 @@ export async function executeAgent(
           const result = await runToolUseFlow({
             ...ctx,
             ...interrupts,
-            getUsageRecorder: () => (run) =>
+            onRoundFinalized: (run) =>
               ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
             setting: ctx.setting as AgentToolUseSetting,
             isSubagent,
@@ -569,7 +569,7 @@ export async function executeAgent(
         const result = await runReflectionFlow({
           ...ctx,
           ...interrupts,
-          getUsageRecorder: () => (run) =>
+          onRoundFinalized: (run) =>
             ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
           setting: ctx.setting as AgentWorkflowSetting,
           parentStage: ctx.parentStage,
@@ -581,7 +581,6 @@ export async function executeAgent(
           executionId: ctx.executionId,
           streamId,
         };
-      });
     },
     { isSubagent },
   );
@@ -614,7 +613,7 @@ export async function executeMergeAgent(
       const result = await runReflectionFlow({
         ...ctx,
         ...createInterruptCallbacks(),
-        getUsageRecorder: () => (run) =>
+        onRoundFinalized: (run) =>
           ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
         setting: ctx.setting as AgentWorkflowSetting,
         getOutputFileLocation: createMergeOutputFileLocationGetter(
@@ -663,7 +662,7 @@ export async function resumeToolUseFromSnapshot(
         {
           ...ctx,
           ...createInterruptCallbacks(),
-          getUsageRecorder: () => (run) =>
+          onRoundFinalized: (run) =>
             ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
           setting: setting as AgentToolUseSetting,
           resumeSnapshot: snapshot,

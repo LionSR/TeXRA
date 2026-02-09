@@ -105,7 +105,6 @@ export class OutputNode<C = unknown> extends Node<
   async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
     const {
       outputState,
-      outputDeps,
       xmlManager,
       diffManager,
       setting,
@@ -139,7 +138,7 @@ export class OutputNode<C = unknown> extends Node<
         () =>
           extractFilesFromXml(
             outputState,
-            outputDeps,
+            this.services,
             xmlManager,
             outputLocation,
             currentRound,
@@ -167,7 +166,7 @@ export class OutputNode<C = unknown> extends Node<
     // Summarize round (pure data — no events)
     const summary = await summarizeRound(
       outputState,
-      outputDeps,
+      this.services,
       outputLocation,
       currentRound,
       { endTurn, mapping },
@@ -187,7 +186,7 @@ export class OutputNode<C = unknown> extends Node<
     prepRes: OutputPrepInput,
     error: Error,
   ): Promise<OutputExecResult> {
-    const { logger, outputState, outputDeps } = this.services;
+    const { logger, outputState } = this.services;
     const { shared, outputLocation } = prepRes;
     logger.warn(`Output processing failed: ${error.message}`);
 
@@ -196,7 +195,7 @@ export class OutputNode<C = unknown> extends Node<
     try {
       summary = await summarizeRound(
         outputState,
-        outputDeps,
+        this.services,
         outputLocation,
         shared.currentRound,
         { endTurn: shared.endTurn },
@@ -236,7 +235,7 @@ export class OutputNode<C = unknown> extends Node<
     prepRes: OutputPrepInput,
     execRes: OutputExecResult,
   ): Promise<string | undefined> {
-    const { streamId, logger, outputState, outputDeps } = this.services;
+    const { streamId, logger, outputState } = this.services;
     const { shared, outputLocation } = prepRes;
     const { currentRound, endTurn } = shared;
     const { summary, roundOutput } = execRes;
@@ -264,7 +263,7 @@ export class OutputNode<C = unknown> extends Node<
         async () => {
           const validationResult = await checkExpectedOutputs(
             outputState,
-            outputDeps,
+            this.services,
             outputLocation,
             currentRound,
             summary.stage,
