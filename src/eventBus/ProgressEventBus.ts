@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 
 import type { AgentCategory } from '@agent/core/AgentDataclass';
+import type { ActiveSubagentSummary } from '@agent/runtime/subagentLineage';
 import type { TaskState } from '@logger/TaskState';
 import type {
   AddTaskGroupPayload,
@@ -86,6 +87,10 @@ export interface ProgressEventPayloads {
   resolveAgentProposal: { proposalId: string };
   updateTodos: UpdateTodosPayload;
   updateQueuedFollowUps: { streamId: StreamTabId };
+  updateActiveSubagents: {
+    parentStreamId: StreamTabId;
+    children: ActiveSubagentSummary[];
+  };
   extensionDeactivating: undefined;
 }
 
