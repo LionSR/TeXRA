@@ -96,11 +96,15 @@ export class WorkspaceFS extends RelativeFS {
       return { kind: 'external', absolutePath: inputPath };
     }
 
-    // Relative path — normalize to forward slashes
+    // Relative path — convert backslashes to forward slashes BEFORE normalizing
+    // so that path.posix.normalize() can properly collapse '..' segments.
+    // On POSIX, backslashes are valid filename characters, so path.normalize()
+    // would preserve them; the subsequent replaceAll would then create new
+    // path separators that could form '..' traversals bypassing the check below.
     if (!workspaceRoot) {
       return { kind: 'external', absolutePath: path.resolve(inputPath) };
     }
-    const relative = path.normalize(inputPath).replaceAll('\\', '/');
+    const relative = path.posix.normalize(inputPath.replaceAll('\\', '/'));
     if (relative.startsWith('..')) {
       return {
         kind: 'external',
