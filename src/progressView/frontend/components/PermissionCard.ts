@@ -25,6 +25,7 @@ import { ProgressEvents } from '../events';
 import type {
   AgentProposalPermission,
   BashPermission,
+  ModelOptionData,
   RetryPermission,
   ToolEditPermission,
   WorkflowAgentProposalPermission,
@@ -38,7 +39,11 @@ export type PermissionState =
   | { kind: typeof PERMISSION_KIND.TOOL_EDIT; data: ToolEditPermission }
   | { kind: typeof PERMISSION_KIND.BASH; data: BashPermission }
   | { kind: typeof PERMISSION_KIND.RETRY; data: RetryPermission }
-  | { kind: typeof PERMISSION_KIND.PROPOSAL; data: AgentProposalPermission };
+  | {
+      kind: typeof PERMISSION_KIND.PROPOSAL;
+      data: AgentProposalPermission;
+      modelOptions?: ModelOptionData[];
+    };
 
 /** Action button configuration */
 type ActionConfig = {
