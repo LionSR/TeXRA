@@ -6,19 +6,21 @@ TeXRA provides built-in AI agents, each specialized for specific research tasks.
 
 | Agent              | Type     | Purpose                                 |
 | ------------------ | -------- | --------------------------------------- |
-| `chat`             | Tool-use | General assistance, file editing        |
-| `ask`              | Tool-use | Read-only questions and exploration     |
-| `search`           | Tool-use | Literature discovery, web search        |
-| `research`         | Tool-use | Computational verification with Wolfram |
-| `discuss`          | Tool-use | Academic brainstorming with literature  |
-| `lean`             | Tool-use | Lean 4 proof development                |
-| `correct`          | Workflow | Fix errors without style changes        |
-| `polish`           | Workflow | Improve writing quality                 |
-| `paper2slide`      | Workflow | Convert papers to beamer slides         |
-| `paper2poster`     | Workflow | Create academic posters                 |
-| `draw`             | Workflow | Create/enhance TikZ figures             |
-| `ocr`              | Workflow | Extract text from images/PDFs           |
-| `transcribe_audio` | Workflow | Transcribe audio to text                |
+| `chat`             | Tool-use | General assistance, file editing            |
+| `ask`              | Tool-use | Read-only questions and exploration         |
+| `search`           | Tool-use | Literature discovery, web search            |
+| `research`         | Tool-use | Computational verification with Wolfram     |
+| `discuss`          | Tool-use | Academic brainstorming with literature      |
+| `lean`             | Tool-use | Lean 4 proof development                    |
+| `presenter`        | Tool-use | Interactive presentation builder            |
+| `simplifier`       | Tool-use | Simplify code and LaTeX for clarity         |
+| `correct`          | Workflow | Fix errors without style changes            |
+| `polish`           | Workflow | Improve writing quality                     |
+| `paper2slide`      | Workflow | Convert papers to beamer slides             |
+| `paper2poster`     | Workflow | Create academic posters                     |
+| `draw`             | Workflow | Create/enhance TikZ figures                 |
+| `ocr`              | Workflow | Extract text from images/PDFs               |
+| `transcribe_audio` | Workflow | Transcribe audio to text                    |
 
 ::: warning Important Note
 The underlying prompts and specific behaviors of these built-in agents may change slightly between TeXRA versions as we continue to optimize them. If you require precise, unchanging behavior or wish to heavily customize the process, consider creating a [Custom Agent](./custom-agents.md) based on these examples.
@@ -148,6 +150,52 @@ Interactive Lean 4 proof assistant with VS Code integration.
 ```
 Formalize the proof of the theorem in Proofs/GroupTheory.lean. Start with an
 informal outline, then produce Lean code and iterate until it compiles.
+```
+
+## Presentation & Simplification Agents
+
+### `presenter`
+
+An interactive scientific presentation builder with visual quality assurance. It creates LaTeX Beamer presentations, posters, and visual materials by surveying your codebase, planning slides, and iteratively compiling and inspecting the output PDF.
+
+**Capabilities:**
+
+- Build Beamer presentations, posters, and tutorial materials from your research
+- Survey your project with `glob`/`grep` to extract key algorithms, results, and figures
+- Generate and include TikZ diagrams, matplotlib plots, and Wolfram-generated figures
+- Compile LaTeX and visually inspect every slide of the output PDF to fix layout issues
+- Search arXiv and the web for supporting references
+
+**Best for:** Conference talks, poster sessions, seminar presentations, code documentation slides, lightning talks
+
+**Example instruction:**
+
+```
+Create a 15-slide Beamer presentation from this project. Cover motivation, the core
+algorithm, key results, and future work. Use the metropolis theme and include TikZ
+diagrams for the architecture. Compile and verify every slide looks correct.
+```
+
+### `simplifier`
+
+A code and writing simplification specialist that makes scientific projects clearer and more maintainable while preserving exact correctness.
+
+**Capabilities:**
+
+- Remove code duplication across files using systematic search
+- Inline single-use wrappers and collapse unnecessary abstraction layers
+- Replace hand-rolled implementations with standard library equivalents
+- Clean up AI-generated prose bloat (filler phrases, redundant transitions, hedging pileups)
+- Apply language-idiomatic patterns (vectorized NumPy ops, Julia broadcasting, LaTeX `\tikzset`, etc.)
+
+**Best for:** Refactoring research code, tightening manuscript prose, cleaning up LLM-generated artifacts
+
+**Example instruction:**
+
+```
+Simplify the numerical solver in solver.py. Look for duplicated loops that could be
+vectorized with NumPy, inline any single-use helper functions, and remove dead code.
+Run the existing tests after each change to verify correctness.
 ```
 
 ## Correction & Polishing Agents
