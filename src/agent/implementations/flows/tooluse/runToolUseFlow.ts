@@ -27,7 +27,6 @@ import type { BaseFlowContextInit } from '@agent/implementations/flows/common/Ba
 import { getDefaultToolRegistry } from '@tools/registry';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
@@ -236,58 +235,15 @@ export async function runToolUseFlow<C = unknown>(
     unregisterInterruptible(streamId);
   }
 
-  return {
-    status,
-    lastResponse: extractLastAssistantText(shared.conversation),
-  };
-}
-
-/**
- * Extract text from the last assistant message in a provider conversation.
- * Handles OpenAI (string content), Anthropic (content blocks), and
- * Google (parts array) message formats.
- */
-function extractLastAssistantText(
-  conversation: ProviderMessage[],
-): string | undefined {
-  for (let i = conversation.length - 1; i >= 0; i--) {
-    const msg = conversation[i] as Record<string, unknown>;
-    if (!msg || typeof msg !== 'object') continue;
-
-    // OpenAI / Anthropic use role='assistant', Google uses role='model'
-    if (msg.role !== 'assistant' && msg.role !== 'model') continue;
-
-    // OpenAI: content is string
-    if (typeof msg.content === 'string') return msg.content;
-
-    // Anthropic / OpenAI: content is array of blocks with .text
-    if (Array.isArray(msg.content)) {
-      const texts = (msg.content as unknown[])
-        .map((c) => {
-          if (typeof c === 'string') return c;
-          if (typeof c === 'object' && c !== null && 'text' in c) {
-            const text = (c as { text: unknown }).text;
-            return typeof text === 'string' ? text : '';
-          }
-          return '';
-        })
-        .filter(Boolean);
-      if (texts.length > 0) return texts.join('\n');
-    }
-
-    // Google: parts array
-    if (Array.isArray(msg.parts)) {
-      const texts = (msg.parts as unknown[])
-        .map((p) => {
-          if (typeof p === 'object' && p !== null && 'text' in p) {
-            const text = (p as { text: unknown }).text;
-            return typeof text === 'string' ? text : '';
-          }
-          return '';
-        })
-        .filter(Boolean);
-      if (texts.length > 0) return texts.join('\n');
+  // Extract last assistant text using the model handler's typed extraction
+  let lastResponse: string | undefined;
+  for (let i = shared.conversation.length - 1; i >= 0; i--) {
+    const text = input.modelHandler.extractAssistantText(shared.conversation[i]);
+    if (text !== undefined) {
+      lastResponse = text;
+      break;
     }
   }
-  return undefined;
+
+  return { status, lastResponse };
 }
