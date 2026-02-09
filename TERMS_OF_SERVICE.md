@@ -83,15 +83,9 @@ The Extension integrates with third-party services, including AI model providers
 
 ## 12. International Data Transfers
 
-The Extension supports AI providers headquartered in various jurisdictions, including providers based outside the European Union and the United States. By selecting a provider, you acknowledge and consent to your data being transmitted to and processed in the jurisdiction where that provider operates. This may include jurisdictions that do not provide the same level of data protection as your home country or the EU/EEA.
+The Extension supports AI providers headquartered in various jurisdictions worldwide, including providers based outside the European Union and the United States. Some supported providers operate in jurisdictions that may not provide the same level of data protection as your home country or the EU/EEA. By selecting a provider, you acknowledge and consent to your data being transmitted to and processed in the jurisdiction where that provider operates, subject to that jurisdiction's local laws.
 
-Notably:
-
-- **DeepSeek** is operated by DeepSeek (深度求索), headquartered in Hangzhou, China.
-- **Moonshot AI (Kimi)** is operated by Moonshot AI (月之暗面), headquartered in Beijing, China.
-- **DashScope** is operated by Alibaba Cloud, headquartered in Hangzhou, China.
-
-Data sent to these providers is subject to the laws of the People's Republic of China, including the Personal Information Protection Law (PIPL) and the Cybersecurity Law, which may differ significantly from GDPR, CCPA, or other data protection frameworks you are accustomed to.
+A current list of supported providers and their operating jurisdictions is available at [https://texra.ai/providers](https://texra.ai/providers). This list may be updated from time to time as providers are added or removed.
 
 **You are solely responsible for ensuring that your use of any AI provider complies with applicable data protection laws in your jurisdiction**, including but not limited to the EU General Data Protection Regulation (GDPR), the UK GDPR, the California Consumer Privacy Act (CCPA), and any institutional or organizational data policies that apply to you. If you are subject to regulations that restrict international data transfers, you should only select providers that meet your compliance requirements. We do not make any representations regarding the data protection practices of third-party AI providers.
 
