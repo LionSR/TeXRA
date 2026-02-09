@@ -188,15 +188,15 @@ export class PersistedFlow<
 
   async getShared(): Promise<S | undefined> {
     const flow =
-      this.cachedRecord ?? (await this.kv.read<FlowRecord>(`flow:${this.runId}`));
+      this.cachedRecord ??
+      (await this.kv.read<FlowRecord>(`flow:${this.runId}`));
     if (flow) this.cachedRecord = flow;
     return flow?.shared as S | undefined;
   }
 
   async setShared(newShared: S): Promise<void> {
     const key = `flow:${this.runId}`;
-    const flow =
-      this.cachedRecord ?? (await this.kv.read<FlowRecord>(key))!;
+    const flow = this.cachedRecord ?? (await this.kv.read<FlowRecord>(key))!;
     this.cachedRecord = null;
     flow.shared = this.serializeShared(newShared);
     await this.kv.write(key, flow);
