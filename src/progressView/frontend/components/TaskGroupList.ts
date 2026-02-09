@@ -7,7 +7,7 @@
 
 // Third-party imports
 import { LitElement, html, type TemplateResult, nothing } from 'lit';
-import { customElement, property, query, state } from 'lit/decorators.js';
+import { customElement, property, query } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - side effects: register components
@@ -74,8 +74,8 @@ export class TaskGroupList extends LitElement {
   /** Toggle state store for persistence */
   @property({ type: Object }) toggleStates: ToggleStateStore | null = null;
 
-  /** Track previous group statuses to detect completion */
-  @state() private previousStatuses = new Map<string, string>();
+  /** Track previous group statuses to detect completion (not rendered — no @state needed) */
+  private previousStatuses = new Map<string, string>();
 
   /** Memoized tree output from buildGroupTree() - recomputed only when inputs change */
   private cachedTree: GroupTree[] = [];
@@ -123,8 +123,9 @@ export class TaskGroupList extends LitElement {
 
       if (this.messages.length === prevCount) {
         // Same length: text-only update (e.g. streaming UPDATE_LOG).
-        // Tree structure is unchanged — Lit's keyed repeat() handles
-        // individual log-entry re-renders automatically.
+        // Propagate fresh message references to cached structures so
+        // render() passes updated objects to repeat()/log-entry.
+        this.updateCachedMessageRefs();
       } else if (this.messages.length > prevCount) {
         // Append-only: classify only the new messages incrementally.
         this.appendNewMessages(prevCount);
@@ -182,9 +183,27 @@ export class TaskGroupList extends LitElement {
     }
   }
 
+  /** Replace stale message references in cached structures with fresh ones (O(n)). */
+  private updateCachedMessageRefs(): void {
+    const byId = new Map(this.messages.map((m) => [m.id, m]));
+
+    const updateNode = (node: GroupTree): void => {
+      node.messages = node.messages.map((old) => byId.get(old.id) ?? old);
+      for (const child of node.children) updateNode(child);
+    };
+    for (const node of this.cachedTree) updateNode(node);
+
+    this.cachedUserMessages = this.cachedUserMessages.map(
+      (old) => byId.get(old.id) ?? old,
+    );
+    this.cachedOtherUngrouped = this.cachedOtherUngrouped.map(
+      (old) => byId.get(old.id) ?? old,
+    );
+  }
+
   /** Play sound when a run group completes */
   private checkForCompletedRuns(): void {
-    const knownGroups = new Set(this.groups.map((group) => group.id));
+    const nextStatuses = new Map<string, string>();
     for (const group of this.groups) {
       const prev = this.previousStatuses.get(group.id);
       const isRunGroup = /^r\d+$/.test(group.name);
@@ -197,13 +216,9 @@ export class TaskGroupList extends LitElement {
         playCompletionSound();
       }
 
-      this.previousStatuses.set(group.id, group.status);
+      nextStatuses.set(group.id, group.status);
     }
-    for (const key of this.previousStatuses.keys()) {
-      if (!knownGroups.has(key)) {
-        this.previousStatuses.delete(key);
-      }
-    }
+    this.previousStatuses = nextStatuses;
   }
 
   /**
