@@ -439,7 +439,9 @@ export function formatToolUseTemplate(
   const proposalMode =
     isProposal && isPlainObject(input) && typeof input.mode === 'string'
       ? input.mode
-      : '';
+      : isProposal
+        ? 'sync'
+        : '';
   const proposalId =
     isProposal && !isInProgress
       ? registerProposalInput(input, toolName)
