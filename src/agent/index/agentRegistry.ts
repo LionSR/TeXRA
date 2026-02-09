@@ -280,6 +280,22 @@ export function updateAgentTools(
   const entry = getAgent(identifier);
   if (entry && tools?.length) {
     entry.tools = tools;
+    persistRemoteAgentMeta(entry.name, { tools });
+  }
+}
+
+/**
+ * Update an agent's default output files in the cache.
+ * Used to populate defaultOutputFiles for remote agents after YAML is loaded.
+ */
+export function updateAgentDefaultOutputFiles(
+  identifier: string,
+  defaultOutputFiles: string[] | undefined,
+): void {
+  const entry = getAgent(identifier);
+  if (entry && defaultOutputFiles?.length) {
+    entry.defaultOutputFiles = defaultOutputFiles;
+    persistRemoteAgentMeta(entry.name, { defaultOutputFiles });
   }
 }
 
@@ -480,10 +496,51 @@ async function scanYaml(
   }
 }
 
+// =============================================================================
+// REMOTE AGENT METADATA PERSISTENCE
+// =============================================================================
+
+/**
+ * Cached metadata for a remote agent, persisted in globalState.
+ * Populated lazily when a remote agent's YAML is first loaded.
+ */
+interface RemoteAgentMetaCache {
+  [agentName: string]: {
+    tools?: string[];
+    defaultOutputFiles?: string[];
+  };
+}
+
+/** Persist remote agent metadata to globalState for cross-session availability. */
+function persistRemoteAgentMeta(
+  agentName: string,
+  meta: { tools?: string[]; defaultOutputFiles?: string[] },
+): void {
+  if (!globalSM) return;
+  const cache =
+    globalSM.get<RemoteAgentMetaCache>(
+      GlobalStateKey.REMOTE_AGENT_META_CACHE,
+      {},
+    ) ?? {};
+  cache[agentName] = { ...cache[agentName], ...meta };
+  void globalSM.update(GlobalStateKey.REMOTE_AGENT_META_CACHE, cache);
+}
+
+/** Load persisted remote agent metadata from globalState. */
+function getPersistedRemoteAgentMeta(): RemoteAgentMetaCache {
+  return (
+    globalSM?.get<RemoteAgentMetaCache>(
+      GlobalStateKey.REMOTE_AGENT_META_CACHE,
+      {},
+    ) ?? {}
+  );
+}
+
 async function loadRemoteAgents(): Promise<AgentEntry[]> {
   try {
     const remotes = await RemoteAgentLoader.listRemoteAgents();
     const grouped = groupByVariants(remotes, (r) => r.name);
+    const metaCache = getPersistedRemoteAgentMeta();
 
     // Build entries from grouped agents
     const entries: AgentEntry[] = [];
@@ -491,16 +548,22 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
       const primary = base || multiple;
       if (!primary) continue;
 
+      const name = base ? baseName : primary.name;
       const isToolUse = primary.agentCategory === AgentCategory.ToolUse;
-      // Description from DB is cache; updated from YAML when agent is loaded
+      const cached = metaCache[name];
+
+      // Description from DB is cache; updated from YAML when agent is loaded.
+      // Tools and defaultOutputFiles hydrated from persistent cache.
       entries.push({
-        name: base ? baseName : primary.name,
+        name,
         source: 'remote' as AgentSource,
         path: '',
         multiplePath: multiple?.name,
         category: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
         description: primary.description ?? undefined,
         visibility: primary.visibility ?? undefined,
+        tools: cached?.tools,
+        defaultOutputFiles: cached?.defaultOutputFiles,
       });
     }
 
