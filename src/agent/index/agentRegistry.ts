@@ -269,6 +269,21 @@ export function updateAgentDescription(
 }
 
 /**
+ * Update an agent's tool list in the cache.
+ * Used to populate tools for remote agents after YAML is loaded,
+ * so orchestrator agents can see what tools remote agents have.
+ */
+export function updateAgentTools(
+  identifier: string,
+  tools: string[] | undefined,
+): void {
+  const entry = getAgent(identifier);
+  if (entry && tools?.length) {
+    entry.tools = tools;
+  }
+}
+
+/**
  * Resolve an agent to its definition path, handling _multiple variant logic.
  */
 export function resolveAgent(
