@@ -12,6 +12,8 @@ export const RemoteAgentListItemSchema = z.object({
   name: z.string(),
   description: z.string().nullish(),
   visibility: z.array(z.string()).nullish(),
+  /** Cached tool names from YAML. Available when DB column is populated. */
+  tools: z.array(z.string()).nullish(),
   /** Defaults to Workflow for backward compatibility with existing DB rows. */
   agentCategory: z
     .enum(AgentCategory)
