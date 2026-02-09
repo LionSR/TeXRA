@@ -126,7 +126,10 @@ function resolvePathAgainstWorkspace(
       return { kind: 'external', absolutePath: inputPath };
     }
     const relative = WorkspaceFS.relativePath(inputPath);
-    if (relative !== inputPath && !relative.startsWith('..')) {
+    // WorkspaceFS.relativePath() returns forward-slash normalized paths.
+    // When outside workspace, it returns the absolute path (still absolute).
+    // Use path.isAbsolute() instead of string equality to detect this.
+    if (!path.isAbsolute(relative) && !relative.startsWith('..')) {
       return {
         kind: 'workspace',
         absolutePath: inputPath,
