@@ -4,10 +4,9 @@
  * - workflow_agent: For workflow agents (document processing with file I/O)
  * - delegate_agent: For tool-use agents (interactive assistants)
  *
- * Three execution modes:
+ * Two execution modes:
  * - sync: Await result inline (default, simplest)
- * - async: Launch and use await_subagent later (parallel-friendly)
- * - background: Result delivered as follow-up message
+ * - async: Launch, check progress via runs tool, result delivered as follow-up
  */
 
 // Third-party imports
@@ -22,6 +21,7 @@ import {
   type WorkflowAgentProposal,
   type ToolUseAgentProposal,
   type StreamTabId,
+  type ExecutionId,
 } from '@shared/schemas';
 import {
   getAgent,
@@ -45,7 +45,6 @@ import { resolveVisibleModel } from '@model/computeModelOptions';
 // Local imports - tools
 import { ToolResult } from '@tools/result';
 import {
-  addPendingResult,
   formatFlowResult,
   formatSubagentDelivery,
   formatSubagentError,
@@ -64,10 +63,10 @@ logger.initialize(LOG_CHANNEL);
 
 /** Execution mode schema for proposal tools. */
 const ModeSchema = z
-  .enum(['sync', 'async', 'background'])
+  .enum(['sync', 'async'])
   .prefault('sync')
   .describe(
-    'sync: wait for result. async: launch and use await_subagent later. background: result delivered as follow-up.',
+    'sync: wait for result inline. async: launch, check progress via runs tool, result delivered as follow-up message.',
   );
 
 /** Get streamId from context, throwing if unavailable. */
@@ -101,78 +100,49 @@ function toConfigPayload(
 function executeSubagent(
   configPayload: AgentConfigPayload,
   agentName: string,
-  mode: 'sync' | 'async' | 'background',
+  mode: 'sync' | 'async',
   orchestratorStreamId: StreamTabId,
   inputFile?: string,
 ): ToolResult | Promise<ToolResult> {
-  switch (mode) {
-    // Mode A: block and return result directly
-    case 'sync': {
-      return executeAgent(configPayload, undefined, {
-        isSubagent: true,
-      }).then((result) => formatFlowResult(result, agentName, inputFile));
-    }
-
-    // Mode B: launch, store promise, return ID for later await
-    case 'async': {
-      const subagentId = randomUUID();
-      const promise = executeAgent(configPayload, undefined, {
-        isSubagent: true,
-        onStreamResolved: (childStreamId) => {
-          registerSubagent(
-            subagentId,
-            orchestratorStreamId,
-            childStreamId,
-            agentName,
-            promise,
-          );
-        },
-      });
-      addPendingResult(subagentId, promise, agentName, inputFile);
-      return {
-        summary: `Launched '${agentName}' (async)`,
-        output: [
-          `Subagent '${agentName}' launched in async mode.`,
-          `Subagent ID: ${subagentId}`,
-          'Use await_subagent to retrieve the result when ready.',
-        ].join('\n'),
-      };
-    }
-
-    // Mode C: fire-and-deliver via FollowUpQueue
-    case 'background': {
-      const subagentId = randomUUID();
-      const promise = executeAgent(configPayload, undefined, {
-        isSubagent: true,
-        onStreamResolved: (childStreamId) => {
-          registerSubagent(
-            subagentId,
-            orchestratorStreamId,
-            childStreamId,
-            agentName,
-            promise,
-          );
-        },
-      });
-      promise
-        .then((result) => {
-          const msg = formatSubagentDelivery(agentName, result);
-          ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
-        })
-        .catch((err: unknown) => {
-          const msg = formatSubagentError(subagentId, agentName, err);
-          ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
-        });
-      return {
-        summary: `Launched '${agentName}' (background)`,
-        output: [
-          `Subagent '${agentName}' launched in background mode.`,
-          `Subagent ID: ${subagentId}`,
-          'Result will be delivered as a follow-up message when complete.',
-        ].join('\n'),
-      };
-    }
+  if (mode === 'sync') {
+    return executeAgent(configPayload, undefined, {
+      isSubagent: true,
+    }).then((result) => formatFlowResult(result, agentName, inputFile));
   }
+
+  // Async: launch, deliver result via FollowUpQueue, return execution ID for progress checks
+  const subagentId = randomUUID();
+  const executionId = randomUUID() as ExecutionId;
+  const promise = executeAgent(configPayload, executionId, {
+    isSubagent: true,
+    onStreamResolved: (childStreamId) => {
+      registerSubagent(
+        subagentId,
+        orchestratorStreamId,
+        childStreamId,
+        agentName,
+        promise,
+      );
+    },
+  });
+  promise
+    .then((result) => {
+      const msg = formatSubagentDelivery(agentName, result);
+      ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+    })
+    .catch((err: unknown) => {
+      const msg = formatSubagentError(subagentId, agentName, err);
+      ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+    });
+  return {
+    summary: `Launched '${agentName}' (async)`,
+    output: [
+      `Subagent '${agentName}' launched in async mode.`,
+      `Execution ID: ${executionId}`,
+      `Check progress: runs tool with path /runs/${executionId}`,
+      'Result will be delivered as a follow-up message when complete.',
+    ].join('\n'),
+  };
 }
 
 /** Format an agent list for tool descriptions. */
