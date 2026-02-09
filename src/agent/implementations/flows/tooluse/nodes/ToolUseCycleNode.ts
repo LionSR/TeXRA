@@ -57,7 +57,6 @@ export class ToolUseCycleNode<C> extends Node<
       setting,
       resolvedTools,
       modelHandler,
-      getUsageRecorder,
       config,
     } = this.services;
 
@@ -88,7 +87,8 @@ export class ToolUseCycleNode<C> extends Node<
 
     const flow = createToolUseCycleFlow<C>();
     const clientRef = { current: await modelHandler.getClient() };
-    // Spread outer services (core fields pass through), add/override cycle-specific fields
+    // Spread outer services (core fields pass through), add/override cycle-specific fields.
+    // onRoundFinalized passes through from the spread (same name in both service levels).
     flow.setServices({
       ...this.services,
       setting: { ...setting, tools: resolvedTools },
@@ -97,7 +97,6 @@ export class ToolUseCycleNode<C> extends Node<
       },
       run: prepRes.runState,
       workspace: prepRes.workspaceState,
-      onRoundFinalized: getUsageRecorder(),
       modelName: config.model,
       agentName: config.agent,
       async refreshClient() {

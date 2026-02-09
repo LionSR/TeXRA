@@ -3,16 +3,13 @@
  *
  * Extends BaseFlowContextInit with:
  * - Narrowed setting type (AgentWorkflowSetting)
- * - Required getUsageRecorder (narrowed from optional)
+ * - Required onRoundFinalized (narrowed from optional)
  * - Workflow-specific services (outputState, promptBuilder, etc.)
  */
 
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
-import type {
-  OutputState,
-  OutputDependencies,
-} from '@agent/output/outputState';
+import type { OutputState } from '@agent/output/outputState';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import type { PromptBuilder } from '@utils/prompt';
@@ -35,8 +32,6 @@ export interface ReflectionServices<
   readonly setting: AgentWorkflowSetting;
   /** Mutable state for output processing */
   readonly outputState: OutputState;
-  /** Dependencies for output utility functions */
-  readonly outputDeps: OutputDependencies;
   /** Manager for XML output processing */
   readonly xmlManager: XmlOutputManager;
   /** Manager for latexdiff operations */
@@ -48,7 +43,7 @@ export interface ReflectionServices<
   readonly shouldEnsureXmlStructure: boolean;
   readonly baseFiles: WorkspaceFileLocation[];
   /** Narrowed from optional to required for workflow flows */
-  readonly getUsageRecorder: () => RoundFinalizedCallback;
+  readonly onRoundFinalized: RoundFinalizedCallback;
 }
 
 export type { FlowParams as ReflectionFlowParams };

@@ -133,8 +133,6 @@ export class ResponseCycleNode<C = unknown> extends Node<
       return { outcome: 'completed' };
     }
 
-    const onRoundFinalized = this.services.getUsageRecorder();
-
     try {
       // Initialize all cycle fields in one call (replaces 11 individual assignments + assertion)
       initializeCycleFields(
@@ -147,7 +145,8 @@ export class ResponseCycleNode<C = unknown> extends Node<
       const flow = createResponseCycleFlow<C>();
       const { modelHandler } = this.services;
       const clientRef = { current: await modelHandler.getClient() };
-      // Spread outer services (core fields pass through), add cycle-specific fields
+      // Spread outer services (core fields pass through), add cycle-specific fields.
+      // onRoundFinalized passes through from the spread (same name in both service levels).
       flow.setServices({
         ...this.services,
         get client() {
@@ -156,7 +155,6 @@ export class ResponseCycleNode<C = unknown> extends Node<
         round: prepRes.round,
         run: prepRes.run,
         workspace: prepRes.workspace,
-        onRoundFinalized,
         async refreshClient() {
           clientRef.current = await modelHandler.getClient();
         },
@@ -177,8 +175,8 @@ export class ResponseCycleNode<C = unknown> extends Node<
     } catch (error) {
       // Error path: finalize round on unexpected errors
       recordRound(prepRes.run, prepRes.round);
-      if (onRoundFinalized) {
-        await onRoundFinalized(prepRes.run);
+      if (this.services.onRoundFinalized) {
+        await this.services.onRoundFinalized(prepRes.run);
       }
       return {
         outcome: 'failed',

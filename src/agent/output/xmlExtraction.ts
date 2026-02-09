@@ -75,7 +75,7 @@ export async function extractFilesFromXml(
       const rawLocation = data.rawOutput;
 
       const processingContext: ProcessingContext = {
-        agentSetting: deps.agentSetting,
+        agentSetting: deps.setting,
         baseFiles: deps.baseFiles,
         streamId: deps.streamId,
         logger: deps.logger,
@@ -91,8 +91,8 @@ export async function extractFilesFromXml(
       const storageKey: StorageKey = getStorageKey(state);
 
       const hasMultipleOutputs =
-        deps.agentConfig.useMultipleOutputs &&
-        deps.agentConfig.outputFiles?.length > 0;
+        deps.config.useMultipleOutputs &&
+        deps.config.outputFiles?.length > 0;
 
       if (hasMultipleOutputs) {
         await fileProcessor.processMultipleOutputs(
