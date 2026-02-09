@@ -20,6 +20,7 @@ export class ToolUseFollowUpQueue {
   private static readonly queues = new Map<StreamTabId, FollowUpQueue>();
   /** Streams whose queues were explicitly released (orchestrator disposed). */
   private static readonly released = new Set<StreamTabId>();
+  private static readonly RELEASED_CAP = 500;
 
   static acquire(streamId: StreamTabId): FollowUpQueue {
     this.released.delete(streamId);
@@ -33,12 +34,15 @@ export class ToolUseFollowUpQueue {
 
   static release(streamId: StreamTabId): void {
     const queue = this.queues.get(streamId);
-    if (!queue) {
-      return;
+    if (queue) {
+      queue.dispose();
+      this.queues.delete(streamId);
     }
-    queue.dispose();
-    this.queues.delete(streamId);
     this.released.add(streamId);
+    if (this.released.size > this.RELEASED_CAP) {
+      this.released.clear();
+      this.released.add(streamId);
+    }
     logger.debug(`Released follow-up queue for stream ${streamId}.`);
   }
 
