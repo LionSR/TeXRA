@@ -10,7 +10,11 @@ import {
 import {
   getMultipleName,
   getBaseName,
+  getAgent,
+  extractToolNames,
   updateAgentDescription,
+  updateAgentTools,
+  updateAgentDefaultOutputFiles,
 } from '@agent/index/agentRegistry';
 import type { AgentLoadOptions } from '@agent/runtime/agentLoad';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
@@ -75,6 +79,7 @@ function parseListItemRow(row: {
   name: string;
   description?: string | null;
   visibility?: string[] | null;
+  tools?: string[] | null;
   agent_category?: string | null;
 }): RemoteAgentListItem | null {
   const result = RemoteAgentListItemSchema.safeParse({
@@ -82,6 +87,7 @@ function parseListItemRow(row: {
     name: row.name,
     description: row.description,
     visibility: row.visibility,
+    tools: row.tools,
     agentCategory: row.agent_category,
   });
 
@@ -134,11 +140,21 @@ export class RemoteAgentLoader {
           isLastCandidate,
         );
 
-        // Update registry cache with description from YAML
+        // Update registry cache with metadata from YAML.
+        // Try base name first (normal case), then full name (_multiple-only agents
+        // are registered under their full name, not the stripped base).
+        const baseName = getBaseName(agentName);
+        const registryId = getAgent(`remote:${baseName}`)
+          ? `remote:${baseName}`
+          : `remote:${agentName}`;
         if (config.description) {
-          const baseName = getBaseName(agentName);
-          updateAgentDescription(`remote:${baseName}`, config.description);
+          updateAgentDescription(registryId, config.description);
         }
+        updateAgentTools(registryId, config.tools);
+        updateAgentDefaultOutputFiles(
+          registryId,
+          config.defaultOutputFiles,
+        );
 
         logger.info(
           CHANNEL,
@@ -188,10 +204,23 @@ export class RemoteAgentLoader {
         refresh_token: tokens.refreshToken,
       });
 
-      const { data, error } = await supabase
+      // Query with tools column; fall back without it for pre-migration databases.
+      // PostgREST returns 400 if the column doesn't exist.
+      let { data, error } = await supabase
         .from('remote_agents')
-        .select('id, name, description, visibility, agent_category')
+        .select('id, name, description, visibility, tools, agent_category')
         .order('name');
+
+      if (error) {
+        logger.debug(
+          CHANNEL,
+          `Query with tools column failed, retrying without: ${error.message}`,
+        );
+        ({ data, error } = await supabase
+          .from('remote_agents')
+          .select('id, name, description, visibility, agent_category')
+          .order('name'));
+      }
 
       if (error) {
         logger.error(CHANNEL, `Failed to list remote agents: ${error.message}`);
@@ -235,6 +264,8 @@ async function fetchAgentConfig(
   settings: RemoteAgentConfig['settings'];
   prompts: RemoteAgentConfig['prompts'];
   description?: string;
+  tools?: string[];
+  defaultOutputFiles?: string[];
 }> {
   const token = await SupabaseClient.getAccessToken();
   if (!token) {
@@ -268,11 +299,18 @@ async function fetchAgentConfig(
   const parsed = yaml.parse(responseData.config);
   const validated = AgentDefinitionSchema.parse(parsed);
 
-  // Process tool definitions (remote agents are self-contained)
+  // Extract metadata before resolving tools to full definitions (for registry cache)
   const settings: Partial<AgentSetting> = validated.settings;
+  const rawTools = settings.tools as (string | { name: string })[] | undefined;
+  const toolNames = extractToolNames(rawTools);
+  const defaultOutputFiles = settings.defaultOutputFiles as
+    | string[]
+    | undefined;
+
+  // Process tool definitions (remote agents are self-contained)
   if (Array.isArray(settings.tools)) {
     settings.tools = resolveToolDefinitions(
-      settings.tools as (string | { name: string })[],
+      rawTools!,
       (name) => logger.warn(CHANNEL, `Tool "${name}" not found in registry`),
     );
   }
@@ -281,5 +319,9 @@ async function fetchAgentConfig(
     settings: AgentSettingSchema.parse(settings),
     prompts: AgentPromptSchema.parse(validated.prompts),
     description: validated.description,
+    tools: toolNames?.length ? toolNames : undefined,
+    defaultOutputFiles: defaultOutputFiles?.length
+      ? defaultOutputFiles
+      : undefined,
   };
 }
