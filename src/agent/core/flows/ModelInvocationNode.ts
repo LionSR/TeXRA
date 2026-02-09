@@ -20,6 +20,7 @@ import {
 export interface ModelInvocationConfig<TShared, TServices> {
   operationName: string;
   streaming: boolean;
+  backgroundModeAware?: boolean;
   getSystemPrompt?: (shared: TShared) => string | undefined;
   getEndTag?: (services: TServices) => string | undefined;
   getTools?: (services: TServices) => ToolDefinition[] | undefined;
@@ -60,7 +61,10 @@ export class ModelInvocationNode<
   }
 
   protected override isBackgroundModeActive(): boolean {
-    return this.services.modelHandler.isBackgroundModeActive();
+    return (
+      this._config.backgroundModeAware === true &&
+      this.services.modelHandler.isBackgroundModeActive()
+    );
   }
 
   async prep(shared: TShared): Promise<BaseInvocationPrepResult> {
