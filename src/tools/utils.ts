@@ -53,7 +53,9 @@ export function resolveWorkspaceRelativePath(
     };
   }
 
-  const relative = path.normalize(trimmed);
+  // Normalize and convert to forward slashes for cross-platform consistency
+  // (path.normalize on Windows converts / to \)
+  const relative = path.normalize(trimmed).replaceAll('\\', '/');
   if (relative.startsWith('..')) {
     throw new ToolError('Path must stay within the workspace.');
   }

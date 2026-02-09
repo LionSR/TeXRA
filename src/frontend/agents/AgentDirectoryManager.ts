@@ -223,10 +223,8 @@ export class AgentDirectoryManager {
     const subscription: AgentDirectoryWatcherSubscription = {
       pattern,
       handleEvent: (event) => {
-        // Normalize path separators for cross-platform compatibility
-        // Windows path.relative() produces backslashes, minimatch expects forward slashes
-        const normalizedPath = this.normalizePath(event.relativePath);
-        if (minimatch(normalizedPath, pattern, { dot: true })) {
+        // relativePath is already normalized to forward slashes in dispatchAgentEvent
+        if (minimatch(event.relativePath, pattern, { dot: true })) {
           options.onEvent(event);
         }
       },
@@ -243,14 +241,6 @@ export class AgentDirectoryManager {
         }
       },
     };
-  }
-
-  /**
-   * Normalize path separators for cross-platform glob matching.
-   * Windows path.relative() produces backslashes, but minimatch expects forward slashes.
-   */
-  private normalizePath(p: string): string {
-    return p.replaceAll('\\', '/');
   }
 
   /**
@@ -348,7 +338,12 @@ export class AgentDirectoryManager {
     type: AgentDirectoryEventType,
     uri: vscode.Uri,
   ): void {
-    const relativePath = path.relative(entry.directory, uri.fsPath);
+    // Normalize to forward slashes for cross-platform consistency.
+    // path.relative() returns backslashes on Windows, but minimatch
+    // and downstream consumers expect forward slashes.
+    const relativePath = path
+      .relative(entry.directory, uri.fsPath)
+      .replaceAll('\\', '/');
     const event: AgentDirectoryWatcherEvent = {
       type,
       uri,
