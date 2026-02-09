@@ -57,13 +57,15 @@ export class ExplorerOperations {
 
   /**
    * Check if a path is within the built-in agents or tool-use directories.
+   * Uses path.sep boundary to avoid false matches with sibling directories
+   * (e.g., "agents" must not match "agents_backup").
    */
   private isBuiltInPath(targetPath: string): boolean {
     return (
       (!!this.builtInAgentsPath &&
-        targetPath.startsWith(this.builtInAgentsPath)) ||
+        targetPath.startsWith(this.builtInAgentsPath + path.sep)) ||
       (!!this.builtInToolUsePath &&
-        targetPath.startsWith(this.builtInToolUsePath))
+        targetPath.startsWith(this.builtInToolUsePath + path.sep))
     );
   }
 
@@ -87,7 +89,8 @@ export class ExplorerOperations {
     if (!this.isBuiltInPath(targetPath)) return targetPath;
 
     const isToolUse =
-      this.builtInToolUsePath && targetPath.startsWith(this.builtInToolUsePath);
+      this.builtInToolUsePath &&
+      targetPath.startsWith(this.builtInToolUsePath + path.sep);
     const base = isToolUse ? this.builtInToolUsePath : this.builtInAgentsPath;
     return path.join(customBase, path.relative(base, targetPath));
   }
