@@ -8,8 +8,9 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createToolUseCycleFlow,
-  type ToolUseCycleShared,
+  createToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
+import { buildCycleServices } from '@agent/core/flows/CycleServices';
 import { bus } from '@eventBus/ProgressEventBus';
 
 import {
@@ -65,39 +66,21 @@ export class ToolUseCycleNode<C> extends Node<
       return { outcome: 'skipped' };
     }
 
-    const cycleShared: ToolUseCycleShared = {
-      messages: prepRes.messages,
-      shouldStop: false,
-      endTurn: false,
-      response: undefined,
-      responseTimeMs: undefined,
-      stopReason: undefined,
-      lastError: undefined,
-      toolCalls: undefined,
-      text: undefined,
-      cycleIndex: prepRes.runState.totalRounds,
-      cycleResponseTimeMs: 0,
-      cycleNormalizedUsage: undefined,
-    };
+    const cycleShared = createToolUseCycleShared(
+      prepRes.messages,
+      prepRes.runState.totalRounds,
+    );
 
     const flow = createToolUseCycleFlow<C>();
-    const clientRef = { current: await modelHandler.getClient() };
-    // Spread outer services (core fields pass through), add/override cycle-specific fields.
-    // onRoundFinalized passes through from the spread (same name in both service levels).
-    flow.setServices({
-      ...this.services,
-      setting: { ...setting, tools: resolvedTools },
-      get client() {
-        return clientRef.current;
-      },
-      run: prepRes.runState,
-      workspace: prepRes.workspaceState,
-      modelName: config.model,
-      agentName: config.agent,
-      async refreshClient() {
-        clientRef.current = await modelHandler.getClient();
-      },
-    });
+    flow.setServices(
+      await buildCycleServices(this.services, {
+        setting: { ...setting, tools: resolvedTools },
+        run: prepRes.runState,
+        workspace: prepRes.workspaceState,
+        modelName: config.model,
+        agentName: config.agent,
+      }),
+    );
 
     prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {
       bus.emit('updateTodos', {
