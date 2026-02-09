@@ -69,6 +69,9 @@ export class ProgressEventHandler {
     bus.on('setTaskState', this.handleSetTaskState, { signal });
     bus.on('addTaskGroup', this.handleAddTaskGroup, { signal });
     bus.on('updateTaskGroup', this.handleUpdateTaskGroup, { signal });
+    bus.on('updateActiveSubagents', this.handleUpdateActiveSubagents, {
+      signal,
+    });
     bus.on('extensionDeactivating', this.markAllRunningTasksAsCancelled, {
       signal,
     });
@@ -246,6 +249,32 @@ export class ProgressEventHandler {
       this.webviewUpdater.updateTaskGroup(data);
     }
   }
+
+  private handleUpdateActiveSubagents = (
+    data: ProgressEventPayloads['updateActiveSubagents'],
+  ): void => {
+    withEventErrorHandling(
+      'ActiveSubagents',
+      'failed to handle updateActiveSubagents',
+      () => {
+        const { parentStreamId, children } = data;
+
+        // Update the parent stream's state with active subagent info
+        this.state.updateStreamState(parentStreamId, (prev) => ({
+          ...prev,
+          activeSubagents: children,
+        }));
+
+        // Push the updated state to the webview
+        if (this.webviewUpdater.isAvailable()) {
+          this.webviewUpdater.updateAll(
+            this.state,
+            StreamStatusService.getAll(),
+          );
+        }
+      },
+    );
+  };
 
   private markAllRunningTasksAsCancelled = (): void => {
     for (const [stream, status] of StreamStatusService.entries()) {

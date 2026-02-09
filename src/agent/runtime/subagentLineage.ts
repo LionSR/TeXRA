@@ -10,6 +10,7 @@
  * reference, Mode C delivers via .then(). Each concern has one owner.
  */
 
+import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas';
 
 interface SubagentEntry {
@@ -18,7 +19,19 @@ interface SubagentEntry {
   childAgentName: string;
 }
 
+/** Summary of an active subagent, suitable for UI display. */
+export interface ActiveSubagentSummary {
+  executionId: string;
+  agentName: string;
+}
+
 const activeSubagents = new Map<string, SubagentEntry>();
+
+/** Emit the current active children list for a parent to the progress UI. */
+function emitActiveSubagentsUpdate(parentStreamId: StreamTabId): void {
+  const children = getActiveChildrenSummary(parentStreamId);
+  bus.emit('updateActiveSubagents', { parentStreamId, children });
+}
 
 /**
  * Register a subagent. Entry auto-removes when the promise settles.
@@ -41,9 +54,16 @@ export function registerSubagent(
     childStreamId,
     childAgentName,
   });
+  emitActiveSubagentsUpdate(parentStreamId);
+
   // .catch suppresses the derived promise's unhandled rejection —
   // the original promise's rejection is handled by the caller.
-  promise.finally(() => activeSubagents.delete(executionId)).catch(() => {});
+  promise
+    .finally(() => {
+      activeSubagents.delete(executionId);
+      emitActiveSubagentsUpdate(parentStreamId);
+    })
+    .catch(() => {});
 }
 
 /** Get all active children for a given orchestrator stream. */
@@ -58,6 +78,25 @@ export function getActiveChildren(
 /** Check if an orchestrator has any active subagents. */
 export function hasActiveChildren(parentStreamId: StreamTabId): boolean {
   return getActiveChildren(parentStreamId).length > 0;
+}
+
+/** Get a specific active subagent entry by execution ID. */
+export function getActiveSubagent(
+  executionId: string,
+): SubagentEntry | undefined {
+  return activeSubagents.get(executionId);
+}
+
+/** Get summary of active children for a parent stream (for UI display and events). */
+export function getActiveChildrenSummary(
+  parentStreamId: StreamTabId,
+): ActiveSubagentSummary[] {
+  return [...activeSubagents.entries()]
+    .filter(([, e]) => e.parentStreamId === parentStreamId)
+    .map(([execId, e]) => ({
+      executionId: execId,
+      agentName: e.childAgentName,
+    }));
 }
 
 /** Check if a stream is itself a subagent (has a parent). */
