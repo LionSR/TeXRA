@@ -239,8 +239,7 @@ export class ProgressApp extends BaseWebviewApp {
         ? this.appState.streamStates.get(activeStreamId)
         : null;
       const streamSwitched =
-        !!previousState &&
-        activeStreamId !== previousState.activeStreamId;
+        !!previousState && activeStreamId !== previousState.activeStreamId;
 
       // Log context: always update when stream data changes (drives LogList)
       const streamDataChanged =
@@ -352,9 +351,7 @@ export class ProgressApp extends BaseWebviewApp {
     );
   }
 
-  private updateLogContext(
-    streamState: StreamState | null | undefined,
-  ): void {
+  private updateLogContext(streamState: StreamState | null | undefined): void {
     const hasStreams = this.cachedFilteredStreams.length > 0;
     const activeStream = this.getActiveStreamInfo();
     const isToolUse = streamState ? isToolUseState(streamState) : false;
