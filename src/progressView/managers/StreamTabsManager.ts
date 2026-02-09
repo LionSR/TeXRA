@@ -85,14 +85,6 @@ export class StreamTabsManager extends PersistentMapManager<
   }
 
   /**
-   * Find a message by ID without copying the entire array.
-   * Returns the message if found, undefined otherwise.
-   */
-  findMessage(stream: StreamTabId, messageId: string): LogMessageData | undefined {
-    return this.items.get(stream)?.find((m) => m.id === messageId);
-  }
-
-  /**
    * Get first timestamp for a stream (for sorting by creation time).
    * More efficient than getMessages() when only timestamp is needed.
    */
@@ -112,27 +104,28 @@ export class StreamTabsManager extends PersistentMapManager<
 
   /**
    * Update an existing message by ID.
-   * Returns true if message was found and updated, false otherwise.
+   * Returns the original message (before update) if found, undefined otherwise.
+   * Callers can use the return value both as a found/not-found check and to
+   * access the pre-update state (e.g. for constructing webview messages).
    *
-   * Note: Uses fire-and-forget persistence (void this.save()) because:
-   * - Callers only need to know if message was found/updated in memory
-   * - The in-memory state is immediately correct for webview updates
-   * - Persistence is background work; failures are logged by base class
+   * Uses fire-and-forget persistence (void this.save()) because the in-memory
+   * state is immediately correct for webview updates.
    */
   updateMessage(
     stream: StreamTabId,
     messageId: string,
     updates: Partial<Omit<LogMessageData, 'id'>>,
-  ): boolean {
+  ): LogMessageData | undefined {
     const messages = this.items.get(stream);
-    if (!messages) return false;
+    if (!messages) return undefined;
 
     const index = messages.findIndex((m) => m.id === messageId);
-    if (index < 0) return false;
+    if (index < 0) return undefined;
 
-    messages[index] = { ...messages[index], ...updates };
+    const original = messages[index];
+    messages[index] = { ...original, ...updates };
     void this.save();
-    return true;
+    return original;
   }
 
   private ensureMessages(stream: StreamTabId): LogMessageData[] {
