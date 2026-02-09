@@ -8,7 +8,6 @@ import {
   getToolUseFlowContext,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { interruptActiveChildren } from '@agent/runtime/subagentLineage';
 import type { StreamTabId } from '@shared/schemas';
 
 export function registerAgentCommands(context: vscode.ExtensionContext): void {
@@ -16,7 +15,6 @@ export function registerAgentCommands(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       'texra.stopAgent',
       (streamId: StreamTabId) => {
-        interruptActiveChildren(streamId);
         getInterruptible(streamId)?.interrupt();
         StreamStatusService.set(streamId, STREAM_STATUS.STOPPED);
       },
