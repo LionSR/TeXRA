@@ -1,5 +1,6 @@
 // Standard library imports
 import { Buffer } from 'node:buffer';
+import * as path from 'path';
 
 // Third-party imports
 import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
@@ -2379,7 +2380,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       try {
         const filename =
           typeof attachment.path === 'string' && attachment.path.length > 0
-            ? (attachment.path.split('/').pop() ?? 'attachment')
+            ? path.basename(attachment.path)
             : 'attachment';
         const mimeType = attachment.mimeType ?? 'application/octet-stream';
 
