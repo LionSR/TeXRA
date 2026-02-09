@@ -20,6 +20,7 @@ import { ProgressViewState } from './state/ProgressViewState';
 import type {
   AgentProposalPermission,
   BashPermission,
+  ModelOptionData,
   OutputFileInfo,
   StorageKey,
   StreamTabId,
@@ -56,7 +57,7 @@ export class ProgressViewProvider
   /** TTL-cached model options to avoid redundant async work for rapid proposals. */
   private static readonly MODEL_OPTIONS_TTL_MS = 30_000;
   private _cachedModelOptions?: {
-    data: import('@shared/schemas').ModelOptionData[];
+    data: ModelOptionData[];
     expiry: number;
   };
 
@@ -193,9 +194,7 @@ export class ProgressViewProvider
     }
   }
 
-  private async getCachedModelOptions(): Promise<
-    import('@shared/schemas').ModelOptionData[]
-  > {
+  private async getCachedModelOptions(): Promise<ModelOptionData[]> {
     const now = Date.now();
     if (this._cachedModelOptions && now < this._cachedModelOptions.expiry) {
       return this._cachedModelOptions.data;
