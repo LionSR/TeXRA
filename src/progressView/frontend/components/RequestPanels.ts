@@ -534,10 +534,10 @@ export class RequestPanels extends LitElement {
               class=${classMap({
                 'workflow-proposal__mode-badge': true,
                 'workflow-proposal__mode-badge--async': data.mode === 'async',
-                'workflow-proposal__mode-badge--sync': data.mode !== 'async',
+                'workflow-proposal__mode-badge--sync': data.mode === 'sync',
               })}
             >
-              ${data.mode === 'async' ? 'async' : 'sync'}
+              ${data.mode}
             </span>
           </div>
           <div class="workflow-proposal__instruction">${data.instruction}</div>
