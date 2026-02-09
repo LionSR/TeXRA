@@ -204,10 +204,23 @@ export class RemoteAgentLoader {
         refresh_token: tokens.refreshToken,
       });
 
-      const { data, error } = await supabase
+      // Query with tools column; fall back without it for pre-migration databases.
+      // PostgREST returns 400 if the column doesn't exist.
+      let { data, error } = await supabase
         .from('remote_agents')
         .select('id, name, description, visibility, tools, agent_category')
         .order('name');
+
+      if (error) {
+        logger.debug(
+          CHANNEL,
+          `Query with tools column failed, retrying without: ${error.message}`,
+        );
+        ({ data, error } = await supabase
+          .from('remote_agents')
+          .select('id, name, description, visibility, agent_category')
+          .order('name'));
+      }
 
       if (error) {
         logger.error(CHANNEL, `Failed to list remote agents: ${error.message}`);
