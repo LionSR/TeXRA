@@ -48,10 +48,16 @@ export class ToolUseFollowUpQueue {
 
   /**
    * Enqueue a follow-up message for a stream.
-   * Auto-creates the queue if it doesn't exist.
+   * Silently discards the message if no queue exists (e.g. orchestrator already disposed).
    */
   static enqueue(streamId: StreamTabId, followUp: string): void {
-    const queue = this.acquire(streamId);
+    const queue = this.queues.get(streamId);
+    if (!queue) {
+      logger.debug(
+        `No active queue for stream ${streamId}, discarding follow-up.`,
+      );
+      return;
+    }
     queue.enqueue(followUp);
     logger.debug(`Queued follow-up for stream ${streamId}.`);
   }
