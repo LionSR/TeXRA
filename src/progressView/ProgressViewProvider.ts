@@ -118,8 +118,10 @@ export class ProgressViewProvider
     this.agentProposalHandler = new ApprovalRequestHandler(
       'proposalId',
       (p) => {
-        u.showAgentProposal(p); // Synchronous — proposal appears immediately
-        void this.sendProposalModelOptions(p); // Progressive enhancement
+        // Show proposal immediately with basic model dropdown (synchronous)
+        u.showAgentProposal(p, buildBasicModelOptionsData());
+        // Then upgrade with availability metadata if possible
+        void this.sendProposalModelOptions(p);
       },
       (id) => u.resolveAgentProposal(id),
       canSend,
