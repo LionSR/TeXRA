@@ -10,6 +10,9 @@ import { z } from 'zod';
 // Local imports - agent
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { getStreamIdForExecution } from '@agent/runtime/executionRegistry';
+import { getActiveSubagent } from '@agent/runtime/subagentLineage';
 
 // Local imports - common
 import { AgentHistoryManager } from '@common/history/AgentHistoryManager';
@@ -59,13 +62,32 @@ export type RunsToolInput = z.infer<typeof RunsToolInputSchema>;
  * - /runs/{id}/files - List generated files
  * - /runs/{id}/files/{path} - Read specific file
  */
+/**
+ * Resolve the runtime status for an execution ID.
+ * Returns the stream status if still active, otherwise 'completed'.
+ */
+function getExecutionStatus(executionId: string): string {
+  // Check execution registry first (covers all executions)
+  const streamId = getStreamIdForExecution(executionId);
+  if (streamId) {
+    return StreamStatusService.get(streamId) ?? 'running';
+  }
+  // Check subagent lineage (covers async subagents whose stream may have settled)
+  const entry = getActiveSubagent(executionId);
+  if (entry) {
+    const childStatus = StreamStatusService.get(entry.childStreamId);
+    return childStatus ?? 'running';
+  }
+  return 'completed';
+}
+
 export class RunsTool extends defineTool({
   name: 'runs',
   description: `View execution history and generated files (read-only).
 
 Paths:
-- /runs - List all past executions
-- /runs/{id} - Execution summary (agent, model, timestamp)
+- /runs - List all past executions (with status: running/completed)
+- /runs/{id} - Execution summary (agent, model, timestamp, status)
 - /runs/{id}/config - Agent configuration JSON (for propose_workflow/propose_agent)
 - /runs/{id}/conversation - Full message history
 - /runs/{id}/files - List generated files
@@ -153,7 +175,8 @@ Use view_range: [start, end] to paginate large outputs.`,
       const model = item.agentConfig.model ?? 'unknown';
       // Format timestamp: extract date and time
       const ts = item.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
-      return `${item.id}  ${ts}  ${agent}  ${model}`;
+      const status = getExecutionStatus(item.id);
+      return `${item.id}  ${ts}  ${agent}  ${model}  [${status}]`;
     });
 
     return {
@@ -175,17 +198,20 @@ Use view_range: [start, end] to paginate large outputs.`,
       if (!flow) {
         throw new ToolError(`Execution not found: ${executionId}`);
       }
+      const status = getExecutionStatus(executionId);
       return {
-        output: `Execution: ${executionId}\n(No metadata available - use /runs/${executionId}/conversation to view messages)`,
+        output: `Execution: ${executionId}\nStatus: ${status}\n(No metadata available - use /runs/${executionId}/conversation to view messages)`,
       };
     }
 
     const config = historyItem.agentConfig;
+    const status = getExecutionStatus(executionId);
     const lines = [
       `Execution: ${executionId}`,
       `Agent: ${config.agent}`,
       `Model: ${config.model ?? 'default'}`,
       `Timestamp: ${historyItem.timestamp}`,
+      `Status: ${status}`,
     ];
 
     lines.push('');
