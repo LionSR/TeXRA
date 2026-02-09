@@ -16,6 +16,7 @@ import {
   codiconIconClasses,
   commonViewStyles,
   designTokens,
+  proposalModeBadgeStyles,
   requestPanelStyles,
   selectStyles,
 } from '@shared/styles';
@@ -118,6 +119,7 @@ export class RequestPanels extends LitElement {
     codiconIconClasses,
     codeBlockStyles,
     requestPanelStyles,
+    proposalModeBadgeStyles,
     selectStyles,
   ];
 
@@ -530,9 +532,15 @@ export class RequestPanels extends LitElement {
               : html`<span class="workflow-proposal__model"
                   >${data.model}</span
                 >`}
-            ${data.mode === 'async'
-              ? html`<span class="workflow-proposal__mode-badge">async</span>`
-              : nothing}
+            <span
+              class=${classMap({
+                'proposal-mode-badge': true,
+                'proposal-mode-badge--async': data.mode === 'async',
+                'proposal-mode-badge--sync': data.mode === 'sync',
+              })}
+            >
+              ${data.mode}
+            </span>
           </div>
           <div class="workflow-proposal__instruction">${data.instruction}</div>
           ${isWorkflow
