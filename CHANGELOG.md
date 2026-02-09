@@ -2,47 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.35.10] - 2026-02-09
-
-### Features
-
-- Added **Agents tab** to Settings View with split-panel agent browser, keyboard navigation, and folder open buttons.
-- Added **model dropdown** to agent proposal UI in progress view.
-- Added **sync/async mode badges** on agent proposals with setup button in log entry banner.
-- Added **manual compact response button** for tool-use agents.
-- Added **memory tool UI** in progress view with specialized display for memory operations.
-- Context-aware **"New Agent" button** that creates matching agent type (workflow or tool-use).
-- Agent and model buttons in main view now **open settings view tabs** directly.
-- **Migrated agent settings** from VS Code config to state managers in Settings View.
-- Added **remote agent tool persistence** across sessions with orchestrator visibility.
-- Added **reference YAML files** for presenter, search, and simplifier agents.
-- Added **execution status** to runs tool and orchestrator badge in UI.
-- Implemented **subagent output capture** for tool-use agents.
-- Added **reject-with-feedback** to bash command approval prompts.
-- Added **timeout display** next to elapsed timer for bash tool.
-- Added **proactive relay token refresh** before each model invocation for improved session continuity.
-
-### Bug Fixes
-
-- Fixed **context window overflow** from accumulated reasoning tokens in response chaining.
-- Fixed **Windows path compatibility** issues (backslash-to-slash normalization, path separator boundary checks).
-- Fixed **path traversal** vulnerability via backslash-to-slash conversion in locatePath.
-- Fixed **ghost proposal race** between async model options load and proposal resolution.
-- Fixed **Lean 4 syntax highlighting** using third-party highlightjs-lean.
-- Fixed **agent creator prompts** for robust YAML generation with Nunjucks templating.
-- Fixed **stream tab delete button** clipped at narrow panel widths.
-- Fixed **background mode retries** for tool-use cycle.
-- Fixed **bash tool timeout** not killing entire process group for shell commands.
-- Fixed Anthropic **cache invalidation** from userInstruction and thinking budget changes.
-
-### Improvements
-
-- Major **agent execution lifecycle refactoring** reducing abstraction overhead (~223 net lines removed).
-- Consolidated **model invocation nodes** (merged ResponseModelInvocationNode and ToolUseCallNode into ModelInvocationNode).
-- Optimized **progress view Lit components** to reduce unnecessary re-renders.
-- Consolidated **path resolution** into WorkspaceFS.locatePath() and WorkspaceFS.relativePath().
-- Updated dependencies to latest versions.
-
 ## [0.35.9] - 2026-02-06
 
 ### Features
