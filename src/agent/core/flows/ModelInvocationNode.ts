@@ -1,12 +1,3 @@
-/**
- * Unified model invocation node for both response and tool-use cycles.
- *
- * Parameterized by a config object that controls streaming mode, system prompt
- * extraction, end tag extraction, response storage, and debug save behavior.
- *
- * Replaces the near-identical ResponseModelInvocationNode and ToolUseCallNode.
- */
-
 import type { NonIterableObject } from '@agent/node';
 import type { AgentSetting } from '@agent/core/AgentDataclass';
 import {
@@ -28,41 +19,18 @@ import {
   handleInvocationResult,
 } from './RetryState';
 
-// ---------------------------------------------------------------------------
-// Config
-// ---------------------------------------------------------------------------
-
-/** Configuration for a ModelInvocationNode instance. */
 export interface ModelInvocationConfig<TShared, TServices> {
-  /** Operation name for logs and retry prompts (e.g., 'Model invocation', 'Tool-use call'). */
   operationName: string;
-
-  /** Whether to enable output streaming on the model handler. */
   streaming: boolean;
-
-  /** Extract system prompt from shared state. Omit for no system prompt. */
   getSystemPrompt?: (shared: TShared) => string | undefined;
-
-  /** Extract end tag from services. Omit for no end tag. */
   getEndTag?: (services: TServices) => string | undefined;
-
-  /** Get tools to pass to createResponse. Defaults to `services.setting.tools`. */
   getTools?: (services: TServices) => ToolDefinition[] | undefined;
-
-  /** Store the model response and timing on shared state. */
   storeResponse: (
     shared: TShared,
     response: unknown,
     responseTimeMs: number | undefined,
   ) => void;
-
-  /** Check if background mode is active (enables minimum retry count). Defaults to false. */
   isBackgroundModeActive?: (services: TServices) => boolean;
-
-  /**
-   * Get debug save options for maybeSaveDebugObject in post().
-   * Omit to skip debug save entirely.
-   */
   getDebugSaveOptions?: (
     shared: TShared,
     services: TServices,
@@ -76,11 +44,6 @@ export interface ModelInvocationConfig<TShared, TServices> {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Minimum service constraint
-// ---------------------------------------------------------------------------
-
-/** Minimum services required by ModelInvocationNode's own implementation. */
 export interface ModelInvocationServices {
   readonly modelHandler: IModelHandler<any, any, any, any, any>;
   readonly client: unknown;
@@ -92,36 +55,10 @@ export interface ModelInvocationServices {
   readonly refreshClient?: () => Promise<void>;
 }
 
-// ---------------------------------------------------------------------------
-// Prep result
-// ---------------------------------------------------------------------------
-
-/** Data extracted by prep() for model invocation. */
 interface ModelInvocationPrepResult extends BaseInvocationPrepResult {
   systemPrompt?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Node
-// ---------------------------------------------------------------------------
-
-/**
- * Unified model invocation node with retry support.
- *
- * Handles both response-cycle and tool-use-cycle invocations via config:
- * - Response cycle: streaming=false, passes systemPrompt + endTag
- * - Tool-use cycle: streaming=true, no systemPrompt/endTag
- *
- * Extends RetryableInvocationNode for shared retry logic:
- * - maxRetries and wait configured from user settings
- * - exec() throws on error, Node retries automatically
- * - retryPrompt() shows UI when auto-retries exhausted (if error is retryable)
- * - execFallback() called only when user cancels or error is non-retryable
- *
- * Flow transitions:
- * - default: Continue to next node on success
- * - COMPLETE: All retries exhausted, non-retryable error, or user cancelled
- */
 export class ModelInvocationNode<
   TShared extends BaseCycleFields,
   TParams extends NonIterableObject = NonIterableObject,
