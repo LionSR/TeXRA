@@ -1,13 +1,16 @@
--- Migration: Add presenter and search as remote tool-use agents,
+-- Migration: Add presenter, search, and simplifier as remote tool-use agents,
 -- and sync descriptions/tools for existing remote agents.
 --
 -- Prerequisites:
 -- 1. Upload the YAML files to Supabase Storage:
---    - Copy from: resources/tool_use_agents/presenter.yaml
+--    - Copy from: reference-agents/presenter.yaml
 --    - Upload to: Storage > agent-configs > tool_use/presenter.yaml
 --
---    - Copy from: resources/tool_use_agents/search.yaml
+--    - Copy from: reference-agents/search.yaml
 --    - Upload to: Storage > agent-configs > tool_use/search.yaml
+--
+--    - Copy from: reference-agents/simplifier.yaml
+--    - Upload to: Storage > agent-configs > tool_use/simplifier.yaml
 --
 -- Then run this SQL in Supabase SQL Editor:
 
@@ -40,6 +43,16 @@ VALUES (
   ARRAY['researcher'],
   'toolUse',
   ARRAY['bash', 'read_file', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'extract_tikz_figures', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source', 'crossref_search', 'crossref_doi', 'zotero_add', 'zotero_search', 'zotero_export', 'web_search', 'web_fetch']
+);
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'simplifier',
+  'Simplifies scientific code and LaTeX for clarity and maintainability while preserving all functionality.',
+  'tool_use/simplifier.yaml',
+  ARRAY['researcher'],
+  'toolUse',
+  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'diagnostics', 'extract_figures', 'extract_tikz_figures', 'memory']
 );
 
 -- =============================================================================
