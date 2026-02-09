@@ -373,18 +373,6 @@ export const requestPanelStyles: CSSResult = css`
     max-width: 12rem;
   }
 
-  .workflow-proposal__mode-badge {
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 2px 6px;
-    border-radius: var(--border-radius);
-    white-space: nowrap;
-    background: var(--vscode-editorWarning-foreground);
-    color: var(--vscode-editor-background);
-  }
-
   .workflow-proposal__instruction {
     font-size: var(--font-size-sm);
     color: var(--vscode-editor-foreground);
