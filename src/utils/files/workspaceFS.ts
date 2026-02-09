@@ -24,12 +24,18 @@ export class WorkspaceFS extends RelativeFS {
    * Convert an absolute path to a workspace-relative path.
    * Uses VS Code's asRelativePath which properly handles symlinks.
    * Returns the original path if no workspace is open.
+   *
+   * Always returns forward slashes for cross-platform consistency.
+   * On Windows, vscode.workspace.asRelativePath() returns backslashes;
+   * normalizing here ensures all downstream consumers get a consistent format.
    */
   public static relativePath(filePath: string): string {
     if (!this.getPath()) {
       return filePath;
     }
-    return vscode.workspace.asRelativePath(filePath, false);
+    return vscode.workspace
+      .asRelativePath(filePath, false)
+      .replaceAll('\\', '/');
   }
 
   /**
