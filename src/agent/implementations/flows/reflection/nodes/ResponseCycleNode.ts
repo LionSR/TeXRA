@@ -1,21 +1,19 @@
 /**
- * ResponseCycleNode - Runs a response cycle flow with native nesting.
+ * ResponseCycleNode - Runs a response cycle flow with separate cycle state.
  *
- * ## Native Nesting Architecture
+ * ## Separate State Architecture
  *
- * Instead of creating a separate shared state for the cycle flow, this node
- * runs the cycle directly on ReflectionFlowShared. This eliminates the
- * translation layer between inner/outer shared types.
+ * Creates a dedicated ResponseCycleShared object for the cycle flow, keeping
+ * cycle-internal fields off the outer ReflectionFlowShared. Results needed by
+ * downstream nodes (endTurn, outputLocation) are propagated in post().
  *
- * The cycle flow modifies ReflectionFlowShared's cycle fields directly:
- * - messages, shouldStop, endTurn, outputExists, outputLocation
- * - responseTimeMs, stopReason, systemPrompt, debug, responseObject, processedResponse
- * - lastError
+ * This matches the pattern used by ToolUseCycleNode: construct cycle state,
+ * run flow, interpret completion, sync results back.
  *
  * ## PocketFlow pattern:
- * - prep(): Reconstruct state slices, populate cycle fields on shared
- * - exec(): Run ResponseCycleFlow directly on shared (native nesting)
- * - post(): Update snapshots from slices (cycle results already in shared)
+ * - prep(): Reconstruct state slices from snapshots
+ * - exec(): Create cycle state, run ResponseCycleFlow on it
+ * - post(): Propagate results to shared for downstream nodes
  *
  * Services accessed via native `this.services`:
  * - modelHandler, logger, setting, prompt, config, context, etc.
@@ -27,7 +25,7 @@ import { recordRound } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createResponseCycleFlow,
-  initializeCycleFields,
+  type ResponseCycleShared,
 } from '@agent/core/flows/ResponseCycleFlow';
 import type {
   AgentRunStateSnapshot,
@@ -46,8 +44,7 @@ import type {
 // ============================================================================
 
 /**
- * Prep result carries shared reference and reconstructed state slices.
- * - shared: Reference for native nesting (cycle runs directly on it)
+ * Prep result carries reconstructed state slices.
  * - State slices (run, round, workspace): Reconstructed from snapshots, modified by cycle
  * - outputLocation: Computed once per round
  */
@@ -61,11 +58,9 @@ interface CyclePrepInput {
 
 /**
  * Cycle outcome — single discriminated union that maps 1:1 to post() actions.
- * Replaces the prior chain: shared flags → interpretCycleCompletion() → CycleCompletionResult
- * → CycleExecResult wrapping → post() re-destructuring.
  */
 type CycleOutcome =
-  | { outcome: 'completed' }
+  | { outcome: 'completed'; endTurn: boolean }
   | { outcome: 'cancelled' }
   | { outcome: 'failed'; error: Error };
 
@@ -80,7 +75,6 @@ export class ResponseCycleNode<C = unknown> extends Node<
 > {
   /**
    * Reconstruct state slices and prepare for cycle execution.
-   * Also stores shared reference for native nesting in exec().
    */
   async prep(shared: ReflectionFlowShared): Promise<CyclePrepInput> {
     const { context } = shared;
@@ -109,11 +103,11 @@ export class ResponseCycleNode<C = unknown> extends Node<
   }
 
   /**
-   * Execute response cycle with native nesting.
+   * Execute response cycle on a separate cycle state object.
    *
-   * Runs ResponseCycleFlow directly on the outer shared state
-   * (ReflectionFlowShared), eliminating the translation layer.
-   * Cycle results are written directly to shared's cycle fields.
+   * Creates a ResponseCycleShared, runs the cycle flow on it,
+   * and returns the interpreted result. Cycle-internal fields
+   * stay on the cycle object — only endTurn propagates to shared via post().
    */
   async exec(prepRes: CyclePrepInput): Promise<CycleOutcome> {
     const { shared } = prepRes;
@@ -132,21 +126,26 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
     // If prefill already completes the response, mark as completed
     if (prefillEndsTurn) {
-      shared.endTurn = true;
-      shared.messages = initializedMessages;
-      shared.outputLocation = prepRes.outputLocation;
-      return { outcome: 'completed' };
+      return { outcome: 'completed', endTurn: true };
     }
 
     try {
-      // Initialize all cycle fields in one call (replaces 11 individual assignments + assertion)
-      initializeCycleFields(
-        shared,
-        initializedMessages,
-        prepRes.outputLocation,
-      );
+      // Create separate cycle state (cycle-internal fields stay here)
+      const cycleShared: ResponseCycleShared = {
+        messages: initializedMessages,
+        outputLocation: prepRes.outputLocation,
+        endTurn: false,
+        shouldStop: false,
+        outputExists: false,
+        systemPrompt: undefined,
+        responseObject: undefined,
+        responseTimeMs: undefined,
+        stopReason: undefined,
+        processedResponse: undefined,
+        lastError: undefined,
+      };
 
-      // Create and run the flow directly on shared (native nesting)
+      // Create and run the flow on the separate cycle state
       const flow = createResponseCycleFlow<C>();
       const { modelHandler } = this.services;
       const clientRef = { current: await modelHandler.getClient() };
@@ -164,19 +163,23 @@ export class ResponseCycleNode<C = unknown> extends Node<
           clientRef.current = await modelHandler.getClient();
         },
       });
-      await flow.run(shared);
+      await flow.run(cycleShared);
 
-      // Determine outcome directly from shared state flags (single interpretation)
-      if (shared.shouldStop && shared.lastError) {
+      // Determine outcome from cycle state (single interpretation)
+      if (cycleShared.shouldStop && cycleShared.lastError) {
         return {
           outcome: 'failed',
-          error: new Error(shared.lastError.message),
+          error: new Error(cycleShared.lastError.message),
         };
       }
-      if (shared.shouldStop && !shared.lastError && !shared.endTurn) {
+      if (
+        cycleShared.shouldStop &&
+        !cycleShared.lastError &&
+        !cycleShared.endTurn
+      ) {
         return { outcome: 'cancelled' };
       }
-      return { outcome: 'completed' };
+      return { outcome: 'completed', endTurn: cycleShared.endTurn };
     } catch (error) {
       // Error path: finalize round on unexpected errors
       recordRound(prepRes.run, prepRes.round);
@@ -198,10 +201,10 @@ export class ResponseCycleNode<C = unknown> extends Node<
   }
 
   /**
-   * Update snapshots and handle cycle outcome.
+   * Propagate cycle results to shared and update snapshots.
    *
-   * With native nesting, cycle results are already in shared's cycle fields.
-   * CycleOutcome maps 1:1 to actions — no re-interpretation needed.
+   * Sets fields needed by downstream nodes (OutputNode reads endTurn,
+   * outputLocation) and persisted state (lastError for resume).
    */
   async post(
     shared: ReflectionFlowShared,
@@ -210,11 +213,17 @@ export class ResponseCycleNode<C = unknown> extends Node<
   ): Promise<string | undefined> {
     const { logger } = this.services;
 
+    // Set output location for downstream nodes (OutputNode reads it)
+    shared.outputLocation = prepRes.outputLocation;
+
     if (execRes.outcome === 'failed') {
       logger.error(`Response cycle failed: ${execRes.error.message}`);
       shared.lastError = { message: execRes.error.message, retryable: false };
       throw execRes.error;
     }
+
+    // Propagate endTurn for downstream nodes (OutputNode reads it)
+    shared.endTurn = execRes.outcome === 'completed' ? execRes.endTurn : false;
 
     if (execRes.outcome === 'cancelled') {
       logger.debug('Response cycle cancelled by user');
@@ -227,6 +236,10 @@ export class ResponseCycleNode<C = unknown> extends Node<
     shared.lastError = undefined;
     shared.runStateSnapshot = prepRes.run;
     shared.workspaceSnapshot = prepRes.workspace.toSnapshot();
+
+    // Sync conversation state — initializeOutputAndPrefill returns the same
+    // array reference, so in-place modifications by the cycle flow (compaction,
+    // continuation prompts) are visible through context.messages.
     shared.conversation = shared.context!.messages;
     shared.roundStateSnapshots.push(shared.context!.stateRoundSnapshot);
 
