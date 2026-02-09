@@ -1,5 +1,4 @@
 import type { NonIterableObject } from '@agent/node';
-import type { AgentSetting } from '@agent/core/AgentDataclass';
 import {
   type BaseInvocationPrepResult,
   type BaseInvocationSuccessData,
@@ -7,9 +6,8 @@ import {
   getDebugContext,
   replaceMessagesInPlace,
 } from '@agent/core/flows/CommonCycleTypes';
-import type { IModelHandler } from '@agent/modelHandlers/types/IModelHandler';
+import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
-import type { AgentLogger } from '@logger/AgentLogger';
 import type { ToolDefinition } from '@model';
 
 import { FlowTransition } from './FlowTransitions';
@@ -39,21 +37,15 @@ export interface ModelInvocationConfig<TShared, TServices> {
   };
 }
 
-export interface ModelInvocationServices {
-  readonly modelHandler: IModelHandler<any, any, any, any, any>;
+type InvocationServices = BaseFlowContextInit<any> & {
   readonly client: unknown;
-  readonly setting: AgentSetting;
-  readonly logger: AgentLogger;
-  readonly streamId: string;
-  readonly executionId: string;
-  readonly setAbortController: (ctrl: AbortController | null) => void;
   readonly refreshClient?: () => Promise<void>;
-}
+};
 
 export class ModelInvocationNode<
   TShared extends BaseCycleFields,
   TParams extends NonIterableObject = NonIterableObject,
-  TServices extends ModelInvocationServices = ModelInvocationServices,
+  TServices extends InvocationServices = InvocationServices,
 > extends RetryableInvocationNode<TShared, TParams, TServices> {
   private readonly _config: ModelInvocationConfig<TShared, TServices>;
 
@@ -71,9 +63,7 @@ export class ModelInvocationNode<
     return this.services.modelHandler.isBackgroundModeActive();
   }
 
-  async prep(
-    shared: TShared,
-  ): Promise<BaseInvocationPrepResult & { systemPrompt?: string }> {
+  async prep(shared: TShared): Promise<BaseInvocationPrepResult> {
     return {
       shouldStop: shared.shouldStop,
       messages: shared.messages,
@@ -82,7 +72,7 @@ export class ModelInvocationNode<
   }
 
   async exec(
-    prepRes: BaseInvocationPrepResult & { systemPrompt?: string },
+    prepRes: BaseInvocationPrepResult,
   ): Promise<InvocationResult<BaseInvocationSuccessData>> {
     if (prepRes.shouldStop) {
       return { kind: 'skipped' };
