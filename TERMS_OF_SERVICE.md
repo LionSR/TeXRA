@@ -34,8 +34,8 @@ We reserve all rights not expressly granted in these Terms.
 
 ## 5. User Accounts and API Keys
 
-- **API Keys**: Certain features require you to provide your own API keys for third-party AI providers. You are solely responsible for obtaining, maintaining, and securing your API keys. API keys are stored locally using VS Code's built-in Secret Storage and are never transmitted to TeXRA servers.
-- **Researcher Access Program**: TeXRA may offer access programs that provide limited access to AI models without requiring personal API keys. Participation in such programs may be subject to additional terms and may be modified or discontinued at any time.
+- **API Keys**: Certain features require you to provide your own API keys for third-party AI providers. You are solely responsible for obtaining, maintaining, and securing your API keys. API keys are stored locally using VS Code's built-in Secret Storage and are never transmitted to TeXRA servers. See Section 9 for details on how data is handled in this mode.
+- **Researcher Access Program**: TeXRA may offer access programs that provide limited access to AI models without requiring personal API keys. When using this program, requests are routed through a TeXRA-operated relay server (see Section 9 for details). Participation is limited to personal research and academic use, is subject to fair-use limits, and may be modified or discontinued at any time.
 
 ## 6. Acceptable Use
 
@@ -61,17 +61,18 @@ If you provide suggestions, ideas, enhancement requests, or other feedback regar
 
 ## 9. Privacy and Data Handling
 
-- **Local Processing**: API calls to AI providers are made directly from your local VS Code instance. Your document content and API keys are not sent to or stored on TeXRA servers.
-- **Third-Party Providers**: When using third-party AI models, your content is transmitted to the respective provider's API endpoints. You are responsible for reviewing and accepting the privacy policies and terms of service of your chosen AI provider(s).
-- **Telemetry**: The Extension may collect anonymized usage telemetry (such as feature usage and error reports) to improve the product. You can opt out of telemetry through VS Code's standard telemetry settings.
+- **Personal API Keys (Local Processing)**: When you use your own API keys, all calls to AI providers are made directly from your local VS Code instance to the provider's endpoints. In this mode, your document content is not sent to or routed through TeXRA servers. Your API keys are stored locally using VS Code's built-in Secret Storage and are never transmitted to us.
+- **Researcher Access Program (Relay Processing)**: When you use the Researcher Access Program (server-side keys), your requests are routed through a TeXRA-operated relay server (`remote.texra.ai`) before being forwarded to the AI provider. In this mode, your document content temporarily passes through our relay infrastructure in order to authenticate the request. We do not permanently store Your Content on the relay, but you should be aware that it transits our servers.
+- **Third-Party Providers**: In both modes, your content is ultimately transmitted to the respective AI provider's API endpoints. You are responsible for reviewing and accepting the privacy policies and terms of service of your chosen AI provider(s).
+- **Telemetry**: The Extension collects anonymized usage metadata — such as model name, token counts, estimated cost, and response time — to monitor service health and improve the product. Telemetry does not include Your Content. You can opt out of telemetry through VS Code's standard telemetry settings.
 
 ## 10. AI and Machine Learning
 
 - **No Model Training on Your Content**: We do not use Your Content to train, fine-tune, or improve any machine learning models. Your Content is processed solely to provide you with the requested AI-assisted features.
 - **Third-Party AI Providers**: Each AI provider has its own data usage policies. Some providers may use API inputs for model improvement unless you opt out. We strongly recommend reviewing the data policies of your chosen provider(s):
-  - [Anthropic Usage Policy](https://www.anthropic.com/policies)
-  - [OpenAI Usage Policies](https://openai.com/policies)
-  - [Google AI Terms](https://ai.google.dev/terms)
+  - [Anthropic Acceptable Use Policy](https://www.anthropic.com/legal/aup)
+  - [OpenAI Usage Policies](https://openai.com/policies/usage-policies)
+  - [Google Gemini API Terms of Service](https://ai.google.dev/gemini-api/terms)
 - **AI Output Disclaimer**: AI-generated content may contain errors, inaccuracies, hallucinations, or biases. You are solely responsible for reviewing, verifying, and validating all AI-generated outputs before use in research, publications, or any other context. AI outputs do not constitute professional, academic, legal, or any other form of advice.
 
 ## 11. Third-Party Services
