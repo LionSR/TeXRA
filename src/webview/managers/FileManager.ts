@@ -3,7 +3,6 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { workspace } from 'vscode';
 
-import { normalizeFilePath } from '@shared/utils/path';
 import { getAgent } from '@agent/index';
 import {
   ExtensionCategory,
@@ -509,7 +508,7 @@ export class FileManager extends BaseWebviewManager {
     const relevantFiles = [
       ...new Set(
         fileUris.map((uri) =>
-          normalizeFilePath(workspace.asRelativePath(uri.fsPath, false)),
+          WorkspaceFS.relativePath(uri.fsPath),
         ),
       ),
     ];
