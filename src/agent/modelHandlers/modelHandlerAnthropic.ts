@@ -1058,13 +1058,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * Validates that the total number of PDF pages across all messages does not
    * exceed the Anthropic API limit. Throws a user-friendly error when the
    * limit is reached, avoiding the raw HTTP 400 from the API.
+   *
+   * Only messages at or after the last compaction block are counted, because
+   * the Anthropic API drops pre-compaction messages server-side.
    */
   private async validatePdfPageLimit(
     messages: MessageParam[],
   ): Promise<void> {
+    const startIndex = this.findLastCompactionMessageIndex(messages);
     let totalPages = 0;
 
-    for (const message of messages) {
+    for (let i = startIndex; i < messages.length; i++) {
+      const message = messages[i];
       const contentBlocks = message.content;
       if (!Array.isArray(contentBlocks)) {
         continue;
@@ -1107,6 +1112,29 @@ export class ModelHandlerAnthropic extends ModelHandler<
         }
       }
     }
+  }
+
+  /**
+   * Finds the index of the last message containing a compaction block.
+   * After server-side compaction, the API drops all messages before the
+   * compaction block, so only messages from this index onwards are relevant
+   * for limit validation.
+   *
+   * Returns 0 when no compaction block is found (count all messages).
+   */
+  private findLastCompactionMessageIndex(messages: MessageParam[]): number {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const contentBlocks = messages[i].content;
+      if (!Array.isArray(contentBlocks)) {
+        continue;
+      }
+      for (const block of contentBlocks) {
+        if ((block as { type: string }).type === 'compaction') {
+          return i;
+        }
+      }
+    }
+    return 0;
   }
 
   private async uploadToolAttachments(
