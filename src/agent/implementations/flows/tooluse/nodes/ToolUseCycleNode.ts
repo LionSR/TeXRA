@@ -10,18 +10,27 @@ import {
   createToolUseCycleFlow,
   type ToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
-import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
-import { type ToolUseCycleServices } from '@agent/core/flows/CycleServices';
 import { bus } from '@eventBus/ProgressEventBus';
 
 import {
   type ToolUseRunShared,
   type CyclePrepResult,
-  type CycleExecResult,
   assertPreparedShared,
 } from './types';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
 import type { TodoItem } from '@shared/schemas';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+
+/**
+ * Cycle outcome — single discriminated union that maps 1:1 to post() actions.
+ * Eliminates the prior chain: shared flags → interpretCycleCompletion() →
+ * InvocationResult mapping → post() switch.
+ */
+type ToolUseCycleOutcome =
+  | { outcome: 'completed'; messages: ProviderMessage[] }
+  | { outcome: 'skipped' }
+  | { outcome: 'cancelled' }
+  | { outcome: 'failed'; message: string };
 
 export class ToolUseCycleNode<C> extends Node<
   ToolUseRunShared,
@@ -33,7 +42,7 @@ export class ToolUseCycleNode<C> extends Node<
 
     return {
       shouldSkip: shared.shouldSkipCycle,
-      conversation: shared.conversation,
+      messages: shared.messages,
       runState: shared.stateSlices.runStateSnapshot,
       workspaceState: AgentWorkspaceState.fromSnapshot(
         shared.stateSlices.workspaceSnapshot,
@@ -42,15 +51,9 @@ export class ToolUseCycleNode<C> extends Node<
     };
   }
 
-  async exec(prepRes: CyclePrepResult): Promise<CycleExecResult> {
-    const {
-      streamId,
-      setting,
-      resolvedTools,
-      modelHandler,
-      getUsageRecorder,
-      config,
-    } = this.services;
+  async exec(prepRes: CyclePrepResult): Promise<ToolUseCycleOutcome> {
+    const { streamId, setting, resolvedTools, modelHandler, config } =
+      this.services;
 
     if (prepRes.shouldSkip) {
       if (prepRes.workspaceState.todos.todos.length > 0) {
@@ -59,11 +62,11 @@ export class ToolUseCycleNode<C> extends Node<
           todos: prepRes.workspaceState.todos.todos,
         });
       }
-      return { kind: 'skipped' };
+      return { outcome: 'skipped' };
     }
 
     const cycleShared: ToolUseCycleShared = {
-      messages: prepRes.conversation,
+      messages: prepRes.messages,
       shouldStop: false,
       endTurn: false,
       response: undefined,
@@ -79,34 +82,22 @@ export class ToolUseCycleNode<C> extends Node<
 
     const flow = createToolUseCycleFlow<C>();
     const clientRef = { current: await modelHandler.getClient() };
-    const flowServices: ToolUseCycleServices<C> & {
-      refreshClient: () => Promise<void>;
-    } = {
-      modelHandler,
+    // Spread outer services (core fields pass through), add/override cycle-specific fields.
+    // onRoundFinalized passes through from the spread (same name in both service levels).
+    flow.setServices({
+      ...this.services,
       setting: { ...setting, tools: resolvedTools },
-      prompt: this.services.prompt,
-      logger: this.services.logger,
-      streamId,
-      executionId: this.services.executionId,
-      userVarChannels: this.services.userVarChannels,
-      checkInterruption: this.services.checkInterruption,
-      setAbortController: this.services.setAbortController,
-      toolRegistry: this.services.toolRegistry,
-      session: this.services.session,
-      onFollowUpConsumed: this.services.onFollowUpConsumed,
       get client() {
         return clientRef.current;
       },
       run: prepRes.runState,
       workspace: prepRes.workspaceState,
-      onRoundFinalized: getUsageRecorder(),
       modelName: config.model,
       agentName: config.agent,
       async refreshClient() {
         clientRef.current = await modelHandler.getClient();
       },
-    };
-    flow.setServices(flowServices);
+    });
 
     prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {
       bus.emit('updateTodos', {
@@ -118,17 +109,21 @@ export class ToolUseCycleNode<C> extends Node<
     try {
       await flow.run(cycleShared);
 
-      const completion = interpretCycleCompletion(cycleShared);
-      if (completion.failedWithError) {
+      // Determine outcome directly from shared state flags (single interpretation)
+      if (cycleShared.shouldStop && cycleShared.lastError) {
         return {
-          kind: 'failed',
-          message: completion.errorMessage ?? 'Cycle failed',
+          outcome: 'failed',
+          message: cycleShared.lastError.message ?? 'Cycle failed',
         };
       }
-      if (completion.userCancelled) {
-        return { kind: 'cancelled' };
+      if (
+        cycleShared.shouldStop &&
+        !cycleShared.lastError &&
+        !cycleShared.endTurn
+      ) {
+        return { outcome: 'cancelled' };
       }
-      return { kind: 'success', messages: cycleShared.messages };
+      return { outcome: 'completed', messages: cycleShared.messages };
     } finally {
       prepRes.workspaceState.todos.clearOnUpdate();
     }
@@ -137,14 +132,14 @@ export class ToolUseCycleNode<C> extends Node<
   async execFallback(
     _prepRes: CyclePrepResult,
     error: Error,
-  ): Promise<CycleExecResult> {
-    return { kind: 'failed', message: error.message };
+  ): Promise<ToolUseCycleOutcome> {
+    return { outcome: 'failed', message: error.message };
   }
 
   async post(
     shared: ToolUseRunShared,
     prepRes: CyclePrepResult,
-    execRes: CycleExecResult,
+    execRes: ToolUseCycleOutcome,
   ): Promise<string | undefined> {
     if (prepRes.shouldSkip) {
       shared.shouldSkipCycle = false;
@@ -156,9 +151,9 @@ export class ToolUseCycleNode<C> extends Node<
       userChannels: prepRes.userChannels,
     };
 
-    switch (execRes.kind) {
-      case 'success':
-        shared.conversation = execRes.messages;
+    switch (execRes.outcome) {
+      case 'completed':
+        shared.messages = execRes.messages;
         return FlowTransition.DEFAULT;
 
       case 'skipped':

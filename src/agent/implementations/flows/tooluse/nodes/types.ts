@@ -9,7 +9,6 @@ import type {
   AgentWorkspaceSnapshot,
 } from '@agent/core/AgentWorkspaceState';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
-import type { InvocationResult } from '@agent/core/flows/RetryState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 export interface StateSlicesSnapshot {
@@ -20,7 +19,7 @@ export interface StateSlicesSnapshot {
 
 /** Runtime shared state for tool-use flows (flat structure for PersistedFlow). */
 export interface ToolUseRunShared {
-  conversation: ProviderMessage[];
+  messages: ProviderMessage[];
   shouldSkipCycle: boolean;
   stateSlices: StateSlicesSnapshot | null;
   userCancelledRetry?: boolean;
@@ -38,9 +37,6 @@ export interface PrepareResult extends NodeResultStateBase {
   shouldSkipCycle: boolean;
 }
 
-/** Result from ToolUseCycleNode exec phase. */
-export type CycleExecResult = InvocationResult<{ messages: ProviderMessage[] }>;
-
 /** Result from ToolUseWaitNode exec phase. */
 export type WaitExecResult =
   | { kind: 'continue'; followUp: string }
@@ -48,7 +44,7 @@ export type WaitExecResult =
 
 /** Result from ToolUseCycleNode prep phase. */
 export interface CyclePrepResult extends NodeResultStateBase {
-  conversation: ProviderMessage[];
+  messages: ProviderMessage[];
   shouldSkip: boolean;
 }
 
@@ -64,28 +60,57 @@ export function assertPreparedShared(
   }
 }
 
-/** Lightweight schema for detecting shared state format. */
-const ConversationSchema = z.looseObject({
+/** Lightweight schema for detecting shared state format (handles both field names). */
+const MessagesSchema = z.looseObject({
+  messages: z.array(z.unknown()),
+});
+const LegacyConversationSchema = z.looseObject({
   conversation: z.array(z.unknown()),
 });
 
 /**
- * Migrate legacy shared state (nested `{ state: {...} }`) to flat format.
+ * Migrate legacy shared state formats to current ToolUseRunShared:
+ * 1. Nested `{ state: {...} }` → flat format
+ * 2. Legacy `conversation` field → `messages` field
  * Returns null if the state is unparseable.
  */
 export function migrateSharedState(
   shared: unknown,
 ): { data: ToolUseRunShared; migrated: boolean } | null {
-  const flatResult = ConversationSchema.safeParse(shared);
-  if (flatResult.success && !('state' in flatResult.data)) {
+  // Try current format first (flat with `messages`)
+  const currentResult = MessagesSchema.safeParse(shared);
+  if (currentResult.success && !('state' in currentResult.data)) {
     return { data: shared as ToolUseRunShared, migrated: false };
   }
 
+  // Try legacy flat format (`conversation` → `messages`)
+  const legacyFlatResult = LegacyConversationSchema.safeParse(shared);
+  if (legacyFlatResult.success && !('state' in legacyFlatResult.data)) {
+    const obj = shared as Record<string, unknown>;
+    const migrated = {
+      ...obj,
+      messages: obj.conversation,
+    } as unknown as ToolUseRunShared;
+    delete (migrated as Record<string, unknown>).conversation;
+    return { data: migrated, migrated: true };
+  }
+
+  // Try nested format (`{ state: {...} }`)
   const obj = shared as Record<string, unknown>;
   if (obj && typeof obj === 'object' && 'state' in obj) {
-    const legacyResult = ConversationSchema.safeParse(obj.state);
-    if (legacyResult.success) {
+    const nestedCurrent = MessagesSchema.safeParse(obj.state);
+    if (nestedCurrent.success) {
       return { data: obj.state as ToolUseRunShared, migrated: true };
+    }
+    const nestedLegacy = LegacyConversationSchema.safeParse(obj.state);
+    if (nestedLegacy.success) {
+      const inner = obj.state as Record<string, unknown>;
+      const migrated = {
+        ...inner,
+        messages: inner.conversation,
+      } as unknown as ToolUseRunShared;
+      delete (migrated as Record<string, unknown>).conversation;
+      return { data: migrated, migrated: true };
     }
   }
 

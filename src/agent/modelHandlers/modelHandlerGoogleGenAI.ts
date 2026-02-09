@@ -808,7 +808,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   override extractAssistantText(message: Content): string | undefined {
     if (message.role !== 'model') return undefined;
     if (!Array.isArray(message.parts)) return undefined;
-    const texts = message.parts.filter(isTextPart).map((p) => p.text).filter(Boolean);
+    const texts = message.parts
+      .filter(isTextPart)
+      .map((p) => p.text)
+      .filter(Boolean);
     return texts.length > 0 ? texts.join('\n') : undefined;
   }
 
