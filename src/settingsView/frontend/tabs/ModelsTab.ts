@@ -42,7 +42,6 @@ export class ModelsTab extends LitElement {
   @property({ type: Boolean }) authenticated = false;
   @property({ type: String }) apiAccessMode: 'included' | 'personal' =
     'personal';
-  @property({ attribute: false }) enabledProviders: string[] = [];
   @property({ attribute: false }) allowedModels: string[] | null = [];
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
   @property({ type: Boolean }) globalStreamingDefault = true;
@@ -54,8 +53,6 @@ export class ModelsTab extends LitElement {
     const apiAccessSection = this.authenticated
       ? html`<api-access-section
           .mode=${this.apiAccessMode}
-          .enabledProviders=${this.enabledProviders}
-          .allowedModels=${this.allowedModels}
         ></api-access-section>`
       : nothing;
 
