@@ -108,7 +108,9 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
 
         const resourceUri = vscode.Uri.file(path.join(dirPath, name));
         const isBuiltIn =
+          resourceUri.fsPath === builtInAgentsPath ||
           resourceUri.fsPath.startsWith(builtInAgentsPath + path.sep) ||
+          resourceUri.fsPath === builtInToolUsePath ||
           resourceUri.fsPath.startsWith(builtInToolUsePath + path.sep);
         const isDirectory = type === vscode.FileType.Directory;
 
