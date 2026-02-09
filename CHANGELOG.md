@@ -2,6 +2,60 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.10] - 2026-02-09
+
+### Features
+
+- Added **scientific simplifier agent** — a tool-use agent that simplifies complex scientific writing while preserving mathematical discourse, targeting AI bloat, spaghetti logic, and redundant computation.
+- Added **scientific presenter agent** — an interactive agent for creating scientific code presentations with a visual QA loop and TikZ figure verification.
+- Added **agent browser** in settings view Agents tab with split-panel layout, visibility configuration, folder navigation, keyboard support, and per-category folder open buttons.
+- **Main view agent/model buttons** now navigate directly to the corresponding settings view tab.
+- Added **context-aware "New Agent" button** that creates the matching agent type (workflow or tool-use) based on the current browser context.
+- Added **manual conversation compaction** button for tool-use agents to trigger compaction when context grows large.
+- Added **live tool timers** with timeout limit display, and **bash output streaming** in real-time including stderr.
+- Added **reject-with-feedback** option for bash command approvals, allowing written feedback to guide the agent's next attempt.
+- Added **model dropdown in agent proposals** to choose or override the model before approving execution.
+- Added **sync/async mode badges** on agent proposals and log entries with a setup button for quick configuration.
+- Added **subagent output capture** — subagent results are now returned to parent agents, enabling richer orchestration workflows.
+- Added **remote agent tool surfacing** — orchestrator agents can see tools available on remote agents via persisted metadata cached across sessions.
+- Added **proactive relay token refresh** before each model invocation to prevent mid-session authentication failures.
+- Added **memory tool display** in progress view with specialized UI showing the file path being read or written.
+- Added **batched Lean loogle queries** for more efficient theorem search.
+- Added **execution status to runs tool** and orchestrator badge in the UI.
+
+### Bug Fixes
+
+- Fixed **context window overflow** caused by accumulated reasoning tokens in response chaining, with proper post-compaction token counting that includes system prompt and tools.
+- Fixed **Anthropic cache invalidation** caused by userInstruction and thinking budget changes; uses fixed thinking budget for Opus 4.6 tool-use.
+- Fixed **auto-scroll** not scrolling to bottom when switching stream tabs.
+- Fixed **bash tool process cleanup** — now kills the entire process group on timeout and properly clears timeout timers. Also handles the Windows kill path correctly.
+- Fixed **stream tab delete button** being clipped at narrow panel widths.
+- Fixed **Max Tokens Reduced notification** appearing above the 32k threshold where it is not meaningful.
+- Fixed **Windows path compatibility** throughout — uses native path module and normalizes workspace-relative paths to forward slashes.
+- Fixed **max_tokens for Anthropic thinking models** being too high in tool-use mode, halved to prevent context overflow.
+- Fixed **Lean 4 integration** — proper FileUri for client lookup and third-party syntax highlighting.
+- Fixed **background polling errors** — shows retry prompt on 404, preserves HTTP metadata for other errors, retains request_id on wrapped errors.
+- Fixed **path traversal vulnerability** via backslash-to-slash conversion in locatePath with exact equality checks for built-in path detection.
+- Fixed **workspace boundary checks** — added path separator boundaries to startsWith checks and uses path.isAbsolute for proper containment validation.
+- Fixed **pre-migration database compatibility** by gracefully handling missing tools column.
+- Fixed **compaction size reporting** to use output_tokens and count compacted messages directly.
+- Fixed **agent visibility edge cases** — properly distinguishes "never configured" from "explicitly empty" visibility, and auto-adds new tool-use agents to visibility config.
+- Fixed **proposal race conditions** between async model options loading and proposal resolution.
+
+### Improvements
+
+- Added **consistent tool timeouts** across all tools with standardized error detection and reporting.
+- Added **parallel tool call deduplication** using deterministic JSON serialization to avoid redundant execution.
+- Optimized **progress view performance** with better Lit component rendering and cached flow records to eliminate redundant reads.
+- Added **model options caching** with 30-second TTL for rapid proposal interactions.
+- Refined **orchestrator agent** prompts — reframed as long-term project steward with consolidated instructions, git workflow guidance, and build directory conventions.
+- Made **agent creator provider-agnostic** with Nunjucks templating, split into separate workflow and tool-use YAML templates.
+- Improved **Lean agent workflow** — searches .lake/packages with grep/glob, checks diagnostics after build.
+- **Migrated agent settings** from VS Code config to internal state managers for more reliable persistence.
+- Removed **deprecated agents** (tex_linter_fix, xml_validator) and related logic.
+- **Restricted tool-use agents** from scanning root filesystem or accessing out-of-workspace paths.
+- Updated dependencies (supabase, fast-json-stable-stringify, highlightjs-lean, and others).
+
 ## [0.35.9] - 2026-02-06
 
 ### Features
