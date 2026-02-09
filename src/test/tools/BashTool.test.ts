@@ -7,11 +7,9 @@ import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import { createRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
-  createToolUseCycleFlow,
-  type ToolUseCycleShared,
+  runToolUseCycle,
+  type CycleServices,
 } from '@agent/core/flows/ToolUseCycleFlow';
-// Type imports
-import type { ToolUseCycleServices } from '@agent/core/flows/CycleServices';
 
 // Local imports - agent runtime
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
@@ -141,7 +139,10 @@ describe('BashTool', () => {
     const handler = new BashMockHandler(config);
     const workspaceState = AgentWorkspaceState.create();
     const run = createRunState();
-    const options: ToolUseCycleServices<OpenAI> = {
+
+    const messages: ProviderMessage[] = [];
+
+    const services: CycleServices<OpenAI> = {
       modelHandler: handler,
       config: config as any,
       setting: {
@@ -173,31 +174,18 @@ describe('BashTool', () => {
       workspace: workspaceState,
     };
 
-    const messages: ProviderMessage[] = [];
-
-    // Create shared state for the cycle flow (flat pattern)
-    // Tool-use cycles track metrics in shared (cycleIndex, etc.) instead of round object
-    const shared: ToolUseCycleShared = {
+    // Run the cycle directly — no Flow wrapper needed
+    const result = await runToolUseCycle<OpenAI>({
       messages,
-      shouldStop: false,
-      endTurn: false,
-      response: undefined,
-      responseTimeMs: undefined,
-      stopReason: undefined,
-      lastError: undefined,
-      toolCalls: undefined,
-      text: undefined,
       cycleIndex: 0,
-      cycleResponseTimeMs: 0,
-      cycleNormalizedUsage: undefined,
-    };
+      services,
+    });
 
-    // Create and run the flow directly
-    const flow = createToolUseCycleFlow();
-    flow.setServices(options);
-    await flow.run(shared);
+    assert.equal(result.outcome, 'completed', 'Cycle should complete');
 
-    const toolOutputMessage = messages.find(
+    const outputMessages =
+      result.outcome === 'completed' ? result.messages : messages;
+    const toolOutputMessage = outputMessages.find(
       (msg) => (msg as any).type === 'function_call_output',
     ) as any;
     assert.ok(toolOutputMessage, 'Tool output message was not produced');

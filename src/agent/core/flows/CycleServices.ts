@@ -14,8 +14,6 @@ import type {
   ConversationRoundStateSnapshot,
 } from '@agent/core/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import type { IToolRegistry } from '@agent/core/ToolTypes';
-import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import type { TaskRunFileService } from '@utils/files';
 
@@ -48,29 +46,6 @@ export interface ResponseCycleServices<
   readonly run: AgentRunStateSnapshot;
   readonly workspace: AgentWorkspaceState;
   round: ConversationRoundStateSnapshot;
-}
-
-/**
- * Services for tool-use cycle flow nodes.
- *
- * Extends BaseFlowContextInit (agent identity + interrupts) with:
- * - client: Model API client
- * - toolRegistry + resolved tool names
- * - State slices: run, workspace (no per-round snapshot — continuous session model)
- */
-export interface ToolUseCycleServices<
-  C = unknown,
-> extends BaseFlowContextInit<C> {
-  readonly client: C;
-  readonly toolRegistry: IToolRegistry;
-  readonly modelName?: string;
-  readonly agentName?: string;
-  /** Session for injecting queued user messages after tool dispatch. */
-  readonly session?: IToolUseSession;
-  /** Callback when a queued follow-up is consumed (clears UI display). */
-  readonly onFollowUpConsumed?: () => void;
-  readonly run: AgentRunStateSnapshot;
-  readonly workspace: AgentWorkspaceState;
 }
 
 /** Params for cycle nodes — empty by design (dependencies via services). */
