@@ -29,14 +29,7 @@ import {
   createResponseCycleFlow,
   initializeCycleFields,
 } from '@agent/core/flows/ResponseCycleFlow';
-import {
-  interpretCycleCompletion,
-  type CycleCompletionResult,
-} from '@agent/core/flows/CommonCycleTypes';
-import {
-  type CycleStateSlices,
-  type ResponseCycleServices,
-} from '@agent/core/flows/CycleServices';
+import { type CycleStateSlices } from '@agent/core/flows/CycleServices';
 import type { AgentFileLocation } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -62,12 +55,14 @@ interface CyclePrepInput extends CycleStateSlices {
 }
 
 /**
- * Exec result - no longer includes CycleStateSlices since those are
- * available via prepRes in post(). This eliminates a data round trip.
+ * Cycle outcome — single discriminated union that maps 1:1 to post() actions.
+ * Replaces the prior chain: shared flags → interpretCycleCompletion() → CycleCompletionResult
+ * → CycleExecResult wrapping → post() re-destructuring.
  */
-type CycleExecResult =
-  | ({ kind: 'success'; endTurn: boolean } & CycleCompletionResult)
-  | { kind: 'error'; error: Error };
+type CycleOutcome =
+  | { outcome: 'completed' }
+  | { outcome: 'cancelled' }
+  | { outcome: 'failed'; error: Error };
 
 // ============================================================================
 // Node Implementation
@@ -115,7 +110,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
    * (ReflectionFlowShared), eliminating the translation layer.
    * Cycle results are written directly to shared's cycle fields.
    */
-  async exec(prepRes: CyclePrepInput): Promise<CycleExecResult> {
+  async exec(prepRes: CyclePrepInput): Promise<CycleOutcome> {
     const { shared } = prepRes;
     const context = shared.context!; // Validated in prep()
 
@@ -130,20 +125,13 @@ export class ResponseCycleNode<C = unknown> extends Node<
         context.prefill,
       );
 
-    // If prefill already completes the response, return success with endTurn=true
+    // If prefill already completes the response, mark as completed
     if (prefillEndsTurn) {
       shared.endTurn = true;
       shared.messages = initializedMessages;
       shared.outputLocation = prepRes.outputLocation;
-      return {
-        kind: 'success',
-        endTurn: true,
-        failedWithError: false,
-        userCancelled: false,
-      };
+      return { outcome: 'completed' };
     }
-
-    const onRoundFinalized = this.services.getUsageRecorder();
 
     try {
       // Initialize all cycle fields in one call (replaces 11 individual assignments + assertion)
@@ -155,116 +143,86 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
       // Create and run the flow directly on shared (native nesting)
       const flow = createResponseCycleFlow<C>();
-      const modelHandler = this.services.modelHandler;
+      const { modelHandler } = this.services;
       const clientRef = { current: await modelHandler.getClient() };
-      const flowServices: ResponseCycleServices<C> & {
-        refreshClient: () => Promise<void>;
-      } = {
-        modelHandler: this.services.modelHandler,
-        setting: this.services.setting,
-        prompt: this.services.prompt,
-        logger: this.services.logger,
-        streamId: this.services.streamId,
-        executionId: this.services.executionId,
-        userVarChannels: this.services.userVarChannels,
-        checkInterruption: this.services.checkInterruption,
-        setAbortController: this.services.setAbortController,
-        config: this.services.config,
-        fileService: this.services.fileService,
+      // Spread outer services (core fields pass through), add cycle-specific fields.
+      // onRoundFinalized passes through from the spread (same name in both service levels).
+      flow.setServices({
+        ...this.services,
         get client() {
           return clientRef.current;
         },
         round: prepRes.round,
         run: prepRes.run,
         workspace: prepRes.workspace,
-        onRoundFinalized,
         async refreshClient() {
           clientRef.current = await modelHandler.getClient();
         },
-      };
-      flow.setServices(flowServices);
+      });
       await flow.run(shared);
 
-      // Interpret completion from shared
-      const completion = interpretCycleCompletion(shared);
-
-      return {
-        kind: 'success',
-        endTurn: shared.endTurn,
-        ...completion,
-      };
+      // Determine outcome directly from shared state flags (single interpretation)
+      if (shared.shouldStop && shared.lastError) {
+        return {
+          outcome: 'failed',
+          error: new Error(shared.lastError.message),
+        };
+      }
+      if (shared.shouldStop && !shared.lastError && !shared.endTurn) {
+        return { outcome: 'cancelled' };
+      }
+      return { outcome: 'completed' };
     } catch (error) {
       // Error path: finalize round on unexpected errors
       recordRound(prepRes.run, prepRes.round);
-      if (onRoundFinalized) {
-        await onRoundFinalized(prepRes.run);
+      if (this.services.onRoundFinalized) {
+        await this.services.onRoundFinalized(prepRes.run);
       }
       return {
-        kind: 'error',
+        outcome: 'failed',
         error: error instanceof Error ? error : new Error(String(error)),
       };
     }
   }
 
-  /**
-   * Handle cycle failure.
-   */
   async execFallback(
     _prepRes: CyclePrepInput,
     error: Error,
-  ): Promise<CycleExecResult> {
-    return { kind: 'error', error };
+  ): Promise<CycleOutcome> {
+    return { outcome: 'failed', error };
   }
 
   /**
-   * Update snapshots and handle errors.
+   * Update snapshots and handle cycle outcome.
    *
    * With native nesting, cycle results are already in shared's cycle fields.
-   * This method just updates snapshots and handles error/cancellation paths.
+   * CycleOutcome maps 1:1 to actions — no re-interpretation needed.
    */
   async post(
     shared: ReflectionFlowShared,
     prepRes: CyclePrepInput,
-    execRes: CycleExecResult,
+    execRes: CycleOutcome,
   ): Promise<string | undefined> {
     const { logger } = this.services;
 
-    if (execRes.kind === 'error') {
+    if (execRes.outcome === 'failed') {
       logger.error(`Response cycle failed: ${execRes.error.message}`);
-      shared.lastError = {
-        message: execRes.error.message,
-        retryable: false,
-      };
+      shared.lastError = { message: execRes.error.message, retryable: false };
       throw execRes.error;
     }
 
-    if (execRes.userCancelled) {
+    if (execRes.outcome === 'cancelled') {
       logger.debug('Response cycle cancelled by user');
       shared.continueRounds = false;
       shared.lastError = undefined;
       return FlowTransition.DEFAULT;
     }
 
-    if (execRes.failedWithError) {
-      logger.error(`Response cycle failed: ${execRes.errorMessage}`);
-      shared.lastError = {
-        message: execRes.errorMessage ?? 'Unknown error',
-        retryable: false,
-      };
-      throw new Error(execRes.errorMessage ?? 'Unknown error');
-    }
-
-    // Success - clear any previous error
+    // completed — clear any previous error, update snapshots
     shared.lastError = undefined;
-
-    // Update snapshots from slices (accessed via prepRes, not execRes)
     shared.runStateSnapshot = prepRes.run;
     shared.workspaceSnapshot = prepRes.workspace.toSnapshot();
-
-    // Sync conversation state - messages modified in-place during cycle
     shared.conversation = shared.context!.messages;
-
-    // Store round state snapshot
     shared.roundStateSnapshots.push(shared.context!.stateRoundSnapshot);
 
     return FlowTransition.DEFAULT;

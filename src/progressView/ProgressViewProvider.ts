@@ -7,6 +7,7 @@ import {
   getSharedLocalResourceRoots,
 } from '@common/webview';
 import { AgentLogger } from '@logger/AgentLogger';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
 import { isApprovalBypassedForStream } from '@tools/approval/toolEditApproval';
@@ -19,6 +20,7 @@ import { ProgressViewState } from './state/ProgressViewState';
 import type {
   AgentProposalPermission,
   BashPermission,
+  ModelOptionData,
   OutputFileInfo,
   StorageKey,
   StreamTabId,
@@ -51,6 +53,13 @@ export class ProgressViewProvider
   private _pendingUpdateOptions: { forceRebuild: boolean } | null = null;
   private _hasResolved = false;
   private readonly logger: AgentLogger;
+
+  /** TTL-cached model options to avoid redundant async work for rapid proposals. */
+  private static readonly MODEL_OPTIONS_TTL_MS = 30_000;
+  private _cachedModelOptions?: {
+    data: ModelOptionData[];
+    expiry: number;
+  };
 
   private readonly toolEditHandler: ApprovalRequestHandler<
     ToolEditPermission,
@@ -105,7 +114,10 @@ export class ProgressViewProvider
     );
     this.agentProposalHandler = new ApprovalRequestHandler(
       'proposalId',
-      (p) => u.showAgentProposal(p),
+      (p) => {
+        u.showAgentProposal(p); // Synchronous — proposal appears immediately
+        void this.sendProposalModelOptions(p); // Progressive enhancement
+      },
       (id) => u.resolveAgentProposal(id),
       canSend,
     );
@@ -155,6 +167,44 @@ export class ProgressViewProvider
     await this.state.load();
     this._disposables.push(...this.eventHandler.setupEventListeners());
     this.logger.debug('ProgressViewProvider initialized');
+  }
+
+  /**
+   * Load model options and re-send the proposal with the dropdown data.
+   * Sent as a second SHOW message — the frontend upserts it over the initial
+   * (model-option-less) permission.
+   *
+   * Guards against the RESOLVE-between-two-SHOWs race: if the user
+   * approves/rejects while model options are loading, the proposal is
+   * removed from agentProposalHandler. We check before sending so the
+   * late SHOW doesn't re-create an undismissable ghost proposal.
+   *
+   * Uses a 30-second TTL cache to avoid redundant async work when
+   * multiple proposals arrive in quick succession.
+   */
+  private async sendProposalModelOptions(
+    proposal: AgentProposalPermission,
+  ): Promise<void> {
+    try {
+      const modelOptions = await this.getCachedModelOptions();
+      if (!this.agentProposalHandler.get(proposal.proposalId)) return;
+      this.webviewUpdater.showAgentProposal(proposal, modelOptions);
+    } catch {
+      // Model dropdown won't appear — static label fallback is fine
+    }
+  }
+
+  private async getCachedModelOptions(): Promise<ModelOptionData[]> {
+    const now = Date.now();
+    if (this._cachedModelOptions && now < this._cachedModelOptions.expiry) {
+      return this._cachedModelOptions.data;
+    }
+    const data = await computeModelOptionsData();
+    this._cachedModelOptions = {
+      data,
+      expiry: now + ProgressViewProvider.MODEL_OPTIONS_TTL_MS,
+    };
+    return data;
   }
 
   public static getInstance(): ProgressViewProvider | undefined {
