@@ -85,16 +85,6 @@ export class TaskGroupList extends LitElement {
   /** Memoized set of root group IDs for isGroupVisible() */
   private cachedRootGroupIds: Set<string> = new Set();
 
-  /**
-   * Tracking state for incremental tree updates.
-   * When only messages change (not groups), we can often skip the full
-   * O(n log n) sort + tree rebuild:
-   * - Text update (same length): tree structure unchanged, skip entirely
-   * - Append (length grew): classify only the new messages incrementally
-   */
-  private prevGroupsRef: TaskGroup[] = [];
-  private prevMessageCount = 0;
-
   /** Reference to the scroll container */
   @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
   private scrollContainer?: HTMLElement;
@@ -121,29 +111,27 @@ export class TaskGroupList extends LitElement {
     const groupsChanged = changedProperties.has('groups');
     const messagesChanged = changedProperties.has('messages');
 
-    if (groupsChanged || messagesChanged) {
-      const groupsRefSame = this.groups === this.prevGroupsRef;
+    if (groupsChanged) {
+      // Structural change — always full rebuild
+      this.fullTreeRebuild();
+    } else if (messagesChanged) {
+      // Only messages changed — use Lit's old value to pick incremental path
+      const prevMessages = changedProperties.get('messages') as
+        | LogMessageData[]
+        | undefined;
+      const prevCount = prevMessages?.length ?? 0;
 
-      if (!groupsChanged && messagesChanged && groupsRefSame) {
-        // Groups didn't change — try incremental path
-        if (this.messages.length === this.prevMessageCount) {
-          // Same length: text-only update (e.g. streaming UPDATE_LOG).
-          // Tree structure is unchanged — skip rebuild entirely.
-          // Lit's keyed repeat() handles individual log-entry updates.
-        } else if (this.messages.length > this.prevMessageCount) {
-          // Append-only: classify only the new messages incrementally.
-          this.appendNewMessages(this.prevMessageCount);
-        } else {
-          // Messages shrunk (e.g. clear) — full rebuild
-          this.fullTreeRebuild();
-        }
+      if (this.messages.length === prevCount) {
+        // Same length: text-only update (e.g. streaming UPDATE_LOG).
+        // Tree structure is unchanged — Lit's keyed repeat() handles
+        // individual log-entry re-renders automatically.
+      } else if (this.messages.length > prevCount) {
+        // Append-only: classify only the new messages incrementally.
+        this.appendNewMessages(prevCount);
       } else {
-        // Groups changed or first render — full rebuild required
+        // Messages shrunk (e.g. clear) — full rebuild
         this.fullTreeRebuild();
       }
-
-      this.prevGroupsRef = this.groups;
-      this.prevMessageCount = this.messages.length;
     }
 
     // Recompute root group IDs when groups or activeRunId change
