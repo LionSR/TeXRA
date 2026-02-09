@@ -7,6 +7,15 @@ import * as vscode from 'vscode';
 // Local imports - filesystem
 import { RelativeFS } from './relativeFS';
 
+/**
+ * Result of resolving a path against the workspace.
+ * 'workspace' paths have both absolute and forward-slash relative forms.
+ * 'external' paths are outside the workspace (or no workspace is open).
+ */
+export type ResolvedPath =
+  | { kind: 'workspace'; absolutePath: string; relativePath: string }
+  | { kind: 'external'; absolutePath: string };
+
 export class WorkspaceFS extends RelativeFS {
   protected static override getBasePath(): string {
     const folder = vscode.workspace.workspaceFolders?.[0];
@@ -44,5 +53,64 @@ export class WorkspaceFS extends RelativeFS {
    */
   public static toAbsolute(filePath: string): string {
     return path.isAbsolute(filePath) ? filePath : this.fullPath(filePath);
+  }
+
+  /**
+   * Resolve a path (absolute or relative) against the workspace root.
+   *
+   * This is the single resolution primitive for workspace path handling.
+   * Returns a discriminated union — callers apply their own policy
+   * (throw on external, create ExternalFileLocation, etc.).
+   *
+   * Relative paths are normalized to forward slashes. Paths that escape
+   * via `..` are treated as external.
+   */
+  public static locatePath(inputPath: string): ResolvedPath {
+    const workspaceRoot = this.getPath();
+
+    if (!inputPath) {
+      if (!workspaceRoot) {
+        return { kind: 'external', absolutePath: '' };
+      }
+      return {
+        kind: 'workspace',
+        absolutePath: workspaceRoot,
+        relativePath: '',
+      };
+    }
+
+    if (path.isAbsolute(inputPath)) {
+      if (!workspaceRoot) {
+        return { kind: 'external', absolutePath: inputPath };
+      }
+      const relative = this.relativePath(inputPath);
+      // relativePath() returns forward-slash normalized paths.
+      // Outside-workspace paths remain absolute — detect with path.isAbsolute().
+      if (!path.isAbsolute(relative) && !relative.startsWith('..')) {
+        return {
+          kind: 'workspace',
+          absolutePath: inputPath,
+          relativePath: relative,
+        };
+      }
+      return { kind: 'external', absolutePath: inputPath };
+    }
+
+    // Relative path — normalize to forward slashes
+    if (!workspaceRoot) {
+      return { kind: 'external', absolutePath: path.resolve(inputPath) };
+    }
+    const relative = path.normalize(inputPath).replaceAll('\\', '/');
+    if (relative.startsWith('..')) {
+      return {
+        kind: 'external',
+        absolutePath: path.resolve(workspaceRoot, inputPath),
+      };
+    }
+    return {
+      kind: 'workspace',
+      absolutePath: path.join(workspaceRoot, relative),
+      relativePath: relative,
+    };
   }
 }
