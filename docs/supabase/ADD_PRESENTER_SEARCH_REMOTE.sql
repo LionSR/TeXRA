@@ -2,10 +2,7 @@
 -- and sync descriptions/tools for existing remote agents.
 --
 -- Prerequisites:
--- 1. Run the tools column migration first:
---    supabase/migrations/20260209_add_tools_to_remote_agents.sql
---
--- 2. Upload the YAML files to Supabase Storage:
+-- 1. Upload the YAML files to Supabase Storage:
 --    - Copy from: resources/tool_use_agents/presenter.yaml
 --    - Upload to: Storage > agent-configs > researcher/presenter.yaml
 --
@@ -15,7 +12,14 @@
 -- Then run this SQL in Supabase SQL Editor:
 
 -- =============================================================================
--- NEW AGENTS: presenter and search (tool-use)
+-- STEP 1: Ensure tools column exists (idempotent)
+-- =============================================================================
+
+ALTER TABLE remote_agents
+ADD COLUMN IF NOT EXISTS tools TEXT[] DEFAULT NULL;
+
+-- =============================================================================
+-- STEP 2: Insert new agents
 -- =============================================================================
 
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
@@ -39,26 +43,19 @@ VALUES (
 );
 
 -- =============================================================================
--- SYNC: descriptions and agent_category for existing remote agents
+-- STEP 3: Sync descriptions and agent_category for existing remote agents
 -- =============================================================================
 
--- Fix transcribe_audio: sync trailing period from YAML, migrate agent_type → agent_category
+-- Fix transcribe_audio: sync trailing period from YAML, ensure agent_category
 UPDATE remote_agents
 SET description = 'Transcribes audio with speaker identification and LaTeX math formatting.',
     agent_category = 'workflow'
 WHERE name = 'transcribe_audio';
 
--- apply and apply_multiple: descriptions already match YAML, just ensure agent_category is set
+-- apply and apply_multiple: ensure agent_category is set
 UPDATE remote_agents
 SET agent_category = 'workflow'
 WHERE name IN ('apply', 'apply_multiple');
-
--- =============================================================================
--- BACKFILL: populate tools column for existing remote agents that have them
--- (apply and transcribe_audio are workflow agents with no tools column needed)
--- =============================================================================
-
--- No tools to backfill for existing agents (all workflow/CoT type).
 
 -- =============================================================================
 -- VERIFY
