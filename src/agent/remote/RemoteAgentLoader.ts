@@ -12,6 +12,7 @@ import {
   getBaseName,
   updateAgentDescription,
   updateAgentTools,
+  updateAgentDefaultOutputFiles,
 } from '@agent/index/agentRegistry';
 import type { AgentLoadOptions } from '@agent/runtime/agentLoad';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
@@ -135,13 +136,19 @@ export class RemoteAgentLoader {
           isLastCandidate,
         );
 
-        // Update registry cache with description and tools from YAML
+        // Update registry cache with metadata from YAML
         const baseName = getBaseName(agentName);
         if (config.description) {
           updateAgentDescription(`remote:${baseName}`, config.description);
         }
         if (config.tools?.length) {
           updateAgentTools(`remote:${baseName}`, config.tools);
+        }
+        if (config.defaultOutputFiles?.length) {
+          updateAgentDefaultOutputFiles(
+            `remote:${baseName}`,
+            config.defaultOutputFiles,
+          );
         }
 
         logger.info(
@@ -240,6 +247,7 @@ async function fetchAgentConfig(
   prompts: RemoteAgentConfig['prompts'];
   description?: string;
   tools?: string[];
+  defaultOutputFiles?: string[];
 }> {
   const token = await SupabaseClient.getAccessToken();
   if (!token) {
@@ -273,13 +281,16 @@ async function fetchAgentConfig(
   const parsed = yaml.parse(responseData.config);
   const validated = AgentDefinitionSchema.parse(parsed);
 
-  // Extract tool names before resolving to full definitions (for registry cache)
+  // Extract metadata before resolving tools to full definitions (for registry cache)
   const settings: Partial<AgentSetting> = validated.settings;
   const rawTools = settings.tools as (string | { name: string })[] | undefined;
   const toolNames = rawTools?.flatMap((t) => {
     if (typeof t === 'string') return t;
     return typeof t?.name === 'string' ? t.name : [];
   });
+  const defaultOutputFiles = settings.defaultOutputFiles as
+    | string[]
+    | undefined;
 
   // Process tool definitions (remote agents are self-contained)
   if (Array.isArray(settings.tools)) {
@@ -294,5 +305,8 @@ async function fetchAgentConfig(
     prompts: AgentPromptSchema.parse(validated.prompts),
     description: validated.description,
     tools: toolNames?.length ? toolNames : undefined,
+    defaultOutputFiles: defaultOutputFiles?.length
+      ? defaultOutputFiles
+      : undefined,
   };
 }
