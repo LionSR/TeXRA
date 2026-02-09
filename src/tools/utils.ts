@@ -44,7 +44,10 @@ export function resolveWorkspaceRelativePath(
 
   if (path.isAbsolute(trimmed)) {
     const relative = WorkspaceFS.relativePath(trimmed);
-    if (relative === trimmed || relative.startsWith('..')) {
+    // When the path is outside the workspace, asRelativePath returns the
+    // original absolute path (now forward-slash normalized). Detect this
+    // with path.isAbsolute() which handles both C:/ and / forms.
+    if (path.isAbsolute(relative) || relative.startsWith('..')) {
       throw new ToolError('Path must stay within the workspace.');
     }
     return {
