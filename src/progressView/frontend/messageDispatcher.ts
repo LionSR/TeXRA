@@ -63,6 +63,14 @@ export interface MessageHandlerContext extends FrontendEventHandlerContext {
  */
 const pendingLogUpdates = new Map<string, Partial<LogMessageData>>();
 
+/**
+ * Proposal IDs that were resolved before their SHOW message arrived.
+ * When RESOLVE arrives for a proposal not yet in the permission list, we stash the ID.
+ * A subsequent SHOW for a stashed ID is dropped instead of creating a ghost permission.
+ * Entries are cleaned up when the late SHOW arrives or on the next SHOW for a different proposal.
+ */
+const resolvedBeforeShown = new Set<string>();
+
 // ============================================================
 // Helper functions
 // ============================================================
@@ -122,6 +130,30 @@ function addPermission(
 ): void {
   // Prepend newest permissions so keyboard shortcuts target the latest request.
   ctx.setPermissions([permission, ...ctx.getPermissions()]);
+}
+
+/**
+ * Upsert a proposal permission. If one with the same proposalId already exists
+ * (e.g., a model-options update after the initial show), replace it in-place
+ * to preserve ordering. Otherwise prepend as a new permission.
+ */
+function upsertProposalPermission(
+  ctx: MessageHandlerContext,
+  permission: PermissionState & { kind: typeof PERMISSION_KIND.PROPOSAL },
+): void {
+  const permissions = ctx.getPermissions();
+  const idx = permissions.findIndex(
+    (p) =>
+      p.kind === PERMISSION_KIND.PROPOSAL &&
+      p.data.proposalId === permission.data.proposalId,
+  );
+  if (idx >= 0) {
+    const updated = [...permissions];
+    updated[idx] = permission;
+    ctx.setPermissions(updated);
+  } else {
+    ctx.setPermissions([permission, ...permissions]);
+  }
 }
 
 function removePrompt(
@@ -630,11 +662,22 @@ const handlers: HandlerRegistry = {
   },
 
   [PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL]: (data, ctx) => {
-    addPermission(ctx, { kind: PERMISSION_KIND.PROPOSAL, data: data.proposal });
+    // Drop if this proposal was already resolved (out-of-order messages)
+    if (resolvedBeforeShown.delete(data.proposal.proposalId)) return;
+    upsertProposalPermission(ctx, {
+      kind: PERMISSION_KIND.PROPOSAL,
+      data: data.proposal,
+      modelOptions: data.modelOptionsData,
+    });
   },
 
   [PROGRESS_VIEW_COMMANDS.RESOLVE_AGENT_PROPOSAL]: (data, ctx) => {
+    const before = ctx.getPermissions().length;
     removePrompt(ctx, PERMISSION_KIND.PROPOSAL, 'proposalId', data.proposalId);
+    // If nothing was removed, RESOLVE arrived before SHOW — stash the ID
+    if (ctx.getPermissions().length === before) {
+      resolvedBeforeShown.add(data.proposalId);
+    }
   },
 
   // Follow-up and recording

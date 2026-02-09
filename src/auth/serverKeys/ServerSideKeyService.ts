@@ -272,10 +272,6 @@ export class ServerSideKeyService {
     return this.tierService.getAllowedModels(this.userTier);
   }
 
-  getEffectiveProvidersForCurrentUser(): string[] {
-    return this.tierService.getProviders();
-  }
-
   getAccessDescription(): string {
     if (!this.userTier) {
       return 'No included model access';
