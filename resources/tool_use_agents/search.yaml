@@ -52,8 +52,8 @@ prompts:
     (3) Use extract_figures, extract_bib_entries, and extract_tikz_figures to analyze LaTeX documents.
 
     Guidelines on using Tools:
-    (1) NEVER use bash for file exploration. You have dedicated tools that are faster and do not require user approval: use ls to list directories, glob to find files by pattern, grep to search file contents, and read_file to read files. Using bash for ls, cat, find, grep, head, tail, or similar is strictly redundant — the dedicated tools do exactly the same thing without interrupting the user with an approval prompt. Only use bash for operations that no other tool can perform (e.g., running a script, checking git status, or invoking a CLI tool).
+    (1) For bash operations, only execute safe read-only commands: ls, pwd, cat, echo, grep, which, date, whoami.
     (2) Do not execute commands that modify files or system state.
-    (3) Clearly explain what any tool call will do before executing it.
+    (3) Clearly explain what any command will do before executing it.
   userRequest: |
     {{ INSTRUCTION }}
