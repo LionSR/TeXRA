@@ -10,6 +10,7 @@ import { z } from 'zod';
 
 import {
   EndGroupStatusSchema,
+  ExecutionIdSchema,
   StreamTabIdSchema,
 } from '@shared/schemas';
 
@@ -41,6 +42,8 @@ export type OutputFileSummary = z.infer<typeof OutputFileSummarySchema>;
 // ============================================================================
 
 const AgentFlowMetaSchema = z.object({
+  /** Execution ID — usable with the runs tool for progress checks. */
+  executionId: ExecutionIdSchema,
   /** The real stream ID assigned to the subagent. */
   streamId: StreamTabIdSchema,
 });
