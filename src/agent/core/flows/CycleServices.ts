@@ -8,6 +8,7 @@
  * Services are injected via PocketFlow's `this.services` (immutable dependencies).
  */
 
+import type { IModelHandler } from '@agent/modelHandlers/types/IModelHandler';
 import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
@@ -74,3 +75,42 @@ export interface ToolUseCycleServices<
 
 /** Params for cycle nodes — empty by design (dependencies via services). */
 export type CycleParams = Record<string, unknown>;
+
+// ---------------------------------------------------------------------------
+// Cycle Service Construction Helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Build cycle services from outer (flow-level) services.
+ *
+ * Handles the shared boilerplate:
+ * - Lazy client via getter (supports refreshClient without re-setting services)
+ * - refreshClient method for token refresh after 401
+ * - Spread of outer services as base
+ *
+ * Callers only provide their cycle-specific overrides.
+ */
+export async function buildCycleServices<
+  Base extends { modelHandler: IModelHandler<any, any, any, any, C> },
+  Overrides extends Record<string, unknown>,
+  C,
+>(
+  baseServices: Base,
+  overrides: Overrides,
+): Promise<
+  Base & Overrides & { readonly client: C; refreshClient: () => Promise<void> }
+> {
+  const { modelHandler } = baseServices;
+  const clientRef = { current: await modelHandler.getClient() };
+
+  return {
+    ...baseServices,
+    ...overrides,
+    get client(): C {
+      return clientRef.current;
+    },
+    async refreshClient(): Promise<void> {
+      clientRef.current = await modelHandler.getClient();
+    },
+  };
+}

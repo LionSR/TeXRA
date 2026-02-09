@@ -31,6 +31,7 @@ import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
 } from '@agent/core/AgentState';
+import { buildCycleServices } from '@agent/core/flows/CycleServices';
 import type { AgentFileLocation } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -147,22 +148,13 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
       // Create and run the flow on the separate cycle state
       const flow = createResponseCycleFlow<C>();
-      const { modelHandler } = this.services;
-      const clientRef = { current: await modelHandler.getClient() };
-      // Spread outer services (core fields pass through), add cycle-specific fields.
-      // onRoundFinalized passes through from the spread (same name in both service levels).
-      flow.setServices({
-        ...this.services,
-        get client() {
-          return clientRef.current;
-        },
-        round: prepRes.round,
-        run: prepRes.run,
-        workspace: prepRes.workspace,
-        async refreshClient() {
-          clientRef.current = await modelHandler.getClient();
-        },
-      });
+      flow.setServices(
+        await buildCycleServices(this.services, {
+          round: prepRes.round,
+          run: prepRes.run,
+          workspace: prepRes.workspace,
+        }),
+      );
       await flow.run(cycleShared);
 
       // Determine outcome from cycle state (single interpretation)
