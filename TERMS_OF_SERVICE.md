@@ -18,6 +18,8 @@ These Terms are entered into between you and the TeXRA team ("we," "us," or "our
 
 TeXRA is a VS Code extension that provides AI-powered assistance for LaTeX research and writing. The Extension connects to third-party large language model (LLM) providers — including but not limited to Anthropic (Claude), OpenAI (GPT), and Google (Gemini) — to deliver its features.
 
+We reserve the right to modify, suspend, or discontinue the Extension (or any part of it) at any time, with or without notice. We shall not be liable to you or any third party for any modification, suspension, or discontinuation of the Extension.
+
 ## 3. Eligibility
 
 You must be at least 18 years old, or the age of legal majority in your jurisdiction, to use the Extension. By using TeXRA, you represent that you meet this requirement.
@@ -79,13 +81,35 @@ If you provide suggestions, ideas, enhancement requests, or other feedback regar
 
 The Extension integrates with third-party services, including AI model providers and OpenRouter. We are not responsible for the availability, accuracy, or content of these third-party services. Your use of third-party services is governed by their respective terms and policies. We may add, remove, or change supported third-party integrations at any time.
 
-## 12. Free and Beta Services
+## 12. International Data Transfers
+
+The Extension supports AI providers headquartered in various jurisdictions, including providers based outside the European Union and the United States. By selecting a provider, you acknowledge and consent to your data being transmitted to and processed in the jurisdiction where that provider operates. This may include jurisdictions that do not provide the same level of data protection as your home country or the EU/EEA.
+
+Notably:
+
+- **DeepSeek** is operated by DeepSeek (深度求索), headquartered in Hangzhou, China.
+- **Moonshot AI (Kimi)** is operated by Moonshot AI (月之暗面), headquartered in Beijing, China.
+- **DashScope** is operated by Alibaba Cloud, headquartered in Hangzhou, China.
+
+Data sent to these providers is subject to the laws of the People's Republic of China, including the Personal Information Protection Law (PIPL) and the Cybersecurity Law, which may differ significantly from GDPR, CCPA, or other data protection frameworks you are accustomed to.
+
+**You are solely responsible for ensuring that your use of any AI provider complies with applicable data protection laws in your jurisdiction**, including but not limited to the EU General Data Protection Regulation (GDPR), the UK GDPR, the California Consumer Privacy Act (CCPA), and any institutional or organizational data policies that apply to you. If you are subject to regulations that restrict international data transfers, you should only select providers that meet your compliance requirements. We do not make any representations regarding the data protection practices of third-party AI providers.
+
+## 13. Free and Beta Services
 
 Certain features of the Extension, including the Researcher Access Program, may be offered free of charge or in beta. These features are provided without any service level commitments and may be modified, suspended, or discontinued at any time without notice. We make no guarantees regarding availability, uptime, or continued support for free or beta features.
 
-## 13. Disclaimer of Warranties
+## 14. Assumption of Risk
 
-THE EXTENSION IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+You acknowledge that:
+
+1. **AI Outputs**: AI-generated content is inherently unpredictable and may be inaccurate, incomplete, or unsuitable. You assume all risk associated with your reliance on AI-generated outputs, including in academic publications, professional work, or any other context.
+2. **API Costs**: When using your own API keys, you are solely responsible for any charges incurred from third-party AI providers. We have no control over and accept no responsibility for third-party pricing, rate limits, or billing disputes.
+3. **Data Loss**: While the Extension operates on your local files, you are responsible for maintaining your own backups. We are not liable for any data loss or corruption arising from use of the Extension.
+
+## 15. Disclaimer of Warranties
+
+THE EXTENSION IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, ACCURACY, AND QUIET ENJOYMENT.
 
 We do not warrant that:
 
@@ -93,52 +117,68 @@ We do not warrant that:
 2. The Extension will be uninterrupted, timely, secure, or error-free.
 3. AI-generated outputs will be accurate, complete, or suitable for any particular purpose.
 4. Any defects in the Extension will be corrected.
+5. The Extension will be compatible with any particular third-party software, hardware, or AI provider.
+6. Third-party AI providers will remain available or maintain their current terms.
 
-## 14. Limitation of Liability
+YOU USE THE EXTENSION AT YOUR OWN RISK. THE ENTIRE RISK AS TO SATISFACTORY QUALITY, PERFORMANCE, ACCURACY, AND EFFORT IS WITH YOU.
+
+## 16. Limitation of Liability
 
 TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE TEXRA TEAM OR ITS MEMBERS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED TO LOSS OF PROFITS, DATA, USE, OR GOODWILL, ARISING OUT OF OR IN CONNECTION WITH YOUR USE OF THE EXTENSION, WHETHER BASED ON WARRANTY, CONTRACT, TORT (INCLUDING NEGLIGENCE), OR ANY OTHER LEGAL THEORY, EVEN IF WE HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 
-Our total cumulative liability to you for all claims arising from or related to the Extension shall not exceed the amount you have paid to us, if any, for access to the Extension during the twelve (12) months preceding the claim.
+WITHOUT LIMITING THE FOREGOING, WE SHALL NOT BE LIABLE FOR ANY DAMAGES ARISING FROM: (A) THIRD-PARTY AI PROVIDER OUTAGES, CHANGES IN TERMS, OR DISCONTINUATION OF SERVICES; (B) INACCURATE, MISLEADING, OR HARMFUL AI-GENERATED CONTENT; (C) UNAUTHORIZED ACCESS TO YOUR API KEYS OR CONTENT CAUSED BY YOUR FAILURE TO SECURE YOUR CREDENTIALS; (D) ANY ACTIONS TAKEN BASED ON AI-GENERATED OUTPUTS; OR (E) INTERNATIONAL DATA TRANSFERS TO THIRD-PARTY AI PROVIDERS YOU SELECT.
 
-## 15. Indemnification
+Our total cumulative liability to you for all claims arising from or related to the Extension shall not exceed the greater of (a) the amount you have paid to us, if any, for access to the Extension during the twelve (12) months preceding the claim, or (b) fifty US dollars (USD $50).
 
-You agree to indemnify, defend, and hold harmless the TeXRA team and its members from and against any claims, liabilities, damages, losses, and expenses (including reasonable attorneys' fees) arising out of or in any way connected with: (a) your use of the Extension, (b) your violation of these Terms, (c) your infringement of any third-party rights, or (d) Your Content.
+## 17. Indemnification
 
-## 16. Dispute Resolution
+You agree to indemnify, defend, and hold harmless the TeXRA team and its members from and against any claims, liabilities, damages, losses, and expenses (including reasonable attorneys' fees) arising out of or in any way connected with: (a) your use of the Extension, (b) your violation of these Terms, (c) your infringement of any third-party rights, (d) Your Content, (e) your selection of and data transfers to third-party AI providers, or (f) any dispute between you and a third-party AI provider.
+
+## 18. Dispute Resolution
 
 - **Informal Resolution**: Before filing any formal legal claim, you agree to first contact us at contact@texra.ai and attempt to resolve the dispute informally for at least thirty (30) days.
 - **Binding Arbitration**: If the dispute cannot be resolved informally, either party may elect to resolve the dispute through binding arbitration administered under the rules of a mutually agreed-upon arbitration body. Arbitration shall be conducted on an individual basis; class arbitrations and class actions are not permitted.
+- **Class Action Waiver**: YOU AGREE THAT ANY DISPUTE RESOLUTION PROCEEDINGS WILL BE CONDUCTED ONLY ON AN INDIVIDUAL BASIS AND NOT IN A CLASS, CONSOLIDATED, OR REPRESENTATIVE ACTION. If for any reason a claim proceeds in court rather than through arbitration, each party waives any right to a jury trial.
+- **Statute of Limitations**: You agree that any claim arising out of or related to these Terms or the Extension must be filed within one (1) year after the cause of action arose, or such claim shall be permanently barred.
 - **Exceptions**: Either party may seek injunctive or other equitable relief in any court of competent jurisdiction to prevent the actual or threatened infringement or misappropriation of intellectual property rights.
 
-## 17. Modifications to the Terms
+## 19. Modifications to the Terms
 
 We reserve the right to update or modify these Terms at any time. Material changes will be communicated through the Extension (e.g., via a notification or changelog entry) or by updating the "Last Updated" date at the top of this document. Your continued use of the Extension after any modifications constitutes acceptance of the revised Terms. We encourage you to review these Terms periodically.
 
-## 18. Termination
+## 20. Termination
 
-We may suspend or terminate your access to the Extension at any time, with or without cause, and with or without notice. You may stop using the Extension at any time by uninstalling it. Upon termination, all rights and licenses granted to you under these Terms will immediately cease. Sections 7, 8, 10, 13, 14, 15, 16, and 19 shall survive termination.
+We may suspend or terminate your access to the Extension at any time, with or without cause, and with or without notice. You may stop using the Extension at any time by uninstalling it. Upon termination, all rights and licenses granted to you under these Terms will immediately cease. Sections 7, 8, 10, 12, 14, 15, 16, 17, 18, 21, and 22 shall survive termination.
 
-## 19. Governing Law
+## 21. Governing Law
 
-These Terms shall be governed by and construed in accordance with the laws of the State of California, United States, without regard to conflict of law principles. To the extent litigation is permitted under these Terms, the exclusive venue shall be the state or federal courts located in San Francisco County, California.
+These Terms shall be governed by and construed in accordance with the laws of the State of California, United States, without regard to conflict of law principles and without regard to the United Nations Convention on Contracts for the International Sale of Goods. To the extent litigation is permitted under these Terms, the exclusive venue shall be the state or federal courts located in San Francisco County, California.
 
-## 20. Assignment
+## 22. Assignment
 
-You may not assign or transfer these Terms or any rights hereunder without our prior written consent. We may freely assign these Terms, including to any successor entity formed upon incorporation, without restriction or notice. Any attempted assignment in violation of this section shall be null and void.
+You may not assign or transfer these Terms or any rights hereunder without our prior written consent. We may freely assign these Terms, including to any successor entity formed upon incorporation, merger, acquisition, or reorganization, without restriction or notice. Any attempted assignment in violation of this section shall be null and void.
 
-## 21. Force Majeure
+## 23. Force Majeure
 
-We shall not be liable for any failure or delay in performing our obligations under these Terms where such failure or delay results from circumstances beyond our reasonable control, including but not limited to natural disasters, acts of government, internet or infrastructure outages, or third-party service disruptions.
+We shall not be liable for any failure or delay in performing our obligations under these Terms where such failure or delay results from circumstances beyond our reasonable control, including but not limited to natural disasters, acts of government, pandemic, internet or infrastructure outages, third-party service disruptions, or changes to third-party AI provider terms or availability.
 
-## 22. Severability
+## 24. No Third-Party Beneficiaries
+
+These Terms do not confer any rights, remedies, or benefits on any third party. No third party shall have any right to enforce any provision of these Terms.
+
+## 25. Waiver
+
+Our failure to enforce any right or provision of these Terms shall not constitute a waiver of such right or provision. Any waiver of any provision of these Terms will be effective only if in writing and signed by us.
+
+## 26. Severability
 
 If any provision of these Terms is found to be unenforceable or invalid, that provision shall be limited or eliminated to the minimum extent necessary so that these Terms shall otherwise remain in full force and effect.
 
-## 23. Entire Agreement
+## 27. Entire Agreement
 
 These Terms, together with any additional terms you agree to when using particular features of the Extension, constitute the entire agreement between you and the TeXRA team regarding the Extension and supersede all prior agreements and understandings.
 
-## 24. Contact
+## 28. Contact
 
 If you have questions or concerns about these Terms, please contact us:
 
