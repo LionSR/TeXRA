@@ -102,4 +102,3 @@ export function replaceMessagesInPlace<T>(target: T[], newContents: T[]): void {
   target.length = 0;
   target.push(...newContents);
 }
-
