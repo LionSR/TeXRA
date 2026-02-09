@@ -287,7 +287,7 @@ export function handlePermissionAction(
         proposalId: permission.data.proposalId,
         action,
         feedback,
-        ...(modelOverride ? { model: modelOverride } : {}),
+        model: modelOverride,
       });
       break;
   }
