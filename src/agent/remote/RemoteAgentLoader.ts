@@ -11,6 +11,7 @@ import {
   getMultipleName,
   getBaseName,
   updateAgentDescription,
+  updateAgentTools,
 } from '@agent/index/agentRegistry';
 import type { AgentLoadOptions } from '@agent/runtime/agentLoad';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
@@ -134,10 +135,13 @@ export class RemoteAgentLoader {
           isLastCandidate,
         );
 
-        // Update registry cache with description from YAML
+        // Update registry cache with description and tools from YAML
+        const baseName = getBaseName(agentName);
         if (config.description) {
-          const baseName = getBaseName(agentName);
           updateAgentDescription(`remote:${baseName}`, config.description);
+        }
+        if (config.tools?.length) {
+          updateAgentTools(`remote:${baseName}`, config.tools);
         }
 
         logger.info(
@@ -235,6 +239,7 @@ async function fetchAgentConfig(
   settings: RemoteAgentConfig['settings'];
   prompts: RemoteAgentConfig['prompts'];
   description?: string;
+  tools?: string[];
 }> {
   const token = await SupabaseClient.getAccessToken();
   if (!token) {
@@ -268,11 +273,18 @@ async function fetchAgentConfig(
   const parsed = yaml.parse(responseData.config);
   const validated = AgentDefinitionSchema.parse(parsed);
 
-  // Process tool definitions (remote agents are self-contained)
+  // Extract tool names before resolving to full definitions (for registry cache)
   const settings: Partial<AgentSetting> = validated.settings;
+  const rawTools = settings.tools as (string | { name: string })[] | undefined;
+  const toolNames = rawTools?.flatMap((t) => {
+    if (typeof t === 'string') return t;
+    return typeof t?.name === 'string' ? t.name : [];
+  });
+
+  // Process tool definitions (remote agents are self-contained)
   if (Array.isArray(settings.tools)) {
     settings.tools = resolveToolDefinitions(
-      settings.tools as (string | { name: string })[],
+      rawTools!,
       (name) => logger.warn(CHANNEL, `Tool "${name}" not found in registry`),
     );
   }
@@ -281,5 +293,6 @@ async function fetchAgentConfig(
     settings: AgentSettingSchema.parse(settings),
     prompts: AgentPromptSchema.parse(validated.prompts),
     description: validated.description,
+    tools: toolNames?.length ? toolNames : undefined,
   };
 }
