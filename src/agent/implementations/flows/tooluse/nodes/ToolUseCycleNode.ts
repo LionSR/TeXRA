@@ -52,13 +52,8 @@ export class ToolUseCycleNode<C> extends Node<
   }
 
   async exec(prepRes: CyclePrepResult): Promise<ToolUseCycleOutcome> {
-    const {
-      streamId,
-      setting,
-      resolvedTools,
-      modelHandler,
-      config,
-    } = this.services;
+    const { streamId, setting, resolvedTools, modelHandler, config } =
+      this.services;
 
     if (prepRes.shouldSkip) {
       if (prepRes.workspaceState.todos.todos.length > 0) {
