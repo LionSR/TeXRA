@@ -29,7 +29,10 @@ import {
   createResponseCycleFlow,
   initializeCycleFields,
 } from '@agent/core/flows/ResponseCycleFlow';
-import { type CycleStateSlices } from '@agent/core/flows/CycleServices';
+import type {
+  AgentRunStateSnapshot,
+  ConversationRoundStateSnapshot,
+} from '@agent/core/AgentState';
 import type { AgentFileLocation } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -45,13 +48,15 @@ import type {
 /**
  * Prep result carries shared reference and reconstructed state slices.
  * - shared: Reference for native nesting (cycle runs directly on it)
- * - context/currentRound: Accessed via shared, not duplicated here
  * - State slices (run, round, workspace): Reconstructed from snapshots, modified by cycle
  * - outputLocation: Computed once per round
  */
-interface CyclePrepInput extends CycleStateSlices {
+interface CyclePrepInput {
   shared: ReflectionFlowShared;
   outputLocation: AgentFileLocation;
+  run: AgentRunStateSnapshot;
+  workspace: AgentWorkspaceState;
+  round: ConversationRoundStateSnapshot;
 }
 
 /**
