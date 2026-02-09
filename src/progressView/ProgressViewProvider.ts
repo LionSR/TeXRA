@@ -7,7 +7,10 @@ import {
   getSharedLocalResourceRoots,
 } from '@common/webview';
 import { AgentLogger } from '@logger/AgentLogger';
-import { computeModelOptionsData } from '@model/computeModelOptions';
+import {
+  buildBasicModelOptionsData,
+  computeModelOptionsData,
+} from '@model/computeModelOptions';
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
 import { isApprovalBypassedForStream } from '@tools/approval/toolEditApproval';
@@ -115,8 +118,10 @@ export class ProgressViewProvider
     this.agentProposalHandler = new ApprovalRequestHandler(
       'proposalId',
       (p) => {
-        u.showAgentProposal(p); // Synchronous — proposal appears immediately
-        void this.sendProposalModelOptions(p); // Progressive enhancement
+        // Show proposal immediately with basic model dropdown (synchronous)
+        u.showAgentProposal(p, buildBasicModelOptionsData());
+        // Then upgrade with availability metadata if possible
+        void this.sendProposalModelOptions(p);
       },
       (id) => u.resolveAgentProposal(id),
       canSend,
@@ -185,13 +190,16 @@ export class ProgressViewProvider
   private async sendProposalModelOptions(
     proposal: AgentProposalPermission,
   ): Promise<void> {
+    let modelOptions: ModelOptionData[];
     try {
-      const modelOptions = await this.getCachedModelOptions();
-      if (!this.agentProposalHandler.get(proposal.proposalId)) return;
-      this.webviewUpdater.showAgentProposal(proposal, modelOptions);
+      modelOptions = await this.getCachedModelOptions();
     } catch {
-      // Model dropdown won't appear — static label fallback is fine
+      // Availability check failed (e.g. ServerSideKeyService not yet initialized) —
+      // fall back to static model metadata so the dropdown still appears.
+      modelOptions = buildBasicModelOptionsData();
     }
+    if (!this.agentProposalHandler.get(proposal.proposalId)) return;
+    this.webviewUpdater.showAgentProposal(proposal, modelOptions);
   }
 
   private async getCachedModelOptions(): Promise<ModelOptionData[]> {

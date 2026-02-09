@@ -154,6 +154,25 @@ async function buildModelOptionData(
   };
 }
 
+/**
+ * Build basic model options from static config only (synchronous).
+ * Includes provider, context, and cost metadata but skips async
+ * availability checks. All models are shown as enabled.
+ */
+export function buildBasicModelOptionsData(): ModelOptionData[] {
+  return getVisibleModels().map((model) => {
+    const config = MODEL_CONFIGS[model];
+    if (!config) return { value: model, label: model };
+    return {
+      value: model,
+      label: model,
+      provider: config.provider,
+      context: formatContext(config.contextWindow),
+      cost: formatCost(config.inputPrice, config.outputPrice),
+    };
+  });
+}
+
 /** Compute typed model options data for Lit-native rendering. */
 export async function computeModelOptionsData(): Promise<ModelOptionData[]> {
   const models = getVisibleModels();
