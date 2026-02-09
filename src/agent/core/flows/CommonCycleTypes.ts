@@ -80,6 +80,7 @@ export function resetCycleState<T extends BaseCycleFields>(
 export interface BaseInvocationPrepResult {
   shouldStop: boolean;
   messages: ProviderMessage[];
+  systemPrompt?: string;
 }
 
 /** Base success data returned from model/tool invocations. */
