@@ -63,9 +63,13 @@ export function resolveWorkspaceRelativePath(
   }
 
   if (path.isAbsolute(trimmed)) {
-    // When using an override root (e.g., worktree), use path.relative() directly
-    // since WorkspaceFS.relativePath() always resolves against the VS Code workspace.
-    const relative = overrideRoot
+    // Use path.relative() when the effective workspace root differs from the
+    // VS Code singleton (e.g., worktree context or explicit override).
+    // WorkspaceFS.relativePath() always resolves against the VS Code workspace,
+    // so it's only correct when workspacePath IS the VS Code workspace.
+    const vsCodeRoot = WorkspaceFS.getPath();
+    const usingNonDefaultRoot = workspacePath !== vsCodeRoot;
+    const relative = usingNonDefaultRoot
       ? path.relative(workspacePath, trimmed)
       : WorkspaceFS.relativePath(trimmed);
     if (relative === trimmed || relative.startsWith('..')) {

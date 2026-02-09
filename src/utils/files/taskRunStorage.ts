@@ -118,14 +118,20 @@ function resolvePathAgainstWorkspace(
   }
 
   if (path.isAbsolute(inputPath)) {
-    // Absolute path - check if within workspace
-    // Use WorkspaceFS.relativePath() which handles symlinks correctly via
-    // vscode.workspace.asRelativePath(). Direct path.relative() fails when
-    // the path is inside a symlinked directory.
+    // Absolute path - check if within workspace.
     if (!workspaceRoot) {
       return { kind: 'external', absolutePath: inputPath };
     }
-    const relative = WorkspaceFS.relativePath(inputPath);
+    // When workspaceRoot differs from the VS Code singleton (e.g., worktree),
+    // use path.relative() directly since WorkspaceFS.relativePath() always
+    // resolves against the VS Code workspace.
+    // When they match, prefer WorkspaceFS.relativePath() which handles
+    // symlinks correctly via vscode.workspace.asRelativePath().
+    const vsCodeRoot = WorkspaceFS.getPath();
+    const relative =
+      workspaceRoot !== vsCodeRoot
+        ? path.relative(workspaceRoot, inputPath)
+        : WorkspaceFS.relativePath(inputPath);
     if (relative !== inputPath && !relative.startsWith('..')) {
       return {
         kind: 'workspace',

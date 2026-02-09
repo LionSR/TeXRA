@@ -58,7 +58,6 @@ import type { UsageMonitor } from '@agent/utils/UsageMonitor';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import {
   TaskRunFileService,
-  WorkspaceFS,
   createWorkspaceLocation,
   type AgentFileLocation,
   type WorkspaceFileLocation,
@@ -207,12 +206,18 @@ export async function runReflectionFlow<C = unknown>(
 
   const fileService = new TaskRunFileService(executionId, workspaceRoot);
 
-  // Create workspace file locations for latexdiff base files
+  // Create workspace file locations for latexdiff base files.
+  // Use the parameterized workspaceRoot (not the VS Code singleton) so that
+  // worktree contexts resolve paths correctly.
   const baseFiles: WorkspaceFileLocation[] = (
     config.outputFiles.length > 0 ? config.outputFiles : [config.inputFile]
   ).map((f) => {
-    const absolutePath = path.isAbsolute(f) ? f : WorkspaceFS.fullPath(f);
-    const relativePath = path.isAbsolute(f) ? WorkspaceFS.relativePath(f) : f;
+    const absolutePath = path.isAbsolute(f)
+      ? f
+      : path.join(workspaceRoot, f);
+    const relativePath = path.isAbsolute(f)
+      ? path.relative(workspaceRoot, f)
+      : f;
     return createWorkspaceLocation(absolutePath, relativePath);
   });
 
