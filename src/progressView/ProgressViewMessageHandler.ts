@@ -537,12 +537,24 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleAgentProposalAction(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION>,
   ): Promise<void> {
-    const { proposalId, action, feedback } = data;
-    if (action === 'setup') {
-      await this.handleAgentProposalSetup(proposalId);
-      return;
+    const { proposalId, action } = data;
+    switch (action) {
+      case 'setup':
+        await this.handleAgentProposalSetup(proposalId);
+        break;
+      case 'approve':
+        proposalCoordinator.resolveRequest(proposalId, {
+          action: 'approve',
+          model: data.model,
+        });
+        break;
+      case 'reject':
+        proposalCoordinator.resolveRequest(proposalId, {
+          action: 'reject',
+          feedback: data.feedback,
+        });
+        break;
     }
-    proposalCoordinator.resolveRequest(proposalId, { action, feedback });
   }
 
   private async handleAgentProposalSetup(proposalId: string): Promise<void> {

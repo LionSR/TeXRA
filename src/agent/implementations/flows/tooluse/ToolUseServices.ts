@@ -3,7 +3,7 @@
  *
  * Extends BaseFlowContextInit with:
  * - Narrowed setting type (AgentToolUseSetting)
- * - Required getUsageRecorder (narrowed from optional)
+ * - Required onRoundFinalized (narrowed from optional)
  * - Tool-use specific services (session, resolvedTools, toolRegistry, etc.)
  *
  * Services are injected via flow.setServices() and accessed via this.services.
@@ -31,7 +31,7 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   /** Resume snapshot for session recovery (null for fresh start). */
   readonly snapshot: ToolUseSessionSnapshot | null;
   /** Narrowed from optional to required for tool-use flows */
-  readonly getUsageRecorder: () => RoundFinalizedCallback;
+  readonly onRoundFinalized: RoundFinalizedCallback;
   /** Callback invoked when a queued follow-up message is consumed (clears UI). */
   readonly onFollowUpConsumed?: () => void;
 }
