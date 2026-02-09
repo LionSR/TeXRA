@@ -22,45 +22,29 @@ export interface WorkspacePathResolution {
 /**
  * Resolve a potentially absolute or relative path against the workspace root.
  *
- * The returned relative path is normalized and guaranteed to remain inside the
- * workspace. Throws if the workspace folder cannot be determined or if the
- * resolved location would escape the workspace root.
+ * Thin policy wrapper around WorkspaceFS.locatePath() that throws ToolError
+ * when the path is external. Tools use this; non-tool code should call
+ * WorkspaceFS.locatePath() directly and handle the discriminated union.
  */
 export function resolveWorkspaceRelativePath(
   targetPath?: string,
 ): WorkspacePathResolution {
-  const workspacePath = WorkspaceFS.getPath();
-  if (!workspacePath) {
+  if (!WorkspaceFS.getPath()) {
     throw new ToolError('Workspace path is not available.');
   }
 
   const trimmed = targetPath?.trim();
-  if (!trimmed || trimmed === '.') {
-    return {
-      relative: '.',
-      absolute: workspacePath,
-    };
-  }
+  const resolved = WorkspaceFS.locatePath(
+    !trimmed || trimmed === '.' ? '' : trimmed,
+  );
 
-  if (path.isAbsolute(trimmed)) {
-    const relative = WorkspaceFS.relativePath(trimmed);
-    if (relative === trimmed || relative.startsWith('..')) {
-      throw new ToolError('Path must stay within the workspace.');
-    }
-    return {
-      relative: relative === '' ? '.' : relative,
-      absolute: trimmed,
-    };
-  }
-
-  const relative = path.normalize(trimmed);
-  if (relative.startsWith('..')) {
+  if (resolved.kind === 'external') {
     throw new ToolError('Path must stay within the workspace.');
   }
 
   return {
-    relative,
-    absolute: path.join(workspacePath, relative),
+    relative: resolved.relativePath || '.',
+    absolute: resolved.absolutePath,
   };
 }
 
