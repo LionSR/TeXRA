@@ -18,8 +18,11 @@ const logger = new AgentLogger('ToolUseFollowUpQueue');
  */
 export class ToolUseFollowUpQueue {
   private static readonly queues = new Map<StreamTabId, FollowUpQueue>();
+  /** Streams whose queues were explicitly released (orchestrator disposed). */
+  private static readonly released = new Set<StreamTabId>();
 
   static acquire(streamId: StreamTabId): FollowUpQueue {
+    this.released.delete(streamId);
     let queue = this.queues.get(streamId);
     if (!queue) {
       queue = new FollowUpQueue();
@@ -35,6 +38,7 @@ export class ToolUseFollowUpQueue {
     }
     queue.dispose();
     this.queues.delete(streamId);
+    this.released.add(streamId);
     logger.debug(`Released follow-up queue for stream ${streamId}.`);
   }
 
@@ -48,16 +52,19 @@ export class ToolUseFollowUpQueue {
 
   /**
    * Enqueue a follow-up message for a stream.
-   * Silently discards the message if no queue exists (e.g. orchestrator already disposed).
+   *
+   * Auto-creates the queue if it doesn't exist yet (needed for WAITING streams
+   * from prior sessions). Silently discards if the queue was explicitly released
+   * (orchestrator disposed — late-arriving subagent results).
    */
   static enqueue(streamId: StreamTabId, followUp: string): void {
-    const queue = this.queues.get(streamId);
-    if (!queue) {
+    if (this.released.has(streamId)) {
       logger.debug(
-        `No active queue for stream ${streamId}, discarding follow-up.`,
+        `Queue for stream ${streamId} was released, discarding follow-up.`,
       );
       return;
     }
+    const queue = this.acquire(streamId);
     queue.enqueue(followUp);
     logger.debug(`Queued follow-up for stream ${streamId}.`);
   }
