@@ -11,7 +11,7 @@ import {
   type ToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
 // Type imports
-import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
+import type { ToolUseCycleServices } from '@agent/core/flows/CycleServices';
 
 // Local imports - agent runtime
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
@@ -141,8 +141,9 @@ describe('BashTool', () => {
     const handler = new BashMockHandler(config);
     const workspaceState = AgentWorkspaceState.create();
     const run = createRunState();
-    const options: ToolUseCycleOptions<OpenAI> = {
+    const options: ToolUseCycleServices<OpenAI> = {
       modelHandler: handler,
+      config: config as any,
       setting: {
         agentCategory: AgentCategory.ToolUse,
         documentTag: 'doc',

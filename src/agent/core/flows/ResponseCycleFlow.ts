@@ -42,10 +42,7 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
-import {
-  type ResponseCycleParams,
-  type ResponseCycleServices,
-} from './CycleServices';
+import { type CycleParams, type ResponseCycleServices } from './CycleServices';
 
 // All debug options (context + file options) are derived at maybeSaveDebugObject call sites.
 
@@ -159,7 +156,7 @@ interface ResponsePrepResult {
  */
 class ResponsePrepNode<C> extends BaseNode<
   ResponseCycleShared,
-  ResponseCycleParams<C>,
+  CycleParams,
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ResponsePrepResult> {
@@ -234,7 +231,7 @@ interface InvocationPrepResult extends BaseInvocationPrepResult {
  */
 class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
   ResponseCycleShared,
-  ResponseCycleParams<C>,
+  CycleParams,
   ResponseCycleServices<C>
 > {
   protected getOperationName(): string {
@@ -405,7 +402,7 @@ type ContinuationNodeResult = SkippableNodeResult<{
  */
 class ResponseProcessNode<C> extends BaseNode<
   ResponseCycleShared,
-  ResponseCycleParams<C>,
+  CycleParams,
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ProcessPrepResult> {
@@ -666,7 +663,7 @@ class ResponseProcessNode<C> extends BaseNode<
  */
 class ResponseCycleFinalizeNode<C> extends BaseNode<
   ResponseCycleShared,
-  ResponseCycleParams<C>,
+  CycleParams,
   ResponseCycleServices<C>
 > {
   /** Finalize the round by recording stats and invoking callback. */
@@ -690,7 +687,7 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
  */
 class ResponseContinuationNode<C> extends BaseNode<
   ResponseCycleShared,
-  ResponseCycleParams<C>,
+  CycleParams,
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
@@ -830,7 +827,7 @@ class ResponseContinuationNode<C> extends BaseNode<
  */
 export function createResponseCycleFlow<C>(): Flow<
   ResponseCycleShared,
-  ResponseCycleParams<C>
+  CycleParams
 > {
   const prepNode = new ResponsePrepNode<C>();
   const invokeNode = new ResponseModelInvocationNode<C>();
@@ -849,5 +846,5 @@ export function createResponseCycleFlow<C>(): Flow<
 
   continuationNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ResponseCycleShared, ResponseCycleParams<C>>(prepNode);
+  return new Flow<ResponseCycleShared, CycleParams>(prepNode);
 }
