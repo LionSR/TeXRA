@@ -23,27 +23,27 @@ const activeSubagents = new Map<string, SubagentEntry>();
 /**
  * Register a subagent. Entry auto-removes when the promise settles.
  *
- * @param subagentId - Unique identifier for this subagent invocation
+ * @param executionId - Execution ID for this subagent (same ID used in runs tool and XML delivery)
  * @param parentStreamId - Orchestrator's stream ID
  * @param childStreamId - Subagent's stream ID
  * @param childAgentName - Name of the subagent being run
  * @param promise - The subagent's execution promise (for auto-cleanup)
  */
 export function registerSubagent(
-  subagentId: string,
+  executionId: string,
   parentStreamId: StreamTabId,
   childStreamId: StreamTabId,
   childAgentName: string,
   promise: Promise<unknown>,
 ): void {
-  activeSubagents.set(subagentId, {
+  activeSubagents.set(executionId, {
     parentStreamId,
     childStreamId,
     childAgentName,
   });
   // .catch suppresses the derived promise's unhandled rejection —
   // the original promise's rejection is handled by the caller.
-  promise.finally(() => activeSubagents.delete(subagentId)).catch(() => {});
+  promise.finally(() => activeSubagents.delete(executionId)).catch(() => {});
 }
 
 /** Get all active children for a given orchestrator stream. */
