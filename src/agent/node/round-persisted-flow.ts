@@ -154,8 +154,7 @@ export class RoundPersistedFlow<
       );
       const wasInterrupted =
         !completedAllRounds &&
-        (this.callbacks.checkInterruption?.() ||
-          !currentShared.continueRounds);
+        (this.callbacks.checkInterruption?.() || !currentShared.continueRounds);
       if (wasInterrupted) {
         status = EXECUTION_STATUS.INTERRUPTED;
       }
