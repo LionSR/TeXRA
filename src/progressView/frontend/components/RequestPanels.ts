@@ -483,6 +483,9 @@ export class RequestPanels extends LitElement {
             </span>
             <span class="workflow-proposal__agent">${data.agent}</span>
             <span class="workflow-proposal__model">${data.model}</span>
+            ${data.mode === 'async'
+              ? html`<span class="workflow-proposal__mode-badge">async</span>`
+              : nothing}
           </div>
           <div class="workflow-proposal__instruction">${data.instruction}</div>
           ${isWorkflow
