@@ -30,7 +30,7 @@ export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {
   checkInterruption: () => boolean;
   setAbortController: (ctrl: AbortController | null) => void;
   onInterrupt?: () => void;
-  getUsageRecorder?: () => RoundFinalizedCallback;
+  onRoundFinalized?: RoundFinalizedCallback;
 }
 
 export interface FlowParams {

@@ -25,7 +25,7 @@ import type { AgentProposal } from '@shared/schemas';
 
 /** Result of an agent proposal (workflow or tool-use). */
 export type ProposalResult =
-  | { action: 'approve' }
+  | { action: 'approve'; model?: string }
   | { action: 'reject'; feedback?: string }
   | { action: 'setup' }
   | { action: 'timeout' };

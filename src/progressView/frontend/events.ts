@@ -47,6 +47,7 @@ export interface PermissionActionDetail {
   permission: PermissionState;
   action: string;
   feedback?: string;
+  modelOverride?: string;
 }
 
 export interface GroupToggleDetail {

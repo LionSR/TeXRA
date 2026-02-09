@@ -110,7 +110,7 @@ export class ToolUsePrepareNode<C> extends Node<
       userChannels,
       shouldSkipCycle,
     } = execRes.result;
-    shared.conversation = [...messages];
+    shared.messages = [...messages];
     shared.shouldSkipCycle = shouldSkipCycle;
     shared.stateSlices = {
       runStateSnapshot: runState,
