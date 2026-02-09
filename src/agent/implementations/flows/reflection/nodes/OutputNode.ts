@@ -13,7 +13,7 @@
 import { Node } from '@agent/node';
 import type { RoundFileMapping } from '@agent/output/types';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
-import { hasRoundOutputs } from '@agent/output/outputState';
+import { hasRoundOutputs, getStorageKey } from '@agent/output/outputState';
 import { extractFilesFromXml } from '@agent/output/xmlExtraction';
 import { traceFileLineage } from '@agent/output/lineageMapping';
 import { checkExpectedOutputs } from '@agent/output/outputValidation';
@@ -202,7 +202,7 @@ export class OutputNode<C = unknown> extends Node<
       );
     } catch {
       summary = {
-        storageKey: '' as any,
+        storageKey: getStorageKey(outputState),
         currRound: shared.currentRound,
         fileInfos: [],
         filesToOpen: [],
