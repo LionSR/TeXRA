@@ -95,7 +95,8 @@ function toConfigPayload(
 
 /**
  * Execute a subagent in the requested mode.
- * Returns a ToolResult for the orchestrator.
+ * Pre-generates executionId so all IDs (tool return, XML delivery, error)
+ * are consistent and usable with the runs tool.
  */
 function executeSubagent(
   configPayload: AgentConfigPayload,
@@ -104,20 +105,20 @@ function executeSubagent(
   orchestratorStreamId: StreamTabId,
   inputFile?: string,
 ): ToolResult | Promise<ToolResult> {
+  const executionId = randomUUID() as ExecutionId;
+
   if (mode === 'sync') {
-    return executeAgent(configPayload, undefined, {
+    return executeAgent(configPayload, executionId, {
       isSubagent: true,
     }).then((result) => formatFlowResult(result, agentName, inputFile));
   }
 
   // Async: launch, deliver result via FollowUpQueue, return execution ID for progress checks
-  const subagentId = randomUUID();
-  const executionId = randomUUID() as ExecutionId;
   const promise = executeAgent(configPayload, executionId, {
     isSubagent: true,
     onStreamResolved: (childStreamId) => {
       registerSubagent(
-        subagentId,
+        executionId,
         orchestratorStreamId,
         childStreamId,
         agentName,
@@ -131,7 +132,7 @@ function executeSubagent(
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     })
     .catch((err: unknown) => {
-      const msg = formatSubagentError(subagentId, agentName, err);
+      const msg = formatSubagentError(executionId, agentName, err);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     });
   return {

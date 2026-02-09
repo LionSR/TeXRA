@@ -308,6 +308,7 @@ async function runFlowWithLifecycle(
   streamId: StreamTabId,
   agentName: string,
   runner: () => Promise<AgentFlowResult>,
+  options?: { isSubagent?: boolean },
 ): Promise<AgentFlowResult> {
   try {
     const result = await runner();
@@ -331,10 +332,14 @@ async function runFlowWithLifecycle(
     ctx.parentStage.end(END_GROUP_STATUS.ERROR);
     StreamStatusService.set(streamId, STREAM_STATUS.ERROR);
 
-    if (isApiKeyError(err)) {
-      await showApiKeyErrorNotification();
-    } else {
-      vscode.window.showErrorMessage(errorMsg);
+    // Subagents propagate errors to the orchestrator via FollowUpQueue —
+    // don't show VS Code popups that would confuse the user.
+    if (!options?.isSubagent) {
+      if (isApiKeyError(err)) {
+        await showApiKeyErrorNotification();
+      } else {
+        vscode.window.showErrorMessage(errorMsg);
+      }
     }
 
     throw new Error(errorMsg);
@@ -466,6 +471,7 @@ function createFlowContext(
 async function prepareAgentUI(
   ctx: ResolvedAgentBase,
   executionId: ExecutionId | undefined,
+  options?: { isSubagent?: boolean },
 ): Promise<void> {
   if (executionId) await ensureRunDir(executionId);
   const { streamId, config } = ctx;
@@ -483,11 +489,15 @@ async function prepareAgentUI(
     `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
   );
 
-  if (!runStorage.isViewVisible()) {
-    await vscode.commands.executeCommand('texra.showProgressView');
-  }
-  if (!runStorage.isViewVisible()) {
-    showAgentNotification(config);
+  // Subagents don't need to force-open the progress board or show notifications —
+  // the orchestrator's stream is already visible.
+  if (!options?.isSubagent) {
+    if (!runStorage.isViewVisible()) {
+      await vscode.commands.executeCommand('texra.showProgressView');
+    }
+    if (!runStorage.isViewVisible()) {
+      showAgentNotification(config);
+    }
   }
   bus.emit('setTaskState', {
     streamId,
@@ -534,44 +544,55 @@ export async function executeAgent(
 
   options?.onStreamResolved?.(streamId);
 
-  return runFlowWithLifecycle(ctx, streamId, agentName, async () => {
-    await prepareAgentUI(ctx, executionId);
+  const isSubagent = options?.isSubagent;
+  return runFlowWithLifecycle(
+    ctx,
+    streamId,
+    agentName,
+    async () => {
+      await prepareAgentUI(ctx, executionId, { isSubagent });
 
-    const taskStage = await logger.stage(`Task: ${agentName}@${config.model}`);
-    return taskStage.run(async () => {
-      logger.info(`Executing ${agentName} with model ${config.model}`);
+      const taskStage = await logger.stage(
+        `Task: ${agentName}@${config.model}`,
+      );
+      return taskStage.run(async () => {
+        logger.info(`Executing ${agentName} with model ${config.model}`);
 
-      if (setting.agentCategory === AgentCategory.ToolUse) {
-        const flowContext = createFlowContext(ctx, 'tool-use');
-        const result = await runToolUseFlow({
+        if (setting.agentCategory === AgentCategory.ToolUse) {
+          const flowContext = createFlowContext(ctx, 'tool-use');
+          const result = await runToolUseFlow({
+            ...flowContext,
+            setting: ctx.setting as AgentToolUseSetting,
+            isSubagent,
+            onFollowUpConsumed: () =>
+              bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
+          });
+          return {
+            category: 'toolUse' as const,
+            status: result.status,
+            lastResponse: result.lastResponse,
+            executionId: ctx.executionId,
+            streamId,
+          };
+        }
+
+        const flowContext = createFlowContext(ctx, 'workflow');
+        const result = await runReflectionFlow({
           ...flowContext,
-          setting: ctx.setting as AgentToolUseSetting,
-          isSubagent: options?.isSubagent,
-          onFollowUpConsumed: () =>
-            bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
+          setting: ctx.setting as AgentWorkflowSetting,
+          parentStage: ctx.parentStage,
         });
         return {
-          category: 'toolUse' as const,
+          category: 'workflow' as const,
           status: result.status,
-          lastResponse: result.lastResponse,
+          outputs: toOutputSummaries(result.roundOutputs),
+          executionId: ctx.executionId,
           streamId,
         };
-      }
-
-      const flowContext = createFlowContext(ctx, 'workflow');
-      const result = await runReflectionFlow({
-        ...flowContext,
-        setting: ctx.setting as AgentWorkflowSetting,
-        parentStage: ctx.parentStage,
       });
-      return {
-        category: 'workflow' as const,
-        status: result.status,
-        outputs: toOutputSummaries(result.roundOutputs),
-        streamId,
-      };
-    });
-  });
+    },
+    { isSubagent },
+  );
 }
 
 export async function executeMergeAgent(
@@ -613,6 +634,7 @@ export async function executeMergeAgent(
         category: 'workflow' as const,
         status: result.status,
         outputs: toOutputSummaries(result.roundOutputs),
+        executionId: ctx.executionId,
         streamId,
       };
     });
@@ -659,6 +681,7 @@ export async function resumeToolUseFromSnapshot(
         category: 'toolUse' as const,
         status: result.status,
         lastResponse: result.lastResponse,
+        executionId: ctx.executionId,
         streamId,
       };
     },
