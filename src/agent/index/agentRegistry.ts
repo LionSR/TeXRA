@@ -552,8 +552,9 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
       const isToolUse = primary.agentCategory === AgentCategory.ToolUse;
       const cached = metaCache[name];
 
-      // Description from DB is cache; updated from YAML when agent is loaded.
-      // Tools and defaultOutputFiles hydrated from persistent cache.
+      // Tools: prefer DB column (authoritative), fall back to persistent cache.
+      // defaultOutputFiles: from persistent cache (no DB column yet).
+      const dbTools = primary.tools?.length ? primary.tools : undefined;
       entries.push({
         name,
         source: 'remote' as AgentSource,
@@ -562,7 +563,7 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
         category: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
         description: primary.description ?? undefined,
         visibility: primary.visibility ?? undefined,
-        tools: cached?.tools,
+        tools: dbTools ?? cached?.tools,
         defaultOutputFiles: cached?.defaultOutputFiles,
       });
     }
