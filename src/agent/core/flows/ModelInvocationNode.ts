@@ -91,7 +91,10 @@ export class ModelInvocationNode<
         systemPrompt: prepRes.systemPrompt,
         endTag: this._config.getEndTag?.(services),
         signal,
-        tools: this._config.getTools?.(services) ?? services.setting.tools,
+        tools:
+          this._config.getTools !== undefined
+            ? this._config.getTools(services)
+            : services.setting.tools,
       });
 
       return {
