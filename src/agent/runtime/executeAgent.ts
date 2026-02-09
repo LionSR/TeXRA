@@ -12,6 +12,8 @@ import {
   type StreamTabId,
   type ExecutionId,
   type StorageKey,
+  type OutputFileInfo,
+  type RoundOutput,
 } from '@shared/schemas';
 import {
   resolveAgent,
@@ -68,6 +70,8 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
 import { createInterruptCallbacks } from './InterruptManager';
+import { trackExecution, untrackExecution } from './executionRegistry';
+import type { AgentFlowResult, OutputFileSummary } from './AgentFlowResult';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -282,23 +286,46 @@ function isApiKeyError(err: unknown): boolean {
   return msg.includes('Missing API key') || msg.includes('API key not found');
 }
 
+/** Map workflow RoundOutput[] to OutputFileSummary[] for AgentFlowResult. */
+function toOutputSummaries(roundOutputs: RoundOutput[]): OutputFileSummary[] {
+  return roundOutputs.flatMap((r) =>
+    r.outputs.map((o: OutputFileInfo) => ({
+      round: r.round,
+      relativePath:
+        'relativePath' in o.location
+          ? o.location.relativePath
+          : o.location.absolutePath,
+      absolutePath: o.location.absolutePath,
+      location: o.location.kind,
+      originalPath: o.lineage?.original?.absolutePath ?? null,
+      added: o.diff?.added ?? null,
+      removed: o.diff?.removed ?? null,
+    })),
+  );
+}
+
 async function runFlowWithLifecycle(
   ctx: ResolvedAgentBase,
   streamId: StreamTabId,
   agentName: string,
-  runner: () => Promise<EndGroupStatus>,
-): Promise<void> {
+  runner: () => Promise<AgentFlowResult>,
+  options?: { isSubagent?: boolean },
+): Promise<AgentFlowResult> {
+  trackExecution(ctx.executionId, streamId);
   try {
-    const flowStatus = await runner();
-    ctx.parentStage.end(flowStatus);
+    const result = await runner();
+    untrackExecution(ctx.executionId);
+    ctx.parentStage.end(result.status);
 
     if (!StreamStatusService.shouldPreserveOnCompletion(streamId)) {
       const status =
-        flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED;
+        result.status === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED;
       StreamStatusService.set(streamId, status);
     }
-    logger.debug(`Task completed with status: ${flowStatus}`);
+    logger.debug(`Task completed with status: ${result.status}`);
+    return result;
   } catch (err) {
+    untrackExecution(ctx.executionId);
     const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
     // Log error BEFORE ending the group so it gets the correct groupId
@@ -309,10 +336,14 @@ async function runFlowWithLifecycle(
     ctx.parentStage.end(END_GROUP_STATUS.ERROR);
     StreamStatusService.set(streamId, STREAM_STATUS.ERROR);
 
-    if (isApiKeyError(err)) {
-      await showApiKeyErrorNotification();
-    } else {
-      vscode.window.showErrorMessage(errorMsg);
+    // Subagents propagate errors to the orchestrator via FollowUpQueue —
+    // don't show VS Code popups that would confuse the user.
+    if (!options?.isSubagent) {
+      if (isApiKeyError(err)) {
+        await showApiKeyErrorNotification();
+      } else {
+        vscode.window.showErrorMessage(errorMsg);
+      }
     }
 
     throw new Error(errorMsg);
@@ -427,23 +458,11 @@ async function resolveAndAcquireStream(
   return ctx;
 }
 
-/** Creates a flow context with interrupt callbacks and a usage recorder for the given flow kind. */
-function createFlowContext(
-  ctx: ResolvedAgentBase,
-  runKind: 'workflow' | 'tool-use',
-) {
-  return {
-    ...ctx,
-    ...createInterruptCallbacks(),
-    getUsageRecorder: () => (run: Parameters<UsageMonitor['recordUsage']>[0]) =>
-      ctx.usageMonitor.recordUsage(run, { runKind }),
-  };
-}
-
 /** Pre-execution UI setup: progress board visibility, notifications, task state emission. */
 async function prepareAgentUI(
   ctx: ResolvedAgentBase,
   executionId: ExecutionId | undefined,
+  options?: { isSubagent?: boolean },
 ): Promise<void> {
   if (executionId) await ensureRunDir(executionId);
   const { streamId, config } = ctx;
@@ -461,11 +480,15 @@ async function prepareAgentUI(
     `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
   );
 
-  if (!runStorage.isViewVisible()) {
-    await vscode.commands.executeCommand('texra.showProgressView');
-  }
-  if (!runStorage.isViewVisible()) {
-    showAgentNotification(config);
+  // Subagents don't need to force-open the progress board or show notifications —
+  // the orchestrator's stream is already visible.
+  if (!options?.isSubagent) {
+    if (!runStorage.isViewVisible()) {
+      await vscode.commands.executeCommand('texra.showProgressView');
+    }
+    if (!runStorage.isViewVisible()) {
+      showAgentNotification(config);
+    }
   }
   bus.emit('setTaskState', {
     streamId,
@@ -489,45 +512,79 @@ async function prepareAgentUI(
 // Public Entry Points
 // ============================================================================
 
+/** Options for executeAgent. */
+export interface ExecuteAgentOptions {
+  /** When true, proposal tools are filtered out to prevent nesting. */
+  isSubagent?: boolean;
+  /** Fires early with the real streamId, before flow execution starts. */
+  onStreamResolved?: (streamId: StreamTabId) => void;
+}
+
 export async function executeAgent(
   configPayload: AgentConfigPayload,
   executionId?: ExecutionId,
-): Promise<void> {
-  if (!configPayload.model || !configPayload.agent) {
-    throw new Error('Missing required fields: model and/or agent');
-  }
-
+  options?: ExecuteAgentOptions,
+): Promise<AgentFlowResult> {
   const ctx = await resolveAndAcquireStream(configPayload, executionId);
   const { setting, streamId, config } = ctx;
   const agentName = config.agent;
 
-  await runFlowWithLifecycle(ctx, streamId, agentName, async () => {
-    await prepareAgentUI(ctx, executionId);
+  options?.onStreamResolved?.(streamId);
 
-    const taskStage = await logger.stage(`Task: ${agentName}@${config.model}`);
-    return taskStage.run(async () => {
-      logger.info(`Executing ${agentName} with model ${config.model}`);
+  const isSubagent = options?.isSubagent;
+  return runFlowWithLifecycle(
+    ctx,
+    streamId,
+    agentName,
+    async () => {
+      await prepareAgentUI(ctx, executionId, { isSubagent });
 
-      if (setting.agentCategory === AgentCategory.ToolUse) {
-        const flowContext = createFlowContext(ctx, 'tool-use');
-        const result = await runToolUseFlow({
-          ...flowContext,
-          setting: ctx.setting as AgentToolUseSetting,
-          onFollowUpConsumed: () =>
-            bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
+      const taskStage = await logger.stage(
+        `Task: ${agentName}@${config.model}`,
+      );
+      return taskStage.run(async () => {
+        logger.info(`Executing ${agentName} with model ${config.model}`);
+        const interrupts = createInterruptCallbacks();
+
+        if (setting.agentCategory === AgentCategory.ToolUse) {
+          const result = await runToolUseFlow({
+            ...ctx,
+            ...interrupts,
+            onRoundFinalized: (run) =>
+              ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
+            setting: ctx.setting as AgentToolUseSetting,
+            isSubagent,
+            onFollowUpConsumed: () =>
+              bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
+          });
+          return {
+            category: 'toolUse' as const,
+            status: result.status,
+            lastResponse: result.lastResponse,
+            executionId: ctx.executionId,
+            streamId,
+          };
+        }
+
+        const result = await runReflectionFlow({
+          ...ctx,
+          ...interrupts,
+          onRoundFinalized: (run) =>
+            ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
+          setting: ctx.setting as AgentWorkflowSetting,
+          parentStage: ctx.parentStage,
         });
-        return result.status;
-      }
-
-      const flowContext = createFlowContext(ctx, 'workflow');
-      const result = await runReflectionFlow({
-        ...flowContext,
-        setting: ctx.setting as AgentWorkflowSetting,
-        parentStage: ctx.parentStage,
+        return {
+          category: 'workflow' as const,
+          status: result.status,
+          outputs: toOutputSummaries(result.roundOutputs),
+          executionId: ctx.executionId,
+          streamId,
+        };
       });
-      return result.status;
-    });
-  });
+    },
+    { isSubagent },
+  );
 }
 
 export async function executeMergeAgent(
@@ -554,9 +611,11 @@ export async function executeMergeAgent(
       logger.info(`Executing merge with model ${model}`);
 
       const fileService = new TaskRunFileService(executionId);
-      const flowContext = createFlowContext(ctx, 'workflow');
       const result = await runReflectionFlow({
-        ...flowContext,
+        ...ctx,
+        ...createInterruptCallbacks(),
+        onRoundFinalized: (run) =>
+          ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
         setting: ctx.setting as AgentWorkflowSetting,
         getOutputFileLocation: createMergeOutputFileLocationGetter(
           inputFile,
@@ -565,7 +624,13 @@ export async function executeMergeAgent(
         ),
         parentStage: ctx.parentStage,
       });
-      return result.status;
+      return {
+        category: 'workflow' as const,
+        status: result.status,
+        outputs: toOutputSummaries(result.roundOutputs),
+        executionId: ctx.executionId,
+        streamId,
+      };
     });
   });
 }
@@ -594,10 +659,12 @@ export async function resumeToolUseFromSnapshot(
     async () => {
       StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
 
-      const flowContext = createFlowContext(ctx, 'tool-use');
       const result = await runToolUseFlow(
         {
-          ...flowContext,
+          ...ctx,
+          ...createInterruptCallbacks(),
+          onRoundFinalized: (run) =>
+            ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
           setting: setting as AgentToolUseSetting,
           resumeSnapshot: snapshot,
           onFollowUpConsumed: () =>
@@ -606,7 +673,13 @@ export async function resumeToolUseFromSnapshot(
         undefined,
         setupSession ? (context) => setupSession(context.session) : undefined,
       );
-      return result.status;
+      return {
+        category: 'toolUse' as const,
+        status: result.status,
+        lastResponse: result.lastResponse,
+        executionId: ctx.executionId,
+        streamId,
+      };
     },
   );
 }

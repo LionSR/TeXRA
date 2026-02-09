@@ -259,6 +259,7 @@ export const ResolveRetryRequestMessageSchema = z.object({
 export const ShowAgentProposalMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL),
   proposal: AgentProposalPermissionSchema,
+  modelOptionsData: z.array(ModelOptionDataSchema).optional(),
 });
 
 export const ResolveAgentProposalMessageSchema = z.object({
@@ -567,6 +568,7 @@ const AgentProposalActionMessageSchema = z.object({
   proposalId: z.string().min(1),
   action: z.enum(['approve', 'reject', 'setup']),
   feedback: z.string().optional(),
+  model: z.string().optional(),
 });
 
 const RestoreProposalConfigMessageSchema = z.object({

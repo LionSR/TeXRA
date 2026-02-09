@@ -45,10 +45,14 @@ export interface OutputState {
   runPreparation: Promise<void> | null;
 }
 
-/** Dependencies needed by output utility functions. */
+/** Dependencies needed by output utility functions.
+ *
+ * Field names match AgentCore/ReflectionServices so that `services` objects
+ * satisfy this interface structurally — no wrapper object needed.
+ */
 export interface OutputDependencies {
-  agentSetting: AgentWorkflowSetting;
-  agentConfig: AgentConfig;
+  setting: AgentWorkflowSetting;
+  config: AgentConfig;
   baseFiles: FileLocation[];
   logger: AgentLogger;
   fileService: TaskRunFileService;
@@ -176,7 +180,7 @@ export function setActiveRun(
   state.storageKey = storageKey;
   state.openedOutputs.clear();
 
-  const supportFiles = collectRunSupportFiles(deps.agentConfig);
+  const supportFiles = collectRunSupportFiles(deps.config);
   state.runPreparation = deps.fileService.prepareRunWorkspace(deps.baseFiles, {
     linkFiles: supportFiles,
   });
