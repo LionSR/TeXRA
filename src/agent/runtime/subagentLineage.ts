@@ -2,7 +2,7 @@
  * Parent-child lineage tracking for active subagents.
  *
  * Tracks which subagents are currently running under which orchestrator.
- * Used for: result routing (Mode C), queue lifetime management,
+ * Used for: result routing, queue lifetime management,
  * cascading cancellation, and nesting enforcement.
  *
  * Entries auto-remove when the subagent's promise settles.
@@ -11,7 +11,11 @@
  */
 
 import { bus } from '@eventBus/ProgressEventBus';
-import type { ActiveSubagentInfo, StreamTabId } from '@shared/schemas';
+import {
+  getInterruptible,
+} from '@agent/toolUse/ToolUseAgentRegistry';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { STREAM_STATUS, type ActiveSubagentInfo, type StreamTabId } from '@shared/schemas';
 
 interface SubagentEntry {
   parentStreamId: StreamTabId;
@@ -98,4 +102,15 @@ export function isSubagent(streamId: StreamTabId): boolean {
   return [...activeSubagents.values()].some(
     (e) => e.childStreamId === streamId,
   );
+}
+
+/**
+ * Interrupt all active subagents of a parent stream.
+ * Used for cascading cancellation when the orchestrator is stopped.
+ */
+export function interruptActiveChildren(parentStreamId: StreamTabId): void {
+  for (const child of getActiveChildren(parentStreamId)) {
+    getInterruptible(child.childStreamId)?.interrupt();
+    StreamStatusService.set(child.childStreamId, STREAM_STATUS.STOPPED);
+  }
 }
