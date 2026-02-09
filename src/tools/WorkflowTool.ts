@@ -64,7 +64,7 @@ logger.initialize(LOG_CHANNEL);
 /** Execution mode schema for proposal tools. */
 const ModeSchema = z
   .enum(['sync', 'async'])
-  .prefault('sync')
+  .nullish()
   .describe(
     'sync: wait for result inline. async: launch, check progress via runs tool, result delivered as follow-up message.',
   );
@@ -344,7 +344,7 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       agent: input.agent,
       model,
       instruction: input.instruction,
-      mode: input.mode,
+      mode: input.mode ?? 'sync',
       inputFile: input.inputFile,
       inputFiles: input.inputFiles,
       referenceFile: input.referenceFile,
@@ -444,7 +444,7 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
       agent: input.agent,
       model,
       instruction: input.instruction,
-      mode: input.mode,
+      mode: input.mode ?? 'sync',
     } satisfies ToolUseAgentProposal);
 
     const streamId = getRequiredStreamId();
