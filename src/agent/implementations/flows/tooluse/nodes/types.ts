@@ -1,6 +1,4 @@
-/**
- * Shared types for tool-use flow nodes.
- */
+/** Shared types for tool-use flow nodes. */
 import { z } from 'zod';
 
 import type { AgentRunStateSnapshot } from '@agent/core/AgentState';
@@ -9,7 +7,10 @@ import type {
   AgentWorkspaceSnapshot,
 } from '@agent/core/AgentWorkspaceState';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
+import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import type { RetryErrorInfo } from '@shared/schemas';
 
 export interface StateSlicesSnapshot {
   runStateSnapshot: AgentRunStateSnapshot;
@@ -17,12 +18,24 @@ export interface StateSlicesSnapshot {
   userChannels: UserVariableChannels;
 }
 
-/** Runtime shared state for tool-use flows (flat structure for PersistedFlow). */
+/** Shared state for the flat tool-use flow. Cycle fields are structurally compatible with ToolUseCycleShared. */
 export interface ToolUseRunShared {
   messages: ProviderMessage[];
   shouldSkipCycle: boolean;
   stateSlices: StateSlicesSnapshot | null;
   userCancelledRetry?: boolean;
+  // Cycle fields (reset by CycleSetupNode before each cycle)
+  shouldStop: boolean;
+  endTurn: boolean;
+  responseTimeMs?: number;
+  stopReason?: string | null;
+  lastError?: RetryErrorInfo;
+  response?: unknown;
+  toolCalls?: SdkToolCall[];
+  text?: string;
+  cycleIndex: number;
+  cycleResponseTimeMs: number;
+  cycleNormalizedUsage?: NormalizedUsage;
 }
 
 interface NodeResultStateBase {
@@ -41,12 +54,6 @@ export interface PrepareResult extends NodeResultStateBase {
 export type WaitExecResult =
   | { kind: 'continue'; followUp: string }
   | { kind: 'stop' };
-
-/** Result from ToolUseCycleNode prep phase. */
-export interface CyclePrepResult extends NodeResultStateBase {
-  messages: ProviderMessage[];
-  shouldSkip: boolean;
-}
 
 export type PreparedShared = ToolUseRunShared & {
   stateSlices: StateSlicesSnapshot;
