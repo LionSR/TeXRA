@@ -452,30 +452,39 @@ const handlers: HandlerRegistry = {
     const isActiveStream = stream === state.activeStreamId;
     const shouldFocus = isActiveStream && status === STREAM_STATUS.WAITING;
 
-    ctx.setStreamState(stream, (prev) => {
-      if (isToolUseState(prev) && shouldFocus) {
-        return {
-          ...prev,
-          status,
-          ui: { ...prev.ui, shouldFocusFollowUp: true },
-        };
-      }
-      return { ...prev, status };
-    });
+    // Single atomic update: stream state + tab metadata in one setState call,
+    // avoiding two Map copies and two Lit re-render triggers.
+    ctx.setState((prev) => {
+      const streamInfo = prev.streams.find((s) => s.name === stream);
+      const nextStates = new Map(prev.streamStates);
 
-    // Use updater function to get fresh state after setStreamState
-    ctx.setState((prev) => ({
-      ...prev,
-      streams: prev.streams.map((item) =>
-        item.name === stream
-          ? {
-              ...item,
-              status,
-              lastTimestamp: lastTimestamp ?? item.lastTimestamp,
-            }
-          : item,
-      ),
-    }));
+      if (streamInfo) {
+        const current = getStreamState(prev, stream, streamInfo.agentCategory);
+        const updatedState =
+          isToolUseState(current) && shouldFocus
+            ? {
+                ...current,
+                status,
+                ui: { ...current.ui, shouldFocusFollowUp: true },
+              }
+            : { ...current, status };
+        nextStates.set(stream, updatedState);
+      }
+
+      return {
+        ...prev,
+        streamStates: nextStates,
+        streams: prev.streams.map((item) =>
+          item.name === stream
+            ? {
+                ...item,
+                status,
+                lastTimestamp: lastTimestamp ?? item.lastTimestamp,
+              }
+            : item,
+        ),
+      };
+    });
   },
 
   // File and output updates

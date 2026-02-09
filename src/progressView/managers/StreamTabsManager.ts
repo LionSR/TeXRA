@@ -85,6 +85,14 @@ export class StreamTabsManager extends PersistentMapManager<
   }
 
   /**
+   * Find a message by ID without copying the entire array.
+   * Returns the message if found, undefined otherwise.
+   */
+  findMessage(stream: StreamTabId, messageId: string): LogMessageData | undefined {
+    return this.items.get(stream)?.find((m) => m.id === messageId);
+  }
+
+  /**
    * Get first timestamp for a stream (for sorting by creation time).
    * More efficient than getMessages() when only timestamp is needed.
    */
