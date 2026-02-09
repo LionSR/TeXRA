@@ -3,6 +3,9 @@
  * Read-only access to past runs - agents can learn from history.
  */
 
+// Standard library imports
+import * as path from 'path';
+
 // Third-party imports
 import * as vscode from 'vscode';
 import { z } from 'zod';
@@ -326,7 +329,7 @@ Use view_range: [start, end] to paginate large outputs.`,
    * List files in task run directory.
    */
   private async listFiles(executionId: ExecutionId): Promise<ToolResult> {
-    const runDir = `${TASK_RUNS_DIR}/${executionId}`;
+    const runDir = path.join(TASK_RUNS_DIR, executionId);
 
     if (!(await StorageFS.exists(runDir))) {
       return { output: 'No files generated for this execution.' };
@@ -357,14 +360,18 @@ Use view_range: [start, end] to paginate large outputs.`,
     maxDepth: number,
   ): Promise<Array<{ path: string; size: number; isDir: boolean }>> {
     const results: Array<{ path: string; size: number; isDir: boolean }> = [];
-    const fullPath = relativePath ? `${basePath}/${relativePath}` : basePath;
+    const fullPath = relativePath
+      ? path.join(basePath, relativePath)
+      : basePath;
 
     try {
       const entries = await StorageFS.readDir(fullPath);
 
       for (const [name, type] of entries) {
-        const entryRelative = relativePath ? `${relativePath}/${name}` : name;
-        const entryFull = `${basePath}/${entryRelative}`;
+        const entryRelative = relativePath
+          ? path.join(relativePath, name)
+          : name;
+        const entryFull = path.join(basePath, entryRelative);
         const isDir = type === vscode.FileType.Directory;
 
         try {
@@ -398,7 +405,7 @@ Use view_range: [start, end] to paginate large outputs.`,
     filePath: string,
     viewRange?: number[],
   ): Promise<ToolResult> {
-    const fullPath = `${TASK_RUNS_DIR}/${executionId}/${filePath}`;
+    const fullPath = path.join(TASK_RUNS_DIR, executionId, filePath);
 
     if (!(await StorageFS.exists(fullPath))) {
       throw new ToolError(
