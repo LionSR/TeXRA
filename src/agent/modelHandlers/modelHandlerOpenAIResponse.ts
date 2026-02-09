@@ -2407,6 +2407,40 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     } satisfies EasyInputMessage;
   }
 
+  override extractAssistantText(
+    message: ResponseInputItem,
+  ): string | undefined {
+    if (
+      typeof message !== 'object' ||
+      !('type' in message) ||
+      message.type !== 'message' ||
+      !('role' in message) ||
+      message.role !== 'assistant' ||
+      !('content' in message)
+    ) {
+      return undefined;
+    }
+
+    // String content (from createAssistantMessage)
+    if (typeof message.content === 'string') {
+      return message.content;
+    }
+
+    // Array content (input_text or output_text parts)
+    if (Array.isArray(message.content)) {
+      const texts = (message.content as { type?: string; text?: string }[])
+        .filter(
+          (p) =>
+            (p.type === 'input_text' || p.type === 'output_text') &&
+            typeof p.text === 'string',
+        )
+        .map((p) => p.text!);
+      return texts.length > 0 ? texts.join('') : undefined;
+    }
+
+    return undefined;
+  }
+
   private createInputText(text: string): ResponseInputContent {
     return { type: 'input_text', text };
   }

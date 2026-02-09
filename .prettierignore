@@ -1,0 +1,2 @@
+# YAML templates contain Nunjucks {{ }} syntax that conflicts with YAML flow mapping parsing
+resources/templates/agentTemplate-*.yaml

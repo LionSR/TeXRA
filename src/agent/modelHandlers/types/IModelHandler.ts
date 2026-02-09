@@ -433,6 +433,15 @@ export interface IModelHandler<
    */
   extractAssistantContent(responseObject: Resp): unknown[];
 
+  /**
+   * Extract text from an assistant message in the conversation.
+   * Returns undefined if the message is not an assistant message or has no text.
+   *
+   * Each provider implements this with proper typing for their message format
+   * (e.g., role='assistant' for OpenAI/Anthropic, role='model' for Google).
+   */
+  extractAssistantText(message: M): string | undefined;
+
   // =========================================================================
   // Message modification methods (for post-build enrichment)
   // =========================================================================
