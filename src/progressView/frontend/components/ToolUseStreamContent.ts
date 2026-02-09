@@ -81,9 +81,11 @@ export class ToolUseStreamContent extends LitElement {
   @state()
   private permissionContext?: PermissionState[];
 
-  // Memoized derived values - updated in willUpdate when deps change
-  @state() private filteredPermissions: PermissionState[] = [];
-  @state() private runGroups: RunGroup[] = [];
+  // Memoized derived values - updated in willUpdate() before render().
+  // Not @state(): these are always recomputed when streamContext/permissionContext
+  // change, so they don't need independent reactivity (avoids double-render).
+  private filteredPermissions: PermissionState[] = [];
+  private runGroups: RunGroup[] = [];
 
   /** Ref for FollowUpInput - exposed for parent access */
   private followUpRef: Ref<FollowUpInput> = createRef();
