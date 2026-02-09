@@ -48,7 +48,6 @@ import { resolveVisibleModel } from '@model/computeModelOptions';
 // Local imports - tools
 import { ToolResult } from '@tools/result';
 import {
-  formatFlowResult,
   formatSubagentDelivery,
   formatSubagentError,
 } from '@tools/subagentResults';
@@ -63,14 +62,6 @@ import { WorkspaceFS } from '@utils/files';
 
 const LOG_CHANNEL = 'WorkflowTool';
 logger.initialize(LOG_CHANNEL);
-
-/** Execution mode schema for proposal tools. */
-const ModeSchema = z
-  .enum(['sync', 'async'])
-  .nullish()
-  .describe(
-    'sync: wait for result inline. async: launch, check progress via runs tool, result delivered as follow-up message.',
-  );
 
 /** Get streamId from context, throwing if unavailable. */
 function getRequiredStreamId(): StreamTabId {
@@ -97,26 +88,20 @@ function toConfigPayload(
 }
 
 /**
- * Execute a subagent in the requested mode.
+ * Execute a subagent asynchronously.
  * Pre-generates executionId so all IDs (tool return, XML delivery, error)
  * are consistent and usable with the runs tool.
+ *
+ * Result is delivered via FollowUpQueue when the subagent completes.
  */
 function executeSubagent(
   configPayload: AgentConfigPayload,
   agentName: string,
-  mode: 'sync' | 'async',
   orchestratorStreamId: StreamTabId,
   inputFile?: string,
-): ToolResult | Promise<ToolResult> {
+): ToolResult {
   const executionId = randomUUID() as ExecutionId;
 
-  if (mode === 'sync') {
-    return executeAgent(configPayload, executionId, {
-      isSubagent: true,
-    }).then((result) => formatFlowResult(result, agentName, inputFile));
-  }
-
-  // Async: launch, deliver result via FollowUpQueue, return execution ID for progress checks
   const promise = executeAgent(configPayload, executionId, {
     isSubagent: true,
     onStreamResolved: (childStreamId) => {
@@ -269,7 +254,6 @@ const WorkflowAgentInputSchema = z.object({
     .describe(
       'Set true when outputFiles has multiple entries. Enables multi-file extraction from agent response.',
     ),
-  mode: ModeSchema,
 });
 
 export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
@@ -355,7 +339,7 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       agent: input.agent,
       model,
       instruction: input.instruction,
-      mode: input.mode ?? 'sync',
+      mode: 'async',
       inputFile: input.inputFile,
       inputFiles: input.inputFiles,
       referenceFile: input.referenceFile,
@@ -390,7 +374,6 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
     return executeSubagent(
       toConfigPayload(effective),
       input.agent,
-      effective.mode,
       streamId,
       input.inputFile,
     );
@@ -413,7 +396,6 @@ const DelegateAgentInputSchema = z.object({
   instruction: z
     .string()
     .describe('Plain prose instruction with file paths included naturally'),
-  mode: ModeSchema,
 });
 
 export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
@@ -457,7 +439,7 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
       agent: input.agent,
       model,
       instruction: input.instruction,
-      mode: input.mode ?? 'sync',
+      mode: 'async',
     } satisfies ToolUseAgentProposal);
 
     const streamId = getRequiredStreamId();
@@ -479,11 +461,6 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
       proposal,
       result as ProposalResult & { action: 'approve' },
     );
-    return executeSubagent(
-      toConfigPayload(effective),
-      input.agent,
-      effective.mode,
-      streamId,
-    );
+    return executeSubagent(toConfigPayload(effective), input.agent, streamId);
   }
 }
