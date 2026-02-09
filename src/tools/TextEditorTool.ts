@@ -25,7 +25,7 @@ import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 // Local file imports
 import { defineTool } from './core/define';
 import { ToolResult, ToolError } from './result';
-import { requireField } from './utils';
+import { getEffectiveWorkspaceRoot, requireField } from './utils';
 
 // Constants
 const CHANNEL = 'TextEditorTool';
@@ -169,7 +169,7 @@ export class TextEditorTool extends defineTool({
     // Check if the path is a directory (only view command can be used on directories)
     if (exists) {
       try {
-        const stats = await AbsoluteFS.stat(WorkspaceFS.fullPath(filePath));
+        const stats = await AbsoluteFS.stat(path.join(getEffectiveWorkspaceRoot(), filePath));
         if (stats.type === vscode.FileType.Directory && command !== 'view') {
           throw new ToolError(
             `The path ${filePath} is a directory and only the 'view' command can be used on directories`,
@@ -186,7 +186,7 @@ export class TextEditorTool extends defineTool({
     viewRange?: number[],
   ): Promise<ToolResult> {
     try {
-      const stats = await AbsoluteFS.stat(WorkspaceFS.fullPath(filePath));
+      const stats = await AbsoluteFS.stat(path.join(getEffectiveWorkspaceRoot(), filePath));
 
       if (stats.type === vscode.FileType.Directory) {
         if (viewRange) {

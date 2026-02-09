@@ -2,9 +2,8 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { formatToolOutput, resolveAndFormat } from '@tools/utils';
+import { formatToolOutput, resolveAndFormat, toLocation } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
-import { pathToLocation } from '@utils/files';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import {
   buildLimitedAttachments,
@@ -32,7 +31,7 @@ export class ExtractLatexFiguresTool extends defineTool({
     const { path, display } = await resolveLatexFileOrThrow(texPath);
 
     const figurePaths = await extractFigurePathsFromLatex(
-      pathToLocation(path.absolute),
+      toLocation(path.absolute),
     );
     const uniqueFigures = [...new Set(figurePaths)];
 

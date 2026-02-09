@@ -62,6 +62,7 @@ export class BashTool extends defineTool({
     const result = await executeCommand(input.command, {
       truncate: true,
       timeout: timeoutMs,
+      cwd: ctx?.workspaceRoot,
       onStdout: ctx?.onToolOutput,
       onStderr: ctx?.onToolOutput,
     });

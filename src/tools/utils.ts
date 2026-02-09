@@ -15,7 +15,7 @@ import { ToolError, type ToolFileAttachment } from '@tools/result';
 
 // Local imports - core utilities
 import { isNonEmptyString, toPosixPath } from '@utils/core';
-import { WorkspaceFS, getMimeType } from '@utils/files';
+import { WorkspaceFS, getMimeType, pathToLocation, type FileLocation } from '@utils/files';
 
 export interface WorkspacePathResolution {
   relative: string;
@@ -27,10 +27,21 @@ export interface WorkspacePathResolution {
  *
  * Priority: explicit override > tool execution context > VS Code workspace.
  */
-function getEffectiveWorkspaceRoot(overrideRoot?: string): string {
+export function getEffectiveWorkspaceRoot(overrideRoot?: string): string {
   if (overrideRoot) return overrideRoot;
   const ctx = getCurrentToolFileInteractionContext();
   return ctx?.workspaceRoot ?? WorkspaceFS.getPath() ?? '';
+}
+
+/**
+ * Context-aware version of pathToLocation().
+ *
+ * Unlike pathToLocation() in @utils/files (which can't depend on @agent/),
+ * this wrapper automatically picks up the workspace root from the current
+ * ToolFileInteractionContext — so tools don't need to pass it explicitly.
+ */
+export function toLocation(target: string, overrideRoot?: string): FileLocation {
+  return pathToLocation(target, getEffectiveWorkspaceRoot(overrideRoot));
 }
 
 /**

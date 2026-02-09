@@ -1,3 +1,6 @@
+// Standard library imports
+import * as path from 'path';
+
 // Third-party imports
 import { z } from 'zod';
 
@@ -5,10 +8,9 @@ import { z } from 'zod';
 import { toErrorMessage } from '@common/errors';
 import { LsTool } from '@tools/ls';
 import { ToolError, ToolResult } from '@tools/result';
-import { formatToolOutput } from '@tools/utils';
+import { formatToolOutput, getEffectiveWorkspaceRoot } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { toPosixPath } from '@utils/core';
-import { WorkspaceFS } from '@utils/files';
 import { arxivProcessor } from '@latex/arxivProcessor';
 
 const ArxivDownloadInputSchema = z.strictObject({
@@ -47,8 +49,11 @@ export class ArxivDownloadTool extends defineTool({
       );
     }
 
-    const relativeRaw = WorkspaceFS.relativePath(downloadPath);
-    // WorkspaceFS.relativePath returns an empty string for the workspace root; normalise to '.' for tooling.
+    const workspaceRoot = getEffectiveWorkspaceRoot();
+    const relativeRaw = workspaceRoot
+      ? path.relative(workspaceRoot, downloadPath)
+      : downloadPath;
+    // path.relative returns an empty string for the workspace root; normalise to '.' for tooling.
     const relativePath = relativeRaw === '' ? '.' : relativeRaw;
     const displayPath = toPosixPath(relativePath);
 

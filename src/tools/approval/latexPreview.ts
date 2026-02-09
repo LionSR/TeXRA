@@ -10,8 +10,8 @@ import * as vscode from 'vscode';
 
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { getConfig } from '@utils/config';
-import { WorkspaceFS, pathToLocation } from '@utils/files';
 import { LaTeXdiffService } from '@latex/latexdiff';
+import { getEffectiveWorkspaceRoot, toLocation } from '@tools/utils';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 
 /** Interface for entries that support LaTeX preview operations */
@@ -99,7 +99,7 @@ async function createTempFileWithCleanup(
   content: string,
   suffix: string,
 ): Promise<string> {
-  const workspacePath = WorkspaceFS.getPath();
+  const workspacePath = getEffectiveWorkspaceRoot();
   if (!workspacePath) {
     throw new Error('No workspace folder open');
   }
@@ -156,7 +156,7 @@ export async function previewProposedLatex(
 
     if (entry.isSettled()) return;
 
-    await openBuildDisplayIfTex(pathToLocation(tempPath), {
+    await openBuildDisplayIfTex(toLocation(tempPath), {
       preserveFocus: true,
     });
   });
@@ -188,13 +188,13 @@ export async function runLatexdiff(
     );
 
     const result = await latexdiffService.runDiff(
-      pathToLocation(originalPath),
-      pathToLocation(proposedPath),
+      toLocation(originalPath),
+      toLocation(proposedPath),
       '_diff',
       false,
       'coarse',
       {
-        cwd: WorkspaceFS.getPath() ?? path.dirname(originalPath),
+        cwd: getEffectiveWorkspaceRoot() || path.dirname(originalPath),
         subtype: options?.subtype,
       },
     );
@@ -229,7 +229,7 @@ export async function runLatexdiff(
 
     if (entry.isSettled()) return;
 
-    await openBuildDisplayIfTex(pathToLocation(diffFilePath), {
+    await openBuildDisplayIfTex(toLocation(diffFilePath), {
       preserveFocus: true,
     });
   });

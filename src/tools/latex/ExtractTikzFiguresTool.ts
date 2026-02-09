@@ -3,9 +3,8 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { type ToolFileAttachment } from '@tools/result';
-import { formatResultCount, formatToolOutput } from '@tools/utils';
+import { formatResultCount, formatToolOutput, toLocation } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
-import { pathToLocation } from '@utils/files';
 import { tikzPictureManager } from '@latex/TikzPictureManager';
 import {
   buildLimitedAttachments,
@@ -37,7 +36,7 @@ export class ExtractTikzFiguresTool extends defineTool({
     const { path, display } = await resolveLatexFileOrThrow(texPath);
 
     const tikzFigures = await tikzPictureManager.extract(
-      pathToLocation(path.absolute),
+      toLocation(path.absolute),
     );
     if (tikzFigures.length === 0) {
       const summary = `No TikZ figures found in ${display}.`;
@@ -61,7 +60,7 @@ export class ExtractTikzFiguresTool extends defineTool({
     let attachments: ToolFileAttachment[] | undefined;
     if (compile) {
       const compiledPaths = await tikzPictureManager.compile(
-        pathToLocation(path.absolute),
+        toLocation(path.absolute),
       );
       if (compiledPaths.length > 0) {
         // Convert FileLocation[] to string[] for legacy attachment API
