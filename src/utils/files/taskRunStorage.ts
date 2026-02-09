@@ -89,63 +89,6 @@ export function getFileDirectory(location: FileLocation): string {
   return path.dirname(location.absolutePath);
 }
 
-/**
- * Result of resolving a path against a workspace.
- * Used internally by path resolution functions.
- */
-type ResolvedPath =
-  | { kind: 'workspace'; absolutePath: string; relativePath: string }
-  | { kind: 'external'; absolutePath: string };
-
-/**
- * Resolve a path (absolute or relative) against a workspace root.
- * This is the shared logic for path resolution used by createLocation,
- * createRawOutputLocation, and pathToLocation.
- *
- * @param inputPath - Absolute or workspace-relative path
- * @param workspaceRoot - The workspace root directory (or undefined if no workspace)
- * @returns Resolved path info with kind, absolutePath, and relativePath (for workspace paths)
- */
-function resolvePathAgainstWorkspace(
-  inputPath: string,
-  workspaceRoot: string | undefined,
-): ResolvedPath {
-  if (!inputPath) {
-    if (!workspaceRoot) {
-      return { kind: 'external', absolutePath: '' };
-    }
-    return { kind: 'workspace', absolutePath: workspaceRoot, relativePath: '' };
-  }
-
-  if (path.isAbsolute(inputPath)) {
-    // Absolute path - check if within workspace
-    // Use WorkspaceFS.relativePath() which handles symlinks correctly via
-    // vscode.workspace.asRelativePath(). Direct path.relative() fails when
-    // the path is inside a symlinked directory.
-    if (!workspaceRoot) {
-      return { kind: 'external', absolutePath: inputPath };
-    }
-    const relative = WorkspaceFS.relativePath(inputPath);
-    // WorkspaceFS.relativePath() returns forward-slash normalized paths.
-    // When outside workspace, it returns the absolute path (still absolute).
-    // Use path.isAbsolute() instead of string equality to detect this.
-    if (!path.isAbsolute(relative) && !relative.startsWith('..')) {
-      return {
-        kind: 'workspace',
-        absolutePath: inputPath,
-        relativePath: relative,
-      };
-    }
-    return { kind: 'external', absolutePath: inputPath };
-  }
-
-  // Relative path
-  if (!workspaceRoot) {
-    return { kind: 'external', absolutePath: path.resolve(inputPath) };
-  }
-  const absolutePath = path.join(workspaceRoot, inputPath);
-  return { kind: 'workspace', absolutePath, relativePath: inputPath };
-}
 
 /**
  * Get the full path to a specific task run directory.
@@ -286,10 +229,6 @@ export class TaskRunFileService {
 
   public updateRunContext(executionId?: ExecutionId | null): void {
     this.applyExecutionContext(executionId ?? undefined);
-  }
-
-  private get workspaceRoot(): string | undefined {
-    return WorkspaceFS.getPath();
   }
 
   public getExecutionId(): ExecutionId | undefined {
@@ -442,7 +381,7 @@ export class TaskRunFileService {
    * @returns FileLocation (runStorage if executionId available, workspace otherwise)
    */
   public createRawOutputLocation(inputPath: string): FileLocation {
-    const resolved = resolvePathAgainstWorkspace(inputPath, this.workspaceRoot);
+    const resolved = WorkspaceFS.locatePath(inputPath);
 
     if (resolved.kind === 'external') {
       return createExternalLocation(resolved.absolutePath);
@@ -483,7 +422,7 @@ export class TaskRunFileService {
    * @returns FileLocation (workspace, runStorage, or external based on path and mode)
    */
   public createLocation(inputPath: string): FileLocation {
-    const resolved = resolvePathAgainstWorkspace(inputPath, this.workspaceRoot);
+    const resolved = WorkspaceFS.locatePath(inputPath);
 
     if (resolved.kind === 'external') {
       return createExternalLocation(resolved.absolutePath);
@@ -581,19 +520,12 @@ export function getComparablePath(location: FileLocation): string {
  * @returns FileLocation (workspace or external, never runStorage)
  */
 export function pathToLocation(target: string): FileLocation {
-  const workspaceRoot = WorkspaceFS.getPath();
-
-  // Special case: empty path requires workspace
-  if (!target) {
-    if (!workspaceRoot) {
-      throw new Error('Cannot resolve empty path without workspace');
-    }
-    return createWorkspaceLocation(workspaceRoot, '');
-  }
-
-  const resolved = resolvePathAgainstWorkspace(target, workspaceRoot);
+  const resolved = WorkspaceFS.locatePath(target);
 
   if (resolved.kind === 'external') {
+    if (!target) {
+      throw new Error('Cannot resolve empty path without workspace');
+    }
     return createExternalLocation(resolved.absolutePath);
   }
 
