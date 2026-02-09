@@ -6,8 +6,9 @@
  * - Round stage creation/ending
  * - Workspace reset between rounds
  *
- * Nodes signal intent via FlowTransitions (CONTINUE_NEXT_ROUND or FINALIZE),
- * and this class handles all round management.
+ * After each full pass through the flow graph, the flow checks whether to
+ * continue (based on continueRounds, bounds, and interruption) and loops
+ * automatically — no dedicated decision node needed.
  *
  * Inheritance:
  * ```
@@ -17,7 +18,6 @@
 
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import type { ExecutionKVStore } from '@agent/storage';
-import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
 import { BaseNode } from './index';
@@ -80,8 +80,8 @@ export interface RoundCallbacks<S extends RoundAwareState> {
 /**
  * A PersistedFlow that manages round lifecycle automatically.
  *
- * Nodes signal intent via FlowTransitions (CONTINUE_NEXT_ROUND or FINALIZE),
- * and this class handles incrementing, stages, resets, and bounds checking.
+ * After each full pass through the node graph, this class checks whether to
+ * continue and handles incrementing, stages, resets, and bounds checking.
  *
  * Returns ExecutionStatus directly from run() — no onFlowEnd callback needed.
  */
@@ -121,10 +121,14 @@ export class RoundPersistedFlow<
 
   /**
    * Run the flow with automatic round management.
+   *
+   * After each full pass through all nodes, the flow checks whether to
+   * continue to the next round. This eliminates the need for a dedicated
+   * "round complete" decision node — the flow itself owns the decision.
+   *
    * Returns the execution status directly.
    */
   async run(shared: S): Promise<ExecutionStatus> {
-    const { callbacks } = this;
     let status: ExecutionStatus = EXECUTION_STATUS.COMPLETED;
 
     await this.init(shared);
@@ -134,24 +138,14 @@ export class RoundPersistedFlow<
       // Create initial round stage (r0)
       await this.createStage(currentShared.currentRound);
 
-      // Execute nodes via stepWithResult()
-      let stepResult = await this.inStage(() => this.stepWithResult());
-      while (stepResult.hasMore) {
-        currentShared = stepResult.shared;
+      // Execute all nodes for the current round
+      currentShared = await this.executeRoundSteps(currentShared);
 
-        if (callbacks.checkInterruption?.()) {
-          currentShared.continueRounds = false;
-          break;
-        }
-
-        if (stepResult.action === FlowTransition.CONTINUE_NEXT_ROUND) {
-          await this.transitionToNextRound(currentShared);
-        }
-
-        stepResult = await this.inStage(() => this.stepWithResult());
+      // After each round, decide whether to continue to the next round.
+      while (this.shouldContinueNextRound(currentShared)) {
+        await this.transitionToNextRound(currentShared);
+        currentShared = await this.executeRoundSteps(currentShared);
       }
-
-      currentShared = stepResult.shared;
 
       // Determine final status
       const completedAllRounds = isRoundAtOrBeyondLimit(
@@ -160,7 +154,8 @@ export class RoundPersistedFlow<
       );
       const wasInterrupted =
         !completedAllRounds &&
-        (callbacks.checkInterruption?.() || !currentShared.continueRounds);
+        (this.callbacks.checkInterruption?.() ||
+          !currentShared.continueRounds);
       if (wasInterrupted) {
         status = EXECUTION_STATUS.INTERRUPTED;
       }
@@ -176,8 +171,43 @@ export class RoundPersistedFlow<
   }
 
   /**
-   * Handle continuation to next round.
-   * This is the SINGLE SOURCE OF TRUTH for round increment.
+   * Execute all nodes in the current round, checking for interruption
+   * between each step. Returns the final shared state.
+   */
+  private async executeRoundSteps(shared: S): Promise<S> {
+    let currentShared = shared;
+    let stepResult = await this.inStage(() => this.stepWithResult());
+
+    while (stepResult.hasMore) {
+      currentShared = stepResult.shared;
+
+      if (this.callbacks.checkInterruption?.()) {
+        currentShared.continueRounds = false;
+        break;
+      }
+
+      stepResult = await this.inStage(() => this.stepWithResult());
+    }
+
+    return stepResult.shared;
+  }
+
+  /**
+   * Check whether to continue to the next round after all nodes complete.
+   * This is the SINGLE SOURCE OF TRUTH for the continue/finalize decision.
+   */
+  private shouldContinueNextRound(shared: S): boolean {
+    if (this.callbacks.checkInterruption?.()) return false;
+    if (!shared.continueRounds) return false;
+    if (isRoundAtOrBeyondLimit(shared.currentRound + 1, shared.totalRounds)) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Transition to the next round: increment counter, reset state,
+   * reset node history so the flow starts from the beginning again.
    */
   private async transitionToNextRound(shared: S): Promise<void> {
     // End previous round stage
@@ -190,13 +220,11 @@ export class RoundPersistedFlow<
     // Reset state for next round
     this.callbacks.resetForNextRound?.(shared);
 
-    // Persist the updated state atomically
-    await this.setShared(shared);
+    // Reset node history so next stepWithResult() starts from the beginning
+    await this.resetNodeHistory(shared);
 
-    // Create new stage if still in bounds
-    if (!isRoundAtOrBeyondLimit(shared.currentRound, shared.totalRounds)) {
-      await this.createStage(shared.currentRound);
-    }
+    // Create new stage
+    await this.createStage(shared.currentRound);
   }
 
   /**
