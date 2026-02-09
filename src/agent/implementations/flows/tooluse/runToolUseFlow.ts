@@ -75,11 +75,10 @@ export type ToolUseFlowSetupCallback = (
   context: ToolUseFlowContext<unknown>,
 ) => void;
 
-/** Proposal tool names (and their companion) that subagents must not receive. */
+/** Proposal tool names that subagents must not receive. */
 const PROPOSAL_TOOLS = new Set([
   'propose_workflow',
   'propose_agent',
-  'await_subagent',
 ]);
 
 /** Options for tool resolution. */
