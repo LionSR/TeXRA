@@ -1233,7 +1233,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (typeof message.content === 'string') return message.content;
     if (!Array.isArray(message.content)) return undefined;
     const texts = message.content
-      .filter((b): b is { type: 'text'; text: string } => (b as { type?: string }).type === 'text')
+      .filter(
+        (b): b is { type: 'text'; text: string } =>
+          (b as { type?: string }).type === 'text',
+      )
       .map((b) => b.text)
       .filter(Boolean);
     return texts.length > 0 ? texts.join('\n') : undefined;

@@ -368,9 +368,7 @@ export class StreamHeader extends LitElement {
             ${activeSubagents.length > 0
               ? html`<span
                   class="subagent-badge"
-                  title=${activeSubagents
-                    .map((s) => s.agentName)
-                    .join(', ')}
+                  title=${activeSubagents.map((s) => s.agentName).join(', ')}
                 >
                   <i class="codicon codicon-server-process"></i>
                   ${activeSubagents.length}
