@@ -343,6 +343,7 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       agent: input.agent,
       model,
       instruction: input.instruction,
+      mode: input.mode,
       inputFile: input.inputFile,
       inputFiles: input.inputFiles,
       referenceFile: input.referenceFile,
@@ -375,7 +376,7 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
     return executeSubagent(
       configPayload,
       input.agent,
-      input.mode,
+      proposal.mode,
       streamId,
       input.inputFile,
     );
@@ -442,6 +443,7 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
       agent: input.agent,
       model,
       instruction: input.instruction,
+      mode: input.mode,
     } satisfies ToolUseAgentProposal);
 
     const streamId = getRequiredStreamId();
@@ -461,6 +463,6 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
 
     // Approved - execute via executeAgent with requested mode
     const configPayload = toConfigPayload(proposal);
-    return executeSubagent(configPayload, input.agent, input.mode, streamId);
+    return executeSubagent(configPayload, input.agent, proposal.mode, streamId);
   }
 }
