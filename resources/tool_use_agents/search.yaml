@@ -4,7 +4,6 @@ description: Research assistant with web search and literature discovery tools.
 settings:
   agentCategory: toolUse
   tools:
-    - bash
     - read_file
     - glob
     - grep
@@ -52,8 +51,7 @@ prompts:
     (3) Use extract_figures, extract_bib_entries, and extract_tikz_figures to analyze LaTeX documents.
 
     Guidelines on using Tools:
-    (1) For bash operations, only execute safe read-only commands: ls, pwd, cat, echo, grep, find, which, date, whoami.
-    (2) Do not execute commands that modify files or system state.
-    (3) Clearly explain what any command will do before executing it.
+    (1) Do not execute commands that modify files or system state.
+    (2) Clearly explain what any tool call will do before executing it.
   userRequest: |
     {{ INSTRUCTION }}
