@@ -85,6 +85,16 @@ export class TaskGroupList extends LitElement {
   /** Memoized set of root group IDs for isGroupVisible() */
   private cachedRootGroupIds: Set<string> = new Set();
 
+  /**
+   * Tracking state for incremental tree updates.
+   * When only messages change (not groups), we can often skip the full
+   * O(n log n) sort + tree rebuild:
+   * - Text update (same length): tree structure unchanged, skip entirely
+   * - Append (length grew): classify only the new messages incrementally
+   */
+  private prevGroupsRef: TaskGroup[] = [];
+  private prevMessageCount = 0;
+
   /** Reference to the scroll container */
   @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
   private scrollContainer?: HTMLElement;
@@ -107,13 +117,35 @@ export class TaskGroupList extends LitElement {
     if (changedProperties.has('groups')) {
       this.checkForCompletedRuns();
     }
-    // Recompute tree only when groups or messages actually change
-    if (changedProperties.has('groups') || changedProperties.has('messages')) {
-      const [tree, userMessages, otherUngrouped] = this.buildGroupTree();
-      this.cachedTree = tree;
-      this.cachedUserMessages = userMessages;
-      this.cachedOtherUngrouped = otherUngrouped;
+
+    const groupsChanged = changedProperties.has('groups');
+    const messagesChanged = changedProperties.has('messages');
+
+    if (groupsChanged || messagesChanged) {
+      const groupsRefSame = this.groups === this.prevGroupsRef;
+
+      if (!groupsChanged && messagesChanged && groupsRefSame) {
+        // Groups didn't change — try incremental path
+        if (this.messages.length === this.prevMessageCount) {
+          // Same length: text-only update (e.g. streaming UPDATE_LOG).
+          // Tree structure is unchanged — skip rebuild entirely.
+          // Lit's keyed repeat() handles individual log-entry updates.
+        } else if (this.messages.length > this.prevMessageCount) {
+          // Append-only: classify only the new messages incrementally.
+          this.appendNewMessages(this.prevMessageCount);
+        } else {
+          // Messages shrunk (e.g. clear) — full rebuild
+          this.fullTreeRebuild();
+        }
+      } else {
+        // Groups changed or first render — full rebuild required
+        this.fullTreeRebuild();
+      }
+
+      this.prevGroupsRef = this.groups;
+      this.prevMessageCount = this.messages.length;
     }
+
     // Recompute root group IDs when groups or activeRunId change
     if (
       changedProperties.has('groups') ||
@@ -122,6 +154,43 @@ export class TaskGroupList extends LitElement {
       this.cachedRootGroupIds = new Set(
         this.groups.filter((g) => !g.parentGroupId).map((g) => g.id),
       );
+    }
+  }
+
+  /** Full tree rebuild — used when groups change or on first render. */
+  private fullTreeRebuild(): void {
+    const [tree, userMessages, otherUngrouped] = this.buildGroupTree();
+    this.cachedTree = tree;
+    this.cachedUserMessages = userMessages;
+    this.cachedOtherUngrouped = otherUngrouped;
+  }
+
+  /**
+   * Incrementally classify messages appended since `startIndex`.
+   * Avoids the full O(n log n) sort — appended messages are already in order.
+   */
+  private appendNewMessages(startIndex: number): void {
+    // Build a quick group lookup from the existing tree
+    const treeNodeMap = new Map<string, GroupTree>();
+    const collectNodes = (nodes: GroupTree[]): void => {
+      for (const node of nodes) {
+        treeNodeMap.set(node.group.id, node);
+        collectNodes(node.children);
+      }
+    };
+    collectNodes(this.cachedTree);
+
+    for (let i = startIndex; i < this.messages.length; i++) {
+      const msg = this.messages[i];
+      if (msg.groupId && treeNodeMap.has(msg.groupId)) {
+        const node = treeNodeMap.get(msg.groupId)!;
+        // Create a new array reference so Lit detects the change
+        node.messages = [...node.messages, msg];
+      } else if (msg.messageType === 'userMessage') {
+        this.cachedUserMessages = [...this.cachedUserMessages, msg];
+      } else {
+        this.cachedOtherUngrouped = [...this.cachedOtherUngrouped, msg];
+      }
     }
   }
 
