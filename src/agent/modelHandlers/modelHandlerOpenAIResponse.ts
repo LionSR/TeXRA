@@ -51,6 +51,7 @@ import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
 import {
   CHAINED_RESPONSE_MAX_OUTPUT_FACTOR,
+  CHAINED_RESPONSE_SAFETY_MARGIN_PERCENT,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
   TOKEN_SAFETY_BUFFER,
   TOOL_USE_SAFETY_BUFFER,
@@ -536,15 +537,24 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /**
    * Get the appropriate safety buffer for token validation.
-   * Uses larger buffer (2000) when:
-   * - Tool-use mode: tool results can have counting discrepancies
-   * - previous_response_id is set: server-side history may differ from token count
-   * Otherwise uses small buffer (10) for exact counting.
+   * - Chained responses (previous_response_id): proportional margin (5% of context window)
+   *   because the pre-flight token count can significantly undercount server-side context
+   *   (reasoning tokens, framing overhead). A flat buffer is insufficient at high utilization.
+   * - Tool-use mode: larger flat buffer (2000) for counting discrepancies
+   * - Otherwise: small buffer (10) for exact counting
    */
   private getTokenSafetyBuffer(): number {
-    const needsLargerBuffer =
-      this.isToolUseMode() || this.previousResponseId !== null;
-    return needsLargerBuffer ? TOOL_USE_SAFETY_BUFFER : TOKEN_SAFETY_BUFFER;
+    if (this.previousResponseId !== null) {
+      // Proportional margin scales with context window size - critical at high utilization
+      // where even a small percentage error can cause overflow.
+      const proportionalMargin = Math.floor(
+        this.config.contextWindow *
+          (CHAINED_RESPONSE_SAFETY_MARGIN_PERCENT / 100),
+      );
+      // Use at least the tool-use buffer as a floor
+      return Math.max(proportionalMargin, TOOL_USE_SAFETY_BUFFER);
+    }
+    return this.isToolUseMode() ? TOOL_USE_SAFETY_BUFFER : TOKEN_SAFETY_BUFFER;
   }
 
   /**
@@ -1492,6 +1502,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.previousResponseId = null;
         this.resetConversationState();
         // Also clear pending background response if present
+        this.clearPendingBackgroundResponse();
+      } else if (isContextWindowError(error) && this.previousResponseId) {
+        // Context window overflow with chained response: the server-side context
+        // (via previous_response_id) may be larger than the pre-flight estimate.
+        // Clear the chain so retry rebuilds from local history with accurate counting.
+        this.logger.info(
+          `Context window exceeded with previousResponseId=${this.previousResponseId} - ` +
+            'clearing chain so next retry rebuilds conversation from local history',
+        );
+        this.previousResponseId = null;
+        this.resetConversationState();
         this.clearPendingBackgroundResponse();
       } else if (this.previousResponseId) {
         // Log diagnostic info for other errors when chaining was active
