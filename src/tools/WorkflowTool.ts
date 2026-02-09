@@ -4,9 +4,7 @@
  * - workflow_agent: For workflow agents (document processing with file I/O)
  * - delegate_agent: For tool-use agents (interactive assistants)
  *
- * Two execution modes:
- * - sync: Await result inline (default, simplest)
- * - async: Launch, check progress via runs tool, result delivered as follow-up
+ * All subagents execute asynchronously — result delivered via follow-up queue.
  */
 
 // Third-party imports
@@ -98,7 +96,6 @@ function executeSubagent(
   configPayload: AgentConfigPayload,
   agentName: string,
   orchestratorStreamId: StreamTabId,
-  inputFile?: string,
 ): ToolResult {
   const executionId = randomUUID() as ExecutionId;
 
@@ -371,12 +368,7 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       proposal,
       result as ProposalResult & { action: 'approve' },
     );
-    return executeSubagent(
-      toConfigPayload(effective),
-      input.agent,
-      streamId,
-      input.inputFile,
-    );
+    return executeSubagent(toConfigPayload(effective), input.agent, streamId);
   }
 }
 
