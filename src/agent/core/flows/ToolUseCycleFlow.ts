@@ -9,11 +9,8 @@ import { BaseNode, BatchNode, Flow } from '@agent/node';
 import { recordCycleMetrics } from '@agent/core/AgentState';
 import {
   BaseCycleFieldsSchema,
-  BaseInvocationPrepResult,
-  BaseInvocationSuccessData,
   resetCycleState,
   getDebugContext,
-  replaceMessagesInPlace,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -40,7 +37,6 @@ import { toErrorMessage } from '@common/errors';
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
 // Type imports
-import type { ToolDefinition } from '@model';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
@@ -53,11 +49,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
-import {
-  type InvocationResult,
-  RetryableInvocationNode,
-  handleInvocationResult,
-} from './RetryState';
+import { ModelInvocationNode } from './ModelInvocationNode';
 import type { CycleParams, ToolUseCycleServices } from './CycleServices';
 
 // ============================================================================
@@ -313,104 +305,6 @@ class ToolUsePrepNode<C> extends BaseNode<
   }
 }
 
-/**
- * Handles model invocation for tool-use cycles with PocketFlow's built-in retry.
- * Uses RetryableInvocationNode for automatic retry logic with user prompts.
- */
-class ToolUseCallNode<C> extends RetryableInvocationNode<
-  ToolUseCycleShared,
-  CycleParams,
-  ToolUseCycleServices<C>
-> {
-  protected getOperationName(): string {
-    return 'Tool-use call';
-  }
-
-  async prep(shared: ToolUseCycleShared): Promise<BaseInvocationPrepResult> {
-    return {
-      shouldStop: shared.shouldStop,
-      messages: shared.messages,
-    };
-  }
-
-  async exec(
-    prepRes: BaseInvocationPrepResult,
-  ): Promise<InvocationResult<BaseInvocationSuccessData>> {
-    const services = this.services;
-
-    if (prepRes.shouldStop) {
-      return { kind: 'skipped' };
-    }
-
-    const start = Date.now();
-
-    return this.withAbortController(async (signal) => {
-      services.modelHandler.setOutputStreaming(true);
-      const result = await services.modelHandler.createResponse({
-        client: services.client,
-        messages: prepRes.messages,
-        temperature: services.setting.temperature,
-        signal,
-        tools: services.setting.tools as ToolDefinition[] | undefined,
-      });
-
-      const responseTimeMs = Date.now() - start;
-
-      return {
-        kind: 'success',
-        response: result.response,
-        responseTimeMs,
-        updatedMessages: result.updatedMessages,
-      };
-    });
-  }
-
-  async execFallback(
-    _prepRes: BaseInvocationPrepResult,
-    error: Error,
-  ): Promise<InvocationResult<BaseInvocationSuccessData>> {
-    return this.getFallbackResult(error);
-  }
-
-  async post(
-    shared: ToolUseCycleShared,
-    _prepRes: BaseInvocationPrepResult,
-    execRes: InvocationResult<BaseInvocationSuccessData>,
-  ): Promise<string | undefined> {
-    const successRes = handleInvocationResult(execRes, shared, shared, {
-      logger: this.services.logger,
-      operationName: this.getOperationName(),
-    });
-
-    if (!successRes) {
-      return FlowTransition.COMPLETE;
-    }
-
-    // Handle message updates from compaction (explicit in post, not via callback)
-    if (successRes.updatedMessages !== undefined) {
-      replaceMessagesInPlace(shared.messages, successRes.updatedMessages);
-    }
-
-    // Apply success-specific side effects
-    shared.response = successRes.response;
-    shared.responseTimeMs = successRes.responseTimeMs;
-
-    await maybeSaveDebugObject({
-      object: successRes.response,
-      objectType: 'response',
-      context: getDebugContext(this.services, {
-        modelName: this.services.modelName,
-        isRemote: isRemoteAgent(this.services.agentName),
-      }),
-      fileOptions: {
-        continuationCount: shared.cycleIndex,
-        baseName: 'tooluse_response',
-      },
-    });
-
-    return FlowTransition.DEFAULT;
-  }
-}
 
 /** Result of exec() containing extracted data needed for post() side effects. */
 type ToolUseProcessExecResult =
@@ -1008,7 +902,28 @@ export function createToolUseCycleFlow<C>(): Flow<
   CycleParams
 > {
   const prepNode = new ToolUsePrepNode<C>();
-  const callNode = new ToolUseCallNode<C>();
+  const callNode = new ModelInvocationNode<
+    ToolUseCycleShared,
+    CycleParams,
+    ToolUseCycleServices<C>
+  >({
+    operationName: 'Tool-use call',
+    streaming: true,
+    storeResponse: (shared, response, responseTimeMs) => {
+      shared.response = response;
+      shared.responseTimeMs = responseTimeMs;
+    },
+    getDebugSaveOptions: (shared, services) => ({
+      context: {
+        modelName: services.modelName,
+        isRemote: isRemoteAgent(services.agentName),
+      },
+      fileOptions: {
+        continuationCount: shared.cycleIndex,
+        baseName: 'tooluse_response',
+      },
+    }),
+  });
   const processNode = new ToolUseProcessNode<C>();
   const dispatchNode = new ToolUseDispatchNode<C>();
 
