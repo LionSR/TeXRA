@@ -265,8 +265,11 @@ export class ProgressEventHandler {
           activeSubagents: children,
         }));
 
-        // Push the updated state to the webview
-        if (this.webviewUpdater.isAvailable()) {
+        // Only push to webview if the orchestrator is the active stream
+        if (
+          this.webviewUpdater.isAvailable() &&
+          parentStreamId === this.state.activeStream
+        ) {
           this.webviewUpdater.updateAll(
             this.state,
             StreamStatusService.getAll(),
