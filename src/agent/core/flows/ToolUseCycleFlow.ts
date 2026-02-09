@@ -57,11 +57,7 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
-import type {
-  ToolUseCycleOptions,
-  ToolUseCycleServices,
-  ToolUseCycleParams,
-} from './CycleServices';
+import type { CycleParams, ToolUseCycleServices } from './CycleServices';
 
 // ============================================================================
 // Parallel call deduplication
@@ -222,7 +218,7 @@ export interface ToolUseCycleShared extends ToolUseCycleFields {
  */
 class ToolUsePrepNode<C> extends BaseNode<
   ToolUseCycleShared,
-  ToolUseCycleParams<C>,
+  CycleParams,
   ToolUseCycleServices<C>
 > {
   async prep(
@@ -295,7 +291,7 @@ class ToolUsePrepNode<C> extends BaseNode<
  */
 class ToolUseCallNode<C> extends RetryableInvocationNode<
   ToolUseCycleShared,
-  ToolUseCycleParams<C>,
+  CycleParams,
   ToolUseCycleServices<C>
 > {
   protected getOperationName(): string {
@@ -412,7 +408,7 @@ interface ToolUseProcessPrepResult {
 /** Processes the model response to extract tool calls and usage data. */
 class ToolUseProcessNode<C> extends BaseNode<
   ToolUseCycleShared,
-  ToolUseCycleParams<C>,
+  CycleParams,
   ToolUseCycleServices<C>
 > {
   async prep(shared: ToolUseCycleShared): Promise<ToolUseProcessPrepResult> {
@@ -609,7 +605,7 @@ interface ToolExecutionResult {
  */
 class ToolUseDispatchNode<C> extends BatchNode<
   ToolUseCycleShared,
-  ToolUseCycleParams<C>,
+  CycleParams,
   ToolUseCycleServices<C>
 > {
   /**
@@ -707,7 +703,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     call: SdkToolCall,
     tool: { call(input: unknown): Promise<ToolResult> } | undefined,
     parsedInput: unknown,
-    options: ToolUseCycleOptions<C>,
+    options: ToolUseCycleServices<C>,
     tracker: FileInteractionState,
     todoState: TodoState,
     onExecutionReady?: () => void,
@@ -739,7 +735,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
   /** Execute a single tool call and return the result with metadata. */
   private async executeToolCall(
     call: SdkToolCall,
-    options: ToolUseCycleOptions<C>,
+    options: ToolUseCycleServices<C>,
     tracker: FileInteractionState,
     todoState: TodoState,
   ): Promise<ToolExecutionResult> {
@@ -838,7 +834,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
 
   private async logAndProcessMediaFiles(
     execResult: ToolExecutionResult,
-    options: ToolUseCycleOptions<C>,
+    options: ToolUseCycleServices<C>,
     workspace: ToolUseCycleServices<C>['workspace'],
   ): Promise<void> {
     const { call, result, parsedInput, sanitizedOutput, editedFiles, logRef } =
@@ -981,7 +977,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
  */
 export function createToolUseCycleFlow<C>(): Flow<
   ToolUseCycleShared,
-  ToolUseCycleParams<C>
+  CycleParams
 > {
   const prepNode = new ToolUsePrepNode<C>();
   const callNode = new ToolUseCallNode<C>();
@@ -993,5 +989,5 @@ export function createToolUseCycleFlow<C>(): Flow<
   processNode.next(dispatchNode);
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ToolUseCycleShared, ToolUseCycleParams<C>>(prepNode);
+  return new Flow<ToolUseCycleShared, CycleParams>(prepNode);
 }
