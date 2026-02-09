@@ -1,11 +1,8 @@
 /**
- * Pending subagent results and formatting utilities.
+ * Formatting utilities for subagent results.
  *
- * pendingResults holds Promise<AgentFlowResult> for async mode (Mode B).
- * The await_subagent tool resolves these promises.
- *
- * Format helpers convert AgentFlowResult into tool result output strings,
- * used by both sync/async mode tool results and background mode delivery.
+ * Format helpers convert AgentFlowResult into structured XML strings,
+ * used by sync mode tool results and async mode FollowUpQueue delivery.
  */
 
 import type {
@@ -13,34 +10,6 @@ import type {
   OutputFileSummary,
 } from '@agent/runtime/AgentFlowResult';
 import type { ToolResult } from './result';
-
-// ============================================================================
-// Pending results map (Mode B: async)
-// ============================================================================
-
-/** Entry in the pending results map — stores context needed to format the result. */
-export interface PendingSubagent {
-  promise: Promise<AgentFlowResult>;
-  agentName: string;
-  inputFile?: string;
-}
-
-/**
- * Pending subagent results, keyed by subagent ID.
- * Cleanup is handled by AwaitSubagentTool after consuming the result.
- * Entries for unawaited subagents remain until extension reload (bounded, small).
- */
-export const pendingResults = new Map<string, PendingSubagent>();
-
-/** Store a pending subagent result. Caller must clean up via pendingResults.delete(). */
-export function addPendingResult(
-  subagentId: string,
-  promise: Promise<AgentFlowResult>,
-  agentName: string,
-  inputFile?: string,
-): void {
-  pendingResults.set(subagentId, { promise, agentName, inputFile });
-}
 
 // ============================================================================
 // Formatting helpers
@@ -87,7 +56,7 @@ function resultTag(result: AgentFlowResult, agentName: string): string {
   return `<subagent-result id="${result.streamId}" agent="${agentName}" category="${result.category}" status="${result.status}">`;
 }
 
-/** Format an AgentFlowResult into a ToolResult for sync/async modes. */
+/** Format an AgentFlowResult into a ToolResult for sync mode. */
 export function formatFlowResult(
   result: AgentFlowResult,
   agentName: string,
@@ -118,7 +87,7 @@ export function formatFlowResult(
 }
 
 /**
- * Format an AgentFlowResult as a delivery message for background mode (Mode C).
+ * Format an AgentFlowResult as a delivery message for async mode.
  * Injected into the orchestrator's FollowUpQueue as a user-role message.
  */
 export function formatSubagentDelivery(
@@ -138,7 +107,7 @@ export function formatSubagentDelivery(
 }
 
 /**
- * Format an error as a delivery message for background mode (Mode C).
+ * Format an error as a delivery message for async mode.
  */
 export function formatSubagentError(
   subagentId: string,
