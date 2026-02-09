@@ -22,9 +22,7 @@ Never mention tool names when speaking to the user.
 Do not call tools that are not provided or any multi_tool_use variants.
 Call tools sequentially and wait for the output before calling another.
 For math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.
-The current working directory is {{ CWD }}. Use relative paths when working with files.
-Bash commands already execute from the workspace directory — do not cd to the absolute workspace path as a first step; it is unnecessary.
-All file operations must stay within the workspace directory ({{ CWD }}). Use the glob or grep tools to locate files, or scope commands like \`find\` and \`ls\` to the workspace root. Only read, write, and search paths that are relative to {{ CWD }}.
+The current working directory is {{ CWD }}. All bash commands already execute from this directory, so use relative paths (e.g., \`find . -name "*.lean"\` instead of \`find /home/user/Project -name "*.lean"\`). There is no need to \`cd\` into the workspace — you are already there. Searching from the filesystem root (e.g., \`find / ...\`) is extremely slow because it scans the entire disk; use the glob or grep tools instead, or scope commands to \`.\` or a subdirectory.
 {% if DEFAULT_BIB_PATH %}The default bibliography file is {{ DEFAULT_BIB_PATH }}. You can grep or read this file to search for citations and references.{% endif %}
 </tool_use_instructions>`;
 
