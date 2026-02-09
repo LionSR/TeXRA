@@ -137,8 +137,8 @@ export abstract class PersistentMapManager<K extends string, V> {
    * so this only defers the disk write. Multiple rapid calls coalesce into
    * one write at the trailing edge of the debounce window.
    *
-   * When a new save supersedes a pending one, the previous promise is
-   * resolved immediately — its data will be captured by the newer write.
+   * When a new save supersedes a pending one, the same promise is reused
+   * so all callers resolve when the eventual write completes.
    */
   async save(): Promise<void> {
     // If a timer is already pending, reset it (trailing-edge debounce).
@@ -146,18 +146,21 @@ export abstract class PersistentMapManager<K extends string, V> {
       clearTimeout(this.saveTimer);
     }
 
-    // Resolve any previously pending save — its data will be included
-    // in this newer write (which captures current in-memory state).
-    this.pendingResolve?.();
+    if (!this.savePromise) {
+      this.savePromise = new Promise<void>((resolve) => {
+        this.pendingResolve = resolve;
+      });
+    }
 
-    this.savePromise = new Promise<void>((resolve) => {
-      this.pendingResolve = resolve;
-      this.saveTimer = setTimeout(() => {
-        this.saveTimer = null;
-        this.pendingResolve = null;
-        this.writeToStorage().then(resolve, resolve);
-      }, SAVE_DEBOUNCE_MS);
-    });
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      const resolve = this.pendingResolve;
+      this.pendingResolve = null;
+      this.writeToStorage().then(
+        () => resolve?.(),
+        () => resolve?.(),
+      );
+    }, SAVE_DEBOUNCE_MS);
 
     return this.savePromise;
   }
@@ -170,8 +173,9 @@ export abstract class PersistentMapManager<K extends string, V> {
     if (this.saveTimer !== null) {
       clearTimeout(this.saveTimer);
       this.saveTimer = null;
-      this.pendingResolve = null;
       await this.writeToStorage();
+      this.pendingResolve?.();
+      this.pendingResolve = null;
     } else if (this.savePromise) {
       await this.savePromise;
     }
