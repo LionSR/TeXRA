@@ -39,7 +39,6 @@ import {
   setActiveRun,
   getOutputFilesByRound,
   type OutputState,
-  type OutputDependencies,
 } from '@agent/output/outputState';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
@@ -196,7 +195,7 @@ export async function runReflectionFlow<C = unknown>(
     parentStage,
     userVarChannels,
     checkInterruption,
-    getUsageRecorder = () => async () => {},
+    onRoundFinalized = async () => {},
     usageMonitor,
   } = input;
 
@@ -219,17 +218,8 @@ export async function runReflectionFlow<C = unknown>(
     return createWorkspaceLocation(absolutePath, relativePath);
   });
 
-  // Create output state and dependencies for utility functions
+  // Create output state (deps are now derived from services via structural subtyping)
   const outputState: OutputState = createOutputState();
-  const outputDeps: OutputDependencies = {
-    agentSetting: setting,
-    agentConfig: config,
-    baseFiles,
-    logger,
-    fileService,
-    executionId,
-    streamId,
-  };
   // Create managers directly (no factory indirection)
   const xmlManager = new XmlOutputManager(setting, config, logger, fileService);
   const diffManager = new LatexDiffManager(
@@ -282,8 +272,12 @@ export async function runReflectionFlow<C = unknown>(
     },
   };
 
-  // Set active run for output state
-  setActiveRun(outputState, outputDeps, storageKey);
+  // Set active run for output state (inline deps — services not yet assembled)
+  setActiveRun(
+    outputState,
+    { setting, config, baseFiles, logger, fileService, executionId, streamId },
+    storageKey,
+  );
 
   try {
     // Register for interrupt handling
@@ -362,11 +356,12 @@ export async function runReflectionFlow<C = unknown>(
     });
 
     // Build services: spread input + add computed fields
+    // ReflectionServices structurally satisfies OutputDependencies, so no
+    // separate outputDeps object is needed — output functions accept services directly.
     services = {
       ...input,
-      getUsageRecorder,
+      onRoundFinalized,
       outputState,
-      outputDeps,
       xmlManager,
       diffManager,
       latexMediaManager,
