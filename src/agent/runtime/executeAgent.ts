@@ -581,6 +581,7 @@ export async function executeAgent(
           executionId: ctx.executionId,
           streamId,
         };
+      });
     },
     { isSubagent },
   );
