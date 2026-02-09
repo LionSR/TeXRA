@@ -4,10 +4,10 @@
 -- Prerequisites:
 -- 1. Upload the YAML files to Supabase Storage:
 --    - Copy from: resources/tool_use_agents/presenter.yaml
---    - Upload to: Storage > agent-configs > researcher/presenter.yaml
+--    - Upload to: Storage > agent-configs > tool_use/presenter.yaml
 --
 --    - Copy from: resources/tool_use_agents/search.yaml
---    - Upload to: Storage > agent-configs > researcher/search.yaml
+--    - Upload to: Storage > agent-configs > tool_use/search.yaml
 --
 -- Then run this SQL in Supabase SQL Editor:
 
@@ -26,7 +26,7 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'presenter',
   'Interactive scientific presentation builder with visual QA.',
-  'researcher/presenter.yaml',
+  'tool_use/presenter.yaml',
   ARRAY['researcher'],
   'toolUse',
   ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'extract_tikz_figures', 'wolfram', 'arxiv_search', 'arxiv_metadata', 'web_search', 'web_fetch']
@@ -36,7 +36,7 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'search',
   'Research assistant with web search and literature discovery tools.',
-  'researcher/search.yaml',
+  'tool_use/search.yaml',
   ARRAY['researcher'],
   'toolUse',
   ARRAY['bash', 'read_file', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'extract_tikz_figures', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source', 'crossref_search', 'crossref_doi', 'zotero_add', 'zotero_search', 'zotero_export', 'web_search', 'web_fetch']
