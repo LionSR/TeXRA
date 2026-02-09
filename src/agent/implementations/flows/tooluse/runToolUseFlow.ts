@@ -141,7 +141,7 @@ export async function runToolUseFlow<C = unknown>(
     resolvedTools,
     toolRegistry: registry,
     snapshot,
-    getUsageRecorder: input.getUsageRecorder ?? (() => async () => {}),
+    onRoundFinalized: input.onRoundFinalized ?? (async () => {}),
   };
 
   const flowContext: ToolUseFlowContext<C> = {
