@@ -1,3 +1,6 @@
+// Standard library imports
+import * as path from 'path';
+
 // Third-party imports
 import * as vscode from 'vscode';
 import { z } from 'zod';
@@ -87,7 +90,7 @@ export class LsTool extends defineTool({
 
     if (stats.type === vscode.FileType.File) {
       const relativePosix = toPosixPath(resolved.relative);
-      const fileName = relativePosix.split('/').at(-1) ?? relativePosix;
+      const fileName = path.basename(resolved.relative);
       const isIgnored =
         isDefaultHiddenName(fileName) ||
         gitignore.ignores(resolved.relative) ||
