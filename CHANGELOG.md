@@ -6,8 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- Added **scientific simplifier agent** — a tool-use agent that simplifies complex scientific writing while preserving mathematical discourse, targeting AI bloat, spaghetti logic, and redundant computation.
-- Added **scientific presenter agent** — an interactive agent for creating scientific code presentations with a visual QA loop and TikZ figure verification.
+- Added **simplifier agent** — a tool-use agent that simplifies scientific code, LaTeX, and prose for clarity and maintainability, targeting duplication, excessive abstraction, spaghetti control flow, and AI-generated bloat.
+- Added **presenter agent** — an interactive tool-use agent for building LaTeX Beamer presentations, posters, and visual materials from scientific codebases, with a visual QA loop that inspects compiled output for overflow, overlapping elements, and readability issues.
 - Added **agent browser** in settings view Agents tab with split-panel layout, visibility configuration, folder navigation, keyboard support, and per-category folder open buttons.
 - **Main view agent/model buttons** now navigate directly to the corresponding settings view tab.
 - Added **context-aware "New Agent" button** that creates the matching agent type (workflow or tool-use) based on the current browser context.
@@ -35,8 +35,7 @@ All notable changes to this project will be documented in this file.
 - Fixed **max_tokens for Anthropic thinking models** being too high in tool-use mode, halved to prevent context overflow.
 - Fixed **Lean 4 integration** — proper FileUri for client lookup and third-party syntax highlighting.
 - Fixed **background polling errors** — shows retry prompt on 404, preserves HTTP metadata for other errors, retains request_id on wrapped errors.
-- Fixed **path traversal vulnerability** via backslash-to-slash conversion in locatePath with exact equality checks for built-in path detection.
-- Fixed **workspace boundary checks** — added path separator boundaries to startsWith checks and uses path.isAbsolute for proper containment validation.
+- Fixed **path traversal and workspace boundary checks** — prevented path traversal via backslash conversion in locatePath, added path separator boundaries to containment checks, and uses path.isAbsolute for proper workspace validation.
 - Fixed **pre-migration database compatibility** by gracefully handling missing tools column.
 - Fixed **compaction size reporting** to use output_tokens and count compacted messages directly.
 - Fixed **agent visibility edge cases** — properly distinguishes "never configured" from "explicitly empty" visibility, and auto-adds new tool-use agents to visibility config.
@@ -48,6 +47,7 @@ All notable changes to this project will be documented in this file.
 - Added **parallel tool call deduplication** using deterministic JSON serialization to avoid redundant execution.
 - Optimized **progress view performance** with better Lit component rendering and cached flow records to eliminate redundant reads.
 - Added **model options caching** with 30-second TTL for rapid proposal interactions.
+- Optimized **Anthropic cache breakpoint placement** — evenly distributes 4 breakpoints across the conversation for better cache hit rates in long tool-use sessions.
 - Refined **orchestrator agent** prompts — reframed as long-term project steward with consolidated instructions, git workflow guidance, and build directory conventions.
 - Made **agent creator provider-agnostic** with Nunjucks templating, split into separate workflow and tool-use YAML templates.
 - Improved **Lean agent workflow** — searches .lake/packages with grep/glob, checks diagnostics after build.
