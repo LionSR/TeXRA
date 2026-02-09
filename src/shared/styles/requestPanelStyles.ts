@@ -356,6 +356,35 @@ export const requestPanelStyles: CSSResult = css`
     margin-right: var(--spacing-small);
   }
 
+  .workflow-proposal__model-select {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    margin-left: auto;
+  }
+
+  .workflow-proposal__model-select .codicon {
+    color: var(--vscode-descriptionForeground);
+    flex-shrink: 0;
+  }
+
+  .proposal-model-dropdown {
+    min-width: 8rem;
+    max-width: 12rem;
+  }
+
+  .workflow-proposal__mode-badge {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 6px;
+    border-radius: var(--border-radius);
+    white-space: nowrap;
+    background: var(--vscode-editorWarning-foreground);
+    color: var(--vscode-editor-background);
+  }
+
   .workflow-proposal__instruction {
     font-size: var(--font-size-sm);
     color: var(--vscode-editor-foreground);
