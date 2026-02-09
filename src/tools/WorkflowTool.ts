@@ -31,7 +31,10 @@ import {
 import type { AgentConfigPayload } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
+import {
+  proposalCoordinator,
+  type ProposalResult,
+} from '@agent/runtime/AgentProposalCoordinator';
 import { registerSubagent } from '@agent/runtime/subagentLineage';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
@@ -194,6 +197,14 @@ function proposalResultToToolResult(
     case 'approve':
       return null;
   }
+}
+
+/** Apply model override from an approved proposal result. */
+function applyModelOverride<T extends { model: string }>(
+  proposal: T,
+  result: ProposalResult & { action: 'approve' },
+): T {
+  return result.model ? { ...proposal, model: result.model } : proposal;
 }
 
 // ============================================================================
@@ -372,12 +383,14 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
     );
     if (nonApproveResult) return nonApproveResult;
 
-    // Approved - execute via executeAgent with requested mode
-    const configPayload = toConfigPayload(proposal);
+    const effective = applyModelOverride(
+      proposal,
+      result as ProposalResult & { action: 'approve' },
+    );
     return executeSubagent(
-      configPayload,
+      toConfigPayload(effective),
       input.agent,
-      proposal.mode,
+      effective.mode,
       streamId,
       input.inputFile,
     );
@@ -462,8 +475,15 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
     );
     if (nonApproveResult) return nonApproveResult;
 
-    // Approved - execute via executeAgent with requested mode
-    const configPayload = toConfigPayload(proposal);
-    return executeSubagent(configPayload, input.agent, proposal.mode, streamId);
+    const effective = applyModelOverride(
+      proposal,
+      result as ProposalResult & { action: 'approve' },
+    );
+    return executeSubagent(
+      toConfigPayload(effective),
+      input.agent,
+      effective.mode,
+      streamId,
+    );
   }
 }
