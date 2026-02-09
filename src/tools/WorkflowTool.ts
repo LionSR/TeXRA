@@ -100,6 +100,9 @@ function toConfigPayload(
  * Execute a subagent in the requested mode.
  * Pre-generates executionId so all IDs (tool return, XML delivery, error)
  * are consistent and usable with the runs tool.
+ *
+ * Passes parentExecutionId to enable cascading interrupt:
+ * when the orchestrator is stopped, all subagents are stopped too.
  */
 function executeSubagent(
   configPayload: AgentConfigPayload,
@@ -109,16 +112,20 @@ function executeSubagent(
   inputFile?: string,
 ): ToolResult | Promise<ToolResult> {
   const executionId = randomUUID() as ExecutionId;
+  const parentExecutionId =
+    getCurrentToolFileInteractionContext()?.executionId;
 
   if (mode === 'sync') {
     return executeAgent(configPayload, executionId, {
       isSubagent: true,
+      parentExecutionId,
     }).then((result) => formatFlowResult(result, agentName, inputFile));
   }
 
   // Async: launch, deliver result via FollowUpQueue, return execution ID for progress checks
   const promise = executeAgent(configPayload, executionId, {
     isSubagent: true,
+    parentExecutionId,
     onStreamResolved: (childStreamId) => {
       registerSubagent(
         executionId,

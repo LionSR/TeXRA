@@ -30,6 +30,7 @@ import {
 } from '@agent/implementations/flows/tooluse';
 import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import type { AgentCore } from '@agent/implementations/flows/common/BaseFlowServices';
+import type { RunToolUseFlowResult } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -71,7 +72,11 @@ import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
 import { createInterruptCallbacks } from './InterruptManager';
 import { trackExecution, untrackExecution } from './executionRegistry';
-import type { AgentFlowResult, OutputFileSummary } from './AgentFlowResult';
+import type {
+  AgentFlowResult,
+  AgentFlowMeta,
+  OutputFileSummary,
+} from './AgentFlowResult';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -304,14 +309,44 @@ function toOutputSummaries(roundOutputs: RoundOutput[]): OutputFileSummary[] {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Unified AgentFlowResult builders
+// ---------------------------------------------------------------------------
+
+/** Build a workflow AgentFlowResult from flow result and execution metadata. */
+function toWorkflowFlowResult(
+  result: { status: EndGroupStatus; roundOutputs: RoundOutput[] },
+  meta: AgentFlowMeta,
+): AgentFlowResult {
+  return {
+    category: 'workflow' as const,
+    status: result.status,
+    outputs: toOutputSummaries(result.roundOutputs),
+    ...meta,
+  };
+}
+
+/** Build a tool-use AgentFlowResult from flow result and execution metadata. */
+function toToolUseFlowResult(
+  result: RunToolUseFlowResult,
+  meta: AgentFlowMeta,
+): AgentFlowResult {
+  return {
+    category: 'toolUse' as const,
+    status: result.status,
+    lastResponse: result.lastResponse,
+    ...meta,
+  };
+}
+
 async function runFlowWithLifecycle(
   ctx: ResolvedAgentBase,
   streamId: StreamTabId,
   agentName: string,
   runner: () => Promise<AgentFlowResult>,
-  options?: { isSubagent?: boolean },
+  options?: { isSubagent?: boolean; parentExecutionId?: string },
 ): Promise<AgentFlowResult> {
-  trackExecution(ctx.executionId, streamId);
+  trackExecution(ctx.executionId, streamId, options?.parentExecutionId);
   try {
     const result = await runner();
     untrackExecution(ctx.executionId);
@@ -518,6 +553,12 @@ export interface ExecuteAgentOptions {
   isSubagent?: boolean;
   /** Fires early with the real streamId, before flow execution starts. */
   onStreamResolved?: (streamId: StreamTabId) => void;
+  /**
+   * Parent execution ID for subagent lineage tracking.
+   * When set, enables cascading interrupt: stopping the parent
+   * also stops this execution and all its descendants.
+   */
+  parentExecutionId?: string;
 }
 
 export async function executeAgent(
@@ -546,6 +587,8 @@ export async function executeAgent(
         logger.info(`Executing ${agentName} with model ${config.model}`);
         const interrupts = createInterruptCallbacks();
 
+        const meta = { executionId: ctx.executionId, streamId };
+
         if (setting.agentCategory === AgentCategory.ToolUse) {
           const result = await runToolUseFlow({
             ...ctx,
@@ -557,13 +600,7 @@ export async function executeAgent(
             onFollowUpConsumed: () =>
               bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
           });
-          return {
-            category: 'toolUse' as const,
-            status: result.status,
-            lastResponse: result.lastResponse,
-            executionId: ctx.executionId,
-            streamId,
-          };
+          return toToolUseFlowResult(result, meta);
         }
 
         const result = await runReflectionFlow({
@@ -574,16 +611,10 @@ export async function executeAgent(
           setting: ctx.setting as AgentWorkflowSetting,
           parentStage: ctx.parentStage,
         });
-        return {
-          category: 'workflow' as const,
-          status: result.status,
-          outputs: toOutputSummaries(result.roundOutputs),
-          executionId: ctx.executionId,
-          streamId,
-        };
+        return toWorkflowFlowResult(result, meta);
       });
     },
-    { isSubagent },
+    { isSubagent, parentExecutionId: options?.parentExecutionId },
   );
 }
 
@@ -624,13 +655,10 @@ export async function executeMergeAgent(
         ),
         parentStage: ctx.parentStage,
       });
-      return {
-        category: 'workflow' as const,
-        status: result.status,
-        outputs: toOutputSummaries(result.roundOutputs),
+      return toWorkflowFlowResult(result, {
         executionId: ctx.executionId,
         streamId,
-      };
+      });
     });
   });
 }
@@ -673,13 +701,10 @@ export async function resumeToolUseFromSnapshot(
         undefined,
         setupSession ? (context) => setupSession(context.session) : undefined,
       );
-      return {
-        category: 'toolUse' as const,
-        status: result.status,
-        lastResponse: result.lastResponse,
+      return toToolUseFlowResult(result, {
         executionId: ctx.executionId,
         streamId,
-      };
+      });
     },
   );
 }

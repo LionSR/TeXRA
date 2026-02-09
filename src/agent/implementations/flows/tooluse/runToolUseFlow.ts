@@ -11,14 +11,13 @@ import {
   type EndGroupStatus,
 } from '@shared/schemas';
 import { executionToEndStatus } from '@common/constants/streamStatus';
-import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
-import {
-  registerInterruptible,
-  unregisterInterruptible,
-} from '@agent/toolUse/ToolUseAgentRegistry';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import {
+  withFlowLifecycle,
+  deleteFlowRecord,
+} from '@agent/implementations/flows/common/FlowLifecycle';
 
-import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
+import { PersistedFlow } from '@agent/node/persisted-flow';
 
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
@@ -149,83 +148,78 @@ export async function runToolUseFlow<C = unknown>(
     },
   };
 
-  let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
-
-  // Shared state is declared outside try block for access in finally (cleanup decision based on userCancelledRetry)
+  // Shared state is declared outside the lifecycle callback for access after completion
   const shared: ToolUseRunShared = {
     messages: [],
     shouldSkipCycle: false,
     stateSlices: null,
   };
 
-  try {
-    registerInterruptible(streamId, flowContext);
-    onSetup?.(flowContext);
+  let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
-    const kv: ExecutionKVStore = getExecutionStore(executionId);
-    let flowRecord: FlowRecord | null = null;
-    try {
-      flowRecord = (await kv.read<FlowRecord>(`flow:${executionId}`)) ?? null;
-    } catch (error) {
-      logger.debug(
-        `Resume parse failed, starting fresh: ${error instanceof Error ? error.message : 'unknown'}`,
-      );
-    }
-    if (flowRecord?.shared) {
-      logger.debug('Resuming tool-use flow from persistence');
-      // Migrate legacy nested format to flat format if needed
-      const migrationResult = migrateSharedState(flowRecord.shared);
-      if (migrationResult === null) {
-        logger.warn('Failed to parse flow record shared state, starting fresh');
-        await kv.delete(`flow:${executionId}`);
-        flowRecord = null;
-      } else if (migrationResult.migrated) {
-        logger.debug('Migrated legacy shared state to flat format');
-        flowRecord.shared = migrationResult.data;
-        await kv.write(`flow:${executionId}`, flowRecord);
-      }
-    }
-
-    // Create flow nodes and wire transitions inline
-    const prepareNode = new ToolUsePrepareNode<C>();
-    const cycleNode = new ToolUseCycleNode<C>();
-    const waitNode = new ToolUseWaitNode<C>();
-    prepareNode.next(cycleNode);
-    cycleNode.next(waitNode);
-    waitNode.on(FlowTransition.CONTINUE, cycleNode);
-    const startNode = prepareNode;
-    const pf = new PersistedFlow<
-      ToolUseRunShared,
-      Record<string, unknown>,
-      ToolUseServices<C>
-    >(startNode, kv);
-    pf.setServices(services);
-    await pf.run(shared);
-
-    const execStatus = input.checkInterruption()
-      ? EXECUTION_STATUS.INTERRUPTED
-      : EXECUTION_STATUS.COMPLETED;
-    status = executionToEndStatus(execStatus) as EndGroupStatus;
-  } catch (error) {
-    status = END_GROUP_STATUS.ERROR;
-    throw error;
-  } finally {
-    // Preserve flow record if user cancelled retry (for resume), otherwise delete
-    // Use the local shared object directly - it's updated in place during pf.run()
-    if (shared.userCancelledRetry) {
-      logger.debug('Flow record preserved for resume after retry cancellation');
-    } else {
+  await withFlowLifecycle(
+    {
+      streamId,
+      executionId,
+      interruptible: flowContext,
+      onRegistered: () => onSetup?.(flowContext),
+    },
+    async ({ kv, flowRecord }) => {
       try {
-        const kv = getExecutionStore(executionId);
-        await kv.delete(`flow:${executionId}`);
-      } catch {
-        // Ignore cleanup errors
-      }
-    }
+        // Migrate persisted state if resuming
+        if (flowRecord?.shared) {
+          logger.debug('Resuming tool-use flow from persistence');
+          const migrationResult = migrateSharedState(flowRecord.shared);
+          if (migrationResult === null) {
+            logger.warn(
+              'Failed to parse flow record shared state, starting fresh',
+            );
+            await kv.delete(`flow:${executionId}`);
+            flowRecord = null;
+          } else if (migrationResult.migrated) {
+            logger.debug('Migrated legacy shared state to flat format');
+            flowRecord.shared = migrationResult.data;
+            await kv.write(`flow:${executionId}`, flowRecord);
+          }
+        }
 
-    sessionLifecycle.dispose();
-    unregisterInterruptible(streamId);
-  }
+        // Create flow nodes and wire transitions inline
+        const prepareNode = new ToolUsePrepareNode<C>();
+        const cycleNode = new ToolUseCycleNode<C>();
+        const waitNode = new ToolUseWaitNode<C>();
+        prepareNode.next(cycleNode);
+        cycleNode.next(waitNode);
+        waitNode.on(FlowTransition.CONTINUE, cycleNode);
+        const startNode = prepareNode;
+        const pf = new PersistedFlow<
+          ToolUseRunShared,
+          Record<string, unknown>,
+          ToolUseServices<C>
+        >(startNode, kv);
+        pf.setServices(services);
+        await pf.run(shared);
+
+        const execStatus = input.checkInterruption()
+          ? EXECUTION_STATUS.INTERRUPTED
+          : EXECUTION_STATUS.COMPLETED;
+        status = executionToEndStatus(execStatus) as EndGroupStatus;
+      } catch (error) {
+        status = END_GROUP_STATUS.ERROR;
+        throw error;
+      } finally {
+        // Preserve flow record if user cancelled retry (for resume), otherwise delete
+        if (shared.userCancelledRetry) {
+          logger.debug(
+            'Flow record preserved for resume after retry cancellation',
+          );
+        } else {
+          await deleteFlowRecord(executionId);
+        }
+
+        sessionLifecycle.dispose();
+      }
+    },
+  );
 
   // Extract last assistant text using the model handler's typed extraction
   let lastResponse: string | undefined;

@@ -32,6 +32,7 @@ import type {
   ConversationRoundStateSnapshot,
 } from '@agent/core/AgentState';
 import { buildCycleServices } from '@agent/core/flows/CycleServices';
+import { interpretCycleOutcome } from '@agent/core/flows/CommonCycleTypes';
 import type { AgentFileLocation } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -157,18 +158,15 @@ export class ResponseCycleNode<C = unknown> extends Node<
       );
       await flow.run(cycleShared);
 
-      // Determine outcome from cycle state (single interpretation)
-      if (cycleShared.shouldStop && cycleShared.lastError) {
+      // Interpret outcome using shared helper (single source of truth)
+      const outcome = interpretCycleOutcome(cycleShared);
+      if (outcome === 'failed') {
         return {
           outcome: 'failed',
-          error: new Error(cycleShared.lastError.message),
+          error: new Error(cycleShared.lastError!.message),
         };
       }
-      if (
-        cycleShared.shouldStop &&
-        !cycleShared.lastError &&
-        !cycleShared.endTurn
-      ) {
+      if (outcome === 'cancelled') {
         return { outcome: 'cancelled' };
       }
       return { outcome: 'completed', endTurn: cycleShared.endTurn };

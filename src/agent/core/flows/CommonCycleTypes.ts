@@ -102,3 +102,33 @@ export function replaceMessagesInPlace<T>(target: T[], newContents: T[]): void {
   target.length = 0;
   target.push(...newContents);
 }
+
+// --- Cycle Outcome Interpretation ---
+
+/**
+ * Outcome of a cycle flow execution, derived from cycle shared state.
+ *
+ * Used by both ResponseCycleNode and ToolUseCycleNode to avoid duplicating
+ * the three-way interpretation of shouldStop / lastError / endTurn.
+ */
+export type CycleOutcome = 'completed' | 'cancelled' | 'failed';
+
+/**
+ * Interpret cycle shared state into a single outcome.
+ *
+ * Both cycle nodes (Response and ToolUse) use the same three-flag pattern:
+ * - shouldStop + lastError → failed
+ * - shouldStop + !lastError + !endTurn → cancelled (user stopped)
+ * - otherwise → completed
+ *
+ * This is the single source of truth for that interpretation.
+ */
+export function interpretCycleOutcome(shared: BaseCycleFields): CycleOutcome {
+  if (shared.shouldStop && shared.lastError) {
+    return 'failed';
+  }
+  if (shared.shouldStop && !shared.lastError && !shared.endTurn) {
+    return 'cancelled';
+  }
+  return 'completed';
+}

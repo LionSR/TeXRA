@@ -11,6 +11,7 @@ import {
   createToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
 import { buildCycleServices } from '@agent/core/flows/CycleServices';
+import { interpretCycleOutcome } from '@agent/core/flows/CommonCycleTypes';
 import { bus } from '@eventBus/ProgressEventBus';
 
 import {
@@ -92,18 +93,15 @@ export class ToolUseCycleNode<C> extends Node<
     try {
       await flow.run(cycleShared);
 
-      // Determine outcome directly from shared state flags (single interpretation)
-      if (cycleShared.shouldStop && cycleShared.lastError) {
+      // Interpret outcome using shared helper (single source of truth)
+      const outcome = interpretCycleOutcome(cycleShared);
+      if (outcome === 'failed') {
         return {
           outcome: 'failed',
-          message: cycleShared.lastError.message ?? 'Cycle failed',
+          message: cycleShared.lastError?.message ?? 'Cycle failed',
         };
       }
-      if (
-        cycleShared.shouldStop &&
-        !cycleShared.lastError &&
-        !cycleShared.endTurn
-      ) {
+      if (outcome === 'cancelled') {
         return { outcome: 'cancelled' };
       }
       return { outcome: 'completed', messages: cycleShared.messages };
