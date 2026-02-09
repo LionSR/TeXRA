@@ -31,7 +31,10 @@ import {
 import type { AgentConfigPayload } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
+import {
+  proposalCoordinator,
+  type ProposalResult,
+} from '@agent/runtime/AgentProposalCoordinator';
 import { registerSubagent } from '@agent/runtime/subagentLineage';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
@@ -194,6 +197,14 @@ function proposalResultToToolResult(
     case 'approve':
       return null;
   }
+}
+
+/** Apply model override from an approved proposal result. */
+function applyModelOverride<T extends { model: string }>(
+  proposal: T,
+  result: ProposalResult & { action: 'approve' },
+): T {
+  return result.model ? { ...proposal, model: result.model } : proposal;
 }
 
 // ============================================================================
@@ -372,15 +383,12 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
     );
     if (nonApproveResult) return nonApproveResult;
 
-    // After guard, result is the 'approve' variant
-    const approvedModel =
-      result.action === 'approve' ? result.model : undefined;
-    const effective = approvedModel
-      ? { ...proposal, model: approvedModel }
-      : proposal;
-    const configPayload = toConfigPayload(effective);
+    const effective = applyModelOverride(
+      proposal,
+      result as ProposalResult & { action: 'approve' },
+    );
     return executeSubagent(
-      configPayload,
+      toConfigPayload(effective),
       input.agent,
       effective.mode,
       streamId,
@@ -467,13 +475,15 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
     );
     if (nonApproveResult) return nonApproveResult;
 
-    // After guard, result is the 'approve' variant
-    const approvedModel =
-      result.action === 'approve' ? result.model : undefined;
-    const effective = approvedModel
-      ? { ...proposal, model: approvedModel }
-      : proposal;
-    const configPayload = toConfigPayload(effective);
-    return executeSubagent(configPayload, input.agent, effective.mode, streamId);
+    const effective = applyModelOverride(
+      proposal,
+      result as ProposalResult & { action: 'approve' },
+    );
+    return executeSubagent(
+      toConfigPayload(effective),
+      input.agent,
+      effective.mode,
+      streamId,
+    );
   }
 }
