@@ -8,8 +8,8 @@ import {
 } from '@common/webview';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
+  buildBasicModelOptionsData,
   computeModelOptionsData,
-  getVisibleModels,
 } from '@model/computeModelOptions';
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
@@ -192,9 +192,9 @@ export class ProgressViewProvider
     try {
       modelOptions = await this.getCachedModelOptions();
     } catch {
-      // Full availability check failed — fall back to basic model list
-      // so the dropdown still appears (without availability/cost metadata).
-      modelOptions = getVisibleModels().map((m) => ({ value: m, label: m }));
+      // Availability check failed (e.g. ServerSideKeyService not yet initialized) —
+      // fall back to static model metadata so the dropdown still appears.
+      modelOptions = buildBasicModelOptionsData();
     }
     if (!this.agentProposalHandler.get(proposal.proposalId)) return;
     this.webviewUpdater.showAgentProposal(proposal, modelOptions);
