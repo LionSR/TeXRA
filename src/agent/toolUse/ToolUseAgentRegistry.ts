@@ -64,8 +64,8 @@ export function getInterruptible(
  */
 function isToolUseFlowContext(
   entry: IInterruptible | undefined,
-): entry is ToolUseFlowContext<unknown> {
-  const session = (entry as ToolUseFlowContext<unknown> | undefined)?.session;
+): entry is ToolUseFlowContext {
+  const session = (entry as ToolUseFlowContext | undefined)?.session;
   return session !== undefined && typeof session.appendFollowUp === 'function';
 }
 
@@ -75,7 +75,7 @@ function isToolUseFlowContext(
  */
 export function getToolUseFlowContext(
   streamTabId: StreamTabId,
-): ToolUseFlowContext<unknown> | undefined {
+): ToolUseFlowContext | undefined {
   const entry = registry.get(streamTabId);
   return isToolUseFlowContext(entry) ? entry : undefined;
 }
