@@ -26,20 +26,16 @@ function handleAddLogMessage(
   ctx: EventHandlerContext,
   { streamId, logMessage }: ProgressEventPayloads['addLogMessage'],
 ): void {
-  withEventErrorHandling(
-    'LogEvents',
-    'failed to handle addLogMessage',
-    () => {
-      const isNew = ctx.state.streamTabs.addMessage(streamId, logMessage);
-      // Only send to webview for the active stream. Inactive streams get
-      // their full log history via UPDATE_LOGS on tab switch, so sending
-      // APPEND_LOG for them is wasted work (serialization + frontend state churn).
-      const isActive = streamId === ctx.state.activeStream;
-      if (isNew && isActive && ctx.webviewUpdater.isAvailable()) {
-        ctx.webviewUpdater.appendLogMessage(streamId, logMessage);
-      }
-    },
-  );
+  withEventErrorHandling('LogEvents', 'failed to handle addLogMessage', () => {
+    const isNew = ctx.state.streamTabs.addMessage(streamId, logMessage);
+    // Only send to webview for the active stream. Inactive streams get
+    // their full log history via UPDATE_LOGS on tab switch, so sending
+    // APPEND_LOG for them is wasted work (serialization + frontend state churn).
+    const isActive = streamId === ctx.state.activeStream;
+    if (isNew && isActive && ctx.webviewUpdater.isAvailable()) {
+      ctx.webviewUpdater.appendLogMessage(streamId, logMessage);
+    }
+  });
 }
 
 function handleUpdateLogMessage(
@@ -56,14 +52,21 @@ function handleUpdateLogMessage(
       // Guard: don't create phantom streams for updates to non-existent streams
       if (!ctx.state.streamTabs.has(streamId)) return;
 
-      // Single-pass: find, guard, and update in one scan
+      // Find and guard before mutating stored messages.
       const { id: _id, ...updates } = logMessage;
+      const existingMessage = ctx.state.streamTabs.findMessage(
+        streamId,
+        logMessage.id,
+      );
+      if (!existingMessage) return;
+      if (existingMessage.messageType === MESSAGE_TYPES.INTERNAL) return;
+
       const existing = ctx.state.streamTabs.updateMessage(
         streamId,
         logMessage.id,
         updates,
       );
-      if (!existing || existing.messageType === MESSAGE_TYPES.INTERNAL) return;
+      if (!existing) return;
 
       const isActive = streamId === ctx.state.activeStream;
       if (ctx.webviewUpdater.isAvailable() && isActive) {
