@@ -1,26 +1,21 @@
 /**
  * Service interfaces for cycle flows.
  *
- * Flattened design: each service interface directly declares all its fields
- * instead of composing through 4 levels of Pick/extend/intersection.
- * This makes it immediately clear what dependencies a cycle node has.
+ * Cycle services extend BaseFlowContextInit (agent identity + interrupts)
+ * and add per-cycle runtime fields (client, state slices, etc.).
+ * This eliminates the previous flat re-declaration of ~10 identical fields.
  *
  * Services are injected via PocketFlow's `this.services` (immutable dependencies).
  */
 
-import type { IModelHandler } from '@agent/modelHandlers/types/IModelHandler';
 import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
 } from '@agent/core/AgentState';
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
-import type { AgentLogger } from '@logger/AgentLogger';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import type { TaskRunFileService } from '@utils/files';
 
 // ---------------------------------------------------------------------------
@@ -32,75 +27,39 @@ export type RoundFinalizedCallback = (
   run: AgentRunStateSnapshot,
 ) => void | Promise<void>;
 
-/**
- * State slices for response cycle flows (includes round for workflow agents).
- * Used by ResponseCycleNode to pass reconstructed state into the cycle.
- */
-export interface CycleStateSlices {
-  readonly run: AgentRunStateSnapshot;
-  readonly workspace: AgentWorkspaceState;
-  readonly onRoundFinalized?: RoundFinalizedCallback;
-  round: ConversationRoundStateSnapshot;
-}
-
 // ---------------------------------------------------------------------------
-// Service Interfaces (Flat — no intermediate Pick/extend layers)
+// Service Interfaces
 // ---------------------------------------------------------------------------
 
 /**
  * Services for response cycle flow nodes.
  *
- * All fields are declared directly for readability. The previous 4-level
- * composition chain (AgentCore → BaseFlowContextInit → AgentCycleBaseOptions
- * → ResponseCycleOptions ∩ CycleStateSlices) is flattened here.
+ * Extends BaseFlowContextInit (agent identity + interrupts) with:
+ * - client: Model API client (created per cycle via clientRef pattern)
+ * - fileService: File I/O for output writing
+ * - State slices: run, workspace, round (reconstructed per cycle from snapshots)
  */
-export interface ResponseCycleServices<C = unknown> {
-  // --- Agent identity (from AgentCore) ---
-  readonly modelHandler: IModelHandler<any, any, any, any, C>;
-  readonly config: AgentConfig;
-  readonly setting: AgentSetting;
-  readonly prompt: AgentPrompt;
-  readonly logger: AgentLogger;
-  readonly streamId: StreamTabId;
-  readonly executionId: ExecutionId;
-  readonly userVarChannels: UserVariableChannels;
-
-  // --- Interrupt handling ---
-  readonly checkInterruption: () => boolean;
-  readonly setAbortController: (ctrl: AbortController | null) => void;
-
-  // --- Cycle-specific ---
+export interface ResponseCycleServices<
+  C = unknown,
+> extends BaseFlowContextInit<C> {
   readonly client: C;
   readonly fileService: TaskRunFileService;
-
-  // --- State slices (reconstructed per cycle) ---
   readonly run: AgentRunStateSnapshot;
   readonly workspace: AgentWorkspaceState;
-  readonly onRoundFinalized?: RoundFinalizedCallback;
   round: ConversationRoundStateSnapshot;
 }
 
 /**
  * Services for tool-use cycle flow nodes.
  *
- * Flat interface — all fields declared directly.
- * Tool-use cycles don't have a round snapshot (continuous session model).
+ * Extends BaseFlowContextInit (agent identity + interrupts) with:
+ * - client: Model API client
+ * - toolRegistry + resolved tool names
+ * - State slices: run, workspace (no per-round snapshot — continuous session model)
  */
-export interface ToolUseCycleServices<C = unknown> {
-  // --- Agent identity (from AgentCore) ---
-  readonly modelHandler: IModelHandler<any, any, any, any, C>;
-  readonly setting: AgentSetting;
-  readonly prompt: AgentPrompt;
-  readonly logger: AgentLogger;
-  readonly streamId: StreamTabId;
-  readonly executionId: ExecutionId;
-  readonly userVarChannels: UserVariableChannels;
-
-  // --- Interrupt handling ---
-  readonly checkInterruption: () => boolean;
-  readonly setAbortController: (ctrl: AbortController | null) => void;
-
-  // --- Cycle-specific ---
+export interface ToolUseCycleServices<
+  C = unknown,
+> extends BaseFlowContextInit<C> {
   readonly client: C;
   readonly toolRegistry: IToolRegistry;
   readonly modelName?: string;
@@ -109,22 +68,9 @@ export interface ToolUseCycleServices<C = unknown> {
   readonly session?: IToolUseSession;
   /** Callback when a queued follow-up is consumed (clears UI display). */
   readonly onFollowUpConsumed?: () => void;
-
-  // --- State slices ---
   readonly run: AgentRunStateSnapshot;
   readonly workspace: AgentWorkspaceState;
-  readonly onRoundFinalized?: RoundFinalizedCallback;
 }
 
-/** Backwards-compatible alias for consumers that reference the old intermediate type. */
-export type ToolUseCycleOptions<C = unknown> = ToolUseCycleServices<C>;
-
-/**
- * Params for cycle nodes (services injected via `this.services`).
- * Empty by design - cycles use services for dependencies, params for flow-specific data.
- */
-type CycleParams = Record<string, unknown>;
-
-// Re-export for backward compatibility with existing node definitions
-export type ResponseCycleParams<_C = unknown> = CycleParams;
-export type ToolUseCycleParams<_C = unknown> = CycleParams;
+/** Params for cycle nodes — empty by design (dependencies via services). */
+export type CycleParams = Record<string, unknown>;
