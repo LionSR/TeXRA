@@ -99,7 +99,7 @@ AI scientists need more than a chat window. TeXRA keeps research grounded in rep
 
   <div class="feature-item">
     <h3>🔄 Document Transformation</h3>
-    <p>Effortlessly convert papers into slides (`paper2slide`), lecture notes (`paper2note`), posters (`paper2poster`), or even draft cover letters (`paper2cover`).</p>
+    <p>Effortlessly convert papers into slides (<code>paper2slide</code>), posters (<code>paper2poster</code>), or build interactive presentations with the <code>presenter</code> agent.</p>
     <div class="feature-example">
       <code>Paper Abstract</code> &#8594; `Beamer Slides Outline`
     </div>
