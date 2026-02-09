@@ -56,6 +56,7 @@ function hasMetaChange(
   if (prev.status !== curr.status) return true;
   if (prev.taskGroups !== curr.taskGroups) return true;
   if (prev.contextState !== curr.contextState) return true;
+  if (prev.activeSubagents !== curr.activeSubagents) return true;
   if (isWorkflowState(prev) && isWorkflowState(curr)) {
     return (
       prev.runInstructions !== curr.runInstructions ||
