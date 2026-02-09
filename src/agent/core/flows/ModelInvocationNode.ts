@@ -25,12 +25,7 @@ export interface ModelInvocationConfig<TShared, TServices> {
   getSystemPrompt?: (shared: TShared) => string | undefined;
   getEndTag?: (services: TServices) => string | undefined;
   getTools?: (services: TServices) => ToolDefinition[] | undefined;
-  storeResponse: (
-    shared: TShared,
-    response: unknown,
-    responseTimeMs: number | undefined,
-  ) => void;
-  isBackgroundModeActive?: (services: TServices) => boolean;
+  storeResponse: (shared: TShared, response: unknown) => void;
   getDebugSaveOptions?: (
     shared: TShared,
     services: TServices,
@@ -55,10 +50,6 @@ export interface ModelInvocationServices {
   readonly refreshClient?: () => Promise<void>;
 }
 
-interface ModelInvocationPrepResult extends BaseInvocationPrepResult {
-  systemPrompt?: string;
-}
-
 export class ModelInvocationNode<
   TShared extends BaseCycleFields,
   TParams extends NonIterableObject = NonIterableObject,
@@ -71,15 +62,18 @@ export class ModelInvocationNode<
     this._config = config;
   }
 
+  // Required by abstract base class RetryableInvocationNode
   protected getOperationName(): string {
     return this._config.operationName;
   }
 
   protected override isBackgroundModeActive(): boolean {
-    return this._config.isBackgroundModeActive?.(this.services) ?? false;
+    return this.services.modelHandler.isBackgroundModeActive();
   }
 
-  async prep(shared: TShared): Promise<ModelInvocationPrepResult> {
+  async prep(
+    shared: TShared,
+  ): Promise<BaseInvocationPrepResult & { systemPrompt?: string }> {
     return {
       shouldStop: shared.shouldStop,
       messages: shared.messages,
@@ -88,7 +82,7 @@ export class ModelInvocationNode<
   }
 
   async exec(
-    prepRes: ModelInvocationPrepResult,
+    prepRes: BaseInvocationPrepResult & { systemPrompt?: string },
   ): Promise<InvocationResult<BaseInvocationSuccessData>> {
     if (prepRes.shouldStop) {
       return { kind: 'skipped' };
@@ -107,24 +101,20 @@ export class ModelInvocationNode<
         systemPrompt: prepRes.systemPrompt,
         endTag: this._config.getEndTag?.(services),
         signal,
-        tools: this._config.getTools
-          ? this._config.getTools(services)
-          : services.setting.tools,
+        tools: this._config.getTools?.(services) ?? services.setting.tools,
       });
-
-      const responseTimeMs = Date.now() - start;
 
       return {
         kind: 'success',
         response: result.response,
-        responseTimeMs,
+        responseTimeMs: Date.now() - start,
         updatedMessages: result.updatedMessages,
       };
     });
   }
 
   async execFallback(
-    _prepRes: ModelInvocationPrepResult,
+    _prepRes: BaseInvocationPrepResult,
     error: Error,
   ): Promise<InvocationResult<BaseInvocationSuccessData>> {
     return this.getFallbackResult(error);
@@ -132,7 +122,7 @@ export class ModelInvocationNode<
 
   async post(
     shared: TShared,
-    _prepRes: ModelInvocationPrepResult,
+    _prepRes: BaseInvocationPrepResult,
     execRes: InvocationResult<BaseInvocationSuccessData>,
   ): Promise<string | undefined> {
     const successRes = handleInvocationResult(execRes, shared, shared, {
@@ -148,11 +138,8 @@ export class ModelInvocationNode<
       replaceMessagesInPlace(shared.messages, successRes.updatedMessages);
     }
 
-    this._config.storeResponse(
-      shared,
-      successRes.response,
-      successRes.responseTimeMs,
-    );
+    shared.responseTimeMs = successRes.responseTimeMs;
+    this._config.storeResponse(shared, successRes.response);
 
     if (this._config.getDebugSaveOptions) {
       const { context, fileOptions } = this._config.getDebugSaveOptions(

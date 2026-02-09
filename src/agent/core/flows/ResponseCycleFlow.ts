@@ -164,7 +164,6 @@ class ResponsePrepNode<C> extends BaseNode<
   }
 }
 
-
 /**
  * Data extracted by prep() for response processing.
  * Note: outputLocation and outputExists are accessed directly from shared
@@ -664,12 +663,9 @@ export function createResponseCycleFlow<C>(): Flow<
       services.modelHandler.capabilities.supportsFunctionCalling
         ? services.setting.tools
         : undefined,
-    storeResponse: (shared, response, responseTimeMs) => {
+    storeResponse: (shared, response) => {
       shared.responseObject = response;
-      shared.responseTimeMs = responseTimeMs;
     },
-    isBackgroundModeActive: (services) =>
-      services.modelHandler.isBackgroundModeActive(),
     getDebugSaveOptions: (shared, services) => ({
       context: {
         modelName: services.config.model,
