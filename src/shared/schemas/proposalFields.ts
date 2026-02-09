@@ -1,9 +1,12 @@
 import { z } from 'zod';
 
+export const ProposalModeSchema = z.enum(['sync', 'async']).catch('sync');
+
 export const BaseProposalFieldsSchema = z.object({
   agent: z.string(),
   model: z.string(),
   instruction: z.string(),
+  mode: ProposalModeSchema,
 });
 
 const FileFieldsSchema = z.object({

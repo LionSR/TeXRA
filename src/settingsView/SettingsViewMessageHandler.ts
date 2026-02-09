@@ -364,7 +364,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         permissions: [],
         remoteAgents: [],
         apiAccessMode: 'personal',
-        enabledProviders: [],
         allowedModels: [],
         tierConstants: {
           ultra: ULTRA_TIER,
@@ -397,9 +396,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
     const apiAccessMode = useIncludedAccess ? 'included' : 'personal';
 
-    const enabledProviders = hasServerSideAccess
-      ? serverSideKeyService.getEffectiveProvidersForCurrentUser()
-      : [];
     const allowedModels = hasServerSideAccess
       ? serverSideKeyService.getAllowedModelsForCurrentUser()
       : [];
@@ -417,7 +413,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       permissions: authContext.permissions,
       remoteAgents,
       apiAccessMode,
-      enabledProviders,
       allowedModels,
       tierConstants: {
         ultra: ULTRA_TIER,

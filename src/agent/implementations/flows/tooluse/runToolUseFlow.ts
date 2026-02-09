@@ -26,7 +26,6 @@ import type { ToolDefinition } from '@model';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
-import { Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
@@ -47,11 +46,14 @@ export interface RunToolUseFlowInput<
   setting: AgentToolUseSetting;
   resumeSnapshot?: ToolUseSessionSnapshot | null;
   onFollowUpConsumed?: () => void;
+  /** When true, proposal tools are filtered out to prevent nesting. */
+  isSubagent?: boolean;
 }
 
 /** Result from running a tool-use flow. */
 export interface RunToolUseFlowResult {
   status: EndGroupStatus;
+  lastResponse?: string;
 }
 
 /**
@@ -72,16 +74,27 @@ export type ToolUseFlowSetupCallback = (
   context: ToolUseFlowContext<unknown>,
 ) => void;
 
+/** Proposal tool names that subagents must not receive. */
+const PROPOSAL_TOOLS = new Set(['propose_workflow', 'propose_agent']);
+
+/** Options for tool resolution. */
+interface ResolveToolsOptions {
+  /** When true, proposal tools are filtered out to prevent nesting. */
+  isSubagent?: boolean;
+}
+
 /** Resolve tool definitions from agent settings, validating against registry. */
 function resolveTools(
   tools: AgentToolUseSetting['tools'],
   registry: IToolRegistry,
   logger: { warn: (msg: string) => void },
+  options?: ResolveToolsOptions,
 ): ToolDefinition[] {
   const toolConfigs = Array.isArray(tools) ? tools : [];
   const resolved = toolConfigs
     .map((config) => (typeof config === 'string' ? { name: config } : config))
     .filter((def) => {
+      if (options?.isSubagent && PROPOSAL_TOOLS.has(def.name)) return false;
       if (!registry.has(def.name)) {
         logger.warn(`Tool "${def.name}" not found in registry`);
         return false;
@@ -114,7 +127,9 @@ export async function runToolUseFlow<C = unknown>(
   const snapshot = input.resumeSnapshot ?? null;
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const registry = toolRegistry ?? getDefaultToolRegistry();
-  const resolvedTools = resolveTools(setting.tools, registry, logger);
+  const resolvedTools = resolveTools(setting.tools, registry, logger, {
+    isSubagent: input.isSubagent,
+  });
 
   // Build services: spread input + add computed fields (matches reflection flow pattern)
   const services: ToolUseServices<C> = {
@@ -123,7 +138,7 @@ export async function runToolUseFlow<C = unknown>(
     resolvedTools,
     toolRegistry: registry,
     snapshot,
-    getUsageRecorder: input.getUsageRecorder ?? (() => async () => {}),
+    onRoundFinalized: input.onRoundFinalized ?? (async () => {}),
   };
 
   const flowContext: ToolUseFlowContext<C> = {
@@ -143,7 +158,7 @@ export async function runToolUseFlow<C = unknown>(
 
   // Shared state is declared outside try block for access in finally (cleanup decision based on userCancelledRetry)
   const shared: ToolUseRunShared = {
-    conversation: [],
+    messages: [],
     shouldSkipCycle: false,
     stateSlices: null,
   };
@@ -217,5 +232,15 @@ export async function runToolUseFlow<C = unknown>(
     unregisterInterruptible(streamId);
   }
 
-  return { status };
+  // Extract last assistant text using the model handler's typed extraction
+  let lastResponse: string | undefined;
+  for (let i = shared.messages.length - 1; i >= 0; i--) {
+    const text = input.modelHandler.extractAssistantText(shared.messages[i]);
+    if (text !== undefined) {
+      lastResponse = text;
+      break;
+    }
+  }
+
+  return { status, lastResponse };
 }
