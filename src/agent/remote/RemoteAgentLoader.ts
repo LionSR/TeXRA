@@ -77,6 +77,7 @@ function parseListItemRow(row: {
   name: string;
   description?: string | null;
   visibility?: string[] | null;
+  tools?: string[] | null;
   agent_category?: string | null;
 }): RemoteAgentListItem | null {
   const result = RemoteAgentListItemSchema.safeParse({
@@ -84,6 +85,7 @@ function parseListItemRow(row: {
     name: row.name,
     description: row.description,
     visibility: row.visibility,
+    tools: row.tools,
     agentCategory: row.agent_category,
   });
 
@@ -201,7 +203,7 @@ export class RemoteAgentLoader {
 
       const { data, error } = await supabase
         .from('remote_agents')
-        .select('id, name, description, visibility, agent_category')
+        .select('id, name, description, visibility, tools, agent_category')
         .order('name');
 
       if (error) {

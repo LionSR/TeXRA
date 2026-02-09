@@ -223,6 +223,7 @@ CREATE TABLE profiles (
 -- Remote agents metadata table
 -- visibility: array of group names that can access the agent (e.g., ARRAY['math', 'cs'])
 -- agent_category: 'workflow' (multi-turn) or 'toolUse' (single-turn with tools)
+-- tools: cached tool names from YAML for tool-use agents (e.g., ARRAY['web_search', 'arxiv_search'])
 CREATE TABLE remote_agents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT UNIQUE NOT NULL,
@@ -230,6 +231,7 @@ CREATE TABLE remote_agents (
   storage_path TEXT NOT NULL,
   visibility TEXT[] DEFAULT ARRAY['public'],
   agent_category TEXT DEFAULT 'workflow' CHECK (agent_category IN ('workflow', 'toolUse')),
+  tools TEXT[] DEFAULT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -612,6 +614,9 @@ Notes:
 
 - `visibility` is an array - agents can be visible to multiple groups
 - `agent_category` can be `'workflow'` (multi-turn) or `'toolUse'` (single-turn with tools)
+- `tools` is an optional array of tool names for tool-use agents (cached from YAML).
+  Populate this so orchestrator agents can see what tools remote agents have without fetching YAML.
+  Example: `ARRAY['web_search', 'arxiv_search', 'web_fetch']`
 
 ---
 
