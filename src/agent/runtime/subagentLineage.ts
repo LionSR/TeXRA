@@ -11,18 +11,12 @@
  */
 
 import { bus } from '@eventBus/ProgressEventBus';
-import type { StreamTabId } from '@shared/schemas';
+import type { ActiveSubagentInfo, StreamTabId } from '@shared/schemas';
 
 interface SubagentEntry {
   parentStreamId: StreamTabId;
   childStreamId: StreamTabId;
   childAgentName: string;
-}
-
-/** Summary of an active subagent, suitable for UI display. */
-export interface ActiveSubagentSummary {
-  executionId: string;
-  agentName: string;
 }
 
 const activeSubagents = new Map<string, SubagentEntry>();
@@ -90,7 +84,7 @@ export function getActiveSubagent(
 /** Get summary of active children for a parent stream (for UI display and events). */
 export function getActiveChildrenSummary(
   parentStreamId: StreamTabId,
-): ActiveSubagentSummary[] {
+): ActiveSubagentInfo[] {
   return [...activeSubagents.entries()]
     .filter(([, e]) => e.parentStreamId === parentStreamId)
     .map(([execId, e]) => ({
