@@ -305,7 +305,6 @@ class ToolUsePrepNode<C> extends BaseNode<
   }
 }
 
-
 /** Result of exec() containing extracted data needed for post() side effects. */
 type ToolUseProcessExecResult =
   | { kind: 'skipped' }
@@ -909,9 +908,8 @@ export function createToolUseCycleFlow<C>(): Flow<
   >({
     operationName: 'Tool-use call',
     streaming: true,
-    storeResponse: (shared, response, responseTimeMs) => {
+    storeResponse: (shared, response) => {
       shared.response = response;
-      shared.responseTimeMs = responseTimeMs;
     },
     getDebugSaveOptions: (shared, services) => ({
       context: {
