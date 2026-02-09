@@ -58,21 +58,19 @@ export interface RunToolUseFlowResult {
 
 /**
  * Runtime context for tool-use flow execution (implements IInterruptible).
- * The `session` field provides direct access for follow-up operations,
- * avoiding the need to traverse through services for common operations.
+ * Exposes only the fields needed by external consumers (agentCommands,
+ * ToolUseAgentRegistry) — services stay internal to runToolUseFlow.
  */
-export interface ToolUseFlowContext<C = unknown> {
-  services: ToolUseServices<C>;
-  /** Direct accessor for follow-up operations (also available via services.session). */
-  session: ToolUseSessionLifecycle;
+export interface ToolUseFlowContext {
+  /** Direct accessor for follow-up operations. */
+  readonly session: ToolUseSessionLifecycle;
+  /** Model handler for compaction requests (used by agentCommands). */
+  readonly modelHandler: ToolUseServices['modelHandler'];
   interrupt(): void;
-  dispose(): void;
 }
 
 /** Setup callback invoked after context creation, before execution starts. */
-export type ToolUseFlowSetupCallback = (
-  context: ToolUseFlowContext<unknown>,
-) => void;
+export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
 
 /** Proposal tool names that subagents must not receive. */
 const PROPOSAL_TOOLS = new Set(['propose_workflow', 'propose_agent']);
@@ -141,16 +139,13 @@ export async function runToolUseFlow<C = unknown>(
     onRoundFinalized: input.onRoundFinalized ?? (async () => {}),
   };
 
-  const flowContext: ToolUseFlowContext<C> = {
-    services,
+  const flowContext: ToolUseFlowContext = {
     session: sessionLifecycle,
+    modelHandler: input.modelHandler,
     interrupt(): void {
       onInterrupt?.();
       retryCoordinator.clearRequest(streamId);
       sessionLifecycle.interrupt();
-    },
-    dispose(): void {
-      sessionLifecycle.dispose();
     },
   };
 
@@ -204,7 +199,7 @@ export async function runToolUseFlow<C = unknown>(
       Record<string, unknown>,
       ToolUseServices<C>
     >(startNode, kv);
-    pf.setServices(flowContext.services);
+    pf.setServices(services);
     await pf.run(shared);
 
     const execStatus = input.checkInterruption()
@@ -228,7 +223,7 @@ export async function runToolUseFlow<C = unknown>(
       }
     }
 
-    flowContext.dispose();
+    sessionLifecycle.dispose();
     unregisterInterruptible(streamId);
   }
 

@@ -3,10 +3,7 @@ import { dirname } from 'path';
 import { z } from 'zod';
 
 import { MESSAGE_TYPES } from '@shared/schemas';
-import {
-  AgentFileLocationSchema,
-  type AgentFileLocation,
-} from '@shared/schemas';
+import { AgentFileLocationSchema } from '@shared/schemas';
 import { isRemoteAgent } from '@agent/index';
 import { BaseNode, Flow } from '@agent/node';
 import { recordRound } from '@agent/core/AgentState';
@@ -54,7 +51,6 @@ import { type CycleParams, type ResponseCycleServices } from './CycleServices';
  * Schema for serializable response cycle fields.
  *
  * Extends BaseCycleFieldsSchema with response-specific fields for output tracking.
- * ReflectionFlowShared uses this (or derives from it) for native nesting.
  *
  * ## Field Categories
  *
@@ -101,42 +97,11 @@ export interface CycleTransientFields {
 /**
  * Full cycle shared type combining serializable and transient fields.
  *
- * This is what cycle nodes operate on. For native nesting, the outer
- * flow's shared type (e.g., ReflectionFlowShared) must be compatible
- * with this type.
+ * This is what cycle nodes operate on. ResponseCycleNode creates a
+ * dedicated instance for each cycle, keeping cycle fields off the
+ * outer ReflectionFlowShared.
  */
 export type ResponseCycleShared = CycleFields & CycleTransientFields;
-
-/**
- * Initialize cycle fields on a shared state object for native nesting.
- *
- * Replaces the error-prone pattern of setting 11 fields individually
- * followed by assertCycleFieldsPopulated(). All required fields are
- * initialized in one place — impossible to forget a field.
- */
-export function initializeCycleFields<T extends object>(
-  shared: T,
-  messages: ProviderMessage[],
-  outputLocation: AgentFileLocation,
-): asserts shared is T & ResponseCycleShared {
-  // Typed literal ensures compile-time checking: missing fields, typos, and
-  // wrong types are all caught. Object.assign mutates shared in place so the
-  // flow's reference stays valid.
-  const defaults: ResponseCycleShared = {
-    messages,
-    outputLocation,
-    endTurn: false,
-    shouldStop: false,
-    outputExists: false,
-    systemPrompt: undefined,
-    responseObject: undefined,
-    responseTimeMs: undefined,
-    stopReason: undefined,
-    processedResponse: undefined,
-    lastError: undefined,
-  };
-  Object.assign(shared, defaults);
-}
 
 // Each node in the response cycle progressively hydrates the shared cycle
 // object. Mutations performed in `prep`, `exec`, and `post` stages are
