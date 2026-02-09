@@ -269,6 +269,39 @@ export function updateAgentDescription(
 }
 
 /**
+ * Update an agent's tool list in the cache.
+ * Used to populate tools for remote agents after YAML is loaded,
+ * so orchestrator agents can see what tools remote agents have.
+ * Passing undefined/empty clears stale tools if the YAML removed them.
+ */
+export function updateAgentTools(
+  identifier: string,
+  tools: string[] | undefined,
+): void {
+  const entry = getAgent(identifier);
+  if (!entry) return;
+  const value = tools?.length ? tools : undefined;
+  entry.tools = value;
+  persistRemoteAgentMeta(entry.name, { tools: value });
+}
+
+/**
+ * Update an agent's default output files in the cache.
+ * Used to populate defaultOutputFiles for remote agents after YAML is loaded.
+ * Passing undefined/empty clears stale values.
+ */
+export function updateAgentDefaultOutputFiles(
+  identifier: string,
+  defaultOutputFiles: string[] | undefined,
+): void {
+  const entry = getAgent(identifier);
+  if (!entry) return;
+  const value = defaultOutputFiles?.length ? defaultOutputFiles : undefined;
+  entry.defaultOutputFiles = value;
+  persistRemoteAgentMeta(entry.name, { defaultOutputFiles: value });
+}
+
+/**
  * Resolve an agent to its definition path, handling _multiple variant logic.
  */
 export function resolveAgent(
@@ -338,6 +371,20 @@ export async function refresh(): Promise<void> {
 // =============================================================================
 // HELPERS
 // =============================================================================
+
+/**
+ * Extract tool names from raw YAML tool configs.
+ * Tools can be plain strings ("web_search") or objects ({ name: "web_search", ... }).
+ */
+export function extractToolNames(
+  rawTools: unknown[] | undefined,
+): string[] | undefined {
+  return rawTools?.flatMap((t) => {
+    if (typeof t === 'string') return t;
+    const name = (t as Record<string, unknown>)?.name;
+    return typeof name === 'string' ? name : [];
+  });
+}
 
 async function scanDirectory(
   dir: string,
@@ -428,13 +475,7 @@ async function scanYaml(
       | string[]
       | undefined;
 
-    // Extract tool names (can be strings or objects with name field)
-    const rawTools = rawSettings.tools as unknown[] | undefined;
-    const tools = rawTools?.flatMap((t) => {
-      if (typeof t === 'string') return t;
-      const name = (t as Record<string, unknown>)?.name;
-      return typeof name === 'string' ? name : [];
-    });
+    const tools = extractToolNames(rawSettings.tools as unknown[] | undefined);
 
     // Determine category from source or explicit setting
     // Backward compatibility: check both agentCategory and legacy agentType
@@ -465,10 +506,51 @@ async function scanYaml(
   }
 }
 
+// =============================================================================
+// REMOTE AGENT METADATA PERSISTENCE
+// =============================================================================
+
+/**
+ * Cached metadata for a remote agent, persisted in globalState.
+ * Populated lazily when a remote agent's YAML is first loaded.
+ */
+interface RemoteAgentMetaCache {
+  [agentName: string]: {
+    tools?: string[];
+    defaultOutputFiles?: string[];
+  };
+}
+
+/** Persist remote agent metadata to globalState for cross-session availability. */
+function persistRemoteAgentMeta(
+  agentName: string,
+  meta: { tools?: string[]; defaultOutputFiles?: string[] },
+): void {
+  if (!globalSM) return;
+  const stored =
+    globalSM.get<RemoteAgentMetaCache>(
+      GlobalStateKey.REMOTE_AGENT_META_CACHE,
+      {},
+    ) ?? {};
+  stored[agentName] = { ...stored[agentName], ...meta };
+  void globalSM.update(GlobalStateKey.REMOTE_AGENT_META_CACHE, stored);
+}
+
+/** Load persisted remote agent metadata from globalState. */
+function getPersistedRemoteAgentMeta(): RemoteAgentMetaCache {
+  return (
+    globalSM?.get<RemoteAgentMetaCache>(
+      GlobalStateKey.REMOTE_AGENT_META_CACHE,
+      {},
+    ) ?? {}
+  );
+}
+
 async function loadRemoteAgents(): Promise<AgentEntry[]> {
   try {
     const remotes = await RemoteAgentLoader.listRemoteAgents();
     const grouped = groupByVariants(remotes, (r) => r.name);
+    const metaCache = getPersistedRemoteAgentMeta();
 
     // Build entries from grouped agents
     const entries: AgentEntry[] = [];
@@ -476,16 +558,23 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
       const primary = base || multiple;
       if (!primary) continue;
 
+      const name = base ? baseName : primary.name;
       const isToolUse = primary.agentCategory === AgentCategory.ToolUse;
-      // Description from DB is cache; updated from YAML when agent is loaded
+      const cached = metaCache[name];
+
+      // Tools: prefer DB column (authoritative), fall back to persistent cache.
+      // defaultOutputFiles: from persistent cache (no DB column yet).
+      const dbTools = primary.tools?.length ? primary.tools : undefined;
       entries.push({
-        name: base ? baseName : primary.name,
+        name,
         source: 'remote' as AgentSource,
         path: '',
         multiplePath: multiple?.name,
         category: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
         description: primary.description ?? undefined,
         visibility: primary.visibility ?? undefined,
+        tools: dbTools ?? cached?.tools,
+        defaultOutputFiles: cached?.defaultOutputFiles,
       });
     }
 

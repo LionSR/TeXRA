@@ -1,0 +1,301 @@
+-- Sync all reference-agents to the remote_agents table.
+-- This upserts every agent in reference-agents/ so descriptions, tools,
+-- and agent_category match the YAML source of truth.
+--
+-- Prerequisites:
+-- 1. Upload each YAML from reference-agents/ to Supabase Storage under
+--    agent-configs/{workflow|tool_use}/{name}.yaml
+-- 2. Ensure the tools column exists (idempotent ALTER below).
+--
+-- Run this SQL in the Supabase SQL Editor.
+
+-- =============================================================================
+-- STEP 1: Ensure tools column exists (idempotent)
+-- =============================================================================
+
+ALTER TABLE remote_agents
+ADD COLUMN IF NOT EXISTS tools TEXT[] DEFAULT NULL;
+
+-- =============================================================================
+-- STEP 2: Upsert all reference agents
+-- =============================================================================
+
+-- ---------------------------------------------------------------------------
+-- Workflow agents
+-- ---------------------------------------------------------------------------
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'apply',
+  'Implements suggestions from review agents (criticize, enhance, logic, notation, etc.). Reads inline annotations, works through the issues, and applies corrections.',
+  'workflow/apply.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'apply_multiple',
+  'Implements suggestions from review agents across multiple documents. Reads inline annotations, works through issues, and applies corrections while maintaining cross-document consistency.',
+  'workflow/apply_multiple.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'criticize',
+  'Critical reviewer for mathematical physics papers. Inserts inline comments using \criticize{}{severity}{confidence} without modifying original content.',
+  'workflow/criticize.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'criticize_multiple',
+  'Critical reviewer for multiple related documents. Inserts inline comments using \criticize{}{severity}{confidence} across papers without modifying original content.',
+  'workflow/criticize_multiple.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'devise',
+  'Mathematical paper enhancer with two-phase workflow. Rewrites document by first adding rigorous derivations then revising to publication-ready scientific style.',
+  'workflow/devise.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'devise_multiple',
+  'Multi-paper enhancement workflow with derivation and revision phases. Rewrites documents through two-phase process ensuring consistent notation and rigor across collections.',
+  'workflow/devise_multiple.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'enhance',
+  'Mathematical substance enhancer for research papers. Identifies elegant proofs and stronger results.',
+  'workflow/enhance.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'enhance_multiple',
+  'Multi-document mathematical enhancer for research papers. Improves proofs and results across paper collections.',
+  'workflow/enhance_multiple.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'generic',
+  'General-purpose LaTeX document editor. Flexibly processes research papers following academic standards and user instructions. Detects and uses existing comment styles (\todo, \comment, %).',
+  'workflow/generic.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'generic_multiple',
+  'General-purpose LaTeX document editor for multiple documents. Flexibly processes research papers following academic standards while maintaining consistency.',
+  'workflow/generic_multiple.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'logic',
+  'Logical flow analyzer for research papers. Improves argument structure and coherence.',
+  'workflow/logic.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'logic_multiple',
+  'Multi-document logical flow analyzer for research papers. Ensures coherent argumentation across paper collections.',
+  'workflow/logic_multiple.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'notation',
+  'Notation consistency checker for research papers. Ensures consistent symbol usage throughout documents.',
+  'workflow/notation.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'notation_multiple',
+  'Multi-document notation checker for research papers. Ensures consistent symbols across paper collections.',
+  'workflow/notation_multiple.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'verifyFix',
+  'Three-phase verification and fix agent for research papers. Expands, critiques with verification, then fixes with documentation.',
+  'workflow/verifyFix.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'verifyFix_multiple',
+  'Multi-document verification and fix agent for research papers. Comprehensive three-phase review across paper collections.',
+  'workflow/verifyFix_multiple.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+-- ---------------------------------------------------------------------------
+-- Tool-use agents
+-- ---------------------------------------------------------------------------
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'orchestrator',
+  'AI scientist that analyzes documents, tracks progress, and proposes agent tasks.',
+  'tool_use/orchestrator.yaml',
+  ARRAY['researcher'],
+  'toolUse',
+  ARRAY['propose_workflow', 'propose_agent', 'runs', 'todo_write', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'texcount']
+)
+ON CONFLICT (name) DO UPDATE SET
+  description    = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category,
+  tools          = EXCLUDED.tools;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'presenter',
+  'Interactive scientific presentation builder with visual QA.',
+  'tool_use/presenter.yaml',
+  ARRAY['researcher'],
+  'toolUse',
+  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'extract_tikz_figures', 'wolfram', 'arxiv_search', 'arxiv_metadata', 'web_search', 'web_fetch']
+)
+ON CONFLICT (name) DO UPDATE SET
+  description    = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category,
+  tools          = EXCLUDED.tools;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'search',
+  'Research assistant with web search and literature discovery tools.',
+  'tool_use/search.yaml',
+  ARRAY['researcher'],
+  'toolUse',
+  ARRAY['bash', 'read_file', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'extract_tikz_figures', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source', 'crossref_search', 'crossref_doi', 'zotero_add', 'zotero_search', 'zotero_export', 'web_search', 'web_fetch']
+)
+ON CONFLICT (name) DO UPDATE SET
+  description    = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category,
+  tools          = EXCLUDED.tools;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'simplifier',
+  'Simplifies scientific code and LaTeX for clarity and maintainability while preserving all functionality.',
+  'tool_use/simplifier.yaml',
+  ARRAY['researcher'],
+  'toolUse',
+  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'diagnostics', 'extract_figures', 'extract_tikz_figures', 'memory']
+)
+ON CONFLICT (name) DO UPDATE SET
+  description    = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category,
+  tools          = EXCLUDED.tools;
+
+-- =============================================================================
+-- VERIFY
+-- =============================================================================
+
+SELECT name, description, agent_category, tools, visibility
+FROM remote_agents
+ORDER BY agent_category, name;
