@@ -2386,6 +2386,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     } satisfies EasyInputMessage;
   }
 
+  override extractAssistantText(
+    message: ResponseInputItem,
+  ): string | undefined {
+    if (
+      typeof message === 'object' &&
+      'type' in message &&
+      message.type === 'message' &&
+      'role' in message &&
+      message.role === 'assistant' &&
+      'content' in message &&
+      typeof message.content === 'string'
+    ) {
+      return message.content;
+    }
+    return undefined;
+  }
+
   private createInputText(text: string): ResponseInputContent {
     return { type: 'input_text', text };
   }
