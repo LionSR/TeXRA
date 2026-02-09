@@ -70,6 +70,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
 import { createInterruptCallbacks } from './InterruptManager';
+import { trackExecution, untrackExecution } from './executionRegistry';
 import type { AgentFlowResult, OutputFileSummary } from './AgentFlowResult';
 
 const CHANNEL = 'executeAgent';
@@ -310,8 +311,10 @@ async function runFlowWithLifecycle(
   runner: () => Promise<AgentFlowResult>,
   options?: { isSubagent?: boolean },
 ): Promise<AgentFlowResult> {
+  trackExecution(ctx.executionId, streamId);
   try {
     const result = await runner();
+    untrackExecution(ctx.executionId);
     ctx.parentStage.end(result.status);
 
     if (!StreamStatusService.shouldPreserveOnCompletion(streamId)) {
@@ -322,6 +325,7 @@ async function runFlowWithLifecycle(
     logger.debug(`Task completed with status: ${result.status}`);
     return result;
   } catch (err) {
+    untrackExecution(ctx.executionId);
     const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
     // Log error BEFORE ending the group so it gets the correct groupId
