@@ -96,9 +96,12 @@ Key directories in `src/`:
 - `latex/` - LaTeX processing (formatting, diff, TikZ, PDF)
 - `webview/` - Main agent interaction interface
 - `progressView/` - Task tracking board
-- `historyView/` - Execution history browser
-- `profileView/` - Agent profile/settings view
+- `settingsView/` - Unified settings webview (History, Memory, Models, Agents tabs)
+- `shared/` - Shared schemas and message handlers across webviews
 - `explorer/` - VS Code file explorer integration
+- `auth/` - Authentication logic
+- `housekeeping/` - Cleanup and packing operations
+- `types/` - Shared type definitions
 - `logger/` - Logging infrastructure
 - `eventBus/` - Progress event system
 - `replacement/` - Text cleanup rules
@@ -118,9 +121,9 @@ Key documentation in `docs/`:
 - `housekeeping/` - Cleanup, packing, and utilities
 - `latex/` - LaTeX operations (diff, figures, etc.)
 - `progress/` - Progress board management
-- `system/` - Help, settings, tests, XML/YAML utilities, editor commands
+- `settings/` - Settings view commands
+- `system/` - Help, tests, XML/YAML utilities, editor commands
 - `tests/` - Test commands
-- `wolfram/` - Wolfram Alpha queries and script utilities
 
 ### Schema and Type Guidelines
 
@@ -255,7 +258,8 @@ Common aliases (full list in `tsconfig.json`):
 
 - `@agent/*`, `@commands/*`, `@common/*`, `@frontend/*`, `@utils/*`
 - `@model/*`, `@latex/*`, `@logger/*`, `@tools/*`, `@webview/*`
-- `@progressView/*`, `@historyView/*`, `@eventBus/*`, `@replacement/*`
+- `@progressView/*`, `@settingsView/*`, `@shared/*`, `@eventBus/*`
+- `@replacement/*`, `@housekeeping/*`, `@auth/*`, `@types/*`
 
 ## Adding New Components
 
