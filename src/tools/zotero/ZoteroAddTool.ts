@@ -216,7 +216,12 @@ async function resolveDOI(
 
     const creators = work.author?.length
       ? work.author.map(
-          (a: { given?: string; family?: string; name?: string }) => {
+          (a: {
+            given?: string;
+            family?: string;
+            name?: string;
+            literal?: string;
+          }) => {
             if (a.given && a.family) {
               return {
                 firstName: a.given,
@@ -224,8 +229,9 @@ async function resolveDOI(
                 creatorType: 'author',
               };
             }
+            // name = Crossref org author, literal = CSL unparsed name
             return {
-              name: a.name || a.family || 'Unknown',
+              name: a.name || a.literal || a.family || 'Unknown',
               creatorType: 'author',
             };
           },
