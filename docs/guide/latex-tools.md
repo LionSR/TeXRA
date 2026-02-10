@@ -66,7 +66,7 @@ TeXRA extracts and processes figures for AI analysis.
 
 The `extract_figures` tool finds figure references (`\includegraphics`) and returns the images as attachments, allowing the LLM to "see" your figures.
 
-**Auto-extraction:** Enable "Auto Extract Figures" in the UI to automatically include figures in prompts. See [File Management](./file-management.md#auto-extraction-features).
+**Auto-extraction:** Enable "Auto Extract Figures" in the UI to automatically include figures in prompts. See [Working with Figures](./working-with-figures.md).
 
 ### TikZ Figures
 
@@ -98,8 +98,8 @@ The `wolfram` tool executes Wolfram Language code through `wolframscript`, letti
 
 Control how TeXRA uses tools through the UI:
 
-- **Tool Config Dropdown:** Enable/disable helpers like "Attach TeX Count" or "Attach Diagnostics" for the current run. See [File Management](./file-management.md#tool-config-dropdown).
-- **Auto Extract Dropdown:** Enable/disable automatic extraction of Figures or TikZ Figures. See [File Management](./file-management.md#auto-extraction-features).
+- **Tool Config Dropdown:** Enable/disable helpers like "Attach TeX Count" or "Attach Diagnostics" for the current run. See [Configuration](./configuration.md#agent-execution-settings-webview-interface).
+- **Auto Extract Dropdown:** Enable/disable automatic extraction of Figures or TikZ Figures. See [Working with Figures](./working-with-figures.md).
 
 For detailed tool settings (formatter paths, TikZ processing options, etc.), see the [Configuration guide](./configuration.md).
 

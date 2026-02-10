@@ -8,13 +8,29 @@ This glossary provides definitions for technical terms used throughout the TeXRA
 
 A specialized AI assistant in TeXRA that performs a specific type of task, such as correcting errors, polishing writing, or creating figures. Each agent has custom prompts and settings optimized for its purpose.
 
-### Chain of Thought (CoT)
+### Workflow Agent
 
-An agent type in TeXRA that uses structured XML output with scratchpad thinking for complex reasoning. CoT agents can show their work and reasoning process.
+An agent that takes your files and instruction, sends them through one or more structured rounds to an AI model, and produces output files (e.g., a polished `.tex` file). Workflow agents use XML-wrapped output and can include scratchpad reasoning. Examples: `correct`, `polish`, `draw`, `paper2slide`.
 
-### Direct Agent
+### Tool-Use Agent
 
-An agent type in TeXRA that provides simpler, more straightforward output without intermediate reasoning steps. Direct agents are optimized for less complex tasks.
+An interactive agent that can read files, edit code, run commands, search the web, and more - all in a back-and-forth conversation. You chat with it and it takes actions on your behalf. Examples: `chat`, `search`, `research`, `presenter`.
+
+### Dashboard
+
+The unified management panel in TeXRA where you can browse agents, toggle models, manage API keys, view execution history, and access memory. Open it from the Command Palette with **TeXRA: Show Dashboard**.
+
+### YOLO Mode
+
+A mode that lets tool-use agents run without pausing for your approval on each action (file edits, bash commands, etc.). Toggled from the ProgressBoard header. Handy when you trust the agent, but use with care.
+
+### Remote Agent
+
+A cloud-hosted agent maintained by the TeXRA team that loads on demand. Remote agents are marked with a cloud icon in the agent dropdown and require signing in to access.
+
+### Memory
+
+A persistent store that tool-use agents can write to and read from across sessions. Agents use memory to remember project context, preferences, or notes from earlier conversations. Browseable from the Dashboard's Memory tab.
 
 ### Intelligent Merge
 
@@ -44,7 +60,7 @@ A process where the AI reviews and improves its own work, leading to higher qual
 
 ### LLM (Large Language Model)
 
-An AI system trained on vast amounts of text data, capable of understanding and generating human-like text. Examples include Claude, GPT-4, and Gemini.
+An AI system trained on vast amounts of text data, capable of understanding and generating human-like text. Examples include Claude (Anthropic), GPT-5 (OpenAI), and Gemini (Google).
 
 ### Token
 
