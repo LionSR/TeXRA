@@ -5,6 +5,9 @@
  * (taskRuns/{executionId}/). This tool copies selected files from run
  * storage into the workspace, replacing local files — the programmatic
  * equivalent of the "Accept" button in the progress view.
+ *
+ * Each file goes through the standard tool edit approval flow (same diff
+ * panel as write_file), so the user can review, edit, or reject each file.
  */
 
 // Standard library imports
@@ -19,15 +22,15 @@ import { ExecutionIdSchema } from '@shared/schemas';
 // Local imports - tools
 import { ToolError, type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
+import {
+  buildApprovalRejectedResult,
+  requestToolEditApproval,
+  getApprovedContent,
+  writeApprovedContent,
+} from '@tools/approval/toolEditApproval';
 
 // Local imports - utils
-import {
-  StorageFS,
-  WorkspaceFS,
-  flexibleFS,
-  createRunStorageLocation,
-  createWorkspaceLocation,
-} from '@utils/files';
+import { StorageFS, WorkspaceFS, flexibleFS, createRunStorageLocation } from '@utils/files';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 
@@ -71,7 +74,7 @@ export class AcceptRunFilesTool extends defineTool({
   description: `Accept output files from a completed run into the workspace.
 
 Copies selected output files from a run into the workspace, replacing
-existing files.
+existing files. Each file is shown to the user for review before writing.
 
 Parameters:
 - execution_id: The execution ID (from subagent-result or /runs)
@@ -95,10 +98,9 @@ Example: Accept corrected file back to its original location:
       );
     }
 
-    // Phase 1: Validate and resolve all paths before writing anything
-    const resolved = await Promise.all(
+    // Phase 1: Validate all source paths and read content before any approvals
+    const prepared = await Promise.all(
       files.map(async (mapping) => {
-        // Source must not escape run directory
         if (getPathSegments(mapping.run_path).includes('..')) {
           throw new ToolError(
             `run_path must not contain '..': ${mapping.run_path}`,
@@ -115,7 +117,6 @@ Example: Accept corrected file back to its original location:
           );
         }
 
-        // Destination must resolve inside workspace (locatePath rejects traversals)
         const destPath = mapping.workspace_path ?? mapping.run_path;
         const dest = WorkspaceFS.locatePath(destPath);
         if (dest.kind === 'external') {
@@ -124,32 +125,70 @@ Example: Accept corrected file back to its original location:
           );
         }
 
+        const sourceLocation = createRunStorageLocation(sourceAbsolute, mapping.run_path, executionId);
+        const proposedContent = await flexibleFS.read(sourceLocation);
+        const destExists = await WorkspaceFS.exists(dest.relativePath);
+        const originalContent = destExists ? await WorkspaceFS.read(dest.relativePath) : '';
+
         return {
-          sourceLocation: createRunStorageLocation(sourceAbsolute, mapping.run_path, executionId),
-          destLocation: createWorkspaceLocation(dest.absolutePath, dest.relativePath),
           runPath: mapping.run_path,
           workspacePath: dest.relativePath,
+          proposedContent,
+          originalContent,
+          destExists,
         };
       }),
     );
 
-    // Phase 2: Copy each file to workspace via flexibleFS
+    // Phase 2: Request approval and write each file
     const results: string[] = [];
-    const edits: { path: string }[] = [];
+    const edits: ToolResult['edits'] = [];
+    let rejected = 0;
 
-    for (const entry of resolved) {
-      const destExists = await flexibleFS.exists(entry.destLocation);
-      const content = await flexibleFS.read(entry.sourceLocation);
-      await flexibleFS.write(entry.destLocation, content);
+    for (const entry of prepared) {
+      const approval = await requestToolEditApproval({
+        path: entry.workspacePath,
+        originalContent: entry.originalContent,
+        proposedContent: entry.proposedContent,
+        sourceTool: 'accept_run_files',
+      });
 
-      const action = destExists ? 'replaced' : 'created';
+      if (!approval.accepted) {
+        rejected++;
+        const mappingNote =
+          entry.runPath !== entry.workspacePath ? ` (from ${entry.runPath})` : '';
+        results.push(`rejected: ${entry.workspacePath}${mappingNote}`);
+        continue;
+      }
+
+      const finalContent = getApprovedContent(approval, entry.proposedContent);
+      await writeApprovedContent(
+        entry.workspacePath,
+        entry.originalContent,
+        finalContent,
+      );
+
+      const action = entry.destExists ? 'replaced' : 'created';
       const mappingNote =
         entry.runPath !== entry.workspacePath ? ` (from ${entry.runPath})` : '';
       results.push(`${action}: ${entry.workspacePath}${mappingNote}`);
-      edits.push({ path: entry.workspacePath });
+      edits.push({
+        path: entry.workspacePath,
+        lineChanges: approval.lineChanges,
+        startLine: approval.startLine,
+      });
     }
 
-    const summary = `Accepted ${files.length} file${files.length > 1 ? 's' : ''} from run ${executionId}`;
+    // Single rejection → return rejection result
+    if (rejected === files.length) {
+      return buildApprovalRejectedResult(
+        prepared[0].workspacePath,
+        'accept_run_files',
+      );
+    }
+
+    const accepted = files.length - rejected;
+    const summary = `Accepted ${accepted}/${files.length} file${files.length > 1 ? 's' : ''} from run ${executionId}`;
     return {
       summary,
       output: `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`,
