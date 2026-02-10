@@ -162,15 +162,22 @@ export class StreamTabsManager extends PersistentMapManager<
       this.pendingResolve = null;
       this.saveTimer = null;
 
-      this.inFlightWrite = this.writeToStorage()
+      const writePromise = this.writeToStorage()
         .catch(() => {
           // Keep save contract non-throwing to avoid interrupting stream updates.
         })
         .finally(() => {
-          this.inFlightWrite = null;
-          this.savePromise = null;
+          // Only clean up if this is still the active write — a newer save()
+          // may have already replaced inFlightWrite/savePromise.
+          if (this.inFlightWrite === writePromise) {
+            this.inFlightWrite = null;
+            if (!this.pendingResolve) {
+              this.savePromise = null;
+            }
+          }
           resolve?.();
         });
+      this.inFlightWrite = writePromise;
     }, SAVE_DEBOUNCE_MS);
 
     return this.savePromise;
@@ -187,16 +194,21 @@ export class StreamTabsManager extends PersistentMapManager<
       const resolve = this.pendingResolve;
       this.pendingResolve = null;
 
-      this.inFlightWrite = this.writeToStorage()
+      const writePromise = this.writeToStorage()
         .catch(() => {
           // Keep flush contract non-throwing to match save() behavior.
         })
         .finally(() => {
-          this.inFlightWrite = null;
-          this.savePromise = null;
+          if (this.inFlightWrite === writePromise) {
+            this.inFlightWrite = null;
+            if (!this.pendingResolve) {
+              this.savePromise = null;
+            }
+          }
           resolve?.();
         });
-      await this.inFlightWrite;
+      this.inFlightWrite = writePromise;
+      await writePromise;
       return;
     }
 
