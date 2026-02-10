@@ -75,7 +75,9 @@ const ZoteroItemSchema = z
         'webpage',
         'preprint',
       ])
-      .describe('Type of the item. Defaults to journalArticle. Use "preprint" for arXiv papers and other preprints — never use "webpage" for preprints.')
+      .describe(
+        'Type of the item. Defaults to journalArticle. Use "preprint" for arXiv papers and other preprints — never use "webpage" for preprints.',
+      )
       .nullish(),
     abstract: z.string().describe('Abstract of the item.').nullish(),
     publicationTitle: z
@@ -181,9 +183,9 @@ const CROSSREF_TYPE_MAP: Record<string, string> = {
   // Journals
   'journal-article': 'journalArticle',
   // Books
-  'book': 'book',
+  book: 'book',
   'edited-book': 'book',
-  'monograph': 'book',
+  monograph: 'book',
   'reference-book': 'book',
   'book-series': 'book',
   'book-set': 'book',
@@ -196,23 +198,23 @@ const CROSSREF_TYPE_MAP: Record<string, string> = {
   'reference-entry': 'encyclopediaArticle',
   // Conference
   'proceedings-article': 'conferencePaper',
-  'proceedings': 'conferencePaper',
+  proceedings: 'conferencePaper',
   'proceedings-series': 'conferencePaper',
   // Academic
-  'dissertation': 'thesis',
+  dissertation: 'thesis',
   'posted-content': 'preprint',
   'peer-review': 'journalArticle',
   // Reports & standards
-  'report': 'report',
+  report: 'report',
   'report-series': 'report',
-  'standard': 'standard',
+  standard: 'standard',
   'standard-series': 'standard',
   // Data & other
-  'dataset': 'dataset',
-  'database': 'dataset',
-  'component': 'document',
-  'grant': 'document',
-  'other': 'document',
+  dataset: 'dataset',
+  database: 'dataset',
+  component: 'document',
+  grant: 'document',
+  other: 'document',
 };
 
 /**

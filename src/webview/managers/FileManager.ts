@@ -506,11 +506,7 @@ export class FileManager extends BaseWebviewManager {
       .filter((uri) => uri.scheme === 'file');
 
     const relevantFiles = [
-      ...new Set(
-        fileUris.map((uri) =>
-          WorkspaceFS.relativePath(uri.fsPath),
-        ),
-      ),
+      ...new Set(fileUris.map((uri) => WorkspaceFS.relativePath(uri.fsPath))),
     ];
 
     logger.debug(CHANNEL, `Found opened files: ${relevantFiles.join(', ')}`);

@@ -185,15 +185,15 @@ Tool-use agents are interactive: instead of producing a single polished file, th
 
 To create your own tool-use agent, set `agentCategory: toolUse` and list the tools you want to grant. TeXRA provides tools in several categories:
 
-| Category           | What it lets the agent do                                    |
-| ------------------ | ------------------------------------------------------------ |
-| **File workspace** | Read, write, edit, search, and list files in your project    |
-| **Shell**          | Run commands (compilation, scripts, etc.)                    |
-| **Web & search**   | Fetch web pages and search the internet                      |
-| **Literature**     | Search arXiv, Crossref, and manage your Zotero library       |
-| **Math**           | Run Wolfram Language computations                            |
-| **Figures**        | Extract and compile figures and TikZ diagrams                |
-| **Memory & tasks** | Remember context across sessions; track multi-step progress  |
+| Category           | What it lets the agent do                                   |
+| ------------------ | ----------------------------------------------------------- |
+| **File workspace** | Read, write, edit, search, and list files in your project   |
+| **Shell**          | Run commands (compilation, scripts, etc.)                   |
+| **Web & search**   | Fetch web pages and search the internet                     |
+| **Literature**     | Search arXiv, Crossref, and manage your Zotero library      |
+| **Math**           | Run Wolfram Language computations                           |
+| **Figures**        | Extract and compile figures and TikZ diagrams               |
+| **Memory & tasks** | Remember context across sessions; track multi-step progress |
 
 For the exact tool names to list in your YAML, browse any of the built-in tool-use agents (like `chat`, `search`, or `ask`) in the Agent Explorer—their `tools:` array shows exactly which tools are available.
 

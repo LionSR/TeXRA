@@ -124,7 +124,10 @@ const baseConfig = {
             { text: 'LaTeX Tools', link: '/guide/latex-tools' },
             { text: 'File Management', link: '/guide/file-management' },
             { text: 'Multiple Output', link: '/guide/multiple-output' },
-            { text: 'Working with Overleaf', link: '/guide/working-with-overleaf' },
+            {
+              text: 'Working with Overleaf',
+              link: '/guide/working-with-overleaf',
+            },
             { text: 'ProgressBoard', link: '/guide/progress-board' },
           ],
         },
