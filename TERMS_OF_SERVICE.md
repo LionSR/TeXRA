@@ -1,7 +1,5 @@
 # Terms of Service
 
-**TeXRA — AI-Powered Research Assistant**
-
 *Effective Date: February 9, 2026*
 
 *Last Updated: February 9, 2026*
