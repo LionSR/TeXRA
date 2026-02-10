@@ -21,16 +21,12 @@ export const DEFAULT_MODELS = [
   'gemini3p',
   'gemini3f',
   'sonnet45T',
-  'sonnet45',
   'opus46T',
-  'opus46',
   'gpt52',
   'gpt52pro',
   'gpt41',
   'deepseekT',
   'kimi25T',
-  'kimi25',
-  'qwen3max',
   'grok4',
 ];
 
