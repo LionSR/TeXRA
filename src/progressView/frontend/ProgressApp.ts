@@ -183,9 +183,7 @@ export class ProgressApp extends BaseWebviewApp {
     // entirely via the updateStreamLogs fast path. This method only runs for
     // cold-path changes: status, stream switching, task groups, bulk loads, etc.
 
-    const prevAppState = changed.get('appState') as
-      | ProgressState
-      | undefined;
+    const prevAppState = changed.get('appState') as ProgressState | undefined;
 
     // Re-sort streams when the list or sort/filter criteria change.
     if (
