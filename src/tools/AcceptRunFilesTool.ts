@@ -44,10 +44,10 @@ import { getPathSegments } from '@utils/core/pathCore';
 // ============================================================================
 
 const FileMapping = z.strictObject({
-  /** File path within the run (as shown by /runs/{id}/files). */
+  /** File path within the run (as shown by /executions/{id}/files). */
   run_path: z
     .string()
-    .describe('File path within the run (as listed by /runs/{id}/files)'),
+    .describe('File path within the run (as listed by /executions/{id}/files)'),
   /**
    * Workspace-relative path to write to.
    * If omitted, defaults to run_path (same relative path).
@@ -63,7 +63,7 @@ const FileMapping = z.strictObject({
 const AcceptRunFilesInputSchema = z.strictObject({
   /** Execution ID of the completed run (UUID). */
   execution_id: ExecutionIdSchema.describe(
-    'Execution ID (from subagent-result id attribute or /runs)',
+    'Execution ID (from subagent-result id attribute or /executions)',
   ),
   /** Files to accept from run storage into the workspace. */
   files: z
@@ -97,7 +97,7 @@ Example: Accept corrected file back to its original location:
     // Verify run directory exists
     if (!(await StorageFS.exists(runDir))) {
       throw new ToolError(
-        `Run not found: ${executionId}. Use /runs to list available executions.`,
+        `Run not found: ${executionId}. Use /executions to list available executions.`,
       );
     }
 
@@ -120,7 +120,7 @@ Example: Accept corrected file back to its original location:
         if (!(await StorageFS.exists(sourceRelative))) {
           throw new ToolError(
             `File not found: ${mapping.run_path} in run ${executionId}. ` +
-              `Use runs tool with path /runs/${executionId}/files to list available files.`,
+              `Use executions tool with path /executions/${executionId}/files to list available files.`,
           );
         }
 
