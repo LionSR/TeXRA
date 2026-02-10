@@ -1,0 +1,205 @@
+name: paper2slide_multiple
+inherits: paper2slide
+settings:
+  agentCategory: workflow
+  isMultipleOutput: true
+  documentTag: latex_documents
+  endTag: </latex_documents>
+  outputExt: tex
+  prefills:
+    - <scratchpad>
+    - <scratchpad>
+  requiredFilesInternal:
+    TEMPLATE_SLIDE: template_slide.tex
+
+prompts:
+  systemPrompt: |
+    You are an expert scientist and scientific presenter. Your task is to create multiple professional LaTeX Beamer presentations based on given research papers. The presentations should be tailored for a scientific audience, highlighting the key points, methodology, results, and conclusions of each paper.
+
+    When creating the presentations:
+    - Use LaTeX Beamer syntax and commands
+    - Structure each presentation with a clear introduction, body, and conclusion
+    - Include appropriate equations, figures, and tables from the papers
+    - Use condensed bullet points to convey information effectively
+    - Maintain a professional and scientifically rigorous tone throughout the presentations
+    - Use appropriate notation and terminology consistently
+    - Prioritize visual representations and key takeaways over verbose descriptions
+    - Cite relevant key papers using commands like \cite{Author2020Title} (e.g., \cite{Smith2020Analysis}) which include the author, year, and first word of the paper title
+    - Output complete, self-contained LaTeX files that can be compiled directly
+
+    Style consolidation across presentations:
+    - When the presentations share common themes or data, consolidate shared TikZ/pgfplots styles (line styles, marker styles, color definitions, cycle lists) into a common preamble definition file that each presentation can \input{}
+    - If a shared preamble file is not practical, at minimum define identical \pgfplotsset{}, \tikzset{}, \definecolor{}, and \newcommand{} blocks in each presentation's preamble so that visual styling is consistent across all presentations
+    - Use the same named styles, color palettes, and cycle lists across presentations so figures look cohesive as a set
+    - Within each individual presentation, define common figure styles in the preamble rather than repeating them per figure
+
+  userPrefix: |
+    You are tasked with creating LaTeX Beamer presentations based on the following research papers:
+
+    <documents>
+    {{ ALL_AUXILIARYS }}
+    {{ ALL_REFERENCES }}
+    {{ ADDITIONAL_INPUTS }}
+
+    <document name="{{ INPUT_FILE }}">
+    {{ INPUT_CONTENT }}
+    </document>
+    </documents>
+
+    Please carefully review all the provided research papers before creating the presentations.
+  userRequest:
+    - |
+      Your task is to create professional LaTeX Beamer presentations for a scientific audience.
+
+      {% if OUTPUT_FILES_ORDER %}
+      The output files should be in the following order: OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}.
+      {% endif %}
+
+      When creating the presentations, please follow these guidelines:
+      \begin{enumerate}
+          \item Use LaTeX Beamer syntax and commands correctly.
+          \item Structure each presentation with a clear introduction, body, and conclusion.
+          \item Include 10-15 slides per presentation, covering the main points of each paper.
+          \item Use appropriate equations, figures, and tables from the original papers.
+          \item Write condensed bullet points to convey information effectively.
+          \item Maintain a professional and scientifically rigorous tone throughout.
+          \item Use appropriate notation and terminology consistently.
+          \item Prioritize visual representations and key takeaways over verbose descriptions.
+          \item Include slide numbers for easy reference.
+          \item End each presentation with a conclusion slide summarizing the main findings and potential future work.
+          \item \textbf{Style Consolidation:} When multiple presentations contain TikZ or pgfplots figures, define shared style definitions (line styles, marker styles, color definitions, pgfplots cycle lists) in each presentation's preamble using consistent \texttt{\textbackslash pgfplotsset\{\}}, \texttt{\textbackslash tikzset\{\}}, \texttt{\textbackslash definecolor\{\}}, and \texttt{\textbackslash newcommand\{\}} definitions. All presentations should use the same named styles and color palette so they look cohesive as a set.
+      \end{enumerate}
+
+      {% if INSTRUCTION %}
+      Focus solely on the following specific instruction:
+      <instruction>
+      {{ INSTRUCTION }}
+      </instruction>
+      {% endif %}
+
+      In the scratchpad below, outline the structure and key points you plan to include in each presentation, and identify any common styles (colors, line styles, markers, TikZ settings) that should be shared across presentations.
+
+      <scratchpad>
+
+      % Common styles across presentations
+      1. [Shared color palette]
+      2. [Shared line/marker styles for pgfplots]
+      3. [Shared TikZ style definitions]
+
+      % Per-presentation outline
+      Presentation 1:
+      1. [Title slide content]
+      2. [Introduction/Motivation]
+      3-8. [Key points and methodology]
+      9. [Conclusions]
+
+      Presentation 2:
+      1. [Title slide content]
+      ...
+
+      </scratchpad>
+
+      Then, please create complete, self-contained LaTeX Beamer presentations, incorporating the shared styles and key points outlined in the scratchpad. Use the following format:
+
+      <latex_documents>
+      <document name="{OUTPUT_FILES_ORDER[0]}">
+      \documentclass{beamer}
+
+      \usetheme{Madrid}
+      \usecolortheme{dolphin}
+
+      \setbeamertemplate{footline}[page number]
+      \setbeamertemplate{navigation symbols}{}
+      \setbeamertemplate{frametitle}[default][center]
+
+      \AtBeginSection[]
+      {
+      \begin{frame}<beamer>
+      \frametitle{Outline}
+      \tableofcontents[currentsection]
+      \end{frame}
+      }
+
+      \usepackage{amsmath}
+      \usepackage{amssymb}
+      \usepackage{graphicx}
+      \usepackage{physics}
+      \usepackage{hyperref}
+      \usepackage{natbib}
+
+      %%% Consolidated style definitions (keep consistent across all presentations)
+      % \definecolor{...}{...}{...}
+      % \pgfplotsset{...}
+      % \tikzset{...}
+
+      % Title information
+      \title{...}
+      \author{...}
+      \institute{...}
+      \date{\today}
+
+      \begin{document}
+      % SLIDE CONTENT HERE
+      \begin{frame}[allowframebreaks]{References}
+          \bibliography{...}
+      \end{frame}
+      \end{document}
+      </document>
+      <document name="{OUTPUT_FILES_ORDER[1]}">
+      % 2ND PRESENTATION HERE (with same consolidated style definitions in preamble)
+      </document>
+      ... (repeat for all output files)
+      </latex_documents>
+    - |
+      Please review your draft LaTeX Beamer presentations critically, focusing on the following points:
+
+      <scratchpad>
+      <reflection>
+      \begin{enumerate}
+          \item Does each presentation effectively communicate the key findings and methodology?
+          \item Are the slides well-organized and logically structured?
+          \item Is the content appropriate for the target audience?
+          \item Are equations and mathematical content properly formatted and explained?
+          \item Are visual elements (figures, tables, diagrams) effectively used?
+          \item Is the text concise and focused, avoiding unnecessary details?
+          \item Are transitions between slides smooth and logical?
+          \item Is the overall presentation visually appealing and professional?
+          \item \textbf{Style Consistency:} Are TikZ/pgfplots styles, color definitions, and visual styling consistent across all presentations? Do the preamble style blocks match?
+      \end{enumerate}
+      </reflection>
+
+      <improvements>
+      \begin{enumerate}
+          \item [Potential improvement 1]
+              \begin{itemize}
+                  \item Rationale: [Brief explanation]
+                  \item Implementation: [Concrete steps]
+              \end{itemize}
+          \item [Potential improvement 2]
+              \begin{itemize}
+                  \item Rationale: [Brief explanation]
+                  \item Implementation: [Concrete steps]
+              \end{itemize}
+          \item [Style consolidation improvements]
+              \begin{itemize}
+                  \item Rationale: [Identify any inconsistencies in shared styles]
+                  \item Implementation: [Concrete steps to unify]
+              \end{itemize}
+          \item[\ldots]
+      \end{enumerate}
+      </improvements>
+      </scratchpad>
+
+      Based on this reflection, please revise all presentations to address any identified issues while maintaining professional quality, technical accuracy, and visual consistency across the set. Output the complete revised versions. Use the following format:
+
+      Ensure that the output documents are in the following order: OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}
+
+      <latex_documents>
+      <document name="{OUTPUT_FILES_ORDER[0]}">
+      % Complete revised LaTeX Beamer presentation here
+      </document>
+      <document name="{OUTPUT_FILES_ORDER[1]}">
+      % Complete revised LaTeX Beamer presentation here
+      </document>
+      ... (repeat for all output files)
+      </latex_documents>
