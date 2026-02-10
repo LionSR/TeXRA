@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import {
   TokenUsageStatsSchema,
+  emptyUsageStats,
+  sumUsageStats,
   type StorageKey,
   type StreamTabId,
   type TokenUsageStats,
@@ -71,30 +73,6 @@ function isEmptyUsage(usage: TokenUsageStats): boolean {
     (usage.cacheReadInputTokens ?? 0) === 0 &&
     (usage.cacheCreationInputTokens ?? 0) === 0
   );
-}
-
-/** Returns zero-initialized usage stats */
-function emptyUsageStats(): TokenUsageStats {
-  return {
-    inputTokens: 0,
-    outputTokens: 0,
-    cost: 0,
-    cacheReadInputTokens: 0,
-    cacheCreationInputTokens: 0,
-  };
-}
-
-/** Accumulates usage stats from an iterable into a single total */
-function sumUsageStats(items: Iterable<TokenUsageStats>): TokenUsageStats {
-  const total = emptyUsageStats();
-  for (const usage of items) {
-    total.inputTokens += usage.inputTokens;
-    total.outputTokens += usage.outputTokens;
-    total.cost += usage.cost;
-    total.cacheReadInputTokens! += usage.cacheReadInputTokens ?? 0;
-    total.cacheCreationInputTokens! += usage.cacheCreationInputTokens ?? 0;
-  }
-  return total;
 }
 
 /** Schema for run map format: { runId: { inputTokens, outputTokens, cost } } */

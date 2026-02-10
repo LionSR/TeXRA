@@ -7,7 +7,7 @@
 
 // Third-party imports
 import { LitElement, html, type TemplateResult, nothing } from 'lit';
-import { customElement, property, query, state } from 'lit/decorators.js';
+import { customElement, property, query } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - side effects: register components
@@ -74,8 +74,8 @@ export class TaskGroupList extends LitElement {
   /** Toggle state store for persistence */
   @property({ type: Object }) toggleStates: ToggleStateStore | null = null;
 
-  /** Track previous group statuses to detect completion */
-  @state() private previousStatuses = new Map<string, string>();
+  /** Track previous group statuses to detect completion (not rendered — no @state needed) */
+  private previousStatuses = new Map<string, string>();
 
   /** Memoized tree output from buildGroupTree() - recomputed only when inputs change */
   private cachedTree: GroupTree[] = [];
@@ -107,13 +107,34 @@ export class TaskGroupList extends LitElement {
     if (changedProperties.has('groups')) {
       this.checkForCompletedRuns();
     }
-    // Recompute tree only when groups or messages actually change
-    if (changedProperties.has('groups') || changedProperties.has('messages')) {
-      const [tree, userMessages, otherUngrouped] = this.buildGroupTree();
-      this.cachedTree = tree;
-      this.cachedUserMessages = userMessages;
-      this.cachedOtherUngrouped = otherUngrouped;
+
+    const groupsChanged = changedProperties.has('groups');
+    const messagesChanged = changedProperties.has('messages');
+
+    if (groupsChanged) {
+      // Structural change — always full rebuild
+      this.fullTreeRebuild();
+    } else if (messagesChanged) {
+      // Only messages changed — use Lit's old value to pick incremental path
+      const prevMessages = changedProperties.get('messages') as
+        | LogMessageData[]
+        | undefined;
+      const prevCount = prevMessages?.length ?? 0;
+
+      if (this.messages.length === prevCount) {
+        // Same length: text-only update (e.g. streaming UPDATE_LOG).
+        // Propagate fresh message references to cached structures so
+        // render() passes updated objects to repeat()/log-entry.
+        this.updateCachedMessageRefs();
+      } else if (this.messages.length > prevCount) {
+        // Append-only: classify only the new messages incrementally.
+        this.appendNewMessages(prevCount);
+      } else {
+        // Messages shrunk (e.g. clear) — full rebuild
+        this.fullTreeRebuild();
+      }
     }
+
     // Recompute root group IDs when groups or activeRunId change
     if (
       changedProperties.has('groups') ||
@@ -125,9 +146,86 @@ export class TaskGroupList extends LitElement {
     }
   }
 
+  /** Full tree rebuild — used when groups change or on first render. */
+  private fullTreeRebuild(): void {
+    const [tree, userMessages, otherUngrouped] = this.buildGroupTree();
+    this.cachedTree = tree;
+    this.cachedUserMessages = userMessages;
+    this.cachedOtherUngrouped = otherUngrouped;
+  }
+
+  /**
+   * Incrementally classify messages appended since `startIndex`.
+   * Avoids full tree rebuilds by classifying only new messages and inserting by timestamp.
+   */
+  private appendNewMessages(startIndex: number): void {
+    // Build a quick group lookup from the existing tree
+    const treeNodeMap = new Map<string, GroupTree>();
+    const collectNodes = (nodes: GroupTree[]): void => {
+      for (const node of nodes) {
+        treeNodeMap.set(node.group.id, node);
+        collectNodes(node.children);
+      }
+    };
+    collectNodes(this.cachedTree);
+
+    for (let i = startIndex; i < this.messages.length; i++) {
+      const msg = this.messages[i];
+      if (msg.groupId && treeNodeMap.has(msg.groupId)) {
+        const node = treeNodeMap.get(msg.groupId)!;
+        node.messages = this.insertMessageSorted(node.messages, msg);
+      } else if (msg.messageType === 'userMessage') {
+        this.cachedUserMessages = this.insertMessageSorted(
+          this.cachedUserMessages,
+          msg,
+        );
+      } else {
+        this.cachedOtherUngrouped = this.insertMessageSorted(
+          this.cachedOtherUngrouped,
+          msg,
+        );
+      }
+    }
+  }
+
+  private insertMessageSorted(
+    target: LogMessageData[],
+    message: LogMessageData,
+  ): LogMessageData[] {
+    const insertIndex = target.findIndex(
+      (entry) => entry.timestamp > message.timestamp,
+    );
+    if (insertIndex < 0) {
+      return [...target, message];
+    }
+    return [
+      ...target.slice(0, insertIndex),
+      message,
+      ...target.slice(insertIndex),
+    ];
+  }
+
+  /** Replace stale message references in cached structures with fresh ones (O(n)). */
+  private updateCachedMessageRefs(): void {
+    const byId = new Map(this.messages.map((m) => [m.id, m]));
+
+    const updateNode = (node: GroupTree): void => {
+      node.messages = node.messages.map((old) => byId.get(old.id) ?? old);
+      for (const child of node.children) updateNode(child);
+    };
+    for (const node of this.cachedTree) updateNode(node);
+
+    this.cachedUserMessages = this.cachedUserMessages.map(
+      (old) => byId.get(old.id) ?? old,
+    );
+    this.cachedOtherUngrouped = this.cachedOtherUngrouped.map(
+      (old) => byId.get(old.id) ?? old,
+    );
+  }
+
   /** Play sound when a run group completes */
   private checkForCompletedRuns(): void {
-    const knownGroups = new Set(this.groups.map((group) => group.id));
+    const nextStatuses = new Map<string, string>();
     for (const group of this.groups) {
       const prev = this.previousStatuses.get(group.id);
       const isRunGroup = /^r\d+$/.test(group.name);
@@ -140,13 +238,9 @@ export class TaskGroupList extends LitElement {
         playCompletionSound();
       }
 
-      this.previousStatuses.set(group.id, group.status);
+      nextStatuses.set(group.id, group.status);
     }
-    for (const key of this.previousStatuses.keys()) {
-      if (!knownGroups.has(key)) {
-        this.previousStatuses.delete(key);
-      }
-    }
+    this.previousStatuses = nextStatuses;
   }
 
   /**

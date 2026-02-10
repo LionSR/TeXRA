@@ -1,7 +1,7 @@
 /**
  * LogList component - declarative log rendering.
  *
- * Consumes streamStateContext to get groups, messages, activeRunId, and isToolUse.
+ * Consumes streamLogContext to get groups, messages, activeRunId, and isToolUse.
  * Delegates rendering to TaskGroupList.
  * Handles event delegation for clicks, toggles, and file links.
  *
@@ -33,8 +33,8 @@ import { COMMANDS } from '../constants';
 
 // Local imports - progress view contexts
 import {
-  streamStateContext,
-  type StreamContextValue,
+  streamLogContext,
+  type StreamLogContextValue,
 } from '../contexts/streamContexts';
 
 // Local imports - progress view styles
@@ -67,18 +67,18 @@ export class LogList extends LitElement {
     ...logStyles,
   ];
 
-  // Context consumption - state provided by ProgressApp
-  @consume({ context: streamStateContext, subscribe: true })
+  // Log context - only updates when logs/groups change (not on metadata-only changes)
+  @consume({ context: streamLogContext, subscribe: true })
   @state()
-  private streamContext?: StreamContextValue;
+  private streamContext?: StreamLogContextValue;
 
-  // Computed getters from context
+  // Direct getters from log context (no .streamState. nesting)
   private get groups(): TaskGroup[] {
-    return this.streamContext?.streamState?.taskGroups ?? [];
+    return this.streamContext?.taskGroups ?? [];
   }
 
   private get messages(): LogMessageData[] {
-    return this.streamContext?.streamState?.logs ?? [];
+    return this.streamContext?.logs ?? [];
   }
 
   private get activeRunId(): string | null {
@@ -125,7 +125,7 @@ export class LogList extends LitElement {
   }
 
   protected willUpdate(): void {
-    const streamId = this.streamContext?.streamInfo?.name ?? null;
+    const streamId = this.streamContext?.streamName ?? null;
     if (streamId === this.activeStreamId) {
       return;
     }

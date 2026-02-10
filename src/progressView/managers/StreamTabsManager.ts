@@ -14,9 +14,16 @@ import { createArraySchema } from '@progressView/persistence/schemaUtils';
 /** Schema for deserializing persisted log messages */
 const LogMessagesSchema = createArraySchema(LogMessageDataSchema);
 
+/** Debounce interval for persistence writes (ms). */
+const SAVE_DEBOUNCE_MS = 300;
+
 /**
  * Manages stream tabs collection with persistence.
  * Handles adding, retrieving, and managing log messages for different streams.
+ *
+ * Overrides save() with a 300ms trailing-edge debounce because log messages
+ * arrive at ~10Hz during streaming. In-memory state is always immediately
+ * up-to-date; only the disk write is deferred and coalesced.
  */
 export class StreamTabsManager extends PersistentMapManager<
   StreamTabId,
@@ -24,6 +31,11 @@ export class StreamTabsManager extends PersistentMapManager<
 > {
   private static readonly MAX_MESSAGE_HISTORY = 1000;
   private readonly logger: AgentLogger;
+
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingResolve: (() => void) | null = null;
+  private savePromise: Promise<void> | null = null;
+  private inFlightWrite: Promise<void> | null = null;
 
   constructor(storage?: MementoStorage) {
     super(WorkspaceStateKey.STREAM_TABS, storage);
@@ -33,11 +45,11 @@ export class StreamTabsManager extends PersistentMapManager<
   /**
    * Add a log message to a stream.
    * Returns true if message was added, false if it updated an existing message.
+   *
+   * Uses fire-and-forget persistence (void this.save()) so callers can
+   * send webview notifications immediately without waiting for disk I/O.
    */
-  async addMessage(
-    stream: StreamTabId,
-    message: LogMessageData,
-  ): Promise<boolean> {
+  addMessage(stream: StreamTabId, message: LogMessageData): boolean {
     const messages = this.ensureMessages(stream);
 
     const existingIndex = messages.findIndex(
@@ -47,7 +59,7 @@ export class StreamTabsManager extends PersistentMapManager<
     // Update existing message
     if (existingIndex >= 0) {
       messages[existingIndex] = message;
-      await this.save();
+      void this.save();
       return false;
     }
 
@@ -62,17 +74,17 @@ export class StreamTabsManager extends PersistentMapManager<
       );
     }
 
-    await this.save();
+    void this.save();
     return true;
   }
 
   /**
    * Create an empty stream if it doesn't exist
    */
-  async ensureStream(stream: StreamTabId): Promise<void> {
+  ensureStream(stream: StreamTabId): void {
     if (!this.has(stream)) {
       this.ensureMessages(stream);
-      await this.save();
+      void this.save();
     }
   }
 
@@ -104,27 +116,105 @@ export class StreamTabsManager extends PersistentMapManager<
 
   /**
    * Update an existing message by ID.
-   * Returns true if message was found and updated, false otherwise.
+   * Returns the original message (before update) if found, undefined otherwise.
+   * Callers can use the return value both as a found/not-found check and to
+   * access the pre-update state (e.g. for constructing webview messages).
    *
-   * Note: Uses fire-and-forget persistence (void this.save()) because:
-   * - Callers only need to know if message was found/updated in memory
-   * - The in-memory state is immediately correct for webview updates
-   * - Persistence is background work; failures are logged by base class
+   * Optional guard predicate runs against the existing message BEFORE mutation.
+   * Returns undefined (no mutation) if the guard returns false.
+   *
+   * Uses fire-and-forget persistence (void this.save()) because the in-memory
+   * state is immediately correct for webview updates.
    */
   updateMessage(
     stream: StreamTabId,
     messageId: string,
     updates: Partial<Omit<LogMessageData, 'id'>>,
-  ): boolean {
+    guard?: (existing: LogMessageData) => boolean,
+  ): LogMessageData | undefined {
     const messages = this.items.get(stream);
-    if (!messages) return false;
+    if (!messages) return undefined;
 
     const index = messages.findIndex((m) => m.id === messageId);
-    if (index < 0) return false;
+    if (index < 0) return undefined;
 
-    messages[index] = { ...messages[index], ...updates };
+    const original = messages[index];
+    if (guard && !guard(original)) return undefined;
+    messages[index] = { ...original, ...updates };
     void this.save();
-    return true;
+    return original;
+  }
+
+  /** Debounced save — coalesces rapid-fire log mutations into a single write. */
+  override async save(): Promise<void> {
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer);
+    }
+
+    if (!this.savePromise || this.pendingResolve === null) {
+      this.savePromise = new Promise<void>((resolve) => {
+        this.pendingResolve = resolve;
+      });
+    }
+
+    this.saveTimer = setTimeout(() => {
+      const resolve = this.pendingResolve;
+      this.pendingResolve = null;
+      this.saveTimer = null;
+
+      const writePromise = this.writeToStorage()
+        .catch(() => {
+          // Keep save contract non-throwing to avoid interrupting stream updates.
+        })
+        .finally(() => {
+          // Only clean up if this is still the active write — a newer save()
+          // may have already replaced inFlightWrite/savePromise.
+          if (this.inFlightWrite === writePromise) {
+            this.inFlightWrite = null;
+            if (!this.pendingResolve) {
+              this.savePromise = null;
+            }
+          }
+          resolve?.();
+        });
+      this.inFlightWrite = writePromise;
+    }, SAVE_DEBOUNCE_MS);
+
+    return this.savePromise;
+  }
+
+  /**
+   * Flush any pending debounced write immediately.
+   * Called during dispose/shutdown to prevent data loss.
+   */
+  override async flush(): Promise<void> {
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+      const resolve = this.pendingResolve;
+      this.pendingResolve = null;
+
+      const writePromise = this.writeToStorage()
+        .catch(() => {
+          // Keep flush contract non-throwing to match save() behavior.
+        })
+        .finally(() => {
+          if (this.inFlightWrite === writePromise) {
+            this.inFlightWrite = null;
+            if (!this.pendingResolve) {
+              this.savePromise = null;
+            }
+          }
+          resolve?.();
+        });
+      this.inFlightWrite = writePromise;
+      await writePromise;
+      return;
+    }
+
+    if (this.inFlightWrite) {
+      await this.inFlightWrite;
+    }
   }
 
   private ensureMessages(stream: StreamTabId): LogMessageData[] {

@@ -413,8 +413,10 @@ export class AgentLogger {
 
     let buffer = '';
     let messageCreated = false;
+    let updateTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const emitMessage = (): void => {
+    /** Emit the current buffer state to the event bus immediately. */
+    const emitNow = (): void => {
       if (!shouldEmit) return;
 
       if (messageCreated) {
@@ -439,15 +441,51 @@ export class AgentLogger {
       }
     };
 
+    /** Cancel any pending throttled emission. */
+    const cancelPendingUpdate = (): void => {
+      if (updateTimer !== null) {
+        clearTimeout(updateTimer);
+        updateTimer = null;
+      }
+    };
+
+    /**
+     * Emit with throttling for updates.
+     * The initial addLogMessage is always immediate (so the UI shows the new
+     * entry). Subsequent updateLogMessage calls are throttled at 100ms trailing
+     * edge — the buffer accumulates text regardless, so only the final
+     * snapshot within each window is sent.
+     */
+    const emitThrottled = (): void => {
+      if (!shouldEmit) return;
+
+      // First emission is always immediate
+      if (!messageCreated) {
+        emitNow();
+        return;
+      }
+
+      // Throttle subsequent updates: schedule trailing-edge emission
+      if (updateTimer === null) {
+        updateTimer = setTimeout(() => {
+          updateTimer = null;
+          emitNow();
+        }, 100);
+      }
+    };
+
     return {
       append: (text: string) => {
         if (!text) return;
         buffer += text;
-        emitMessage();
+        emitThrottled();
       },
       finalize: (finalText?: string) => {
         if (typeof finalText === 'string') buffer = finalText;
-        emitMessage();
+        // Flush: cancel any pending throttled update and emit final state immediately.
+        // This prevents a stale throttled emission from arriving after the final one.
+        cancelPendingUpdate();
+        emitNow();
         this.debug(`Final ${type} length: ${buffer.length}`, { groupId });
         return buffer;
       },
