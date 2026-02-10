@@ -242,6 +242,7 @@ export class LatexDiffsSection extends LitElement {
             </div>
             <vscode-single-select
               id="baseFile"
+              position="above"
               .value=${this.baseFile}
               @change=${(event: Event) => {
                 const target = event.currentTarget as HTMLInputElement;
@@ -315,6 +316,7 @@ export class LatexDiffsSection extends LitElement {
             </div>
             <vscode-single-select
               id="editedFile"
+              position="above"
               .value=${this.editedFile}
               @change=${(event: Event) => {
                 const target = event.currentTarget as HTMLInputElement;
@@ -362,6 +364,7 @@ export class LatexDiffsSection extends LitElement {
             </div>
             <vscode-single-select
               id="commit"
+              position="above"
               .value=${this.commit}
               ?disabled=${!this.isGitRepo}
               @change=${(event: Event) => {
