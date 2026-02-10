@@ -6,15 +6,15 @@ The following table lists the AI model providers supported by TeXRA, along with 
 
 | Provider | Headquarters | Terms / Privacy |
 |----------|-------------|-----------------|
-| Anthropic (Claude) | San Francisco, CA, USA | [Terms](https://www.anthropic.com/legal/consumer-terms) · [Privacy](https://www.anthropic.com/legal/privacy) · [AUP](https://www.anthropic.com/legal/aup) |
-| OpenAI (GPT) | San Francisco, CA, USA | [Terms](https://openai.com/policies/terms-of-use) · [Privacy](https://openai.com/policies/privacy-policy) · [Usage](https://openai.com/policies/usage-policies) |
+| Anthropic (Claude) | San Francisco, CA, USA | [Terms](https://legal.anthropic.com/) · [Privacy](https://docs.anthropic.com/en/docs/legal-center/privacy) · [AUP](https://www.anthropic.com/legal/aup) |
+| OpenAI (GPT) | San Francisco, CA, USA | [Terms](https://openai.com/policies/row-terms-of-use/) · [Privacy](https://openai.com/policies/row-privacy-policy/) · [Usage](https://openai.com/policies/usage-policies/) |
 | Google (Gemini) | Mountain View, CA, USA | [Terms](https://ai.google.dev/gemini-api/terms) · [Privacy](https://policies.google.com/privacy) |
 | xAI (Grok) | San Francisco, CA, USA | [Terms](https://x.ai/legal/terms-of-service) · [Privacy](https://x.ai/legal/privacy-policy) |
-| OpenRouter | San Francisco, CA, USA | [Terms](https://openrouter.ai/terms) · [Privacy](https://openrouter.ai/privacy) |
-| DeepSeek | Hangzhou, China | [Terms](https://www.deepseek.com/terms_of_use) · [Privacy](https://www.deepseek.com/privacy_policy) |
-| Moonshot AI (Kimi) | Beijing, China | [Terms](https://www.moonshot.cn/user-agreement) · [Privacy](https://www.moonshot.cn/privacy-policy) |
-| DashScope (Alibaba) | Hangzhou, China | [Terms](https://www.alibabacloud.com/help/legal) · [Privacy](https://www.alibabacloud.com/help/legal/privacy-policy) |
-| Wolfram | Champaign, IL, USA | [Terms](https://www.wolfram.com/legal/terms/) · [Privacy](https://www.wolfram.com/legal/privacy/wolfram/) |
+| OpenRouter | New York, NY, USA | [Terms](https://openrouter.ai/terms) · [Privacy](https://openrouter.ai/privacy) |
+| DeepSeek | Hangzhou, China | [Terms](https://cdn.deepseek.com/policies/en-US/deepseek-terms-of-use.html) · [Privacy](https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html) |
+| Moonshot AI (Kimi) | Beijing, China | [Terms](https://platform.moonshot.ai/docs/agreement/modeluse) · [Privacy](https://platform.moonshot.ai/docs/agreement/userprivacy) |
+| DashScope (Alibaba) | Hangzhou, China | [Terms](https://www.alibabacloud.com/help/en/legal/) · [Privacy](https://www.alibabacloud.com/help/en/legal/latest/alibaba-cloud-international-website-privacy-policy) |
+| Wolfram | Champaign, IL, USA | [Terms](https://www.wolfram.com/legal/terms/wolfram/) · [Privacy](https://www.wolfram.com/legal/privacy/wolfram/) |
 
 ## Access Modes
 
