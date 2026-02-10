@@ -268,10 +268,7 @@ export class WebviewUpdater {
     });
   }
 
-  /**
-   * Update usage for a single run (incremental).
-   * More efficient than updateUsage when only one run's usage changed.
-   */
+  /** Update usage for a single run (incremental). */
   updateRunUsage(
     stream: StreamTabId,
     runId: string,
