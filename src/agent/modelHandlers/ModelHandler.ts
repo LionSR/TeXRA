@@ -405,6 +405,11 @@ export abstract class ModelHandler<
     return this.config.provider === ModelProvider.DEEPSEEK;
   }
 
+  /** Checks if the model is from Moonshot/Kimi provider. */
+  get isKimi(): boolean {
+    return this.config.provider === ModelProvider.MOONSHOT;
+  }
+
   /** Whether this handler supports manual context compaction. Override in subclasses. */
   get supportsManualCompaction(): boolean {
     return false;
