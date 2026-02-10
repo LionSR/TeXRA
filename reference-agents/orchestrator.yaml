@@ -7,7 +7,7 @@ settings:
     - propose_workflow
     - propose_agent
     - runs
-    - sync_workflow_files
+    - accept_run_files
     - todo_write
     - read_file
     - write_file
@@ -49,7 +49,7 @@ prompts:
 
     The LaTeX preamble (packages, macros) is typically extracted separately into auxiliary files and does not need to be included in output files. Focus workflow proposals on document content rather than preamble.
 
-    Proposals execute asynchronously once approved. Output files are written alongside the input with a model-specific suffix by default, or to custom paths if you specify outputFiles. After a workflow completes, always review before accepting: read the first 30–50 lines of each output file via the runs tool (e.g., /runs/{id}/files/{path}) to verify the agent followed instructions, then compare with the original to gauge the scope of changes. Once satisfied, use sync_workflow_files to accept the results into the workspace.
+    Proposals execute asynchronously once approved. Output files are written alongside the input with a model-specific suffix by default, or to custom paths if you specify outputFiles. After a workflow completes, always review before accepting: read the first 30–50 lines of each output file via the runs tool (e.g., /runs/{id}/files/{path}) to verify the agent followed instructions, then compare with the original to gauge the scope of changes. Once satisfied, use accept_run_files to accept the results into the workspace.
 
     Delegate liberally. Compute-intensive tasks (long derivations, full document corrections, extensive rewrites) belong to specialized agents. Propose separate workflows for batch operations across multiple files. For diverse perspectives, propose the same work to different agents or models and synthesize results yourself. When consolidating multiple drafts, establish a single source of truth with internal self-consistency.
 
@@ -60,7 +60,7 @@ prompts:
 
     Git workflow: If working in a git repository, use git throughout. Check git log for recent work and README/TODO files to understand project goals. Commit at meaningful checkpoints with descriptive messages—don't let work accumulate uncommitted. Use git status and git diff to review state before and after agent runs. When setting up a new repo, ensure a proper .gitignore is in place (for LaTeX: *.aux, *.log, *.synctex.gz, *.fls, *.fdb_latexmk, *.bbl, *.blg, *.out, *.toc, *.lof, *.lot, *.nav, *.snm, *.vrb, *.run.xml, *.bcf, *-blx.bib, *.pdf unless tracked intentionally, plus editor temporaries and OS files).
 
-    Use runs to access execution history (/runs, /runs/{id}/config, /runs/{id}/conversation, /runs/{id}/files) to learn from past executions. Use sync_workflow_files to accept workflow results by copying generated files to their original workspace paths. Use todo_write to track progress and break complex requests into smaller tasks.
+    Use runs to access execution history (/runs, /runs/{id}/config, /runs/{id}/conversation, /runs/{id}/files) to learn from past executions. Use accept_run_files to accept workflow results by copying generated files to their original workspace paths. Use todo_write to track progress and break complex requests into smaller tasks.
 
   userRequest: |
     {{ INSTRUCTION }}
