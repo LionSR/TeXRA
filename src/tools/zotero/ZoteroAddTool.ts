@@ -5,7 +5,7 @@
  * desktop is open. No authentication required - purely local communication.
  *
  * Capabilities:
- * - Add items by DOI (recommended - metadata resolved via doi.org)
+ * - Add items by DOI (recommended - metadata resolved via Crossref)
  * - Add items by URL (Zotero extracts metadata from page)
  * - Add items with manual metadata (title, authors, year, etc.)
  *
@@ -18,10 +18,13 @@
 
 // Third-party imports
 import axios, { AxiosError } from 'axios';
+import { CrossrefClient, type Work } from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
 
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
+import { CROSSREF_CONSTANTS } from '@tools/citation/constants';
+import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { ToolError } from '@tools/result';
 import { isTimeoutErrorCode, buildTimeoutMessage } from '@tools/timeouts';
 import { pluralize } from '@tools/utils';
@@ -32,7 +35,8 @@ import { getZoteroPort } from './bbtClient';
 
 const ZOTERO_PING_TIMEOUT_MS = 2_000; // 2 s
 const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000; // 30 s
-const DOI_RESOLVE_TIMEOUT_MS = 15_000; // 15 s
+
+const crossrefClient = new CrossrefClient();
 
 /**
  * Schema for a single item to add to Zotero.
@@ -169,40 +173,40 @@ async function callZoteroConnector(
   }
 }
 
-/** Map CSL JSON document types to Zotero item types. */
-const CITEPROC_TYPE_MAP: Record<string, string> = {
-  'article-journal': 'journalArticle',
-  article: 'journalArticle',
+/** Map Crossref document types to Zotero item types. */
+const CROSSREF_TYPE_MAP: Record<string, string> = {
+  'journal-article': 'journalArticle',
   book: 'book',
-  chapter: 'bookSection',
-  'paper-conference': 'conferencePaper',
-  thesis: 'thesis',
+  'book-chapter': 'bookSection',
+  'proceedings-article': 'conferencePaper',
+  dissertation: 'thesis',
   report: 'report',
-  webpage: 'webpage',
-  dataset: 'document',
   'posted-content': 'preprint',
-  manuscript: 'preprint',
+  monograph: 'book',
+  dataset: 'document',
 };
 
 /**
- * Resolve a DOI to full metadata via doi.org content negotiation.
+ * Resolve a DOI to full metadata via the Crossref API.
+ * Uses the same CrossrefClient and rate limiter as CrossrefDoiTool.
  * Returns a Zotero-format item object, or null if resolution fails.
  */
 async function resolveDOI(
   doi: string,
 ): Promise<Record<string, unknown> | null> {
   try {
-    const response = await axios.get(`https://doi.org/${doi}`, {
-      headers: { Accept: 'application/vnd.citationstyles.csl+json' },
-      timeout: DOI_RESOLVE_TIMEOUT_MS,
-      maxRedirects: 5,
-    });
+    await waitForRateLimit('crossref', CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS);
+    const response = await crossrefClient.work(doi);
 
-    const data = response.data;
-    if (!data || typeof data !== 'object') return null;
+    if (!response.ok || !response.content?.message) return null;
 
-    const creators = Array.isArray(data.author)
-      ? data.author.map(
+    const work: Work = response.content.message;
+
+    // Access fields that may not be in the library's Work type definition
+    const raw = work as Record<string, unknown>;
+
+    const creators = work.author?.length
+      ? work.author.map(
           (a: { given?: string; family?: string; name?: string }) => {
             if (a.given && a.family) {
               return {
@@ -219,25 +223,28 @@ async function resolveDOI(
         )
       : undefined;
 
-    const year = data.issued?.['date-parts']?.[0]?.[0];
+    // Extract year from published or created date-parts
+    const year =
+      work.published?.['date-parts']?.[0]?.[0] ??
+      work.created?.['date-parts']?.[0]?.[0];
 
-    // container-title may be a string or an array in some CSL JSON variants
-    const containerTitle = Array.isArray(data['container-title'])
-      ? data['container-title'][0]
-      : data['container-title'];
+    // container-title is an array in Crossref responses
+    const containerTitle = Array.isArray(raw['container-title'])
+      ? (raw['container-title'] as string[])[0]
+      : undefined;
 
     return {
-      itemType: CITEPROC_TYPE_MAP[data.type || ''] || 'journalArticle',
-      ...(data.title && { title: data.title }),
+      itemType: CROSSREF_TYPE_MAP[work.type || ''] || 'journalArticle',
+      ...(work.title?.[0] && { title: work.title[0] }),
       DOI: doi,
       ...(creators?.length && { creators }),
       ...(year != null && { date: String(year) }),
       ...(containerTitle && { publicationTitle: containerTitle }),
-      ...(data.volume && { volume: data.volume }),
-      ...(data.issue && { issue: data.issue }),
-      ...(data.page && { pages: data.page }),
-      ...(data.abstract && { abstractNote: data.abstract }),
-      ...(data.URL && { url: data.URL }),
+      ...(raw.volume && { volume: raw.volume }),
+      ...(raw.issue && { issue: raw.issue }),
+      ...(raw.page && { pages: raw.page }),
+      ...(work.abstract && { abstractNote: work.abstract }),
+      ...(work.resource?.primary?.URL && { url: work.resource.primary.URL }),
     };
   } catch {
     return null;
@@ -304,7 +311,7 @@ export class ZoteroAddTool extends defineTool({
       let result: ConnectorResult;
 
       if (item.doi) {
-        // Resolve DOI metadata via doi.org content negotiation, then use saveItems
+        // Resolve DOI metadata via Crossref, then use saveItems
         const resolvedItem = await resolveDOI(item.doi);
         const zoteroItem = resolvedItem || toZoteroItem(item);
         result = await callZoteroConnector(
