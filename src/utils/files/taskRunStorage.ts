@@ -89,7 +89,6 @@ export function getFileDirectory(location: FileLocation): string {
   return path.dirname(location.absolutePath);
 }
 
-
 /**
  * Get the full path to a specific task run directory.
  * @param id - The execution ID for the task run
