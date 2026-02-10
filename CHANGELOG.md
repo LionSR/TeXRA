@@ -6,9 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- Added **simplifier** and **presenter** tool-use agents for scientific code/LaTeX cleanup and interactive Beamer presentation building.
 - Added **agent browser** in settings view with split-panel layout, visibility config, and keyboard navigation.
 - Added **context-aware "New Agent" button** matching the current agent category.
+- Added **simplifier** and **presenter** tool-use agents for scientific code/LaTeX cleanup and interactive Beamer presentation building.
 - **Main view agent/model buttons** now open settings view tabs directly.
 - Added **model dropdown** and **sync/async mode badges** on agent proposals.
 - Added **execution status** on runs tool and orchestrator badge in UI.
