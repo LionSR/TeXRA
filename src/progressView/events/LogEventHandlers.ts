@@ -52,19 +52,14 @@ function handleUpdateLogMessage(
       // Guard: don't create phantom streams for updates to non-existent streams
       if (!ctx.state.streamTabs.has(streamId)) return;
 
-      // Find and guard before mutating stored messages.
+      // Single-scan update: find + guard + mutate in one pass.
+      // The guard rejects INTERNAL stored messages before mutation.
       const { id: _id, ...updates } = logMessage;
-      const existingMessage = ctx.state.streamTabs.findMessage(
-        streamId,
-        logMessage.id,
-      );
-      if (!existingMessage) return;
-      if (existingMessage.messageType === MESSAGE_TYPES.INTERNAL) return;
-
       const existing = ctx.state.streamTabs.updateMessage(
         streamId,
         logMessage.id,
         updates,
+        (msg) => msg.messageType !== MESSAGE_TYPES.INTERNAL,
       );
       if (!existing) return;
 
