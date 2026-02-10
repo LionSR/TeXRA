@@ -30,23 +30,6 @@ import { getPathSegments } from '@utils/core/pathCore';
 import type { ExecutionId } from '@shared/schemas';
 
 // ============================================================================
-// Path validation
-// ============================================================================
-
-/**
- * Validate that a relative path does not escape its parent directory.
- * Rejects paths containing ".." segments that could traverse upward.
- */
-function assertNoTraversal(relativePath: string, label: string): void {
-  const segments = getPathSegments(relativePath);
-  if (segments.includes('..')) {
-    throw new ToolError(
-      `${label} must not contain '..' path segments: ${relativePath}`,
-    );
-  }
-}
-
-// ============================================================================
 // Schema
 // ============================================================================
 
@@ -63,6 +46,10 @@ const FileMapping = z.strictObject({
     .describe(
       'Workspace-relative destination path. Defaults to source path if omitted.',
     ),
+  /** Lines added (from subagent-result output-files metadata). */
+  added: z.number().nullish().describe('Lines added (from output-files metadata)'),
+  /** Lines removed (from subagent-result output-files metadata). */
+  removed: z.number().nullish().describe('Lines removed (from output-files metadata)'),
 });
 
 const SyncWorkflowFilesInputSchema = z.strictObject({
@@ -83,19 +70,6 @@ export type SyncWorkflowFilesInput = z.infer<
 // Tool Implementation
 // ============================================================================
 
-/**
- * Sync workflow-generated files from run storage to the workspace.
- *
- * Usage:
- *   execution_id: "abc-123"
- *   files: [
- *     { source: "paper__correct__r0_gemini.tex", destination: "paper.tex" },
- *     { source: "appendix__correct__r0_gemini.tex", destination: "appendix.tex" }
- *   ]
- *
- * Each file is read from taskRuns/{execution_id}/{source} and written to
- * the workspace at {destination} (or {source} if destination is omitted).
- */
 export class SyncWorkflowFilesTool extends defineTool({
   name: 'sync_workflow_files',
   description: `Sync workflow-generated files from run storage to the workspace.
@@ -108,13 +82,14 @@ check the diff to confirm the changes are acceptable.
 
 Parameters:
 - execution_id: The execution ID (from subagent-result or /runs)
-- files: Array of {source, destination?} mappings
+- files: Array of {source, destination?, added?, removed?} mappings
   - source: File path within the run (as listed by /runs/{id}/files)
   - destination: Workspace path to write to (defaults to source path)
+  - added/removed: Pass through from the subagent-result output-files metadata
 
 Example: Copy corrected file back to its original location:
   execution_id: "abc-123"
-  files: [{source: "paper__correct__r0_gemini.tex", destination: "paper.tex"}]`,
+  files: [{source: "paper__correct__r0_gemini.tex", destination: "paper.tex", added: 12, removed: 5}]`,
   schema: SyncWorkflowFilesInputSchema,
 }) {
   protected async execute(input: SyncWorkflowFilesInput): Promise<ToolResult> {
@@ -132,8 +107,13 @@ Example: Copy corrected file back to its original location:
     // Phase 1: Validate and resolve all paths before writing anything
     const resolved = await Promise.all(
       files.map(async (mapping) => {
-        // Sanitize source — reject path traversal
-        assertNoTraversal(mapping.source, 'Source path');
+        // Source must not escape run directory
+        if (getPathSegments(mapping.source).includes('..')) {
+          throw new ToolError(
+            `Source path must not contain '..': ${mapping.source}`,
+          );
+        }
+
         const sourceRelative = path.join(TASK_RUNS_DIR, executionId, mapping.source);
         const sourceAbsolute = StorageFS.fullPath(sourceRelative);
 
@@ -144,49 +124,51 @@ Example: Copy corrected file back to its original location:
           );
         }
 
-        // Sanitize destination — must resolve inside workspace
+        // Destination must resolve inside workspace (locatePath rejects traversals)
         const destPath = mapping.destination ?? mapping.source;
-        assertNoTraversal(destPath, 'Destination path');
-        const resolved = WorkspaceFS.locatePath(destPath);
-        if (resolved.kind === 'external') {
+        const dest = WorkspaceFS.locatePath(destPath);
+        if (dest.kind === 'external') {
           throw new ToolError(
             `Destination must be inside the workspace: ${destPath}`,
           );
         }
 
-        const sourceLocation = createRunStorageLocation(
-          sourceAbsolute,
-          mapping.source,
-          executionId,
-        );
-        const destLocation = createWorkspaceLocation(
-          resolved.absolutePath,
-          resolved.relativePath,
-        );
-
         return {
-          sourceLocation,
-          destLocation,
+          sourceLocation: createRunStorageLocation(sourceAbsolute, mapping.source, executionId),
+          destLocation: createWorkspaceLocation(dest.absolutePath, dest.relativePath),
           source: mapping.source,
-          destination: resolved.relativePath,
+          destination: dest.relativePath,
+          added: mapping.added ?? null,
+          removed: mapping.removed ?? null,
         };
       }),
     );
 
     // Phase 2: Copy each file to workspace via flexibleFS
     const results: string[] = [];
-    const edits: { path: string }[] = [];
+    const edits: { path: string; lineChanges?: { added: number; removed: number } }[] = [];
 
-    for (const { sourceLocation, destLocation, source, destination } of resolved) {
-      const destExists = await flexibleFS.exists(destLocation);
-      const content = await flexibleFS.read(sourceLocation);
-      await flexibleFS.write(destLocation, content);
+    for (const entry of resolved) {
+      const destExists = await flexibleFS.exists(entry.destLocation);
+      const content = await flexibleFS.read(entry.sourceLocation);
+      await flexibleFS.write(entry.destLocation, content);
 
       const action = destExists ? 'replaced' : 'created';
       const mappingNote =
-        source !== destination ? ` (from ${source})` : '';
-      results.push(`${action}: ${destination}${mappingNote}`);
-      edits.push({ path: destination });
+        entry.source !== entry.destination ? ` (from ${entry.source})` : '';
+      const statsNote =
+        entry.added !== null && entry.removed !== null
+          ? ` [+${entry.added}/-${entry.removed}]`
+          : '';
+      results.push(`${action}: ${entry.destination}${mappingNote}${statsNote}`);
+
+      const edit: { path: string; lineChanges?: { added: number; removed: number } } = {
+        path: entry.destination,
+      };
+      if (entry.added !== null && entry.removed !== null) {
+        edit.lineChanges = { added: entry.added, removed: entry.removed };
+      }
+      edits.push(edit);
     }
 
     const summary = `Synced ${files.length} file${files.length > 1 ? 's' : ''} from run ${executionId}`;
