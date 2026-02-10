@@ -437,9 +437,11 @@ export class ProgressViewProvider
     this.updateWebview();
   }
 
+  public async flushState(): Promise<void> {
+    await this.state.flush();
+  }
+
   public override dispose(): void {
-    // Flush debounced persistence writes before teardown
-    void this.state.flush();
     this.disposePanelResources(true);
     super.dispose();
   }
