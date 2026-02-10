@@ -14,7 +14,7 @@ import type { FollowupOptionsState, StreamState } from '../store';
 import type { PermissionState } from '../components/PermissionCard';
 
 // Local imports - shared schemas
-import type { StreamTabInfo } from '@shared/schemas';
+import type { LogMessageData, StreamTabInfo, TaskGroup } from '@shared/schemas';
 
 /** Context value for stream state, providing all data needed by stream content components. */
 export interface StreamContextValue {
@@ -40,6 +40,33 @@ export const EMPTY_STREAM_CONTEXT: StreamContextValue = {
 
 export const streamStateContext = createContext<StreamContextValue>(
   'progress-stream-state',
+);
+
+/**
+ * Separate context for log data — changes on every streaming update.
+ * Only consumed by LogList, so content components avoid re-rendering during streaming.
+ */
+export interface StreamLogContextValue {
+  logs: LogMessageData[];
+  taskGroups: TaskGroup[];
+  runId: string | null;
+  isToolUse: boolean;
+  hasStreams: boolean;
+  /** Stream name for switch detection in LogList */
+  streamName: string | null;
+}
+
+export const EMPTY_LOG_CONTEXT: StreamLogContextValue = {
+  logs: [],
+  taskGroups: [],
+  runId: null,
+  isToolUse: false,
+  hasStreams: false,
+  streamName: null,
+};
+
+export const streamLogContext = createContext<StreamLogContextValue>(
+  'progress-stream-log',
 );
 
 export const permissionsContext = createContext<PermissionState[]>(

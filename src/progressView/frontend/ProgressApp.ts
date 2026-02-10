@@ -63,10 +63,13 @@ import { dispatchMessage } from './messageDispatcher';
 
 // Local imports - progress view contexts
 import {
+  EMPTY_LOG_CONTEXT,
   EMPTY_STREAM_CONTEXT,
   permissionsContext,
+  streamLogContext,
   streamStateContext,
   type StreamContextValue,
+  type StreamLogContextValue,
 } from './contexts/streamContexts';
 import type { FrontendEventHandlerContext } from './eventHandlers';
 
@@ -86,6 +89,59 @@ import './components/ContextManagement';
 import type { FollowUpInput } from './components/FollowUpInput';
 import type { PermissionState } from './components/PermissionCard';
 import type { ToolUseStreamContent } from './components/ToolUseStreamContent';
+
+/**
+ * Ref-equality check on all StreamState fields that content components read.
+ * Returns true if any non-log field differs between prev and next.
+ *
+ * Used to gate streamContextValue assignment — prevents content component
+ * re-renders on log-only updates (~10Hz during streaming).  Log data is
+ * served by the separate streamLogContext and never read from meta context.
+ */
+function hasStreamStateMetaChange(
+  prev: StreamState | null,
+  next: StreamState,
+): boolean {
+  if (!prev || prev.kind !== next.kind) return true;
+
+  // Base fields shared by both variants (logs excluded — served by streamLogContext)
+  if (
+    prev.status !== next.status ||
+    prev.contextState !== next.contextState ||
+    prev.activeSubagents !== next.activeSubagents ||
+    prev.taskGroups !== next.taskGroups
+  )
+    return true;
+
+  // Kind-specific meta fields
+  if (
+    prev.kind === AGENT_CATEGORY.TOOL_USE &&
+    next.kind === AGENT_CATEGORY.TOOL_USE
+  ) {
+    return (
+      prev.todos !== next.todos ||
+      prev.sessionUsage !== next.sessionUsage ||
+      prev.toolEditBypass !== next.toolEditBypass ||
+      prev.queuedFollowUps !== next.queuedFollowUps ||
+      prev.ui !== next.ui
+    );
+  }
+  if (
+    prev.kind === AGENT_CATEGORY.WORKFLOW &&
+    next.kind === AGENT_CATEGORY.WORKFLOW
+  ) {
+    return (
+      prev.runInstructions !== next.runInstructions ||
+      prev.runUsage !== next.runUsage ||
+      prev.runFiles !== next.runFiles ||
+      prev.runMissingOutputs !== next.runMissingOutputs ||
+      prev.activeRunId !== next.activeRunId ||
+      prev.followupMode !== next.followupMode ||
+      prev.ui !== next.ui
+    );
+  }
+  return true;
+}
 
 @customElement('progress-app')
 export class ProgressApp extends BaseWebviewApp {
@@ -133,12 +189,23 @@ export class ProgressApp extends BaseWebviewApp {
   @state()
   private streamContextValue: StreamContextValue = EMPTY_STREAM_CONTEXT;
 
+  @provide({ context: streamLogContext })
+  @state()
+  private streamLogContextValue: StreamLogContextValue = EMPTY_LOG_CONTEXT;
+
   @provide({ context: permissionsContext })
   @state()
   private permissionsContextValue: PermissionState[] = [];
 
   // Container ref for accessing child component methods (FollowUpInput)
   private toolUseContentRef = createRef<ToolUseStreamContent>();
+
+  /**
+   * Memoized filtered+sorted stream list, recomputed once per willUpdate()
+   * cycle. Shared between render() and updateStreamContext() to avoid
+   * redundant sort/filter on every call.
+   */
+  private cachedFilteredStreams: StreamTabInfo[] = [];
 
   private prefsManager = new PersistedState(
     createWebviewStorage(vscode),
@@ -162,29 +229,43 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   protected override willUpdate(changed: Map<string, unknown>): void {
-    if (changed.has('appState') || changed.has('permissions')) {
-      const previousState = changed.get('appState') as
-        | ProgressState
-        | undefined;
-      const activeStreamId = this.appState.activeStreamId;
-      const previousActiveStreamId = previousState?.activeStreamId ?? null;
-      // Only update stream context if active stream or its state changed
-      const newStreamState = activeStreamId
-        ? this.appState.streamStates.get(activeStreamId)
-        : null;
-      const followupOptionsChanged =
-        !!activeStreamId &&
-        previousState?.followupOptionsByStream.get(activeStreamId) !==
-          this.appState.followupOptionsByStream.get(activeStreamId);
-      if (
-        this.streamContextValue.streamState !== newStreamState ||
-        changed.has('permissions') ||
-        activeStreamId !== previousActiveStreamId ||
-        followupOptionsChanged
-      ) {
-        this.updateStreamContext();
-      }
+    if (!changed.has('appState') && !changed.has('permissions')) return;
+
+    const prevAppState = changed.get('appState') as ProgressState | undefined;
+
+    // Re-sort streams when the list or sort/filter criteria change.
+    if (
+      changed.has('appState') &&
+      (!prevAppState ||
+        prevAppState.streams !== this.appState.streams ||
+        prevAppState.streamFilter !== this.appState.streamFilter ||
+        prevAppState.streamSort !== this.appState.streamSort)
+    ) {
+      this.cachedFilteredStreams = getFilteredStreams(this.appState);
     }
+
+    const activeStreamId = this.appState.activeStreamId;
+    const newStreamState = activeStreamId
+      ? this.appState.streamStates.get(activeStreamId)
+      : null;
+    const streamSwitched =
+      !!prevAppState && activeStreamId !== prevAppState.activeStreamId;
+
+    // Check if log data actually changed (skip log context rebuild for status-only updates).
+    // runId must be checked because LogList/TaskGroupList use it to filter visible groups —
+    // run selection changes runId without changing logs or taskGroups refs.
+    const newRunId = newStreamState
+      ? getEffectiveRunId(newStreamState, { mode: 'fallback' })
+      : null;
+    const logDataChanged =
+      streamSwitched ||
+      this.streamLogContextValue.runId !== newRunId ||
+      this.streamLogContextValue.logs !==
+        (newStreamState?.logs ?? EMPTY_LOG_CONTEXT.logs) ||
+      this.streamLogContextValue.taskGroups !==
+        (newStreamState?.taskGroups ?? EMPTY_LOG_CONTEXT.taskGroups);
+
+    this.updateContexts(logDataChanged);
   }
 
   render(): TemplateResult {
@@ -197,7 +278,7 @@ export class ProgressApp extends BaseWebviewApp {
 
           <stream-tabs
             slot="end"
-            .streams=${getFilteredStreams(this.appState)}
+            .streams=${this.cachedFilteredStreams}
             .activeStreamId=${this.appState.activeStreamId}
             .filter=${this.appState.streamFilter}
             .sort=${this.appState.streamSort}
@@ -260,21 +341,30 @@ export class ProgressApp extends BaseWebviewApp {
     dispatchMessage(raw, this.createMessageHandlerContext());
   }
 
-  private getActiveStreamInfo(): StreamTabInfo | null {
-    if (!this.appState.activeStreamId) return null;
-    const filtered = getFilteredStreams(this.appState);
-    return (
-      filtered.find((stream) => stream.name === this.appState.activeStreamId) ??
-      null
-    );
-  }
+  /**
+   * Update stream contexts from current appState.
+   *
+   * Log context (streamLogContextValue) is rebuilt when log data changes.
+   * Meta context (streamContextValue) is only reassigned when non-log fields
+   * differ — this prevents content component re-renders during streaming
+   * (~10Hz log updates) while staying fully Lit-native (no mutation tricks).
+   *
+   * @param updateLogs - Whether to rebuild log context (skip for status-only changes)
+   */
+  private updateContexts(updateLogs: boolean): void {
+    const hasStreams = this.cachedFilteredStreams.length > 0;
+    const activeStreamInfo = this.appState.activeStreamId
+      ? (this.cachedFilteredStreams.find(
+          (s) => s.name === this.appState.activeStreamId,
+        ) ?? null)
+      : null;
 
-  private updateStreamContext(): void {
-    const filteredStreams = getFilteredStreams(this.appState);
-    const hasStreams = filteredStreams.length > 0;
-    const activeStream = this.getActiveStreamInfo();
-
-    if (!activeStream) {
+    if (!activeStreamInfo) {
+      // Always clear both contexts — the updateLogs optimization only applies
+      // when there IS an active stream with unchanged log data.  Without this,
+      // filtering out the active stream leaves streamLogContext carrying stale
+      // logs while streamContextValue is already empty.
+      this.streamLogContextValue = { ...EMPTY_LOG_CONTEXT, hasStreams };
       this.streamContextValue = { ...EMPTY_STREAM_CONTEXT, hasStreams };
       this.permissionsContextValue = this.permissions;
       return;
@@ -282,21 +372,46 @@ export class ProgressApp extends BaseWebviewApp {
 
     const streamState = getStreamState(
       this.appState,
-      activeStream.name,
-      activeStream.agentCategory,
+      activeStreamInfo.name,
+      activeStreamInfo.agentCategory,
     );
     const isToolUse = isToolUseState(streamState);
     const runId = getEffectiveRunId(streamState, { mode: 'fallback' });
 
-    this.streamContextValue = {
-      streamInfo: activeStream,
-      streamState,
-      runId,
-      followupOptions:
-        this.appState.followupOptionsByStream.get(activeStream.name) ?? null,
-      isToolUse,
-      hasStreams,
-    };
+    if (updateLogs) {
+      this.streamLogContextValue = {
+        logs: streamState.logs,
+        taskGroups: streamState.taskGroups,
+        runId,
+        isToolUse,
+        hasStreams,
+        streamName: activeStreamInfo.name,
+      };
+    }
+
+    // Only propagate meta context when content-visible fields actually changed.
+    // Log-only updates (~10Hz) produce a new streamState ref but identical meta
+    // fields — skipping the assignment avoids re-rendering content components.
+    const followupOptions =
+      this.appState.followupOptionsByStream.get(activeStreamInfo.name) ?? null;
+    const prevCtx = this.streamContextValue;
+    if (
+      prevCtx.streamInfo !== activeStreamInfo ||
+      prevCtx.runId !== runId ||
+      prevCtx.followupOptions !== followupOptions ||
+      prevCtx.isToolUse !== isToolUse ||
+      prevCtx.hasStreams !== hasStreams ||
+      hasStreamStateMetaChange(prevCtx.streamState, streamState)
+    ) {
+      this.streamContextValue = {
+        streamInfo: activeStreamInfo,
+        streamState,
+        runId,
+        followupOptions,
+        isToolUse,
+        hasStreams,
+      };
+    }
     this.permissionsContextValue = this.permissions;
   }
 
@@ -304,18 +419,26 @@ export class ProgressApp extends BaseWebviewApp {
     streamId: StreamTabId,
     updater: (prev: StreamState) => StreamState,
   ): void {
+    // Fast path: stream already has state (common during streaming).
+    // Only fall back to streams.find() when creating default state for new streams.
+    let current = this.appState.streamStates.get(streamId);
+    if (!current) {
+      const streamInfo = this.appState.streams.find(
+        (stream) => stream.name === streamId,
+      );
+      // Skip unknown streams - they'll receive full state via UPDATE_LOGS after initialization
+      if (!streamInfo) return;
+      current = getStreamState(
+        this.appState,
+        streamId,
+        streamInfo.agentCategory,
+      );
+    }
+    const updated = updater(current);
+    // Skip no-op updates: avoid Map copy + appState spread + willUpdate cycle
+    if (updated === current) return;
     const nextStates = new Map(this.appState.streamStates);
-    const streamInfo = this.appState.streams.find(
-      (stream) => stream.name === streamId,
-    );
-    // Skip unknown streams - they'll receive full state via UPDATE_LOGS after initialization
-    if (!streamInfo) return;
-    const current = getStreamState(
-      this.appState,
-      streamId,
-      streamInfo.agentCategory,
-    );
-    nextStates.set(streamId, updater(current));
+    nextStates.set(streamId, updated);
     this.appState = { ...this.appState, streamStates: nextStates };
   }
 
