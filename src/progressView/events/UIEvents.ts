@@ -37,6 +37,15 @@ interface ApprovalCallbacks {
   ) => void;
 }
 
+/** Callbacks for Super YOLO bypass state. */
+interface SuperYoloCallbacks {
+  updateSuperYoloBypassState: (
+    streamId: string,
+    bypassActive: boolean,
+    featureEnabled: boolean,
+  ) => void;
+}
+
 /** Callbacks for bash approval event handling. */
 interface BashApprovalCallbacks {
   showBashPermission: (
@@ -56,6 +65,7 @@ interface AgentProposalCallbacks {
 /** Combined UI callbacks interface. */
 export type UICallbacks = RetryCallbacks &
   ApprovalCallbacks &
+  SuperYoloCallbacks &
   BashApprovalCallbacks &
   AgentProposalCallbacks;
 
@@ -121,6 +131,20 @@ export function registerUIEvents(
     (p) =>
       callbacks.updateToolEditApprovalBypassState(p.streamId, p.bypassActive),
     'failed to update approval bypass state',
+    signal,
+  );
+
+  // Super YOLO bypass state
+  registerEvent(
+    bus,
+    'updateSuperYoloBypassState',
+    (p) =>
+      callbacks.updateSuperYoloBypassState(
+        p.streamId,
+        p.bypassActive,
+        p.featureEnabled,
+      ),
+    'failed to update super yolo bypass state',
     signal,
   );
 

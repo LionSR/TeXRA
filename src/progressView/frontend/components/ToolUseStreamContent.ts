@@ -138,6 +138,7 @@ export class ToolUseStreamContent extends LitElement {
         .runId=${null}
         .runs=${this.runGroups}
         .yoloActive=${Boolean(currentState.toolEditBypass)}
+        .superYoloActive=${Boolean(currentState.superYoloBypass)}
       ></stream-header>
 
       <request-panels .permissions=${this.filteredPermissions}></request-panels>

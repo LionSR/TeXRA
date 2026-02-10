@@ -18,6 +18,7 @@ export enum WorkspaceStateKey {
   // Agent visibility (migrated from VS Code config)
   ENABLED_AGENTS = 'texra.enabledAgents',
   ENABLED_TOOL_USE_AGENTS = 'texra.enabledToolUseAgents',
+  SUPER_YOLO_ENABLED = 'texra.superYoloEnabled',
   // Legacy keys (kept for reference, no longer used):
   // ACTIVE_STREAM_TAB = 'texra.activeStreamTab',
   // STREAM_SORT_ORDER = 'texra.streamSortOrder',
