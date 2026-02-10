@@ -1,19 +1,17 @@
 # LaTeX Tools
 
-TeXRA integrates specialized external tools for LaTeX processing.
+TeXRA doesn't just send text to an AI and hope for the best. It plugs into battle-tested LaTeX tools so formatting, diffing, and figure extraction are handled by the right software—not by a language model guessing at syntax.
 
 ## Overview
 
-LaTeX documents require precision in formatting, compilation, and analysis. Rather than relying solely on the LLM, TeXRA leverages dedicated tools for these tasks:
-
-| Tool                      | Purpose                 |
+| What it does              | Tool behind the scenes  |
 | ------------------------- | ----------------------- |
-| `latexindent` / `tex-fmt` | Code formatting         |
-| `latexdiff`               | Version comparison      |
-| `texcount`                | Document statistics     |
-| `extract_figures`         | Figure asset extraction |
-| `extract_tikz_figures`    | TikZ compilation        |
-| `extract_bib_entries`     | Bibliography resolution |
+| Code formatting           | `latexindent` or `tex-fmt` |
+| Version comparison        | `latexdiff`             |
+| Document statistics       | `texcount`              |
+| Figure extraction         | Built-in                |
+| TikZ compilation          | Built-in                |
+| Bibliography resolution   | Built-in                |
 
 ## Formatting Tools
 

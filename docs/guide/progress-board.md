@@ -1,6 +1,6 @@
 # ProgressBoard
 
-The ProgressBoard monitors agent execution, displays logs, and manages past runs.
+The ProgressBoard is where you watch agents work and review what they did. Think of it as the flight recorder for every TeXRA run—you can see live progress, re-run a past job, or restore its settings with one click.
 
 ## Accessing the ProgressBoard
 

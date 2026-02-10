@@ -71,9 +71,17 @@ hero:
 AI scientists need more than a chat window. TeXRA keeps research grounded in reproducible workflows and transparent reasoning:
 
 - **Reliable scientific loops** – every run is captured with logs, diffs, and audit trails so you and your collaborators can verify changes.
-- **Two kinds of agents** – use workflow agents (`polish`, `correct`, `draw`) for structured tasks, or chat with tool-use agents (`chat`, `search`, `research`) that can edit files, search literature, and run computations interactively.
-- **Integrated verification tools** – trigger `latexdiff`, `texcount`, Wolfram, and compilation checks directly from the agent run.
+- **Two kinds of agents** – use workflow agents (`polish`, `correct`, `draw`) for structured tasks, or chat with interactive agents (`chat`, `search`, `research`) that can edit files, search literature, and run computations.
+- **Integrated verification tools** – generate visual diffs, count words, verify math with Wolfram, and check compilation directly from the agent run.
 - **Literature at your fingertips** – search arXiv, Crossref, and your Zotero library without leaving VS Code.
+
+### Real-World Examples
+
+> **Deadline crunch.** A PhD student has 48 hours to polish a 30-page thesis chapter. She selects the chapter, picks the `polish` agent, and writes: "Improve clarity and flow for a machine-learning audience. Keep all math intact." Two minutes later she's reviewing a colour-coded diff of every change.
+
+> **Conference talk.** A postdoc needs slides for a workshop next week. He opens the `presenter` agent, points it at his paper, and asks for a 15-slide Beamer deck with TikZ diagrams. The agent reads his codebase, drafts slides, compiles them, and visually checks every page.
+
+> **Literature sweep.** A new collaborator joins the project and needs to get up to speed. She opens the `search` agent and asks: "Find the five most-cited papers on physics-informed neural networks from 2022-2024." In seconds she has titles, abstracts, and BibTeX entries.
 
 ## Key Capabilities
 
