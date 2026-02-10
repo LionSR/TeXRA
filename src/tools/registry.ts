@@ -42,7 +42,7 @@ import {
 } from './lean';
 import { WorkflowAgentTool, DelegateAgentTool } from './WorkflowTool';
 import { RunsTool } from './RunsTool';
-import { SyncWorkflowFilesTool } from './SyncWorkflowFilesTool';
+import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
@@ -90,7 +90,7 @@ export function getDefaultToolRegistry(): IToolRegistry {
       propose_workflow: new WorkflowAgentTool(),
       propose_agent: new DelegateAgentTool(),
       runs: new RunsTool(),
-      sync_workflow_files: new SyncWorkflowFilesTool(),
+      accept_run_files: new AcceptRunFilesTool(),
     });
   }
   return defaultRegistryInstance;
