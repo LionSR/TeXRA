@@ -188,8 +188,6 @@ export class AnthropicStreamHandler {
       messageStopReceived: this.diagnostics.messageStopReceived,
       stopReason: this.diagnostics.stopReason,
       anthropicMessageId: this.diagnostics.anthropicMessageId,
-      // anthropicRequestId is set externally by the model handler from response headers
-      anthropicRequestId: null,
     };
   }
 
