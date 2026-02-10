@@ -76,6 +76,14 @@ const StreamDiagnosticsStateSchema = z.object({
   startTime: z.number(),
   /** Timestamp of last event received */
   lastEventTime: z.number(),
+  /** Whether message_start event was received */
+  messageStartReceived: z.boolean(),
+  /** Whether message_stop event was received */
+  messageStopReceived: z.boolean(),
+  /** Stop reason from message_delta event */
+  stopReason: z.string().nullable(),
+  /** Anthropic message ID from message_start */
+  anthropicMessageId: z.string().nullable(),
 });
 
 type StreamDiagnosticsState = z.infer<typeof StreamDiagnosticsStateSchema>;
@@ -130,6 +138,10 @@ export class AnthropicStreamHandler {
     lastEventType: null,
     startTime: Date.now(),
     lastEventTime: Date.now(),
+    messageStartReceived: false,
+    messageStopReceived: false,
+    stopReason: null,
+    anthropicMessageId: null,
   };
 
   constructor(
@@ -172,6 +184,12 @@ export class AnthropicStreamHandler {
         (now - this.diagnostics.lastEventTime) / 1000,
       ),
       finalized: this.state.finalized,
+      messageStartReceived: this.diagnostics.messageStartReceived,
+      messageStopReceived: this.diagnostics.messageStopReceived,
+      stopReason: this.diagnostics.stopReason,
+      anthropicMessageId: this.diagnostics.anthropicMessageId,
+      // anthropicRequestId is set externally by the model handler from response headers
+      anthropicRequestId: null,
     };
   }
 
@@ -213,6 +231,18 @@ export class AnthropicStreamHandler {
     this.diagnostics.lastEventTime = Date.now();
 
     switch (event.type) {
+      case 'message_start':
+        this.diagnostics.messageStartReceived = true;
+        this.diagnostics.anthropicMessageId =
+          (event.message as { id?: string })?.id ?? null;
+        break;
+      case 'message_delta':
+        this.diagnostics.stopReason =
+          (event.delta as { stop_reason?: string | null })?.stop_reason ?? null;
+        break;
+      case 'message_stop':
+        this.diagnostics.messageStopReceived = true;
+        break;
       case 'content_block_start':
         this.handleBlockStart(event);
         break;
