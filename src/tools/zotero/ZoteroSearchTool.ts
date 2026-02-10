@@ -32,41 +32,26 @@ const AUTHOR_DESCRIPTION =
 
 const YEAR_DESCRIPTION = 'Filter by publication year (exact match).';
 
-const BaseSearchSchema = z.strictObject({
-  query: z.string().min(1).describe(QUERY_DESCRIPTION).nullish(),
-  title: z.string().describe(TITLE_DESCRIPTION).nullish(),
-  author: z.string().describe(AUTHOR_DESCRIPTION).nullish(),
-  year: z.union([z.string(), z.number()]).describe(YEAR_DESCRIPTION).nullish(),
-  library: z
-    .string()
-    .describe(
-      'Optional library name to search in. Use "*" to search all libraries.',
-    )
-    .nullish(),
-});
-
-const QueryRequiredSchema = BaseSearchSchema.extend({
-  query: z.string().min(1).describe(QUERY_DESCRIPTION),
-});
-
-const TitleRequiredSchema = BaseSearchSchema.extend({
-  title: z.string().min(1).describe(TITLE_DESCRIPTION),
-});
-
-const AuthorRequiredSchema = BaseSearchSchema.extend({
-  author: z.string().min(1).describe(AUTHOR_DESCRIPTION),
-});
-
-const YearRequiredSchema = BaseSearchSchema.extend({
-  year: z.union([z.string(), z.number()]).describe(YEAR_DESCRIPTION),
-});
-
-const ZoteroSearchInputSchema = z.union([
-  QueryRequiredSchema,
-  TitleRequiredSchema,
-  AuthorRequiredSchema,
-  YearRequiredSchema,
-]);
+const ZoteroSearchInputSchema = z
+  .strictObject({
+    query: z.string().min(1).describe(QUERY_DESCRIPTION).nullish(),
+    title: z.string().describe(TITLE_DESCRIPTION).nullish(),
+    author: z.string().describe(AUTHOR_DESCRIPTION).nullish(),
+    year: z
+      .union([z.string(), z.number()])
+      .describe(YEAR_DESCRIPTION)
+      .nullish(),
+    library: z
+      .string()
+      .describe(
+        'Optional library name to search in. Use "*" to search all libraries.',
+      )
+      .nullish(),
+  })
+  .refine(
+    (data) => data.query || data.title || data.author || data.year,
+    'At least one of query, title, author, or year must be provided.',
+  );
 
 export type ZoteroSearchInput = z.infer<typeof ZoteroSearchInputSchema>;
 
