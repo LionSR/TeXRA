@@ -392,9 +392,11 @@ const handlers: HandlerRegistry = {
     });
   },
 
-  // --- Log updates: use the fast path (updateStreamLogs) ---
-  // These bypass setStreamState → willUpdate → updateContexts entirely.
-  // The updater operates on logs[] directly — no StreamState spread needed.
+  // --- Log updates ---
+  // These flow through setStreamState → willUpdate → updateContexts like all
+  // other state changes.  Content components are shielded from re-renders by
+  // the hasStreamStateMetaChange gate in updateContexts (log-only updates
+  // produce identical meta refs, so the meta context assignment is skipped).
 
   [PROGRESS_VIEW_COMMANDS.APPEND_LOG]: (data, ctx) => {
     const logId = data.logMessage.id;
@@ -411,15 +413,17 @@ const handlers: HandlerRegistry = {
       pendingLogUpdates.delete(getPendingLogKey(data.stream, logId));
     }
 
-    // Fast path: skips unknown streams (no state entry yet → gets full state via UPDATE_LOGS)
-    ctx.updateStreamLogs(data.stream, (logs) => [...logs, mergedLogMessage]);
+    ctx.setStreamState(data.stream, (prev) => ({
+      ...prev,
+      logs: [...prev.logs, mergedLogMessage],
+    }));
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_LOG]: (data, ctx) => {
     const logId = data.logMessage.id;
 
-    ctx.updateStreamLogs(data.stream, (logs) => {
-      const logIndex = logs.findIndex((entry) => entry.id === logId);
+    ctx.setStreamState(data.stream, (prev) => {
+      const logIndex = prev.logs.findIndex((entry) => entry.id === logId);
 
       if (logIndex < 0) {
         // Out-of-order: APPEND hasn't arrived yet, stash for later merge
@@ -431,12 +435,12 @@ const handlers: HandlerRegistry = {
             ...data.logMessage,
           });
         }
-        return logs; // Same reference → updateStreamLogs skips context update
+        return prev; // Same reference → setStreamState skips update
       }
 
-      const newLogs = [...logs];
+      const newLogs = [...prev.logs];
       newLogs[logIndex] = data.logMessage;
-      return newLogs;
+      return { ...prev, logs: newLogs };
     });
   },
 
