@@ -307,9 +307,11 @@ export class ProgressApp extends BaseWebviewApp {
       : null;
 
     if (!activeStreamInfo) {
-      if (updateLogs) {
-        this.streamLogContextValue = { ...EMPTY_LOG_CONTEXT, hasStreams };
-      }
+      // Always clear both contexts — the updateLogs optimization only applies
+      // when there IS an active stream with unchanged log data.  Without this,
+      // filtering out the active stream leaves streamLogContext carrying stale
+      // logs while streamContextValue is already empty.
+      this.streamLogContextValue = { ...EMPTY_LOG_CONTEXT, hasStreams };
       this.streamContextValue = { ...EMPTY_STREAM_CONTEXT, hasStreams };
       this.permissionsContextValue = this.permissions;
       return;
