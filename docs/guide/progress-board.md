@@ -54,6 +54,46 @@ The header provides a summary and actions for the selected stream:
   - <i class="codicon codicon-trash"></i> **Clean**: Deletes the output files associated with this stream.
   - <i class="codicon codicon-clear-all"></i> **Erase**: Removes this stream and its log content entirely from the ProgressBoard.
 
+### YOLO Mode
+
+The header includes a **YOLO mode toggle** button for quick access. When YOLO mode is enabled, tool-use agents automatically approve tool calls (file edits, bash commands, etc.) without pausing for your confirmation. This is useful when you trust the agent and want uninterrupted execution.
+
+Toggle it on/off directly from the ProgressBoard header. Use with caution on unfamiliar tasks.
+
+### Context Utilization
+
+During tool-use sessions, the header displays a **context utilization percentage** showing how much of the model's context window has been consumed. This helps you gauge when a conversation is approaching its limits and may need compaction or a fresh session.
+
+### Todo List (Tool-Use Agents)
+
+Tool-use agents can create and manage a **todo list** visible in the ProgressBoard. When an agent uses the `todo_write` tool, the list appears in the content area showing task items with status indicators:
+
+- **Pending**: Task not yet started
+- **In Progress**: Currently being worked on
+- **Completed**: Finished successfully
+
+The todo list gives you visibility into the agent's plan and progress on multi-step tasks.
+
+### Followup Tasks
+
+After a workflow agent completes, you can continue the conversation using the **Followup Task** feature directly in the ProgressBoard:
+
+1. Select a completed workflow stream
+2. Use the followup controls to either:
+   - **Chat** about the results (discuss, ask questions)
+   - **Run another agent** on the output files (e.g., merge multiple outputs)
+3. The followup inherits the context of the previous run
+
+This avoids manually reconfiguring files and agents for iterative workflows.
+
+### Memory View
+
+The ProgressBoard provides access to the **Memory View** for browsing agent memory entries. When the memory tool is enabled (toggle in the toolbar), agents can store and retrieve persistent notes across sessions. The Memory View lets you:
+
+- Browse all saved memory entries
+- Delete individual entries
+- See what context agents have accumulated
+
 ### Log Content
 
 This scrollable area displays the detailed, timestamped logs for the selected agent run.
