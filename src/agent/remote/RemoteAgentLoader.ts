@@ -151,10 +151,7 @@ export class RemoteAgentLoader {
           updateAgentDescription(registryId, config.description);
         }
         updateAgentTools(registryId, config.tools);
-        updateAgentDefaultOutputFiles(
-          registryId,
-          config.defaultOutputFiles,
-        );
+        updateAgentDefaultOutputFiles(registryId, config.defaultOutputFiles);
 
         logger.info(
           CHANNEL,
@@ -309,9 +306,8 @@ async function fetchAgentConfig(
 
   // Process tool definitions (remote agents are self-contained)
   if (Array.isArray(settings.tools)) {
-    settings.tools = resolveToolDefinitions(
-      rawTools!,
-      (name) => logger.warn(CHANNEL, `Tool "${name}" not found in registry`),
+    settings.tools = resolveToolDefinitions(rawTools!, (name) =>
+      logger.warn(CHANNEL, `Tool "${name}" not found in registry`),
     );
   }
 
