@@ -286,8 +286,10 @@ function detectRequestId(err: unknown): string | undefined {
     return candidate.requestId;
   }
 
-  // Try headers (Anthropic stores request ID here)
-  const headerValue = candidate.headers?.get?.('x-request-id');
+  // Try headers (Anthropic SDK uses 'request-id'; relay may use 'x-request-id')
+  const headerValue =
+    candidate.headers?.get?.('request-id') ??
+    candidate.headers?.get?.('x-request-id');
   if (headerValue) {
     return headerValue;
   }
