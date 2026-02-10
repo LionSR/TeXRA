@@ -186,7 +186,6 @@ export class RequestPanels extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     this.addEventListener('click', this.handleActionClick);
-    this.addEventListener('change', this.handleSelectChange);
     this.addEventListener('keydown', this.handleKeydown);
     document.addEventListener('click', this.handleOutsideClick, true);
     document.addEventListener('keydown', this.handleGlobalKeydown);
@@ -194,7 +193,6 @@ export class RequestPanels extends LitElement {
 
   override disconnectedCallback(): void {
     this.removeEventListener('click', this.handleActionClick);
-    this.removeEventListener('change', this.handleSelectChange);
     this.removeEventListener('keydown', this.handleKeydown);
     document.removeEventListener('click', this.handleOutsideClick, true);
     document.removeEventListener('keydown', this.handleGlobalKeydown);
@@ -524,6 +522,7 @@ export class RequestPanels extends LitElement {
                       position="below"
                       data-proposal-id=${data.proposalId}
                       .value=${selectedModel}
+                      @change=${this.handleSelectChange}
                     >
                       ${renderModelOptions(modelOptions, selectedModel)}
                     </vscode-single-select>
@@ -554,7 +553,7 @@ export class RequestPanels extends LitElement {
           >
           ${this.renderRejectButton(permission, isFeedbackOpen, 'Reject (n)')}
           <vscode-toolbar-button
-            icon="settings-gear"
+            icon="reply"
             data-action="setup"
             data-permission-kind=${permission.kind}
             data-permission-id=${this.getPermissionId(permission)}

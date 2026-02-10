@@ -16,6 +16,8 @@ const COMMIT_HASH_PATTERN = /^[0-9a-fA-F]{4,40}$/;
 const LATEX_PROJECT_ID_PATTERN = /^[a-f0-9]{24}$/i;
 const LATEX_GIT_URL_PATTERN =
   /^https?:\/\/(?:git@)?([^/]+)(\/git)?\/([a-f0-9]{24})$/i;
+const OVERLEAF_PROJECT_URL_PATTERN =
+  /^https?:\/\/(?:www\.)?overleaf\.com\/project\/([a-f0-9]{24})$/i;
 
 export const gitCommands = {
   isGitRepository: 'texra.isGitRepository',
@@ -144,7 +146,7 @@ function parseLatexGitUrl(
 ): { host: string; path: string; isOverleaf: boolean } | null {
   const trimmed = input.trim();
 
-  // Full URL
+  // Full git URL (e.g. https://git.overleaf.com/<id>)
   const match = LATEX_GIT_URL_PATTERN.exec(trimmed);
   if (match) {
     const [, host, hasGit, id] = match;
@@ -153,6 +155,13 @@ function parseLatexGitUrl(
       path: hasGit ? `/git/${id}` : `/${id}`,
       isOverleaf: host === 'git.overleaf.com',
     };
+  }
+
+  // Normal Overleaf project URL (e.g. https://www.overleaf.com/project/<id>)
+  const overleafMatch = OVERLEAF_PROJECT_URL_PATTERN.exec(trimmed);
+  if (overleafMatch) {
+    const [, id] = overleafMatch;
+    return { host: 'git.overleaf.com', path: `/${id}`, isOverleaf: true };
   }
 
   // Bare project ID -> Overleaf
