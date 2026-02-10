@@ -476,6 +476,14 @@ const handlers: HandlerRegistry = {
       }
       return { ...prev, status: data.status };
     });
+
+    // Keep streams array in sync so tab icons reflect the same status
+    ctx.setState((prev) => ({
+      ...prev,
+      streams: prev.streams.map((item) =>
+        item.name === streamId ? { ...item, status: data.status } : item,
+      ),
+    }));
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS]: (data, ctx) => {
