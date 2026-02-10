@@ -142,7 +142,7 @@ Example: Accept corrected file back to its original location:
     const results: string[] = [];
     const edits: ToolResult['edits'] = [];
     let rejected = 0;
-    let lastRejectionMessage: string | undefined;
+    const rejectionMessages: string[] = [];
 
     for (const entry of prepared) {
       const approval = await requestToolEditApproval({
@@ -154,7 +154,7 @@ Example: Accept corrected file back to its original location:
 
       if (!approval.accepted) {
         rejected++;
-        lastRejectionMessage = approval.userMessage ?? lastRejectionMessage;
+        if (approval.userMessage) rejectionMessages.push(approval.userMessage);
         const mappingNote =
           entry.runPath !== entry.workspacePath ? ` (from ${entry.runPath})` : '';
         results.push(`rejected: ${entry.workspacePath}${mappingNote}`);
@@ -184,7 +184,7 @@ Example: Accept corrected file back to its original location:
       return buildApprovalRejectedResult(
         prepared[0].workspacePath,
         'accept_run_files',
-        lastRejectionMessage,
+        [...new Set(rejectionMessages)].join('\n'),
       );
     }
 
