@@ -1,19 +1,19 @@
 # Supported AI Providers
 
-*Last Updated: February 10, 2026*
+_Last Updated: February 10, 2026_
 
 The following table lists the AI model providers supported by TeXRA, along with their operating headquarters and links to their respective terms and privacy policies. When you select a provider, your content is transmitted to that provider's API endpoints and is subject to their terms.
 
-| Provider | Headquarters | Terms / Privacy |
-|----------|-------------|-----------------|
-| Anthropic (Claude) | San Francisco, CA, USA | [Terms](https://legal.anthropic.com/) · [Privacy](https://docs.anthropic.com/en/docs/legal-center/privacy) · [AUP](https://www.anthropic.com/legal/aup) |
-| OpenAI (GPT) | San Francisco, CA, USA | [Terms](https://openai.com/policies/row-terms-of-use/) · [Privacy](https://openai.com/policies/row-privacy-policy/) · [Usage](https://openai.com/policies/usage-policies/) |
-| Google (Gemini) | Mountain View, CA, USA | [Terms](https://ai.google.dev/gemini-api/terms) · [Privacy](https://policies.google.com/privacy) |
-| xAI (Grok) | San Francisco, CA, USA | [Terms](https://x.ai/legal/terms-of-service) · [Privacy](https://x.ai/legal/privacy-policy) |
-| OpenRouter | New York, NY, USA | [Terms](https://openrouter.ai/terms) · [Privacy](https://openrouter.ai/privacy) |
-| DeepSeek | Hangzhou, China | [Terms](https://cdn.deepseek.com/policies/en-US/deepseek-terms-of-use.html) · [Privacy](https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html) |
-| Moonshot AI (Kimi) | Beijing, China | [Terms](https://platform.moonshot.ai/docs/agreement/modeluse) · [Privacy](https://platform.moonshot.ai/docs/agreement/userprivacy) |
-| DashScope (Alibaba) | Hangzhou, China | [Terms](https://www.alibabacloud.com/help/en/legal/) · [Privacy](https://www.alibabacloud.com/help/en/legal/latest/alibaba-cloud-international-website-privacy-policy) |
+| Provider            | Headquarters           | Terms / Privacy                                                                                                                                                            |
+| ------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Anthropic (Claude)  | San Francisco, CA, USA | [Terms](https://legal.anthropic.com/) · [Privacy](https://docs.anthropic.com/en/docs/legal-center/privacy) · [AUP](https://www.anthropic.com/legal/aup)                    |
+| OpenAI (GPT)        | San Francisco, CA, USA | [Terms](https://openai.com/policies/row-terms-of-use/) · [Privacy](https://openai.com/policies/row-privacy-policy/) · [Usage](https://openai.com/policies/usage-policies/) |
+| Google (Gemini)     | Mountain View, CA, USA | [Terms](https://ai.google.dev/gemini-api/terms) · [Privacy](https://policies.google.com/privacy)                                                                           |
+| xAI (Grok)          | San Francisco, CA, USA | [Terms](https://x.ai/legal/terms-of-service) · [Privacy](https://x.ai/legal/privacy-policy)                                                                                |
+| OpenRouter          | New York, NY, USA      | [Terms](https://openrouter.ai/terms) · [Privacy](https://openrouter.ai/privacy)                                                                                            |
+| DeepSeek            | Hangzhou, China        | [Terms](https://cdn.deepseek.com/policies/en-US/deepseek-terms-of-use.html) · [Privacy](https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html)              |
+| Moonshot AI (Kimi)  | Beijing, China         | [Terms](https://platform.moonshot.ai/docs/agreement/modeluse) · [Privacy](https://platform.moonshot.ai/docs/agreement/userprivacy)                                         |
+| DashScope (Alibaba) | Hangzhou, China        | [Terms](https://www.alibabacloud.com/help/en/legal/) · [Privacy](https://www.alibabacloud.com/help/en/legal/latest/alibaba-cloud-international-website-privacy-policy)     |
 
 ## Access Modes
 
