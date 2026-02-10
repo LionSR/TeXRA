@@ -342,7 +342,12 @@ const handlers: HandlerRegistry = {
       }
 
       // Tool-use streams: compute sessionUsage from runUsage (sum all runs)
-      if (isToolUseState(prev) && runUsage) {
+      // Ignore empty payloads so we don't overwrite existing totals with zeros.
+      if (
+        isToolUseState(prev) &&
+        runUsage &&
+        Object.keys(runUsage).length > 0
+      ) {
         return {
           ...baseUpdate,
           sessionUsage: sumUsageStats(Object.values(runUsage)),
