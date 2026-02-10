@@ -61,10 +61,10 @@ GPT-5 reasoning summaries require account verification. Enable with `texra.model
 
 ## Moonshot Kimi Models
 
-| Model ID  | Use Case                    | Cost | Speed  |
-| :-------- | :-------------------------- | :--- | :----- |
-| `kimi25T` | K2.5 with thinking mode     | $$$  | Medium |
-| `kimi25`  | K2.5, agent tasks           | $$$  | Medium |
+| Model ID  | Use Case                | Cost | Speed  |
+| :-------- | :---------------------- | :--- | :----- |
+| `kimi25T` | K2.5 with thinking mode | $$$  | Medium |
+| `kimi25`  | K2.5, agent tasks       | $$$  | Medium |
 
 ## DashScope Qwen Models
 

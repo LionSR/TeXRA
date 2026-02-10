@@ -1,8 +1,8 @@
 # Terms of Service
 
-*Effective Date: February 9, 2026*
+_Effective Date: February 9, 2026_
 
-*Last Updated: February 9, 2026*
+_Last Updated: February 9, 2026_
 
 ---
 
