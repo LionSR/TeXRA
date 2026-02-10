@@ -1,6 +1,7 @@
 // Standard library imports
 import * as path from 'path';
 import { pipeline } from 'node:stream/promises';
+import { createGunzip } from 'node:zlib';
 
 // Third-party imports
 import axios from 'axios';
@@ -222,6 +223,9 @@ export class ArxivSourceProcessor {
       downloadedPath.endsWith('.tar.gz') ||
       downloadedPath.endsWith('.tgz');
 
+    // Detect gzip-compressed single files (.gz but not .tar.gz/.tgz)
+    const isGzipOnly = !isArchive && downloadedPath.endsWith('.gz');
+
     if (isArchive) {
       if (progressCallback) {
         progressCallback('Extracting source files...', 60);
@@ -255,8 +259,26 @@ export class ArxivSourceProcessor {
         );
       }
     } else {
-      // For non-archive files, rename to main.tex and move to paper root
-      const downloadedRel = WorkspaceFS.relativePath(downloadedPath);
+      // For gzip-compressed single files, decompress first
+      let sourceFilePath = downloadedPath;
+      if (isGzipOnly) {
+        if (progressCallback) {
+          progressCallback('Decompressing source file...', 60);
+        }
+        const decompressedPath =
+          downloadedPath.replace(/\.gz$/, '') ||
+          downloadedPath + '.decompressed';
+        await pipeline(
+          AbsoluteFS.createReadStream(downloadedPath),
+          createGunzip(),
+          AbsoluteFS.createWriteStream(decompressedPath),
+        );
+        await AbsoluteFS.delete(downloadedPath);
+        sourceFilePath = decompressedPath;
+      }
+
+      // Rename to main.tex and move to paper root
+      const downloadedRel = WorkspaceFS.relativePath(sourceFilePath);
       // Use forward slashes to match WorkspaceFS.relativePath() convention
       const targetRel = [paperDirRelative, 'main.tex'].join('/');
       // Always move the file to paper root, even if already named main.tex
