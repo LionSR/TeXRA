@@ -83,7 +83,8 @@ export interface AgentEntry {
   name: string;
   source: AgentSource;
   path: string; // absolute path to YAML (empty for remote)
-  multiplePath?: string; // path to _multiple variant if exists
+  multiplePath?: string; // absolute path to _multiple YAML (local agents only)
+  isMultiple?: boolean; // remote only: true if agent has a _multiple variant
   category: AgentCategory;
   description?: string;
   tools?: string[]; // tool names for tool-use agents
@@ -312,7 +313,6 @@ export function resolveAgent(
   if (!entry) return undefined;
 
   // Remote agents have no local path - variant resolution is handled by RemoteAgentLoader.
-  // The multiplePath field is only used for UI indicator (data-multiple="true").
   // RemoteAgentLoader.loadRemoteAgent() handles the preferMultiple logic internally.
   if (entry.source === 'remote') {
     return {
@@ -569,7 +569,7 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
         name,
         source: 'remote' as AgentSource,
         path: '',
-        multiplePath: multiple?.name,
+        isMultiple: Boolean(multiple),
         category: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
         description: primary.description ?? undefined,
         visibility: primary.visibility ?? undefined,
@@ -747,7 +747,7 @@ function entryToOptionData(entry: AgentEntry): AgentOptionData {
   return {
     value: key,
     label: entry.name,
-    isMultiple: Boolean(entry.multiplePath),
+    isMultiple: entry.isMultiple ?? Boolean(entry.multiplePath),
     isToolUse: entry.category === AgentCategory.ToolUse,
     isRemote: entry.source === 'remote',
     isCustom: entry.source === 'custom',

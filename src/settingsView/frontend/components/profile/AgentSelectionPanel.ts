@@ -507,7 +507,7 @@ export class AgentSelectionPanel extends LitElement {
                 </button>
               `
             : nothing}
-          ${agent.hasMultiple
+          ${agent.hasMultiplePath
             ? html`
                 <button
                   class="agent-action-btn"
