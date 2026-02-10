@@ -3,10 +3,7 @@
  * Encapsulates the streaming event handling logic for improved testability and readability.
  */
 // Third-party imports
-import {
-  MESSAGE_TYPES,
-  type StreamDiagnostics,
-} from '@shared/schemas';
+import { MESSAGE_TYPES, type StreamDiagnostics } from '@shared/schemas';
 import {
   extractDomain,
   type WebSearchResult,
@@ -59,11 +56,10 @@ interface AnthropicStreamState {
  * runtime-efficient types (Set, timestamps) that getDiagnostics() converts
  * to the serializable output form.
  */
-interface StreamDiagnosticsState
-  extends Omit<
-    StreamDiagnostics,
-    'blockTypesSeen' | 'elapsedSecs' | 'secsSinceLastEvent' | 'finalized'
-  > {
+interface StreamDiagnosticsState extends Omit<
+  StreamDiagnostics,
+  'blockTypesSeen' | 'elapsedSecs' | 'secsSinceLastEvent' | 'finalized'
+> {
   /** Block types seen during streaming (converted to array in getDiagnostics) */
   blockTypesSeen: Set<string>;
   /** Timestamp when streaming started (converted to elapsedSecs) */
