@@ -217,56 +217,59 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   protected override willUpdate(changed: Map<string, unknown>): void {
-    if (changed.has('appState') || changed.has('permissions')) {
-      // Only re-sort streams when the streams list or sort/filter criteria change.
-      // Log updates change streamStates but not streams — skip the redundant sort.
-      if (changed.has('appState')) {
-        const prev = changed.get('appState') as ProgressState | undefined;
-        if (
-          !prev ||
-          prev.streams !== this.appState.streams ||
-          prev.streamFilter !== this.appState.streamFilter ||
-          prev.streamSort !== this.appState.streamSort
-        ) {
-          this.cachedFilteredStreams = getFilteredStreams(this.appState);
-        }
-      }
+    if (!changed.has('appState') && !changed.has('permissions')) return;
 
-      const previousState = changed.get('appState') as
-        | ProgressState
-        | undefined;
-      const activeStreamId = this.appState.activeStreamId;
-      const newStreamState = activeStreamId
-        ? this.appState.streamStates.get(activeStreamId)
-        : null;
-      const streamSwitched =
-        !!previousState && activeStreamId !== previousState.activeStreamId;
+    // Note: Individual log updates (APPEND_LOG, UPDATE_LOG) bypass willUpdate
+    // entirely via the updateStreamLogs fast path. This method only runs for
+    // cold-path changes: status, stream switching, task groups, bulk loads, etc.
 
-      // Log context: always update when stream data changes (drives LogList)
-      const streamDataChanged =
-        this.streamLogContextValue.logs !== (newStreamState?.logs ?? []) ||
-        this.streamLogContextValue.taskGroups !==
-          (newStreamState?.taskGroups ?? []);
-      if (streamDataChanged || streamSwitched) {
-        this.updateLogContext(newStreamState);
-      }
+    const prevAppState = changed.get('appState') as
+      | ProgressState
+      | undefined;
 
-      // Meta context: only update when non-log fields change (drives content components)
-      const followupOptionsChanged =
-        !!activeStreamId &&
-        previousState?.followupOptionsByStream.get(activeStreamId) !==
-          this.appState.followupOptionsByStream.get(activeStreamId);
-      if (
-        streamSwitched ||
-        changed.has('permissions') ||
-        followupOptionsChanged ||
-        hasMetaChange(
-          this.streamContextValue.streamState ?? null,
-          newStreamState ?? null,
-        )
-      ) {
-        this.updateStreamContext();
-      }
+    // Re-sort streams when the list or sort/filter criteria change.
+    if (
+      changed.has('appState') &&
+      (!prevAppState ||
+        prevAppState.streams !== this.appState.streams ||
+        prevAppState.streamFilter !== this.appState.streamFilter ||
+        prevAppState.streamSort !== this.appState.streamSort)
+    ) {
+      this.cachedFilteredStreams = getFilteredStreams(this.appState);
+    }
+
+    const activeStreamId = this.appState.activeStreamId;
+    const activeStreamInfo = this.getActiveStreamInfo();
+    const newStreamState = activeStreamId
+      ? this.appState.streamStates.get(activeStreamId)
+      : null;
+    const streamSwitched =
+      !!prevAppState && activeStreamId !== prevAppState.activeStreamId;
+
+    // Log context: update when stream data changes (task groups, bulk load, stream switch)
+    const streamDataChanged =
+      this.streamLogContextValue.logs !== (newStreamState?.logs ?? []) ||
+      this.streamLogContextValue.taskGroups !==
+        (newStreamState?.taskGroups ?? []);
+    if (streamDataChanged || streamSwitched) {
+      this.updateLogContext(newStreamState, activeStreamInfo);
+    }
+
+    // Meta context: update when non-log fields change (drives content components)
+    const followupOptionsChanged =
+      !!activeStreamId &&
+      prevAppState?.followupOptionsByStream.get(activeStreamId) !==
+        this.appState.followupOptionsByStream.get(activeStreamId);
+    if (
+      streamSwitched ||
+      changed.has('permissions') ||
+      followupOptionsChanged ||
+      hasMetaChange(
+        this.streamContextValue.streamState ?? null,
+        newStreamState ?? null,
+      )
+    ) {
+      this.updateStreamContext(activeStreamInfo);
     }
   }
 
@@ -352,9 +355,11 @@ export class ProgressApp extends BaseWebviewApp {
     );
   }
 
-  private updateLogContext(streamState: StreamState | null | undefined): void {
+  private updateLogContext(
+    streamState: StreamState | null | undefined,
+    activeStreamInfo: StreamTabInfo | null,
+  ): void {
     const hasStreams = this.cachedFilteredStreams.length > 0;
-    const activeStream = this.getActiveStreamInfo();
     const isToolUse = streamState ? isToolUseState(streamState) : false;
     const runId = streamState
       ? getEffectiveRunId(streamState, { mode: 'fallback' })
@@ -366,15 +371,16 @@ export class ProgressApp extends BaseWebviewApp {
       runId,
       isToolUse,
       hasStreams,
-      streamName: activeStream?.name ?? null,
+      streamName: activeStreamInfo?.name ?? null,
     };
   }
 
-  private updateStreamContext(): void {
+  private updateStreamContext(
+    activeStreamInfo: StreamTabInfo | null,
+  ): void {
     const hasStreams = this.cachedFilteredStreams.length > 0;
-    const activeStream = this.getActiveStreamInfo();
 
-    if (!activeStream) {
+    if (!activeStreamInfo) {
       this.streamContextValue = { ...EMPTY_STREAM_CONTEXT, hasStreams };
       this.permissionsContextValue = this.permissions;
       return;
@@ -382,18 +388,18 @@ export class ProgressApp extends BaseWebviewApp {
 
     const streamState = getStreamState(
       this.appState,
-      activeStream.name,
-      activeStream.agentCategory,
+      activeStreamInfo.name,
+      activeStreamInfo.agentCategory,
     );
     const isToolUse = isToolUseState(streamState);
     const runId = getEffectiveRunId(streamState, { mode: 'fallback' });
 
     this.streamContextValue = {
-      streamInfo: activeStream,
+      streamInfo: activeStreamInfo,
       streamState,
       runId,
       followupOptions:
-        this.appState.followupOptionsByStream.get(activeStream.name) ?? null,
+        this.appState.followupOptionsByStream.get(activeStreamInfo.name) ?? null,
       isToolUse,
       hasStreams,
     };
