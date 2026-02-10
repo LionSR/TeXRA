@@ -194,9 +194,9 @@ export const TOOL_ICON_MAP: Record<string, string> = {
   lean_loogle: 'codicon-search',
 
   // Workflow/delegation
-  propose_workflow: 'codicon-list-tree',
-  propose_agent: 'codicon-account',
+  delegate_workflow: 'codicon-list-tree',
+  delegate_agent: 'codicon-account',
 
-  // History
-  runs: 'codicon-history',
+  // Execution history
+  executions: 'codicon-history',
 };
