@@ -10,6 +10,19 @@ Before creating a custom agent, it's highly recommended to understand the underl
 - **Agent Explorer**: Learn how to browse and manage agent files using the [Agent Explorer](./agent-explorer.md) view in the TeXRA sidebar.
   :::
 
+## Reference Agents
+
+TeXRA ships with a `reference-agents/` folder in the repository root containing example agent definitions you can use as starting points. These include:
+
+- **orchestrator** - Multi-agent workflow coordination with proposal review
+- **enhance** / **criticize** - Content improvement and critique workflows
+- **devise** / **logic** - Problem-solving and logical reasoning
+- **notation** - Mathematical notation standardization
+- **verifyFix** - Verify and fix LaTeX compilation errors
+- **generic** - General-purpose template
+
+Each reference agent also has a `_multiple` variant for multi-file output. Copy any of these into your custom agents directory and modify them to suit your needs.
+
 ## Creating a Custom Agent File
 
 Follow these steps to create a new custom agent:
@@ -185,7 +198,11 @@ List the desired tools by name in your agent YAML. The registry includes
 workspace utilities like `bash`, `read_file`, `write_file`, `edit_file`,
 `glob`, `grep`, and `ls` alongside domain-specific helpers such as
 `str_replace_editor`, `wolfram`,
-`web_fetch`, and `web_search`.
+`web_fetch`, `web_search`, `memory`, `todo_write`, `diagnostics`,
+`extract_figures`, `extract_tikz_figures`, `extract_bib_entries`,
+`arxiv_search`, `arxiv_metadata`, `arxiv_download`,
+`crossref_search`, `crossref_doi`,
+`zotero_search`, `zotero_export`, and `zotero_add`.
 
 > **Tip:** The `read_file` tool returns only the first 2,000 lines of a file (per request) to prevent massive responses from overwhelming the progress log. Provide an optional `range` object (for example, `{"start": 401, "end": 450}`) to page through a file beyond the first 2,000 lines. The tool enforces the same 2,000-line limit on each requested window, prefixes each line with a `cat -n` style line number, reports the specific line range that was returned, and notes when the requested end exceeds the file length so you know the response was clipped. When copying text for `edit_file`, use only the content after the line-number prefix.
 
