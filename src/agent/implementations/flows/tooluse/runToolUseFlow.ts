@@ -1,8 +1,8 @@
 /**
  * Entry point for tool-use flow execution.
  *
- * Flat flow graph — cycle nodes wired directly, no inner Flow nesting.
- * CycleSetupNode/CycleTeardownNode bridge snapshot ↔ live state at cycle boundaries.
+ * Manages session lifecycle, tool execution cycles, interrupt handling,
+ * and state persistence via PersistedFlow.
  */
 
 import {
@@ -20,79 +20,73 @@ import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 
 import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
 
-import type { AgentRunStateSnapshot } from '@agent/core/AgentState';
-import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ToolDefinition } from '@model';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
-import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
-import {
-  ToolUsePrepNode,
-  ToolUseCallNode,
-  ToolUseProcessNode,
-  ToolUseDispatchNode,
-} from '@agent/core/flows/ToolUseCycleFlow';
-import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
-
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
-import { CycleSetupNode } from './nodes/CycleSetupNode';
-import { CycleTeardownNode } from './nodes/CycleTeardownNode';
+import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
 import { migrateSharedState, type ToolUseRunShared } from './nodes/types';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
 
-// ---- Public types -----------------------------------------------------------
-
+/**
+ * Input for running a tool-use flow.
+ * Follows same pattern as RunReflectionFlowInput: extends BaseFlowContextInit
+ * and adds flow-specific fields. toolRegistry is a separate parameter.
+ */
 export interface RunToolUseFlowInput<
   C = unknown,
 > extends BaseFlowContextInit<C> {
   setting: AgentToolUseSetting;
   resumeSnapshot?: ToolUseSessionSnapshot | null;
   onFollowUpConsumed?: () => void;
+  /** When true, proposal tools are filtered out to prevent nesting. */
   isSubagent?: boolean;
 }
 
+/** Result from running a tool-use flow. */
 export interface RunToolUseFlowResult {
   status: EndGroupStatus;
   lastResponse?: string;
 }
 
+/**
+ * Runtime context for tool-use flow execution (implements IInterruptible).
+ * Exposes only the fields needed by external consumers (agentCommands,
+ * ToolUseAgentRegistry) — services stay internal to runToolUseFlow.
+ */
 export interface ToolUseFlowContext {
+  /** Direct accessor for follow-up operations. */
   readonly session: ToolUseSessionLifecycle;
+  /** Model handler for compaction requests (used by agentCommands). */
   readonly modelHandler: ToolUseServices['modelHandler'];
   interrupt(): void;
 }
 
+/** Setup callback invoked after context creation, before execution starts. */
 export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
 
-// ---- Flat services type (extends ToolUseServices with cycle-level fields) ---
-
-/** Services for the flat tool-use flow. Satisfies both ToolUseServices and ToolUseCycleServices. */
-export interface FlatToolUseServices<C = unknown> extends ToolUseServices<C> {
-  readonly client: C;
-  refreshClient(): Promise<void>;
-  readonly run: AgentRunStateSnapshot;
-  readonly workspace: AgentWorkspaceState;
-  readonly modelName: string;
-  readonly agentName: string;
-  /** Update mutable run/workspace refs for the next cycle. */
-  updateCycleState(run: AgentRunStateSnapshot, workspace: AgentWorkspaceState): void;
-}
-
-// ---- Tool resolution --------------------------------------------------------
-
+/** Proposal tool names that subagents must not receive. */
 const PROPOSAL_TOOLS = new Set(['propose_workflow', 'propose_agent']);
 
+/** Options for tool resolution. */
+interface ResolveToolsOptions {
+  /** When true, proposal tools are filtered out to prevent nesting. */
+  isSubagent?: boolean;
+}
+
+/** Resolve tool definitions from agent settings, validating against registry. */
 function resolveTools(
   tools: AgentToolUseSetting['tools'],
   registry: IToolRegistry,
   logger: { warn: (msg: string) => void },
-  options?: { isSubagent?: boolean },
+  options?: ResolveToolsOptions,
 ): ToolDefinition[] {
   const toolConfigs = Array.isArray(tools) ? tools : [];
   const resolved = toolConfigs
@@ -116,14 +110,18 @@ function resolveTools(
   return resolved;
 }
 
-// ---- Flow runner ------------------------------------------------------------
-
+/**
+ * Run a tool-use flow. Interrupt registration is handled automatically.
+ * @param input - Flow input (extends BaseFlowContextInit with tool-use fields)
+ * @param toolRegistry - Optional tool registry (defaults to global registry)
+ * @param onSetup - Optional callback invoked after context creation
+ */
 export async function runToolUseFlow<C = unknown>(
   input: RunToolUseFlowInput<C>,
   toolRegistry?: IToolRegistry,
   onSetup?: ToolUseFlowSetupCallback,
 ): Promise<RunToolUseFlowResult> {
-  const { logger, streamId, executionId, setting, onInterrupt, modelHandler, config } = input;
+  const { logger, streamId, executionId, setting, onInterrupt } = input;
   const snapshot = input.resumeSnapshot ?? null;
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const registry = toolRegistry ?? getDefaultToolRegistry();
@@ -131,27 +129,14 @@ export async function runToolUseFlow<C = unknown>(
     isSubagent: input.isSubagent,
   });
 
-  // Build flat services: ToolUseServices + cycle fields (client, run, workspace via mutable refs)
-  const refs = {
-    run: null as AgentRunStateSnapshot | null,
-    workspace: null as AgentWorkspaceState | null,
-    client: await modelHandler.getClient(),
-  };
-  const services: FlatToolUseServices<C> = {
+  // Build services: spread input + add computed fields (matches reflection flow pattern)
+  const services: ToolUseServices<C> = {
     ...input,
-    setting: { ...setting, tools: resolvedTools } as AgentToolUseSetting,
     session: sessionLifecycle,
     resolvedTools,
     toolRegistry: registry,
     snapshot,
-    onRoundFinalized: (input.onRoundFinalized ?? (async () => {})) as RoundFinalizedCallback,
-    get client(): C { return refs.client; },
-    async refreshClient() { refs.client = await modelHandler.getClient(); },
-    get run(): AgentRunStateSnapshot { return refs.run!; },
-    get workspace(): AgentWorkspaceState { return refs.workspace!; },
-    modelName: config.model,
-    agentName: config.agent,
-    updateCycleState(run, workspace) { refs.run = run; refs.workspace = workspace; },
+    onRoundFinalized: input.onRoundFinalized ?? (async () => {}),
   };
 
   const flowContext: ToolUseFlowContext = {
@@ -165,14 +150,12 @@ export async function runToolUseFlow<C = unknown>(
   };
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
+
+  // Shared state is declared outside try block for access in finally (cleanup decision based on userCancelledRetry)
   const shared: ToolUseRunShared = {
     messages: [],
     shouldSkipCycle: false,
     stateSlices: null,
-    shouldStop: false,
-    endTurn: false,
-    cycleIndex: 0,
-    cycleResponseTimeMs: 0,
   };
 
   try {
@@ -190,6 +173,7 @@ export async function runToolUseFlow<C = unknown>(
     }
     if (flowRecord?.shared) {
       logger.debug('Resuming tool-use flow from persistence');
+      // Migrate legacy nested format to flat format if needed
       const migrationResult = migrateSharedState(flowRecord.shared);
       if (migrationResult === null) {
         logger.warn('Failed to parse flow record shared state, starting fresh');
@@ -202,36 +186,19 @@ export async function runToolUseFlow<C = unknown>(
       }
     }
 
-    // Flat graph: Prepare → Setup → Prep → Call → Process → Dispatch → Teardown → Wait
-    //                         ↑        ↑                        |C          |C
-    //                         |        └────────────────────────┘           |
-    //                         └────────────────────────────────────────────┘
+    // Create flow nodes and wire transitions inline
     const prepareNode = new ToolUsePrepareNode<C>();
-    const setupNode = new CycleSetupNode<C>();
-    const teardownNode = new CycleTeardownNode<C>();
+    const cycleNode = new ToolUseCycleNode<C>();
     const waitNode = new ToolUseWaitNode<C>();
-    const cyclePrepNode = new ToolUsePrepNode<C>();
-    const callNode = new ToolUseCallNode<C>();
-    const processNode = new ToolUseProcessNode<C>();
-    const dispatchNode = new ToolUseDispatchNode<C>();
-
-    prepareNode.next(setupNode);
-    setupNode.next(cyclePrepNode);
-    setupNode.on(FlowTransition.COMPLETE, teardownNode);
-    cyclePrepNode.next(callNode);
-    callNode.next(processNode);
-    processNode.next(dispatchNode);
-    dispatchNode.on(FlowTransition.CONTINUE, cyclePrepNode);
-    cyclePrepNode.on(FlowTransition.COMPLETE, teardownNode);
-    callNode.on(FlowTransition.COMPLETE, teardownNode);
-    processNode.on(FlowTransition.COMPLETE, teardownNode);
-    dispatchNode.on(FlowTransition.COMPLETE, teardownNode);
-    teardownNode.next(waitNode);
-    waitNode.on(FlowTransition.CONTINUE, setupNode);
-
-    const pf = new PersistedFlow<ToolUseRunShared, Record<string, unknown>, FlatToolUseServices<C>>(
-      prepareNode, kv,
-    );
+    prepareNode.next(cycleNode);
+    cycleNode.next(waitNode);
+    waitNode.on(FlowTransition.CONTINUE, cycleNode);
+    const startNode = prepareNode;
+    const pf = new PersistedFlow<
+      ToolUseRunShared,
+      Record<string, unknown>,
+      ToolUseServices<C>
+    >(startNode, kv);
     pf.setServices(services);
     await pf.run(shared);
 
@@ -243,21 +210,24 @@ export async function runToolUseFlow<C = unknown>(
     status = END_GROUP_STATUS.ERROR;
     throw error;
   } finally {
-    try { services.workspace?.todos?.clearOnUpdate(); } catch { /* workspace refs may be null */ }
-
+    // Preserve flow record if user cancelled retry (for resume), otherwise delete
+    // Use the local shared object directly - it's updated in place during pf.run()
     if (shared.userCancelledRetry) {
       logger.debug('Flow record preserved for resume after retry cancellation');
     } else {
       try {
         const kv = getExecutionStore(executionId);
         await kv.delete(`flow:${executionId}`);
-      } catch { /* ignore cleanup errors */ }
+      } catch {
+        // Ignore cleanup errors
+      }
     }
 
     sessionLifecycle.dispose();
     unregisterInterruptible(streamId);
   }
 
+  // Extract last assistant text using the model handler's typed extraction
   let lastResponse: string | undefined;
   for (let i = shared.messages.length - 1; i >= 0; i--) {
     const text = input.modelHandler.extractAssistantText(shared.messages[i]);

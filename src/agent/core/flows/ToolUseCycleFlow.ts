@@ -244,7 +244,7 @@ export function createToolUseCycleShared(
  * they are injected here BEFORE calling the model. This ensures the model's
  * thinking/response considers the user's feedback.
  */
-export class ToolUsePrepNode<C> extends BaseNode<
+class ToolUsePrepNode<C> extends BaseNode<
   ToolUseCycleShared,
   CycleParams,
   ToolUseCycleServices<C>
@@ -317,7 +317,7 @@ export class ToolUsePrepNode<C> extends BaseNode<
  * Handles model invocation for tool-use cycles with PocketFlow's built-in retry.
  * Uses RetryableInvocationNode for automatic retry logic with user prompts.
  */
-export class ToolUseCallNode<C> extends RetryableInvocationNode<
+class ToolUseCallNode<C> extends RetryableInvocationNode<
   ToolUseCycleShared,
   CycleParams,
   ToolUseCycleServices<C>
@@ -434,7 +434,7 @@ interface ToolUseProcessPrepResult {
 }
 
 /** Processes the model response to extract tool calls and usage data. */
-export class ToolUseProcessNode<C> extends BaseNode<
+class ToolUseProcessNode<C> extends BaseNode<
   ToolUseCycleShared,
   CycleParams,
   ToolUseCycleServices<C>
@@ -631,7 +631,7 @@ interface ToolExecutionResult {
  *
  * Batches follow-up messages for Google/DeepSeek handlers to preserve thought signatures.
  */
-export class ToolUseDispatchNode<C> extends BatchNode<
+class ToolUseDispatchNode<C> extends BatchNode<
   ToolUseCycleShared,
   CycleParams,
   ToolUseCycleServices<C>
