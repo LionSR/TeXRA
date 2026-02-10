@@ -14,7 +14,6 @@ The following table lists the AI model providers supported by TeXRA, along with 
 | DeepSeek | Hangzhou, China | [Terms](https://cdn.deepseek.com/policies/en-US/deepseek-terms-of-use.html) · [Privacy](https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html) |
 | Moonshot AI (Kimi) | Beijing, China | [Terms](https://platform.moonshot.ai/docs/agreement/modeluse) · [Privacy](https://platform.moonshot.ai/docs/agreement/userprivacy) |
 | DashScope (Alibaba) | Hangzhou, China | [Terms](https://www.alibabacloud.com/help/en/legal/) · [Privacy](https://www.alibabacloud.com/help/en/legal/latest/alibaba-cloud-international-website-privacy-policy) |
-| Wolfram | Champaign, IL, USA | [Terms](https://www.wolfram.com/legal/terms/wolfram/) · [Privacy](https://www.wolfram.com/legal/privacy/wolfram/) |
 
 ## Access Modes
 
