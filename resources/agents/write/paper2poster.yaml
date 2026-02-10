@@ -29,13 +29,6 @@ prompts:
     - Ensure the poster is visually appealing and readable at A5 size, despite the increased detail
     - Use the provided color scheme and design elements from the template
 
-    When the poster includes multiple TikZ or pgfplots figures:
-    - Define common styles (line styles, marker styles, color definitions, cycle lists) in the preamble using \pgfplotsset{}, \tikzset{}, or \newcommand{} rather than repeating them in each figure
-    - Use pgfplots cycle lists or style definitions for consistent line/marker/color schemes across all plots
-    - Define shared color palettes with \definecolor{} or \colorlet{} in the preamble
-    - Use named styles (e.g., \tikzset{my plot/.style={...}}) so figures reference a single definition
-    - This consolidation ensures visual consistency and makes it easy to update the appearance of all figures from one place
-
   userPrefix: |
     You are tasked with creating a detailed LaTeX Beamer poster based on the following research paper:
 
