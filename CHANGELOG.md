@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.35.10] - 2026-02-09
+## [0.35.10] - 2026-02-10
 
 ### Features
 
@@ -13,13 +13,17 @@ All notable changes to this project will be documented in this file.
 - Added **model dropdown** and **sync/async mode badges** on agent proposals.
 - Added **execution status** on runs tool and orchestrator badge in UI.
 - Added **live tool timers** with timeout display and **real-time bash streaming** including stderr.
-- Added **reject-with-feedback** for bash command approvals.
+- Added **reject-with-feedback** for bash command approvals with combined multi-file rejection messages.
 - Added **manual conversation compaction** for tool-use agents.
 - Added **memory tool display** in progress view.
 - Added **subagent output capture** for richer orchestration.
 - Added **remote agent tool surfacing** via persisted metadata.
 - Added **proactive relay token refresh** before model invocations.
 - Added **batched Lean loogle queries**.
+- Added **accept_run_files tool** with approval panel for orchestrator to accept workflow outputs.
+- Added **client-side PDF page limit validation** for Anthropic API — compaction-aware, marks limit errors as non-retryable.
+- Added **structured fields** (title, author, year) to the `zotero_search` tool.
+- Added **Terms of Service** and **Providers** pages to the documentation site.
 
 ### Bug Fixes
 
@@ -36,6 +40,10 @@ All notable changes to this project will be documented in this file.
 - Fixed **path traversal** and **workspace boundary** validation.
 - Fixed **Windows path** normalization throughout.
 - Fixed **Lean 4** FileUri client lookup and syntax highlighting.
+- Fixed **agent status icon** not updating to RUNNING after successful retry.
+- Fixed **LaTeX diff dropdowns** opening downward — now open upward.
+- Fixed **Anthropic request-id** not captured correctly in error diagnostics.
+- Fixed **Zotero search** schema and label misalignment.
 
 ### Improvements
 
