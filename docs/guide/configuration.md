@@ -4,16 +4,16 @@ TeXRA provides extensive configuration options that allow you to customize its b
 
 ## The TeXRA Dashboard
 
-The **Dashboard** is a unified panel that consolidates several management views into one place. Open it via the Command Palette (`Ctrl+Shift+P`) with **TeXRA: Show Dashboard** (or **TeXRA: Show Agents**, **TeXRA: View Profile**, etc.):
+The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open it from the Command Palette (`Ctrl+Shift+P`) with **TeXRA: Show Dashboard**:
 
-- **Agents tab**: Toggle agent visibility for the current workspace. Agents with a `_multiple.yaml` variant are flagged with a multi-output badge.
-- **Models tab**: A provider-grouped list of all available models with checkboxes to control which appear in the model dropdown. Deprecation toggles and tier availability indicators help you choose. You can also set/remove API keys for each provider inline.
-- **History tab**: Searchable, collapsible list of past agent execution sessions.
-- **Memory tab**: Browse and delete agent memory entries stored across sessions.
-- **Profile tab**: View your account status, access level, and available remote agents.
+- **Agents** - Turn agents on or off for the current workspace. Agents that support multiple output files are marked with a badge.
+- **Models** - Pick which models show up in your dropdown. Models are grouped by provider (Anthropic, OpenAI, Google, etc.) and you can set or remove API keys for each provider right there - no need to hunt through settings.
+- **History** - Search and browse past runs. Handy for finding that polish job you ran last week.
+- **Memory** - See what your tool-use agents have remembered across sessions, and delete entries you no longer need.
+- **Profile** - Check your account, access level, and available remote agents.
 
 ::: tip
-Streaming and endpoint settings (like `useStreaming`, `useOpenAIResponsesAPI`) have been migrated from VS Code settings to the **Settings View** accessible from the Dashboard.
+Streaming and connection settings have moved out of VS Code settings and into the **Settings View**, accessible from the Dashboard.
 :::
 
 ## Accessing Configuration
@@ -42,7 +42,7 @@ default list is maintained in the [Models Guide](./models.md). Override it by
 specifying your own model identifiers:
 
 ```json
-"texra.models": ["sonnet45T", "gpt51", "gpt5pro"]
+"texra.models": ["sonnet45T", "opus46T", "gemini3p", "gpt52"]
 ```
 
 ### API Provider Settings

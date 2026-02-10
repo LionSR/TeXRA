@@ -70,10 +70,10 @@ hero:
 
 AI scientists need more than a chat window. TeXRA keeps research grounded in reproducible workflows and transparent reasoning:
 
-- **Reliable scientific loops** – capture every run with logs, diffs, and audit trails so collaborators can verify changes.
-- **Specialized agent roster** – summon correction, polishing, figure generation, and document transformation agents tuned for LaTeX-heavy projects.
-- **Integrated verification tools** – trigger `latexdiff`, `texcount`, compilation checks, and custom scripts directly from the agent run.
-- **Context you control** – work across multi-file projects, reference libraries, and datasets without losing track of provenance.
+- **Reliable scientific loops** – every run is captured with logs, diffs, and audit trails so you and your collaborators can verify changes.
+- **Two kinds of agents** – use workflow agents (`polish`, `correct`, `draw`) for structured tasks, or chat with tool-use agents (`chat`, `search`, `research`) that can edit files, search literature, and run computations interactively.
+- **Integrated verification tools** – trigger `latexdiff`, `texcount`, Wolfram, and compilation checks directly from the agent run.
+- **Literature at your fingertips** – search arXiv, Crossref, and your Zotero library without leaving VS Code.
 
 ## Key Capabilities
 
@@ -127,6 +127,22 @@ AI scientists need more than a chat window. TeXRA keeps research grounded in rep
     <p>Leverage vision-capable models to analyze images, figures, and PDFs directly within your workflow.</p>
     <div class="feature-example">
       <code>&lt;figure.png&gt; + "Write caption"</code> &#8594; <code>\caption{...}</code>
+    </div>
+  </div>
+
+  <div class="feature-item">
+    <h3>💬 Interactive Tool-Use Agents</h3>
+    <p>Chat with AI agents that can read and edit your files, run shell commands, search the web, and manage your Zotero library - all in one conversation.</p>
+    <div class="feature-example">
+      <code>"Find papers on attention mechanisms and add them to my .bib"</code>
+    </div>
+  </div>
+
+  <div class="feature-item">
+    <h3>🔍 Research & Literature Tools</h3>
+    <p>Search arXiv and Crossref, download paper sources, verify computations with Wolfram, and manage references through Zotero - without leaving VS Code.</p>
+    <div class="feature-example">
+      <code>"Search Zotero for Vaswani"</code> &#8594; BibTeX entries exported
     </div>
   </div>
 
