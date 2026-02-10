@@ -5,7 +5,7 @@
  * desktop is open. No authentication required - purely local communication.
  *
  * Capabilities:
- * - Add items by DOI (recommended - Zotero fetches full metadata)
+ * - Add items by DOI (recommended - metadata resolved via Crossref)
  * - Add items by URL (Zotero extracts metadata from page)
  * - Add items with manual metadata (title, authors, year, etc.)
  *
@@ -18,20 +18,24 @@
 
 // Third-party imports
 import axios, { AxiosError } from 'axios';
+import { type Work } from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
 
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
+import { CROSSREF_CONSTANTS, crossrefClient } from '@tools/citation/constants';
+import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { ToolError } from '@tools/result';
 import { isTimeoutErrorCode, buildTimeoutMessage } from '@tools/timeouts';
 import { pluralize } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - zotero
-import { getZoteroPort } from './bbtClient';
+import { type CslCreator, getZoteroPort } from './bbtClient';
 
 const ZOTERO_PING_TIMEOUT_MS = 2_000; // 2 s
 const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000; // 30 s
+const CROSSREF_RESOLVE_TIMEOUT_MS = 15_000; // 15 s
 
 /**
  * Schema for a single item to add to Zotero.
@@ -42,7 +46,7 @@ const ZoteroItemSchema = z
     doi: z
       .string()
       .describe(
-        'DOI of the item to add. If provided, Zotero will fetch metadata automatically.',
+        'DOI of the item to add. Metadata is resolved via Crossref before saving.',
       )
       .nullish(),
     url: z
@@ -169,6 +173,125 @@ async function callZoteroConnector(
 }
 
 /**
+ * Map Crossref work types to Zotero item types.
+ * Full list of Crossref types: https://api.crossref.org/types
+ * Full list of Zotero types: https://api.zotero.org/schema
+ */
+const CROSSREF_TYPE_MAP: Record<string, string> = {
+  // Journals
+  'journal-article': 'journalArticle',
+  // Books
+  'book': 'book',
+  'edited-book': 'book',
+  'monograph': 'book',
+  'reference-book': 'book',
+  'book-series': 'book',
+  'book-set': 'book',
+  // Book sections
+  'book-chapter': 'bookSection',
+  'book-part': 'bookSection',
+  'book-section': 'bookSection',
+  'book-track': 'bookSection',
+  // Reference works
+  'reference-entry': 'encyclopediaArticle',
+  // Conference
+  'proceedings-article': 'conferencePaper',
+  'proceedings': 'conferencePaper',
+  'proceedings-series': 'conferencePaper',
+  // Academic
+  'dissertation': 'thesis',
+  'posted-content': 'preprint',
+  'peer-review': 'journalArticle',
+  // Reports & standards
+  'report': 'report',
+  'report-series': 'report',
+  'standard': 'standard',
+  'standard-series': 'standard',
+  // Data & other
+  'dataset': 'dataset',
+  'database': 'dataset',
+  'component': 'document',
+  'grant': 'document',
+  'other': 'document',
+};
+
+/**
+ * Resolve a DOI to full metadata via the Crossref API.
+ * Uses the shared CrossrefClient and rate limiter from @tools/citation.
+ * Returns a Zotero-format item object, or null if resolution fails.
+ */
+async function resolveDOI(
+  doi: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    await waitForRateLimit('crossref', CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS);
+
+    // The CrossrefClient has no timeout support, so we race against one.
+    const response = await Promise.race([
+      crossrefClient.work(doi),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('Crossref lookup timed out')),
+          CROSSREF_RESOLVE_TIMEOUT_MS,
+        ),
+      ),
+    ]);
+
+    if (!response.ok || !response.content?.message) return null;
+
+    const work: Work = response.content.message;
+
+    // Access fields that may not be in the library's Work type definition
+    const raw = work as Record<string, unknown>;
+
+    const creators = work.author?.length
+      ? work.author.map((a: CslCreator) => {
+          if (a.given && a.family) {
+            return {
+              firstName: a.given,
+              lastName: a.family,
+              creatorType: 'author',
+            };
+          }
+          // name = Crossref org author, literal = CSL unparsed name
+          return {
+            name: a.name || a.literal || a.family || 'Unknown',
+            creatorType: 'author',
+          };
+        })
+      : undefined;
+
+    // Extract year from published or created date-parts
+    const year =
+      work.published?.['date-parts']?.[0]?.[0] ??
+      work.created?.['date-parts']?.[0]?.[0];
+
+    // container-title is an array in Crossref responses (may be empty)
+    const rawContainer = Array.isArray(raw['container-title'])
+      ? raw['container-title'][0]
+      : undefined;
+    const containerTitle =
+      rawContainer != null ? String(rawContainer) : undefined;
+
+    return {
+      itemType: CROSSREF_TYPE_MAP[work.type || ''] || 'journalArticle',
+      ...(work.title?.[0] && { title: work.title[0] }),
+      DOI: doi,
+      ...(creators?.length && { creators }),
+      ...(year != null && { date: String(year) }),
+      ...(containerTitle && { publicationTitle: containerTitle }),
+      ...(raw.volume && { volume: String(raw.volume) }),
+      ...(raw.issue && { issue: String(raw.issue) }),
+      ...(raw.page && { pages: String(raw.page) }),
+      ...(work.abstract && { abstractNote: work.abstract }),
+      ...(work.resource?.primary?.URL && { url: work.resource.primary.URL }),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Convert our item schema to Zotero Connector format.
  */
 function toZoteroItem(item: z.infer<typeof ZoteroItemSchema>): object {
@@ -228,11 +351,28 @@ export class ZoteroAddTool extends defineTool({
       let result: ConnectorResult;
 
       if (item.doi) {
-        result = await callZoteroConnector(
-          'saveDOI',
-          { doi: item.doi, ...collectionBody },
-          port,
-        );
+        // Resolve DOI metadata via Crossref, then use saveItems
+        const resolvedItem = await resolveDOI(item.doi);
+        if (resolvedItem) {
+          result = await callZoteroConnector(
+            'saveItems',
+            { items: [resolvedItem], ...collectionBody },
+            port,
+          );
+        } else if (item.title) {
+          // Crossref failed but we have manual metadata to fall back on
+          result = await callZoteroConnector(
+            'saveItems',
+            { items: [toZoteroItem(item)], ...collectionBody },
+            port,
+          );
+        } else {
+          result = {
+            status: 'error',
+            message:
+              'Crossref lookup failed and no title provided to fall back on',
+          };
+        }
       } else if (item.url) {
         result = await callZoteroConnector(
           'saveSnapshot',
