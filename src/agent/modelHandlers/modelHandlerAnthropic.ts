@@ -751,10 +751,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // detectRequestId() (in sdkErrorUtils) picks it up via the existing
         // ProviderError.requestId path — no duplicate field needed.
         try {
-          const response = await (
+          const httpResponse = await (
             stream as unknown as { response: Promise<Response> }
           ).response;
-          const reqId = response?.headers?.get?.('x-request-id');
+          const reqId =
+            httpResponse?.headers?.get?.('request-id') ??
+            httpResponse?.headers?.get?.('x-request-id');
           if (reqId && streamError instanceof Error) {
             (streamError as Error & { request_id?: string }).request_id =
               reqId;
