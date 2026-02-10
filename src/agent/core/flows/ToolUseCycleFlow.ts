@@ -839,11 +839,13 @@ class ToolUseDispatchNode<C> extends BatchNode<
     );
     const calls = completedResults.map((er) => er.call);
 
-    // For Google/DeepSeek handlers with multiple parallel calls, batch all tool calls
-    // into a single message to preserve thought signatures.
+    // For Google/DeepSeek/Kimi handlers with multiple parallel calls, batch all tool calls
+    // into a single message to preserve thought signatures / reasoning_content.
     const shouldBatch =
       calls.length > 1 &&
-      (services.modelHandler.isGoogle || services.modelHandler.isDeepSeek) &&
+      (services.modelHandler.isGoogle ||
+        services.modelHandler.isDeepSeek ||
+        services.modelHandler.isKimi) &&
       !!services.modelHandler.createBatchedToolUseFollowUpMessages;
 
     if (shouldBatch) {

@@ -1366,6 +1366,48 @@ export class ModelHandlerOpenAI<
     return [callMsg, resultMsg];
   }
 
+  /**
+   * Creates batched tool-use follow-up messages for multiple parallel tool calls.
+   *
+   * For providers with thinking mode (DeepSeek, Kimi), all tool calls from a
+   * single model response must be in ONE assistant message with reasoning_content,
+   * followed by individual tool result messages. Without batching,
+   * resetReasoning() after the first call clears reasoning_content for
+   * subsequent calls, causing the API to reject the request.
+   */
+  async createBatchedToolUseFollowUpMessages(
+    calls: TCall[],
+    results: ToolResultPayload[],
+    _attachmentsPerCall: ToolFileAttachment[][],
+    workspaceState?: AgentWorkspaceState,
+    text?: string,
+  ): Promise<ChatCompletionMessageParam[]> {
+    if (calls.length !== results.length) {
+      throw new Error(
+        `Batched tool calls mismatch: ${calls.length} calls vs ${results.length} results`,
+      );
+    }
+
+    if (calls.length === 0) {
+      return [];
+    }
+
+    const toolCalls = calls.map((call) => this.normalizeToolCall(call.raw));
+    const callMsg = this.buildAssistantMessageWithToolCalls(
+      toolCalls,
+      workspaceState,
+      text,
+    );
+
+    const toolResultMessages = toolCalls.map((call, i) => ({
+      role: 'tool' as const,
+      tool_call_id: call.id,
+      content: formatToolResultAsText(results[i]),
+    }));
+
+    return [callMsg, ...toolResultMessages];
+  }
+
   // =========================================================================
   // Message modification methods (for post-build enrichment)
   // =========================================================================
