@@ -206,10 +206,6 @@ export class ProgressViewState {
     return todos?.length ? todos : undefined;
   }
 
-  clearTodos(stream: StreamTabId): void {
-    this.clearSessionField(stream, 'todos', []);
-  }
-
   clearAllTodos(): void {
     for (const state of this._sessionState.values()) {
       state.todos = [];
@@ -222,10 +218,6 @@ export class ProgressViewState {
 
   getContextState(stream: StreamTabId): ContextStateData | undefined {
     return this._sessionState.get(stream)?.contextState ?? undefined;
-  }
-
-  clearContextState(stream: StreamTabId): void {
-    this.clearSessionField(stream, 'contextState', null);
   }
 
   private clearSessionField<K extends keyof StreamSessionState>(
@@ -247,14 +239,6 @@ export class ProgressViewState {
 
   getActiveRunId(stream: StreamTabId): StorageKey | null {
     return this._sessionState.get(stream)?.activeRunId ?? null;
-  }
-
-  clearActiveRun(stream: StreamTabId): void {
-    const state = this._sessionState.get(stream);
-    if (state && state.activeRunId !== null) {
-      state.activeRunId = null;
-      this.saveActiveRunIds();
-    }
   }
 
   getStreamState(stream: StreamTabId): StreamState | undefined {

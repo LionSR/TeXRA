@@ -13,10 +13,10 @@
 import {
   createStreamState,
   ProgressViewOutboundMessageSchema,
+  sumUsageStats,
   type LogMessageData,
   type ProgressViewOutboundMessage,
   type StreamTabInfo,
-  type TokenUsageStats,
 } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -27,7 +27,6 @@ import {
   updateToolUseState,
   updateWorkflowState,
   updateNestedRounds,
-  prependInstructionForToolUse,
 } from './stateUtils';
 import {
   getStreamState,
@@ -74,42 +73,6 @@ const resolvedBeforeShown = new Set<string>();
 // ============================================================
 // Helper functions
 // ============================================================
-
-/** Check if stream is tool-use based on streamInfo (source of truth for category). */
-function isToolUseStream(
-  ctx: MessageHandlerContext,
-  streamId: string,
-): boolean {
-  const streamInfo = ctx.getState().streams.find((s) => s.name === streamId);
-  return streamInfo?.agentCategory === 'toolUse';
-}
-
-/** Sum multiple usage stats into a single total. */
-function sumUsageStats(
-  usageMap: Record<string, TokenUsageStats>,
-): TokenUsageStats | null {
-  const values = Object.values(usageMap);
-  if (values.length === 0) return null;
-
-  return values.reduce(
-    (acc, u) => ({
-      inputTokens: acc.inputTokens + u.inputTokens,
-      outputTokens: acc.outputTokens + u.outputTokens,
-      cost: acc.cost + u.cost,
-      cacheReadInputTokens:
-        (acc.cacheReadInputTokens ?? 0) + (u.cacheReadInputTokens ?? 0),
-      cacheCreationInputTokens:
-        (acc.cacheCreationInputTokens ?? 0) + (u.cacheCreationInputTokens ?? 0),
-    }),
-    {
-      inputTokens: 0,
-      outputTokens: 0,
-      cost: 0,
-      cacheReadInputTokens: 0,
-      cacheCreationInputTokens: 0,
-    },
-  );
-}
 
 function getPendingLogKey(streamId: string, logId: string): string {
   return `${streamId}:${logId}`;
@@ -341,18 +304,9 @@ const handlers: HandlerRegistry = {
         contextState,
       } = data;
 
-      let processedMessages = isClear ? [] : messages;
-      if (!isClear && isToolUseState(prev) && runInstructions) {
-        processedMessages = prependInstructionForToolUse(
-          [...messages],
-          runInstructions,
-          stream,
-        );
-      }
-
       const baseUpdate = {
         ...prev,
-        logs: processedMessages,
+        logs: isClear ? [] : messages,
         taskGroups: isClear ? [] : (groups ?? prev.taskGroups),
         contextState: contextState ?? prev.contextState,
       };
@@ -360,10 +314,7 @@ const handlers: HandlerRegistry = {
       if (isWorkflowState(prev)) {
         if (isClear) {
           return {
-            ...prev,
-            logs: processedMessages,
-            taskGroups: [],
-            contextState: contextState ?? prev.contextState,
+            ...baseUpdate,
             activeRunId: null,
             ui: { ...prev.ui, selectedRunId: null },
             runInstructions: {},
@@ -373,10 +324,7 @@ const handlers: HandlerRegistry = {
           };
         }
         return {
-          ...prev,
-          logs: processedMessages,
-          taskGroups: groups ?? prev.taskGroups,
-          contextState: contextState ?? prev.contextState,
+          ...baseUpdate,
           activeRunId: activeRunId ?? prev.activeRunId,
           runInstructions: runInstructions
             ? { ...prev.runInstructions, ...runInstructions }
@@ -395,10 +343,10 @@ const handlers: HandlerRegistry = {
 
       // Tool-use streams: compute sessionUsage from runUsage (sum all runs)
       if (isToolUseState(prev) && runUsage) {
-        const sessionUsage = sumUsageStats(runUsage);
-        if (sessionUsage) {
-          return { ...baseUpdate, sessionUsage };
-        }
+        return {
+          ...baseUpdate,
+          sessionUsage: sumUsageStats(Object.values(runUsage)),
+        };
       }
 
       return baseUpdate;
@@ -406,7 +354,7 @@ const handlers: HandlerRegistry = {
   },
 
   // --- Log updates: use the fast path (updateStreamLogs) ---
-  // These bypass setStreamState → willUpdate → hasMetaChange entirely.
+  // These bypass setStreamState → willUpdate → updateContexts entirely.
   // The updater operates on logs[] directly — no StreamState spread needed.
 
   [PROGRESS_VIEW_COMMANDS.APPEND_LOG]: (data, ctx) => {
@@ -545,37 +493,29 @@ const handlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE]: (data, ctx) => {
     const { stream, runId, usage } = data;
-    // Backend sends accumulated total per run.
-    if (isToolUseStream(ctx, stream)) {
-      // Tool-use: this IS the session total (single session)
-      updateToolUseState(ctx, stream, (prev) => ({
-        ...prev,
-        sessionUsage: usage,
-      }));
-    } else {
-      // Workflow: store per-run usage
-      updateWorkflowState(ctx, stream, (prev) => ({
-        ...prev,
-        runUsage: { ...prev.runUsage, [runId]: usage },
-      }));
-    }
+    // Use StreamState.kind as single source of truth for stream type
+    ctx.setStreamState(stream, (prev) => {
+      if (isToolUseState(prev)) {
+        return { ...prev, sessionUsage: usage };
+      }
+      if (isWorkflowState(prev)) {
+        return { ...prev, runUsage: { ...prev.runUsage, [runId]: usage } };
+      }
+      return prev;
+    });
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_USAGE]: (data, ctx) => {
     const { stream, usage } = data;
-    if (isToolUseStream(ctx, stream)) {
-      // Tool-use: sum all runs into sessionUsage
-      updateToolUseState(ctx, stream, (prev) => ({
-        ...prev,
-        sessionUsage: sumUsageStats(usage),
-      }));
-    } else {
-      // Workflow: store full per-run map
-      updateWorkflowState(ctx, stream, (prev) => ({
-        ...prev,
-        runUsage: usage,
-      }));
-    }
+    ctx.setStreamState(stream, (prev) => {
+      if (isToolUseState(prev)) {
+        return { ...prev, sessionUsage: sumUsageStats(Object.values(usage)) };
+      }
+      if (isWorkflowState(prev)) {
+        return { ...prev, runUsage: usage };
+      }
+      return prev;
+    });
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_CONTEXT_STATE]: (data, ctx) => {
