@@ -75,11 +75,11 @@ If you prefer a custom lightweight implementation, this code recursively travers
 ```typescript
 import { BaseNode, Flow } from '../src/index';
 
-type NodeIds = Map&lt;BaseNode, string&gt;;
+type NodeIds = Map<BaseNode, string>;
 
 function buildMermaid(start: BaseNode): string {
   const ids: NodeIds = new Map();
-  const visited: Set&lt;BaseNode&gt; = new Set();
+  const visited: Set<BaseNode> = new Set();
   const lines: string[] = ['graph LR'];
   let ctr = 1;
 
