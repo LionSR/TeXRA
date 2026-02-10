@@ -227,6 +227,8 @@ export const PROGRESS_VIEW_COMMANDS = {
   AGENT_PROPOSAL_ACTION: 'agentProposalAction',
   BASH_APPROVAL_ACTION: 'bashApprovalAction',
   RESTORE_PROPOSAL_CONFIG: 'restoreProposalConfig',
+  TOGGLE_SUPER_YOLO_BYPASS: 'toggleSuperYoloBypass',
+  UPDATE_SUPER_YOLO_BYPASS_STATE: 'updateSuperYoloBypassState',
 
   // Memory
   OPEN_MEMORY_VIEW: 'openMemoryView',
@@ -322,6 +324,8 @@ export const SETTINGS_VIEW_CMD = {
   SET_PROVIDER_STREAMING: 'setProviderStreaming',
   SET_PROVIDER_ENDPOINT: 'setProviderEndpoint',
   SET_GLOBAL_STREAMING: 'setGlobalStreaming',
+  SET_PROVIDER_VSCODE_SETTING: 'setProviderVscodeSetting',
+  OPEN_EXTERNAL_URL: 'openExternalUrl',
   // Model selection commands
   GET_MODEL_SELECTION: 'getModelSelection',
   SET_MODEL_ENABLED: 'setModelEnabled',
@@ -339,6 +343,9 @@ export const SETTINGS_VIEW_CMD = {
   GET_CUSTOM_AGENT_DIR: 'getCustomAgentDir',
   SET_CUSTOM_AGENT_DIR: 'setCustomAgentDir',
   RESET_CUSTOM_AGENT_DIR: 'resetCustomAgentDir',
+  // Multi-Agent commands
+  GET_SUPER_YOLO_ENABLED: 'getSuperYoloEnabled',
+  SET_SUPER_YOLO_ENABLED: 'setSuperYoloEnabled',
 } as const;
 
 // Settings view specific commands (combines Memory, History, and Profile views)
@@ -356,4 +363,5 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_AGENT_SELECTION: 'updateAgentSelection',
   UPDATE_AUTO_SHOW_REMOTE: 'updateAutoShowRemote',
   UPDATE_CUSTOM_AGENT_DIR: 'updateCustomAgentDir',
+  UPDATE_SUPER_YOLO_ENABLED: 'updateSuperYoloEnabled',
 } as const;

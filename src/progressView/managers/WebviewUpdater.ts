@@ -222,6 +222,19 @@ export class WebviewUpdater {
     });
   }
 
+  updateSuperYoloBypassState(
+    stream: StreamTabId,
+    bypassActive: boolean,
+    featureEnabled: boolean,
+  ): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_BYPASS_STATE,
+      stream,
+      bypassActive,
+      featureEnabled,
+    });
+  }
+
   showBashPermission(permission: BashPermission): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL,

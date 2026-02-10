@@ -256,6 +256,13 @@ export const ResolveAgentProposalMessageSchema = z.object({
   proposalId: z.string(),
 });
 
+export const UpdateSuperYoloBypassStateMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_BYPASS_STATE),
+  stream: StreamTabIdSchema,
+  bypassActive: z.boolean(),
+  featureEnabled: z.boolean(),
+});
+
 export const FollowUpTextPolishedMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED),
   stream: StreamTabIdSchema,
@@ -328,6 +335,7 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     ShowToolEditApprovalMessageSchema,
     ResolveToolEditApprovalMessageSchema,
     UpdateToolEditApprovalStateMessageSchema,
+    UpdateSuperYoloBypassStateMessageSchema,
     ShowBashApprovalMessageSchema,
     ResolveBashApprovalMessageSchema,
     ShowRetryRequestMessageSchema,
@@ -475,6 +483,11 @@ const CancelRetryRequestMessageSchema = z.object({
 
 const ToggleToolEditApprovalBypassMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS),
+  stream: StreamTabIdSchema,
+});
+
+const ToggleSuperYoloBypassMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS),
   stream: StreamTabIdSchema,
 });
 
@@ -631,6 +644,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     StopRecordingMessageSchema,
     ToolEditApprovalActionMessageSchema,
     ToggleToolEditApprovalBypassMessageSchema,
+    ToggleSuperYoloBypassMessageSchema,
     BashApprovalActionMessageSchema,
     AgentProposalActionMessageSchema,
     RestoreProposalConfigMessageSchema,

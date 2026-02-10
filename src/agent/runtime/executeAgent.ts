@@ -518,6 +518,8 @@ export interface ExecuteAgentOptions {
   isSubagent?: boolean;
   /** Fires early with the real streamId, before flow execution starts. */
   onStreamResolved?: (streamId: StreamTabId) => void;
+  /** Fires before a tool-use subagent enters WAITING, delivering interim result to orchestrator. */
+  onBeforeWaiting?: (lastResponse: string | undefined) => void;
 }
 
 export async function executeAgent(
@@ -554,6 +556,7 @@ export async function executeAgent(
               ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
             setting: ctx.setting as AgentToolUseSetting,
             isSubagent,
+            onBeforeWaiting: options?.onBeforeWaiting,
             onFollowUpConsumed: () =>
               bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
           });

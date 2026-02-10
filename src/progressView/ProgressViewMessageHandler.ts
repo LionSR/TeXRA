@@ -41,6 +41,10 @@ import {
   handleProgressViewBashApprovalAction,
   handleProgressViewToolEditApprovalAction,
   toggleToolEditApprovalSessionBypass,
+  setToolEditApprovalSessionBypass,
+  isApprovalBypassedForStream,
+  toggleProposalBypass,
+  isSuperYoloFeatureEnabled,
 } from '@tools/approval';
 import {
   createExternalLocation,
@@ -166,6 +170,23 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         const msg = isNowEnabled
           ? 'YOLO mode enabled: Tool actions will be auto-approved for this stream.'
           : 'YOLO mode disabled: Tool actions will prompt for approval.';
+        await vscode.window.showInformationMessage(msg);
+      },
+      [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: async (data) => {
+        if (!isSuperYoloFeatureEnabled()) {
+          await vscode.window.showWarningMessage(
+            'Super YOLO mode is disabled. Enable it in Settings → Multi-Agent tab first.',
+          );
+          return;
+        }
+        const isNowEnabled = toggleProposalBypass(data.stream);
+        // Super YOLO implies normal YOLO — auto-enable it when turning on
+        if (isNowEnabled && !isApprovalBypassedForStream(data.stream)) {
+          setToolEditApprovalSessionBypass(data.stream, true);
+        }
+        const msg = isNowEnabled
+          ? 'Super YOLO enabled: Agent proposals and tool actions will be auto-approved for this stream.'
+          : 'Super YOLO disabled: Agent proposals will prompt for approval.';
         await vscode.window.showInformationMessage(msg);
       },
       [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]: (data) =>
