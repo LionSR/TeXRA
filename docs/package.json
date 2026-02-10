@@ -3,8 +3,9 @@
   "version": "0.3.0",
   "main": "index.js",
   "scripts": {
-    "dev": "vitepress dev .",
-    "docs:build": "vitepress build .",
+    "sync-legal": "cp ../TERMS_OF_SERVICE.md terms.md",
+    "dev": "npm run sync-legal && vitepress dev .",
+    "docs:build": "npm run sync-legal && vitepress build .",
     "docs:serve": "vitepress serve .",
     "docs:deploy": "npm run docs:build && gh-pages --cname texra.ai -d .vitepress/dist -m \"Deploy docs [ci skip]\""
   },
