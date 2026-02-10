@@ -1,6 +1,6 @@
 # Terms of Service
 
-**TeXRA — AI-Powered LaTeX Research Assistant**
+**TeXRA — AI-Powered Research Assistant**
 
 *Effective Date: February 9, 2026*
 
@@ -59,12 +59,12 @@ You agree not to use the Service to:
 
 ## 8. Feedback
 
-If you provide suggestions, ideas, enhancement requests, or other feedback regarding the Service ("Feedback"), you grant us a worldwide, perpetual, irrevocable, royalty-free license to use, reproduce, modify, and incorporate such Feedback into the Service without obligation or compensation to you. Feedback is voluntary and provided at your sole discretion.
+If you voluntarily provide suggestions, ideas, enhancement requests, or other feedback regarding the Service ("Feedback"), we may use that Feedback to improve the Service without any obligation or compensation to you. You are never required to provide Feedback.
 
 ## 9. Privacy and Data Handling
 
 - **Personal API Keys (Local Processing)**: When you use your own API keys, all calls to AI providers are made directly from your local device to the provider's endpoints. In this mode, your document content is not sent to or routed through TeXRA servers. Your API keys are stored locally (e.g., via VS Code's built-in Secret Storage or equivalent platform-specific secure storage) and are never transmitted to us.
-- **Researcher Access Program (Relay Processing)**: When you use the Researcher Access Program (server-side keys), your requests are routed through a TeXRA-operated relay server (`remote.texra.ai`) before being forwarded to the AI provider. In this mode, your document content temporarily passes through our relay infrastructure in order to authenticate the request. We do not permanently store Your Content on the relay, but you should be aware that it transits our servers.
+- **Researcher Access Program (Relay Processing)**: When you use the Researcher Access Program (server-side keys), your requests are routed through a TeXRA-operated relay server (`remote.texra.ai`) before being forwarded to the AI provider. In this mode, your document content temporarily passes through our relay infrastructure in order to authenticate the request. We do not read, analyze, or permanently store Your Content on the relay — it transits our servers solely for the purpose of forwarding the request to the AI provider.
 - **Third-Party Providers**: In both modes, your content is ultimately transmitted to the respective AI provider's API endpoints. You are responsible for reviewing and accepting the privacy policies and terms of service of your chosen AI provider(s).
 - **Telemetry**: When you are signed in to TeXRA (e.g., through the Researcher Access Program), the Service collects anonymized usage metadata — such as model name, token counts, estimated cost, and response time — to monitor service health and improve the product. Telemetry does not include Your Content. If you are not signed in, no telemetry data is collected or transmitted.
 
@@ -126,14 +126,12 @@ Our total cumulative liability to you for all claims arising from or related to 
 
 ## 17. Indemnification
 
-You agree to indemnify, defend, and hold harmless the TeXRA team and its members from and against any claims, liabilities, damages, losses, and expenses (including reasonable attorneys' fees) arising out of or in any way connected with: (a) your use of the Service, (b) your violation of these Terms, (c) your infringement of any third-party rights, (d) Your Content, (e) your selection of and data transfers to third-party AI providers, or (f) any dispute between you and a third-party AI provider.
+To the extent permitted by applicable law, you agree to hold harmless the TeXRA team and its members from any claims, liabilities, damages, or expenses (including reasonable attorneys' fees) arising from: (a) your violation of these Terms, (b) your infringement of any third-party rights, or (c) your use of the Service in a manner not authorized by these Terms.
 
 ## 18. Dispute Resolution
 
 - **Informal Resolution**: Before filing any formal legal claim, you agree to first contact us at contact@texra.ai and attempt to resolve the dispute informally for at least thirty (30) days.
-- **Binding Arbitration**: If the dispute cannot be resolved informally, either party may elect to resolve the dispute through binding arbitration administered under the rules of a mutually agreed-upon arbitration body. Arbitration shall be conducted on an individual basis; class arbitrations and class actions are not permitted.
-- **Class Action Waiver**: YOU AGREE THAT ANY DISPUTE RESOLUTION PROCEEDINGS WILL BE CONDUCTED ONLY ON AN INDIVIDUAL BASIS AND NOT IN A CLASS, CONSOLIDATED, OR REPRESENTATIVE ACTION. If for any reason a claim proceeds in court rather than through arbitration, each party waives any right to a jury trial.
-- **Statute of Limitations**: You agree that any claim arising out of or related to these Terms or the Service must be filed within one (1) year after the cause of action arose, or such claim shall be permanently barred.
+- **Arbitration**: If the dispute cannot be resolved informally, either party may elect to resolve the dispute through binding arbitration administered under the rules of a mutually agreed-upon arbitration body. Arbitration shall be conducted on an individual basis; class arbitrations and class actions are not permitted. If for any reason a claim proceeds in court rather than through arbitration, each party waives any right to a jury trial.
 - **Exceptions**: Either party may seek injunctive or other equitable relief in any court of competent jurisdiction to prevent the actual or threatened infringement or misappropriation of intellectual property rights.
 
 ## 19. Modifications to the Terms
@@ -142,7 +140,7 @@ We reserve the right to update or modify these Terms at any time. Material chang
 
 ## 20. Termination
 
-We may suspend or terminate your access to the Service at any time, with or without cause, and with or without notice. You may stop using the Service at any time by uninstalling it or ceasing to access it. Upon termination, all rights and licenses granted to you under these Terms will immediately cease. Sections 7, 8, 10, 12, 14, 15, 16, 17, 18, 21, and 22 shall survive termination.
+We may suspend or terminate your access to the Service if you violate these Terms, or for any other reason with reasonable notice. In urgent circumstances (such as abuse, fraud, or legal requirements), we may act immediately without prior notice. You may stop using the Service at any time by uninstalling it or ceasing to access it. Upon termination, all rights and licenses granted to you under these Terms will immediately cease. Sections 7, 8, 10, 12, 14, 15, 16, 17, 18, 21, and 22 shall survive termination.
 
 ## 21. Governing Law
 
