@@ -1,6 +1,6 @@
 # Built-in Agent Reference
 
-TeXRA provides built-in AI agents, each specialized for specific research tasks. Choose from the dropdown menu in the TeXRA UI.
+TeXRA ships with built-in agents for common research tasks—polishing prose, fixing errors, creating figures, converting formats, and more. Pick one from the dropdown in the TeXRA UI and you're ready to go.
 
 ## Quick Reference
 
@@ -33,14 +33,9 @@ For details on the underlying structure and execution flow common to all agents,
 
 ### `chat`
 
-A general-purpose research assistant that can read, write, and edit files in your workspace. It acts as a friendly scientist focused on careful reasoning.
+Your go-to research companion. It can read your project, edit files, run shell commands, and search through your workspace—all in a back-and-forth conversation.
 
-**Capabilities:**
-
-- Read and analyze your documents
-- Edit files with your approval (via VS Code diff view)
-- Run shell commands for compilation or other tasks
-- Search through your project files
+> **User story:** You just got reviewer comments back. Instead of manually hunting through a 40-page paper, you open `chat` and paste the reviewer's feedback: "Address comment 3 about missing error bars in Table 2—add them and update the caption." The agent reads your files, makes the edits, and shows you a diff to approve.
 
 **Best for:** General research assistance, code/LaTeX editing, running compilations
 
@@ -223,14 +218,11 @@ Don't change the technical content or writing style.
 
 ### `polish`
 
-The `polish` agent improves the writing quality of your document while preserving essential technical content and meaning. It focuses on:
+The `polish` agent improves the writing quality of your document while preserving essential technical content and meaning.
 
-- Enhancing clarity and readability
-- Improving sentence structure and paragraph flow
-- Fixing grammatical issues and typos
-- Standardizing formatting and style
+> **User story:** Your draft is technically solid but reads like it was written at 3 AM (because it was). Select `polish`, tell it "Improve clarity for a CVPR audience—keep all equations and citations intact," and in a couple of minutes you'll have a version that reads like it went through a professional copyedit. Review the colour-coded diff to accept or reject each change.
 
-This agent is ideal for refining drafts that are technically sound but need language improvements or polishing before submission.
+This agent is ideal for refining drafts that are technically sound but need language improvements before submission.
 
 #### Example Output
 
@@ -315,9 +307,9 @@ Highlight key figures and tables. Make it visually appealing with appropriate co
 
 ### `draw`
 
-The `draw` agent creates or enhances TikZ figures based on textual descriptions or existing figures.
+Creates or enhances TikZ figures from textual descriptions or existing code.
 
-**Purpose:** Generate visual representations of concepts, systems, or data.
+> **User story:** You need a neural-network architecture diagram for your paper. Describe the layers and connections in the instruction box, and `draw` generates compilable TikZ code.
 
 **Best for:**
 

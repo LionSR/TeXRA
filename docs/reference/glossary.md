@@ -10,7 +10,7 @@ A specialized AI assistant in TeXRA that performs a specific type of task, such 
 
 ### Workflow Agent
 
-An agent that takes your files and instruction, sends them through one or more structured rounds to an AI model, and produces output files (e.g., a polished `.tex` file). Workflow agents use XML-wrapped output and can include scratchpad reasoning. Examples: `correct`, `polish`, `draw`, `paper2slide`.
+An agent that takes your files and instruction, sends them through one or more structured rounds to an AI model, and produces output files (e.g., a polished `.tex` file). Examples: `correct`, `polish`, `draw`, `paper2slide`.
 
 ### Tool-Use Agent
 
