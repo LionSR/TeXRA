@@ -15,6 +15,7 @@ import { PersistedState, createWebviewStorage } from '@shared/state';
 import {
   AGENT_CATEGORY,
   AgentCategoryFilterSchema,
+  type LogMessageData,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
@@ -427,6 +428,40 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   /**
+   * Fast path for log-only updates (APPEND_LOG, UPDATE_LOG).
+   *
+   * Bypasses the generic setStreamState → willUpdate → hasMetaChange pipeline.
+   * Updates the Map entry in place (O(1) vs O(k) Map copy) and directly sets
+   * the log context for the active stream. Content components never re-render.
+   */
+  private updateStreamLogs(
+    streamId: StreamTabId,
+    updater: (logs: LogMessageData[]) => LogMessageData[],
+  ): void {
+    const streamState = this.appState.streamStates.get(streamId);
+    if (!streamState) return;
+
+    const newLogs = updater(streamState.logs);
+    if (newLogs === streamState.logs) return;
+
+    // Mutate the Map entry in place — no new Map(), no new appState, no willUpdate.
+    // Safe because willUpdate never compares prev vs current streamStates Map refs.
+    this.appState.streamStates.set(streamId, {
+      ...streamState,
+      logs: newLogs,
+    });
+
+    // Directly update log context for the active stream.
+    // Only LogList subscribes to streamLogContext — content components are untouched.
+    if (streamId === this.appState.activeStreamId) {
+      this.streamLogContextValue = {
+        ...this.streamLogContextValue,
+        logs: newLogs,
+      };
+    }
+  }
+
+  /**
    * Get the event handler context.
    * Always returns fresh context - closures capture current state via getters.
    */
@@ -438,6 +473,8 @@ export class ProgressApp extends BaseWebviewApp {
       },
       setStreamState: (streamId, updater) =>
         this.setStreamState(streamId, updater),
+      updateStreamLogs: (streamId, updater) =>
+        this.updateStreamLogs(streamId, updater),
       getFollowUpRef: () => this.getFollowUpRef(),
       savePrefs: (prefs) => this.prefsManager.update(prefs),
     };
