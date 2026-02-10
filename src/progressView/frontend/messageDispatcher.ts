@@ -315,7 +315,7 @@ const handlers: HandlerRegistry = {
 
     if (!stream) return;
 
-    ctx.setStreamState(stream, (prev) => {
+    ctx.setStreamState(stream, (prev): StreamState => {
       const isClear = action === 'clear';
       if (isClear) {
         clearPendingLogUpdatesForStream(stream);
@@ -334,12 +334,14 @@ const handlers: HandlerRegistry = {
           ? prependToolUseInstructionIfNeeded(
               messages,
               runInstructions,
-              activeRunId,
+              activeRunId ?? undefined,
             )
           : messages;
 
-      const baseUpdate = {
-        ...prev,
+      // Common overrides shared by both state types.
+      // Spread the narrowed `prev` (not the union) in each branch so
+      // TypeScript can resolve the return back to the discriminated union.
+      const base = {
         logs: isClear ? [] : nextLogs,
         taskGroups: isClear ? [] : (groups ?? prev.taskGroups),
         contextState: contextState ?? prev.contextState,
@@ -348,7 +350,8 @@ const handlers: HandlerRegistry = {
       if (isWorkflowState(prev)) {
         if (isClear) {
           return {
-            ...baseUpdate,
+            ...prev,
+            ...base,
             activeRunId: null,
             ui: { ...prev.ui, selectedRunId: null },
             runInstructions: {},
@@ -358,7 +361,8 @@ const handlers: HandlerRegistry = {
           };
         }
         return {
-          ...baseUpdate,
+          ...prev,
+          ...base,
           activeRunId: activeRunId ?? prev.activeRunId,
           runInstructions: runInstructions
             ? { ...prev.runInstructions, ...runInstructions }
@@ -383,12 +387,13 @@ const handlers: HandlerRegistry = {
         Object.keys(runUsage).length > 0
       ) {
         return {
-          ...baseUpdate,
+          ...prev,
+          ...base,
           sessionUsage: sumUsageStats(Object.values(runUsage)),
         };
       }
 
-      return baseUpdate;
+      return { ...prev, ...base };
     });
   },
 
@@ -597,6 +602,13 @@ const handlers: HandlerRegistry = {
     updateToolUseState(ctx, data.stream, (prev) => ({
       ...prev,
       toolEditBypass: data.bypassActive,
+    }));
+  },
+
+  [PROGRESS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_BYPASS_STATE]: (data, ctx) => {
+    updateToolUseState(ctx, data.stream, (prev) => ({
+      ...prev,
+      superYoloBypass: data.bypassActive,
     }));
   },
 

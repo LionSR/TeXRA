@@ -86,13 +86,11 @@ export function migrateSharedState(
   // Try legacy flat format (`conversation` → `messages`)
   const legacyFlatResult = LegacyConversationSchema.safeParse(shared);
   if (legacyFlatResult.success && !('state' in legacyFlatResult.data)) {
-    const obj = shared as Record<string, unknown>;
-    const migrated = {
-      ...obj,
-      messages: obj.conversation,
-    } as unknown as ToolUseRunShared;
-    delete (migrated as Record<string, unknown>).conversation;
-    return { data: migrated, migrated: true };
+    const { conversation, ...rest } = shared as Record<string, unknown>;
+    return {
+      data: { ...rest, messages: conversation } as ToolUseRunShared,
+      migrated: true,
+    };
   }
 
   // Try nested format (`{ state: {...} }`)
@@ -104,13 +102,11 @@ export function migrateSharedState(
     }
     const nestedLegacy = LegacyConversationSchema.safeParse(obj.state);
     if (nestedLegacy.success) {
-      const inner = obj.state as Record<string, unknown>;
-      const migrated = {
-        ...inner,
-        messages: inner.conversation,
-      } as unknown as ToolUseRunShared;
-      delete (migrated as Record<string, unknown>).conversation;
-      return { data: migrated, migrated: true };
+      const { conversation, ...rest } = obj.state as Record<string, unknown>;
+      return {
+        data: { ...rest, messages: conversation } as ToolUseRunShared,
+        migrated: true,
+      };
     }
   }
 
