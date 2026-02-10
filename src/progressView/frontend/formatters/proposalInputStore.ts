@@ -55,7 +55,7 @@ function parseProposalInput(
 ): AgentProposal | null {
   const spread = isPlainObject(input) ? input : {};
 
-  if (toolName === 'delegate_agent') {
+  if (toolName === 'delegate_agent' || toolName === 'propose_agent') {
     const result = LenientToolUseProposalSchema.safeParse({
       agentCategory: AGENT_CATEGORY.TOOL_USE,
       ...spread,
@@ -63,7 +63,7 @@ function parseProposalInput(
     return result.success ? result.data : null;
   }
 
-  if (toolName === 'delegate_workflow') {
+  if (toolName === 'delegate_workflow' || toolName === 'propose_workflow') {
     const result = LenientWorkflowProposalSchema.safeParse({
       agentCategory: AGENT_CATEGORY.WORKFLOW,
       ...spread,

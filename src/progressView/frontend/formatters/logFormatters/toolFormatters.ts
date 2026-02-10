@@ -101,8 +101,13 @@ const STATUS_ICONS: Record<string, string> = {
   in_progress: 'codicon codicon-sync spin',
 };
 
-/** Tools that represent agent delegation (have restorable config). */
-const DELEGATION_TOOLS = new Set(['delegate_agent', 'delegate_workflow']);
+/** Tools that represent agent delegation (have restorable config). Includes legacy names for historical log entries. */
+const DELEGATION_TOOLS = new Set([
+  'delegate_agent',
+  'delegate_workflow',
+  'propose_agent',
+  'propose_workflow',
+]);
 
 type ToolSectionOptions = {
   toolName?: string;
