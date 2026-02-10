@@ -48,10 +48,6 @@ const FileMapping = z.strictObject({
     .describe(
       'Workspace-relative destination path. Defaults to source path if omitted.',
     ),
-  /** Lines added (from subagent-result output-files metadata). */
-  added: z.number().nullish().describe('Lines added (from output-files metadata)'),
-  /** Lines removed (from subagent-result output-files metadata). */
-  removed: z.number().nullish().describe('Lines removed (from output-files metadata)'),
 });
 
 const SyncWorkflowFilesInputSchema = z.strictObject({
@@ -81,14 +77,13 @@ replacing existing files.
 
 Parameters:
 - execution_id: The execution ID (from subagent-result or /runs)
-- files: Array of {source, destination?, added?, removed?} mappings
+- files: Array of {source, destination?} mappings
   - source: File path within the run (as listed by /runs/{id}/files)
   - destination: Workspace path to write to (defaults to source path)
-  - added/removed: Pass through from the subagent-result output-files metadata
 
 Example: Copy corrected file back to its original location:
   execution_id: "d4f5e6a7-1234-4b89-abcd-ef0123456789"
-  files: [{source: "paper__correct__r0_gemini.tex", destination: "paper.tex", added: 12, removed: 5}]`,
+  files: [{source: "paper__correct__r0_gemini.tex", destination: "paper.tex"}]`,
   schema: SyncWorkflowFilesInputSchema,
 }) {
   protected async execute(input: SyncWorkflowFilesInput): Promise<ToolResult> {
@@ -136,15 +131,13 @@ Example: Copy corrected file back to its original location:
           destLocation: createWorkspaceLocation(dest.absolutePath, dest.relativePath),
           source: mapping.source,
           destination: dest.relativePath,
-          added: mapping.added ?? null,
-          removed: mapping.removed ?? null,
         };
       }),
     );
 
     // Phase 2: Copy each file to workspace via flexibleFS
     const results: string[] = [];
-    const edits: { path: string; lineChanges?: { added: number; removed: number } }[] = [];
+    const edits: { path: string }[] = [];
 
     for (const entry of resolved) {
       const destExists = await flexibleFS.exists(entry.destLocation);
@@ -154,19 +147,8 @@ Example: Copy corrected file back to its original location:
       const action = destExists ? 'replaced' : 'created';
       const mappingNote =
         entry.source !== entry.destination ? ` (from ${entry.source})` : '';
-      const statsNote =
-        entry.added !== null && entry.removed !== null
-          ? ` [+${entry.added}/-${entry.removed}]`
-          : '';
-      results.push(`${action}: ${entry.destination}${mappingNote}${statsNote}`);
-
-      const edit: { path: string; lineChanges?: { added: number; removed: number } } = {
-        path: entry.destination,
-      };
-      if (entry.added !== null && entry.removed !== null) {
-        edit.lineChanges = { added: entry.added, removed: entry.removed };
-      }
-      edits.push(edit);
+      results.push(`${action}: ${entry.destination}${mappingNote}`);
+      edits.push({ path: entry.destination });
     }
 
     const summary = `Synced ${files.length} file${files.length > 1 ? 's' : ''} from run ${executionId}`;
