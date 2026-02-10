@@ -3,10 +3,8 @@
  * Encapsulates the streaming event handling logic for improved testability and readability.
  */
 // Third-party imports
-import { z } from 'zod';
 import {
   MESSAGE_TYPES,
-  StreamDiagnosticsSchema,
   type StreamDiagnostics,
 } from '@shared/schemas';
 import {
@@ -56,29 +54,23 @@ interface AnthropicStreamState {
 }
 
 /**
- * Schema for internal mutable state during streaming.
- * Uses Set/timestamp fields for efficient tracking during stream processing.
+ * Internal mutable state during streaming.
+ * Shares counter/flag fields with {@link StreamDiagnostics} but uses
+ * runtime-efficient types (Set, timestamps) that getDiagnostics() converts
+ * to the serializable output form.
  */
-const StreamDiagnosticsStateSchema = z.object({
-  /** Characters of thinking content received */
-  thinkingChars: z.number(),
-  /** Characters of text content received */
-  textChars: z.number(),
-  /** Characters of tool input JSON received */
-  toolInputChars: z.number(),
-  /** Total events processed */
-  eventsProcessed: z.number(),
-  /** Last event type (e.g., 'content_block_delta') */
-  lastEventType: z.string().nullable(),
-  /** Block types seen during streaming */
-  blockTypesSeen: z.instanceof(Set<string>),
-  /** Timestamp when streaming started */
-  startTime: z.number(),
-  /** Timestamp of last event received */
-  lastEventTime: z.number(),
-});
-
-type StreamDiagnosticsState = z.infer<typeof StreamDiagnosticsStateSchema>;
+interface StreamDiagnosticsState
+  extends Omit<
+    StreamDiagnostics,
+    'blockTypesSeen' | 'elapsedSecs' | 'secsSinceLastEvent' | 'finalized'
+  > {
+  /** Block types seen during streaming (converted to array in getDiagnostics) */
+  blockTypesSeen: Set<string>;
+  /** Timestamp when streaming started (converted to elapsedSecs) */
+  startTime: number;
+  /** Timestamp of last event received (converted to secsSinceLastEvent) */
+  lastEventTime: number;
+}
 
 /**
  * Configuration for the stream handler.
@@ -130,6 +122,10 @@ export class AnthropicStreamHandler {
     lastEventType: null,
     startTime: Date.now(),
     lastEventTime: Date.now(),
+    messageStartReceived: false,
+    messageStopReceived: false,
+    stopReason: null,
+    anthropicMessageId: null,
   };
 
   constructor(
@@ -172,6 +168,10 @@ export class AnthropicStreamHandler {
         (now - this.diagnostics.lastEventTime) / 1000,
       ),
       finalized: this.state.finalized,
+      messageStartReceived: this.diagnostics.messageStartReceived,
+      messageStopReceived: this.diagnostics.messageStopReceived,
+      stopReason: this.diagnostics.stopReason,
+      anthropicMessageId: this.diagnostics.anthropicMessageId,
     };
   }
 
@@ -213,6 +213,18 @@ export class AnthropicStreamHandler {
     this.diagnostics.lastEventTime = Date.now();
 
     switch (event.type) {
+      case 'message_start':
+        this.diagnostics.messageStartReceived = true;
+        this.diagnostics.anthropicMessageId =
+          (event.message as { id?: string })?.id ?? null;
+        break;
+      case 'message_delta':
+        this.diagnostics.stopReason =
+          (event.delta as { stop_reason?: string | null })?.stop_reason ?? null;
+        break;
+      case 'message_stop':
+        this.diagnostics.messageStopReceived = true;
+        break;
       case 'content_block_start':
         this.handleBlockStart(event);
         break;
