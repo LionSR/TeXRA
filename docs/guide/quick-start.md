@@ -1,15 +1,16 @@
 # Quick Start Guide
 
-This guide will help you get up and running with TeXRA quickly. In just a few minutes, you'll be able to use AI to enhance your academic research in VS Code.
+You have a paper draft and a deadline. Let's get TeXRA working for you in under five minutes.
 
 ## Overview
 
-TeXRA integrates powerful AI capabilities directly into your writing workflow. Here's what you can do:
+TeXRA sits inside VS Code and helps you polish writing, fix errors, create figures, and transform documents—without leaving your editor. Here's the short version:
 
-- Fix grammar and typos in academic documents
-- Improve writing style and clarity
-- Create or enhance technical figures
-- Transform papers into different formats (lecture notes, slides, posters)
+1. Select your file
+2. Pick an agent and model
+3. Write a short instruction
+4. Click Execute
+5. Review the diff
 
 > 💡 **Tip:** Inside VS Code you can open the **Run your first TeXRA workflow** walkthrough from the Get Started page (or by running `TeXRA: Open Getting Started Walkthrough`). It mirrors this guide step-by-step and links directly to the relevant commands.
 
