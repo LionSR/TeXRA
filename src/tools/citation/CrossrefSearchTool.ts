@@ -1,6 +1,5 @@
 // Third-party imports
 import {
-  CrossrefClient,
   SortOrder,
   type QueryWorksParams,
   type Work,
@@ -14,7 +13,7 @@ import { pluralize, requireNonEmptyString, wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
 // Local file imports
-import { CROSSREF_CONSTANTS } from './constants';
+import { CROSSREF_CONSTANTS, crossrefClient } from './constants';
 import { waitForRateLimit } from './rateLimiter';
 
 const CrossrefSearchInputSchema = z.strictObject({
@@ -34,8 +33,6 @@ const CrossrefSearchInputSchema = z.strictObject({
 });
 
 export type CrossrefSearchInput = z.infer<typeof CrossrefSearchInputSchema>;
-
-const crossrefClient = new CrossrefClient();
 
 /**
  * Extended QueryWorksParams to include filter field.
