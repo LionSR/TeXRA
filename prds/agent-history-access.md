@@ -60,8 +60,8 @@ No `command` parameter - it's always "view" (read-only).
 
 ## Path Semantics
 
-| Path                      | Source                               | Returns                                    |
-| ------------------------- | ------------------------------------ | ------------------------------------------ |
+| Path                            | Source                               | Returns                                    |
+| ------------------------------- | ------------------------------------ | ------------------------------------------ |
 | `/executions`                   | `AgentHistoryManager.getHistory()`   | List: id, timestamp, agent, model, summary |
 | `/executions/{id}`              | `AgentHistoryManager`                | Summary + navigation hints                 |
 | `/executions/{id}/config`       | `AgentHistoryManager`                | `AgentConfig` as JSON                      |
@@ -92,8 +92,8 @@ The tool reads from existing storage - no refactoring required:
 
 Both agent types store accumulated messages in `shared.conversation[]`. The tool does not expose workflow-specific internals (rounds, per-round state) - these are implementation details.
 
-| Agent Type | `conversation[]`          | Rounds   | Exposed?                        |
-| ---------- | ------------------------- | -------- | ------------------------------- |
+| Agent Type | `conversation[]`          | Rounds   | Exposed?                              |
+| ---------- | ------------------------- | -------- | ------------------------------------- |
 | Tool-use   | All messages              | N/A      | ✅ via `/executions/{id}`             |
 | Workflow   | Accumulated across rounds | Internal | ✅ via `/executions/{id}` (flattened) |
 
@@ -176,7 +176,8 @@ import { getPathSegments } from '@utils/core/pathCore';
 const segments = getPathSegments(input.path);
 const [namespace, id, resource, ...rest] = segments;
 
-if (namespace !== 'executions') throw new ToolError('Path must start with /executions');
+if (namespace !== 'executions')
+  throw new ToolError('Path must start with /executions');
 if (!id) return this.listExecutions();
 if (!resource) return this.showSummary(id);
 if (resource === 'config') return this.showConfig(id);

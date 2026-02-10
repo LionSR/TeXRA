@@ -105,7 +105,9 @@ Use view_range: [start, end] to paginate large outputs.`,
     const [namespace, id, resource, ...rest] = segments;
 
     if (namespace !== 'executions') {
-      throw new ToolError(`Path must start with /executions. Got: ${input.path}`);
+      throw new ToolError(
+        `Path must start with /executions. Got: ${input.path}`,
+      );
     }
 
     // /executions - list all executions
@@ -219,7 +221,9 @@ Use view_range: [start, end] to paginate large outputs.`,
 
     lines.push('');
     lines.push('Available paths:');
-    lines.push(`  /executions/${executionId}/config - Agent configuration (JSON)`);
+    lines.push(
+      `  /executions/${executionId}/config - Agent configuration (JSON)`,
+    );
     lines.push(`  /executions/${executionId}/conversation - Message history`);
     lines.push(`  /executions/${executionId}/files - Generated files`);
 
