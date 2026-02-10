@@ -25,13 +25,6 @@ prompts:
     - Cite relevant key papers using commands like \cite{Author2020Title} (e.g., \cite{Smith2020Analysis}) which include the author, year, and first word of the paper title
     - Output a complete, self-contained LaTeX file that can be compiled directly
 
-    When the presentation includes multiple TikZ or pgfplots figures:
-    - Define common styles (line styles, marker styles, color definitions, cycle lists) in the preamble using \pgfplotsset{}, \tikzset{}, or \newcommand{} rather than repeating them in each figure
-    - Use pgfplots cycle lists or style definitions for consistent line/marker/color schemes across all plots
-    - Define shared color palettes with \definecolor{} or \colorlet{} in the preamble
-    - Use named styles (e.g., \tikzset{my plot/.style={...}}) so figures reference a single definition
-    - This consolidation ensures visual consistency and makes it easy to update the appearance of all figures from one place
-
   userPrefix: |
     You are tasked with creating a LaTeX Beamer presentation based on the following research paper:
 
