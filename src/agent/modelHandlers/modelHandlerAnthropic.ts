@@ -344,15 +344,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
       !contextManagementEdits.some((edit) => edit.type === 'compact_20260112')
     ) {
       this.ensureBeta(options, COMPACTION_BETA);
-      // When manually requested, set trigger to 1 to compact on any conversation.
-      // MIN_COMPACTION_TRIGGER_TOKENS is an app-level floor for automatic compaction;
-      // the API itself accepts any positive integer as a trigger value.
-      const compactionTriggerTokens = forceCompaction
-        ? 1
-        : Math.max(
-            MIN_COMPACTION_TRIGGER_TOKENS,
-            Math.floor((thresholdPercent / 100) * contextWindow),
-          );
+      // Anthropic currently enforces a minimum 50K input-token trigger.
+      // Keep manual compaction compatible by using the same floor.
+      const compactionTriggerTokens = Math.max(
+        MIN_COMPACTION_TRIGGER_TOKENS,
+        forceCompaction
+          ? MIN_COMPACTION_TRIGGER_TOKENS
+          : Math.floor((thresholdPercent / 100) * contextWindow),
+      );
 
       contextManagementEdits.push({
         type: 'compact_20260112',
