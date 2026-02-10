@@ -84,7 +84,7 @@ But `runToolUseFlow()` discards both — it returns only `{ status }`.
 1. **Run the flow** — resolve agent, build context, execute, get result
 2. **Manage UI lifecycle** — acquire stream lock, show notifications, display errors, set stream status
 
-These are tangled together. The command layer (UI buttons, commands) needs #2. The tool layer (subagent proposals) needs #1. Today both callers go through the same function, so the tool layer gets the UI lifecycle it doesn't need and loses the result it does need.
+These are tangled together. The command layer (UI buttons, commands) needs #2. The tool layer (subagent delegation) needs #1. Today both callers go through the same function, so the tool layer gets the UI lifecycle it doesn't need and loses the result it does need.
 
 ---
 
@@ -237,7 +237,7 @@ export async function executeAgent(
 }
 ```
 
-### Step 4: Update the proposal tools
+### Step 4: Update the delegation tools
 
 ```typescript
 // WorkflowTool.ts — the key change
@@ -361,11 +361,11 @@ Default is `sync` because it's the simplest and most useful. The model can choos
 
 ### Impact
 
-With `sync` mode, if the model emits `[propose_workflow(A), propose_workflow(B)]` in one response, they serialize: A runs to completion, then B starts. Total time = A + B.
+With `sync` mode, if the model emits `[delegate_workflow(A), delegate_workflow(B)]` in one response, they serialize: A runs to completion, then B starts. Total time = A + B.
 
 With `async` mode, both launch instantly (non-blocking). The model later emits `[await_subagent(id-1), await_subagent(id-2)]`. Even under sequential `BatchNode`, the second await resolves near-instantly because both subagents ran concurrently.
 
-**Switching to `ParallelBatchNode`** would let sync-mode calls run concurrently too. But that affects ALL tools, not just subagent proposals. Some tools have ordering dependencies.
+**Switching to `ParallelBatchNode`** would let sync-mode calls run concurrently too. But that affects ALL tools, not just subagent delegation. Some tools have ordering dependencies.
 
 ### Pragmatic fix
 
@@ -455,15 +455,15 @@ So results are NOT lost — they persist in the queue until the session resumes 
 
 ## Nesting Constraint: No Orchestrator-Launches-Orchestrator
 
-An orchestrator is an agent that has proposal tools (`propose_workflow`, `propose_agent`). Agents launched via those proposal tools **never** receive proposal tools — they are workers, not orchestrators. One level of delegation, no recursion.
+An orchestrator is an agent that has delegation tools (`delegate_workflow`, `delegate_agent`). Agents launched via those delegation tools **never** receive delegation tools — they are workers, not orchestrators. One level of delegation, no recursion.
 
 **Why**: Nesting adds cascading lifecycle complexity (cascading cancellation, recursive depth tracking, multi-level result routing) for no demonstrated use case. The orchestrator dispatches work; the workers do work and return results. If a task needs further decomposition, the orchestrator handles it in its next turn after collecting the subagent's output.
 
-**Enforcement**: `resolveTools()` in `ToolUseFlowContext.ts` is where agent tool lists are resolved from YAML config against the registry. When called for a subagent, filter out proposal tools before they reach the flow:
+**Enforcement**: `resolveTools()` in `ToolUseFlowContext.ts` is where agent tool lists are resolved from YAML config against the registry. When called for a subagent, filter out delegation tools before they reach the flow:
 
 ```typescript
 // In resolveTools() — add isSubagent parameter:
-const PROPOSAL_TOOLS = new Set(['propose_workflow', 'propose_agent']);
+const DELEGATION_TOOLS = new Set(['delegate_workflow', 'delegate_agent']);
 
 export function resolveTools(
   tools: AgentToolUseSetting['tools'],
@@ -476,7 +476,7 @@ export function resolveTools(
   const resolved = toolConfigs
     .map((config) => (typeof config === 'string' ? { name: config } : config))
     .filter((def) => {
-      if (options?.isSubagent && PROPOSAL_TOOLS.has(def.name)) return false;
+      if (options?.isSubagent && DELEGATION_TOOLS.has(def.name)) return false;
       if (!registry.has(def.name)) {
         logger.warn(`Tool "${def.name}" not found in registry`);
         return false;
@@ -489,7 +489,7 @@ export function resolveTools(
 }
 ```
 
-The call site in `WorkflowTool.ts` passes `{ isSubagent: true }` through to the flow setup. The subagent simply never sees proposal tools. No depth counter, no configuration flag, no exceptions.
+The call site in `WorkflowTool.ts` passes `{ isSubagent: true }` through to the flow setup. The subagent simply never sees delegation tools. No depth counter, no configuration flag, no exceptions.
 
 ---
 
@@ -502,7 +502,7 @@ Not for some future dream feature. It's needed NOW for:
 1. **Result routing** (Mode C): which orchestrator does the subagent deliver to?
 2. **Queue lifetime**: don't dispose the orchestrator's queue while subagents are running
 3. **Cascading cancellation**: stopping the orchestrator should stop its subagents
-4. **Nesting enforcement**: reject proposal tools if calling agent is already a subagent
+4. **Nesting enforcement**: reject delegation tools if calling agent is already a subagent
 
 ### Minimal implementation
 
@@ -602,7 +602,7 @@ Total new infrastructure: ~95 lines of code. One type file, one lineage file, mi
 
 ## Decisions Made
 
-1. **No orchestrator-launches-orchestrator**: Proposal tools (`propose_workflow`, `propose_agent`) are filtered out in `resolveTools()` when `isSubagent` is true. Workers work, orchestrators orchestrate.
+1. **No orchestrator-launches-orchestrator**: Delegation tools (`delegate_workflow`, `delegate_agent`) are filtered out in `resolveTools()` when `isSubagent` is true. Workers work, orchestrators orchestrate.
 
 2. **Workflow output = file artifacts**: `OutputFileSummary[]` (paths + diffs), not raw model response text. Projection of `OutputFileInfo`.
 
