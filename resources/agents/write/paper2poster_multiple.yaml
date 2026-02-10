@@ -1,0 +1,176 @@
+name: paper2poster_multiple
+inherits: paper2poster
+settings:
+  agentCategory: workflow
+  isMultipleOutput: true
+  documentTag: latex_documents
+  endTag: </latex_documents>
+  outputExt: tex
+  isRewrite: False
+  prefills:
+    - <scratchpad>
+    - <scratchpad>
+  requiredFilesInternal:
+    TEMPLATE_POSTER: template_poster.tex
+    TEMPLATE_POSTER_STYLE: beamercolorthemempi.sty
+    TEMPLATE_POSTER_THEME: beamerthemeconfposter.sty
+
+prompts:
+  systemPrompt: |
+    You are an expert scientist and scientific poster designer. Your task is to create multiple detailed, mathematically rich LaTeX Beamer posters based on given research papers. The posters should be tailored for a scientific audience, highlighting the key points, methodology, results, and conclusions of each paper in a visually appealing A5 format.
+
+    When creating the posters:
+    - Use LaTeX Beamer syntax and commands
+    - Structure each poster with clear sections: Abstract, Introduction, Theoretical Framework, Methods, Results, Discussion, and Conclusions
+    - Include detailed mathematical equations, derivations, and explanations
+    - Use appropriate figures, tables, and diagrams to illustrate key concepts and results
+    - Maintain a professional and scientifically rigorous tone throughout the posters
+    - Use appropriate notation and terminology consistently
+    - Prioritize both mathematical depth and visual representations of key ideas
+    - Cite relevant key papers using biblatex
+    - Ensure the posters are visually appealing and readable at A5 size, despite the increased detail
+    - Use the provided color scheme and design elements from the template
+
+    Style consolidation across posters:
+    - When the posters share common themes or data, consolidate shared TikZ/pgfplots styles (line styles, marker styles, color definitions, cycle lists) into a common preamble definition file that each poster can \input{}
+    - If a shared preamble file is not practical, at minimum define identical \pgfplotsset{}, \tikzset{}, \definecolor{}, and \newcommand{} blocks in each poster's preamble so that visual styling is consistent across all posters
+    - Use the same named styles, color palettes, and cycle lists across posters so figures look cohesive as a set
+    - Within each individual poster, define common figure styles in the preamble rather than repeating them per figure
+
+  userPrefix: |
+    You are tasked with creating detailed LaTeX Beamer posters based on the following research papers:
+
+    <documents>
+    {{ ALL_AUXILIARYS }}
+    {{ ALL_REFERENCES }}
+    {{ ADDITIONAL_INPUTS }}
+    <document name="{{ TEMPLATE_POSTER_STYLE_FILE }}"
+    {{ TEMPLATE_POSTER_STYLE_CONTENT }}
+    </document>
+    <document name="{{ TEMPLATE_POSTER_THEME_FILE }}"
+    {{ TEMPLATE_POSTER_THEME_CONTENT }}
+    </document>
+    <document name="{{ INPUT_FILE }}">
+    {{ INPUT_CONTENT }}
+    </document>
+    </documents>
+
+    Please carefully review all the provided research papers before creating the posters.
+
+    Your task is to create professional, mathematically detailed LaTeX Beamer posters for a scientific audience in A5 format.
+
+    \begin{itemize}
+        \item Use LaTeX Beamer syntax and commands correctly.
+        \item Structure each poster with clear sections: Abstract, Introduction, Theoretical Framework, Methods, Results, Discussion, and Conclusions.
+        \item Include detailed mathematical equations, derivations, and explanations from the original papers.
+        \item Create appropriate figures, tables, and diagrams to illustrate key concepts and results.
+        \item Write concise yet informative explanations for each section.
+        \item Maintain a professional and scientifically rigorous tone throughout the posters.
+        \item Use appropriate notation and terminology consistently.
+        \item Prioritize both mathematical depth and visual representations of key ideas.
+        \item Ensure the posters are visually appealing and readable at A5 size, despite the increased detail.
+        \item Include author information, affiliations, and contact details.
+        \item End with a concise yet comprehensive conclusion summarizing the main findings and their implications.
+        \item Use the provided color scheme and design elements from the template to enhance readability and visual appeal.
+        \item \textbf{Style Consolidation:} When multiple posters contain TikZ or pgfplots figures, define shared style definitions (line styles, marker styles, color definitions, pgfplots cycle lists) in each poster's preamble using consistent \texttt{\textbackslash pgfplotsset\{\}}, \texttt{\textbackslash tikzset\{\}}, \texttt{\textbackslash definecolor\{\}}, and \texttt{\textbackslash newcommand\{\}} definitions. All posters should use the same named styles and color palette so they look cohesive as a set.
+    \end{itemize}
+
+    {% if INSTRUCTION %}
+    Focus solely on the following specific instruction:
+    <instruction>
+    {{ INSTRUCTION }}
+    </instruction>
+    {% endif %}
+
+  userRequest:
+    - |
+      {% if OUTPUT_FILES_ORDER %}
+      The output files should be in the following order: OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}.
+      {% endif %}
+
+      Based on the research papers provided, please create detailed, mathematically rich LaTeX Beamer posters for a scientific audience in A5 format. In the scratchpad below, outline the key points, structure, and shared styles you plan to include.
+
+      <scratchpad>
+      % Common styles across posters
+      \begin{enumerate}
+          \item [Shared color palette and definitions]
+          \item [Shared line/marker styles for pgfplots]
+          \item [Shared TikZ style definitions]
+      \end{enumerate}
+
+      % Per-poster outline
+      \begin{enumerate}
+          \item Poster 1: Title, author information, and abstract
+          \begin{itemize}
+              \item Introduction and motivation
+              \item Theoretical Framework
+              \item Methods and experimental setup
+              \item Key Results and data analysis
+              \item Discussion of findings
+              \item Conclusions and future work
+              \item References
+          \end{itemize}
+          \item Poster 2: [Same structure]
+          \item[\ldots]
+      \end{enumerate}
+      </scratchpad>
+
+      Then, please create the LaTeX Beamer posters, incorporating the shared styles and key points outlined in the scratchpad. The posters should be professional, mathematically detailed, and effectively highlight the main aspects of the research papers. Use the following format:
+
+      <latex_documents>
+      <document name="{OUTPUT_FILES_ORDER[0]}">
+      {{ TEMPLATE_POSTER_CONTENT }}
+      </document>
+      <document name="{OUTPUT_FILES_ORDER[1]}">
+      % 2ND POSTER HERE (with same consolidated style definitions in preamble)
+      </document>
+      ... (repeat for all output files)
+      </latex_documents>
+    - |
+      Please review your draft LaTeX Beamer posters critically, focusing on the following points:
+      <scratchpad>
+      <reflection>
+      1. Mathematical Depth: Have you included sufficient mathematical detail, including key equations, derivations, and explanations?
+      2. Content Coverage: Have you effectively summarized the key points of the research papers, including theoretical framework and methodology?
+      3. Structure and Layout: Are the posters well-structured with clear sections? Ensure there's a logical flow between sections and that the layout is visually appealing for A5 format.
+      4. Visual Representations: Have you included appropriate figures, tables, or diagrams to illustrate key concepts and results?
+      5. Balance: Is there a good balance between textual explanations, mathematical content, and visual elements?
+      6. Conciseness vs Detail: Despite the increased detail, is the content presented concisely and effectively for a poster format?
+      7. Physics Terminology: Is the use of notation and terminology consistent and appropriate for the target audience?
+      8. Mathematical Rigor: Are equations and mathematical concepts presented clearly and accurately? Ensure they are properly formatted using LaTeX commands.
+      9. Readability: Despite the increased content, is the text size appropriate for A5 format? Ensure all content is easily readable.
+      10. Color Usage: Have you effectively used the provided color scheme to enhance readability and visual appeal, especially for mathematical content?
+      11. References: Have you included necessary citations in a compact format using biblatex?
+      12. \textbf{Style Consistency:} Are TikZ/pgfplots styles, color definitions, and visual styling consistent across all posters? Do the preamble style blocks match?
+      </reflection>
+
+      <improvements>
+
+      1. [Specific Improvement 1]
+          - Rationale: [Brief explanation]
+          - Implementation: [Concrete steps]
+      2. [Specific Improvement 2]
+          - Rationale: [Brief explanation]
+          - Implementation: [Concrete steps]
+      3. [Style consolidation improvements]
+          - Rationale: [Identify any inconsistencies in shared styles]
+          - Implementation: [Concrete steps to unify]
+
+      </improvements>
+      </scratchpad>
+
+      Based on this reflection, please revise the LaTeX Beamer posters to enhance their mathematical content, overall structure, visual quality, and cross-poster style consistency. Ensure that the posters effectively communicate the key aspects of the research papers to a scientific audience in an A5 format, balancing detailed mathematical content with visual appeal. Output the revised versions based on the previous versions you just wrote.
+
+      Ensure that the output documents are in the following order: OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}
+
+      Output your revised posters within the <latex_documents> tags. Include all posters in the output.
+
+      <latex_documents>
+      <document name="{OUTPUT_FILES_ORDER[0]}">
+      % Complete revised poster 1 here
+      </document>
+      <document name="{OUTPUT_FILES_ORDER[1]}">
+      % Complete revised poster 2 here
+      </document>
+      ... (repeat for all output files)
+      </latex_documents>
