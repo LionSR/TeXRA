@@ -9,6 +9,8 @@ export interface ToolFileInteractionContext {
   streamId?: StreamTabId;
   executionId?: ExecutionId;
   toolCallId?: string;
+  /** Model short name of the parent agent (e.g. "opus46", "sonnet45"). */
+  model?: string;
   tracker: FileInteractionState;
   /** Todo state for managing task lists. Optional for backward compatibility. */
   todoState?: TodoState;
