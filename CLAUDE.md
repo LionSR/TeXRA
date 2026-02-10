@@ -267,7 +267,7 @@ Common aliases (full list in `tsconfig.json`):
 
 1. Create file in appropriate `src/commands/` subdirectory
 2. Export command function following existing patterns
-3. Register in `src/commands/index.ts`
+3. Register in `src/commands.ts`
 
 ### New Agent
 
@@ -277,8 +277,7 @@ Common aliases (full list in `tsconfig.json`):
 ### New Model Provider
 
 1. Create handler in `src/agent/modelHandlers/`
-2. Add provider config in `src/model/providers/`
-3. Register in `src/model/ModelRegistry.ts`
+2. Register capabilities and pricing in `src/model/computeModelOptions.ts`
 
 ## Release Process
 
