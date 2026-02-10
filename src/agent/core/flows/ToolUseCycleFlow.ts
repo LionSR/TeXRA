@@ -642,6 +642,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
           streamId: options.logger.streamId,
           executionId: options.executionId,
           toolCallId: call.callId,
+          model: options.modelName ?? options.config.model,
           onExecutionReady,
           onToolOutput,
         },

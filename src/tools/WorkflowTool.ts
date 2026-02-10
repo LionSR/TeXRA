@@ -34,17 +34,24 @@ import {
   type ProposalResult,
 } from '@agent/runtime/AgentProposalCoordinator';
 import { registerSubagent } from '@agent/runtime/subagentLineage';
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import {
+  getCurrentToolFileInteractionContext,
+  type ToolFileInteractionContext,
+} from '@agent/toolUse/ToolFileInteractionContext';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
 
 // Local imports - model
-import { resolveVisibleModel } from '@model/computeModelOptions';
+import { getVisibleModels, resolveVisibleModel } from '@model/computeModelOptions';
 
 // Local imports - tools
 import { ToolResult } from '@tools/result';
+import {
+  isSuperYoloFeatureEnabled,
+  isProposalBypassedForStream,
+} from '@tools/approval';
 import {
   formatSubagentDelivery,
   formatSubagentError,
@@ -61,15 +68,17 @@ import { WorkspaceFS } from '@utils/files';
 const LOG_CHANNEL = 'WorkflowTool';
 logger.initialize(LOG_CHANNEL);
 
-/** Get streamId from context, throwing if unavailable. */
-function getRequiredStreamId(): StreamTabId {
-  const streamId = getCurrentToolFileInteractionContext()?.streamId;
-  if (!streamId) {
+/** Get required context fields, throwing if unavailable. */
+function getRequiredContext(): ToolFileInteractionContext & {
+  streamId: StreamTabId;
+} {
+  const ctx = getCurrentToolFileInteractionContext();
+  if (!ctx?.streamId) {
     throw new Error(
       'Tool context unavailable. Cannot create proposal without active stream.',
     );
   }
-  return streamId;
+  return ctx as ToolFileInteractionContext & { streamId: StreamTabId };
 }
 
 /** Build config payload from a proposal. */
@@ -198,9 +207,9 @@ const WorkflowAgentInputSchema = z.object({
   agent: z.string().describe('Name of the workflow agent to execute'),
   model: z
     .string()
-    .prefault('gemini3p')
+    .optional()
     .describe(
-      'Model short name (e.g., gemini3p, sonnet45, opus46, gpt45, o3). User can change via dropdown.',
+      'Model short name (e.g., opus46T, sonnet45T, gpt52, gemini3p). Defaults to the current model if omitted. User can change via dropdown.',
     ),
   instruction: z.string().describe('Plain prose instruction for the agent'),
   inputFile: z.string().describe('Primary input file to process (required)'),
@@ -264,6 +273,9 @@ export class WorkflowAgentTool extends defineTool({
 Available agents:
 ${formatAgentList(getVisibleWorkflowAgents())}
 
+Available models: ${getVisibleModels().join(', ')}
+Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
+
 Example: agent=correct, inputFile=paper.tex, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
   schema: WorkflowAgentInputSchema,
 }) {
@@ -285,8 +297,10 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       );
     }
 
-    // Resolve model to a visible model (falls back to first visible if needed)
-    const model = resolveVisibleModel(input.model);
+    const ctx = getRequiredContext();
+
+    // Resolve model: explicit input → parent model → first visible model
+    const model = resolveVisibleModel(input.model ?? ctx.model ?? '');
 
     // Validate inputFile is provided
     if (!input.inputFile) {
@@ -350,7 +364,16 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       useMultipleOutputs: input.useMultipleOutputs,
     } satisfies WorkflowAgentProposal);
 
-    const streamId = getRequiredStreamId();
+    const streamId = ctx.streamId;
+
+    // Super YOLO: skip proposal when feature enabled AND stream bypassed
+    if (
+      isSuperYoloFeatureEnabled() &&
+      isProposalBypassedForStream(streamId)
+    ) {
+      return executeSubagent(toConfigPayload(proposal), input.agent, streamId);
+    }
+
     const proposalId = randomUUID();
 
     const result = await proposalCoordinator.waitForProposal(streamId, {
@@ -382,9 +405,9 @@ const DelegateAgentInputSchema = z.object({
   agent: z.string().describe('Name of the tool-use agent to delegate to'),
   model: z
     .string()
-    .prefault('gemini3p')
+    .optional()
     .describe(
-      'Model short name (e.g., gemini3p, sonnet45, opus46, gpt45, o3). User can change via dropdown.',
+      'Model short name (e.g., opus46T, sonnet45T, gpt52, gemini3p). Defaults to the current model if omitted. User can change via dropdown.',
     ),
   instruction: z
     .string()
@@ -401,6 +424,9 @@ export class DelegateAgentTool extends defineTool({
 
 Available agents:
 ${formatAgentList(getVisibleToolUseAgents())}
+
+Available models: ${getVisibleModels().join(', ')}
+Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
 Example: agent=search, instruction="The paper at paper.tex proposes a new attention mechanism called FlashAttention-3 that reduces memory complexity from quadratic to linear. Please search the web for three to five related papers on efficient transformer attention mechanisms, particularly those addressing memory efficiency or linear attention, that we should cite in the related work section."`,
   schema: DelegateAgentInputSchema,
@@ -423,8 +449,10 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
       );
     }
 
-    // Resolve model to a visible model (falls back to first visible if needed)
-    const model = resolveVisibleModel(input.model);
+    const ctx = getRequiredContext();
+
+    // Resolve model: explicit input → parent model → first visible model
+    const model = resolveVisibleModel(input.model ?? ctx.model ?? '');
 
     // Construct tool-use proposal (no file fields)
     const proposal = ToolUseAgentProposalSchema.parse({
@@ -435,7 +463,16 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
       mode: 'async',
     } satisfies ToolUseAgentProposal);
 
-    const streamId = getRequiredStreamId();
+    const streamId = ctx.streamId;
+
+    // Super YOLO: skip proposal when feature enabled AND stream bypassed
+    if (
+      isSuperYoloFeatureEnabled() &&
+      isProposalBypassedForStream(streamId)
+    ) {
+      return executeSubagent(toConfigPayload(proposal), input.agent, streamId);
+    }
+
     const proposalId = randomUUID();
 
     const result = await proposalCoordinator.waitForProposal(streamId, {
