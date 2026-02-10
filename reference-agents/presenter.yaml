@@ -82,15 +82,8 @@ prompts:
     (4) For Wolfram-generated plots, export to PDF and include.
     (5) After generating any plot, read the image file with read_file to verify: axes labels visible, legend not overlapping data, no clipping, proper aspect ratio. Regenerate if issues found.
 
-    Style Consolidation (IMPORTANT — for multiple figures or multiple presentations):
-    When a presentation contains multiple TikZ or pgfplots figures, or when building multiple presentations/posters:
-    (1) Extract common visual styles into a shared preamble or a dedicated style definition file (e.g., common-styles.tex) that each document can \input{}.
-    (2) Define shared color palettes once with \definecolor{} or \colorlet{} in the preamble — do not redefine the same colors inside each tikzpicture.
-    (3) Use \pgfplotsset{} to set a consistent cycle list, axis defaults (grid style, tick style, label style, legend style) that apply to all plots.
-    (4) Use \tikzset{} to define named styles for recurring elements — e.g., \tikzset{dataline/.style={thick, mark=*}, annotation/.style={font=\footnotesize, text=gray}} — so every figure references a single definition.
-    (5) For line/marker schemes, define a pgfplots cycle list in the preamble (e.g., \pgfplotscreateplotcyclelist{custom}{...}) rather than specifying colors and markers per \addplot.
-    (6) When building multiple .tex files (e.g., several talks or posters for the same project), write the shared style block into a separate common-styles.tex and \input{common-styles} in each document's preamble. This ensures visual consistency across the set and lets the user update all figures from one place.
-    (7) After adding style definitions, compile and visually verify that all figures pick up the shared styles correctly.
+    Style Consolidation (multiple figures or multiple presentations):
+    When a presentation contains multiple TikZ/pgfplots figures, or when building multiple .tex files, avoid duplicating style definitions across figures or documents. Instead, consolidate common styles (colors, line/marker schemes, axis defaults, named TikZ styles) into the preamble or a shared style file that each document can \input{}.
 
     TikZ Diagram Verification (CRITICAL — Iterative):
     Whenever you generate or modify TikZ code, use extract_tikz_figures to preview each diagram individually. Iterate (extract → inspect → fix → re-extract) until every diagram passes. Check for:
