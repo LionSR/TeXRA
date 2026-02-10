@@ -74,6 +74,14 @@ export const CHAINED_RESPONSE_SAFETY_MARGIN_PERCENT = 5;
 export const MAX_TOOL_RESULT_TEXT_LENGTH = 200_000;
 
 /**
+ * Maximum number of PDF pages allowed per Anthropic API request.
+ * The API returns HTTP 400 with "A maximum of 100 PDF pages may be provided"
+ * when this limit is exceeded. We validate client-side to surface a friendlier
+ * error message before the request is sent.
+ */
+export const ANTHROPIC_MAX_PDF_PAGES = 100;
+
+/**
  * Compute reduced max tokens when context pressure requires adjustment.
  * Ensures minimum completion tokens while respecting available space.
  *

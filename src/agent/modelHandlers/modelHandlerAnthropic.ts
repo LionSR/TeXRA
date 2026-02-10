@@ -8,6 +8,7 @@ import {
   APIUserAbortError as AnthropicUserAbortError,
   toFile,
 } from '@anthropic-ai/sdk';
+import { PDFDocument } from '@cantoo/pdf-lib';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -50,6 +51,7 @@ import { objectToLogString } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
+  ANTHROPIC_MAX_PDF_PAGES,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
   TOOL_USE_SAFETY_BUFFER,
 } from './contextManagementConstants';
@@ -252,6 +254,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   /** Flag to force compaction on the next API call, set by requestCompaction(). */
   private compactionRequested = false;
+
+  /** Tracks PDF page counts for files uploaded to the Anthropic Files API. */
+  private uploadedPdfPageCounts = new Map<string, number>();
 
   private isClaudeOpus46(): boolean {
     return this.config.fullName === OPUS_46_FULLNAME;
@@ -508,6 +513,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     const documentAnalysis = this.analyzeDocumentSources(messages);
     let hasFileReference = documentAnalysis.hasFileSource;
+
+    // Validate PDF page limit before expensive token counting and uploads
+    if (documentAnalysis.hasBase64Pdf || documentAnalysis.hasFileSource) {
+      await this.validatePdfPageLimit(messages);
+    }
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const options: MessageCreateParams = {
@@ -948,6 +958,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
         try {
           buffer = Buffer.from(base64Data, 'base64');
+
+          // Count pages before upload so we can track them for future validation
+          const pageCount = await this.countPdfPagesFromBuffer(buffer);
+
           const uploadedFile = await client.beta.files.upload({
             file: await toFile(buffer!, sanitizedFilename, {
               type: mediaType,
@@ -959,6 +973,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
             type: 'file',
             file_id: uploadedFile.id,
           } as BetaRequestDocumentBlock['source'];
+
+          // Track page count so validatePdfPageLimit can account for
+          // this file reference in subsequent rounds
+          if (pageCount > 0) {
+            this.uploadedPdfPageCounts.set(uploadedFile.id, pageCount);
+          }
         } finally {
           if (buffer) {
             buffer.fill(0);
@@ -1016,6 +1036,109 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     return { hasFileSource, hasBase64Pdf };
+  }
+
+  /**
+   * Count pages in a PDF buffer without writing to disk.
+   * Returns 0 on parse failure so the API can enforce the limit as fallback.
+   */
+  private async countPdfPagesFromBuffer(buffer: Buffer): Promise<number> {
+    try {
+      const pdfDoc = await PDFDocument.load(buffer, {
+        updateMetadata: false,
+        ignoreEncryption: true,
+      });
+      return pdfDoc.getPageCount();
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Validates that the total number of PDF pages across all messages does not
+   * exceed the Anthropic API limit. Throws a user-friendly error when the
+   * limit is reached, avoiding the raw HTTP 400 from the API.
+   *
+   * Only messages at or after the last compaction block are counted, because
+   * the Anthropic API drops pre-compaction messages server-side.
+   */
+  private async validatePdfPageLimit(
+    messages: MessageParam[],
+  ): Promise<void> {
+    const startIndex = this.findLastCompactionMessageIndex(messages);
+    let totalPages = 0;
+
+    for (let i = startIndex; i < messages.length; i++) {
+      const message = messages[i];
+      const contentBlocks = message.content;
+      if (!Array.isArray(contentBlocks)) {
+        continue;
+      }
+
+      for (const block of contentBlocks) {
+        if (block.type !== 'document' || !block.source) {
+          continue;
+        }
+
+        const source = block.source;
+
+        if ('file_id' in (source as { file_id?: string })) {
+          // PDF previously uploaded to the Files API — use tracked page count
+          const fileId = (source as { file_id: string }).file_id;
+          const tracked = this.uploadedPdfPageCounts.get(fileId);
+          if (tracked !== undefined) {
+            totalPages += tracked;
+          }
+        } else if (
+          source.type === 'base64' &&
+          source.media_type === 'application/pdf' &&
+          source.data
+        ) {
+          // Inline base64 PDF — decode and count pages
+          const buffer = Buffer.from(source.data, 'base64');
+          try {
+            totalPages += await this.countPdfPagesFromBuffer(buffer);
+          } finally {
+            buffer.fill(0);
+          }
+        }
+
+        if (totalPages > ANTHROPIC_MAX_PDF_PAGES) {
+          const err = new Error(
+            `PDF page limit reached: the conversation contains ${totalPages}+ PDF pages, ` +
+              `but the API allows a maximum of ${ANTHROPIC_MAX_PDF_PAGES} pages per request. ` +
+              `Please reduce the number of PDF attachments or start a new conversation.`,
+          );
+          // Attach status 400 so formatProviderHttpError classifies this as
+          // non-retryable (same as the raw API error it replaces).
+          (err as Error & { status: number }).status = 400;
+          throw err;
+        }
+      }
+    }
+  }
+
+  /**
+   * Finds the index of the last message containing a compaction block.
+   * After server-side compaction, the API drops all messages before the
+   * compaction block, so only messages from this index onwards are relevant
+   * for limit validation.
+   *
+   * Returns 0 when no compaction block is found (count all messages).
+   */
+  private findLastCompactionMessageIndex(messages: MessageParam[]): number {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const contentBlocks = messages[i].content;
+      if (!Array.isArray(contentBlocks)) {
+        continue;
+      }
+      for (const block of contentBlocks) {
+        if ((block as { type: string }).type === 'compaction') {
+          return i;
+        }
+      }
+    }
+    return 0;
   }
 
   private async uploadToolAttachments(
