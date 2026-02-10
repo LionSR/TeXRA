@@ -395,7 +395,6 @@ export class ProgressEventHandler {
    */
   private clearStreamSurface(clearInstruction: boolean): void {
     this.webviewUpdater.updateLogContent('', [], [], undefined, 'clear');
-    this.webviewUpdater.updateStatus(STREAM_STATUS.READY);
     if (clearInstruction) {
       this.webviewUpdater.updateInstruction('', null);
     }

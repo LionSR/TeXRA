@@ -265,7 +265,7 @@ export abstract class RetryableInvocationNode<
 
     if (result.action === 'retry') {
       logger.debug('Manual retry triggered');
-      StreamStatusService.set(streamId, STREAM_STATUS.RESUMING);
+      StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
       return { shouldRetry: true, userCancelled: false };
     }
 
