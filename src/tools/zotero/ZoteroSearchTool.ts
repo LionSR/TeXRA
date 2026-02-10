@@ -45,8 +45,6 @@ const BaseSearchSchema = z.strictObject({
     .nullish(),
 });
 
-type BaseSearchInput = z.infer<typeof BaseSearchSchema>;
-
 const QueryRequiredSchema = BaseSearchSchema.extend({
   query: z.string().min(1).describe(QUERY_DESCRIPTION),
 });
@@ -76,7 +74,7 @@ export type ZoteroSearchInput = z.infer<typeof ZoteroSearchInputSchema>;
  * Build a human-readable label from whichever search parameters are set.
  */
 function describeSearch(
-  input: Pick<BaseSearchInput, 'query' | 'title' | 'author' | 'year'>,
+  input: Pick<ZoteroSearchInput, 'query' | 'title' | 'author' | 'year'>,
 ): string {
   const hasStructuredSearch = !!(input.title || input.author || input.year);
   if (hasStructuredSearch) {
