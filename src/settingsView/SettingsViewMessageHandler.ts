@@ -154,7 +154,8 @@ function entryToSelectionItem(
     description: entry.description,
     hasPath: Boolean(entry.path),
     tools: entry.tools,
-    hasMultiple: Boolean(entry.multiplePath),
+    hasMultiple: entry.isMultiple ?? Boolean(entry.multiplePath),
+    hasMultiplePath: Boolean(entry.multiplePath),
     enabled,
   };
 }
@@ -389,7 +390,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         description: entry.description ?? '',
         visibility: entry.visibility ?? ['public'],
         category: entry.category,
-        supportsMultipleOutput: Boolean(entry.multiplePath),
+        supportsMultipleOutput: entry.isMultiple ?? false,
       }),
     );
 
