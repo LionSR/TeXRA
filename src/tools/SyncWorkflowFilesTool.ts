@@ -75,10 +75,7 @@ export class SyncWorkflowFilesTool extends defineTool({
   description: `Sync workflow-generated files from run storage to the workspace.
 
 Copies selected output files from a completed workflow run into the workspace,
-replacing existing files. Use after reviewing workflow results via the runs tool.
-
-IMPORTANT: Before syncing, always review the output first — read a few lines or
-check the diff to confirm the changes are acceptable.
+replacing existing files.
 
 Parameters:
 - execution_id: The execution ID (from subagent-result or /runs)
