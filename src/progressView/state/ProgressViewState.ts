@@ -194,7 +194,10 @@ export class ProgressViewState {
   }
 
   clearStreamHints(streamTabId: StreamTabId): void {
-    this.clearSessionField(streamTabId, 'hints', {});
+    const state = this._sessionState.get(streamTabId);
+    if (state) {
+      state.hints = {};
+    }
   }
 
   setTodos(stream: StreamTabId, todos: TodoItem[]): void {
@@ -206,29 +209,12 @@ export class ProgressViewState {
     return todos?.length ? todos : undefined;
   }
 
-  clearAllTodos(): void {
-    for (const state of this._sessionState.values()) {
-      state.todos = [];
-    }
-  }
-
   setContextState(stream: StreamTabId, contextState: ContextStateData): void {
     this.getOrCreateSession(stream).contextState = contextState;
   }
 
   getContextState(stream: StreamTabId): ContextStateData | undefined {
     return this._sessionState.get(stream)?.contextState ?? undefined;
-  }
-
-  private clearSessionField<K extends keyof StreamSessionState>(
-    stream: StreamTabId,
-    field: K,
-    emptyValue: StreamSessionState[K],
-  ): void {
-    const state = this._sessionState.get(stream);
-    if (state) {
-      state[field] = emptyValue;
-    }
   }
 
   setActiveRunId(stream: StreamTabId, runId: string | null): void {
@@ -239,10 +225,6 @@ export class ProgressViewState {
 
   getActiveRunId(stream: StreamTabId): StorageKey | null {
     return this._sessionState.get(stream)?.activeRunId ?? null;
-  }
-
-  getStreamState(stream: StreamTabId): StreamState | undefined {
-    return this._streamStates.get(stream);
   }
 
   getOrCreateStreamState(
@@ -271,10 +253,6 @@ export class ProgressViewState {
 
   getAllStreamStates(): Record<StreamTabId, StreamState> {
     return Object.fromEntries(this._streamStates.entries());
-  }
-
-  clearStreamState(stream: StreamTabId): void {
-    this._streamStates.delete(stream);
   }
 
   getRunInstructions(stream: StreamTabId): Map<string, InstructionUpdate> {
@@ -341,15 +319,6 @@ export class ProgressViewState {
 
   getTaskState(streamTabId: StreamTabId): TaskState | undefined {
     return this.taskStates.get(streamTabId);
-  }
-
-  clearTaskState(streamTabId: StreamTabId): void {
-    const didDelete = this.taskStates.delete(streamTabId);
-    this.clearStreamHints(streamTabId);
-    if (didDelete) {
-      this.saveTaskStates();
-      this.cleanupToolUseAgentRegistry();
-    }
   }
 
   getRunOutputFiles(
