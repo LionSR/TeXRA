@@ -1047,14 +1047,21 @@ export class RequestPanels extends LitElement {
     if (details.streamDiagnostics) {
       const diag = details.streamDiagnostics;
       lines.push('--- Stream Diagnostics ---');
+      lines.push(`  messageStartReceived: ${diag.messageStartReceived}`);
+      lines.push(`  messageStopReceived: ${diag.messageStopReceived}`);
+      lines.push(`  stopReason: ${diag.stopReason ?? 'null'}`);
+      lines.push(`  anthropicMessageId: ${diag.anthropicMessageId ?? 'null'}`);
+      lines.push(
+        `  anthropicRequestId: ${diag.anthropicRequestId ?? 'null'}`,
+      );
+      lines.push(`  eventsProcessed: ${diag.eventsProcessed}`);
+      lines.push(`  lastEventType: ${diag.lastEventType ?? 'null'}`);
       lines.push(`  thinkingChars: ${diag.thinkingChars}`);
       lines.push(`  textChars: ${diag.textChars}`);
       lines.push(`  toolInputChars: ${diag.toolInputChars}`);
       lines.push(
         `  blockTypesSeen: [${diag.blockTypesSeen?.join(', ') || ''}]`,
       );
-      lines.push(`  eventsProcessed: ${diag.eventsProcessed}`);
-      lines.push(`  lastEventType: ${diag.lastEventType ?? 'null'}`);
       lines.push(`  elapsedSecs: ${diag.elapsedSecs}`);
       lines.push(`  secsSinceLastEvent: ${diag.secsSinceLastEvent}`);
       lines.push(`  finalized: ${diag.finalized}`);
