@@ -30,7 +30,6 @@ import {
   createInitialState,
   getStreamState,
   isToolUseState,
-  isWorkflowState,
   type ProgressState,
   type StreamState,
 } from './store';
@@ -41,45 +40,6 @@ const ProgressViewPrefsSchema = z.object({
   streamFilter: AgentCategoryFilterSchema.catch('all'),
   streamSort: StreamSortSchema.catch('time'),
 });
-
-/**
- * Check whether any non-log field changed between two StreamState snapshots.
- * During streaming, only `logs` changes — all other fields keep the same
- * reference (spread from prev). Returns false for logs-only changes so we
- * can skip the meta context update and avoid re-rendering content components.
- */
-function hasMetaChange(
-  prev: StreamState | null,
-  curr: StreamState | null,
-): boolean {
-  if (prev === curr) return false;
-  if (!prev || !curr) return true;
-  if (prev.status !== curr.status) return true;
-  if (prev.taskGroups !== curr.taskGroups) return true;
-  if (prev.contextState !== curr.contextState) return true;
-  if (prev.activeSubagents !== curr.activeSubagents) return true;
-  if (isWorkflowState(prev) && isWorkflowState(curr)) {
-    return (
-      prev.runInstructions !== curr.runInstructions ||
-      prev.runUsage !== curr.runUsage ||
-      prev.runFiles !== curr.runFiles ||
-      prev.runMissingOutputs !== curr.runMissingOutputs ||
-      prev.activeRunId !== curr.activeRunId ||
-      prev.followupMode !== curr.followupMode ||
-      prev.ui !== curr.ui
-    );
-  }
-  if (isToolUseState(prev) && isToolUseState(curr)) {
-    return (
-      prev.todos !== curr.todos ||
-      prev.sessionUsage !== curr.sessionUsage ||
-      prev.toolEditBypass !== curr.toolEditBypass ||
-      prev.ui !== curr.ui ||
-      prev.queuedFollowUps !== curr.queuedFollowUps
-    );
-  }
-  return true;
-}
 
 // Local imports - event handlers
 import {
@@ -239,38 +199,20 @@ export class ProgressApp extends BaseWebviewApp {
     }
 
     const activeStreamId = this.appState.activeStreamId;
-    const activeStreamInfo = this.getActiveStreamInfo();
     const newStreamState = activeStreamId
       ? this.appState.streamStates.get(activeStreamId)
       : null;
     const streamSwitched =
       !!prevAppState && activeStreamId !== prevAppState.activeStreamId;
 
-    // Log context: update when stream data changes (task groups, bulk load, stream switch)
-    const streamDataChanged =
+    // Check if log data actually changed (skip log context rebuild for status-only updates)
+    const logDataChanged =
+      streamSwitched ||
       this.streamLogContextValue.logs !== (newStreamState?.logs ?? []) ||
       this.streamLogContextValue.taskGroups !==
         (newStreamState?.taskGroups ?? []);
-    if (streamDataChanged || streamSwitched) {
-      this.updateLogContext(newStreamState, activeStreamInfo);
-    }
 
-    // Meta context: update when non-log fields change (drives content components)
-    const followupOptionsChanged =
-      !!activeStreamId &&
-      prevAppState?.followupOptionsByStream.get(activeStreamId) !==
-        this.appState.followupOptionsByStream.get(activeStreamId);
-    if (
-      streamSwitched ||
-      changed.has('permissions') ||
-      followupOptionsChanged ||
-      hasMetaChange(
-        this.streamContextValue.streamState ?? null,
-        newStreamState ?? null,
-      )
-    ) {
-      this.updateStreamContext(activeStreamInfo);
-    }
+    this.updateContexts(logDataChanged);
   }
 
   render(): TemplateResult {
@@ -346,41 +288,23 @@ export class ProgressApp extends BaseWebviewApp {
     dispatchMessage(raw, this.createMessageHandlerContext());
   }
 
-  private getActiveStreamInfo(): StreamTabInfo | null {
-    if (!this.appState.activeStreamId) return null;
-    return (
-      this.cachedFilteredStreams.find(
-        (stream) => stream.name === this.appState.activeStreamId,
-      ) ?? null
-    );
-  }
-
-  private updateLogContext(
-    streamState: StreamState | null | undefined,
-    activeStreamInfo: StreamTabInfo | null,
-  ): void {
+  /**
+   * Update both stream contexts (log + meta) from current appState.
+   * Computes shared fields (isToolUse, runId, hasStreams) once.
+   * @param updateLogs - Whether to rebuild log context (skip for status-only changes)
+   */
+  private updateContexts(updateLogs: boolean): void {
     const hasStreams = this.cachedFilteredStreams.length > 0;
-    const isToolUse = streamState ? isToolUseState(streamState) : false;
-    const runId = streamState
-      ? getEffectiveRunId(streamState, { mode: 'fallback' })
+    const activeStreamInfo = this.appState.activeStreamId
+      ? (this.cachedFilteredStreams.find(
+          (s) => s.name === this.appState.activeStreamId,
+        ) ?? null)
       : null;
 
-    this.streamLogContextValue = {
-      logs: streamState?.logs ?? [],
-      taskGroups: streamState?.taskGroups ?? [],
-      runId,
-      isToolUse,
-      hasStreams,
-      streamName: activeStreamInfo?.name ?? null,
-    };
-  }
-
-  private updateStreamContext(
-    activeStreamInfo: StreamTabInfo | null,
-  ): void {
-    const hasStreams = this.cachedFilteredStreams.length > 0;
-
     if (!activeStreamInfo) {
+      if (updateLogs) {
+        this.streamLogContextValue = { ...EMPTY_LOG_CONTEXT, hasStreams };
+      }
       this.streamContextValue = { ...EMPTY_STREAM_CONTEXT, hasStreams };
       this.permissionsContextValue = this.permissions;
       return;
@@ -394,12 +318,24 @@ export class ProgressApp extends BaseWebviewApp {
     const isToolUse = isToolUseState(streamState);
     const runId = getEffectiveRunId(streamState, { mode: 'fallback' });
 
+    if (updateLogs) {
+      this.streamLogContextValue = {
+        logs: streamState.logs,
+        taskGroups: streamState.taskGroups,
+        runId,
+        isToolUse,
+        hasStreams,
+        streamName: activeStreamInfo.name,
+      };
+    }
+
     this.streamContextValue = {
       streamInfo: activeStreamInfo,
       streamState,
       runId,
       followupOptions:
-        this.appState.followupOptionsByStream.get(activeStreamInfo.name) ?? null,
+        this.appState.followupOptionsByStream.get(activeStreamInfo.name) ??
+        null,
       isToolUse,
       hasStreams,
     };
@@ -436,7 +372,7 @@ export class ProgressApp extends BaseWebviewApp {
   /**
    * Fast path for log-only updates (APPEND_LOG, UPDATE_LOG).
    *
-   * Bypasses the generic setStreamState → willUpdate → hasMetaChange pipeline.
+   * Bypasses the generic setStreamState → willUpdate → updateContexts pipeline.
    * Updates the Map entry in place (O(1) vs O(k) Map copy) and directly sets
    * the log context for the active stream. Content components never re-render.
    */
