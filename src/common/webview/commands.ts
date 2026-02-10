@@ -182,7 +182,6 @@ export const PROGRESS_VIEW_COMMANDS = {
   UPDATE_QUEUED_FOLLOW_UPS: 'updateQueuedFollowUps',
 
   // Status and files
-  UPDATE_STATUS: 'updateStatus',
   UPDATE_STREAM_STATUS: 'updateStreamStatus', // Update single stream's status in tabs
   UPDATE_FILES: 'updateFiles',
   UPDATE_MISSING_OUTPUTS: 'updateMissingOutputs',

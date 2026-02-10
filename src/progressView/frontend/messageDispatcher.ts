@@ -461,31 +461,6 @@ const handlers: HandlerRegistry = {
   },
 
   // Status updates
-  [PROGRESS_VIEW_COMMANDS.UPDATE_STATUS]: (data, ctx) => {
-    const streamId = ctx.getState().activeStreamId;
-    if (!streamId) return;
-
-    ctx.setStreamState(streamId, (prev) => {
-      const shouldFocus = data.status === STREAM_STATUS.WAITING;
-      if (isToolUseState(prev) && shouldFocus) {
-        return {
-          ...prev,
-          status: data.status,
-          ui: { ...prev.ui, shouldFocusFollowUp: true },
-        };
-      }
-      return { ...prev, status: data.status };
-    });
-
-    // Keep streams array in sync so tab icons reflect the same status
-    ctx.setState((prev) => ({
-      ...prev,
-      streams: prev.streams.map((item) =>
-        item.name === streamId ? { ...item, status: data.status } : item,
-      ),
-    }));
-  },
-
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS]: (data, ctx) => {
     const { stream, status, lastTimestamp } = data;
     const state = ctx.getState();

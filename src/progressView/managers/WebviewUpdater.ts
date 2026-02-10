@@ -335,16 +335,6 @@ export class WebviewUpdater {
   }
 
   /**
-   * Update stream status indicator (for active stream)
-   */
-  updateStatus(status: StreamStatus): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_STATUS,
-      status,
-    });
-  }
-
-  /**
    * Update a single stream's status in the stream tabs.
    * More efficient than updateStreams when only status changed.
    * @param lastTimestamp - Optional timestamp for updating "last activity" display
