@@ -15,7 +15,6 @@ import { PersistedState, createWebviewStorage } from '@shared/state';
 import {
   AGENT_CATEGORY,
   AgentCategoryFilterSchema,
-  type LogMessageData,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
@@ -90,6 +89,59 @@ import './components/ContextManagement';
 import type { FollowUpInput } from './components/FollowUpInput';
 import type { PermissionState } from './components/PermissionCard';
 import type { ToolUseStreamContent } from './components/ToolUseStreamContent';
+
+/**
+ * Ref-equality check on all StreamState fields that content components read.
+ * Returns true if any non-log field differs between prev and next.
+ *
+ * Used to gate streamContextValue assignment — prevents content component
+ * re-renders on log-only updates (~10Hz during streaming).  Log data is
+ * served by the separate streamLogContext and never read from meta context.
+ */
+function hasStreamStateMetaChange(
+  prev: StreamState | null,
+  next: StreamState,
+): boolean {
+  if (!prev || prev.kind !== next.kind) return true;
+
+  // Base fields shared by both variants (logs excluded — served by streamLogContext)
+  if (
+    prev.status !== next.status ||
+    prev.contextState !== next.contextState ||
+    prev.activeSubagents !== next.activeSubagents ||
+    prev.taskGroups !== next.taskGroups
+  )
+    return true;
+
+  // Kind-specific meta fields
+  if (
+    prev.kind === AGENT_CATEGORY.TOOL_USE &&
+    next.kind === AGENT_CATEGORY.TOOL_USE
+  ) {
+    return (
+      prev.todos !== next.todos ||
+      prev.sessionUsage !== next.sessionUsage ||
+      prev.toolEditBypass !== next.toolEditBypass ||
+      prev.queuedFollowUps !== next.queuedFollowUps ||
+      prev.ui !== next.ui
+    );
+  }
+  if (
+    prev.kind === AGENT_CATEGORY.WORKFLOW &&
+    next.kind === AGENT_CATEGORY.WORKFLOW
+  ) {
+    return (
+      prev.runInstructions !== next.runInstructions ||
+      prev.runUsage !== next.runUsage ||
+      prev.runFiles !== next.runFiles ||
+      prev.runMissingOutputs !== next.runMissingOutputs ||
+      prev.activeRunId !== next.activeRunId ||
+      prev.followupMode !== next.followupMode ||
+      prev.ui !== next.ui
+    );
+  }
+  return true;
+}
 
 @customElement('progress-app')
 export class ProgressApp extends BaseWebviewApp {
@@ -178,10 +230,6 @@ export class ProgressApp extends BaseWebviewApp {
 
   protected override willUpdate(changed: Map<string, unknown>): void {
     if (!changed.has('appState') && !changed.has('permissions')) return;
-
-    // Note: Individual log updates (APPEND_LOG, UPDATE_LOG) bypass willUpdate
-    // entirely via the updateStreamLogs fast path. This method only runs for
-    // cold-path changes: status, stream switching, task groups, bulk loads, etc.
 
     const prevAppState = changed.get('appState') as ProgressState | undefined;
 
@@ -294,8 +342,13 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   /**
-   * Update both stream contexts (log + meta) from current appState.
-   * Computes shared fields (isToolUse, runId, hasStreams) once.
+   * Update stream contexts from current appState.
+   *
+   * Log context (streamLogContextValue) is rebuilt when log data changes.
+   * Meta context (streamContextValue) is only reassigned when non-log fields
+   * differ — this prevents content component re-renders during streaming
+   * (~10Hz log updates) while staying fully Lit-native (no mutation tricks).
+   *
    * @param updateLogs - Whether to rebuild log context (skip for status-only changes)
    */
   private updateContexts(updateLogs: boolean): void {
@@ -336,16 +389,29 @@ export class ProgressApp extends BaseWebviewApp {
       };
     }
 
-    this.streamContextValue = {
-      streamInfo: activeStreamInfo,
-      streamState,
-      runId,
-      followupOptions:
-        this.appState.followupOptionsByStream.get(activeStreamInfo.name) ??
-        null,
-      isToolUse,
-      hasStreams,
-    };
+    // Only propagate meta context when content-visible fields actually changed.
+    // Log-only updates (~10Hz) produce a new streamState ref but identical meta
+    // fields — skipping the assignment avoids re-rendering content components.
+    const followupOptions =
+      this.appState.followupOptionsByStream.get(activeStreamInfo.name) ?? null;
+    const prevCtx = this.streamContextValue;
+    if (
+      prevCtx.streamInfo !== activeStreamInfo ||
+      prevCtx.runId !== runId ||
+      prevCtx.followupOptions !== followupOptions ||
+      prevCtx.isToolUse !== isToolUse ||
+      prevCtx.hasStreams !== hasStreams ||
+      hasStreamStateMetaChange(prevCtx.streamState, streamState)
+    ) {
+      this.streamContextValue = {
+        streamInfo: activeStreamInfo,
+        streamState,
+        runId,
+        followupOptions,
+        isToolUse,
+        hasStreams,
+      };
+    }
     this.permissionsContextValue = this.permissions;
   }
 
@@ -377,40 +443,6 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   /**
-   * Fast path for log-only updates (APPEND_LOG, UPDATE_LOG).
-   *
-   * Bypasses the generic setStreamState → willUpdate → updateContexts pipeline.
-   * Updates the Map entry in place (O(1) vs O(k) Map copy) and directly sets
-   * the log context for the active stream. Content components never re-render.
-   */
-  private updateStreamLogs(
-    streamId: StreamTabId,
-    updater: (logs: LogMessageData[]) => LogMessageData[],
-  ): void {
-    const streamState = this.appState.streamStates.get(streamId);
-    if (!streamState) return;
-
-    const newLogs = updater(streamState.logs);
-    if (newLogs === streamState.logs) return;
-
-    // Mutate the Map entry in place — no new Map(), no new appState, no willUpdate.
-    // Safe because willUpdate never compares prev vs current streamStates Map refs.
-    this.appState.streamStates.set(streamId, {
-      ...streamState,
-      logs: newLogs,
-    });
-
-    // Directly update log context for the active stream.
-    // Only LogList subscribes to streamLogContext — content components are untouched.
-    if (streamId === this.appState.activeStreamId) {
-      this.streamLogContextValue = {
-        ...this.streamLogContextValue,
-        logs: newLogs,
-      };
-    }
-  }
-
-  /**
    * Get the event handler context.
    * Always returns fresh context - closures capture current state via getters.
    */
@@ -422,8 +454,6 @@ export class ProgressApp extends BaseWebviewApp {
       },
       setStreamState: (streamId, updater) =>
         this.setStreamState(streamId, updater),
-      updateStreamLogs: (streamId, updater) =>
-        this.updateStreamLogs(streamId, updater),
       getFollowUpRef: () => this.getFollowUpRef(),
       savePrefs: (prefs) => this.prefsManager.update(prefs),
     };
