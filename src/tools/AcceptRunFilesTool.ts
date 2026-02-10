@@ -1,5 +1,5 @@
 /**
- * Tool for syncing workflow-generated files back to the workspace.
+ * Tool for accepting output files from a completed run into the workspace.
  *
  * After a workflow agent completes, its output files live in run storage
  * (taskRuns/{executionId}/). This tool copies selected files from run
@@ -37,56 +37,54 @@ import { getPathSegments } from '@utils/core/pathCore';
 
 const FileMapping = z.strictObject({
   /** File path within the run (as shown by /runs/{id}/files). */
-  source: z.string().describe('File path within the run storage'),
+  run_path: z.string().describe('File path within the run storage'),
   /**
-   * Workspace-relative destination path.
-   * If omitted, defaults to source (same relative path).
+   * Workspace-relative path to write to.
+   * If omitted, defaults to run_path (same relative path).
    */
-  destination: z
+  workspace_path: z
     .string()
     .nullish()
     .describe(
-      'Workspace-relative destination path. Defaults to source path if omitted.',
+      'Workspace-relative destination path. Defaults to run_path if omitted.',
     ),
 });
 
-const SyncWorkflowFilesInputSchema = z.strictObject({
-  /** Execution ID of the completed workflow run (UUID). */
-  execution_id: ExecutionIdSchema.describe('Execution ID to sync files from'),
-  /** Files to sync from run storage to workspace. */
+const AcceptRunFilesInputSchema = z.strictObject({
+  /** Execution ID of the completed run (UUID). */
+  execution_id: ExecutionIdSchema.describe('Execution ID to accept files from'),
+  /** Files to accept from run storage into the workspace. */
   files: z
     .array(FileMapping)
     .min(1)
     .describe('Files to copy from run storage to workspace'),
 });
 
-export type SyncWorkflowFilesInput = z.infer<
-  typeof SyncWorkflowFilesInputSchema
->;
+export type AcceptRunFilesInput = z.infer<typeof AcceptRunFilesInputSchema>;
 
 // ============================================================================
 // Tool Implementation
 // ============================================================================
 
-export class SyncWorkflowFilesTool extends defineTool({
-  name: 'sync_workflow_files',
-  description: `Sync workflow-generated files from run storage to the workspace.
+export class AcceptRunFilesTool extends defineTool({
+  name: 'accept_run_files',
+  description: `Accept output files from a completed run into the workspace.
 
-Copies selected output files from a completed workflow run into the workspace,
-replacing existing files.
+Copies selected output files from a run into the workspace, replacing
+existing files.
 
 Parameters:
 - execution_id: The execution ID (from subagent-result or /runs)
-- files: Array of {source, destination?} mappings
-  - source: File path within the run (as listed by /runs/{id}/files)
-  - destination: Workspace path to write to (defaults to source path)
+- files: Array of {run_path, workspace_path?} mappings
+  - run_path: File path within the run (as listed by /runs/{id}/files)
+  - workspace_path: Workspace path to write to (defaults to run_path)
 
-Example: Copy corrected file back to its original location:
+Example: Accept corrected file back to its original location:
   execution_id: "d4f5e6a7-1234-4b89-abcd-ef0123456789"
-  files: [{source: "paper__correct__r0_gemini.tex", destination: "paper.tex"}]`,
-  schema: SyncWorkflowFilesInputSchema,
+  files: [{run_path: "paper__correct__r0_gemini.tex", workspace_path: "paper.tex"}]`,
+  schema: AcceptRunFilesInputSchema,
 }) {
-  protected async execute(input: SyncWorkflowFilesInput): Promise<ToolResult> {
+  protected async execute(input: AcceptRunFilesInput): Promise<ToolResult> {
     const { execution_id: executionId, files } = input;
     const runDir = path.join(TASK_RUNS_DIR, executionId);
 
@@ -101,36 +99,36 @@ Example: Copy corrected file back to its original location:
     const resolved = await Promise.all(
       files.map(async (mapping) => {
         // Source must not escape run directory
-        if (getPathSegments(mapping.source).includes('..')) {
+        if (getPathSegments(mapping.run_path).includes('..')) {
           throw new ToolError(
-            `Source path must not contain '..': ${mapping.source}`,
+            `run_path must not contain '..': ${mapping.run_path}`,
           );
         }
 
-        const sourceRelative = path.join(TASK_RUNS_DIR, executionId, mapping.source);
+        const sourceRelative = path.join(TASK_RUNS_DIR, executionId, mapping.run_path);
         const sourceAbsolute = StorageFS.fullPath(sourceRelative);
 
         if (!(await StorageFS.exists(sourceRelative))) {
           throw new ToolError(
-            `Source file not found: ${mapping.source} in run ${executionId}. ` +
+            `File not found: ${mapping.run_path} in run ${executionId}. ` +
               `Use runs tool with path /runs/${executionId}/files to list available files.`,
           );
         }
 
         // Destination must resolve inside workspace (locatePath rejects traversals)
-        const destPath = mapping.destination ?? mapping.source;
+        const destPath = mapping.workspace_path ?? mapping.run_path;
         const dest = WorkspaceFS.locatePath(destPath);
         if (dest.kind === 'external') {
           throw new ToolError(
-            `Destination must be inside the workspace: ${destPath}`,
+            `workspace_path must be inside the workspace: ${destPath}`,
           );
         }
 
         return {
-          sourceLocation: createRunStorageLocation(sourceAbsolute, mapping.source, executionId),
+          sourceLocation: createRunStorageLocation(sourceAbsolute, mapping.run_path, executionId),
           destLocation: createWorkspaceLocation(dest.absolutePath, dest.relativePath),
-          source: mapping.source,
-          destination: dest.relativePath,
+          runPath: mapping.run_path,
+          workspacePath: dest.relativePath,
         };
       }),
     );
@@ -146,12 +144,12 @@ Example: Copy corrected file back to its original location:
 
       const action = destExists ? 'replaced' : 'created';
       const mappingNote =
-        entry.source !== entry.destination ? ` (from ${entry.source})` : '';
-      results.push(`${action}: ${entry.destination}${mappingNote}`);
-      edits.push({ path: entry.destination });
+        entry.runPath !== entry.workspacePath ? ` (from ${entry.runPath})` : '';
+      results.push(`${action}: ${entry.workspacePath}${mappingNote}`);
+      edits.push({ path: entry.workspacePath });
     }
 
-    const summary = `Synced ${files.length} file${files.length > 1 ? 's' : ''} from run ${executionId}`;
+    const summary = `Accepted ${files.length} file${files.length > 1 ? 's' : ''} from run ${executionId}`;
     return {
       summary,
       output: `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`,
