@@ -174,6 +174,8 @@ const baseConfig = {
       provider: 'local',
     },
     footer: {
+      message:
+        '<a href="/terms">Terms of Service</a> · <a href="/providers">Providers</a>',
       copyright: 'Copyright © 2024-2026 TeXRA Team. All rights reserved.',
     },
   },
