@@ -4,14 +4,14 @@ TeXRA doesn't just send text to an AI and hope for the best. It plugs into battl
 
 ## Overview
 
-| What it does              | Tool behind the scenes  |
-| ------------------------- | ----------------------- |
-| Code formatting           | `latexindent` or `tex-fmt` |
-| Version comparison        | `latexdiff`             |
-| Document statistics       | `texcount`              |
-| Figure extraction         | Built-in                |
-| TikZ compilation          | Built-in                |
-| Bibliography resolution   | Built-in                |
+| What it does            | Tool behind the scenes     |
+| ----------------------- | -------------------------- |
+| Code formatting         | `latexindent` or `tex-fmt` |
+| Version comparison      | `latexdiff`                |
+| Document statistics     | `texcount`                 |
+| Figure extraction       | Built-in                   |
+| TikZ compilation        | Built-in                   |
+| Bibliography resolution | Built-in                   |
 
 ## Formatting Tools
 
