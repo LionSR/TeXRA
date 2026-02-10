@@ -59,9 +59,9 @@ inherits: base # Or polish, correct, etc.
 # Override parent settings here if inheriting.
 settings:
   # Core Behavior
-  agentType: CoT # Type: 'CoT' (Chain of Thought) for complex reasoning with scratchpads, 'direct' for simpler direct output, or 'toolUse' for agents that call model tools.
+  agentCategory: workflow # 'workflow' for structured reasoning with XML-wrapped output, or 'toolUse' for interactive agents that call tools (file editing, web search, etc.)
   temperature: 0.1 # LLM creativity (0.0 = deterministic, >0 = more random). Can be overridden by user settings.
-  isRewrite: true # Boolean: Does the agent primarily rewrite existing content (true) or generate new content (false)? Affects some internal handling.
+  isRewrite: true # Does the agent primarily rewrite existing content (true) or generate new content (false)?
 
   # Output Handling
   documentTag: document # The main XML tag wrapping the agent's final output (required for CoT).
@@ -220,7 +220,7 @@ Example:
 
 ```yaml
 settings:
-  agentType: toolUse
+  agentCategory: toolUse
   tools:
     - str_replace_editor
     - wolfram
