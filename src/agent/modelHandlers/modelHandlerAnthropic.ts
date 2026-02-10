@@ -747,13 +747,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
         const isUsingRelay = this.shouldUseServerSideKeys();
         const diagnostics = streamHandler.getDiagnostics();
 
-        // Try to extract Anthropic request ID from stream response headers
+        // Enrich error with request ID from stream response headers so
+        // detectRequestId() (in sdkErrorUtils) picks it up via the existing
+        // ProviderError.requestId path — no duplicate field needed.
         try {
           const response = await (
             stream as unknown as { response: Promise<Response> }
           ).response;
-          diagnostics.anthropicRequestId =
-            response?.headers?.get?.('x-request-id') ?? null;
+          const reqId = response?.headers?.get?.('x-request-id');
+          if (reqId && streamError instanceof Error) {
+            (streamError as Error & { request_id?: string }).request_id =
+              reqId;
+          }
         } catch {
           // Response may not be available (e.g. network error before HTTP response)
         }
