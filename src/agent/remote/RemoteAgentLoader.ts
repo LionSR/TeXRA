@@ -213,10 +213,12 @@ export class RemoteAgentLoader {
           CHANNEL,
           `Query with tools column failed, retrying without: ${error.message}`,
         );
-        ({ data, error } = await supabase
+        const fallback = await supabase
           .from('remote_agents')
           .select('id, name, description, visibility, agent_category')
-          .order('name'));
+          .order('name');
+        data = fallback.data as typeof data;
+        error = fallback.error;
       }
 
       if (error) {
