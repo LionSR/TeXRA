@@ -66,7 +66,7 @@ If you provide suggestions, ideas, enhancement requests, or other feedback regar
 - **Personal API Keys (Local Processing)**: When you use your own API keys, all calls to AI providers are made directly from your local device to the provider's endpoints. In this mode, your document content is not sent to or routed through TeXRA servers. Your API keys are stored locally (e.g., via VS Code's built-in Secret Storage or equivalent platform-specific secure storage) and are never transmitted to us.
 - **Researcher Access Program (Relay Processing)**: When you use the Researcher Access Program (server-side keys), your requests are routed through a TeXRA-operated relay server (`remote.texra.ai`) before being forwarded to the AI provider. In this mode, your document content temporarily passes through our relay infrastructure in order to authenticate the request. We do not permanently store Your Content on the relay, but you should be aware that it transits our servers.
 - **Third-Party Providers**: In both modes, your content is ultimately transmitted to the respective AI provider's API endpoints. You are responsible for reviewing and accepting the privacy policies and terms of service of your chosen AI provider(s).
-- **Telemetry**: The Service collects anonymized usage metadata — such as model name, token counts, estimated cost, and response time — to monitor service health and improve the product. Telemetry does not include Your Content. You can opt out of telemetry through the applicable platform settings (e.g., VS Code's telemetry settings).
+- **Telemetry**: When you are signed in to TeXRA (e.g., through the Researcher Access Program), the Service collects anonymized usage metadata — such as model name, token counts, estimated cost, and response time — to monitor service health and improve the product. Telemetry does not include Your Content. If you are not signed in, no telemetry data is collected or transmitted.
 
 ## 10. AI and Machine Learning
 
@@ -103,7 +103,7 @@ You acknowledge that:
 
 ## 15. Disclaimer of Warranties
 
-THE EXTENSION IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, ACCURACY, AND QUIET ENJOYMENT.
+THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, ACCURACY, AND QUIET ENJOYMENT.
 
 We do not warrant that:
 
@@ -114,11 +114,11 @@ We do not warrant that:
 5. The Service will be compatible with any particular third-party software, hardware, or AI provider.
 6. Third-party AI providers will remain available or maintain their current terms.
 
-YOU USE THE EXTENSION AT YOUR OWN RISK. THE ENTIRE RISK AS TO SATISFACTORY QUALITY, PERFORMANCE, ACCURACY, AND EFFORT IS WITH YOU.
+YOU USE THE SERVICE AT YOUR OWN RISK. THE ENTIRE RISK AS TO SATISFACTORY QUALITY, PERFORMANCE, ACCURACY, AND EFFORT IS WITH YOU.
 
 ## 16. Limitation of Liability
 
-TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE TEXRA TEAM OR ITS MEMBERS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED TO LOSS OF PROFITS, DATA, USE, OR GOODWILL, ARISING OUT OF OR IN CONNECTION WITH YOUR USE OF THE EXTENSION, WHETHER BASED ON WARRANTY, CONTRACT, TORT (INCLUDING NEGLIGENCE), OR ANY OTHER LEGAL THEORY, EVEN IF WE HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE TEXRA TEAM OR ITS MEMBERS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED TO LOSS OF PROFITS, DATA, USE, OR GOODWILL, ARISING OUT OF OR IN CONNECTION WITH YOUR USE OF THE SERVICE, WHETHER BASED ON WARRANTY, CONTRACT, TORT (INCLUDING NEGLIGENCE), OR ANY OTHER LEGAL THEORY, EVEN IF WE HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 
 WITHOUT LIMITING THE FOREGOING, WE SHALL NOT BE LIABLE FOR ANY DAMAGES ARISING FROM: (A) THIRD-PARTY AI PROVIDER OUTAGES, CHANGES IN TERMS, OR DISCONTINUATION OF SERVICES; (B) INACCURATE, MISLEADING, OR HARMFUL AI-GENERATED CONTENT; (C) UNAUTHORIZED ACCESS TO YOUR API KEYS OR CONTENT CAUSED BY YOUR FAILURE TO SECURE YOUR CREDENTIALS; (D) ANY ACTIONS TAKEN BASED ON AI-GENERATED OUTPUTS; OR (E) INTERNATIONAL DATA TRANSFERS TO THIRD-PARTY AI PROVIDERS YOU SELECT.
 
