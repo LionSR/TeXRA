@@ -258,7 +258,8 @@ export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 /** Tool for delegating tasks to workflow agents (document processing). */
 export class WorkflowAgentTool extends defineTool({
   name: 'delegate_workflow',
-  description: () => `Delegate a task to a workflow agent for document processing.
+  description:
+    () => `Delegate a task to a workflow agent for document processing.
 
 Available agents:
 ${formatAgentList(getVisibleWorkflowAgents())}
