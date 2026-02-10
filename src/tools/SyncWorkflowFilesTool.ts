@@ -13,6 +13,9 @@ import * as path from 'path';
 // Third-party imports
 import { z } from 'zod';
 
+// Local imports - shared
+import { ExecutionIdSchema } from '@shared/schemas';
+
 // Local imports - tools
 import { ToolError, type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
@@ -27,7 +30,6 @@ import {
 } from '@utils/files';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
-import type { ExecutionId } from '@shared/schemas';
 
 // ============================================================================
 // Schema
@@ -53,8 +55,8 @@ const FileMapping = z.strictObject({
 });
 
 const SyncWorkflowFilesInputSchema = z.strictObject({
-  /** Execution ID of the completed workflow run. */
-  execution_id: z.string().describe('Execution ID to sync files from'),
+  /** Execution ID of the completed workflow run (UUID). */
+  execution_id: ExecutionIdSchema.describe('Execution ID to sync files from'),
   /** Files to sync from run storage to workspace. */
   files: z
     .array(FileMapping)
@@ -85,13 +87,12 @@ Parameters:
   - added/removed: Pass through from the subagent-result output-files metadata
 
 Example: Copy corrected file back to its original location:
-  execution_id: "abc-123"
+  execution_id: "d4f5e6a7-1234-4b89-abcd-ef0123456789"
   files: [{source: "paper__correct__r0_gemini.tex", destination: "paper.tex", added: 12, removed: 5}]`,
   schema: SyncWorkflowFilesInputSchema,
 }) {
   protected async execute(input: SyncWorkflowFilesInput): Promise<ToolResult> {
-    const { execution_id, files } = input;
-    const executionId = execution_id as ExecutionId;
+    const { execution_id: executionId, files } = input;
     const runDir = path.join(TASK_RUNS_DIR, executionId);
 
     // Verify run directory exists
