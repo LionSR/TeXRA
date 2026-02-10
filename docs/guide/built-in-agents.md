@@ -21,6 +21,7 @@ TeXRA provides built-in AI agents, each specialized for specific research tasks.
 | `draw`             | Workflow | Create/enhance TikZ figures                 |
 | `ocr`              | Workflow | Extract text from images/PDFs               |
 | `transcribe_audio` | Workflow | Transcribe audio to text                    |
+| `merge`            | Workflow | Intelligently merge document versions       |
 
 ::: warning Important Note
 The underlying prompts and specific behaviors of these built-in agents may change slightly between TeXRA versions as we continue to optimize them. If you require precise, unchanging behavior or wish to heavily customize the process, consider creating a [Custom Agent](./custom-agents.md) based on these examples.
@@ -367,6 +368,30 @@ The `transcribe_audio` agent converts audio files (like lectures, podcasts, or p
 ```
 Transcribe the provided lecture audio file [lecture.mp3]. Provide the output as plain text, identifying different speakers if possible (e.g., Lecturer, Questioner 1).
 ```
+
+## Merge Agent
+
+### `merge`
+
+The `merge` agent intelligently combines changes from an edited document back into a base document.
+
+**Capabilities:**
+
+- Compare an AI-edited file against the original base document
+- Selectively integrate improvements while preserving technical precision
+- Resolve conflicting changes between document versions
+
+**Best for:** Applying AI-suggested edits from `_r0_` or `_r1_` output files, incorporating reviewer suggestions, combining different drafts
+
+**Example instruction:**
+
+```
+Merge changes from the edited file into the original document. Prioritize substantive
+improvements in clarity while maintaining the original's technical precision.
+Preserve mathematical notation and citations from the original.
+```
+
+See [Intelligent Merge](./intelligent-merge.md) for details on the merge workflow.
 
 ## Next Steps
 
