@@ -18,14 +18,25 @@ import {
   type BbtSearchResultItem,
 } from './bbtClient';
 
-const ZoteroSearchInputSchema = z.strictObject({
-  query: z
-    .string()
-    .min(1)
-    .describe(
-      'Search query - can be citation key, title, author, or year. ' +
-        'Works like the search box in Zotero.',
-    ),
+const QUERY_DESCRIPTION =
+  'Quick search string (searches across title, creators, and year simultaneously). ' +
+  'Best for short queries like a single surname or citekey. ' +
+  'All words must match, so keep it to one or two terms. ' +
+  'Omit this when using the structured title/author/year fields instead.';
+
+const TITLE_DESCRIPTION =
+  'Search by title (partial match). Use a few distinctive words, not the full title.';
+
+const AUTHOR_DESCRIPTION =
+  'Search by author/creator surname (partial match). Use a single surname.';
+
+const YEAR_DESCRIPTION = 'Filter by publication year (exact match).';
+
+const BaseSearchSchema = z.strictObject({
+  query: z.string().min(1).describe(QUERY_DESCRIPTION).nullish(),
+  title: z.string().describe(TITLE_DESCRIPTION).nullish(),
+  author: z.string().describe(AUTHOR_DESCRIPTION).nullish(),
+  year: z.union([z.string(), z.number()]).describe(YEAR_DESCRIPTION).nullish(),
   library: z
     .string()
     .describe(
@@ -34,7 +45,48 @@ const ZoteroSearchInputSchema = z.strictObject({
     .nullish(),
 });
 
+const QueryRequiredSchema = BaseSearchSchema.extend({
+  query: z.string().min(1).describe(QUERY_DESCRIPTION),
+});
+
+const TitleRequiredSchema = BaseSearchSchema.extend({
+  title: z.string().min(1).describe(TITLE_DESCRIPTION),
+});
+
+const AuthorRequiredSchema = BaseSearchSchema.extend({
+  author: z.string().min(1).describe(AUTHOR_DESCRIPTION),
+});
+
+const YearRequiredSchema = BaseSearchSchema.extend({
+  year: z.union([z.string(), z.number()]).describe(YEAR_DESCRIPTION),
+});
+
+const ZoteroSearchInputSchema = z.union([
+  QueryRequiredSchema,
+  TitleRequiredSchema,
+  AuthorRequiredSchema,
+  YearRequiredSchema,
+]);
+
 export type ZoteroSearchInput = z.infer<typeof ZoteroSearchInputSchema>;
+
+/**
+ * Build a human-readable label from whichever search parameters are set.
+ */
+function describeSearch(
+  input: Pick<ZoteroSearchInput, 'query' | 'title' | 'author' | 'year'>,
+): string {
+  const hasStructuredSearch = !!(input.title || input.author || input.year);
+  if (hasStructuredSearch) {
+    const parts: string[] = [];
+    if (input.title) parts.push(`title="${input.title}"`);
+    if (input.author) parts.push(`author="${input.author}"`);
+    if (input.year) parts.push(`year=${input.year}`);
+    return parts.join(', ');
+  }
+
+  return input.query ?? 'query';
+}
 
 /**
  * Format a single search result item for display.
@@ -78,13 +130,33 @@ export class ZoteroSearchTool extends defineTool({
   name: 'zotero_search',
   description:
     'Search Zotero library by citation key, title, author, or year. ' +
+    'Prefer the structured title/author/year fields over a single query string. ' +
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroSearchInputSchema,
 }) {
-  protected async execute({ query, library }: ZoteroSearchInput) {
+  protected async execute({
+    query,
+    title,
+    author,
+    year,
+    library,
+  }: ZoteroSearchInput) {
     const port = getZoteroPort();
 
-    const params: unknown[] = [query];
+    // Build search params: use advanced tuple search when structured fields
+    // are provided, otherwise fall back to simple quick-search string.
+    let searchTerms: unknown;
+    if (title || author || year) {
+      const conditions: [string, string, string][] = [];
+      if (title) conditions.push(['title', 'contains', title]);
+      if (author) conditions.push(['creator', 'contains', author]);
+      if (year) conditions.push(['date', 'is', String(year)]);
+      searchTerms = conditions;
+    } else {
+      searchTerms = query!;
+    }
+
+    const params: unknown[] = [searchTerms];
     if (library) {
       params.push(library);
     }
@@ -95,9 +167,11 @@ export class ZoteroSearchTool extends defineTool({
       port,
     );
 
+    const label = describeSearch({ query, title, author, year });
+
     if (!Array.isArray(result) || result.length === 0) {
       return {
-        summary: `No results found for "${query}"`,
+        summary: `No results found for ${label}`,
         output: 'No matching items in Zotero library.',
       };
     }
@@ -106,7 +180,7 @@ export class ZoteroSearchTool extends defineTool({
     const items = result.map((item) => formatSearchResult(item));
 
     return {
-      summary: `Found ${result.length} item${result.length === 1 ? '' : 's'} matching "${query}"`,
+      summary: `Found ${result.length} item${result.length === 1 ? '' : 's'} matching ${label}`,
       output: items.join('\n'),
     };
   }
