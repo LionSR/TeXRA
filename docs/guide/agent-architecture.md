@@ -11,7 +11,7 @@ The core of TeXRA's agent definition lies in a combination of YAML for structure
 These `.yaml` files have two main parts (and thankfully, YAML is usually less prickly than XML or JSON):
 
 1.  **`settings`**: Define general operational parameters. For example:
-    - `agentType`: Is it a complex `CoT` (Chain of Thought) agent that "thinks" step-by-step, a simpler `direct` agent, or a `toolUse` agent designed to call model-integrated tools?
+    - `agentCategory`: Is it a `workflow` agent (structured Chain-of-Thought reasoning with XML-wrapped output) or a `toolUse` agent (interactive conversation that can call tools like file editing, web search, etc.)?
     - `prefills`: Text the agent should automatically start its response with (e.g., `<scratchpad>`).
     - _(Other settings control output format, inheritance, etc. See [Configuration](./configuration.md) and [Custom Agents](./custom-agents.md) for full details)._
 2.  **`prompts`**: Contain text templates that TeXRA fills with your specific context (input files, instructions) to guide the LLM at different stages:

@@ -33,9 +33,9 @@ For complex tasks:
 
 Match model capability to task complexity - overpowered models waste money, underpowered ones produce poor results.
 
-- **Simple tasks** (corrections): Use fast, cheap models (`gemini25f-`, `gpt5--`)
+- **Simple tasks** (corrections): Use fast, cheap models (`gemini3f`, `gpt5-`, `haiku35`)
 - **Complex tasks** (transformations): Use powerful models (`opus46`, `gpt52pro`)
-- **Reasoning-heavy**: Use thinking models (`sonnet45T`, `o1`, `deepseekT`)
+- **Reasoning-heavy**: Use thinking models (`sonnet45T`, `opus46T`, `deepseekT`)
 
 See the [AI Models Guide](./models.md) for detailed comparisons.
 
@@ -63,10 +63,11 @@ project/
 
 ### Staged Approach
 
-1. **Drafting**: `txt2tex` to convert to LaTeX
-2. **Development**: `polish` for clarity
-3. **Visualization**: `draw` for figures
-4. **Finalization**: `correct` for proofreading
+1. **Research**: `search` or `research` to find papers and verify ideas
+2. **Writing**: `chat` to draft LaTeX content interactively
+3. **Development**: `polish` for clarity and style
+4. **Visualization**: `draw` for figures, `presenter` for slides
+5. **Finalization**: `correct` for proofreading
 
 ### Quality Assurance
 
