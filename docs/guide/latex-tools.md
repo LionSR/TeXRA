@@ -1,19 +1,17 @@
 # LaTeX Tools
 
-TeXRA integrates specialized external tools for LaTeX processing.
+TeXRA doesn't just send text to an AI and hope for the best. It plugs into battle-tested LaTeX tools so formatting, diffing, and figure extraction are handled by the right software—not by a language model guessing at syntax.
 
 ## Overview
 
-LaTeX documents require precision in formatting, compilation, and analysis. Rather than relying solely on the LLM, TeXRA leverages dedicated tools for these tasks:
-
-| Tool                      | Purpose                 |
+| What it does              | Tool behind the scenes  |
 | ------------------------- | ----------------------- |
-| `latexindent` / `tex-fmt` | Code formatting         |
-| `latexdiff`               | Version comparison      |
-| `texcount`                | Document statistics     |
-| `extract_figures`         | Figure asset extraction |
-| `extract_tikz_figures`    | TikZ compilation        |
-| `extract_bib_entries`     | Bibliography resolution |
+| Code formatting           | `latexindent` or `tex-fmt` |
+| Version comparison        | `latexdiff`             |
+| Document statistics       | `texcount`              |
+| Figure extraction         | Built-in                |
+| TikZ compilation          | Built-in                |
+| Bibliography resolution   | Built-in                |
 
 ## Formatting Tools
 
@@ -66,7 +64,7 @@ TeXRA extracts and processes figures for AI analysis.
 
 The `extract_figures` tool finds figure references (`\includegraphics`) and returns the images as attachments, allowing the LLM to "see" your figures.
 
-**Auto-extraction:** Enable "Auto Extract Figures" in the UI to automatically include figures in prompts. See [File Management](./file-management.md#auto-extraction-features).
+**Auto-extraction:** Enable "Auto Extract Figures" in the UI to automatically include figures in prompts. See [Working with Figures](./working-with-figures.md).
 
 ### TikZ Figures
 
@@ -98,8 +96,8 @@ The `wolfram` tool executes Wolfram Language code through `wolframscript`, letti
 
 Control how TeXRA uses tools through the UI:
 
-- **Tool Config Dropdown:** Enable/disable helpers like "Attach TeX Count" or "Attach Diagnostics" for the current run. See [File Management](./file-management.md#tool-config-dropdown).
-- **Auto Extract Dropdown:** Enable/disable automatic extraction of Figures or TikZ Figures. See [File Management](./file-management.md#auto-extraction-features).
+- **Tool Config Dropdown:** Enable/disable helpers like "Attach TeX Count" or "Attach Diagnostics" for the current run. See [Configuration](./configuration.md#agent-execution-settings-webview-interface).
+- **Auto Extract Dropdown:** Enable/disable automatic extraction of Figures or TikZ Figures. See [Working with Figures](./working-with-figures.md).
 
 For detailed tool settings (formatter paths, TikZ processing options, etc.), see the [Configuration guide](./configuration.md).
 

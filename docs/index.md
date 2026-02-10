@@ -70,10 +70,18 @@ hero:
 
 AI scientists need more than a chat window. TeXRA keeps research grounded in reproducible workflows and transparent reasoning:
 
-- **Reliable scientific loops** – capture every run with logs, diffs, and audit trails so collaborators can verify changes.
-- **Specialized agent roster** – summon correction, polishing, figure generation, and document transformation agents tuned for LaTeX-heavy projects.
-- **Integrated verification tools** – trigger `latexdiff`, `texcount`, compilation checks, and custom scripts directly from the agent run.
-- **Context you control** – work across multi-file projects, reference libraries, and datasets without losing track of provenance.
+- **Reliable scientific loops** – every run is captured with logs, diffs, and audit trails so you and your collaborators can verify changes.
+- **Two kinds of agents** – use workflow agents (`polish`, `correct`, `draw`) for structured tasks, or chat with interactive agents (`chat`, `search`, `research`) that can edit files, search literature, and run computations.
+- **Integrated verification tools** – generate visual diffs, count words, verify math with Wolfram, and check compilation directly from the agent run.
+- **Literature at your fingertips** – search arXiv, Crossref, and your Zotero library without leaving VS Code.
+
+### Real-World Examples
+
+> **Deadline crunch.** A PhD student has 48 hours to polish a 30-page thesis chapter. She selects the chapter, picks the `polish` agent, and writes: "Improve clarity and flow for a machine-learning audience. Keep all math intact." Two minutes later she's reviewing a colour-coded diff of every change.
+
+> **Conference talk.** A postdoc needs slides for a workshop next week. He opens the `presenter` agent, points it at his paper, and asks for a 15-slide Beamer deck with TikZ diagrams. The agent reads his codebase, drafts slides, compiles them, and visually checks every page.
+
+> **Literature sweep.** A new collaborator joins the project and needs to get up to speed. She opens the `search` agent and asks: "Find the five most-cited papers on physics-informed neural networks from 2022-2024." In seconds she has titles, abstracts, and BibTeX entries.
 
 ## Key Capabilities
 
@@ -99,7 +107,7 @@ AI scientists need more than a chat window. TeXRA keeps research grounded in rep
 
   <div class="feature-item">
     <h3>🔄 Document Transformation</h3>
-    <p>Effortlessly convert papers into slides (`paper2slide`), lecture notes (`paper2note`), posters (`paper2poster`), or even draft cover letters (`paper2cover`).</p>
+    <p>Effortlessly convert papers into slides (<code>paper2slide</code>), posters (<code>paper2poster</code>), or build interactive presentations with the <code>presenter</code> agent.</p>
     <div class="feature-example">
       <code>Paper Abstract</code> &#8594; `Beamer Slides Outline`
     </div>
@@ -127,6 +135,22 @@ AI scientists need more than a chat window. TeXRA keeps research grounded in rep
     <p>Leverage vision-capable models to analyze images, figures, and PDFs directly within your workflow.</p>
     <div class="feature-example">
       <code>&lt;figure.png&gt; + "Write caption"</code> &#8594; <code>\caption{...}</code>
+    </div>
+  </div>
+
+  <div class="feature-item">
+    <h3>💬 Interactive Tool-Use Agents</h3>
+    <p>Chat with AI agents that can read and edit your files, run shell commands, search the web, and manage your Zotero library - all in one conversation.</p>
+    <div class="feature-example">
+      <code>"Find papers on attention mechanisms and add them to my .bib"</code>
+    </div>
+  </div>
+
+  <div class="feature-item">
+    <h3>🔍 Research & Literature Tools</h3>
+    <p>Search arXiv and Crossref, download paper sources, verify computations with Wolfram, and manage references through Zotero - without leaving VS Code.</p>
+    <div class="feature-example">
+      <code>"Search Zotero for Vaswani"</code> &#8594; BibTeX entries exported
     </div>
   </div>
 

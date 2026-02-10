@@ -1,24 +1,27 @@
 # Built-in Agent Reference
 
-TeXRA provides built-in AI agents, each specialized for specific research tasks. Choose from the dropdown menu in the TeXRA UI.
+TeXRA ships with built-in agents for common research tasks—polishing prose, fixing errors, creating figures, converting formats, and more. Pick one from the dropdown in the TeXRA UI and you're ready to go.
 
 ## Quick Reference
 
 | Agent              | Type     | Purpose                                 |
 | ------------------ | -------- | --------------------------------------- |
-| `chat`             | Tool-use | General assistance, file editing        |
-| `ask`              | Tool-use | Read-only questions and exploration     |
-| `search`           | Tool-use | Literature discovery, web search        |
-| `research`         | Tool-use | Computational verification with Wolfram |
-| `discuss`          | Tool-use | Academic brainstorming with literature  |
-| `lean`             | Tool-use | Lean 4 proof development                |
-| `correct`          | Workflow | Fix errors without style changes        |
-| `polish`           | Workflow | Improve writing quality                 |
-| `paper2slide`      | Workflow | Convert papers to beamer slides         |
-| `paper2poster`     | Workflow | Create academic posters                 |
-| `draw`             | Workflow | Create/enhance TikZ figures             |
-| `ocr`              | Workflow | Extract text from images/PDFs           |
-| `transcribe_audio` | Workflow | Transcribe audio to text                |
+| `chat`             | Tool-use | General assistance, file editing            |
+| `ask`              | Tool-use | Read-only questions and exploration         |
+| `search`           | Tool-use | Literature discovery, web search            |
+| `research`         | Tool-use | Computational verification with Wolfram     |
+| `discuss`          | Tool-use | Academic brainstorming with literature      |
+| `lean`             | Tool-use | Lean 4 proof development                    |
+| `presenter`        | Tool-use | Interactive presentation builder            |
+| `simplifier`       | Tool-use | Simplify code and LaTeX for clarity         |
+| `correct`          | Workflow | Fix errors without style changes            |
+| `polish`           | Workflow | Improve writing quality                     |
+| `paper2slide`      | Workflow | Convert papers to beamer slides             |
+| `paper2poster`     | Workflow | Create academic posters                     |
+| `draw`             | Workflow | Create/enhance TikZ figures                 |
+| `ocr`              | Workflow | Extract text from images/PDFs               |
+| `transcribe_audio` | Workflow | Transcribe audio to text                    |
+| `merge`            | Workflow | Intelligently merge document versions       |
 
 ::: warning Important Note
 The underlying prompts and specific behaviors of these built-in agents may change slightly between TeXRA versions as we continue to optimize them. If you require precise, unchanging behavior or wish to heavily customize the process, consider creating a [Custom Agent](./custom-agents.md) based on these examples.
@@ -30,14 +33,9 @@ For details on the underlying structure and execution flow common to all agents,
 
 ### `chat`
 
-A general-purpose research assistant that can read, write, and edit files in your workspace. It acts as a friendly scientist focused on careful reasoning.
+Your go-to research companion. It can read your project, edit files, run shell commands, and search through your workspace—all in a back-and-forth conversation.
 
-**Capabilities:**
-
-- Read and analyze your documents
-- Edit files with your approval (via VS Code diff view)
-- Run shell commands for compilation or other tasks
-- Search through your project files
+> **User story:** You just got reviewer comments back. Instead of manually hunting through a 40-page paper, you open `chat` and paste the reviewer's feedback: "Address comment 3 about missing error bars in Table 2—add them and update the caption." The agent reads your files, makes the edits, and shows you a diff to approve.
 
 **Best for:** General research assistance, code/LaTeX editing, running compilations
 
@@ -50,13 +48,7 @@ Then update the file with your changes.
 
 ### `ask`
 
-A read-only assistant for exploring your workspace without risk of modifications.
-
-**Capabilities:**
-
-- Read and analyze documents
-- Search through project files
-- Answer questions about your codebase
+A read-only assistant for exploring your workspace. It can answer questions about your project without touching any files—safe to use when you just want to understand what's there.
 
 **Best for:** Quick questions, understanding existing code, safe exploration
 
@@ -70,14 +62,7 @@ What packages does this LaTeX project use? Summarize the document structure.
 
 ### `search`
 
-Specializes in finding academic literature and web content. Read-only - cannot modify your files.
-
-**Capabilities:**
-
-- Search arXiv for preprints and papers
-- Look up publications via Crossref/DOI
-- Fetch and summarize web pages
-- Cross-reference multiple sources
+Finds papers and web content for you. Give it a topic and it comes back with relevant preprints, published articles, and web resources. Read-only—it won't touch your files.
 
 **Best for:** Literature reviews, finding citations, fact-checking
 
@@ -90,14 +75,7 @@ Focus on papers from 2023-2024 that address mathematical equation handling.
 
 ### `research`
 
-Combines file editing with computational verification using Wolfram Language for symbolic mathematics.
-
-**Capabilities:**
-
-- Perform symbolic and numerical calculations
-- Verify mathematical derivations step-by-step
-- Edit files with computational results
-- Track progress on complex tasks
+A hands-on research agent that can edit your files **and** verify mathematics computationally. When you need to check a derivation or run a symbolic calculation alongside your writing, this is the one.
 
 **Best for:** Mathematical derivations, computational verification, multi-step research
 
@@ -110,14 +88,7 @@ Verify each step computationally and update the file with results.
 
 ### `discuss`
 
-An academic discussion partner for brainstorming and exploring research directions. Read-only with literature access.
-
-**Capabilities:**
-
-- Engage in substantive intellectual discourse
-- Find and synthesize relevant literature
-- Offer counterarguments and alternative perspectives
-- Connect ideas across papers
+A brainstorming partner that can pull in relevant literature as you talk. Useful for thinking through research directions, poking holes in methodology, or connecting ideas across papers. Read-only.
 
 **Best for:** Brainstorming, methodology critique, research direction guidance
 
@@ -132,14 +103,7 @@ tradeoffs compared to tree-based approaches? What does the literature say?
 
 ### `lean`
 
-Interactive Lean 4 proof assistant with VS Code integration.
-
-**Capabilities:**
-
-- Get real-time diagnostics and error feedback
-- Inspect proof state and types at any position
-- Search Mathlib for relevant lemmas
-- Build and verify proofs
+Helps you write and debug Lean 4 proofs. It reads compiler diagnostics, inspects proof state, and iterates until the proof compiles.
 
 **Best for:** Formalizing proofs, Lean 4 development, Mathlib projects
 
@@ -148,6 +112,35 @@ Interactive Lean 4 proof assistant with VS Code integration.
 ```
 Formalize the proof of the theorem in Proofs/GroupTheory.lean. Start with an
 informal outline, then produce Lean code and iterate until it compiles.
+```
+
+## Presentation & Simplification Agents
+
+### `presenter`
+
+Builds conference-ready Beamer presentations, posters, and visual materials from your project. Point it at your paper and it reads through your work, plans the slide structure, generates figures, and compiles the result—checking every slide visually before handing it back to you.
+
+**Best for:** Conference talks, poster sessions, seminar presentations, lightning talks
+
+**Example instruction:**
+
+```
+Create a 15-slide Beamer presentation from this project. Cover motivation, the core
+algorithm, key results, and future work. Use the metropolis theme and include TikZ
+diagrams for the architecture.
+```
+
+### `simplifier`
+
+Cuts through complexity in your code and writing. Whether it's duplicated logic across files, overly-abstract wrappers, or LLM-generated filler prose, `simplifier` cleans things up while preserving correctness.
+
+**Best for:** Refactoring research code, tightening manuscript prose, cleaning up verbose AI-generated text
+
+**Example instruction:**
+
+```
+Simplify the numerical solver in solver.py. Look for duplicated code, inline any
+single-use helper functions, and remove dead code. Run existing tests after each change.
 ```
 
 ## Correction & Polishing Agents
@@ -174,14 +167,11 @@ Don't change the technical content or writing style.
 
 ### `polish`
 
-The `polish` agent improves the writing quality of your document while preserving essential technical content and meaning. It focuses on:
+The `polish` agent improves the writing quality of your document while preserving essential technical content and meaning.
 
-- Enhancing clarity and readability
-- Improving sentence structure and paragraph flow
-- Fixing grammatical issues and typos
-- Standardizing formatting and style
+> **User story:** Your draft is technically solid but reads like it was written at 3 AM (because it was). Select `polish`, tell it "Improve clarity for a CVPR audience—keep all equations and citations intact," and in a couple of minutes you'll have a version that reads like it went through a professional copyedit. Review the colour-coded diff to accept or reject each change.
 
-This agent is ideal for refining drafts that are technically sound but need language improvements or polishing before submission.
+This agent is ideal for refining drafts that are technically sound but need language improvements before submission.
 
 #### Example Output
 
@@ -266,9 +256,9 @@ Highlight key figures and tables. Make it visually appealing with appropriate co
 
 ### `draw`
 
-The `draw` agent creates or enhances TikZ figures based on textual descriptions or existing figures.
+Creates or enhances TikZ figures from textual descriptions or existing code.
 
-**Purpose:** Generate visual representations of concepts, systems, or data.
+> **User story:** You need a neural-network architecture diagram for your paper. Describe the layers and connections in the instruction box, and `draw` generates compilable TikZ code.
 
 **Best for:**
 
@@ -319,6 +309,24 @@ The `transcribe_audio` agent converts audio files (like lectures, podcasts, or p
 ```
 Transcribe the provided lecture audio file [lecture.mp3]. Provide the output as plain text, identifying different speakers if possible (e.g., Lecturer, Questioner 1).
 ```
+
+## Merge Agent
+
+### `merge`
+
+Takes an AI-edited document and merges the improvements back into your original, keeping the best of both. It understands context, so it won't blindly overwrite your careful phrasing with generic rewrites.
+
+**Best for:** Applying AI-suggested edits from output files, incorporating reviewer suggestions, combining different drafts
+
+**Example instruction:**
+
+```
+Merge changes from the edited file into the original document. Prioritize substantive
+improvements in clarity while maintaining the original's technical precision.
+Preserve mathematical notation and citations from the original.
+```
+
+See [Intelligent Merge](./intelligent-merge.md) for details on the merge workflow.
 
 ## Next Steps
 
