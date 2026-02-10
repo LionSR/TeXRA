@@ -184,7 +184,7 @@ Example: Accept corrected file back to its original location:
       return buildApprovalRejectedResult(
         prepared[0].workspacePath,
         'accept_run_files',
-        [...new Set(rejectionMessages)].join('\n'),
+        rejectionMessages.join('\n'),
       );
     }
 
