@@ -72,8 +72,13 @@ export interface ToolUseFlowContext {
 /** Setup callback invoked after context creation, before execution starts. */
 export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
 
-/** Delegation tool names that subagents must not receive. */
-const DELEGATION_TOOLS = new Set(['delegate_workflow', 'delegate_agent']);
+/** Delegation tool names that subagents must not receive (includes legacy aliases). */
+const DELEGATION_TOOLS = new Set([
+  'delegate_workflow',
+  'delegate_agent',
+  'propose_workflow',
+  'propose_agent',
+]);
 
 /** Options for tool resolution. */
 interface ResolveToolsOptions {
