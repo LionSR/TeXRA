@@ -243,9 +243,6 @@ async function resolveDOI(
 
     const work: Work = response.content.message;
 
-    // Access fields that may not be in the library's Work type definition
-    const raw = work as Record<string, unknown>;
-
     const creators = work.author?.length
       ? work.author.map((a: CslCreator) => {
           if (a.given && a.family) {
@@ -263,14 +260,13 @@ async function resolveDOI(
         })
       : undefined;
 
-    // Extract year from published or created date-parts
+    // Extract year from published or created dateParts
     const year =
-      work.published?.['date-parts']?.[0]?.[0] ??
-      work.created?.['date-parts']?.[0]?.[0];
+      work.published?.dateParts?.[0]?.[0] ?? work.created?.dateParts?.[0]?.[0];
 
-    // container-title is an array in Crossref responses (may be empty)
-    const rawContainer = Array.isArray(raw['container-title'])
-      ? raw['container-title'][0]
+    // containerTitle is an array in Crossref responses (may be empty)
+    const rawContainer = Array.isArray(work.containerTitle)
+      ? work.containerTitle[0]
       : undefined;
     const containerTitle =
       rawContainer != null ? String(rawContainer) : undefined;
@@ -282,9 +278,9 @@ async function resolveDOI(
       ...(creators?.length && { creators }),
       ...(year != null && { date: String(year) }),
       ...(containerTitle && { publicationTitle: containerTitle }),
-      ...(raw.volume && { volume: String(raw.volume) }),
-      ...(raw.issue && { issue: String(raw.issue) }),
-      ...(raw.page && { pages: String(raw.page) }),
+      ...(work.volume && { volume: String(work.volume) }),
+      ...(work.issue && { issue: String(work.issue) }),
+      ...(work.page && { pages: String(work.page) }),
       ...(work.abstract && { abstractNote: work.abstract }),
       ...(work.resource?.primary?.URL && { url: work.resource.primary.URL }),
     };

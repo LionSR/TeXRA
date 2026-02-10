@@ -925,12 +925,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
           continue;
         }
 
-        const source = block.source;
-        if (!source) {
+        if (!block.source) {
           continue;
         }
 
-        if ('file_id' in (source as { file_id?: string })) {
+        // Cast to beta source type: upload code stores BetaFileDocumentSource
+        // entries (via Files API) into non-beta message arrays.
+        const source = block.source as BetaRequestDocumentBlock['source'];
+
+        if (source.type === 'file') {
           hasFileReference = true;
           continue;
         }
@@ -1016,8 +1019,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
           continue;
         }
 
-        const { source } = block;
-        if ('file_id' in (source as { file_id?: string })) {
+        const source = block.source as BetaRequestDocumentBlock['source'];
+        if (source.type === 'file') {
           hasFileSource = true;
         } else if (
           source.type === 'base64' &&
@@ -1077,11 +1080,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
           continue;
         }
 
-        const source = block.source;
+        // Cast to beta source type: upload code stores BetaFileDocumentSource
+        // entries (via Files API) into non-beta message arrays.
+        const source = block.source as BetaRequestDocumentBlock['source'];
 
-        if ('file_id' in (source as { file_id?: string })) {
+        if (source.type === 'file') {
           // PDF previously uploaded to the Files API — use tracked page count
-          const fileId = (source as { file_id: string }).file_id;
+          const fileId = source.file_id;
           const tracked = this.uploadedPdfPageCounts.get(fileId);
           if (tracked !== undefined) {
             totalPages += tracked;
