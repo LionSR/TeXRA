@@ -19,8 +19,6 @@ export const StreamDiagnosticsSchema = z.object({
   stopReason: z.string().nullable().prefault(null),
   /** Anthropic message ID from message_start (e.g. 'msg_01XFD...') */
   anthropicMessageId: z.string().nullable().prefault(null),
-  /** Anthropic request ID from response headers (x-request-id) */
-  anthropicRequestId: z.string().nullable().prefault(null),
 });
 
 export type StreamDiagnostics = z.infer<typeof StreamDiagnosticsSchema>;

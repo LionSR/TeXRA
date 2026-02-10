@@ -1051,9 +1051,6 @@ export class RequestPanels extends LitElement {
       lines.push(`  messageStopReceived: ${diag.messageStopReceived}`);
       lines.push(`  stopReason: ${diag.stopReason ?? 'null'}`);
       lines.push(`  anthropicMessageId: ${diag.anthropicMessageId ?? 'null'}`);
-      lines.push(
-        `  anthropicRequestId: ${diag.anthropicRequestId ?? 'null'}`,
-      );
       lines.push(`  eventsProcessed: ${diag.eventsProcessed}`);
       lines.push(`  lastEventType: ${diag.lastEventType ?? 'null'}`);
       lines.push(`  thinkingChars: ${diag.thinkingChars}`);
