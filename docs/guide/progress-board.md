@@ -1,6 +1,6 @@
 # ProgressBoard
 
-The ProgressBoard monitors agent execution, displays logs, and manages past runs.
+The ProgressBoard is where you watch agents work and review what they did. Think of it as the flight recorder for every TeXRA run—you can see live progress, re-run a past job, or restore its settings with one click.
 
 ## Accessing the ProgressBoard
 
@@ -53,6 +53,31 @@ The header provides a summary and actions for the selected stream:
   - <i class="codicon codicon-archive"></i> **Pack**: Archives the output files and log for this stream into the `History` folder. See [File Management](./file-management.md).
   - <i class="codicon codicon-trash"></i> **Clean**: Deletes the output files associated with this stream.
   - <i class="codicon codicon-clear-all"></i> **Erase**: Removes this stream and its log content entirely from the ProgressBoard.
+
+### YOLO Mode
+
+Tired of clicking "Approve" on every file edit? The **YOLO mode** toggle in the header lets tool-use agents run hands-free - they'll edit files, run commands, and search the web without stopping to ask. Great for tasks you trust; just flip it off when you want to review each step.
+
+### Context Utilization
+
+A small percentage next to the token count shows how full the model's context window is. When it climbs toward 100%, the conversation may get compacted automatically or you might want to start a fresh session.
+
+### Todo List
+
+When a tool-use agent tackles a multi-step task, it shows a **live checklist** right in the ProgressBoard. Each item moves from Pending to In Progress to Completed so you always know what the agent is working on and how far along it is.
+
+### Followup Tasks
+
+Finished a polish run and want to discuss the results or merge the outputs? Instead of setting everything up again, use the **Followup** controls that appear after a workflow completes:
+
+- **Chat** about what the agent changed
+- **Run another agent** (like `merge`) on the output files
+
+The followup picks up right where the previous run left off - no need to re-select files or re-enter your instruction.
+
+### Memory
+
+Tool-use agents can remember things between sessions. When memory is enabled (toggle in the toolbar), agents save useful notes about your project. You can browse and delete these notes from the **Memory** tab in the Dashboard, or by running **TeXRA: Show Memory** from the Command Palette.
 
 ### Log Content
 
