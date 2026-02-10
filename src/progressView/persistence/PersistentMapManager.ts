@@ -34,12 +34,6 @@ export abstract class PersistentMapManager<K extends string, V> {
     this.storageKey = storageKey;
   }
 
-  /** Add an entry to the map and persist it */
-  async add(key: K, value: V): Promise<void> {
-    this.items.set(key, value);
-    await this.save();
-  }
-
   /** Delete an entry and persist the change */
   async delete(key: K): Promise<void> {
     this.items.delete(key);
@@ -83,11 +77,6 @@ export abstract class PersistentMapManager<K extends string, V> {
   /** Get all keys */
   keys(): K[] {
     return [...this.items.keys()];
-  }
-
-  /** Replace all entries (used during loading) */
-  setAll(entries: Map<K, V>): void {
-    this.items = new Map(entries);
   }
 
   /** Serialize a value before saving. Override for custom serialization. */
