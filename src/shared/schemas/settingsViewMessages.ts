@@ -93,7 +93,8 @@ export const AgentSelectionItemSchema = z.object({
   description: z.string().optional(),
   hasPath: z.boolean(),
   tools: z.array(z.string()).optional(),
-  hasMultiple: z.boolean(),
+  hasMultiple: z.boolean(), // supports multiple outputs (informational)
+  hasMultiplePath: z.boolean(), // has openable _multiple YAML file
   enabled: z.boolean(),
 });
 export type AgentSelectionItem = z.infer<typeof AgentSelectionItemSchema>;
