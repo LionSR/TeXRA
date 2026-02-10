@@ -78,3 +78,4 @@ CLAUDE.md
 supabase/**
 releases/**
 prds/**
+.prettierignore
