@@ -190,12 +190,6 @@ export const UpdateTodosMessageSchema = z.object({
   todos: z.array(TodoItemSchema),
 });
 
-export const UpdateUsageMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_USAGE),
-  stream: StreamTabIdSchema,
-  usage: z.record(z.string(), TokenUsageStatsSchema),
-});
-
 export const UpdateRunUsageMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE),
   stream: StreamTabIdSchema,
@@ -328,7 +322,6 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     AddTaskGroupMessageSchema,
     UpdateTaskGroupMessageSchema,
     UpdateTodosMessageSchema,
-    UpdateUsageMessageSchema,
     UpdateRunUsageMessageSchema,
     UpdateContextStateMessageSchema,
     UpdateQueuedFollowUpsMessageSchema,
@@ -358,31 +351,6 @@ export type ProgressViewOutboundMessage = z.infer<
   typeof ProgressViewOutboundMessageSchema
 >;
 
-export type UpdateStreamsMessage = z.infer<typeof UpdateStreamsMessageSchema>;
-export type UpdateLogsMessage = z.infer<typeof UpdateLogsMessageSchema>;
-export type AppendLogMessage = z.infer<typeof AppendLogMessageSchema>;
-export type UpdateLogMessage = z.infer<typeof UpdateLogMessageSchema>;
-export type UpdateFilesMessage = z.infer<typeof UpdateFilesMessageSchema>;
-export type UpdateInstructionMessage = z.infer<
-  typeof UpdateInstructionMessageSchema
->;
-export type AddTaskGroupMessage = z.infer<typeof AddTaskGroupMessageSchema>;
-export type UpdateTaskGroupMessage = z.infer<
-  typeof UpdateTaskGroupMessageSchema
->;
-export type UpdateTodosMessage = z.infer<typeof UpdateTodosMessageSchema>;
-export type ShowToolEditApprovalMessage = z.infer<
-  typeof ShowToolEditApprovalMessageSchema
->;
-export type ShowBashApprovalMessage = z.infer<
-  typeof ShowBashApprovalMessageSchema
->;
-export type ShowRetryRequestMessage = z.infer<
-  typeof ShowRetryRequestMessageSchema
->;
-export type ShowAgentProposalMessage = z.infer<
-  typeof ShowAgentProposalMessageSchema
->;
 export type SetFollowupOptionsMessage = z.infer<
   typeof SetFollowupOptionsMessageSchema
 >;

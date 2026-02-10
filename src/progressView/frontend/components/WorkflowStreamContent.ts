@@ -91,15 +91,17 @@ export class WorkflowStreamContent extends LitElement {
   @state()
   private permissionContext?: PermissionState[];
 
-  // Memoized derived values - updated in willUpdate when deps change
-  @state() private runGroups: RunGroup[] = [];
-  @state() private runValues: RunDerivedValues = {
+  // Memoized derived values - updated in willUpdate() before render().
+  // Not @state(): these are always recomputed when streamContext/permissionContext
+  // change, so they don't need independent reactivity (avoids double-render).
+  private runGroups: RunGroup[] = [];
+  private runValues: RunDerivedValues = {
     instruction: null,
     usage: null,
     files: {},
     hasFiles: false,
   };
-  @state() private filteredPermissions: PermissionState[] = [];
+  private filteredPermissions: PermissionState[] = [];
 
   protected override willUpdate(changedProperties: PropertyValues): void {
     if (changedProperties.has('streamContext')) {

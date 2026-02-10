@@ -50,12 +50,12 @@ export interface PermissionActionDetail {
   modelOverride?: string;
 }
 
-export interface GroupToggleDetail {
+interface GroupToggleDetail {
   groupId: string;
   expanded: boolean;
 }
 
-export interface FileClickDetail {
+interface FileClickDetail {
   file: string;
   line?: number;
 }
