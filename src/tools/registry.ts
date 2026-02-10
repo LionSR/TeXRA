@@ -41,7 +41,7 @@ import {
   LeanLoogleTool,
 } from './lean';
 import { WorkflowAgentTool, DelegateAgentTool } from './WorkflowTool';
-import { ExecutionsTool } from './RunsTool';
+import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 
 /** Singleton IToolRegistry instance for the default tools. */
@@ -91,6 +91,10 @@ export function getDefaultToolRegistry(): IToolRegistry {
       delegate_agent: new DelegateAgentTool(),
       executions: new ExecutionsTool(),
       accept_run_files: new AcceptRunFilesTool(),
+      // Legacy aliases — old agent configs may reference these names
+      propose_workflow: new WorkflowAgentTool(),
+      propose_agent: new DelegateAgentTool(),
+      runs: new ExecutionsTool(),
     });
   }
   return defaultRegistryInstance;
