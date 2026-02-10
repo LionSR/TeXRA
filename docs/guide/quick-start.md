@@ -238,13 +238,13 @@ Here are some common tasks you can try with TeXRA:
 ### Fixing Grammar and Typos
 
 - **Agent**: `correct`
-- **Model**: `gemini25p`, `gpt41`, `gpt51`, `gpt5`, or `gpt5pro`
+- **Model**: `gemini3f`, `gemini3p`, `gpt41`, or `sonnet45`
 - **Instruction**: "Fix grammatical errors and typos without changing the content or technical terminology."
 
 ### Converting a Paper to Slides
 
 - **Agent**: `paper2slide`
-- **Model**: `sonnet45T`, `gpt51`, `gpt5`, or `gpt5pro`
+- **Model**: `sonnet45T`, `opus46`, or `gpt52`
 - **Instruction**: "Convert this paper into presentation slides using the beamer template. Create approximately 12-15 slides highlighting the key points, methodology, and results."
 
 ### Improving Writing Style
