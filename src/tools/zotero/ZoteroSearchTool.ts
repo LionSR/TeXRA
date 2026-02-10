@@ -18,21 +18,69 @@ import {
   type BbtSearchResultItem,
 } from './bbtClient';
 
-const ZoteroSearchInputSchema = z.strictObject({
-  query: z
-    .string()
-    .min(1)
-    .describe(
-      'Search query - can be citation key, title, author, or year. ' +
-        'Works like the search box in Zotero.',
+/**
+ * Build a human-readable label from whichever search parameters are set.
+ */
+function describeSearch(input: {
+  query?: string | null;
+  title?: string | null;
+  author?: string | null;
+  year?: string | number | null;
+}): string {
+  if (input.query) return input.query;
+  const parts: string[] = [];
+  if (input.title) parts.push(`title="${input.title}"`);
+  if (input.author) parts.push(`author="${input.author}"`);
+  if (input.year) parts.push(`year=${input.year}`);
+  return parts.join(', ');
+}
+
+const ZoteroSearchInputSchema = z
+  .strictObject({
+    query: z
+      .string()
+      .min(1)
+      .describe(
+        'Quick search string (searches across title, creators, and year simultaneously). ' +
+          'Best for short queries like a single surname or citekey. ' +
+          'All words must match, so keep it to one or two terms. ' +
+          'Omit this when using the structured title/author/year fields instead.',
+      )
+      .nullish(),
+    title: z
+      .string()
+      .describe(
+        'Search by title (partial match). Use a few distinctive words, not the full title.',
+      )
+      .nullish(),
+    author: z
+      .string()
+      .describe(
+        'Search by author/creator surname (partial match). Use a single surname.',
+      )
+      .nullish(),
+    year: z
+      .union([z.string(), z.number()])
+      .describe('Filter by publication year (exact match).')
+      .nullish(),
+    library: z
+      .string()
+      .describe(
+        'Optional library name to search in. Use "*" to search all libraries.',
+      )
+      .nullish(),
+  })
+  .check(
+    z.check(
+      (val: {
+        query?: string | null;
+        title?: string | null;
+        author?: string | null;
+        year?: string | number | null;
+      }) => !!(val.query || val.title || val.author || val.year),
+      'Provide at least one of: query, title, author, or year.',
     ),
-  library: z
-    .string()
-    .describe(
-      'Optional library name to search in. Use "*" to search all libraries.',
-    )
-    .nullish(),
-});
+  );
 
 export type ZoteroSearchInput = z.infer<typeof ZoteroSearchInputSchema>;
 
@@ -78,13 +126,33 @@ export class ZoteroSearchTool extends defineTool({
   name: 'zotero_search',
   description:
     'Search Zotero library by citation key, title, author, or year. ' +
+    'Prefer the structured title/author/year fields over a single query string. ' +
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroSearchInputSchema,
 }) {
-  protected async execute({ query, library }: ZoteroSearchInput) {
+  protected async execute({
+    query,
+    title,
+    author,
+    year,
+    library,
+  }: ZoteroSearchInput) {
     const port = getZoteroPort();
 
-    const params: unknown[] = [query];
+    // Build search params: use advanced tuple search when structured fields
+    // are provided, otherwise fall back to simple quick-search string.
+    let searchTerms: unknown;
+    if (title || author || year) {
+      const conditions: [string, string, string][] = [];
+      if (title) conditions.push(['title', 'contains', title]);
+      if (author) conditions.push(['creator', 'contains', author]);
+      if (year) conditions.push(['date', 'is', String(year)]);
+      searchTerms = conditions;
+    } else {
+      searchTerms = query!;
+    }
+
+    const params: unknown[] = [searchTerms];
     if (library) {
       params.push(library);
     }
@@ -95,9 +163,11 @@ export class ZoteroSearchTool extends defineTool({
       port,
     );
 
+    const label = describeSearch({ query, title, author, year });
+
     if (!Array.isArray(result) || result.length === 0) {
       return {
-        summary: `No results found for "${query}"`,
+        summary: `No results found for ${label}`,
         output: 'No matching items in Zotero library.',
       };
     }
@@ -106,7 +176,7 @@ export class ZoteroSearchTool extends defineTool({
     const items = result.map((item) => formatSearchResult(item));
 
     return {
-      summary: `Found ${result.length} item${result.length === 1 ? '' : 's'} matching "${query}"`,
+      summary: `Found ${result.length} item${result.length === 1 ? '' : 's'} matching ${label}`,
       output: items.join('\n'),
     };
   }
