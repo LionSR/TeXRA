@@ -29,7 +29,7 @@ import type {
 } from './events';
 
 // Local imports - shared schemas (types)
-import type { LogMessageData, StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - component types
 import type { FollowUpInput } from './components/FollowUpInput';
@@ -47,15 +47,6 @@ export interface FrontendEventHandlerContext {
   setStreamState(
     streamId: StreamTabId,
     updater: (prev: StreamState) => StreamState,
-  ): void;
-  /**
-   * Fast path for log-only updates. Bypasses willUpdate, Map copy,
-   * hasMetaChange — directly updates logs in the Map and the log context.
-   * Used by APPEND_LOG and UPDATE_LOG (the hot path during streaming).
-   */
-  updateStreamLogs(
-    streamId: StreamTabId,
-    updater: (logs: LogMessageData[]) => LogMessageData[],
   ): void;
   getFollowUpRef(): FollowUpInput | undefined;
   /** Persist filter/sort preferences to webview state. */
