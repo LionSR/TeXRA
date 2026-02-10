@@ -30,7 +30,12 @@ import {
 } from '@tools/approval/toolEditApproval';
 
 // Local imports - utils
-import { StorageFS, WorkspaceFS, flexibleFS, createRunStorageLocation } from '@utils/files';
+import {
+  StorageFS,
+  WorkspaceFS,
+  flexibleFS,
+  createRunStorageLocation,
+} from '@utils/files';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 
@@ -105,7 +110,11 @@ Example: Accept corrected file back to its original location:
           );
         }
 
-        const sourceRelative = path.join(TASK_RUNS_DIR, executionId, mapping.run_path);
+        const sourceRelative = path.join(
+          TASK_RUNS_DIR,
+          executionId,
+          mapping.run_path,
+        );
         const sourceAbsolute = StorageFS.fullPath(sourceRelative);
 
         if (!(await StorageFS.exists(sourceRelative))) {
@@ -123,10 +132,16 @@ Example: Accept corrected file back to its original location:
           );
         }
 
-        const sourceLocation = createRunStorageLocation(sourceAbsolute, mapping.run_path, executionId);
+        const sourceLocation = createRunStorageLocation(
+          sourceAbsolute,
+          mapping.run_path,
+          executionId,
+        );
         const proposedContent = await flexibleFS.read(sourceLocation);
         const destExists = await WorkspaceFS.exists(dest.relativePath);
-        const originalContent = destExists ? await WorkspaceFS.read(dest.relativePath) : '';
+        const originalContent = destExists
+          ? await WorkspaceFS.read(dest.relativePath)
+          : '';
 
         return {
           runPath: mapping.run_path,
@@ -156,7 +171,9 @@ Example: Accept corrected file back to its original location:
         rejected++;
         if (approval.userMessage) rejectionMessages.push(approval.userMessage);
         const mappingNote =
-          entry.runPath !== entry.workspacePath ? ` (from ${entry.runPath})` : '';
+          entry.runPath !== entry.workspacePath
+            ? ` (from ${entry.runPath})`
+            : '';
         results.push(`rejected: ${entry.workspacePath}${mappingNote}`);
         continue;
       }

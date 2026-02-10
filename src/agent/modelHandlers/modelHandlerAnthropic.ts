@@ -1061,9 +1061,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * Only messages at or after the last compaction block are counted, because
    * the Anthropic API drops pre-compaction messages server-side.
    */
-  private async validatePdfPageLimit(
-    messages: MessageParam[],
-  ): Promise<void> {
+  private async validatePdfPageLimit(messages: MessageParam[]): Promise<void> {
     const startIndex = this.findLastCompactionMessageIndex(messages);
     let totalPages = 0;
 
