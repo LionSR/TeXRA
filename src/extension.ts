@@ -45,6 +45,7 @@ import { registerCommands, getMainViewProvider } from './commands';
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
 let disposeStatusListener: (() => void) | undefined;
+let progressViewProviderInstance: ProgressViewProvider | undefined;
 
 async function refreshApiKeyStatus() {
   if (!apiKeyStatusBarItem) {
@@ -198,6 +199,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Create the log view provider
   const progressViewProvider = new ProgressViewProvider(context);
+  progressViewProviderInstance = progressViewProvider;
   await progressViewProvider.initialize();
 
   // Log activation message to ensure the logger is working correctly
@@ -327,6 +329,9 @@ export async function deactivate() {
   await UsageLogService.dispose();
 
   // PersistedFlow cleanup is handled automatically via ExecutionKVStore.
+
+  // Flush pending progress-view persistence writes before teardown.
+  await progressViewProviderInstance?.flushState();
 
   // Notify all listeners that extension is deactivating
   bus.emit('extensionDeactivating', undefined);

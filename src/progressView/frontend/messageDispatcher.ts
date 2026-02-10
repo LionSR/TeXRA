@@ -87,6 +87,31 @@ function clearPendingLogUpdatesForStream(streamId: string): void {
   }
 }
 
+function prependToolUseInstructionIfNeeded(
+  logs: LogMessageData[],
+  runInstructions: Record<string, { text: string }> | undefined,
+  activeRunId: string | undefined,
+): LogMessageData[] {
+  if (!activeRunId) return logs;
+
+  const instructionText = runInstructions?.[activeRunId]?.text?.trim();
+  if (!instructionText) return logs;
+
+  const firstMessage = logs[0];
+  if (firstMessage?.messageType === 'userMessage') return logs;
+
+  return [
+    {
+      id: `tool-use-instruction:${activeRunId}`,
+      text: instructionText,
+      level: 'info',
+      timestamp: (firstMessage?.timestamp ?? Date.now()) - 1,
+      messageType: 'userMessage',
+    },
+    ...logs,
+  ];
+}
+
 function addPermission(
   ctx: MessageHandlerContext,
   permission: PermissionState,
@@ -304,9 +329,18 @@ const handlers: HandlerRegistry = {
         contextState,
       } = data;
 
+      const nextLogs =
+        !isClear && isToolUseState(prev)
+          ? prependToolUseInstructionIfNeeded(
+              messages,
+              runInstructions,
+              activeRunId,
+            )
+          : messages;
+
       const baseUpdate = {
         ...prev,
-        logs: isClear ? [] : messages,
+        logs: isClear ? [] : nextLogs,
         taskGroups: isClear ? [] : (groups ?? prev.taskGroups),
         contextState: contextState ?? prev.contextState,
       };

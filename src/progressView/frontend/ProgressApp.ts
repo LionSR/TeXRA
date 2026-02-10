@@ -212,9 +212,10 @@ export class ProgressApp extends BaseWebviewApp {
     const logDataChanged =
       streamSwitched ||
       this.streamLogContextValue.runId !== newRunId ||
-      this.streamLogContextValue.logs !== (newStreamState?.logs ?? []) ||
+      this.streamLogContextValue.logs !==
+        (newStreamState?.logs ?? EMPTY_LOG_CONTEXT.logs) ||
       this.streamLogContextValue.taskGroups !==
-        (newStreamState?.taskGroups ?? []);
+        (newStreamState?.taskGroups ?? EMPTY_LOG_CONTEXT.taskGroups);
 
     this.updateContexts(logDataChanged);
   }
