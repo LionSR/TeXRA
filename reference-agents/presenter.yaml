@@ -82,6 +82,9 @@ prompts:
     (4) For Wolfram-generated plots, export to PDF and include.
     (5) After generating any plot, read the image file with read_file to verify: axes labels visible, legend not overlapping data, no clipping, proper aspect ratio. Regenerate if issues found.
 
+    Style Consolidation (multiple figures or multiple presentations):
+    When a presentation contains multiple TikZ/pgfplots figures, or when building multiple .tex files, avoid duplicating style definitions across figures or documents. Instead, consolidate common styles (colors, line/marker schemes, axis defaults, named TikZ styles) into the preamble or a shared style file that each document can \input{}.
+
     TikZ Diagram Verification (CRITICAL — Iterative):
     Whenever you generate or modify TikZ code, use extract_tikz_figures to preview each diagram individually. Iterate (extract → inspect → fix → re-extract) until every diagram passes. Check for:
       (a) Rendering: No overflows, clipped edges, missing labels, or overlapping nodes/edges.
