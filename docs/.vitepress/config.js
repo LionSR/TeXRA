@@ -124,6 +124,7 @@ const baseConfig = {
             { text: 'LaTeX Tools', link: '/guide/latex-tools' },
             { text: 'File Management', link: '/guide/file-management' },
             { text: 'Multiple Output', link: '/guide/multiple-output' },
+            { text: 'Working with Overleaf', link: '/guide/working-with-overleaf' },
             { text: 'ProgressBoard', link: '/guide/progress-board' },
           ],
         },
@@ -173,7 +174,7 @@ const baseConfig = {
       provider: 'local',
     },
     footer: {
-      copyright: 'Copyright © 2024-present TeXRA Team. All rights reserved.',
+      copyright: 'Copyright © 2024-2026 TeXRA Team. All rights reserved.',
     },
   },
   ignoreDeadLinks: true,

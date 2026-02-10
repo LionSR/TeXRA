@@ -61,11 +61,10 @@ GPT-5 reasoning summaries require account verification. Enable with `texra.model
 
 ## Moonshot Kimi Models
 
-| Model ID | Use Case                       | Cost | Speed  |
-| :------- | :----------------------------- | :--- | :----- |
-| `kimi2`  | Agent tasks, 256k context      | $$$  | Medium |
-| `kimi2T` | K2 with thinking mode          | $$   | Medium |
-| `kimit`  | Detailed reasoning with vision | $$$  | Medium |
+| Model ID  | Use Case                    | Cost | Speed  |
+| :-------- | :-------------------------- | :--- | :----- |
+| `kimi25T` | K2.5 with thinking mode     | $$$  | Medium |
+| `kimi25`  | K2.5, agent tasks           | $$$  | Medium |
 
 ## DashScope Qwen Models
 
@@ -85,7 +84,7 @@ GPT-5 reasoning summaries require account verification. Enable with `texra.model
 
 ## Choosing a Model
 
-- **Simple tasks**: Fast, cheap models (`gemini25f-`, `gpt5--`, `haiku35`)
+- **Simple tasks**: Fast, cheap models (`gemini25f-`, `gpt5-`, `haiku35`)
 - **Complex tasks**: Powerful models (`opus46`, `gpt52pro`, `o1`)
 - **Reasoning-heavy**: Thinking models (`sonnet45T`, `deepseekT`, `o3`)
 - **Large documents**: High-context models (`gemini*`, `gpt41`, `gpt5`)
