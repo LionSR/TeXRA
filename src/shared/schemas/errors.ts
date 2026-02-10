@@ -11,6 +11,14 @@ export const StreamDiagnosticsSchema = z.object({
   elapsedSecs: z.number().prefault(0),
   secsSinceLastEvent: z.number().prefault(0),
   finalized: z.boolean().prefault(false),
+  /** Whether a message_start event was received from the API */
+  messageStartReceived: z.boolean().prefault(false),
+  /** Whether a message_stop event was received from the API */
+  messageStopReceived: z.boolean().prefault(false),
+  /** Stop reason from message_delta (e.g. 'end_turn', 'tool_use', 'max_tokens') */
+  stopReason: z.string().nullable().prefault(null),
+  /** Anthropic message ID from message_start (e.g. 'msg_01XFD...') */
+  anthropicMessageId: z.string().nullable().prefault(null),
 });
 
 export type StreamDiagnostics = z.infer<typeof StreamDiagnosticsSchema>;
