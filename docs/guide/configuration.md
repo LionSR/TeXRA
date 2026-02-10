@@ -2,9 +2,23 @@
 
 TeXRA provides extensive configuration options that allow you to customize its behavior to match your workflow (don't worry, the defaults are sensible!). This guide explains the available settings and how to adjust them for optimal performance.
 
+## The TeXRA Dashboard
+
+The **Dashboard** is a unified panel that consolidates several management views into one place. Open it via the Command Palette (`Ctrl+Shift+P`) with **TeXRA: Show Dashboard** (or **TeXRA: Show Agents**, **TeXRA: View Profile**, etc.):
+
+- **Agents tab**: Toggle agent visibility for the current workspace. Agents with a `_multiple.yaml` variant are flagged with a multi-output badge.
+- **Models tab**: A provider-grouped list of all available models with checkboxes to control which appear in the model dropdown. Deprecation toggles and tier availability indicators help you choose. You can also set/remove API keys for each provider inline.
+- **History tab**: Searchable, collapsible list of past agent execution sessions.
+- **Memory tab**: Browse and delete agent memory entries stored across sessions.
+- **Profile tab**: View your account status, access level, and available remote agents.
+
+::: tip
+Streaming and endpoint settings (like `useStreaming`, `useOpenAIResponsesAPI`) have been migrated from VS Code settings to the **Settings View** accessible from the Dashboard.
+:::
+
 ## Accessing Configuration
 
-You can configure TeXRA through VS Code's settings:
+You can also configure TeXRA through VS Code's standard settings:
 
 1. Open VS Code Settings (File > Preferences > Settings or `Ctrl+,`)
 2. Search for "TeXRA" to see all available settings
