@@ -18,15 +18,56 @@ import {
   type BbtSearchResultItem,
 } from './bbtClient';
 
+const BaseSearchSchema = z.strictObject({
+  query: z
+    .string()
+    .min(1)
+    .describe(
+      'Quick search string (searches across title, creators, and year simultaneously). ' +
+        'Best for short queries like a single surname or citekey. ' +
+        'All words must match, so keep it to one or two terms. ' +
+        'Omit this when using the structured title/author/year fields instead.',
+    )
+    .nullish(),
+  title: z
+    .string()
+    .describe(
+      'Search by title (partial match). Use a few distinctive words, not the full title.',
+    )
+    .nullish(),
+  author: z
+    .string()
+    .describe(
+      'Search by author/creator surname (partial match). Use a single surname.',
+    )
+    .nullish(),
+  year: z
+    .union([z.string(), z.number()])
+    .describe('Filter by publication year (exact match).')
+    .nullish(),
+  library: z
+    .string()
+    .describe(
+      'Optional library name to search in. Use "*" to search all libraries.',
+    )
+    .nullish(),
+});
+
+type BaseSearchInput = z.infer<typeof BaseSearchSchema>;
+
+const ZoteroSearchInputSchema = BaseSearchSchema.refine(
+  (val) => !!(val.query || val.title || val.author || val.year),
+  'Provide at least one of: query, title, author, or year.',
+);
+
+export type ZoteroSearchInput = z.infer<typeof ZoteroSearchInputSchema>;
+
 /**
  * Build a human-readable label from whichever search parameters are set.
  */
-function describeSearch(input: {
-  query?: string | null;
-  title?: string | null;
-  author?: string | null;
-  year?: string | number | null;
-}): string {
+function describeSearch(
+  input: Pick<BaseSearchInput, 'query' | 'title' | 'author' | 'year'>,
+): string {
   if (input.query) return input.query;
   const parts: string[] = [];
   if (input.title) parts.push(`title="${input.title}"`);
@@ -34,55 +75,6 @@ function describeSearch(input: {
   if (input.year) parts.push(`year=${input.year}`);
   return parts.join(', ');
 }
-
-const ZoteroSearchInputSchema = z
-  .strictObject({
-    query: z
-      .string()
-      .min(1)
-      .describe(
-        'Quick search string (searches across title, creators, and year simultaneously). ' +
-          'Best for short queries like a single surname or citekey. ' +
-          'All words must match, so keep it to one or two terms. ' +
-          'Omit this when using the structured title/author/year fields instead.',
-      )
-      .nullish(),
-    title: z
-      .string()
-      .describe(
-        'Search by title (partial match). Use a few distinctive words, not the full title.',
-      )
-      .nullish(),
-    author: z
-      .string()
-      .describe(
-        'Search by author/creator surname (partial match). Use a single surname.',
-      )
-      .nullish(),
-    year: z
-      .union([z.string(), z.number()])
-      .describe('Filter by publication year (exact match).')
-      .nullish(),
-    library: z
-      .string()
-      .describe(
-        'Optional library name to search in. Use "*" to search all libraries.',
-      )
-      .nullish(),
-  })
-  .check(
-    z.check(
-      (val: {
-        query?: string | null;
-        title?: string | null;
-        author?: string | null;
-        year?: string | number | null;
-      }) => !!(val.query || val.title || val.author || val.year),
-      'Provide at least one of: query, title, author, or year.',
-    ),
-  );
-
-export type ZoteroSearchInput = z.infer<typeof ZoteroSearchInputSchema>;
 
 /**
  * Format a single search result item for display.
