@@ -403,18 +403,26 @@ export class ProgressApp extends BaseWebviewApp {
     streamId: StreamTabId,
     updater: (prev: StreamState) => StreamState,
   ): void {
+    // Fast path: stream already has state (common during streaming).
+    // Only fall back to streams.find() when creating default state for new streams.
+    let current = this.appState.streamStates.get(streamId);
+    if (!current) {
+      const streamInfo = this.appState.streams.find(
+        (stream) => stream.name === streamId,
+      );
+      // Skip unknown streams - they'll receive full state via UPDATE_LOGS after initialization
+      if (!streamInfo) return;
+      current = getStreamState(
+        this.appState,
+        streamId,
+        streamInfo.agentCategory,
+      );
+    }
+    const updated = updater(current);
+    // Skip no-op updates: avoid Map copy + appState spread + willUpdate cycle
+    if (updated === current) return;
     const nextStates = new Map(this.appState.streamStates);
-    const streamInfo = this.appState.streams.find(
-      (stream) => stream.name === streamId,
-    );
-    // Skip unknown streams - they'll receive full state via UPDATE_LOGS after initialization
-    if (!streamInfo) return;
-    const current = getStreamState(
-      this.appState,
-      streamId,
-      streamInfo.agentCategory,
-    );
-    nextStates.set(streamId, updater(current));
+    nextStates.set(streamId, updated);
     this.appState = { ...this.appState, streamStates: nextStates };
   }
 

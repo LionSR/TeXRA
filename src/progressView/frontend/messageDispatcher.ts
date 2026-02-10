@@ -429,35 +429,31 @@ const handlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_LOG]: (data, ctx) => {
     const logId = data.logMessage.id;
-    const state = ctx.getState();
-    const streamInfo = state.streams.find(
-      (stream) => stream.name === data.stream,
-    );
-    const streamState = getStreamState(
-      state,
-      data.stream,
-      streamInfo?.agentCategory,
-    );
-    const logExists = streamState.logs.some((entry) => entry.id === logId);
 
-    if (!logExists) {
-      if (logId) {
-        const key = getPendingLogKey(data.stream, logId);
-        const existingUpdate = pendingLogUpdates.get(key) ?? {};
-        pendingLogUpdates.set(key, {
-          ...existingUpdate,
-          ...data.logMessage,
-        });
+    // Single-pass: setStreamState gets current state from the Map directly
+    // (no redundant streams.find or getStreamState here).
+    // The updater does findIndex (one scan) instead of some + map (two scans).
+    // Returns prev unchanged when log not found → setStreamState skips the update.
+    ctx.setStreamState(data.stream, (prev) => {
+      const logIndex = prev.logs.findIndex((entry) => entry.id === logId);
+
+      if (logIndex < 0) {
+        // Out-of-order: APPEND hasn't arrived yet, stash for later merge
+        if (logId) {
+          const key = getPendingLogKey(data.stream, logId);
+          const existingUpdate = pendingLogUpdates.get(key) ?? {};
+          pendingLogUpdates.set(key, {
+            ...existingUpdate,
+            ...data.logMessage,
+          });
+        }
+        return prev; // No change — setStreamState skips Map copy + willUpdate
       }
-      return;
-    }
 
-    ctx.setStreamState(data.stream, (prev) => ({
-      ...prev,
-      logs: prev.logs.map((entry) =>
-        entry.id === data.logMessage.id ? data.logMessage : entry,
-      ),
-    }));
+      const newLogs = [...prev.logs];
+      newLogs[logIndex] = data.logMessage;
+      return { ...prev, logs: newLogs };
+    });
   },
 
   // Status updates
