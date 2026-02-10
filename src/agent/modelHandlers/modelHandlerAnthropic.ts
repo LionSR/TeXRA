@@ -758,8 +758,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
             httpResponse?.headers?.get?.('request-id') ??
             httpResponse?.headers?.get?.('x-request-id');
           if (reqId && streamError instanceof Error) {
-            (streamError as Error & { request_id?: string }).request_id =
-              reqId;
+            (streamError as Error & { request_id?: string }).request_id = reqId;
           }
         } catch {
           // Response may not be available (e.g. network error before HTTP response)
