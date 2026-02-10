@@ -101,8 +101,8 @@ const STATUS_ICONS: Record<string, string> = {
   in_progress: 'codicon codicon-sync spin',
 };
 
-/** Tools that represent agent proposals (have restorable config). */
-const PROPOSAL_TOOLS = new Set(['propose_agent', 'propose_workflow']);
+/** Tools that represent agent delegation (have restorable config). */
+const DELEGATION_TOOLS = new Set(['delegate_agent', 'delegate_workflow']);
 
 type ToolSectionOptions = {
   toolName?: string;
@@ -434,16 +434,16 @@ export function formatToolUseTemplate(
   // prettier-ignore
   const timerTemplate = isInProgress ? html`<tool-timer .startTime=${timestamp} .timeoutMs=${toolTimeoutMs ?? 0}></tool-timer>` : undefined;
 
-  // Proposal banner extras: mode badge + setup link (shown in summary row)
-  const isProposal = PROPOSAL_TOOLS.has(toolName);
+  // Delegation banner extras: mode badge + setup link (shown in summary row)
+  const isDelegation = DELEGATION_TOOLS.has(toolName);
   const proposalMode =
-    isProposal && isPlainObject(input) && typeof input.mode === 'string'
+    isDelegation && isPlainObject(input) && typeof input.mode === 'string'
       ? input.mode
-      : isProposal
+      : isDelegation
         ? 'sync'
         : '';
   const proposalId =
-    isProposal && !isInProgress ? registerProposalInput(input, toolName) : null;
+    isDelegation && !isInProgress ? registerProposalInput(input, toolName) : null;
 
   // prettier-ignore
   const extraContent = html`${timerTemplate ?? nothing}${proposalMode ? html`<span class=${classMap({ 'proposal-mode-badge': true, 'proposal-mode-badge--async': proposalMode === 'async', 'proposal-mode-badge--sync': proposalMode === 'sync' })}>${proposalMode}</span>` : nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Restore this proposal configuration"><i class="codicon codicon-reply"></i> Setup</span>` : nothing}`;
