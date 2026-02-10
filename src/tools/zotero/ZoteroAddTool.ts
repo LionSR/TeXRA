@@ -5,7 +5,7 @@
  * desktop is open. No authentication required - purely local communication.
  *
  * Capabilities:
- * - Add items by DOI (recommended - Zotero fetches full metadata)
+ * - Add items by DOI (recommended - metadata resolved via doi.org)
  * - Add items by URL (Zotero extracts metadata from page)
  * - Add items with manual metadata (title, authors, year, etc.)
  *
@@ -32,6 +32,7 @@ import { getZoteroPort } from './bbtClient';
 
 const ZOTERO_PING_TIMEOUT_MS = 2_000; // 2 s
 const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000; // 30 s
+const DOI_RESOLVE_TIMEOUT_MS = 15_000; // 15 s
 
 /**
  * Schema for a single item to add to Zotero.
@@ -168,6 +169,81 @@ async function callZoteroConnector(
   }
 }
 
+/** Map CSL JSON document types to Zotero item types. */
+const CITEPROC_TYPE_MAP: Record<string, string> = {
+  'article-journal': 'journalArticle',
+  article: 'journalArticle',
+  book: 'book',
+  chapter: 'bookSection',
+  'paper-conference': 'conferencePaper',
+  thesis: 'thesis',
+  report: 'report',
+  webpage: 'webpage',
+  dataset: 'document',
+  'posted-content': 'preprint',
+  manuscript: 'preprint',
+};
+
+/**
+ * Resolve a DOI to full metadata via doi.org content negotiation.
+ * Returns a Zotero-format item object, or null if resolution fails.
+ */
+async function resolveDOI(
+  doi: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const response = await axios.get(`https://doi.org/${doi}`, {
+      headers: { Accept: 'application/vnd.citationstyles.csl+json' },
+      timeout: DOI_RESOLVE_TIMEOUT_MS,
+      maxRedirects: 5,
+    });
+
+    const data = response.data;
+    if (!data || typeof data !== 'object') return null;
+
+    const creators = Array.isArray(data.author)
+      ? data.author.map(
+          (a: { given?: string; family?: string; name?: string }) => {
+            if (a.given && a.family) {
+              return {
+                firstName: a.given,
+                lastName: a.family,
+                creatorType: 'author',
+              };
+            }
+            return {
+              name: a.name || a.family || 'Unknown',
+              creatorType: 'author',
+            };
+          },
+        )
+      : undefined;
+
+    const year = data.issued?.['date-parts']?.[0]?.[0];
+
+    // container-title may be a string or an array in some CSL JSON variants
+    const containerTitle = Array.isArray(data['container-title'])
+      ? data['container-title'][0]
+      : data['container-title'];
+
+    return {
+      itemType: CITEPROC_TYPE_MAP[data.type || ''] || 'journalArticle',
+      ...(data.title && { title: data.title }),
+      DOI: doi,
+      ...(creators?.length && { creators }),
+      ...(year != null && { date: String(year) }),
+      ...(containerTitle && { publicationTitle: containerTitle }),
+      ...(data.volume && { volume: data.volume }),
+      ...(data.issue && { issue: data.issue }),
+      ...(data.page && { pages: data.page }),
+      ...(data.abstract && { abstractNote: data.abstract }),
+      ...(data.URL && { url: data.URL }),
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Convert our item schema to Zotero Connector format.
  */
@@ -228,9 +304,12 @@ export class ZoteroAddTool extends defineTool({
       let result: ConnectorResult;
 
       if (item.doi) {
+        // Resolve DOI metadata via doi.org content negotiation, then use saveItems
+        const resolvedItem = await resolveDOI(item.doi);
+        const zoteroItem = resolvedItem || toZoteroItem(item);
         result = await callZoteroConnector(
-          'saveDOI',
-          { doi: item.doi, ...collectionBody },
+          'saveItems',
+          { items: [zoteroItem], ...collectionBody },
           port,
         );
       } else if (item.url) {
