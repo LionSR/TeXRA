@@ -40,6 +40,18 @@ export const TierConstantsSchema = z.object({
 });
 export type TierConstants = z.infer<typeof TierConstantsSchema>;
 
+/** A VS Code configuration toggle surfaced in a provider's expanded settings. */
+export const ProviderVscodeSettingSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  description: z.string(),
+  value: z.boolean(),
+  warning: z.string().optional(),
+  warningUrl: z.string().optional(),
+  warningUrlLabel: z.string().optional(),
+});
+export type ProviderVscodeSetting = z.infer<typeof ProviderVscodeSettingSchema>;
+
 export const ProviderKeyStatusSchema = z.object({
   provider: z.string(),
   displayName: z.string(),
@@ -48,6 +60,7 @@ export const ProviderKeyStatusSchema = z.object({
   streaming: z.boolean().prefault(true),
   customEndpoint: z.string().prefault(''),
   supportsCustomEndpoint: z.boolean().prefault(false),
+  vscodeSettings: z.array(ProviderVscodeSettingSchema).prefault([]),
 });
 export type ProviderKeyStatus = z.infer<typeof ProviderKeyStatusSchema>;
 

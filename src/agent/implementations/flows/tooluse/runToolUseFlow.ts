@@ -48,6 +48,8 @@ export interface RunToolUseFlowInput<
   onFollowUpConsumed?: () => void;
   /** When true, delegation tools are filtered out to prevent nesting. */
   isSubagent?: boolean;
+  /** Fires before the subagent enters WAITING, delivering the last response to the orchestrator. */
+  onBeforeWaiting?: (lastResponse: string | undefined) => void;
 }
 
 /** Result from running a tool-use flow. */

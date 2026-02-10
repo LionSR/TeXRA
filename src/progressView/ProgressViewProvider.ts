@@ -142,6 +142,18 @@ export class ProgressViewProvider
               bypassActive,
             );
         },
+        updateSuperYoloBypassState: (
+          streamId,
+          bypassActive,
+          featureEnabled,
+        ) => {
+          if (canSend())
+            u.updateSuperYoloBypassState(
+              streamId as StreamTabId,
+              bypassActive,
+              featureEnabled,
+            );
+        },
         showBashPermission: (p) => this.bashApprovalHandler.show(p),
         resolveBashPermission: (id) => this.bashApprovalHandler.resolve(id),
         showAgentProposal: (p) => this.agentProposalHandler.show(p),

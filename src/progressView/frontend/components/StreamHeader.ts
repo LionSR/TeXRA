@@ -58,6 +58,7 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, string[]> = {
   [STREAM_STATUS.RUNNING]: [
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
+    ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
     ELEMENT_IDS.COMPACT_RESPONSE_BTN,
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
@@ -91,6 +92,7 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, string[]> = {
   [STREAM_STATUS.WAITING]: [
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
+    ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
     ELEMENT_IDS.COMPACT_RESPONSE_BTN,
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
@@ -98,6 +100,7 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, string[]> = {
   [STREAM_STATUS.RESUMING]: [
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
+    ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
     ELEMENT_IDS.COMPACT_RESPONSE_BTN,
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
@@ -283,6 +286,41 @@ export class StreamHeader extends LitElement {
           color-mix(in srgb, var(--color-error) 60%, transparent);
       }
 
+      .super-yolo-toggle-button {
+        flex-shrink: 0;
+        transition: all 0.2s ease;
+      }
+
+      .super-yolo-toggle-button.is-active {
+        color: var(--color-warning, var(--vscode-charts-orange));
+        background-color: color-mix(
+          in srgb,
+          var(--color-warning, var(--vscode-charts-orange)) 15%,
+          transparent
+        );
+        border-radius: var(--border-radius);
+        box-shadow: 0 0 8px
+          color-mix(
+            in srgb,
+            var(--color-warning, var(--vscode-charts-orange)) 40%,
+            transparent
+          );
+      }
+
+      .super-yolo-toggle-button.is-active:hover {
+        background-color: color-mix(
+          in srgb,
+          var(--color-warning, var(--vscode-charts-orange)) 25%,
+          transparent
+        );
+        box-shadow: 0 0 12px
+          color-mix(
+            in srgb,
+            var(--color-warning, var(--vscode-charts-orange)) 60%,
+            transparent
+          );
+      }
+
       .subagent-badge {
         display: inline-flex;
         align-items: center;
@@ -330,6 +368,7 @@ export class StreamHeader extends LitElement {
     startTime: number;
   }> = [];
   @property({ type: Boolean }) yoloActive = false;
+  @property({ type: Boolean }) superYoloActive = false;
 
   override render(): TemplateResult | typeof nothing {
     if (!this.stream) {
@@ -391,7 +430,12 @@ export class StreamHeader extends LitElement {
                     status,
                     hasExecutionId,
                   );
-                  const isActive = Boolean(btn.isToggle && this.yoloActive);
+                  const isActive = Boolean(
+                    btn.isToggle &&
+                    (btn.id === ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN
+                      ? this.superYoloActive
+                      : this.yoloActive),
+                  );
                   const icon =
                     isActive && btn.iconActive ? btn.iconActive : btn.icon;
                   const title =
