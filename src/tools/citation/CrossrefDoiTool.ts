@@ -1,5 +1,5 @@
 // Third-party imports
-import { CrossrefClient, type Work } from '@jamesgopsill/crossref-client';
+import { type Work } from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
 
 // Local imports
@@ -8,7 +8,7 @@ import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
 // Local file imports
-import { CROSSREF_CONSTANTS } from './constants';
+import { CROSSREF_CONSTANTS, crossrefClient } from './constants';
 import { waitForRateLimit } from './rateLimiter';
 
 const CrossrefDoiInputSchema = z.strictObject({
@@ -16,8 +16,6 @@ const CrossrefDoiInputSchema = z.strictObject({
 });
 
 export type CrossrefDoiInput = z.infer<typeof CrossrefDoiInputSchema>;
-
-const crossrefClient = new CrossrefClient();
 
 export class CrossrefDoiTool extends defineTool({
   name: 'crossref_doi',
