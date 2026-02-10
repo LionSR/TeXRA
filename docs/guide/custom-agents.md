@@ -1,6 +1,8 @@
 # Custom Agents
 
-TeXRA is a VS Code extension that orchestrates AI-driven writing tools using YAML agent files. Each agent follows a chain-of-thought workflow with scratchpad planning and a final XML-wrapped output. This guide focuses on creating those definition (`.yaml`) files so you can tailor TeXRA to your research needs (or make an agent that writes everything in pirate speak—we won't judge).
+Every lab has its own writing style, formatting quirks, and recurring tasks. Maybe your group always needs a "rewrite the abstract for a Nature-style letter" pass, or you want an agent that converts your internal notes into arXiv-ready LaTeX. Custom agents let you encode these workflows once and reuse them with a single click.
+
+This guide walks you through creating your own agent definition files (`.yaml`) so TeXRA does exactly what your research needs—no coding required.
 
 ::: info Agent Fundamentals
 Before creating a custom agent, it's highly recommended to understand the underlying concepts:
@@ -9,6 +11,10 @@ Before creating a custom agent, it's highly recommended to understand the underl
 - **Built-in Agents**: Review the standard agents provided by TeXRA for examples and potential inheritance parents. See the [Built-in Agent Reference](./built-in-agents.md).
 - **Agent Explorer**: Learn how to browse and manage agent files using the [Agent Explorer](./agent-explorer.md) view in the TeXRA sidebar.
   :::
+
+## Reference Agents
+
+TeXRA includes ready-made reference agents you can use as starting points. Think of them as recipes: copy one into your custom agents directory, tweak it, and you have a new agent in minutes. Examples range from content-enhancement workflows to notation standardizers and multi-agent orchestrators. Each also has a `_multiple` variant for multi-file output.
 
 ## Creating a Custom Agent File
 
@@ -46,9 +52,9 @@ inherits: base # Or polish, correct, etc.
 # Override parent settings here if inheriting.
 settings:
   # Core Behavior
-  agentType: CoT # Type: 'CoT' (Chain of Thought) for complex reasoning with scratchpads, 'direct' for simpler direct output, or 'toolUse' for agents that call model tools.
+  agentCategory: workflow # 'workflow' for structured reasoning with XML-wrapped output, or 'toolUse' for interactive agents that call tools (file editing, web search, etc.)
   temperature: 0.1 # LLM creativity (0.0 = deterministic, >0 = more random). Can be overridden by user settings.
-  isRewrite: true # Boolean: Does the agent primarily rewrite existing content (true) or generate new content (false)? Affects some internal handling.
+  isRewrite: true # Does the agent primarily rewrite existing content (true) or generate new content (false)?
 
   # Output Handling
   documentTag: document # The main XML tag wrapping the agent's final output (required for CoT).
@@ -165,61 +171,47 @@ userPrefix: |
 - **Start Simple:** Begin with basic settings/prompts and add complexity incrementally.
 - **Test Iteratively:** Test frequently and review logs in the ProgressBoard.
 
-### Runtime XML exports
+### Chaining Agents Together
 
-Reflection-style agents automatically collect a lightweight summary of the XML they generate. The summary is exposed as
-`runtimeXmlExports` on the agent instance so pipeline orchestrators can forward the results to follow-up steps.
+After a workflow agent finishes, TeXRA captures the output so follow-up steps can reuse it without another trip through the file picker. This is how multi-stage pipelines work—for example, an orchestrator agent can run a `polish` step, then automatically hand the result to a `correct` step, all in a single session.
 
-The structure includes three simple fields:
-
-- `tagContents`: a dictionary of detected XML tags. For `<document>` outputs this contains either a single string or an array of strings (when the model generated multiple named documents). A `<scratchpad>` tag is captured when present.
-- `documents`: a list of serialized `<document>` elements suitable for pasting directly into the next prompt.
-- `singleOutputFile`: the processed output path when the agent produced exactly one LaTeX document.
-
-Because this data lives alongside the run state, orchestrators can choose how to apply it—for example, by inserting the serialized documents straight into the next request or by handing off the processed file path to a critique step.
+You don't need to configure this yourself; it happens automatically when an agent definition includes orchestration prompts. See the reference agents for working examples.
 
 ### Tool-Use Agents
 
-Tools live under `src/tools/` and each one defines its input schema with Zod.
-List the desired tools by name in your agent YAML. The registry includes
-workspace utilities like `bash`, `read_file`, `write_file`, `edit_file`,
-`glob`, `grep`, and `ls` alongside domain-specific helpers such as
-`str_replace_editor`, `wolfram`,
-`web_fetch`, and `web_search`.
+Tool-use agents are interactive: instead of producing a single polished file, they hold a conversation and take actions on your behalf—reading and editing files, searching the web, looking up papers, and more.
 
-> **Tip:** The `read_file` tool returns only the first 2,000 lines of a file (per request) to prevent massive responses from overwhelming the progress log. Provide an optional `range` object (for example, `{"start": 401, "end": 450}`) to page through a file beyond the first 2,000 lines. The tool enforces the same 2,000-line limit on each requested window, prefixes each line with a `cat -n` style line number, reports the specific line range that was returned, and notes when the requested end exceeds the file length so you know the response was clipped. When copying text for `edit_file`, use only the content after the line-number prefix.
+**Typical user story:** You're writing up results for a conference submission and realize you need three new BibTeX entries, a TikZ architecture diagram, and a consistency pass across four `.tex` files. Rather than switching between browser tabs and terminal windows, you open a `chat` agent and describe what you need. The agent reads your project, searches arXiv for the missing references, drafts the TikZ code, and edits the files—all in one session.
 
-For a minimal read-only configuration, see the built-in `ask` agent
-(`resources/tool_use_agents/ask.yaml`), which only grants `read_file`, `glob`,
-`grep`, and `ls` access.
+To create your own tool-use agent, set `agentCategory: toolUse` and list the tools you want to grant. TeXRA provides tools in several categories:
 
-Common workspace helpers:
+| Category           | What it lets the agent do                                    |
+| ------------------ | ------------------------------------------------------------ |
+| **File workspace** | Read, write, edit, search, and list files in your project    |
+| **Shell**          | Run commands (compilation, scripts, etc.)                    |
+| **Web & search**   | Fetch web pages and search the internet                      |
+| **Literature**     | Search arXiv, Crossref, and manage your Zotero library       |
+| **Math**           | Run Wolfram Language computations                            |
+| **Figures**        | Extract and compile figures and TikZ diagrams                |
+| **Memory & tasks** | Remember context across sessions; track multi-step progress  |
 
-- `glob` — Quickly list files matching a pattern, sorted by modification time.
-- `grep` — Run ripgrep searches without leaving the workspace sandbox. By default it returns matching content lines; switch the `output_mode` to `files_with_matches` or `count` to change the response format.
-- `ls` — Inspect directory contents with optional ignore globs.
+For the exact tool names to list in your YAML, browse any of the built-in tool-use agents (like `chat`, `search`, or `ask`) in the Agent Explorer—their `tools:` array shows exactly which tools are available.
 
-Example:
+Example skeleton:
 
 ```yaml
 settings:
-  agentType: toolUse
+  agentCategory: toolUse
   tools:
-    - str_replace_editor
-    - wolfram
-    - glob
-    - grep
-    - ls
-    - bash
     - read_file
     - write_file
     - edit_file
-    - web_fetch
+    - glob
+    - grep
     - web_search
 ```
 
-The ProgressBoard shows the JSON passed to each tool along with the tool's
-response.
+The ProgressBoard logs every tool call and its result, so you can always see what the agent is doing.
 
 ### Example: Multiple Output Agent
 
@@ -269,8 +261,6 @@ for more details.
 
 ### Strict XML Extraction
 
-TeXRA's `XmlOutputManager` parses the `<latex_document>` or `<latex_documents>` blocks in the AI output.
-It requires properly closed tags and, for multiple outputs, each `<document>` must include a `name` attribute that matches a filename from the UI.
-If tags are mismatched or a filename is wrong, extraction fails and no files are saved.
+TeXRA expects the model's output to use properly closed XML tags. For agents producing multiple files, each `<document>` block must include a `name` attribute matching one of the filenames from the UI. If tags are mismatched or a filename doesn't match, extraction fails and no files are saved—check the ProgressBoard logs for details.
 
-For more complex examples and advanced configuration options like `requiredFiles` and `filePatternsContain`, examine the source `.yaml` files of the [Built-in Agents](./built-in-agents.md).
+For more examples and advanced options, browse the built-in agent definitions through the [Agent Explorer](./agent-explorer.md).

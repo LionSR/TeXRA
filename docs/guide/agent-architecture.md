@@ -1,17 +1,17 @@
 # How TeXRA Agents Work: An Overview
 
-At its core, a TeXRA agent is a recipe for instructing a Large Language Model (LLM) to perform a specific academic research task. This guide provides a high-level overview of how these agents are defined and how they execute your requests.
+Every time you click "Execute" in TeXRA, an **agent** takes your files and instructions, asks an AI model to do the work, and delivers the result. This page explains what happens under the hood—enough to understand the system, customize it, and troubleshoot when things go sideways.
 
 ## Agent Definition Files (`.yaml`)
 
-The core of TeXRA's agent definition lies in a combination of YAML for structure, Jinja2 for templating, and often XML within the prompts for guiding the LLM's output. Each agent's behavior is defined in a `.yaml` file located in the built-in or custom agent directories.
+Each agent is defined in a simple `.yaml` file that tells TeXRA what to say to the AI model and how to handle the response. You can browse these files in the Agent Explorer, or create your own (see [Custom Agents](./custom-agents.md)).
 
 ## Understanding the YAML Structure
 
 These `.yaml` files have two main parts (and thankfully, YAML is usually less prickly than XML or JSON):
 
 1.  **`settings`**: Define general operational parameters. For example:
-    - `agentType`: Is it a complex `CoT` (Chain of Thought) agent that "thinks" step-by-step, a simpler `direct` agent, or a `toolUse` agent designed to call model-integrated tools?
+    - `agentCategory`: Is it a `workflow` agent (structured Chain-of-Thought reasoning with XML-wrapped output) or a `toolUse` agent (interactive conversation that can call tools like file editing, web search, etc.)?
     - `prefills`: Text the agent should automatically start its response with (e.g., `<scratchpad>`).
     - _(Other settings control output format, inheritance, etc. See [Configuration](./configuration.md) and [Custom Agents](./custom-agents.md) for full details)._
 2.  **`prompts`**: Contain text templates that TeXRA fills with your specific context (input files, instructions) to guide the LLM at different stages:
@@ -57,9 +57,9 @@ sequenceDiagram
 
 **Continuation Handling:** If the LLM response gets cut off due to output token limits before generating the required `endTag`, TeXRA automatically sends a continuation prompt. This prompt asks the model to resume generating exactly where it left off, ensuring complete outputs even for very long tasks. This happens seamlessly within a processing round.
 
-### Prompt Composition and Message Flow
+### What Goes Into the Prompt
 
-TeXRA constructs the conversation by merging your agent's `systemPrompt`, the context-filled `userPrefix`, and the `userRequest`. Depending on settings, the extension may insert additional messages in between—for example the output of `texcount` when you enable **Attach TeX Count**, or encoded images and audio files selected in the file panel. The sequence is not a fixed "system–user–system" pattern: attachments or tool results can be inserted at any point before the LLM generates a single response containing `<scratchpad>` reasoning followed by the XML-wrapped output defined by `settings.documentTag`.
+TeXRA assembles a conversation from your agent's prompts and the content you selected in the UI. If you enabled **Attach TeX Count** or **Attach Diagnostics**, that information is included too. Figures and audio files are sent alongside the text for models that support them. The AI then reasons through the task and produces its output.
 
 **Reflection Rounds (Round 1+):**
 
