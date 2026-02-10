@@ -102,7 +102,7 @@ export class ProgressEventHandler {
     const { streamId, agentCategory, isRemote, hasMultipleOutputs } = payload;
     if (!streamId) return;
 
-    await this.state.streamTabs.ensureStream(streamId);
+    this.state.streamTabs.ensureStream(streamId);
     this.state.updateStreamHints(streamId, {
       agentCategory,
       isRemote,
@@ -468,7 +468,7 @@ export class ProgressEventHandler {
   private async initializeStreamForTaskGroup(
     streamId: StreamTabId,
   ): Promise<void> {
-    await this.state.streamTabs.ensureStream(streamId);
+    this.state.streamTabs.ensureStream(streamId);
 
     if (!StreamStatusService.has(streamId)) {
       StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, { emit: false });

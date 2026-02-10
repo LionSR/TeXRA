@@ -13,10 +13,10 @@
 import {
   createStreamState,
   ProgressViewOutboundMessageSchema,
+  sumUsageStats,
   type LogMessageData,
   type ProgressViewOutboundMessage,
   type StreamTabInfo,
-  type TokenUsageStats,
 } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -27,7 +27,6 @@ import {
   updateToolUseState,
   updateWorkflowState,
   updateNestedRounds,
-  prependInstructionForToolUse,
 } from './stateUtils';
 import {
   getStreamState,
@@ -75,42 +74,6 @@ const resolvedBeforeShown = new Set<string>();
 // Helper functions
 // ============================================================
 
-/** Check if stream is tool-use based on streamInfo (source of truth for category). */
-function isToolUseStream(
-  ctx: MessageHandlerContext,
-  streamId: string,
-): boolean {
-  const streamInfo = ctx.getState().streams.find((s) => s.name === streamId);
-  return streamInfo?.agentCategory === 'toolUse';
-}
-
-/** Sum multiple usage stats into a single total. */
-function sumUsageStats(
-  usageMap: Record<string, TokenUsageStats>,
-): TokenUsageStats | null {
-  const values = Object.values(usageMap);
-  if (values.length === 0) return null;
-
-  return values.reduce(
-    (acc, u) => ({
-      inputTokens: acc.inputTokens + u.inputTokens,
-      outputTokens: acc.outputTokens + u.outputTokens,
-      cost: acc.cost + u.cost,
-      cacheReadInputTokens:
-        (acc.cacheReadInputTokens ?? 0) + (u.cacheReadInputTokens ?? 0),
-      cacheCreationInputTokens:
-        (acc.cacheCreationInputTokens ?? 0) + (u.cacheCreationInputTokens ?? 0),
-    }),
-    {
-      inputTokens: 0,
-      outputTokens: 0,
-      cost: 0,
-      cacheReadInputTokens: 0,
-      cacheCreationInputTokens: 0,
-    },
-  );
-}
-
 function getPendingLogKey(streamId: string, logId: string): string {
   return `${streamId}:${logId}`;
 }
@@ -122,6 +85,31 @@ function clearPendingLogUpdatesForStream(streamId: string): void {
       pendingLogUpdates.delete(key);
     }
   }
+}
+
+function prependToolUseInstructionIfNeeded(
+  logs: LogMessageData[],
+  runInstructions: Record<string, { text: string }> | undefined,
+  activeRunId: string | undefined,
+): LogMessageData[] {
+  if (!activeRunId) return logs;
+
+  const instructionText = runInstructions?.[activeRunId]?.text?.trim();
+  if (!instructionText) return logs;
+
+  const firstMessage = logs[0];
+  if (firstMessage?.messageType === 'userMessage') return logs;
+
+  return [
+    {
+      id: `tool-use-instruction:${activeRunId}`,
+      text: instructionText,
+      level: 'info',
+      timestamp: (firstMessage?.timestamp ?? Date.now()) - 1,
+      messageType: 'userMessage',
+    },
+    ...logs,
+  ];
 }
 
 function addPermission(
@@ -341,18 +329,18 @@ const handlers: HandlerRegistry = {
         contextState,
       } = data;
 
-      let processedMessages = isClear ? [] : messages;
-      if (!isClear && isToolUseState(prev) && runInstructions) {
-        processedMessages = prependInstructionForToolUse(
-          [...messages],
-          runInstructions,
-          stream,
-        );
-      }
+      const nextLogs =
+        !isClear && isToolUseState(prev)
+          ? prependToolUseInstructionIfNeeded(
+              messages,
+              runInstructions,
+              activeRunId,
+            )
+          : messages;
 
       const baseUpdate = {
         ...prev,
-        logs: processedMessages,
+        logs: isClear ? [] : nextLogs,
         taskGroups: isClear ? [] : (groups ?? prev.taskGroups),
         contextState: contextState ?? prev.contextState,
       };
@@ -360,10 +348,7 @@ const handlers: HandlerRegistry = {
       if (isWorkflowState(prev)) {
         if (isClear) {
           return {
-            ...prev,
-            logs: processedMessages,
-            taskGroups: [],
-            contextState: contextState ?? prev.contextState,
+            ...baseUpdate,
             activeRunId: null,
             ui: { ...prev.ui, selectedRunId: null },
             runInstructions: {},
@@ -373,10 +358,7 @@ const handlers: HandlerRegistry = {
           };
         }
         return {
-          ...prev,
-          logs: processedMessages,
-          taskGroups: groups ?? prev.taskGroups,
-          contextState: contextState ?? prev.contextState,
+          ...baseUpdate,
           activeRunId: activeRunId ?? prev.activeRunId,
           runInstructions: runInstructions
             ? { ...prev.runInstructions, ...runInstructions }
@@ -394,16 +376,27 @@ const handlers: HandlerRegistry = {
       }
 
       // Tool-use streams: compute sessionUsage from runUsage (sum all runs)
-      if (isToolUseState(prev) && runUsage) {
-        const sessionUsage = sumUsageStats(runUsage);
-        if (sessionUsage) {
-          return { ...baseUpdate, sessionUsage };
-        }
+      // Ignore empty payloads so we don't overwrite existing totals with zeros.
+      if (
+        isToolUseState(prev) &&
+        runUsage &&
+        Object.keys(runUsage).length > 0
+      ) {
+        return {
+          ...baseUpdate,
+          sessionUsage: sumUsageStats(Object.values(runUsage)),
+        };
       }
 
       return baseUpdate;
     });
   },
+
+  // --- Log updates ---
+  // These flow through setStreamState → willUpdate → updateContexts like all
+  // other state changes.  Content components are shielded from re-renders by
+  // the hasStreamStateMetaChange gate in updateContexts (log-only updates
+  // produce identical meta refs, so the meta context assignment is skipped).
 
   [PROGRESS_VIEW_COMMANDS.APPEND_LOG]: (data, ctx) => {
     const logId = data.logMessage.id;
@@ -420,7 +413,6 @@ const handlers: HandlerRegistry = {
       pendingLogUpdates.delete(getPendingLogKey(data.stream, logId));
     }
 
-    // setStreamState skips unknown streams - they'll receive full state via UPDATE_LOGS
     ctx.setStreamState(data.stream, (prev) => ({
       ...prev,
       logs: [...prev.logs, mergedLogMessage],
@@ -429,35 +421,27 @@ const handlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_LOG]: (data, ctx) => {
     const logId = data.logMessage.id;
-    const state = ctx.getState();
-    const streamInfo = state.streams.find(
-      (stream) => stream.name === data.stream,
-    );
-    const streamState = getStreamState(
-      state,
-      data.stream,
-      streamInfo?.agentCategory,
-    );
-    const logExists = streamState.logs.some((entry) => entry.id === logId);
 
-    if (!logExists) {
-      if (logId) {
-        const key = getPendingLogKey(data.stream, logId);
-        const existingUpdate = pendingLogUpdates.get(key) ?? {};
-        pendingLogUpdates.set(key, {
-          ...existingUpdate,
-          ...data.logMessage,
-        });
+    ctx.setStreamState(data.stream, (prev) => {
+      const logIndex = prev.logs.findIndex((entry) => entry.id === logId);
+
+      if (logIndex < 0) {
+        // Out-of-order: APPEND hasn't arrived yet, stash for later merge
+        if (logId) {
+          const key = getPendingLogKey(data.stream, logId);
+          const existingUpdate = pendingLogUpdates.get(key) ?? {};
+          pendingLogUpdates.set(key, {
+            ...existingUpdate,
+            ...data.logMessage,
+          });
+        }
+        return prev; // Same reference → setStreamState skips update
       }
-      return;
-    }
 
-    ctx.setStreamState(data.stream, (prev) => ({
-      ...prev,
-      logs: prev.logs.map((entry) =>
-        entry.id === data.logMessage.id ? data.logMessage : entry,
-      ),
-    }));
+      const newLogs = [...prev.logs];
+      newLogs[logIndex] = data.logMessage;
+      return { ...prev, logs: newLogs };
+    });
   },
 
   // Status updates
@@ -467,30 +451,39 @@ const handlers: HandlerRegistry = {
     const isActiveStream = stream === state.activeStreamId;
     const shouldFocus = isActiveStream && status === STREAM_STATUS.WAITING;
 
-    ctx.setStreamState(stream, (prev) => {
-      if (isToolUseState(prev) && shouldFocus) {
-        return {
-          ...prev,
-          status,
-          ui: { ...prev.ui, shouldFocusFollowUp: true },
-        };
-      }
-      return { ...prev, status };
-    });
+    // Single atomic update: stream state + tab metadata in one setState call,
+    // avoiding two Map copies and two Lit re-render triggers.
+    ctx.setState((prev) => {
+      const streamInfo = prev.streams.find((s) => s.name === stream);
+      const nextStates = new Map(prev.streamStates);
 
-    // Use updater function to get fresh state after setStreamState
-    ctx.setState((prev) => ({
-      ...prev,
-      streams: prev.streams.map((item) =>
-        item.name === stream
-          ? {
-              ...item,
-              status,
-              lastTimestamp: lastTimestamp ?? item.lastTimestamp,
-            }
-          : item,
-      ),
-    }));
+      if (streamInfo) {
+        const current = getStreamState(prev, stream, streamInfo.agentCategory);
+        const updatedState =
+          isToolUseState(current) && shouldFocus
+            ? {
+                ...current,
+                status,
+                ui: { ...current.ui, shouldFocusFollowUp: true },
+              }
+            : { ...current, status };
+        nextStates.set(stream, updatedState);
+      }
+
+      return {
+        ...prev,
+        streamStates: nextStates,
+        streams: prev.streams.map((item) =>
+          item.name === stream
+            ? {
+                ...item,
+                status,
+                lastTimestamp: lastTimestamp ?? item.lastTimestamp,
+              }
+            : item,
+        ),
+      };
+    });
   },
 
   // File and output updates
@@ -526,37 +519,16 @@ const handlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE]: (data, ctx) => {
     const { stream, runId, usage } = data;
-    // Backend sends accumulated total per run.
-    if (isToolUseStream(ctx, stream)) {
-      // Tool-use: this IS the session total (single session)
-      updateToolUseState(ctx, stream, (prev) => ({
-        ...prev,
-        sessionUsage: usage,
-      }));
-    } else {
-      // Workflow: store per-run usage
-      updateWorkflowState(ctx, stream, (prev) => ({
-        ...prev,
-        runUsage: { ...prev.runUsage, [runId]: usage },
-      }));
-    }
-  },
-
-  [PROGRESS_VIEW_COMMANDS.UPDATE_USAGE]: (data, ctx) => {
-    const { stream, usage } = data;
-    if (isToolUseStream(ctx, stream)) {
-      // Tool-use: sum all runs into sessionUsage
-      updateToolUseState(ctx, stream, (prev) => ({
-        ...prev,
-        sessionUsage: sumUsageStats(usage),
-      }));
-    } else {
-      // Workflow: store full per-run map
-      updateWorkflowState(ctx, stream, (prev) => ({
-        ...prev,
-        runUsage: usage,
-      }));
-    }
+    // Use StreamState.kind as single source of truth for stream type
+    ctx.setStreamState(stream, (prev) => {
+      if (isToolUseState(prev)) {
+        return { ...prev, sessionUsage: usage };
+      }
+      if (isWorkflowState(prev)) {
+        return { ...prev, runUsage: { ...prev.runUsage, [runId]: usage } };
+      }
+      return prev;
+    });
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_CONTEXT_STATE]: (data, ctx) => {
