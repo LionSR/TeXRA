@@ -31,7 +31,7 @@ import { pluralize } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - zotero
-import { getZoteroPort } from './bbtClient';
+import { type CslCreator, getZoteroPort } from './bbtClient';
 
 const ZOTERO_PING_TIMEOUT_MS = 2_000; // 2 s
 const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000; // 30 s
@@ -172,17 +172,47 @@ async function callZoteroConnector(
   }
 }
 
-/** Map Crossref document types to Zotero item types. */
+/**
+ * Map Crossref work types to Zotero item types.
+ * Full list of Crossref types: https://api.crossref.org/types
+ * Full list of Zotero types: https://api.zotero.org/schema
+ */
 const CROSSREF_TYPE_MAP: Record<string, string> = {
+  // Journals
   'journal-article': 'journalArticle',
-  book: 'book',
+  // Books
+  'book': 'book',
+  'edited-book': 'book',
+  'monograph': 'book',
+  'reference-book': 'book',
+  'book-series': 'book',
+  'book-set': 'book',
+  // Book sections
   'book-chapter': 'bookSection',
+  'book-part': 'bookSection',
+  'book-section': 'bookSection',
+  'book-track': 'bookSection',
+  // Reference works
+  'reference-entry': 'encyclopediaArticle',
+  // Conference
   'proceedings-article': 'conferencePaper',
-  dissertation: 'thesis',
-  report: 'report',
+  'proceedings': 'conferencePaper',
+  'proceedings-series': 'conferencePaper',
+  // Academic
+  'dissertation': 'thesis',
   'posted-content': 'preprint',
-  monograph: 'book',
-  dataset: 'document',
+  'peer-review': 'journalArticle',
+  // Reports & standards
+  'report': 'report',
+  'report-series': 'report',
+  'standard': 'standard',
+  'standard-series': 'standard',
+  // Data & other
+  'dataset': 'dataset',
+  'database': 'dataset',
+  'component': 'document',
+  'grant': 'document',
+  'other': 'document',
 };
 
 /**
@@ -215,27 +245,20 @@ async function resolveDOI(
     const raw = work as Record<string, unknown>;
 
     const creators = work.author?.length
-      ? work.author.map(
-          (a: {
-            given?: string;
-            family?: string;
-            name?: string;
-            literal?: string;
-          }) => {
-            if (a.given && a.family) {
-              return {
-                firstName: a.given,
-                lastName: a.family,
-                creatorType: 'author',
-              };
-            }
-            // name = Crossref org author, literal = CSL unparsed name
+      ? work.author.map((a: CslCreator) => {
+          if (a.given && a.family) {
             return {
-              name: a.name || a.literal || a.family || 'Unknown',
+              firstName: a.given,
+              lastName: a.family,
               creatorType: 'author',
             };
-          },
-        )
+          }
+          // name = Crossref org author, literal = CSL unparsed name
+          return {
+            name: a.name || a.literal || a.family || 'Unknown',
+            creatorType: 'author',
+          };
+        })
       : undefined;
 
     // Extract year from published or created date-parts
