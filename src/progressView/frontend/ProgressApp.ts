@@ -205,9 +205,15 @@ export class ProgressApp extends BaseWebviewApp {
     const streamSwitched =
       !!prevAppState && activeStreamId !== prevAppState.activeStreamId;
 
-    // Check if log data actually changed (skip log context rebuild for status-only updates)
+    // Check if log data actually changed (skip log context rebuild for status-only updates).
+    // runId must be checked because LogList/TaskGroupList use it to filter visible groups —
+    // run selection changes runId without changing logs or taskGroups refs.
+    const newRunId = newStreamState
+      ? getEffectiveRunId(newStreamState, { mode: 'fallback' })
+      : null;
     const logDataChanged =
       streamSwitched ||
+      this.streamLogContextValue.runId !== newRunId ||
       this.streamLogContextValue.logs !== (newStreamState?.logs ?? []) ||
       this.streamLogContextValue.taskGroups !==
         (newStreamState?.taskGroups ?? []);
