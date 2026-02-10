@@ -2,6 +2,54 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.10] - 2026-02-09
+
+### Features
+
+- Added **simplifier** and **presenter** tool-use agents for scientific code/LaTeX cleanup and interactive Beamer presentation building.
+- Added **agent browser** in settings view with split-panel layout, visibility config, and keyboard navigation.
+- Added **context-aware "New Agent" button** matching the current agent category.
+- **Main view agent/model buttons** now open settings view tabs directly.
+- Added **model dropdown** and **sync/async mode badges** on agent proposals.
+- Added **execution status** on runs tool and orchestrator badge in UI.
+- Added **live tool timers** with timeout display and **real-time bash streaming** including stderr.
+- Added **reject-with-feedback** for bash command approvals.
+- Added **manual conversation compaction** for tool-use agents.
+- Added **memory tool display** in progress view.
+- Added **subagent output capture** for richer orchestration.
+- Added **remote agent tool surfacing** via persisted metadata.
+- Added **proactive relay token refresh** before model invocations.
+- Added **batched Lean loogle queries**.
+
+### Bug Fixes
+
+- Fixed **context window overflow** from reasoning token accumulation in response chaining.
+- Fixed **Anthropic cache invalidation** from thinking budget changes; fixed budget for Opus 4.6 tool-use.
+- Fixed **max_tokens for thinking models** halved in tool-use mode.
+- Fixed **compaction size reporting** to use output_tokens directly.
+- Fixed **auto-scroll** when switching stream tabs.
+- Fixed **stream tab delete button** clipped at narrow widths.
+- Fixed **proposal race conditions** between model options loading and resolution.
+- Fixed **agent visibility** — "never configured" vs "explicitly empty", auto-adds new agents.
+- Fixed **bash process cleanup** — kills process group on timeout, Windows support.
+- Fixed **background polling** — retry on 404, preserved HTTP metadata.
+- Fixed **path traversal** and **workspace boundary** validation.
+- Fixed **Windows path** normalization throughout.
+- Fixed **Lean 4** FileUri client lookup and syntax highlighting.
+
+### Improvements
+
+- Optimized **Anthropic cache breakpoints** — 4 evenly spaced for better hit rates.
+- Added **tool timeouts** across all tools and **parallel call deduplication**.
+- Optimized **progress view rendering** with Lit improvements and cached flow records.
+- Refined **orchestrator agent** as long-term project steward with git/build conventions.
+- Made **agent creator provider-agnostic** with Nunjucks templating.
+- Improved **Lean agent** — .lake/packages search, post-build diagnostics.
+- **Migrated agent settings** from VS Code config to internal state managers.
+- Removed **deprecated agents** (tex_linter_fix, xml_validator).
+- **Restricted tool-use agents** from out-of-workspace filesystem access.
+- Updated dependencies.
+
 ## [0.35.9] - 2026-02-06
 
 ### Features
