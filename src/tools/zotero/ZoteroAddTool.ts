@@ -237,10 +237,12 @@ async function resolveDOI(
       work.published?.['date-parts']?.[0]?.[0] ??
       work.created?.['date-parts']?.[0]?.[0];
 
-    // container-title is an array in Crossref responses
-    const containerTitle = Array.isArray(raw['container-title'])
-      ? String(raw['container-title'][0])
+    // container-title is an array in Crossref responses (may be empty)
+    const rawContainer = Array.isArray(raw['container-title'])
+      ? raw['container-title'][0]
       : undefined;
+    const containerTitle =
+      rawContainer != null ? String(rawContainer) : undefined;
 
     return {
       itemType: CROSSREF_TYPE_MAP[work.type || ''] || 'journalArticle',
