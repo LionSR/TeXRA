@@ -193,10 +193,13 @@ export const TOOL_ICON_MAP: Record<string, string> = {
   lean_inspect: 'codicon-inspect',
   lean_loogle: 'codicon-search',
 
-  // Workflow/delegation
+  // Workflow/delegation (includes legacy names for historical log entries)
+  delegate_workflow: 'codicon-list-tree',
+  delegate_agent: 'codicon-account',
   propose_workflow: 'codicon-list-tree',
   propose_agent: 'codicon-account',
 
-  // History
+  // Execution history
+  executions: 'codicon-history',
   runs: 'codicon-history',
 };
