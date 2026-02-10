@@ -234,6 +234,10 @@ export abstract class RetryableInvocationNode<
           'before manual retry after relay 401',
         );
       }
+      // Restore RUNNING status so the UI reflects the active retry attempt.
+      // handleManualRetryPrompt sets RESUMING as a brief transitional state;
+      // once the retry loop actually restarts, the agent is running again.
+      StreamStatusService.set(this.services.streamId, STREAM_STATUS.RUNNING);
     }
 
     return result.shouldRetry;
