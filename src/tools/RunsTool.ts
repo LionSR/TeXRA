@@ -1,6 +1,6 @@
 /**
  * Tool for viewing execution history and generated files.
- * Read-only access to past runs - agents can learn from history.
+ * Read-only access to past executions - agents can learn from history.
  */
 
 // Standard library imports
@@ -34,9 +34,9 @@ import type { ExecutionId } from '@shared/schemas';
 // Schema
 // ============================================================================
 
-const RunsToolInputSchema = z.strictObject({
-  /** Virtual path: /runs, /runs/{id}, /runs/{id}/files, /runs/{id}/files/{path} */
-  path: z.string().describe('Path starting with /runs'),
+const ExecutionsToolInputSchema = z.strictObject({
+  /** Virtual path: /executions, /executions/{id}, /executions/{id}/files, /executions/{id}/files/{path} */
+  path: z.string().describe('Path starting with /executions'),
 
   /** Optional line range [start, end] for large outputs */
   view_range: z
@@ -48,7 +48,7 @@ const RunsToolInputSchema = z.strictObject({
     .nullish(),
 });
 
-export type RunsToolInput = z.infer<typeof RunsToolInputSchema>;
+export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
 
 // ============================================================================
 // Tool Implementation
@@ -58,12 +58,12 @@ export type RunsToolInput = z.infer<typeof RunsToolInputSchema>;
  * Read-only tool for viewing execution history and generated files.
  *
  * Paths:
- * - /runs - List all past executions
- * - /runs/{id} - Execution summary
- * - /runs/{id}/config - Agent configuration (JSON)
- * - /runs/{id}/conversation - Message history
- * - /runs/{id}/files - List generated files
- * - /runs/{id}/files/{path} - Read specific file
+ * - /executions - List all past executions
+ * - /executions/{id} - Execution summary
+ * - /executions/{id}/config - Agent configuration (JSON)
+ * - /executions/{id}/conversation - Message history
+ * - /executions/{id}/files - List generated files
+ * - /executions/{id}/files/{path} - Read specific file
  */
 /**
  * Resolve the runtime status for an execution ID.
@@ -84,53 +84,53 @@ function getExecutionStatus(executionId: string): string {
   return 'completed';
 }
 
-export class RunsTool extends defineTool({
-  name: 'runs',
+export class ExecutionsTool extends defineTool({
+  name: 'executions',
   description: `View execution history and generated files (read-only).
 
 Paths:
-- /runs - List all past executions (with status: running/completed)
-- /runs/{id} - Execution summary (agent, model, timestamp, status)
-- /runs/{id}/config - Agent configuration JSON (for propose_workflow/propose_agent)
-- /runs/{id}/conversation - Full message history
-- /runs/{id}/files - List generated files
-- /runs/{id}/files/{path} - Read specific file
+- /executions - List all past executions (with status: running/completed)
+- /executions/{id} - Execution summary (agent, model, timestamp, status)
+- /executions/{id}/config - Agent configuration JSON (for delegate_workflow/delegate_agent)
+- /executions/{id}/conversation - Full message history
+- /executions/{id}/files - List generated files
+- /executions/{id}/files/{path} - Read specific file
 
 Use "current" as {id} to access the active execution.
 Use view_range: [start, end] to paginate large outputs.`,
-  schema: RunsToolInputSchema,
+  schema: ExecutionsToolInputSchema,
 }) {
-  protected async execute(input: RunsToolInput): Promise<ToolResult> {
+  protected async execute(input: ExecutionsToolInput): Promise<ToolResult> {
     const segments = getPathSegments(input.path);
     const [namespace, id, resource, ...rest] = segments;
 
-    if (namespace !== 'runs') {
-      throw new ToolError(`Path must start with /runs. Got: ${input.path}`);
+    if (namespace !== 'executions') {
+      throw new ToolError(`Path must start with /executions. Got: ${input.path}`);
     }
 
-    // /runs - list all executions
+    // /executions - list all executions
     if (!id) {
-      return this.listRuns();
+      return this.listExecutions();
     }
 
     const executionId = this.resolveExecutionId(id);
 
-    // /runs/{id} - execution summary
+    // /executions/{id} - execution summary
     if (!resource) {
       return this.showSummary(executionId);
     }
 
-    // /runs/{id}/config - agent configuration
+    // /executions/{id}/config - agent configuration
     if (resource === 'config') {
       return this.showConfig(executionId);
     }
 
-    // /runs/{id}/conversation - message history
+    // /executions/{id}/conversation - message history
     if (resource === 'conversation') {
       return this.showConversation(executionId, input.view_range ?? undefined);
     }
 
-    // /runs/{id}/files or /runs/{id}/files/{path}
+    // /executions/{id}/files or /executions/{id}/files/{path}
     if (resource === 'files') {
       if (rest.length === 0) {
         return this.listFiles(executionId);
@@ -143,7 +143,7 @@ Use view_range: [start, end] to paginate large outputs.`,
     }
 
     throw new ToolError(
-      `Unknown path: ${input.path}. Valid: /runs/{id}, /runs/{id}/config, /runs/{id}/conversation, /runs/{id}/files`,
+      `Unknown path: ${input.path}. Valid: /executions/{id}, /executions/{id}/config, /executions/{id}/conversation, /executions/{id}/files`,
     );
   }
 
@@ -166,7 +166,7 @@ Use view_range: [start, end] to paginate large outputs.`,
   /**
    * List all executions from history (most recent first).
    */
-  private async listRuns(): Promise<ToolResult> {
+  private async listExecutions(): Promise<ToolResult> {
     const history = await AgentHistoryManager.getHistory();
 
     if (history.length === 0) {
@@ -203,7 +203,7 @@ Use view_range: [start, end] to paginate large outputs.`,
       }
       const status = getExecutionStatus(executionId);
       return {
-        output: `Execution: ${executionId}\nStatus: ${status}\n(No metadata available - use /runs/${executionId}/conversation to view messages)`,
+        output: `Execution: ${executionId}\nStatus: ${status}\n(No metadata available - use /executions/${executionId}/conversation to view messages)`,
       };
     }
 
@@ -219,9 +219,9 @@ Use view_range: [start, end] to paginate large outputs.`,
 
     lines.push('');
     lines.push('Available paths:');
-    lines.push(`  /runs/${executionId}/config - Agent configuration (JSON)`);
-    lines.push(`  /runs/${executionId}/conversation - Message history`);
-    lines.push(`  /runs/${executionId}/files - Generated files`);
+    lines.push(`  /executions/${executionId}/config - Agent configuration (JSON)`);
+    lines.push(`  /executions/${executionId}/conversation - Message history`);
+    lines.push(`  /executions/${executionId}/files - Generated files`);
 
     return { output: lines.join('\n') };
   }
@@ -347,7 +347,7 @@ Use view_range: [start, end] to paginate large outputs.`,
     });
 
     return {
-      output: `Files in /runs/${executionId}/files:\n\n${lines.join('\n')}`,
+      output: `Files in /executions/${executionId}/files:\n\n${lines.join('\n')}`,
     };
   }
 
@@ -410,20 +410,20 @@ Use view_range: [start, end] to paginate large outputs.`,
 
     if (!(await StorageFS.exists(fullPath))) {
       throw new ToolError(
-        `File not found: /runs/${executionId}/files/${filePath}`,
+        `File not found: /executions/${executionId}/files/${filePath}`,
       );
     }
 
     const stats = await StorageFS.stat(fullPath);
     if (stats.type === vscode.FileType.Directory) {
       throw new ToolError(
-        `Path is a directory: /runs/${executionId}/files/${filePath}. Use without trailing path to list.`,
+        `Path is a directory: /executions/${executionId}/files/${filePath}. Use without trailing path to list.`,
       );
     }
 
     const content = await StorageFS.read(fullPath);
     const output = this.applyViewRange(
-      `File: /runs/${executionId}/files/${filePath}\n\n${content}`,
+      `File: /executions/${executionId}/files/${filePath}\n\n${content}`,
       viewRange,
     );
 

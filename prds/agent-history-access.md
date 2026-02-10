@@ -1,8 +1,8 @@
-# PRD: Agent History Access via `/runs` Virtual Filesystem
+# PRD: Agent History Access via `/executions` Virtual Filesystem
 
 ## Overview
 
-Give tool-use agents read-only access to execution history and generated files through a virtual filesystem interface (`/runs`), following the same pattern as the existing `/memories` tool.
+Give tool-use agents read-only access to execution history and generated files through a virtual filesystem interface (`/executions`), following the same pattern as the existing `/memories` tool.
 
 ## Problem Statement
 
@@ -21,17 +21,17 @@ This limits an agent's ability to:
 
 ## Solution
 
-A new `runs` tool providing read-only virtual filesystem access to execution storage.
+A new `executions` tool providing read-only virtual filesystem access to execution storage.
 
 ### Virtual Filesystem Structure
 
 ```
-/runs                        → List all executions
-/runs/{id}                   → Execution summary (with navigation hints)
-/runs/{id}/config            → Agent configuration (JSON, for propose_*)
-/runs/{id}/conversation      → Message history (tool calls, responses)
-/runs/{id}/files             → List generated files
-/runs/{id}/files/{path}      → Read file content
+/executions                        → List all executions
+/executions/{id}                   → Execution summary (with navigation hints)
+/executions/{id}/config            → Agent configuration (JSON, for delegate_*)
+/executions/{id}/conversation      → Message history (tool calls, responses)
+/executions/{id}/files             → List generated files
+/executions/{id}/files/{path}      → Read file content
 ```
 
 Use `current` as `{id}` to access the active execution.
@@ -41,14 +41,14 @@ Use `current` as `{id}` to access the active execution.
 1. **Separation of concerns** - Config (structured) vs conversation (log) vs files (artifacts)
 2. **Read-only** - History is immutable, no `command` parameter needed
 3. **Agent-type agnostic** - Works for both tool-use and workflow agents
-4. **Single file** - `src/tools/RunsTool.ts`, no subdirectory
+4. **Single file** - `src/tools/ExecutionsTool.ts`, no subdirectory
 5. **Friendly output** - Summary shows what's available, not everything at once
 
 ## Schema
 
 ```typescript
-const RunsToolInputSchema = z.strictObject({
-  /** Virtual path: /runs, /runs/{id}, /runs/{id}/files, /runs/{id}/files/{path} */
+const ExecutionsToolInputSchema = z.strictObject({
+  /** Virtual path: /executions, /executions/{id}, /executions/{id}/files, /executions/{id}/files/{path} */
   path: z.string(),
 
   /** Optional line range [start, end] for large outputs */
@@ -62,20 +62,20 @@ No `command` parameter - it's always "view" (read-only).
 
 | Path                      | Source                               | Returns                                    |
 | ------------------------- | ------------------------------------ | ------------------------------------------ |
-| `/runs`                   | `AgentHistoryManager.getHistory()`   | List: id, timestamp, agent, model, summary |
-| `/runs/{id}`              | `AgentHistoryManager`                | Summary + navigation hints                 |
-| `/runs/{id}/config`       | `AgentHistoryManager`                | `AgentConfig` as JSON                      |
-| `/runs/{id}/conversation` | `ExecutionKVStore` → `flow:{id}`     | `conversation[]` formatted                 |
-| `/runs/{id}/files`        | `StorageFS` → `taskRuns/{id}/`       | Directory listing                          |
-| `/runs/{id}/files/{path}` | `StorageFS` → `taskRuns/{id}/{path}` | File content                               |
+| `/executions`                   | `AgentHistoryManager.getHistory()`   | List: id, timestamp, agent, model, summary |
+| `/executions/{id}`              | `AgentHistoryManager`                | Summary + navigation hints                 |
+| `/executions/{id}/config`       | `AgentHistoryManager`                | `AgentConfig` as JSON                      |
+| `/executions/{id}/conversation` | `ExecutionKVStore` → `flow:{id}`     | `conversation[]` formatted                 |
+| `/executions/{id}/files`        | `StorageFS` → `taskRuns/{id}/`       | Directory listing                          |
+| `/executions/{id}/files/{path}` | `StorageFS` → `taskRuns/{id}/{path}` | File content                               |
 
 ### Special: `current`
 
 Use `current` as execution ID to access the active session:
 
 ```
-runs({ path: '/runs/current' })
-runs({ path: '/runs/current/files' })
+executions({ path: '/executions/current' })
+executions({ path: '/executions/current/files' })
 ```
 
 ## Storage Architecture (Unchanged)
@@ -94,21 +94,21 @@ Both agent types store accumulated messages in `shared.conversation[]`. The tool
 
 | Agent Type | `conversation[]`          | Rounds   | Exposed?                        |
 | ---------- | ------------------------- | -------- | ------------------------------- |
-| Tool-use   | All messages              | N/A      | ✅ via `/runs/{id}`             |
-| Workflow   | Accumulated across rounds | Internal | ✅ via `/runs/{id}` (flattened) |
+| Tool-use   | All messages              | N/A      | ✅ via `/executions/{id}`             |
+| Workflow   | Accumulated across rounds | Internal | ✅ via `/executions/{id}` (flattened) |
 
 ## Example Usage
 
 ```
 // List past executions
-runs({ path: '/runs' })
+executions({ path: '/executions' })
 → Executions (2):
 
   abc123  2024-01-15T10:30:00Z  research-assistant  sonnet45  Find related work...
   def456  2024-01-15T11:00:00Z  latex-rewriter      gemini3p  Fix grammar errors...
 
 // View execution summary (friendly, shows what's available)
-runs({ path: '/runs/abc123' })
+executions({ path: '/executions/abc123' })
 → Execution: abc123
   Agent: research-assistant
   Model: sonnet45
@@ -116,12 +116,12 @@ runs({ path: '/runs/abc123' })
   Task: Find related work
 
   Available paths:
-    /runs/abc123/config - Agent configuration (JSON)
-    /runs/abc123/conversation - Message history
-    /runs/abc123/files - Generated files
+    /executions/abc123/config - Agent configuration (JSON)
+    /executions/abc123/conversation - Message history
+    /executions/abc123/files - Generated files
 
-// Get config as JSON (for propose_workflow / propose_agent)
-runs({ path: '/runs/abc123/config' })
+// Get config as JSON (for delegate_workflow / delegate_agent)
+executions({ path: '/executions/abc123/config' })
 → {
     "agent": "research-assistant",
     "model": "sonnet45",
@@ -133,7 +133,7 @@ runs({ path: '/runs/abc123/config' })
   }
 
 // View conversation history
-runs({ path: '/runs/abc123/conversation' })
+executions({ path: '/executions/abc123/conversation' })
 → [1] user:
   Find papers about quantum computing...
 
@@ -147,8 +147,8 @@ runs({ path: '/runs/abc123/conversation' })
   [tool_result: Found 10 papers...]
 
 // List generated files
-runs({ path: '/runs/abc123/files' })
-→ Files in /runs/abc123/files:
+executions({ path: '/executions/abc123/files' })
+→ Files in /executions/abc123/files:
 
       2.4K  output.tex
       1.2K  summary.md
@@ -156,8 +156,8 @@ runs({ path: '/runs/abc123/files' })
       3.1K  original/input.tex
 
 // Read generated file
-runs({ path: '/runs/abc123/files/output.tex' })
-→ File: /runs/abc123/files/output.tex
+executions({ path: '/executions/abc123/files/output.tex' })
+→ File: /executions/abc123/files/output.tex
 
   \documentclass{article}
   ...
@@ -172,12 +172,12 @@ Use existing `getPathSegments` from `src/utils/core/pathCore.ts`:
 ```typescript
 import { getPathSegments } from '@utils/core/pathCore';
 
-// Example: '/runs/abc123/files' → ['runs', 'abc123', 'files']
+// Example: '/executions/abc123/files' → ['executions', 'abc123', 'files']
 const segments = getPathSegments(input.path);
 const [namespace, id, resource, ...rest] = segments;
 
-if (namespace !== 'runs') throw new ToolError('Path must start with /runs');
-if (!id) return this.listRuns();
+if (namespace !== 'executions') throw new ToolError('Path must start with /executions');
+if (!id) return this.listExecutions();
 if (!resource) return this.showSummary(id);
 if (resource === 'config') return this.showConfig(id);
 if (resource === 'conversation') return this.showConversation(id);
@@ -190,13 +190,13 @@ if (resource === 'files') {
 ### Files Created
 
 ```
-src/tools/RunsTool.ts  # Single file, ~400 lines
+src/tools/ExecutionsTool.ts  # Single file, ~400 lines
 ```
 
 ### Files Modified
 
 ```
-src/tools/registry.ts  # Import + register RunsTool
+src/tools/registry.ts  # Import + register ExecutionsTool
 ```
 
 ### Existing Utilities to Reuse
@@ -223,12 +223,12 @@ src/tools/registry.ts  # Import + register RunsTool
 View execution history and generated files (read-only).
 
 Paths:
-- /runs - List all past executions
-- /runs/{id} - Execution summary
-- /runs/{id}/config - Agent configuration (JSON, use with propose_*)
-- /runs/{id}/conversation - Message history
-- /runs/{id}/files - List generated files
-- /runs/{id}/files/{path} - Read specific file
+- /executions - List all past executions
+- /executions/{id} - Execution summary
+- /executions/{id}/config - Agent configuration (JSON, use with delegate_*)
+- /executions/{id}/conversation - Message history
+- /executions/{id}/files - List generated files
+- /executions/{id}/files/{path} - Read specific file
 
 Use "current" as {id} to access the active execution.
 Use view_range: [start, end] to paginate large outputs.
@@ -236,17 +236,17 @@ Use view_range: [start, end] to paginate large outputs.
 
 ## Integration with Agent Proposal Tools
 
-The `/runs/{id}/config` path returns clean JSON, enabling agents to learn and propose new executions:
+The `/executions/{id}/config` path returns clean JSON, enabling agents to learn and propose new executions:
 
 ### Tool-Use Agent History → Propose New Tool-Use Agent
 
 ```
 // Get past config as JSON
-runs({ path: '/runs/abc123/config' })
+executions({ path: '/executions/abc123/config' })
 → { "agent": "search", "model": "sonnet45", ... }
 
 // Propose similar with modifications
-propose_agent({
+delegate_agent({
   agent: "search",
   model: "opus45",
   instruction: "Find papers on linear attention, focusing on memory efficiency"
@@ -257,11 +257,11 @@ propose_agent({
 
 ```
 // Get past config as JSON
-runs({ path: '/runs/def456/config' })
+executions({ path: '/executions/def456/config' })
 → { "agent": "correct", "model": "sonnet45", "inputFile": "paper.tex", ... }
 
 // Propose similar with modifications
-propose_workflow({
+delegate_workflow({
   agent: "correct",
   model: "opus45",
   inputFile: "paper_v2.tex",
@@ -273,8 +273,8 @@ propose_workflow({
 
 An orchestrating tool-use agent can:
 
-1. List executions: `/runs`
-2. Check what worked: `/runs/{id}/config` + `/runs/{id}/conversation`
+1. List executions: `/executions`
+2. Check what worked: `/executions/{id}/config` + `/executions/{id}/conversation`
 3. Propose new execution with modifications
 
 ## Future Considerations
@@ -288,15 +288,15 @@ An orchestrating tool-use agent can:
 
 ### Potential Extensions (Later)
 
-- `/runs/{id}/tools` - List of tool calls with timing/success
-- `/runs/{id}/usage` - Token usage statistics
+- `/executions/{id}/tools` - List of tool calls with timing/success
+- `/executions/{id}/usage` - Token usage statistics
 - Search by agent name or date range
 
 ## Success Criteria
 
 1. Agent can list past executions (sorted by time, most recent first)
 2. Agent can view execution summary with navigation hints
-3. Agent can get config as JSON (for propose_workflow/propose_agent)
+3. Agent can get config as JSON (for delegate_workflow/delegate_agent)
 4. Agent can view conversation history
 5. Agent can read generated files from past runs
 6. Works for both tool-use and workflow agents
