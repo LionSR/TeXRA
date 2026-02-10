@@ -119,11 +119,6 @@ export const UpdateStreamStatusMessageSchema = z.object({
   lastTimestamp: z.number().optional(),
 });
 
-export const UpdateStatusMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STATUS),
-  status: StreamStatusSchema,
-});
-
 export const UpdateLogsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_LOGS),
   stream: z.union([StreamTabIdSchema, z.literal('')]),
@@ -324,7 +319,6 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
   [
     UpdateStreamsMessageSchema,
     UpdateStreamStatusMessageSchema,
-    UpdateStatusMessageSchema,
     UpdateLogsMessageSchema,
     AppendLogMessageSchema,
     UpdateLogMessageSchema,
