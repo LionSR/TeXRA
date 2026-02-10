@@ -48,13 +48,7 @@ Then update the file with your changes.
 
 ### `ask`
 
-A read-only assistant for exploring your workspace without risk of modifications.
-
-**Capabilities:**
-
-- Read and analyze documents
-- Search through project files
-- Answer questions about your codebase
+A read-only assistant for exploring your workspace. It can answer questions about your project without touching any files—safe to use when you just want to understand what's there.
 
 **Best for:** Quick questions, understanding existing code, safe exploration
 
@@ -68,14 +62,7 @@ What packages does this LaTeX project use? Summarize the document structure.
 
 ### `search`
 
-Specializes in finding academic literature and web content. Read-only - cannot modify your files.
-
-**Capabilities:**
-
-- Search arXiv for preprints and papers
-- Look up publications via Crossref/DOI
-- Fetch and summarize web pages
-- Cross-reference multiple sources
+Finds papers and web content for you. Give it a topic and it comes back with relevant preprints, published articles, and web resources. Read-only—it won't touch your files.
 
 **Best for:** Literature reviews, finding citations, fact-checking
 
@@ -88,14 +75,7 @@ Focus on papers from 2023-2024 that address mathematical equation handling.
 
 ### `research`
 
-Combines file editing with computational verification using Wolfram Language for symbolic mathematics.
-
-**Capabilities:**
-
-- Perform symbolic and numerical calculations
-- Verify mathematical derivations step-by-step
-- Edit files with computational results
-- Track progress on complex tasks
+A hands-on research agent that can edit your files **and** verify mathematics computationally. When you need to check a derivation or run a symbolic calculation alongside your writing, this is the one.
 
 **Best for:** Mathematical derivations, computational verification, multi-step research
 
@@ -108,14 +88,7 @@ Verify each step computationally and update the file with results.
 
 ### `discuss`
 
-An academic discussion partner for brainstorming and exploring research directions. Read-only with literature access.
-
-**Capabilities:**
-
-- Engage in substantive intellectual discourse
-- Find and synthesize relevant literature
-- Offer counterarguments and alternative perspectives
-- Connect ideas across papers
+A brainstorming partner that can pull in relevant literature as you talk. Useful for thinking through research directions, poking holes in methodology, or connecting ideas across papers. Read-only.
 
 **Best for:** Brainstorming, methodology critique, research direction guidance
 
@@ -130,14 +103,7 @@ tradeoffs compared to tree-based approaches? What does the literature say?
 
 ### `lean`
 
-Interactive Lean 4 proof assistant with VS Code integration.
-
-**Capabilities:**
-
-- Get real-time diagnostics and error feedback
-- Inspect proof state and types at any position
-- Search Mathlib for relevant lemmas
-- Build and verify proofs
+Helps you write and debug Lean 4 proofs. It reads compiler diagnostics, inspects proof state, and iterates until the proof compiles.
 
 **Best for:** Formalizing proofs, Lean 4 development, Mathlib projects
 
@@ -152,46 +118,29 @@ informal outline, then produce Lean code and iterate until it compiles.
 
 ### `presenter`
 
-An interactive scientific presentation builder with visual quality assurance. It creates LaTeX Beamer presentations, posters, and visual materials by surveying your codebase, planning slides, and iteratively compiling and inspecting the output PDF.
+Builds conference-ready Beamer presentations, posters, and visual materials from your project. Point it at your paper and it reads through your work, plans the slide structure, generates figures, and compiles the result—checking every slide visually before handing it back to you.
 
-**Capabilities:**
-
-- Build Beamer presentations, posters, and tutorial materials from your research
-- Survey your project with `glob`/`grep` to extract key algorithms, results, and figures
-- Generate and include TikZ diagrams, matplotlib plots, and Wolfram-generated figures
-- Compile LaTeX and visually inspect every slide of the output PDF to fix layout issues
-- Search arXiv and the web for supporting references
-
-**Best for:** Conference talks, poster sessions, seminar presentations, code documentation slides, lightning talks
+**Best for:** Conference talks, poster sessions, seminar presentations, lightning talks
 
 **Example instruction:**
 
 ```
 Create a 15-slide Beamer presentation from this project. Cover motivation, the core
 algorithm, key results, and future work. Use the metropolis theme and include TikZ
-diagrams for the architecture. Compile and verify every slide looks correct.
+diagrams for the architecture.
 ```
 
 ### `simplifier`
 
-A code and writing simplification specialist that makes scientific projects clearer and more maintainable while preserving exact correctness.
+Cuts through complexity in your code and writing. Whether it's duplicated logic across files, overly-abstract wrappers, or LLM-generated filler prose, `simplifier` cleans things up while preserving correctness.
 
-**Capabilities:**
-
-- Remove code duplication across files using systematic search
-- Inline single-use wrappers and collapse unnecessary abstraction layers
-- Replace hand-rolled implementations with standard library equivalents
-- Clean up AI-generated prose bloat (filler phrases, redundant transitions, hedging pileups)
-- Apply language-idiomatic patterns (vectorized NumPy ops, Julia broadcasting, LaTeX `\tikzset`, etc.)
-
-**Best for:** Refactoring research code, tightening manuscript prose, cleaning up LLM-generated artifacts
+**Best for:** Refactoring research code, tightening manuscript prose, cleaning up verbose AI-generated text
 
 **Example instruction:**
 
 ```
-Simplify the numerical solver in solver.py. Look for duplicated loops that could be
-vectorized with NumPy, inline any single-use helper functions, and remove dead code.
-Run the existing tests after each change to verify correctness.
+Simplify the numerical solver in solver.py. Look for duplicated code, inline any
+single-use helper functions, and remove dead code. Run existing tests after each change.
 ```
 
 ## Correction & Polishing Agents
@@ -365,15 +314,9 @@ Transcribe the provided lecture audio file [lecture.mp3]. Provide the output as 
 
 ### `merge`
 
-The `merge` agent intelligently combines changes from an edited document back into a base document.
+Takes an AI-edited document and merges the improvements back into your original, keeping the best of both. It understands context, so it won't blindly overwrite your careful phrasing with generic rewrites.
 
-**Capabilities:**
-
-- Compare an AI-edited file against the original base document
-- Selectively integrate improvements while preserving technical precision
-- Resolve conflicting changes between document versions
-
-**Best for:** Applying AI-suggested edits from `_r0_` or `_r1_` output files, incorporating reviewer suggestions, combining different drafts
+**Best for:** Applying AI-suggested edits from output files, incorporating reviewer suggestions, combining different drafts
 
 **Example instruction:**
 
