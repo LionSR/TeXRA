@@ -95,17 +95,6 @@ export class StreamTabsManager extends PersistentMapManager<
   }
 
   /**
-   * Find a message by ID without copying the full list.
-   */
-  findMessage(
-    stream: StreamTabId,
-    messageId: string,
-  ): LogMessageData | undefined {
-    const messages = this.items.get(stream);
-    return messages?.find((message) => message.id === messageId);
-  }
-
-  /**
    * Get first timestamp for a stream (for sorting by creation time).
    * More efficient than getMessages() when only timestamp is needed.
    */
@@ -129,6 +118,9 @@ export class StreamTabsManager extends PersistentMapManager<
    * Callers can use the return value both as a found/not-found check and to
    * access the pre-update state (e.g. for constructing webview messages).
    *
+   * Optional guard predicate runs against the existing message BEFORE mutation.
+   * Returns undefined (no mutation) if the guard returns false.
+   *
    * Uses fire-and-forget persistence (void this.save()) because the in-memory
    * state is immediately correct for webview updates.
    */
@@ -136,6 +128,7 @@ export class StreamTabsManager extends PersistentMapManager<
     stream: StreamTabId,
     messageId: string,
     updates: Partial<Omit<LogMessageData, 'id'>>,
+    guard?: (existing: LogMessageData) => boolean,
   ): LogMessageData | undefined {
     const messages = this.items.get(stream);
     if (!messages) return undefined;
@@ -144,6 +137,7 @@ export class StreamTabsManager extends PersistentMapManager<
     if (index < 0) return undefined;
 
     const original = messages[index];
+    if (guard && !guard(original)) return undefined;
     messages[index] = { ...original, ...updates };
     void this.save();
     return original;
