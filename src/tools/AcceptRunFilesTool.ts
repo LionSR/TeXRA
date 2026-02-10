@@ -40,7 +40,9 @@ import { getPathSegments } from '@utils/core/pathCore';
 
 const FileMapping = z.strictObject({
   /** File path within the run (as shown by /runs/{id}/files). */
-  run_path: z.string().describe('File path within the run storage'),
+  run_path: z
+    .string()
+    .describe('File path within the run (as listed by /runs/{id}/files)'),
   /**
    * Workspace-relative path to write to.
    * If omitted, defaults to run_path (same relative path).
@@ -55,7 +57,9 @@ const FileMapping = z.strictObject({
 
 const AcceptRunFilesInputSchema = z.strictObject({
   /** Execution ID of the completed run (UUID). */
-  execution_id: ExecutionIdSchema.describe('Execution ID to accept files from'),
+  execution_id: ExecutionIdSchema.describe(
+    'Execution ID (from subagent-result id attribute or /runs)',
+  ),
   /** Files to accept from run storage into the workspace. */
   files: z
     .array(FileMapping)
@@ -75,12 +79,6 @@ export class AcceptRunFilesTool extends defineTool({
 
 Copies selected output files from a run into the workspace, replacing
 existing files. Each file is shown to the user for review before writing.
-
-Parameters:
-- execution_id: The execution ID (from subagent-result or /runs)
-- files: Array of {run_path, workspace_path?} mappings
-  - run_path: File path within the run (as listed by /runs/{id}/files)
-  - workspace_path: Workspace path to write to (defaults to run_path)
 
 Example: Accept corrected file back to its original location:
   execution_id: "d4f5e6a7-1234-4b89-abcd-ef0123456789"
