@@ -445,6 +445,10 @@ export class ProgressViewProvider
     this.updateWebview();
   }
 
+  public async flushState(): Promise<void> {
+    await this.state.flush();
+  }
+
   public override dispose(): void {
     this.disposePanelResources(true);
     super.dispose();

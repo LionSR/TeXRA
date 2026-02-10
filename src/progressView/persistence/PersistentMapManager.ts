@@ -15,6 +15,9 @@ export interface MementoStorage {
 /**
  * Generic manager for map-based state with persistence support.
  * Handles common map operations and storage serialization.
+ *
+ * Writes are immediate by default. Subclasses that need coalescing
+ * (e.g. high-frequency streaming updates) can override save().
  */
 export abstract class PersistentMapManager<K extends string, V> {
   protected items: Map<K, V> = new Map();
@@ -29,12 +32,6 @@ export abstract class PersistentMapManager<K extends string, V> {
 
     this.storage = resolvedStorage;
     this.storageKey = storageKey;
-  }
-
-  /** Add an entry to the map and persist it */
-  async add(key: K, value: V): Promise<void> {
-    this.items.set(key, value);
-    await this.save();
   }
 
   /** Delete an entry and persist the change */
@@ -82,11 +79,6 @@ export abstract class PersistentMapManager<K extends string, V> {
     return [...this.items.keys()];
   }
 
-  /** Replace all entries (used during loading) */
-  setAll(entries: Map<K, V>): void {
-    this.items = new Map(entries);
-  }
-
   /** Serialize a value before saving. Override for custom serialization. */
   protected serialize(value: V, _key: K): unknown {
     return value;
@@ -120,8 +112,21 @@ export abstract class PersistentMapManager<K extends string, V> {
     return result.data;
   }
 
-  /** Save current state to persistence */
+  /** Persist current in-memory state to storage. */
   async save(): Promise<void> {
+    await this.writeToStorage();
+  }
+
+  /**
+   * Flush any pending writes. No-op for immediate saves.
+   * Subclasses with debounced saves should override this.
+   */
+  async flush(): Promise<void> {
+    // Immediate saves have nothing to flush
+  }
+
+  /** Perform the actual serialization + storage write. */
+  protected async writeToStorage(): Promise<void> {
     const record: Record<string, unknown> = {};
     for (const [key, value] of this.items) {
       record[key] = this.serialize(value, key);
