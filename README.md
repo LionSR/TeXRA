@@ -72,3 +72,5 @@ Report issues and feature requests on the
 ## License
 
 © TeXRA Team 2025. All rights reserved.
+
+[Terms of Service](TERMS_OF_SERVICE.md) · [Provider List](https://texra.ai/providers)
