@@ -240,7 +240,7 @@ Aim for code that looks like it was designed correctly from the start:
 **Configuration, storage, and workspace files**
 
 - Use `getConfig`, `updateConfig`, and `watchConfig` from `@utils/config` to read and react to settings changes.
-- Interact with the filesystem through `@utils/files` helpers (`WorkspaceFS`, `RelativeFS`, `StorageFS`, `GlobalStorageFS`, `AbsoluteFS`). They resolve workspace paths, manage global storage, and expose cleanup helpers like `StorageFS.cleanupOldFiles`.
+- Interact with the filesystem through `@utils/files` helpers (`WorkspaceFS`, `RelativeFS`, `StorageFS`, `GlobalStorageFS`, `AbsoluteFS`). They resolve workspace paths, manage global storage, and expose cleanup helpers like `RelativeFS.cleanupOldFiles`.
 - Generate and resolve pasted-image paths with `@utils/files/pastedImageUtils` so temporary assets map correctly back to storage.
 - Surface files and agent directories through the shared frontend utilities (`fileLister` in `src/frontend/files/fileLister.ts`, `agentDirectories` in `src/frontend/agents/AgentDirectoryManager.ts`) instead of duplicating discovery logic.
 
@@ -254,13 +254,13 @@ Aim for code that looks like it was designed correctly from the start:
 
 - Define agents using `AgentDataclass` and `AgentConfig` (`src/agent/core/`) and compose them via the factories in `src/agent/runtime`.
 - Launch and resume executions via `executeAgent` (`src/agent/runtime/executeAgent.ts`) so session filters, run directories, and resume actions stay synchronized.
-- Add new model handlers under `src/agent/modelHandlers/`, export them through the index, and register capabilities/pricing in `src/model/ModelRegistry.ts`.
+- Add new model handlers under `src/agent/modelHandlers/`, export them through the index, and register capabilities/pricing in `src/model/computeModelOptions.ts`.
 
 **PocketFlow architecture**
 
 Agent flows follow the PocketFlow pattern in `src/agent/implementations/flows/`:
 
-- **Flow types**: `ReflectionFlow` for multi-round reflection agents, `ToolUseRunFlow` for tool-use agents
+- **Flow types**: `runReflectionFlow` for multi-round reflection agents, `runToolUseFlow` for tool-use agents
 - **Services** are immutable dependencies injected via `flow.setServices()`. Nodes access them via `this.services`. Define service interfaces in flow-specific files (e.g., `ReflectionServices`, `ToolUseServices`) extending `BaseFlowContextInit` with convenience accessors (`logger`, `context`) defined inline.
 - **Shared store** contains only mutable state (memories). Nodes read/write via `prep()` and `post()` methods.
 - **Flow transitions** - use named constants instead of magic values:
@@ -278,7 +278,7 @@ See `docs/pocketflow/` for full framework documentation.
 - Generate HTML through `BaseViewContentProvider` (`src/common/webview/BaseViewContentProvider.ts`) and `buildWebviewHtml` (`src/frontend/webview/html.ts`). Extend `BaseViewMessageHandler` for consistent lifecycle management across views.
 - Use codicon-based controls and shared utilities from `@utils/text/stringUtils` and `@utils/files/pathUtils` for consistent interactions.
 - For webview dependencies, prefer CDN builds (jsdelivr for static assets, esm.sh for ES modules) for complex packages like markdown-it, KaTeX, or highlight.js, while keeping lightweight bundles (split.js, `@vscode/codicons`) local to reduce extension size.
-- Keep CSS modular (per-component styles in `src/progressView/styles`, shared tokens in `src/common/styles/common.css`) and use codicon chevrons (e.g., `<i class="codicon codicon-chevron-down"></i>`) for toggle affordances.
+- Keep CSS modular (per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `src/common/styles/common.css`) and use codicon chevrons (e.g., `<i class="codicon codicon-chevron-down"></i>`) for toggle affordances.
 
 **Progress view**
 
@@ -288,7 +288,7 @@ See `docs/pocketflow/` for full framework documentation.
 **Error handling and types**
 
 - Format and surface errors through `logErrorMessage`, `showLoggedErrorMessage`, and `showLoggedMessageWithDocs` in `src/common/errors/errorHandlingUtils.ts` for consistent telemetry and documentation links.
-- Keep shared type definitions colocated with their domains (`src/agent/types`, `src/logger/types`) and derive runtime-safe interfaces with `zod` plus `z.infer`.
+- Keep shared type definitions colocated with their domains (e.g., `src/agent/types`) and derive runtime-safe interfaces with `zod` plus `z.infer`.
 
 **Miscellaneous**
 
@@ -304,7 +304,7 @@ See `docs/pocketflow/` for full framework documentation.
 ### Webview Consistency Patterns
 
 - **Base Classes**: All webviews (webview, progressView, settingsView) extend `BaseViewContentProvider` and `BaseViewMessageHandler` from `src/common/webview/` for consistent error handling, logging, and cleanup.
-- **Naming Convention**: Follow `[Domain]View[Component]` pattern (e.g., `MainViewContentProvider`, `SettingsViewMessageHandler`, `ProgressViewDomHandler`)
+- **Naming Convention**: Follow `[Domain]View[Component]` pattern (e.g., `MainViewContentProvider`, `SettingsViewMessageHandler`, `ProgressViewContentProvider`)
 - **Command Constants**: Define all commands in `src/common/webview/commands.ts` - use constants, not string literals
 - **Message Handlers**: Delegate to domain-specific manager classes (FileManager, SettingsManager, etc.) for separation of concerns
 - **Client-Side State**: Add empty handlers with `/* State saved client-side */` comment for checkbox/toggle operations
@@ -312,7 +312,7 @@ See `docs/pocketflow/` for full framework documentation.
 - **Module Structure**: Keep UI managers focused on a single responsibility
 - **Trust Dependencies**: Use APIs as documented. When behavior is unclear, check the source in `node_modules/` first. Add a workaround only for a documented quirk, with a comment explaining it
 - **Dropdown Menus**: Should close when clicking outside, not just on toggle
-- **CSS Organization**: Keep per-component styles in view-specific `styles/` directories, shared tokens in `src/common/styles/common.css`
+- **CSS Organization**: Keep per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `src/common/styles/common.css`
 
 ### Source Organization
 
@@ -334,7 +334,7 @@ adding new code or refactoring existing modules:
   addresses them. Favor deep modules with minimal, clear APIs.
 - Most importantly, ideally, when you have finished with each change, the system will have the structure it would have had if you had designed it from the start with that change in mind.
 - When your refactoring include a large number of renames, use search tools to make sure you are not missing any files or paths where changes need to be made.
-- **Share instances via constructors**: When managers share state, pass the shared dependency through the constructor (e.g., `new UsageGroup(this.usageSummary)`). This keeps state consistent and dependencies explicit.
+- **Share instances via constructors**: When managers share state, pass the shared dependency through the constructor. This keeps state consistent and dependencies explicit.
 
 ## Documentation
 
