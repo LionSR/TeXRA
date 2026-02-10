@@ -1104,11 +1104,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
         }
 
         if (totalPages > ANTHROPIC_MAX_PDF_PAGES) {
-          throw new Error(
+          const err = new Error(
             `PDF page limit reached: the conversation contains ${totalPages}+ PDF pages, ` +
               `but the API allows a maximum of ${ANTHROPIC_MAX_PDF_PAGES} pages per request. ` +
               `Please reduce the number of PDF attachments or start a new conversation.`,
           );
+          // Attach status 400 so formatProviderHttpError classifies this as
+          // non-retryable (same as the raw API error it replaces).
+          (err as Error & { status: number }).status = 400;
+          throw err;
         }
       }
     }
