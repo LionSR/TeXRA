@@ -34,6 +34,8 @@ export class StreamTabsManager extends PersistentMapManager<
 
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingResolve: (() => void) | null = null;
+  private savePromise: Promise<void> | null = null;
+  private inFlightWrite: Promise<void> | null = null;
 
   constructor(storage?: MementoStorage) {
     super(WorkspaceStateKey.STREAM_TABS, storage);
@@ -143,26 +145,35 @@ export class StreamTabsManager extends PersistentMapManager<
     return original;
   }
 
-  /**
-   * Debounced save — coalesces rapid-fire log mutations into a single write.
-   * When a new save supersedes a pending one, the previous promise is
-   * resolved immediately (its data is captured by the newer write).
-   */
+  /** Debounced save — coalesces rapid-fire log mutations into a single write. */
   override async save(): Promise<void> {
     if (this.saveTimer !== null) {
       clearTimeout(this.saveTimer);
     }
 
-    this.pendingResolve?.();
+    if (!this.savePromise || this.pendingResolve === null) {
+      this.savePromise = new Promise<void>((resolve) => {
+        this.pendingResolve = resolve;
+      });
+    }
 
-    return new Promise<void>((resolve) => {
-      this.pendingResolve = resolve;
-      this.saveTimer = setTimeout(() => {
-        this.saveTimer = null;
-        this.pendingResolve = null;
-        this.writeToStorage().then(resolve, resolve);
-      }, SAVE_DEBOUNCE_MS);
-    });
+    this.saveTimer = setTimeout(() => {
+      const resolve = this.pendingResolve;
+      this.pendingResolve = null;
+      this.saveTimer = null;
+
+      this.inFlightWrite = this.writeToStorage()
+        .catch(() => {
+          // Keep save contract non-throwing to avoid interrupting stream updates.
+        })
+        .finally(() => {
+          this.inFlightWrite = null;
+          this.savePromise = null;
+          resolve?.();
+        });
+    }, SAVE_DEBOUNCE_MS);
+
+    return this.savePromise;
   }
 
   /**
@@ -173,9 +184,24 @@ export class StreamTabsManager extends PersistentMapManager<
     if (this.saveTimer !== null) {
       clearTimeout(this.saveTimer);
       this.saveTimer = null;
-      this.pendingResolve?.();
+      const resolve = this.pendingResolve;
       this.pendingResolve = null;
-      await this.writeToStorage();
+
+      this.inFlightWrite = this.writeToStorage()
+        .catch(() => {
+          // Keep flush contract non-throwing to match save() behavior.
+        })
+        .finally(() => {
+          this.inFlightWrite = null;
+          this.savePromise = null;
+          resolve?.();
+        });
+      await this.inFlightWrite;
+      return;
+    }
+
+    if (this.inFlightWrite) {
+      await this.inFlightWrite;
     }
   }
 

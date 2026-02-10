@@ -156,7 +156,7 @@ export class TaskGroupList extends LitElement {
 
   /**
    * Incrementally classify messages appended since `startIndex`.
-   * Avoids the full O(n log n) sort — appended messages are already in order.
+   * Avoids full tree rebuilds by classifying only new messages and inserting by timestamp.
    */
   private appendNewMessages(startIndex: number): void {
     // Build a quick group lookup from the existing tree
@@ -173,14 +173,36 @@ export class TaskGroupList extends LitElement {
       const msg = this.messages[i];
       if (msg.groupId && treeNodeMap.has(msg.groupId)) {
         const node = treeNodeMap.get(msg.groupId)!;
-        // Create a new array reference so Lit detects the change
-        node.messages = [...node.messages, msg];
+        node.messages = this.insertMessageSorted(node.messages, msg);
       } else if (msg.messageType === 'userMessage') {
-        this.cachedUserMessages = [...this.cachedUserMessages, msg];
+        this.cachedUserMessages = this.insertMessageSorted(
+          this.cachedUserMessages,
+          msg,
+        );
       } else {
-        this.cachedOtherUngrouped = [...this.cachedOtherUngrouped, msg];
+        this.cachedOtherUngrouped = this.insertMessageSorted(
+          this.cachedOtherUngrouped,
+          msg,
+        );
       }
     }
+  }
+
+  private insertMessageSorted(
+    target: LogMessageData[],
+    message: LogMessageData,
+  ): LogMessageData[] {
+    const insertIndex = target.findIndex(
+      (entry) => entry.timestamp > message.timestamp,
+    );
+    if (insertIndex < 0) {
+      return [...target, message];
+    }
+    return [
+      ...target.slice(0, insertIndex),
+      message,
+      ...target.slice(insertIndex),
+    ];
   }
 
   /** Replace stale message references in cached structures with fresh ones (O(n)). */
