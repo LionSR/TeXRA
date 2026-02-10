@@ -462,6 +462,14 @@ export class ProgressViewState {
     );
   }
 
+  /**
+   * Flush pending writes from all managers.
+   * Only StreamTabsManager has debounced writes; the rest are no-ops.
+   */
+  async flush(): Promise<void> {
+    await this._streamTabs.flush();
+  }
+
   /** Validate activeStream against available streams after load */
   private validateActiveStream(): void {
     const savedActiveStream = this._prefs.get('activeStream');
