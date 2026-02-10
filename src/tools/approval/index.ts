@@ -20,6 +20,10 @@ import {
   _rejectAllPendingToolEditApprovals,
   _rejectPendingToolEditApprovalsForStream,
 } from './toolEditApproval';
+import {
+  _clearAllProposalBypass,
+  _clearProposalBypassForStream,
+} from './proposalApproval';
 import type { StreamTabId } from '@shared/schemas';
 
 /**
@@ -30,6 +34,7 @@ export function cleanupApprovalsForStream(streamId: StreamTabId): void {
   _rejectPendingToolEditApprovalsForStream(streamId);
   _rejectPendingBashApprovalsForStream(streamId);
   _clearApprovalBypassForStream(streamId);
+  _clearProposalBypassForStream(streamId);
 }
 
 /**
@@ -40,6 +45,7 @@ export function cleanupAllApprovals(): void {
   _rejectAllPendingToolEditApprovals();
   _rejectAllPendingBashApprovals();
   _clearAllApprovalBypass();
+  _clearAllProposalBypass();
 }
 
 // Re-export commonly used functions from individual modules
@@ -54,6 +60,13 @@ export {
   type BashApprovalRequest,
   type BashApprovalResult,
 } from './bashApproval';
+
+export {
+  // Proposal approval (Super YOLO)
+  toggleProposalBypass,
+  isProposalBypassedForStream,
+  isSuperYoloFeatureEnabled,
+} from './proposalApproval';
 
 export {
   // Tool edit approval

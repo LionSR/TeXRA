@@ -44,7 +44,10 @@ import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager
 import * as logger from '@logger/logUtils';
 
 // Local imports - model
-import { getVisibleModels, resolveVisibleModel } from '@model/computeModelOptions';
+import {
+  getVisibleModels,
+  resolveVisibleModel,
+} from '@model/computeModelOptions';
 
 // Local imports - tools
 import { ToolResult } from '@tools/result';
@@ -99,7 +102,10 @@ function toConfigPayload(
  * Pre-generates executionId so all IDs (tool return, XML delivery, error)
  * are consistent and usable with the executions tool.
  *
- * Result is delivered via FollowUpQueue when the subagent completes.
+ * Result is delivered via FollowUpQueue. For tool-use subagents, the result
+ * is delivered early via onBeforeWaiting (before the subagent enters WAITING),
+ * so the orchestrator gets the response without waiting for flow exit.
+ * For workflow subagents, delivery happens when the promise resolves.
  */
 function executeSubagent(
   configPayload: AgentConfigPayload,
@@ -108,20 +114,40 @@ function executeSubagent(
 ): ToolResult {
   const executionId = randomUUID() as ExecutionId;
 
+  // Track whether result has already been delivered (via onBeforeWaiting)
+  // to avoid duplicate delivery when the promise eventually resolves.
+  let hasDelivered = false;
+  let childStreamId: StreamTabId | undefined;
+
   const promise = executeAgent(configPayload, executionId, {
     isSubagent: true,
-    onStreamResolved: (childStreamId) => {
+    onStreamResolved: (resolvedStreamId) => {
+      childStreamId = resolvedStreamId;
       registerSubagent(
         executionId,
         orchestratorStreamId,
-        childStreamId,
+        resolvedStreamId,
         agentName,
         promise,
       );
     },
+    onBeforeWaiting: (lastResponse) => {
+      if (hasDelivered || !childStreamId) return;
+      hasDelivered = true;
+      const msg = formatSubagentDelivery(agentName, {
+        category: 'toolUse' as const,
+        status: 'stopped' as const,
+        lastResponse,
+        executionId,
+        streamId: childStreamId,
+      });
+      ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+    },
   });
   promise
     .then((result) => {
+      if (hasDelivered) return;
+      hasDelivered = true;
       const msg = formatSubagentDelivery(agentName, result);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     })
@@ -367,10 +393,7 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
     const streamId = ctx.streamId;
 
     // Super YOLO: skip proposal when feature enabled AND stream bypassed
-    if (
-      isSuperYoloFeatureEnabled() &&
-      isProposalBypassedForStream(streamId)
-    ) {
+    if (isSuperYoloFeatureEnabled() && isProposalBypassedForStream(streamId)) {
       return executeSubagent(toConfigPayload(proposal), input.agent, streamId);
     }
 
@@ -466,10 +489,7 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
     const streamId = ctx.streamId;
 
     // Super YOLO: skip proposal when feature enabled AND stream bypassed
-    if (
-      isSuperYoloFeatureEnabled() &&
-      isProposalBypassedForStream(streamId)
-    ) {
+    if (isSuperYoloFeatureEnabled() && isProposalBypassedForStream(streamId)) {
       return executeSubagent(toConfigPayload(proposal), input.agent, streamId);
     }
 

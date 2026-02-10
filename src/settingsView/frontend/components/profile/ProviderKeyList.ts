@@ -15,7 +15,10 @@ import { profileViewStyles } from './styles';
 import { ProviderKeyEvents } from './events';
 
 // Local imports - shared schemas
-import type { ProviderKeyStatus } from '@shared/schemas/settingsViewMessages';
+import type {
+  ProviderKeyStatus,
+  ProviderVscodeSetting,
+} from '@shared/schemas/settingsViewMessages';
 
 const STATUS_LABELS: Record<ProviderKeyStatus['status'], string> = {
   set: 'Set',
@@ -45,7 +48,8 @@ export class ProviderKeyList extends LitElement {
   private hasSettings(entry: ProviderKeyStatus): boolean {
     return (
       !NO_STREAMING_PROVIDERS.has(entry.provider) ||
-      entry.supportsCustomEndpoint
+      entry.supportsCustomEndpoint ||
+      entry.vscodeSettings.length > 0
     );
   }
 
@@ -145,14 +149,62 @@ export class ProviderKeyList extends LitElement {
         `
       : nothing;
 
+    const vscodeToggles = entry.vscodeSettings.map((setting) =>
+      this.renderVscodeSetting(setting),
+    );
+
     return html`
       <tr class="provider-detail-row">
         <td colspan="3">
           <div class="provider-settings">
-            ${streamingToggle} ${endpointInput}
+            ${streamingToggle} ${endpointInput} ${vscodeToggles}
           </div>
         </td>
       </tr>
+    `;
+  }
+
+  private renderVscodeSetting(setting: ProviderVscodeSetting): TemplateResult {
+    const warningLink =
+      setting.warningUrl && setting.warningUrlLabel
+        ? html` <button
+            class="provider-setting-link"
+            @click=${() =>
+              this.dispatchEvent(
+                ProviderKeyEvents.openUrl({ url: setting.warningUrl! }),
+              )}
+          >
+            ${setting.warningUrlLabel}
+          </button>`
+        : nothing;
+
+    const warning = setting.warning
+      ? html`<span class="provider-setting-warning"
+          >${setting.warning}${warningLink}</span
+        >`
+      : nothing;
+
+    return html`
+      <div class="provider-setting provider-setting--block">
+        <label>
+          <input
+            type="checkbox"
+            .checked=${setting.value}
+            @change=${(e: Event) => {
+              const checked = (e.target as HTMLInputElement).checked;
+              this.dispatchEvent(
+                ProviderKeyEvents.setVscodeSetting({
+                  key: setting.key,
+                  value: checked,
+                }),
+              );
+            }}
+          />
+          ${setting.label}
+        </label>
+        <span class="provider-setting-description">${setting.description}</span>
+        ${warning}
+      </div>
     `;
   }
 

@@ -38,6 +38,7 @@ import {
   UpdateAgentSelectionMessageSchema,
   UpdateAutoShowRemoteMessageSchema,
   UpdateCustomAgentDirMessageSchema,
+  UpdateSuperYoloEnabledMessageSchema,
   type AgentSelectionItem,
 } from '@shared/schemas/settingsViewMessages';
 import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
@@ -56,6 +57,7 @@ import './tabs/MemoryTab';
 import './tabs/HistoryTab';
 import './tabs/ModelsTab';
 import './tabs/AgentsTab';
+import './tabs/MultiAgentTab';
 import type { HistoryTab } from './tabs/HistoryTab';
 
 const HISTORY_ACTION_COMMANDS: Record<string, string> = {
@@ -135,6 +137,10 @@ export class SettingsApp extends BaseWebviewApp {
   @state() private autoShowRemote = true;
   @state() private agentSubTab: AgentCategory | undefined;
 
+  // Super YOLO state
+  @state() private superYoloEnabled = false;
+  @state() private superYoloToggleDisabled = true;
+
   protected get readyCommand(): string | null {
     return null;
   }
@@ -150,6 +156,7 @@ export class SettingsApp extends BaseWebviewApp {
     postMessage(SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_AUTO_SHOW_REMOTE);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR);
+    postMessage(SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED);
   }
 
   private parseMessage<T>(
@@ -248,6 +255,17 @@ export class SettingsApp extends BaseWebviewApp {
         if (!data) return;
         this.customAgentDir = data.path;
         this.customAgentDirIsDefault = data.isDefault;
+        return;
+      }
+
+      case SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED: {
+        const data = this.parseMessage(
+          raw,
+          UpdateSuperYoloEnabledMessageSchema,
+        );
+        if (!data) return;
+        this.superYoloEnabled = data.enabled;
+        this.superYoloToggleDisabled = false;
         return;
       }
 
@@ -385,6 +403,21 @@ export class SettingsApp extends BaseWebviewApp {
     });
   }
 
+  private handleSetProviderVscodeSetting(
+    event: CustomEvent<{ key: string; value: boolean }>,
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING, {
+      key: event.detail.key,
+      value: event.detail.value,
+    });
+  }
+
+  private handleOpenUrl(event: CustomEvent<{ url: string }>): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL, {
+      url: event.detail.url,
+    });
+  }
+
   // Model selection event handlers
   private handleSetModelEnabled(
     event: CustomEvent<{ modelName: string; enabled: boolean }>,
@@ -468,6 +501,14 @@ export class SettingsApp extends BaseWebviewApp {
     });
   }
 
+  private handleSuperYoloToggle(
+    event: CustomEvent<{ enabled: boolean }>,
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED, {
+      enabled: event.detail.enabled,
+    });
+  }
+
   private handleOpenVscodeSettings(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS);
   }
@@ -535,6 +576,7 @@ export class SettingsApp extends BaseWebviewApp {
           <vscode-tab-header slot="header">History</vscode-tab-header>
           <vscode-tab-header slot="header">Models</vscode-tab-header>
           <vscode-tab-header slot="header">Agents</vscode-tab-header>
+          <vscode-tab-header slot="header">Multi-Agent</vscode-tab-header>
 
           <vscode-tab-panel>
             <memory-tab
@@ -573,6 +615,9 @@ export class SettingsApp extends BaseWebviewApp {
               @provider-streaming-set=${this.handleSetProviderStreaming}
               @provider-endpoint-set=${this.handleSetProviderEndpoint}
               @provider-global-streaming-set=${this.handleSetGlobalStreaming}
+              @provider-vscode-setting-set=${this
+                .handleSetProviderVscodeSetting}
+              @provider-open-url=${this.handleOpenUrl}
               @model-enabled-set=${this.handleSetModelEnabled}
               @polish-model-set=${this.handleSetPolishModel}
             ></models-tab>
@@ -594,6 +639,14 @@ export class SettingsApp extends BaseWebviewApp {
               @agent-set-custom-dir=${this.handleSetCustomAgentDir}
               @agent-reset-custom-dir=${this.handleResetCustomAgentDir}
             ></agents-tab>
+          </vscode-tab-panel>
+
+          <vscode-tab-panel>
+            <multi-agent-tab
+              .superYoloEnabled=${this.superYoloEnabled}
+              .toggleDisabled=${this.superYoloToggleDisabled}
+              @super-yolo-toggle=${this.handleSuperYoloToggle}
+            ></multi-agent-tab>
           </vscode-tab-panel>
         </vscode-tabs>
       </div>

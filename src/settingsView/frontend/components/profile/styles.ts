@@ -333,6 +333,45 @@ export const profileViewStyles: CSSResult = css`
     accent-color: var(--vscode-focusBorder);
   }
 
+  .provider-setting--block {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-small);
+  }
+
+  .provider-setting-description {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: 1.4;
+    padding-left: 22px;
+  }
+
+  .provider-setting-warning {
+    color: var(
+      --vscode-inputValidation-warningForeground,
+      var(--vscode-editorWarning-foreground)
+    );
+    font-size: var(--font-size-sm);
+    line-height: 1.4;
+    padding-left: 22px;
+  }
+
+  .provider-setting-link {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-size: var(--font-size-sm);
+    color: var(--vscode-textLink-foreground);
+    cursor: pointer;
+    text-decoration: none;
+    margin-left: var(--spacing-small);
+  }
+
+  .provider-setting-link:hover {
+    text-decoration: underline;
+  }
+
   .endpoint-input {
     flex: 1;
     max-width: 400px;

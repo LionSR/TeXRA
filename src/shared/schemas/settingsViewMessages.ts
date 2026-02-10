@@ -26,6 +26,7 @@ export const SETTINGS_TAB_ORDER = [
   'HISTORY',
   'MODELS',
   'AGENTS',
+  'MULTI_AGENT',
 ] as const;
 
 export type SettingsTabName = (typeof SETTINGS_TAB_ORDER)[number];
@@ -73,11 +74,13 @@ export {
   ApiAccessModeSchema,
   TierConstantsSchema,
   ProviderKeyStatusSchema,
+  ProviderVscodeSettingSchema,
   type ProfileUser,
   type RemoteAgent,
   type ApiAccessMode,
   type TierConstants,
   type ProviderKeyStatus,
+  type ProviderVscodeSetting,
   type SelectAgentMessage,
   type SetApiAccessModeMessage,
 } from './profileViewMessages';
@@ -158,6 +161,19 @@ export const UpdateCustomAgentDirMessageSchema = z.object({
 });
 export type UpdateCustomAgentDirMessage = z.infer<
   typeof UpdateCustomAgentDirMessageSchema
+>;
+
+// ============================================================
+// Super YOLO enabled data schema
+// ============================================================
+
+/** Outbound: backend → frontend Super YOLO enabled toggle */
+export const UpdateSuperYoloEnabledMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED),
+  enabled: z.boolean(),
+});
+export type UpdateSuperYoloEnabledMessage = z.infer<
+  typeof UpdateSuperYoloEnabledMessageSchema
 >;
 
 // ============================================================
@@ -272,6 +288,17 @@ const SetGlobalStreamingMessageSchema = z.object({
   enabled: z.boolean(),
 });
 
+const SetProviderVscodeSettingMessageSchema = z.object({
+  command: z.literal(CMD.SET_PROVIDER_VSCODE_SETTING),
+  key: z.string().min(1),
+  value: z.boolean(),
+});
+
+const OpenExternalUrlMessageSchema = z.object({
+  command: z.literal(CMD.OPEN_EXTERNAL_URL),
+  url: z.string().url(),
+});
+
 // Model selection inbound messages
 const GetModelSelectionMessageSchema = z.object({
   command: z.literal(CMD.GET_MODEL_SELECTION),
@@ -341,6 +368,16 @@ const ResetCustomAgentDirMessageSchema = z.object({
   command: z.literal(CMD.RESET_CUSTOM_AGENT_DIR),
 });
 
+// Super YOLO inbound messages
+const GetSuperYoloEnabledMessageSchema = z.object({
+  command: z.literal(CMD.GET_SUPER_YOLO_ENABLED),
+});
+
+const SetSuperYoloEnabledMessageSchema = z.object({
+  command: z.literal(CMD.SET_SUPER_YOLO_ENABLED),
+  enabled: z.boolean(),
+});
+
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = z.object({
   command: z.literal(CMD.OPEN_VSCODE_SETTINGS),
@@ -380,6 +417,8 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetProviderStreamingMessageSchema,
     SetProviderEndpointMessageSchema,
     SetGlobalStreamingMessageSchema,
+    SetProviderVscodeSettingMessageSchema,
+    OpenExternalUrlMessageSchema,
     // Model selection messages
     GetModelSelectionMessageSchema,
     SetModelEnabledMessageSchema,
@@ -397,6 +436,9 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     GetCustomAgentDirMessageSchema,
     SetCustomAgentDirMessageSchema,
     ResetCustomAgentDirMessageSchema,
+    // Super YOLO messages
+    GetSuperYoloEnabledMessageSchema,
+    SetSuperYoloEnabledMessageSchema,
   ],
 );
 

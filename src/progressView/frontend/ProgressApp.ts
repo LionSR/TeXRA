@@ -122,6 +122,7 @@ function hasStreamStateMetaChange(
       prev.todos !== next.todos ||
       prev.sessionUsage !== next.sessionUsage ||
       prev.toolEditBypass !== next.toolEditBypass ||
+      prev.superYoloBypass !== next.superYoloBypass ||
       prev.queuedFollowUps !== next.queuedFollowUps ||
       prev.ui !== next.ui
     );
