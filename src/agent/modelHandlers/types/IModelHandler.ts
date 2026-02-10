@@ -231,6 +231,9 @@ export interface IModelHandler<
   /** Indicates if the model is served by DeepSeek. */
   readonly isDeepSeek: boolean;
 
+  /** Indicates if the model is from Moonshot/Kimi provider. */
+  readonly isKimi: boolean;
+
   /** Whether the handler supports processing attachments in tool results. */
   readonly canProcessToolResultAttachments: boolean;
 
