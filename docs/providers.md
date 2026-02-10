@@ -1,7 +1,5 @@
 # Supported AI Providers
 
-**TeXRA — AI-Powered LaTeX Research Assistant**
-
 *Last Updated: February 10, 2026*
 
 The following table lists the AI model providers supported by TeXRA, along with their operating headquarters and links to their respective terms and privacy policies. When you select a provider, your content is transmitted to that provider's API endpoints and is subject to their terms.
@@ -27,4 +25,4 @@ The following table lists the AI model providers supported by TeXRA, along with 
 
 You are responsible for selecting providers that comply with the data protection laws applicable to you (e.g., GDPR, UK GDPR, CCPA). Some providers operate in jurisdictions with different data protection standards. Review each provider's policies before use.
 
-See also: [Terms of Service](TERMS_OF_SERVICE.md)
+See also: [Terms of Service](/terms)
