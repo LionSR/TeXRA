@@ -46,62 +46,7 @@ and enhance the flow between paragraphs. Maintain all technical content and equa
 Focus especially on the introduction and discussion sections.
 ```
 
-### `polish_cover`
-
-The `polish_cover` agent focuses specifically on improving the style, clarity, and impact of cover letters.
-
-**Purpose:** Enhance the quality and persuasiveness of academic cover letters.
-
-**Best for:**
-
-- Refining draft cover letters for job applications or submissions
-- Ensuring a professional and compelling tone
-
-**Example instruction:**
-
-```
-Polish this cover letter to improve its clarity, flow, and professional tone. Ensure it strongly highlights my qualifications for the [Job Title/Submission Venue]. Make the language concise and impactful.
-```
-
 ## Content Generation & Transformation Agents
-
-### `derive`
-
-The `derive` agent focuses on deriving mathematical equations or logical steps.
-
-**Purpose:** Assist with mathematical derivations and logical reasoning.
-
-**Best for:**
-
-- Filling in intermediate steps in a derivation
-- Checking the logical flow of an argument
-- Deriving equations based on stated principles
-
-**Example instruction:**
-
-```
-Starting from Equation (1) and assuming [state assumptions], derive the expression for [target variable]. Show the key intermediate steps clearly.
-```
-
-### `paper2note`
-
-The `paper2note` agent transforms research papers into comprehensive lecture notes.
-
-**Purpose:** Convert academic papers to educational materials.
-
-**Best for:**
-
-- Creating teaching materials from research papers
-- Converting dense research into student-friendly content
-- Developing study guides for complex topics
-
-**Example instruction:**
-
-```
-Transform this research paper into lecture notes suitable for a graduate-level course.
-Add explanatory text for complex concepts, include discussion questions, and highlight
-key takeaways. Create sections for Introduction, Background, Methods, Results, and Discussion.
-```
 
 ### `paper2slide`
 
@@ -141,23 +86,6 @@ The `paper2poster` agent transforms papers into academic conference posters.
 Convert this paper into an academic poster using the baposter template.
 Include sections for Introduction, Methodology, Results, and Conclusions.
 Highlight key figures and tables. Make it visually appealing with appropriate columns.
-```
-
-### `paper2cover`
-
-The `paper2cover` agent generates a draft cover letter based on the content of a research paper.
-
-**Purpose:** Quickly create a starting point for a submission cover letter.
-
-**Best for:**
-
-- Drafting cover letters for journal submissions
-- Summarizing a paper's contribution for introductory purposes
-
-**Example instruction:**
-
-```
-Generate a draft cover letter for submitting this paper to [Journal Name]. Highlight the main contributions, significance, and suitability for the journal based on the paper's content.
 ```
 
 ## Figure & Media Agents
@@ -218,25 +146,49 @@ The `transcribe_audio` agent converts audio files into text transcripts.
 Transcribe the provided audio file [interview.mp3]. Provide the output as a plain text file with speaker labels if possible.
 ```
 
-## Specialized Agents
+## Presentation & Simplification Agents
 
-### `solve_qi`
+### `presenter`
 
-The `solve_qi` agent attempts to solve quantitative interview (QI) style questions.
+An interactive scientific presentation builder with visual quality assurance. It creates LaTeX Beamer presentations, posters, and visual materials by surveying your codebase, planning slides, and iteratively compiling and inspecting the output PDF.
 
-**Purpose:** Assist with solving quantitative problems, often found in technical interviews.
+**Purpose:** Build publication-ready presentations from research projects.
 
 **Best for:**
 
-- Practicing quantitative interview questions
-- Getting step-by-step solutions for math or logic puzzles
-- Understanding problem-solving approaches for quantitative tasks
+- Conference talks, poster sessions, and seminar presentations
+- Code documentation slides and tutorial materials
+- Generating TikZ diagrams and including computed figures
 
 **Example instruction:**
 
 ```
-Solve the following quantitative interview question, showing your reasoning and steps clearly: [Insert Question Here]
+Create a 15-slide Beamer presentation from this project. Cover motivation, the core
+algorithm, key results, and future work. Use the metropolis theme and include TikZ
+diagrams for the architecture. Compile and verify every slide looks correct.
 ```
+
+### `simplifier`
+
+A code and writing simplification specialist that makes scientific projects clearer and more maintainable while preserving exact correctness.
+
+**Purpose:** Remove duplication, unnecessary abstraction, and prose bloat from code and documents.
+
+**Best for:**
+
+- Refactoring research code for clarity
+- Tightening manuscript prose and cleaning up LLM-generated artifacts
+- Replacing hand-rolled implementations with standard library equivalents
+
+**Example instruction:**
+
+```
+Simplify the numerical solver in solver.py. Look for duplicated loops that could be
+vectorized with NumPy, inline any single-use helper functions, and remove dead code.
+Run the existing tests after each change to verify correctness.
+```
+
+## Specialized Agents
 
 ### `merge`
 

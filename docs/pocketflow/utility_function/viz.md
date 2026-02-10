@@ -72,8 +72,6 @@ mermaid.render('diagram-id', diagramDefinition, (svgCode) => {
 
 If you prefer a custom lightweight implementation, this code recursively traverses the nested graph, assigns unique IDs to each node, and treats Flow nodes as subgraphs to generate Mermaid syntax for a hierarchical visualization:
 
-{% raw %}
-
 ```typescript
 import { BaseNode, Flow } from '../src/index';
 
@@ -154,8 +152,6 @@ function buildMermaid(start: BaseNode): string {
   return lines.join('\n');
 }
 ```
-
-{% endraw %}
 
 For example, suppose we have a complex Flow for data science:
 

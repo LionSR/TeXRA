@@ -2,9 +2,23 @@
 
 TeXRA provides extensive configuration options that allow you to customize its behavior to match your workflow (don't worry, the defaults are sensible!). This guide explains the available settings and how to adjust them for optimal performance.
 
+## The TeXRA Dashboard
+
+The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open it from the Command Palette (`Ctrl+Shift+P`) with **TeXRA: Show Dashboard**:
+
+- **Agents** - Turn agents on or off for the current workspace. Agents that support multiple output files are marked with a badge.
+- **Models** - Pick which models show up in your dropdown. Models are grouped by provider (Anthropic, OpenAI, Google, etc.) and you can set or remove API keys for each provider right there - no need to hunt through settings.
+- **History** - Search and browse past runs. Handy for finding that polish job you ran last week.
+- **Memory** - See what your tool-use agents have remembered across sessions, and delete entries you no longer need.
+- **Profile** - Check your account, access level, and available remote agents.
+
+::: tip
+Streaming and connection settings have moved out of VS Code settings and into the **Settings View**, accessible from the Dashboard.
+:::
+
 ## Accessing Configuration
 
-You can configure TeXRA through VS Code's settings:
+You can also configure TeXRA through VS Code's standard settings:
 
 1. Open VS Code Settings (File > Preferences > Settings or `Ctrl+,`)
 2. Search for "TeXRA" to see all available settings
@@ -28,7 +42,7 @@ default list is maintained in the [Models Guide](./models.md). Override it by
 specifying your own model identifiers:
 
 ```json
-"texra.models": ["sonnet45T", "gpt51", "gpt5pro"]
+"texra.models": ["sonnet45T", "opus46T", "gemini3p", "gpt52"]
 ```
 
 ### API Provider Settings
@@ -76,6 +90,37 @@ Configure how TeXRA connects to AI model providers:
 | DashScope (Qwen) | N/A                         | ❌ No     |
 
 **Note:** Only the providers marked with ✅ are supported by the proxy. Other providers will use their direct API endpoints even when proxy is enabled.
+
+### Anthropic 1M Context Window
+
+Enable the extended 1M-token context window for Claude Opus 4.6 and Sonnet 4/4.5:
+
+```json
+"texra.model.useAnthropic1MBeta": true
+```
+
+This attaches the `context-1m-2025-08-07` beta header to Anthropic requests. Usage is capped at 200K tokens by the extension.
+
+### Bibliography Settings
+
+Configure the default bibliography file path for Zotero exports and bibliography tools:
+
+```json
+"texra.bib.defaultPath": "${workspaceFolder}/references.bib"
+```
+
+When set, bibliography tools will use this path when no explicit file is provided. Works with Zotero auto-exported `.bib` files.
+
+### Agent Output Storage
+
+Control where agent-generated files are saved:
+
+```json
+"texra.agentOutputs.storageMode": "workspace"
+```
+
+- `workspace`: Write output files beside the source files (default)
+- `taskRunStorage`: Isolate artifacts inside the extension storage
 
 ### Audio Settings
 
