@@ -1,7 +1,7 @@
 /**
- * Tools for proposing agent executions from tool-use agents.
+ * Tools for delegating agent executions from tool-use agents.
  * Two separate tools for clean separation of concerns:
- * - workflow_agent: For workflow agents (document processing with file I/O)
+ * - delegate_workflow: For workflow agents (document processing with file I/O)
  * - delegate_agent: For tool-use agents (interactive assistants)
  *
  * All subagents execute asynchronously — result delivered via follow-up queue.
@@ -88,7 +88,7 @@ function toConfigPayload(
 /**
  * Execute a subagent asynchronously.
  * Pre-generates executionId so all IDs (tool return, XML delivery, error)
- * are consistent and usable with the runs tool.
+ * are consistent and usable with the executions tool.
  *
  * Result is delivered via FollowUpQueue when the subagent completes.
  */
@@ -125,7 +125,7 @@ function executeSubagent(
     output: [
       `Subagent '${agentName}' launched in async mode.`,
       `Execution ID: ${executionId}`,
-      `Check progress: runs tool with path /runs/${executionId}`,
+      `Check progress: executions tool with path /executions/${executionId}`,
       'Result will be delivered as a follow-up message when complete.',
     ].join('\n'),
   };
@@ -190,10 +190,10 @@ function applyModelOverride<T extends { model: string }>(
 }
 
 // ============================================================================
-// workflow_agent tool - for document processing agents
+// delegate_workflow tool - for document processing agents
 // ============================================================================
 
-/** Schema for workflow_agent tool (document processing). */
+/** Schema for delegate_workflow tool (document processing). */
 const WorkflowAgentInputSchema = z.object({
   agent: z.string().describe('Name of the workflow agent to execute'),
   model: z
@@ -255,10 +255,10 @@ const WorkflowAgentInputSchema = z.object({
 
 export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 
-/** Tool for proposing workflow agent executions (document processing). */
+/** Tool for delegating tasks to workflow agents (document processing). */
 export class WorkflowAgentTool extends defineTool({
-  name: 'propose_workflow',
-  description: () => `Propose a workflow agent for document processing.
+  name: 'delegate_workflow',
+  description: () => `Delegate a task to a workflow agent for document processing.
 
 Available agents:
 ${formatAgentList(getVisibleWorkflowAgents())}
@@ -394,9 +394,9 @@ export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
 
 /** Tool for delegating tasks to tool-use agents (interactive assistants). */
 export class DelegateAgentTool extends defineTool({
-  name: 'propose_agent',
+  name: 'delegate_agent',
   description:
-    () => `Propose a tool-use agent for exploration or research tasks.
+    () => `Delegate a task to a tool-use agent for exploration or research.
 
 Available agents:
 ${formatAgentList(getVisibleToolUseAgents())}
@@ -418,7 +418,7 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
 
     if (agentEntry.category !== AgentCategory.ToolUse) {
       throw new Error(
-        `'${input.agent}' is not a tool-use agent. Use workflow_agent for document processing.`,
+        `'${input.agent}' is not a tool-use agent. Use delegate_workflow for document processing.`,
       );
     }
 
