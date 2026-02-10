@@ -14,9 +14,16 @@ import { createArraySchema } from '@progressView/persistence/schemaUtils';
 /** Schema for deserializing persisted log messages */
 const LogMessagesSchema = createArraySchema(LogMessageDataSchema);
 
+/** Debounce interval for persistence writes (ms). */
+const SAVE_DEBOUNCE_MS = 300;
+
 /**
  * Manages stream tabs collection with persistence.
  * Handles adding, retrieving, and managing log messages for different streams.
+ *
+ * Overrides save() with a 300ms trailing-edge debounce because log messages
+ * arrive at ~10Hz during streaming. In-memory state is always immediately
+ * up-to-date; only the disk write is deferred and coalesced.
  */
 export class StreamTabsManager extends PersistentMapManager<
   StreamTabId,
@@ -24,6 +31,9 @@ export class StreamTabsManager extends PersistentMapManager<
 > {
   private static readonly MAX_MESSAGE_HISTORY = 1000;
   private readonly logger: AgentLogger;
+
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingResolve: (() => void) | null = null;
 
   constructor(storage?: MementoStorage) {
     super(WorkspaceStateKey.STREAM_TABS, storage);
@@ -137,6 +147,42 @@ export class StreamTabsManager extends PersistentMapManager<
     messages[index] = { ...original, ...updates };
     void this.save();
     return original;
+  }
+
+  /**
+   * Debounced save — coalesces rapid-fire log mutations into a single write.
+   * When a new save supersedes a pending one, the previous promise is
+   * resolved immediately (its data is captured by the newer write).
+   */
+  override async save(): Promise<void> {
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer);
+    }
+
+    this.pendingResolve?.();
+
+    return new Promise<void>((resolve) => {
+      this.pendingResolve = resolve;
+      this.saveTimer = setTimeout(() => {
+        this.saveTimer = null;
+        this.pendingResolve = null;
+        this.writeToStorage().then(resolve, resolve);
+      }, SAVE_DEBOUNCE_MS);
+    });
+  }
+
+  /**
+   * Flush any pending debounced write immediately.
+   * Called during dispose/shutdown to prevent data loss.
+   */
+  override async flush(): Promise<void> {
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+      this.pendingResolve?.();
+      this.pendingResolve = null;
+      await this.writeToStorage();
+    }
   }
 
   private ensureMessages(stream: StreamTabId): LogMessageData[] {
