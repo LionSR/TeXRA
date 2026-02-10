@@ -46,7 +46,7 @@ export interface RunToolUseFlowInput<
   setting: AgentToolUseSetting;
   resumeSnapshot?: ToolUseSessionSnapshot | null;
   onFollowUpConsumed?: () => void;
-  /** When true, proposal tools are filtered out to prevent nesting. */
+  /** When true, delegation tools are filtered out to prevent nesting. */
   isSubagent?: boolean;
 }
 
@@ -72,12 +72,17 @@ export interface ToolUseFlowContext {
 /** Setup callback invoked after context creation, before execution starts. */
 export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
 
-/** Proposal tool names that subagents must not receive. */
-const PROPOSAL_TOOLS = new Set(['propose_workflow', 'propose_agent']);
+/** Delegation tool names that subagents must not receive (includes legacy aliases). */
+const DELEGATION_TOOLS = new Set([
+  'delegate_workflow',
+  'delegate_agent',
+  'propose_workflow',
+  'propose_agent',
+]);
 
 /** Options for tool resolution. */
 interface ResolveToolsOptions {
-  /** When true, proposal tools are filtered out to prevent nesting. */
+  /** When true, delegation tools are filtered out to prevent nesting. */
   isSubagent?: boolean;
 }
 
@@ -92,7 +97,7 @@ function resolveTools(
   const resolved = toolConfigs
     .map((config) => (typeof config === 'string' ? { name: config } : config))
     .filter((def) => {
-      if (options?.isSubagent && PROPOSAL_TOOLS.has(def.name)) return false;
+      if (options?.isSubagent && DELEGATION_TOOLS.has(def.name)) return false;
       if (!registry.has(def.name)) {
         logger.warn(`Tool "${def.name}" not found in registry`);
         return false;
