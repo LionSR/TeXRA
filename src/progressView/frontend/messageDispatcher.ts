@@ -505,19 +505,6 @@ const handlers: HandlerRegistry = {
     });
   },
 
-  [PROGRESS_VIEW_COMMANDS.UPDATE_USAGE]: (data, ctx) => {
-    const { stream, usage } = data;
-    ctx.setStreamState(stream, (prev) => {
-      if (isToolUseState(prev)) {
-        return { ...prev, sessionUsage: sumUsageStats(Object.values(usage)) };
-      }
-      if (isWorkflowState(prev)) {
-        return { ...prev, runUsage: usage };
-      }
-      return prev;
-    });
-  },
-
   [PROGRESS_VIEW_COMMANDS.UPDATE_CONTEXT_STATE]: (data, ctx) => {
     ctx.setStreamState(data.stream, (prev) => ({
       ...prev,

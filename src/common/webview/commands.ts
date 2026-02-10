@@ -197,7 +197,6 @@ export const PROGRESS_VIEW_COMMANDS = {
   RESOLVE_AGENT_PROPOSAL: 'resolveAgentProposal',
 
   // Usage
-  UPDATE_USAGE: 'updateUsage',
   UPDATE_RUN_USAGE: 'updateRunUsage', // Update single run's usage (incremental)
   UPDATE_CONTEXT_STATE: 'updateContextState', // Update context utilization display
 
