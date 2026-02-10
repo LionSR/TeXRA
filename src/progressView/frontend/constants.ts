@@ -46,6 +46,7 @@ export const ELEMENT_IDS = {
   RECORD_FOLLOW_UP_BTN: 'recordFollowUpBtn',
   COMPACT_RESPONSE_BTN: 'compactResponseBtn',
   YOLO_TOGGLE_BTN: 'yoloToggleBtn',
+  SUPER_YOLO_TOGGLE_BTN: 'superYoloToggleBtn',
   POLISH_FOLLOW_UP_BTN: 'polishFollowUpBtn',
   CLEAR_FOLLOW_UP_BTN: 'clearFollowUpBtn',
   SEND_FOLLOW_UP_BTN: 'sendFollowUpBtn',
@@ -160,6 +161,17 @@ const YOLO_TOGGLE_BUTTON = Object.freeze({
   isToggle: true,
 });
 
+const SUPER_YOLO_TOGGLE_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
+  icon: 'rocket',
+  iconActive: 'zap',
+  command: COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
+  title: 'Enable Super YOLO (auto-approve agent proposals)',
+  titleActive: 'Super YOLO active - click to disable',
+  className: 'super-yolo-toggle-button',
+  isToggle: true,
+});
+
 const COMPACT_RESPONSE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.COMPACT_RESPONSE_BTN,
   icon: 'fold',
@@ -173,6 +185,7 @@ const COMPACT_RESPONSE_BUTTON = Object.freeze({
 const TOOL_USE_TOOLBAR = [
   STOP_STREAM_BUTTON,
   YOLO_TOGGLE_BUTTON,
+  SUPER_YOLO_TOGGLE_BUTTON,
   COMPACT_RESPONSE_BUTTON,
   RESTORE_STATE_BUTTON,
   { ...OPEN_TASK_STORAGE_BUTTON },

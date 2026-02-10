@@ -72,12 +72,14 @@ import {
   setProviderEndpoint,
   supportsCustomEndpoint,
 } from '@utils/config/constants';
+import { getConfig } from '@utils/config/configUtils';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import type {
   RemoteAgent,
   ProviderKeyStatus,
+  ProviderVscodeSetting,
 } from '@shared/schemas/profileViewMessages';
 
 // Type helper for extracting specific message types
@@ -85,6 +87,63 @@ type MessageFor<C extends SettingsViewInboundMessage['command']> = Extract<
   SettingsViewInboundMessage,
   { command: C }
 >;
+
+/** VS Code config settings to surface per provider in the Models tab. */
+const PROVIDER_VSCODE_SETTINGS: Record<
+  string,
+  Omit<ProviderVscodeSetting, 'value'>[]
+> = {
+  openai: [
+    {
+      key: 'texra.model.gpt5ReasoningSummary',
+      label: 'GPT-5 Reasoning Summary',
+      description:
+        'Request reasoning summaries from GPT-5 models. Only available on OpenAI API Tier 3+.',
+      warning:
+        'New accounts with $20 credit are typically Tier 1 and will hit rate limits.',
+      warningUrl:
+        'https://platform.openai.com/settings/organization/billing/overview',
+      warningUrlLabel: 'Check your tier',
+    },
+    {
+      key: 'texra.model.useOpenAIResponsesAPI',
+      label: 'Use Responses API',
+      description:
+        'Use the OpenAI Responses API instead of Chat Completions when available.',
+    },
+    {
+      key: 'texra.model.useBackgroundResponses',
+      label: 'Background Responses',
+      description:
+        'Handle long-running generations (>10 min) via polling to prevent timeouts. Adds polling overhead.',
+    },
+  ],
+  anthropic: [
+    {
+      key: 'texra.model.useAnthropic1MBeta',
+      label: '1M Context Window Beta',
+      description:
+        'Enable the 1M-token context window for Claude Opus 4.6 and Sonnet 4 (usage capped at 200K by extension).',
+    },
+  ],
+};
+
+/** Allowed setting keys that the frontend can toggle (whitelist for safety). */
+const ALLOWED_VSCODE_SETTING_KEYS = new Set(
+  Object.values(PROVIDER_VSCODE_SETTINGS)
+    .flat()
+    .map((s) => s.key),
+);
+
+function getProviderVscodeSettings(provider: string): ProviderVscodeSetting[] {
+  const defs = PROVIDER_VSCODE_SETTINGS[provider.toLowerCase()];
+  if (!defs) return [];
+  // getConfig reads from VS Code's config API which already knows package.json defaults
+  return defs.map((def) => ({
+    ...def,
+    value: getConfig<boolean>(def.key, false),
+  }));
+}
 
 async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
   return Promise.all(
@@ -107,6 +166,7 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
         streaming: getProviderStreaming(provider),
         customEndpoint: getProviderEndpoint(provider),
         supportsCustomEndpoint: supportsCustomEndpoint(provider),
+        vscodeSettings: getProviderVscodeSettings(provider),
       };
     }),
   );
@@ -243,6 +303,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleSetProviderEndpoint(data),
       [SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING]: (data) =>
         this.handleSetGlobalStreaming(data),
+      [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING]: (data) =>
+        this.handleSetProviderVscodeSetting(data),
+      [SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL]: (data) =>
+        this.handleOpenExternalUrl(data),
 
       // Model selection handlers
       [SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION]: () =>
@@ -265,6 +329,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleSetCustomAgentDir(),
       [SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR]: () =>
         this.handleResetCustomAgentDir(),
+
+      // Super YOLO handlers
+      [SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED]: () =>
+        this.handleGetSuperYoloEnabled(),
+      [SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED]: (data) =>
+        this.handleSetSuperYoloEnabled(data),
 
       // Agent selection handlers
       [SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION]: () =>
@@ -323,6 +393,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendAgentSelectionData(webview),
       this.sendAutoShowRemote(webview),
       this.sendCustomAgentDir(webview),
+      this.sendSuperYoloEnabled(webview),
     ]);
   }
 
@@ -488,6 +559,40 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     const view = this.getActiveView();
     if (view) await this.sendAutoShowRemote(view.webview);
+  }
+
+  // ============================================================
+  // Super YOLO handler implementations
+  // ============================================================
+
+  public async sendSuperYoloEnabled(webview: vscode.Webview): Promise<void> {
+    const enabled =
+      workspaceSM.get<boolean>(WorkspaceStateKey.SUPER_YOLO_ENABLED, false) ??
+      false;
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
+      enabled,
+    });
+  }
+
+  private async handleGetSuperYoloEnabled(): Promise<void> {
+    const view = this.getActiveView();
+    if (view) await this.sendSuperYoloEnabled(view.webview);
+  }
+
+  private async handleSetSuperYoloEnabled(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_SUPER_YOLO_ENABLED>,
+  ): Promise<void> {
+    await workspaceSM.update(
+      WorkspaceStateKey.SUPER_YOLO_ENABLED,
+      data.enabled,
+    );
+
+    const view = this.getActiveView();
+    if (view) await this.sendSuperYoloEnabled(view.webview);
+
+    const label = data.enabled ? 'enabled' : 'disabled';
+    void vscode.window.showInformationMessage(`Super YOLO mode ${label}`);
   }
 
   // ============================================================
@@ -849,6 +954,36 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GLOBAL_STREAMING>,
   ): Promise<void> {
     await setGlobalStreaming(data.enabled);
+
+    const view = this.getActiveView();
+    if (view) {
+      await this.sendProfileData(view.webview);
+    }
+  }
+
+  private async handleOpenExternalUrl(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_EXTERNAL_URL>,
+  ): Promise<void> {
+    await vscode.env.openExternal(vscode.Uri.parse(data.url));
+  }
+
+  private async handleSetProviderVscodeSetting(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_VSCODE_SETTING>,
+  ): Promise<void> {
+    if (!ALLOWED_VSCODE_SETTING_KEYS.has(data.key)) {
+      this.logger.warn(
+        this.channel,
+        `Rejected unknown vscode setting key: ${data.key}`,
+      );
+      return;
+    }
+
+    const config = vscode.workspace.getConfiguration();
+    await config.update(
+      data.key,
+      data.value,
+      vscode.ConfigurationTarget.Global,
+    );
 
     const view = this.getActiveView();
     if (view) {
