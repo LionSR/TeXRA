@@ -273,7 +273,11 @@ export class ProgressApp extends BaseWebviewApp {
     return html`
       <div class="main-container">
         <vscode-split-layout initial-handle-position="80%">
-          <div slot="start" class="content-area">
+          <div
+            slot="start"
+            class="content-area"
+            @stream-switch=${this.onStreamSwitch}
+          >
             ${this.renderStreamContent()}
           </div>
 
