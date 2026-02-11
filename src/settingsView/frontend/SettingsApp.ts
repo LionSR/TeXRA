@@ -650,8 +650,7 @@ export class SettingsApp extends BaseWebviewApp {
               .toggleDisabled=${this.superYoloToggleDisabled}
               .reliabilitySettings=${this.reliabilitySettings}
               @super-yolo-toggle=${this.handleSuperYoloToggle}
-              @reliability-setting-change=${this
-                .handleSetProviderVscodeSetting}
+              @reliability-setting-change=${this.handleSetProviderVscodeSetting}
             ></multi-agent-tab>
           </vscode-tab-panel>
         </vscode-tabs>
