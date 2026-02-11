@@ -67,13 +67,13 @@ export class UserMessage extends LitElement {
   ];
 
   /** Message text content */
-  @property({ type: String }) text = '';
+  @property({ attribute: false }) text = '';
 
   /** Log ID for tracking */
-  @property({ type: String }) logId = '';
+  @property({ attribute: false }) logId = '';
 
   /** Message timestamp (Unix ms) */
-  @property({ type: Number }) timestamp = 0;
+  @property({ attribute: false }) timestamp = 0;
 
   override render(): TemplateResult {
     const { timeDisplay, tooltipTimestamp } = formatTimestamp(

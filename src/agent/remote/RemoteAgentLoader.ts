@@ -295,8 +295,9 @@ async function fetchAgentConfig(
   const responseData = EdgeFunctionResponseSchema.parse(await response.json());
 
   logger.debug(CHANNEL, `Parsing YAML for remote agent: ${candidateName}`);
-  const parsed = yaml.parse(responseData.config);
-  const validated = AgentDefinitionSchema.parse(parsed);
+  const validated = AgentDefinitionSchema.parse(
+    yaml.parse(responseData.config),
+  );
 
   // Extract metadata before resolving tools to full definitions (for registry cache)
   const settings: Partial<AgentSetting> = validated.settings;

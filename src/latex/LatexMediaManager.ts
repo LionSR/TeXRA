@@ -59,7 +59,6 @@ export class LatexMediaManager {
         continue;
       }
       const absolutePath = path.normalize(path.join(baseDir, trimmed));
-      // Convert to FileLocation using pathToLocation (boundary conversion)
       targetLocations.add(pathToLocation(absolutePath));
     }
 
@@ -175,18 +174,12 @@ export class LatexMediaManager {
         `Extracted ${figures.length} figures from ${file.absolutePath}`,
       );
 
-      // figures contains paths relative to the LaTeX file's directory.
-      // We first resolve them to absolute paths by joining with baseDir,
-      // then convert to FileLocation (which provides both absolutePath for
-      // file operations and relativePath for user display).
       const baseDir = path.dirname(file.absolutePath);
       const fileLocations = figures.map((relativePath) => {
         const absolutePath = path.normalize(path.join(baseDir, relativePath));
         return pathToLocation(absolutePath);
       });
 
-      // Debug validation: batch existence checks for performance
-      // This helps catch figure extraction issues early
       const existenceChecks = await Promise.all(
         fileLocations.map(async (loc) => ({
           loc,

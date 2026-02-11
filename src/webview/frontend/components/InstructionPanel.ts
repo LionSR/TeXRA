@@ -203,19 +203,31 @@ export class InstructionPanel extends LitElement {
   @query('#instruction')
   private instructionTextarea?: HTMLElement;
 
-  private handleSessionTypeChange(value: SessionType): void {
+  private handleSessionTypeChange(event: Event): void {
+    const target = event.target as HTMLInputElement | null;
+    const value =
+      target?.value === SESSION_TYPES.WORKFLOW
+        ? SESSION_TYPES.WORKFLOW
+        : SESSION_TYPES.TOOL_USE;
     this.dispatchEvent(MainViewEvents.sessionTypeChange({ value }));
   }
 
-  private handleAgentChange(sessionType: SessionType, value: string): void {
+  private handleAgentChange(event: Event): void {
+    const target = event.currentTarget as HTMLSelectElement & {
+      dataset: DOMStringMap;
+    };
+    const sessionType = target.dataset.sessionType as SessionType;
+    const value = target.value;
     this.dispatchEvent(MainViewEvents.agentChange({ sessionType, value }));
   }
 
-  private handleModelChange(value: string): void {
+  private handleModelChange(event: Event): void {
+    const value = (event.currentTarget as HTMLSelectElement).value;
     this.dispatchEvent(MainViewEvents.modelChange({ value }));
   }
 
-  private handleInstructionInput(value: string): void {
+  private handleInput(event: Event): void {
+    const value = (event.currentTarget as HTMLTextAreaElement).value;
     this.dispatchEvent(MainViewEvents.instructionInput({ value }));
   }
 
@@ -235,8 +247,14 @@ export class InstructionPanel extends LitElement {
     }
   };
 
-  private handleAction(action: string): void {
-    this.dispatchEvent(MainViewEvents.panelAction({ action }));
+  private handleActionClick(event: MouseEvent): void {
+    const button = (event.target as HTMLElement).closest<HTMLElement>(
+      '[data-action]',
+    );
+    const action = button?.dataset.action;
+    if (action) {
+      this.dispatchEvent(MainViewEvents.panelAction({ action }));
+    }
   }
 
   private handleExecute(): void {
@@ -251,8 +269,22 @@ export class InstructionPanel extends LitElement {
     this.dispatchEvent(MainViewEvents.modelSettings());
   }
 
-  private handleFocus(key: string, text: string): void {
-    this.dispatchEvent(MainViewEvents.focusInstruction({ key, text }));
+  private handleAgentFocus(): void {
+    this.dispatchEvent(
+      MainViewEvents.focusInstruction({
+        key: 'agentPicker',
+        text: 'Select which agent will handle your request.',
+      }),
+    );
+  }
+
+  private handleModelFocus(): void {
+    this.dispatchEvent(
+      MainViewEvents.focusInstruction({
+        key: 'modelPicker',
+        text: 'Choose the AI model used by the selected agent.',
+      }),
+    );
   }
 
   override render(): TemplateResult | typeof nothing {
@@ -275,14 +307,7 @@ export class InstructionPanel extends LitElement {
                 aria-label="Choose the session type"
                 orientation="horizontal"
                 .value=${session.sessionType}
-                @change=${(event: Event) => {
-                  const target = event.target as HTMLInputElement | null;
-                  const nextValue =
-                    target?.value === SESSION_TYPES.WORKFLOW
-                      ? SESSION_TYPES.WORKFLOW
-                      : SESSION_TYPES.TOOL_USE;
-                  this.handleSessionTypeChange(nextValue);
-                }}
+                @change=${this.handleSessionTypeChange}
               >
                 <vscode-radio
                   value="toolUse"
@@ -303,14 +328,17 @@ export class InstructionPanel extends LitElement {
               </vscode-radio-group>
             </div>
           </div>
-          <vscode-toolbar-container class="instruction-header-actions">
+          <vscode-toolbar-container
+            class="instruction-header-actions"
+            @click=${this.handleActionClick}
+          >
             <vscode-toolbar-button
               id="packButton"
               icon="archive"
               label="Pack output to History"
               title="Pack the output for this agent into the History folder"
               style=${styleMap({ display: session.debugMode ? '' : 'none' })}
-              @click=${() => this.handleAction('pack')}
+              data-action="pack"
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               id="cleanButton"
@@ -318,14 +346,14 @@ export class InstructionPanel extends LitElement {
               label="Clean output"
               title="Clean the output for this agent"
               style=${styleMap({ display: session.debugMode ? '' : 'none' })}
-              @click=${() => this.handleAction('clean')}
+              data-action="clean"
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               id="magicPolishButton"
               icon="sparkle"
               label="Polish instruction"
               title="Polish instruction text with AI"
-              @click=${() => this.handleAction('polish')}
+              data-action="polish"
             ></vscode-toolbar-button>
             <vscode-progress-ring
               id="polishProgressContainer"
@@ -342,14 +370,14 @@ export class InstructionPanel extends LitElement {
               title=${session.isRecording
                 ? 'Stop recording'
                 : 'Record instruction with microphone'}
-              @click=${() => this.handleAction('record')}
+              data-action="record"
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               id="eraseInstructionButton"
               icon="clear-all"
               label="Erase instruction"
               title="Erase instruction"
-              @click=${() => this.handleAction('erase')}
+              data-action="erase"
             ></vscode-toolbar-button>
           </vscode-toolbar-container>
         </div>
@@ -359,10 +387,7 @@ export class InstructionPanel extends LitElement {
           resize="none"
           placeholder=${session.placeholder}
           .value=${session.instruction}
-          @input=${(event: Event) => {
-            const target = event.target as HTMLTextAreaElement;
-            this.handleInstructionInput(target.value);
-          }}
+          @input=${this.handleInput}
           @paste=${this.handleInstructionPaste}
         ></vscode-textarea>
         <div class="instruction-controls">
@@ -397,18 +422,8 @@ export class InstructionPanel extends LitElement {
                       : 'true'}
                     position="above"
                     .value=${session.workflowAgent}
-                    @focus=${() =>
-                      this.handleFocus(
-                        'agentPicker',
-                        'Select which agent will handle your request.',
-                      )}
-                    @change=${(event: Event) => {
-                      const target = event.currentTarget as HTMLInputElement;
-                      this.handleAgentChange(
-                        SESSION_TYPES.WORKFLOW,
-                        target.value,
-                      );
-                    }}
+                    @focus=${this.handleAgentFocus}
+                    @change=${this.handleAgentChange}
                   >
                     ${renderAgentOptions(
                       session.workflowAgentOptions,
@@ -428,18 +443,8 @@ export class InstructionPanel extends LitElement {
                     aria-label="Tool-use agent"
                     position="above"
                     .value=${session.toolUseAgent}
-                    @focus=${() =>
-                      this.handleFocus(
-                        'agentPicker',
-                        'Select which agent will handle your request.',
-                      )}
-                    @change=${(event: Event) => {
-                      const target = event.currentTarget as HTMLInputElement;
-                      this.handleAgentChange(
-                        SESSION_TYPES.TOOL_USE,
-                        target.value,
-                      );
-                    }}
+                    @focus=${this.handleAgentFocus}
+                    @change=${this.handleAgentChange}
                   >
                     ${renderAgentOptions(
                       session.toolUseAgentOptions,
@@ -463,15 +468,8 @@ export class InstructionPanel extends LitElement {
                 position="above"
                 aria-label="Model"
                 .value=${session.model}
-                @focus=${() =>
-                  this.handleFocus(
-                    'modelPicker',
-                    'Choose the AI model used by the selected agent.',
-                  )}
-                @change=${(event: Event) => {
-                  const target = event.currentTarget as HTMLInputElement;
-                  this.handleModelChange(target.value);
-                }}
+                @focus=${this.handleModelFocus}
+                @change=${this.handleModelChange}
               >
                 ${renderModelOptions(session.modelOptions, session.model)}
               </vscode-single-select>

@@ -48,7 +48,7 @@ export async function checkExpectedOutputs(
     deps,
     `Validate expected r${currRound}`,
     stage,
-    async (_scope): Promise<ValidationResult> => {
+    async (): Promise<ValidationResult> => {
       const storageKey = getStorageKey(state);
       const expected = deps.config.outputFiles;
       if (!expected || expected.length === 0) {

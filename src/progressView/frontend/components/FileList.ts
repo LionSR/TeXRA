@@ -161,9 +161,11 @@ export class FileList extends LitElement {
     `,
   ];
 
-  @property({ type: Object }) filesByRound: Record<string, OutputFileInfo[]> =
-    {};
-  @property({ type: Boolean }) showRoundHeaders = true;
+  @property({ attribute: false }) filesByRound: Record<
+    string,
+    OutputFileInfo[]
+  > = {};
+  @property({ attribute: false }) showRoundHeaders = true;
 
   override render(): TemplateResult | typeof nothing {
     const rounds = this.getSortedRounds();

@@ -159,7 +159,7 @@ export class PermissionCard extends LitElement {
     permissionCardStyles,
   ];
 
-  @property({ type: Object }) permission: PermissionState | null = null;
+  @property({ attribute: false }) permission: PermissionState | null = null;
   @state() private showFeedback = false;
   @query('.feedback-input') private feedbackInput?: HTMLElement;
 
@@ -319,7 +319,7 @@ export class PermissionCard extends LitElement {
     if (files.length === 0) return nothing;
 
     return html`
-      <div class="file-list">
+      <div class="file-list" @click=${this.handleFileClick}>
         <span class="file-list-label">${label}:</span>
         ${repeat(
           files,
@@ -328,12 +328,20 @@ export class PermissionCard extends LitElement {
             html`${i > 0 ? ', ' : ''}<span
                 class="file-link"
                 title=${file}
-                @click=${() => this.openFile(file)}
+                data-file=${file}
                 >${getBasename(file)}</span
               >`,
         )}
       </div>
     `;
+  }
+
+  private handleFileClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    const file = target.dataset?.file;
+    if (file) {
+      this.openFile(file);
+    }
   }
 
   // ===========================================================================

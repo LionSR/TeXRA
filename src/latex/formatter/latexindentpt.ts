@@ -33,7 +33,6 @@ async function cleanupIndentLog(
 
 export async function runLatexIndent(filePath: string): Promise<boolean> {
   try {
-    // Check if latexindent is installed
     const showWarning = getConfig<boolean>(
       'texra.latex.showLatexindentWarning',
       true,
@@ -45,12 +44,10 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       (filePath === workspacePath ||
         filePath.startsWith(workspacePath + path.sep));
 
-    // Get latexindent config from settings
     const latexindentConfig = getConfig<string>(
       'texra.latex.latexindentConfig',
     );
 
-    // Build command array - note we're using -w (overwrite) and -s (silent)
     const args = ['-w', '-s'];
     if (latexindentConfig) {
       args.push(`-l=${latexindentConfig}`);

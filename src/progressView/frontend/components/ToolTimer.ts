@@ -32,10 +32,10 @@ export class ToolTimer extends LitElement {
   `;
 
   /** Start timestamp in milliseconds (Date.now() epoch). */
-  @property({ type: Number }) startTime = 0;
+  @property({ attribute: false }) startTime = 0;
 
   /** Timeout limit in milliseconds. When set, displayed as "elapsed / limit". */
-  @property({ type: Number }) timeoutMs = 0;
+  @property({ attribute: false }) timeoutMs = 0;
 
   @state() private _elapsed = '';
 

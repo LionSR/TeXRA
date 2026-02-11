@@ -35,9 +35,9 @@ export class ModelSelectionList extends LitElement {
   static override styles = [designTokens, codiconStyles, profileViewStyles];
 
   @property({ attribute: false }) models: ModelSelectionItem[] = [];
-  @property({ type: String }) polishModel = '';
-  @property({ type: Boolean }) authenticated = false;
-  @property({ type: String }) apiAccessMode: 'included' | 'personal' =
+  @property({ attribute: false }) polishModel = '';
+  @property({ attribute: false }) authenticated = false;
+  @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
     'personal';
   @property({ attribute: false }) allowedModels: string[] | null = [];
 
@@ -95,7 +95,7 @@ export class ModelSelectionList extends LitElement {
   }
 
   private handlePolishModelChange(e: Event): void {
-    const value = (e.target as HTMLSelectElement).value;
+    const value = (e.currentTarget as HTMLSelectElement).value;
     this.dispatchEvent(
       ModelSelectionEvents.setPolishModel({ modelName: value }),
     );

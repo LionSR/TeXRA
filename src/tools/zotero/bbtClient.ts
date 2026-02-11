@@ -177,19 +177,21 @@ export async function callBetterBibTeX<T = unknown>(
 
     return response.data.result as T;
   } catch (error) {
-    if (axios.isAxiosError(error) && isTimeoutErrorCode(error.code)) {
-      throw new ToolError(buildTimeoutMessage('Zotero API request', timeout));
-    }
-    if (axios.isAxiosError(error) && error.code === 'ECONNREFUSED') {
-      throw new ToolError(
-        'Please start Zotero desktop app. The Connector API is not responding.',
-      );
-    }
-    if (axios.isAxiosError(error) && error.response?.status === 404) {
-      throw new ToolError(
-        'Better BibTeX plugin is not installed. ' +
-          'Install it from https://retorque.re/zotero-better-bibtex/',
-      );
+    if (axios.isAxiosError(error)) {
+      if (isTimeoutErrorCode(error.code)) {
+        throw new ToolError(buildTimeoutMessage('Zotero API request', timeout));
+      }
+      if (error.code === 'ECONNREFUSED') {
+        throw new ToolError(
+          'Please start Zotero desktop app. The Connector API is not responding.',
+        );
+      }
+      if (error.response?.status === 404) {
+        throw new ToolError(
+          'Better BibTeX plugin is not installed. ' +
+            'Install it from https://retorque.re/zotero-better-bibtex/',
+        );
+      }
     }
     throw new ToolError(`Better BibTeX API error: ${toErrorMessage(error)}`);
   }

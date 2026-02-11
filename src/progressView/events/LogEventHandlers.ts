@@ -64,7 +64,7 @@ function handleUpdateLogMessage(
       if (!existing) return;
 
       const isActive = streamId === ctx.state.activeStream;
-      if (ctx.webviewUpdater.isAvailable() && isActive) {
+      if (isActive && ctx.webviewUpdater.isAvailable()) {
         ctx.webviewUpdater.updateLogMessage(streamId, {
           ...existing,
           ...updates,

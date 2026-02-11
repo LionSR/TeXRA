@@ -167,14 +167,14 @@ export class FollowupSection extends LitElement {
     `,
   ];
 
-  @property({ type: String }) agentCategory = '';
-  @property({ type: String }) status = '';
-  @property({ type: Boolean }) hasOutputFiles = false;
+  @property({ attribute: false }) agentCategory = '';
+  @property({ attribute: false }) status = '';
+  @property({ attribute: false }) hasOutputFiles = false;
 
   // Configuration props
-  @property({ type: Object }) options: FollowupOptions | null = null;
-  @property({ type: String }) mode: FollowupMode = 'chat';
-  @property({ type: String }) streamModel: string | null = null;
+  @property({ attribute: false }) options: FollowupOptions | null = null;
+  @property({ attribute: false }) mode: FollowupMode = 'chat';
+  @property({ attribute: false }) streamModel: string | null = null;
 
   @state() private includeInstruction = true;
   @state() private attachOutputs = false;
@@ -384,17 +384,17 @@ export class FollowupSection extends LitElement {
   }
 
   private handleQuestionInput(event: Event): void {
-    const target = event.target as HTMLTextAreaElement | null;
+    const target = event.currentTarget as HTMLTextAreaElement | null;
     this.initialQuestion = target?.value ?? '';
   }
 
   private handleIncludeChange(event: Event): void {
-    const target = event.target as HTMLInputElement | null;
+    const target = event.currentTarget as HTMLInputElement | null;
     this.includeInstruction = target?.checked ?? false;
   }
 
   private handleAttachChange(event: Event): void {
-    const target = event.target as HTMLInputElement | null;
+    const target = event.currentTarget as HTMLInputElement | null;
     this.attachOutputs = target?.checked ?? false;
   }
 

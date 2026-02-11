@@ -81,7 +81,7 @@ export class QueuedFollowUps extends LitElement {
     `,
   ];
 
-  @property({ type: Array }) messages: string[] = [];
+  @property({ attribute: false }) messages: string[] = [];
 
   private truncateMessage(message: string): {
     display: string;

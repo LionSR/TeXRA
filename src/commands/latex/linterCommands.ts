@@ -42,7 +42,6 @@ export async function handleShowLinterMessages(): Promise<void> {
           return;
         }
 
-        // Format and log messages
         logger.info(CHANNEL, `Linter messages for: ${relativePath}`);
         for (const msg of messages) {
           const severity = getSeverityLabel(msg.severity).toUpperCase();
@@ -76,15 +75,13 @@ export async function handleCountLinterMessages(): Promise<void> {
         logger.debug(CHANNEL, `Counting linter messages for ${relativePath}`);
 
         const messages = await getLinterMessages(relativePath);
-        const counts = countBySeverity(messages);
-        const total =
-          counts.errors + counts.warnings + counts.info + counts.hints;
 
-        if (total === 0) {
+        if (messages.length === 0) {
           showNoIssuesMessage();
           return;
         }
 
+        const counts = countBySeverity(messages);
         vscode.window.showInformationMessage(
           `Linter issues: ${counts.errors} errors, ${counts.warnings} warnings, ${counts.info} info, ${counts.hints} hints`,
         );

@@ -17,16 +17,12 @@ import { withEventErrorHandling } from './errorHandling';
 
 const MODULE = 'UIEvents';
 
-/** Callbacks for retry event handling. */
-interface RetryCallbacks {
+/** All UI callbacks for retry, approval, and proposal event handling. */
+export interface UICallbacks {
   showRetryRequest: (
     payload: ProgressEventPayloads['showRetryRequest'],
   ) => void;
   resolveRetryRequest: (streamId: string) => void;
-}
-
-/** Callbacks for approval event handling. */
-interface ApprovalCallbacks {
   showToolEditPermission: (
     payload: ProgressEventPayloads['showToolEditPermission'],
   ) => void;
@@ -35,39 +31,20 @@ interface ApprovalCallbacks {
     streamId: string,
     bypassActive: boolean,
   ) => void;
-}
-
-/** Callbacks for Super YOLO bypass state. */
-interface SuperYoloCallbacks {
   updateSuperYoloBypassState: (
     streamId: string,
     bypassActive: boolean,
     featureEnabled: boolean,
   ) => void;
-}
-
-/** Callbacks for bash approval event handling. */
-interface BashApprovalCallbacks {
   showBashPermission: (
     payload: ProgressEventPayloads['showBashPermission'],
   ) => void;
   resolveBashPermission: (requestId: string) => void;
-}
-
-/** Callbacks for agent proposal handling (workflow or tool-use). */
-interface AgentProposalCallbacks {
   showAgentProposal: (
     payload: ProgressEventPayloads['showAgentProposal'],
   ) => void;
   resolveAgentProposal: (proposalId: string) => void;
 }
-
-/** Combined UI callbacks interface. */
-export type UICallbacks = RetryCallbacks &
-  ApprovalCallbacks &
-  SuperYoloCallbacks &
-  BashApprovalCallbacks &
-  AgentProposalCallbacks;
 
 /** Helper to register an event with error handling wrapper. */
 function registerEvent<K extends keyof ProgressEventPayloads>(

@@ -123,7 +123,7 @@ export class RequestPanels extends LitElement {
     selectStyles,
   ];
 
-  @property({ type: Array }) permissions: PermissionState[] = [];
+  @property({ attribute: false }) permissions: PermissionState[] = [];
 
   @state() private feedbackOpenKeys: Set<PermissionKey> = new Set();
   @state() private openDiffMenuKey: PermissionKey | null = null;
@@ -592,7 +592,10 @@ export class RequestPanels extends LitElement {
     if (files.length === 0) return nothing;
 
     return html`
-      <div class="workflow-proposal__${label.toLowerCase()}-files">
+      <div
+        class="workflow-proposal__${label.toLowerCase()}-files"
+        @click=${this.handleProposalFileClick}
+      >
         <span class="workflow-proposal__file-label">${label}:</span>
         ${repeat(
           files,
@@ -601,13 +604,21 @@ export class RequestPanels extends LitElement {
             html`${i > 0 ? ', ' : ''}<span
                 class="workflow-proposal__file-name"
                 title=${file}
-                @click=${() => this.openFile(file)}
+                data-file=${file}
                 >${getBasename(file)}</span
               >`,
         )}
       </div>
     `;
   }
+
+  private handleProposalFileClick = (event: MouseEvent): void => {
+    const target = event.target as HTMLElement;
+    const file = target.dataset?.file;
+    if (file) {
+      this.openFile(file);
+    }
+  };
 
   private renderFeedbackSection(
     permission: PermissionState,

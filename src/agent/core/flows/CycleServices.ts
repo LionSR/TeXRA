@@ -3,9 +3,6 @@
  *
  * Cycle services extend BaseFlowContextInit (agent identity + interrupts)
  * and add per-cycle runtime fields (client, state slices, etc.).
- * This eliminates the previous flat re-declaration of ~10 identical fields.
- *
- * Services are injected via PocketFlow's `this.services` (immutable dependencies).
  */
 
 import type { IModelHandler } from '@agent/modelHandlers/types/IModelHandler';
@@ -19,27 +16,12 @@ import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolU
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import type { TaskRunFileService } from '@utils/files';
 
-// ---------------------------------------------------------------------------
-// Shared Types
-// ---------------------------------------------------------------------------
-
 /** Callback invoked when a round/cycle completes for usage tracking. */
 export type RoundFinalizedCallback = (
   run: AgentRunStateSnapshot,
 ) => void | Promise<void>;
 
-// ---------------------------------------------------------------------------
-// Service Interfaces
-// ---------------------------------------------------------------------------
-
-/**
- * Services for response cycle flow nodes.
- *
- * Extends BaseFlowContextInit (agent identity + interrupts) with:
- * - client: Model API client (created per cycle via clientRef pattern)
- * - fileService: File I/O for output writing
- * - State slices: run, workspace, round (reconstructed per cycle from snapshots)
- */
+/** Services for response cycle flow nodes. */
 export interface ResponseCycleServices<
   C = unknown,
 > extends BaseFlowContextInit<C> {
@@ -50,14 +32,7 @@ export interface ResponseCycleServices<
   round: ConversationRoundStateSnapshot;
 }
 
-/**
- * Services for tool-use cycle flow nodes.
- *
- * Extends BaseFlowContextInit (agent identity + interrupts) with:
- * - client: Model API client
- * - toolRegistry + resolved tool names
- * - State slices: run, workspace (no per-round snapshot — continuous session model)
- */
+/** Services for tool-use cycle flow nodes. */
 export interface ToolUseCycleServices<
   C = unknown,
 > extends BaseFlowContextInit<C> {
@@ -73,22 +48,11 @@ export interface ToolUseCycleServices<
   readonly workspace: AgentWorkspaceState;
 }
 
-/** Params for cycle nodes — empty by design (dependencies via services). */
 export type CycleParams = Record<string, unknown>;
-
-// ---------------------------------------------------------------------------
-// Cycle Service Construction Helper
-// ---------------------------------------------------------------------------
 
 /**
  * Build cycle services from outer (flow-level) services.
- *
- * Handles the shared boilerplate:
- * - Lazy client via getter (supports refreshClient without re-setting services)
- * - refreshClient method for token refresh after 401
- * - Spread of outer services as base
- *
- * Callers only provide their cycle-specific overrides.
+ * Creates a lazy client via getter and a refreshClient method for token refresh.
  */
 export async function buildCycleServices<
   Base extends { modelHandler: IModelHandler<any, any, any, any, C> },
