@@ -119,9 +119,8 @@ const GetProfileDataMessageSchema = z.object({
   command: z.literal(PROFILE_VIEW_COMMANDS.GET_PROFILE_DATA),
 });
 
-const SelectAgentInboundMessageSchema = z.object({
+const SelectAgentInboundMessageSchema = SelectAgentMessageSchema.extend({
   command: z.literal(PROFILE_VIEW_COMMANDS.SELECT_AGENT),
-  agentName: z.string().min(1),
 });
 
 const SignInMessageSchema = z.object({
@@ -132,10 +131,10 @@ const SignOutMessageSchema = z.object({
   command: z.literal(PROFILE_VIEW_COMMANDS.SIGN_OUT),
 });
 
-const SetApiAccessModeInboundMessageSchema = z.object({
-  command: z.literal(PROFILE_VIEW_COMMANDS.SET_API_ACCESS_MODE),
-  mode: ApiAccessModeSchema,
-});
+const SetApiAccessModeInboundMessageSchema =
+  SetApiAccessModeMessageSchema.extend({
+    command: z.literal(PROFILE_VIEW_COMMANDS.SET_API_ACCESS_MODE),
+  });
 
 // ============================================================
 // Discriminated union of all inbound messages
