@@ -32,7 +32,7 @@ export const codeBlockStyles = css`
   .code-block pre {
     margin: 0;
     padding: var(--spacing-small);
-    background-color: var(--background-code);
+    background-color: var(--vscode-editor-background);
     border: var(--border-thin) solid var(--vscode-editorWidget-border);
     border-radius: 0;
     overflow-x: auto;

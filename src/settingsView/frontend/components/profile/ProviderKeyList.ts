@@ -259,9 +259,9 @@ export class ProviderKeyList extends LitElement {
     `;
   }
 
-  override render(): TemplateResult {
+  override render(): TemplateResult | typeof nothing {
     if (this.providerKeyStatuses.length === 0) {
-      return html``;
+      return nothing;
     }
 
     const description =

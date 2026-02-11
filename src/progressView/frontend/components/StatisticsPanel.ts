@@ -59,9 +59,9 @@ export class StatisticsPanel extends LitElement {
   /** Statistics items to display */
   @property({ type: Array }) items: StatItem[] = [];
 
-  override render(): TemplateResult {
+  override render(): TemplateResult | typeof nothing {
     if (this.items.length === 0) {
-      return html`${nothing}`;
+      return nothing;
     }
 
     return html`

@@ -50,16 +50,6 @@ export interface PermissionActionDetail {
   modelOverride?: string;
 }
 
-interface GroupToggleDetail {
-  groupId: string;
-  expanded: boolean;
-}
-
-interface FileClickDetail {
-  file: string;
-  line?: number;
-}
-
 /**
  * Detail for file-related actions in ProgressView.
  * Named to distinguish from mainView's FileActionDetail which has different fields.
@@ -122,10 +112,11 @@ export const ProgressEvents = {
   permissionAction: (detail: PermissionActionDetail) =>
     createEvent('permission-action', detail),
 
-  groupToggle: (detail: GroupToggleDetail) =>
+  groupToggle: (detail: { groupId: string; expanded: boolean }) =>
     createEvent('group-toggle', detail),
 
-  fileClick: (detail: FileClickDetail) => createEvent('file-click', detail),
+  fileClick: (detail: { file: string; line?: number }) =>
+    createEvent('file-click', detail),
 
   focusComplete: () => createEvent('focus-complete', undefined),
 

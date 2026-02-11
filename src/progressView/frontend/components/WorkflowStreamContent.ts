@@ -27,6 +27,7 @@ import {
   LitElement,
   css,
   html,
+  nothing,
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
@@ -171,14 +172,14 @@ export class WorkflowStreamContent extends LitElement {
     return { instruction, usage, files, hasFiles };
   }
 
-  override render(): TemplateResult {
+  override render(): TemplateResult | typeof nothing {
     const { instruction, usage, files, hasFiles } = this.runValues;
     const streamInfo = this.currentStreamInfo;
     const state = this.currentState;
     const runId = this.currentRunId;
 
     if (!streamInfo || !state) {
-      return html``;
+      return nothing;
     }
 
     return html`

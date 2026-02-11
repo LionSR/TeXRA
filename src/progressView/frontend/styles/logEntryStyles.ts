@@ -65,13 +65,13 @@ export const logEntryStyles = css`
   }
 
   .file-list-content .file-var {
-    opacity: 0.8;
-    font-size: 0.9em;
+    opacity: var(--opacity-normal);
+    font-size: var(--font-size-sm);
     margin-left: var(--spacing-tiny);
   }
 
   .file-list-content .file-source {
-    opacity: 0.6;
+    opacity: var(--opacity-disabled);
     font-size: 0.85em;
     font-style: italic;
   }
@@ -92,7 +92,7 @@ export const logEntryStyles = css`
 
   .xml-link-container .document-tag {
     color: var(--color-text-secondary);
-    opacity: 0.8;
+    opacity: var(--opacity-normal);
     font-style: italic;
   }
 
@@ -100,7 +100,7 @@ export const logEntryStyles = css`
     flex-basis: 100%;
     margin-top: var(--spacing-tiny);
     color: var(--color-text-secondary);
-    font-size: 0.9em;
+    font-size: var(--font-size-sm);
     display: flex;
     align-items: center;
     gap: var(--spacing-tiny);
@@ -135,11 +135,11 @@ export const logEntryStyles = css`
   }
 
   .memory-path .codicon {
-    margin-right: 4px;
+    margin-right: var(--spacing-small);
   }
 
   .memory-path .file-source {
-    opacity: 0.6;
+    opacity: var(--opacity-disabled);
     font-size: 0.85em;
   }
 

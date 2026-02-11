@@ -68,7 +68,7 @@ export class AgentSelectionPanel extends LitElement {
         display: flex;
         align-items: center;
         padding: var(--spacing-small) var(--spacing-medium);
-        font-size: var(--font-size-xs, 11px);
+        font-size: var(--font-size-xs);
         font-weight: 600;
         color: var(--color-text-secondary);
         text-transform: uppercase;
@@ -88,7 +88,7 @@ export class AgentSelectionPanel extends LitElement {
         cursor: pointer;
         font-size: var(--font-size-sm);
         color: var(--vscode-foreground);
-        border-left: 2px solid transparent;
+        border-left: var(--border-medium) solid transparent;
         transition: background 0.1s ease;
         outline: none;
       }
@@ -98,7 +98,7 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-list-item:focus-visible {
-        outline: 1px solid var(--vscode-focusBorder);
+        outline: var(--border-thin) solid var(--vscode-focusBorder);
         outline-offset: -1px;
       }
 
@@ -125,9 +125,9 @@ export class AgentSelectionPanel extends LitElement {
 
       .agent-list-item-badges {
         display: flex;
-        gap: 2px;
-        font-size: var(--font-size-xs, 11px);
-        opacity: 0.8;
+        gap: var(--spacing-tiny);
+        font-size: var(--font-size-xs);
+        opacity: var(--opacity-normal);
         flex-shrink: 0;
       }
 
@@ -194,8 +194,8 @@ export class AgentSelectionPanel extends LitElement {
 
       .agent-tool-badge {
         display: inline-block;
-        padding: 1px var(--spacing-small);
-        font-size: var(--font-size-xs, 11px);
+        padding: var(--border-thin) var(--spacing-small);
+        font-size: var(--font-size-xs);
         font-family: var(--vscode-editor-font-family);
         background: var(--vscode-textBlockQuote-background);
         border: var(--border-thin) solid var(--color-border);
@@ -233,7 +233,7 @@ export class AgentSelectionPanel extends LitElement {
 
       .agent-count {
         padding: var(--spacing-small) var(--spacing-medium);
-        font-size: var(--font-size-xs, 11px);
+        font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
         border-top: var(--border-thin) solid var(--color-border);
         background: var(--vscode-editor-background);

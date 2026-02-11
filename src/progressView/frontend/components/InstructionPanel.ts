@@ -66,7 +66,7 @@ export class InstructionPanel extends LitElement {
       }
 
       .instruction-panel__copy {
-        opacity: 0.65;
+        opacity: var(--opacity-subtle);
       }
 
       :host(:hover) .instruction-panel__copy {

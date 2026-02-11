@@ -130,9 +130,9 @@ export class LatexdiffResults extends LitElement {
     `;
   }
 
-  override render(): TemplateResult {
+  override render(): TemplateResult | typeof nothing {
     if (this.entries.length === 0) {
-      return html`${nothing}`;
+      return nothing;
     }
 
     const summaryText =
