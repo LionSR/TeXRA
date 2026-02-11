@@ -178,11 +178,7 @@ export class FollowUpInput extends LitElement {
 
   override render(): TemplateResult | typeof nothing {
     return html`
-      <vscode-collapsible
-        class="panel-collapsible"
-        title="Follow-up Input"
-        open
-      >
+      <vscode-collapsible class="panel-collapsible" title="Follow-up Input">
         <div id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER} class="follow-up-container">
           <queued-follow-ups
             .messages=${this.queuedMessages}
