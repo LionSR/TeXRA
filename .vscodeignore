@@ -79,3 +79,5 @@ supabase/**
 releases/**
 prds/**
 .prettierignore
+
+slides/**

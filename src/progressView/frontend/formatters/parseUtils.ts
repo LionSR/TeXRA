@@ -44,14 +44,16 @@ export function stringifyWithLanguage(value: unknown): StringifyResult {
 }
 
 /**
- * Check if an input object is code-only (has only a code/command field with string content).
+ * Extract the code/command field from a tool input object.
  * Supports 'code' field (wolfram) and 'command' field (bash).
+ * Ignores metadata fields like `timeout` so the code is displayed
+ * with proper syntax highlighting instead of falling back to YAML.
  */
 export function extractCodeOnlyInput(value: unknown): {
   isCodeOnly: boolean;
   code: string;
 } {
-  if (!isPlainObject(value) || Object.keys(value).length !== 1) {
+  if (!isPlainObject(value)) {
     return { isCodeOnly: false, code: '' };
   }
   // Support both 'code' (wolfram) and 'command' (bash) field names
