@@ -139,15 +139,19 @@ Example: Accept corrected file back to its original location:
 
         const proposedContent = await flexibleFS.read(sourceLocation);
         const destExists = await WorkspaceFS.exists(dest.relativePath);
-        // If source and dest are the same workspace file, no change needed
+
+        // Determine original content for diff display
         const isSameFile =
           sourceLocation.kind === 'workspace' &&
           sourceAbsolute === dest.absolutePath;
-        const originalContent = isSameFile
-          ? proposedContent
-          : destExists
-            ? await WorkspaceFS.read(dest.relativePath)
-            : '';
+        let originalContent: string;
+        if (isSameFile) {
+          originalContent = proposedContent;
+        } else if (destExists) {
+          originalContent = await WorkspaceFS.read(dest.relativePath);
+        } else {
+          originalContent = '';
+        }
 
         return {
           runPath: mapping.run_path,
@@ -166,6 +170,9 @@ Example: Accept corrected file back to its original location:
     const rejectionMessages: string[] = [];
 
     for (const entry of prepared) {
+      const mappingNote =
+        entry.runPath !== entry.workspacePath ? ` (from ${entry.runPath})` : '';
+
       const approval = await requestToolEditApproval({
         path: entry.workspacePath,
         originalContent: entry.originalContent,
@@ -176,10 +183,6 @@ Example: Accept corrected file back to its original location:
       if (!approval.accepted) {
         rejected++;
         if (approval.userMessage) rejectionMessages.push(approval.userMessage);
-        const mappingNote =
-          entry.runPath !== entry.workspacePath
-            ? ` (from ${entry.runPath})`
-            : '';
         results.push(`rejected: ${entry.workspacePath}${mappingNote}`);
         continue;
       }
@@ -192,8 +195,6 @@ Example: Accept corrected file back to its original location:
       );
 
       const action = entry.destExists ? 'replaced' : 'created';
-      const mappingNote =
-        entry.runPath !== entry.workspacePath ? ` (from ${entry.runPath})` : '';
       results.push(`${action}: ${entry.workspacePath}${mappingNote}`);
       edits.push({
         path: entry.workspacePath,

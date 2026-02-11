@@ -210,10 +210,6 @@ export class AgentsTab extends LitElement {
     }
   }
 
-  private setSubTab(tab: AgentCategory): void {
-    this.activeSubTab = tab;
-  }
-
   private handleOpenFolder(
     folderType: 'custom' | 'builtInWorkflow' | 'builtInToolUse',
   ): void {
@@ -255,7 +251,7 @@ export class AgentsTab extends LitElement {
               class="agents-sub-tab ${this.activeSubTab === 'workflow'
                 ? 'active'
                 : ''}"
-              @click=${() => this.setSubTab('workflow')}
+              @click=${() => (this.activeSubTab = 'workflow')}
             >
               <span class="codicon codicon-symbol-method"></span>
               Workflow
@@ -267,7 +263,7 @@ export class AgentsTab extends LitElement {
               class="agents-sub-tab ${this.activeSubTab === 'toolUse'
                 ? 'active'
                 : ''}"
-              @click=${() => this.setSubTab('toolUse')}
+              @click=${() => (this.activeSubTab = 'toolUse')}
             >
               <span class="codicon codicon-tools"></span>
               Tool Use

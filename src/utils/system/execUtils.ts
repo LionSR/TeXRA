@@ -33,19 +33,6 @@ logger.initialize(CHANNEL);
 const MAX_OUTPUT_LENGTH = 150;
 const FORCE_KILL_DELAY_MS = 5_000;
 
-/**
- * Truncate text to maxChars by keeping the end portion.
- */
-function truncateOutput(
-  text: string | null,
-  maxChars: number = MAX_OUTPUT_LENGTH,
-): string | null {
-  if (text && text.length > maxChars) {
-    return `...${text.slice(-maxChars)}`;
-  }
-  return text;
-}
-
 function normalizeOutput(text: string | null | undefined): string | null {
   return text?.trim() || null;
 }
@@ -198,18 +185,15 @@ export async function executeCommand(
     const exitCode = result.exitCode ?? 1;
     const timedOut = (result.timedOut ?? false) || shellTimedOut;
 
-    const shouldTruncate = options.truncate ?? false;
-    const formatForLog = (output: string | null) =>
-      shouldTruncate && output ? truncateOutput(output) : output;
-
     const normalizedStdout = normalizeOutput(stdout);
     const normalizedStderr = normalizeOutput(stderr);
 
     if (normalizedStderr) {
-      logger.debug(
-        logChannel,
-        `Command stderr: ${formatForLog(normalizedStderr)}`,
-      );
+      const stderrForLog =
+        options.truncate && normalizedStderr.length > MAX_OUTPUT_LENGTH
+          ? `...${normalizedStderr.slice(-MAX_OUTPUT_LENGTH)}`
+          : normalizedStderr;
+      logger.debug(logChannel, `Command stderr: ${stderrForLog}`);
     }
 
     return {

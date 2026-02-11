@@ -1,9 +1,6 @@
 // Third-party imports
 import { css, type CSSResult } from 'lit';
 
-// Shared badge/category styles are imported in ProfileApp.ts from @shared/styles
-// This file contains only profile-view-specific styles
-
 export const profileViewStyles: CSSResult = css`
   h2 {
     color: var(--vscode-foreground);
