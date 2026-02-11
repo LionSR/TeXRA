@@ -319,7 +319,11 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
   private async buildDirectoryListing(resolvedPath: string): Promise<string[]> {
     const entries: Array<{ path: string; size: number; mtime: number }> = [];
     const rootStats = await StorageFS.stat(resolvedPath);
-    entries.push({ path: resolvedPath, size: rootStats.size, mtime: rootStats.mtime });
+    entries.push({
+      path: resolvedPath,
+      size: rootStats.size,
+      mtime: rootStats.mtime,
+    });
 
     await this.walkDirectory(resolvedPath, 0, entries);
 
