@@ -47,7 +47,9 @@ export class ContextManagement extends LitElement {
       }
 
       /* Extend .details-summary from commonViewStyles with accent color */
-      summary {
+      summary,
+      .context-icon,
+      .context-title {
         color: var(--accent-color, var(--vscode-foreground));
       }
 
@@ -128,13 +130,8 @@ export class ContextManagement extends LitElement {
       <details style="--accent-color: ${this.config.color}">
         <summary class="details-summary">
           <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
-          <i
-            class="codicon ${this.config.icon} context-icon"
-            style="color: ${this.config.color}"
-          ></i>
-          <span class="context-title" style="color: ${this.config.color}"
-            >${this.config.label}</span
-          >
+          <i class="codicon ${this.config.icon} context-icon"></i>
+          <span class="context-title">${this.config.label}</span>
         </summary>
         <div class="context-content" data-log-id=${this.logId}>
           ${repeat(

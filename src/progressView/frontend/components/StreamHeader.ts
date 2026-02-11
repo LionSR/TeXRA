@@ -271,32 +271,17 @@ export class StreamHeader extends LitElement {
         border-radius: var(--border-radius);
       }
 
-      /* YOLO toggle: error color */
+      /* Toggle color per variant */
       .yolo-toggle-button.is-active {
         --_toggle-color: var(--color-error);
-        color: var(--_toggle-color);
-        background-color: color-mix(
-          in srgb,
-          var(--_toggle-color) 15%,
-          transparent
-        );
-        box-shadow: 0 0 8px
-          color-mix(in srgb, var(--_toggle-color) 40%, transparent);
       }
 
-      .yolo-toggle-button.is-active:hover {
-        background-color: color-mix(
-          in srgb,
-          var(--_toggle-color) 25%,
-          transparent
-        );
-        box-shadow: 0 0 12px
-          color-mix(in srgb, var(--_toggle-color) 60%, transparent);
-      }
-
-      /* Super YOLO toggle: warning color */
       .super-yolo-toggle-button.is-active {
         --_toggle-color: var(--color-warning, var(--vscode-charts-orange));
+      }
+
+      /* Shared active toggle styles */
+      :is(.yolo-toggle-button, .super-yolo-toggle-button).is-active {
         color: var(--_toggle-color);
         background-color: color-mix(
           in srgb,
@@ -307,7 +292,7 @@ export class StreamHeader extends LitElement {
           color-mix(in srgb, var(--_toggle-color) 40%, transparent);
       }
 
-      .super-yolo-toggle-button.is-active:hover {
+      :is(.yolo-toggle-button, .super-yolo-toggle-button).is-active:hover {
         background-color: color-mix(
           in srgb,
           var(--_toggle-color) 25%,
