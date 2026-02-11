@@ -1465,7 +1465,7 @@
     "minimatch": "^10.1.2",
     "nanoid": "^5.1.6",
     "node-pandoc": "^0.3.0",
-    "openai": "^6.19.0",
+    "openai": "^6.21.0",
     "p-map": "^7.0.4",
     "pdf2pic": "^3.2.0",
     "perfect-debounce": "^2.1.0",
