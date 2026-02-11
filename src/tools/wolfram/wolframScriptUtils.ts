@@ -116,12 +116,3 @@ export async function executeWolframScriptFile(
     showErrorsToUser: options.showErrorsToUser,
   });
 }
-
-// The verifyMathematicalExpression helper has been removed. It previously
-// wrapped executeWolframCode without adding any logic. Call executeWolframCode
-// directly when verification is needed.
-
-export default {
-  executeWolframCode,
-  executeWolframScriptFile,
-};

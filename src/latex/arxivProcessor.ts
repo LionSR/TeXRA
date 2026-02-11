@@ -196,8 +196,7 @@ export class ArxivSourceProcessor {
     }
 
     // Create project directory for the arXiv paper (sanitize ID to avoid path issues)
-    const sanitizedId = id.replaceAll('/', '_');
-    const paperDirRelative = sanitizedId;
+    const paperDirRelative = id.replaceAll('/', '_');
     await WorkspaceFS.ensureDir(paperDirRelative);
 
     // Create temporary download subdirectory for staging the archive
@@ -249,15 +248,6 @@ export class ArxivSourceProcessor {
 
       // Remove the downloaded archive file
       await AbsoluteFS.delete(downloadedPath);
-      // Remove the temporary download directory (files are now in paper root)
-      try {
-        await AbsoluteFS.delete(downloadDirFull, { recursive: true });
-      } catch (err) {
-        logger.debug(
-          this.channel,
-          `Could not remove download directory: ${toErrorMessage(err)}`,
-        );
-      }
     } else {
       // For gzip-compressed single files, decompress first
       let sourceFilePath = downloadedPath;
@@ -279,19 +269,19 @@ export class ArxivSourceProcessor {
       const downloadedRel = WorkspaceFS.relativePath(sourceFilePath);
       // Use forward slashes to match WorkspaceFS.relativePath() convention
       const targetRel = [paperDirRelative, 'main.tex'].join('/');
-      // Always move the file to paper root, even if already named main.tex
       if (downloadedRel !== targetRel) {
         await WorkspaceFS.rename(downloadedRel, targetRel);
       }
-      // Remove the temporary download directory (file is now in paper root)
-      try {
-        await AbsoluteFS.delete(downloadDirFull, { recursive: true });
-      } catch (err) {
-        logger.debug(
-          this.channel,
-          `Could not remove download directory: ${toErrorMessage(err)}`,
-        );
-      }
+    }
+
+    // Remove the temporary download directory (files are now in paper root)
+    try {
+      await AbsoluteFS.delete(downloadDirFull, { recursive: true });
+    } catch (err) {
+      logger.debug(
+        this.channel,
+        `Could not remove download directory: ${toErrorMessage(err)}`,
+      );
     }
 
     if (autoIndent) {

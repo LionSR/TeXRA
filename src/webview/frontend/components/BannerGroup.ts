@@ -151,37 +151,46 @@ export class BannerGroup extends LitElement {
   ];
 
   /** API key banner state */
-  @property({ type: Object }) apiKeyBanner: ApiKeyBannerState = {
+  @property({ attribute: false }) apiKeyBanner: ApiKeyBannerState = {
     visible: false,
   };
 
   /** Agent config banner state */
-  @property({ type: Object }) agentConfigBanner: AgentConfigBannerState = {
+  @property({ attribute: false }) agentConfigBanner: AgentConfigBannerState = {
     visible: false,
   };
 
   /** Dependency banner state */
-  @property({ type: Object }) dependencyBanner: DependencyBannerState = {
+  @property({ attribute: false }) dependencyBanner: DependencyBannerState = {
     visible: false,
   };
 
   /** Getting started banner visibility */
-  @property({ type: Boolean }) gettingStartedVisible = false;
+  @property({ attribute: false }) gettingStartedVisible = false;
 
   /** Login banner visibility */
-  @property({ type: Boolean }) loginBannerVisible = false;
+  @property({ attribute: false }) loginBannerVisible = false;
 
-  private handleApiKeyAction(action: 'set' | 'guide'): void {
-    const provider = this.apiKeyBanner.provider ?? '';
-    this.dispatchEvent(
-      MainViewEvents.apiKeyAction({
-        action,
-        provider,
-      }),
+  private handleApiKeyActionClick(event: MouseEvent): void {
+    const button = (event.target as HTMLElement).closest<HTMLElement>(
+      '[data-action]',
     );
+    const action = button?.dataset.action as 'set' | 'guide' | undefined;
+    if (!action) return;
+    const provider = this.apiKeyBanner.provider ?? '';
+    this.dispatchEvent(MainViewEvents.apiKeyAction({ action, provider }));
   }
 
-  private handleAgentConfigAction(action: 'edit' | 'dir' | 'docs'): void {
+  private handleAgentConfigActionClick(event: MouseEvent): void {
+    const button = (event.target as HTMLElement).closest<HTMLElement>(
+      '[data-action]',
+    );
+    const action = button?.dataset.action as
+      | 'edit'
+      | 'dir'
+      | 'docs'
+      | undefined;
+    if (!action) return;
     this.dispatchEvent(
       MainViewEvents.agentConfigAction({
         action,
@@ -198,8 +207,14 @@ export class BannerGroup extends LitElement {
     this.dispatchEvent(MainViewEvents.recheckDependencies());
   }
 
-  private handleOpenInstallGuide(tool: string): void {
-    this.dispatchEvent(MainViewEvents.openInstallGuide({ tool }));
+  private handleInstallClick(event: MouseEvent): void {
+    const button = (event.target as HTMLElement).closest<HTMLElement>(
+      '[data-tool]',
+    );
+    const tool = button?.dataset.tool;
+    if (tool) {
+      this.dispatchEvent(MainViewEvents.openInstallGuide({ tool }));
+    }
   }
 
   private handleSignIn(): void {
@@ -236,18 +251,18 @@ export class BannerGroup extends LitElement {
             ? html`<strong>${providerLabel}</strong> API key missing.`
             : 'TeXRA requires an API key to run.'}
         </span>
-        <div class="actions">
+        <div class="actions" @click=${this.handleApiKeyActionClick}>
           <vscode-toolbar-button
             id="apiKeyBannerButton"
             icon="key"
-            @click=${() => this.handleApiKeyAction('set')}
+            data-action="set"
           >
             ${provider ? 'Set Key' : 'Set API Key'}
           </vscode-toolbar-button>
           <vscode-toolbar-button
             id="apiKeyGuideButton"
             icon="book"
-            @click=${() => this.handleApiKeyAction('guide')}
+            data-action="guide"
           >
             ${provider ? 'Get Key' : 'API Key Guide'}
           </vscode-toolbar-button>
@@ -272,18 +287,18 @@ export class BannerGroup extends LitElement {
             ? `Agent file for "${this.agentConfigBanner.agentName}" is missing.`
             : 'Agent configuration is missing.'}
         </span>
-        <div class="actions">
+        <div class="actions" @click=${this.handleAgentConfigActionClick}>
           <vscode-toolbar-button
             id="agentConfigEditButton"
             icon="edit"
-            @click=${() => this.handleAgentConfigAction('edit')}
+            data-action="edit"
           >
             Edit Agents
           </vscode-toolbar-button>
           <vscode-toolbar-button
             id="agentConfigDirButton"
             icon="folder"
-            @click=${() => this.handleAgentConfigAction('dir')}
+            data-action="dir"
           >
             ${this.agentConfigBanner.customDirSet
               ? 'Open Directory'
@@ -292,7 +307,7 @@ export class BannerGroup extends LitElement {
           <vscode-toolbar-button
             id="agentConfigDocButton"
             icon="book"
-            @click=${() => this.handleAgentConfigAction('docs')}
+            data-action="docs"
           >
             Docs
           </vscode-toolbar-button>
@@ -311,7 +326,7 @@ export class BannerGroup extends LitElement {
 
     return html`
       <div id="dependencyBanner" class="dependency-banner">
-        <span class="missing-tools">
+        <span class="missing-tools" @click=${this.handleInstallClick}>
           ${when(
             tools.length === 0,
             () => html`Missing dependencies: none`,
@@ -327,7 +342,7 @@ export class BannerGroup extends LitElement {
                       <vscode-toolbar-button
                         class="btn-secondary dependency-install-button"
                         icon="cloud-download"
-                        @click=${() => this.handleOpenInstallGuide(tool)}
+                        data-tool=${tool}
                       >
                         Install
                       </vscode-toolbar-button>

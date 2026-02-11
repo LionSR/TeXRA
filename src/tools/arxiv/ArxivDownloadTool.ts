@@ -47,9 +47,7 @@ export class ArxivDownloadTool extends defineTool({
       );
     }
 
-    const relativeRaw = WorkspaceFS.relativePath(downloadPath);
-    // WorkspaceFS.relativePath returns an empty string for the workspace root; normalise to '.' for tooling.
-    const relativePath = relativeRaw === '' ? '.' : relativeRaw;
+    const relativePath = WorkspaceFS.relativePath(downloadPath) || '.';
     const displayPath = toPosixPath(relativePath);
 
     const lsTool = new LsTool();

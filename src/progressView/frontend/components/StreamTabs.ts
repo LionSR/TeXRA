@@ -228,10 +228,10 @@ export class StreamTabs extends LitElement {
     `,
   ];
 
-  @property({ type: Array }) streams: StreamTabInfo[] = [];
-  @property({ type: String }) activeStreamId: string | null = null;
-  @property({ type: String }) filter: StreamFilter = 'all';
-  @property({ type: String }) sort: StreamSort = 'time';
+  @property({ attribute: false }) streams: StreamTabInfo[] = [];
+  @property({ attribute: false }) activeStreamId: string | null = null;
+  @property({ attribute: false }) filter: StreamFilter = 'all';
+  @property({ attribute: false }) sort: StreamSort = 'time';
 
   override render(): TemplateResult {
     return html`

@@ -52,7 +52,7 @@ export class TaskGroupHeader extends LitElement {
     `,
   ];
 
-  @property({ type: Object }) group!: TaskGroup;
+  @property({ attribute: false }) group!: TaskGroup;
 
   override render(): TemplateResult {
     const { group } = this;

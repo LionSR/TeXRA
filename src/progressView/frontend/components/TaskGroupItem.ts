@@ -35,11 +35,11 @@ export class TaskGroupItem extends LitElement {
     ...logStyles,
   ];
 
-  @property({ type: Object }) group!: TaskGroup;
-  @property({ type: Boolean }) expanded = true;
+  @property({ attribute: false }) group!: TaskGroup;
+  @property({ attribute: false }) expanded = true;
 
   private handleToggle(event: Event): void {
-    const details = event.target as HTMLDetailsElement;
+    const details = event.currentTarget as HTMLDetailsElement;
     this.dispatchEvent(
       ProgressEvents.groupToggle({
         groupId: this.group.id,
