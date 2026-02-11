@@ -265,9 +265,7 @@ export class ArxivSourceProcessor {
         if (progressCallback) {
           progressCallback('Decompressing source file...', 60);
         }
-        const decompressedPath =
-          downloadedPath.replace(/\.gz$/, '') ||
-          downloadedPath + '.decompressed';
+        const decompressedPath = downloadedPath.replace(/\.gz$/, '');
         await pipeline(
           AbsoluteFS.createReadStream(downloadedPath),
           createGunzip(),
