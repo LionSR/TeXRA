@@ -123,8 +123,11 @@ Example: Accept corrected file back to its original location:
           );
         }
 
-        const { sourceAbsolute, sourceLocation } =
-          await this.resolveSourceFile(executionId, mapping.run_path, runDirExists);
+        const { sourceAbsolute, sourceLocation } = await this.resolveSourceFile(
+          executionId,
+          mapping.run_path,
+          runDirExists,
+        );
 
         const destPath = mapping.workspace_path ?? mapping.run_path;
         const dest = WorkspaceFS.locatePath(destPath);
@@ -140,10 +143,11 @@ Example: Accept corrected file back to its original location:
         const isSameFile =
           sourceLocation.kind === 'workspace' &&
           sourceAbsolute === dest.absolutePath;
-        const originalContent =
-          isSameFile ? proposedContent
-          : destExists ? await WorkspaceFS.read(dest.relativePath)
-          : '';
+        const originalContent = isSameFile
+          ? proposedContent
+          : destExists
+            ? await WorkspaceFS.read(dest.relativePath)
+            : '';
 
         return {
           runPath: mapping.run_path,

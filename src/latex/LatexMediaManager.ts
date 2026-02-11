@@ -12,6 +12,7 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 import { toErrorMessage } from '@common/errors';
 import { AgentLogger } from '@logger/AgentLogger';
+import { hasExtension } from '@utils/core/pathCore';
 import {
   TaskRunFileService,
   flexibleFS,
@@ -88,7 +89,7 @@ export class LatexMediaManager {
     workspaceState: AgentWorkspaceState,
   ): Promise<void> {
     const texFiles = files.filter((file) =>
-      file.absolutePath.toLowerCase().endsWith('.tex'),
+      hasExtension(file.absolutePath, '.tex'),
     );
 
     const compileResults = await pMap(

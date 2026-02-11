@@ -91,8 +91,7 @@ export async function extractFilesFromXml(
       const storageKey: StorageKey = getStorageKey(state);
 
       const hasMultipleOutputs =
-        deps.config.useMultipleOutputs &&
-        deps.config.outputFiles?.length > 0;
+        deps.config.useMultipleOutputs && deps.config.outputFiles?.length > 0;
 
       if (hasMultipleOutputs) {
         await fileProcessor.processMultipleOutputs(

@@ -11,7 +11,8 @@ import { toErrorMessage } from '@common/errors';
 import { ToolError, type ToolFileAttachment } from '@tools/result';
 
 // Local imports - core utilities
-import { isNonEmptyString, toPosixPath } from '@utils/core';
+import { isNonEmptyString } from '@utils/core';
+import { toPosixPath } from '@utils/core/pathCore';
 import { WorkspaceFS, getMimeType } from '@utils/files';
 
 export interface WorkspacePathResolution {

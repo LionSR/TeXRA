@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 // Local imports - log
 import { showLoggedErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { hasExtension } from '@utils/core/pathCore';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { runLatexFormatter } from '@latex/texFormatter';
@@ -96,7 +97,7 @@ export async function indentLatexFilesInDirectory(
   try {
     // Pass 1: Format .tex files
     await walkDirectory(directory, async (fullPath, name) => {
-      if (!name.endsWith('.tex')) {
+      if (!hasExtension(name, '.tex')) {
         return;
       }
       if (progressCallback) {
