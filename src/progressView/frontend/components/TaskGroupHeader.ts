@@ -18,8 +18,8 @@ import { logStyles } from '../styles/logStyles';
 import {
   getDateTimeFormatter,
   getTimeFormatter,
-  formatDuration,
 } from '../formatters/timestampUtils';
+import { formatDuration } from '@utils/core';
 
 // Local imports - shared schemas
 import type { TaskGroup } from '@shared/schemas';

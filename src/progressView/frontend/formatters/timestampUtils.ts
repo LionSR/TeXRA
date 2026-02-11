@@ -43,16 +43,3 @@ export function formatTokens(tokens: number): string {
   if (tokens > 4096) return `${Math.round(tokens / 1000)}k`;
   return `${tokens}`;
 }
-
-/** Format duration in milliseconds to human-readable string. */
-export function formatDuration(durationMs: number): string {
-  if (durationMs < 0) return '0s';
-  if (durationMs < 1000) return '<1s';
-
-  const seconds = Math.floor(durationMs / 1000) % 60;
-  const minutes = Math.floor(durationMs / (1000 * 60));
-
-  if (minutes === 0) return `${seconds}sec`;
-  if (seconds === 0) return `${minutes}min`;
-  return `${minutes}min, ${seconds}sec`;
-}
