@@ -92,18 +92,14 @@ export class ToolUseCycleNode<C> extends Node<
     try {
       await flow.run(cycleShared);
 
-      // Determine outcome directly from shared state flags (single interpretation)
+      // Determine outcome from shared state flags
       if (cycleShared.shouldStop && cycleShared.lastError) {
         return {
           outcome: 'failed',
           message: cycleShared.lastError.message ?? 'Cycle failed',
         };
       }
-      if (
-        cycleShared.shouldStop &&
-        !cycleShared.lastError &&
-        !cycleShared.endTurn
-      ) {
+      if (cycleShared.shouldStop && !cycleShared.endTurn) {
         return { outcome: 'cancelled' };
       }
       return { outcome: 'completed', messages: cycleShared.messages };

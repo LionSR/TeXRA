@@ -39,19 +39,18 @@ export const SETTINGS_TAB = Object.fromEntries(
 
 export type SettingsTab = (typeof SETTINGS_TAB)[keyof typeof SETTINGS_TAB];
 
-/** Maximum valid tab index */
-const MAX_TAB_INDEX = SETTINGS_TAB_ORDER.length - 1;
-
 /** Outbound schema to switch tabs */
 export const SetTabMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_CMD.SET_TAB),
-  tabIndex: z.int().min(0).max(MAX_TAB_INDEX),
+  tabIndex: z
+    .int()
+    .min(0)
+    .max(SETTINGS_TAB_ORDER.length - 1),
   agentSubTab: AgentCategorySchema.optional(),
 });
 
 export type SetTabMessage = z.infer<typeof SetTabMessageSchema>;
 
-// Alias for internal use
 const CMD = SETTINGS_VIEW_CMD;
 
 // Re-export data schemas from individual view messages

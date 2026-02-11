@@ -93,35 +93,32 @@ export class ProgressEventHandler {
     withEventErrorHandling(
       'StreamStatus',
       'failed to handle setActiveStream',
-      () => this.processSetActiveStream(payload),
+      () => {
+        const { streamId, agentCategory, isRemote, hasMultipleOutputs } =
+          payload;
+        if (!streamId) return;
+
+        this.state.streamTabs.ensureStream(streamId);
+        this.state.updateStreamHints(streamId, {
+          agentCategory,
+          isRemote,
+          hasMultipleOutputs,
+        });
+        // Ensure stream state exists so it's included in getAllStreamStates()
+        if (agentCategory) {
+          this.state.getOrCreateStreamState(streamId, agentCategory);
+        }
+        this.maybeUpdateFilterForCategory(agentCategory);
+        this.state.activeStream = streamId;
+        this.replayPendingTaskGroups(streamId);
+
+        if (!this.webviewUpdater.isAvailable()) return;
+
+        this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
+        this.refreshStreamSurface(streamId, { updateInstruction: true });
+      },
     );
   };
-
-  private async processSetActiveStream(
-    payload: ProgressEventPayloads['setActiveStream'],
-  ): Promise<void> {
-    const { streamId, agentCategory, isRemote, hasMultipleOutputs } = payload;
-    if (!streamId) return;
-
-    this.state.streamTabs.ensureStream(streamId);
-    this.state.updateStreamHints(streamId, {
-      agentCategory,
-      isRemote,
-      hasMultipleOutputs,
-    });
-    // Ensure stream state exists so it's included in getAllStreamStates()
-    if (agentCategory) {
-      this.state.getOrCreateStreamState(streamId, agentCategory);
-    }
-    this.maybeUpdateFilterForCategory(agentCategory);
-    this.state.activeStream = streamId;
-    this.replayPendingTaskGroups(streamId);
-
-    if (!this.webviewUpdater.isAvailable()) return;
-
-    this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
-    this.refreshStreamSurface(streamId, { updateInstruction: true });
-  }
 
   private handleUpdateStreamStatus = (
     payload: ProgressEventPayloads['updateStreamStatus'],
@@ -361,7 +358,12 @@ export class ProgressEventHandler {
     const { updateInstruction = true } = options;
 
     if (!stream) {
-      this.clearStreamSurface(updateInstruction);
+      // Clear the stream surface when no stream is active.
+      // The 'clear' action clears all frontend streamStates including queuedFollowUps.
+      this.webviewUpdater.updateLogContent('', [], [], undefined, 'clear');
+      if (updateInstruction) {
+        this.webviewUpdater.updateInstruction('', null);
+      }
       return null;
     }
 
@@ -404,20 +406,6 @@ export class ProgressEventHandler {
     }
 
     return activeRunId;
-  }
-
-  /**
-   * Clear the stream surface when no stream is active.
-   * The 'clear' action on updateLogContent clears all frontend streamStates,
-   * including queuedFollowUps. Queued follow-ups are restored when switching
-   * to a valid stream via refreshStreamSurface(), which fetches from
-   * ToolUseFollowUpQueue (the backend source of truth).
-   */
-  private clearStreamSurface(clearInstruction: boolean): void {
-    this.webviewUpdater.updateLogContent('', [], [], undefined, 'clear');
-    if (clearInstruction) {
-      this.webviewUpdater.updateInstruction('', null);
-    }
   }
 
   setStreamStatus(
@@ -473,16 +461,12 @@ export class ProgressEventHandler {
 
   private replayPendingTaskGroups(streamId: StreamTabId): void {
     const pending = this.pendingTaskGroups.get(streamId);
-    if (!pending || pending.length === 0) {
-      return;
-    }
+    if (!pending?.length || !this.webviewUpdater.isAvailable()) return;
 
-    if (this.webviewUpdater.isAvailable()) {
-      for (const group of pending) {
-        this.webviewUpdater.addTaskGroup(streamId, group);
-      }
-      this.pendingTaskGroups.delete(streamId);
+    for (const group of pending) {
+      this.webviewUpdater.addTaskGroup(streamId, group);
     }
+    this.pendingTaskGroups.delete(streamId);
   }
 
   private async initializeStreamForTaskGroup(

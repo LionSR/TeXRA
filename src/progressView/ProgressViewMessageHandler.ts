@@ -136,9 +136,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: (data) =>
         this.handleDiffStream(data),
       [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: (data) =>
-        this.handlePackStream(data),
+        this.withToolbarTaskState(data.stream, (ts) =>
+          this.handleFileOperation(data.stream, ts, 'texra.pack'),
+        ),
       [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: (data) =>
-        this.handleCleanStream(data),
+        this.withToolbarTaskState(data.stream, (ts) =>
+          this.handleFileOperation(data.stream, ts, 'texra.clean'),
+        ),
       [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: (data) =>
         this.handleSortStreams(data),
       [PROGRESS_VIEW_COMMANDS.FILTER_STREAMS]: (data) =>
@@ -155,9 +159,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.handleOpenTaskStorage(data),
       [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]: (data) =>
         this.handlePolishFollowUp(data),
-      [PROGRESS_VIEW_COMMANDS.START_RECORDING]: () =>
-        this.handleStartRecording(),
-      [PROGRESS_VIEW_COMMANDS.STOP_RECORDING]: () => this.handleStopRecording(),
+      [PROGRESS_VIEW_COMMANDS.START_RECORDING]: async () => {
+        const view = this.getActiveView();
+        if (view) await this.recordingManager.start(view);
+      },
+      [PROGRESS_VIEW_COMMANDS.STOP_RECORDING]: async () => {
+        const view = this.getActiveView();
+        if (view) await this.recordingManager.stop(view);
+      },
       [PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: async (data) => {
         await vscode.window.showInformationMessage(data.text);
       },
@@ -201,12 +210,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION]: (data) =>
         handleProgressViewBashApprovalAction(data),
 
-      // Profile
-      [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: () => this.handleOpenProfile(),
-
-      // Memory
-      [PROGRESS_VIEW_COMMANDS.OPEN_MEMORY_VIEW]: () =>
-        this.handleOpenMemoryView(),
+      // Profile & Memory - direct command execution
+      [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: async () => {
+        await vscode.commands.executeCommand('texra.auth.viewProfile');
+      },
+      [PROGRESS_VIEW_COMMANDS.OPEN_MEMORY_VIEW]: async () => {
+        await vscode.commands.executeCommand('texra.showMemory');
+      },
 
       // Followup task
       [PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS]: (data) =>
@@ -435,22 +445,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  private async handlePackStream(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.PACK_STREAM>,
-  ): Promise<void> {
-    await this.withToolbarTaskState(data.stream, async (taskState) => {
-      await this.handleFileOperation(data.stream, taskState, 'texra.pack');
-    });
-  }
-
-  private async handleCleanStream(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.CLEAN_STREAM>,
-  ): Promise<void> {
-    await this.withToolbarTaskState(data.stream, async (taskState) => {
-      await this.handleFileOperation(data.stream, taskState, 'texra.clean');
-    });
-  }
-
   private handleSortStreams(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.SORT_STREAMS>,
   ): void {
@@ -510,8 +504,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           });
 
           if (result.success) {
-            const view = this.getActiveView();
-            view?.webview.postMessage({
+            this.postToActiveView({
               command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED,
               stream: data.stream,
               text: result.text,
@@ -544,20 +537,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         }
       },
     );
-  }
-
-  private async handleStartRecording(): Promise<void> {
-    const view = this.getActiveView();
-    if (view) {
-      await this.recordingManager.start(view);
-    }
-  }
-
-  private async handleStopRecording(): Promise<void> {
-    const view = this.getActiveView();
-    if (view) {
-      await this.recordingManager.stop(view);
-    }
   }
 
   private async handleAgentProposalAction(
@@ -724,18 +703,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         'Unable to open the workspace storage folder for this run.',
       );
     }
-  }
-
-  // ============================================================
-  // Navigation handlers
-  // ============================================================
-
-  private async handleOpenProfile(): Promise<void> {
-    await vscode.commands.executeCommand('texra.auth.viewProfile');
-  }
-
-  private async handleOpenMemoryView(): Promise<void> {
-    await vscode.commands.executeCommand('texra.showMemory');
   }
 
   // ============================================================

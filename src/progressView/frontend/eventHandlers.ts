@@ -142,10 +142,13 @@ export function handleFollowUpChange(
   });
 }
 
-export function handleFollowUpSend(ctx: FrontendEventHandlerContext): void {
+/** Resolve the active tool-use stream's trimmed follow-up text, or null if unavailable. */
+function getActiveFollowUpText(
+  ctx: FrontendEventHandlerContext,
+): { streamId: StreamTabId; text: string } | null {
   const state = ctx.getState();
   const streamId = state.activeStreamId;
-  if (!streamId) return;
+  if (!streamId) return null;
 
   const streamInfo = state.streams.find((stream) => stream.name === streamId);
   const streamState = getStreamState(
@@ -153,40 +156,35 @@ export function handleFollowUpSend(ctx: FrontendEventHandlerContext): void {
     streamId,
     streamInfo?.agentCategory,
   );
-  if (!isToolUseState(streamState)) return;
+  if (!isToolUseState(streamState)) return null;
 
   const text = streamState.ui.followUpText?.trim() ?? '';
-  if (!text) return;
+  if (!text) return null;
+
+  return { streamId, text };
+}
+
+export function handleFollowUpSend(ctx: FrontendEventHandlerContext): void {
+  const result = getActiveFollowUpText(ctx);
+  if (!result) return;
 
   postMessage(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP, {
-    stream: streamId,
-    text,
+    stream: result.streamId,
+    text: result.text,
   });
-  ctx.setStreamState(streamId, (prev) => {
+  ctx.setStreamState(result.streamId, (prev) => {
     if (!isToolUseState(prev)) return prev;
     return { ...prev, ui: { ...prev.ui, followUpText: '' } };
   });
 }
 
 export function handleFollowUpPolish(ctx: FrontendEventHandlerContext): void {
-  const state = ctx.getState();
-  const streamId = state.activeStreamId;
-  if (!streamId) return;
-
-  const streamInfo = state.streams.find((stream) => stream.name === streamId);
-  const streamState = getStreamState(
-    state,
-    streamId,
-    streamInfo?.agentCategory,
-  );
-  if (!isToolUseState(streamState)) return;
-
-  const text = streamState.ui.followUpText?.trim() ?? '';
-  if (!text) return;
+  const result = getActiveFollowUpText(ctx);
+  if (!result) return;
 
   postMessage(PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP, {
-    stream: streamId,
-    text,
+    stream: result.streamId,
+    text: result.text,
   });
 }
 
