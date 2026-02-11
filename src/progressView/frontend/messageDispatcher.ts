@@ -701,6 +701,7 @@ const handlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED]: (_data, ctx) =>
     setActiveStreamRecording(ctx, false),
 
+  // Recording errors also stop recording
   [PROGRESS_VIEW_COMMANDS.RECORDING_ERROR]: (_data, ctx) =>
     setActiveStreamRecording(ctx, false),
 

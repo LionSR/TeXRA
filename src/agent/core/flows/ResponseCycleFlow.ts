@@ -361,6 +361,13 @@ class ResponseProcessNode<C> extends BaseNode<
     });
   }
 
+  /** Mark the cycle as stopped without completing the turn. */
+  private stopWithoutEndTurn(shared: ResponseCycleShared): string {
+    shared.endTurn = false;
+    shared.shouldStop = true;
+    return FlowTransition.COMPLETE;
+  }
+
   async post(
     shared: ResponseCycleShared,
     prepRes: ProcessPrepResult,
@@ -394,16 +401,8 @@ class ResponseProcessNode<C> extends BaseNode<
     shared.stopReason = result.stopReason;
     shared.processedResponse = result.processedResponse;
 
-    if (result.repetitionDetected) {
-      shared.endTurn = false;
-      shared.shouldStop = true;
-      return FlowTransition.COMPLETE;
-    }
-
-    if (!result.processedResponse) {
-      shared.endTurn = false;
-      shared.shouldStop = true;
-      return FlowTransition.COMPLETE;
+    if (result.repetitionDetected || !result.processedResponse) {
+      return this.stopWithoutEndTurn(shared);
     }
 
     const outputLocation = shared.outputLocation!;
@@ -583,18 +582,11 @@ class ResponseContinuationNode<C> extends BaseNode<
     }
 
     const { shouldEndTurn, shouldStop, shouldContinue } = execRes.value;
-
     shared.endTurn = shouldEndTurn;
     shared.shouldStop = shouldStop;
 
-    if (shouldStop) {
-      return FlowTransition.COMPLETE;
-    }
-
     const reachedTokenLimit = isTokenLimitStopReason(prepRes.stopReason);
-    const willContinue = shouldContinue || reachedTokenLimit;
-
-    if (!willContinue) {
+    if (shouldStop || !(shouldContinue || reachedTokenLimit)) {
       return FlowTransition.COMPLETE;
     }
 

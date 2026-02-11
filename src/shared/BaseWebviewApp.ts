@@ -14,7 +14,8 @@ import { postMessage } from '@shared/vscode';
 import { COMMON_COMMANDS } from '@common/webview/commands';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 
-// Local imports - shared webview
+// Local imports - shared controllers
+import { installToolbarTooltips } from '@shared/controllers';
 
 /**
  * Base class for Lit-powered webview apps.
@@ -84,6 +85,7 @@ export abstract class BaseWebviewApp extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
+    installToolbarTooltips();
     window.addEventListener('message', this.messageListener);
     const command = this.readyCommand;
     if (command) {

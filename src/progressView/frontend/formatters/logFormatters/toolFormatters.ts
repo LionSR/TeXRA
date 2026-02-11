@@ -188,11 +188,14 @@ export function formatToolUseTemplate(
   // Determine display state
   const isInProgress = status === 'in_progress';
   const showAsError = normalizedToolLog.isError && !isUserFeedback;
-  const iconClass = isUserFeedback
-    ? 'codicon-comment'
-    : isInProgress
-      ? 'codicon-sync spin'
-      : getToolIconClass(toolName, showAsError);
+  let iconClass: string;
+  if (isUserFeedback) {
+    iconClass = 'codicon-comment';
+  } else if (isInProgress) {
+    iconClass = 'codicon-sync spin';
+  } else {
+    iconClass = getToolIconClass(toolName, showAsError);
+  }
 
   // Build title
   const titlePrefix = getToolTitlePrefix(
@@ -441,12 +444,13 @@ export function formatToolUseTemplate(
 
   // Delegation banner extras: mode badge + setup link (shown in summary row)
   const isDelegation = DELEGATION_TOOLS.has(toolName);
-  const proposalMode =
-    isDelegation && isPlainObject(input) && typeof input.mode === 'string'
-      ? input.mode
-      : isDelegation
-        ? 'sync'
-        : '';
+  let proposalMode = '';
+  if (isDelegation) {
+    proposalMode =
+      isPlainObject(input) && typeof input.mode === 'string'
+        ? input.mode
+        : 'sync';
+  }
   const proposalId =
     isDelegation && !isInProgress
       ? registerProposalInput(input, toolName)
