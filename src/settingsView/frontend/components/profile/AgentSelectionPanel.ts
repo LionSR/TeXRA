@@ -251,14 +251,12 @@ export class AgentSelectionPanel extends LitElement {
 
   @state() private selectedKey: string | null = null;
 
-  /** Cached grouped agents, updated in willUpdate */
   @state() private groupedSources: Map<string, AgentSelectionItem[]> =
     new Map();
 
-  /** Flat list in visual display order (source-grouped), for keyboard navigation */
+  /** Flat list in visual display order, for keyboard navigation */
   private displayOrder: AgentSelectionItem[] = [];
 
-  /** Source display order — must match renderList() */
   private static readonly SOURCE_ORDER = [
     AGENT_SOURCE.CUSTOM,
     AGENT_SOURCE.BUILT_IN_WORKFLOW,
@@ -268,7 +266,6 @@ export class AgentSelectionPanel extends LitElement {
 
   protected override willUpdate(changed: PropertyValues): void {
     if (changed.has('agents')) {
-      // Recompute grouped agents
       const groups = new Map<string, AgentSelectionItem[]>();
       for (const agent of this.agents) {
         const list = groups.get(agent.source) ?? [];
@@ -276,13 +273,10 @@ export class AgentSelectionPanel extends LitElement {
         groups.set(agent.source, list);
       }
       this.groupedSources = groups;
-
-      // Build flat display order matching visual render order
       this.displayOrder = AgentSelectionPanel.SOURCE_ORDER.flatMap(
         (source) => groups.get(source) ?? [],
       );
 
-      // Auto-select first agent if current selection is stale or missing
       const stillValid = this.displayOrder.some(
         (a) => agentKey(a) === this.selectedKey,
       );
@@ -309,23 +303,27 @@ export class AgentSelectionPanel extends LitElement {
       (a) => agentKey(a) === this.selectedKey,
     );
 
-    let nextIndex = currentIndex;
-    if (event.key === 'ArrowDown') {
-      nextIndex = Math.min(currentIndex + 1, items.length - 1);
-    } else if (event.key === 'ArrowUp') {
-      nextIndex = Math.max(currentIndex - 1, 0);
-    } else if (event.key === 'Home') {
-      nextIndex = 0;
-    } else if (event.key === 'End') {
-      nextIndex = items.length - 1;
-    } else {
-      return;
+    let nextIndex: number;
+    switch (event.key) {
+      case 'ArrowDown':
+        nextIndex = Math.min(currentIndex + 1, items.length - 1);
+        break;
+      case 'ArrowUp':
+        nextIndex = Math.max(currentIndex - 1, 0);
+        break;
+      case 'Home':
+        nextIndex = 0;
+        break;
+      case 'End':
+        nextIndex = items.length - 1;
+        break;
+      default:
+        return;
     }
 
     event.preventDefault();
     if (nextIndex !== currentIndex) {
       this.selectAgent(items[nextIndex]);
-      // Focus the newly selected item
       requestAnimationFrame(() => {
         const el = this.shadowRoot?.querySelector(
           '.agent-list-item.selected',

@@ -30,8 +30,7 @@ import type { XmlOutputManager } from './XmlOutputManager';
 // Helpers
 // ============================================================================
 
-/** Waits for run workspace preparation to complete. */
-// This function is very strange?... need to consider if in the future there are cleaner ways to do this.
+/** Waits for run workspace preparation to complete, clearing the promise once settled. */
 async function prepareRunWorkspaceIfNeeded(
   state: OutputState,
   deps: OutputDependencies,

@@ -80,7 +80,9 @@ export function getActiveChildren(
 
 /** Check if an orchestrator has any active subagents. */
 export function hasActiveChildren(parentStreamId: StreamTabId): boolean {
-  return getActiveChildren(parentStreamId).length > 0;
+  return [...activeSubagents.values()].some(
+    (e) => e.parentStreamId === parentStreamId,
+  );
 }
 
 /** Get a specific active subagent entry by execution ID. */

@@ -153,13 +153,11 @@ function deriveConfig(
 
   // Compute total rounds: max(setting.rounds, userRequest count)
   const { userRequest } = prompt;
-  let requestCount: number;
+  let requestCount = 0;
   if (Array.isArray(userRequest)) {
     requestCount = userRequest.length;
   } else if (userRequest) {
     requestCount = 1;
-  } else {
-    requestCount = 0;
   }
   // Use fallback to handle edge cases where schema defaults may not apply
   const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
@@ -328,12 +326,11 @@ export async function runReflectionFlow<C = unknown>(
     mediaNode.next(responseCycleNode);
     responseCycleNode.next(outputNode);
 
-    const startNode = prepContextNode;
     const pf = new RoundPersistedFlow<
       ReflectionFlowShared,
       Record<string, unknown>,
       ReflectionServices<C>
-    >(startNode, kv, {
+    >(prepContextNode, kv, {
       parentStage,
       callbacks: {
         createRoundStage: async (roundIndex, parent) => {
