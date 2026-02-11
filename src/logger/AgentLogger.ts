@@ -247,12 +247,10 @@ export class AgentLogger {
       source: category,
       sourceDisplay: category,
     }));
-    const loadedCount = entries.filter((e) => e.ok).length;
-    this.info(`Loading ${category} (${loadedCount}/${files.length})`, {
-      groupId,
-      messageType: MESSAGE_TYPES.FILE_LIST,
-      data: entries,
-    });
+    this.info(
+      `Loading ${category} (${files.filter((f) => f.ok).length}/${files.length})`,
+      { groupId, messageType: MESSAGE_TYPES.FILE_LIST, data: entries },
+    );
   }
 
   missingOutputs(info: unknown, groupId?: string): void {
@@ -401,7 +399,7 @@ export class AgentLogger {
     type: MessageType,
     options: AgentLogStreamOptions = {},
   ): AgentLogStream {
-    const streamId = this.streamId;
+    const { streamId } = this;
     const id = randomUUID();
     const level = options.level ?? 'info';
     const groupId = options.groupId ?? this.resolveActiveGroupId();
@@ -415,7 +413,6 @@ export class AgentLogger {
     let messageCreated = false;
     let updateTimer: ReturnType<typeof setTimeout> | null = null;
 
-    /** Emit the current buffer state to the event bus immediately. */
     const emitNow = (): void => {
       if (!shouldEmit) return;
 
@@ -441,7 +438,6 @@ export class AgentLogger {
       }
     };
 
-    /** Cancel any pending throttled emission. */
     const cancelPendingUpdate = (): void => {
       if (updateTimer !== null) {
         clearTimeout(updateTimer);
@@ -449,23 +445,15 @@ export class AgentLogger {
       }
     };
 
-    /**
-     * Emit with throttling for updates.
-     * The initial addLogMessage is always immediate (so the UI shows the new
-     * entry). Subsequent updateLogMessage calls are throttled at 100ms trailing
-     * edge — the buffer accumulates text regardless, so only the final
-     * snapshot within each window is sent.
-     */
+    // First emission is always immediate; subsequent updates are throttled (100ms trailing edge).
     const emitThrottled = (): void => {
       if (!shouldEmit) return;
 
-      // First emission is always immediate
       if (!messageCreated) {
         emitNow();
         return;
       }
 
-      // Throttle subsequent updates: schedule trailing-edge emission
       if (updateTimer === null) {
         updateTimer = setTimeout(() => {
           updateTimer = null;
@@ -514,7 +502,6 @@ export class AgentLogger {
     logger.endGroup(this.streamId, groupId, status, this.isAgentLogger);
   }
 
-  /** Get the currently active group ID for this logger's stream. */
   resolveActiveGroupId(): string | undefined {
     return logger.getActiveGroupId(this.streamId, this.isAgentLogger);
   }

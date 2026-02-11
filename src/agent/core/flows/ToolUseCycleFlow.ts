@@ -777,14 +777,14 @@ class ToolUseDispatchNode<C> extends BatchNode<
     }
 
     // Collect and add valid media file locations
-    const files = result.files;
-    if (files && files.length > 0) {
+    if (result.files?.length) {
+      const files = result.files;
       const validLocations: FileLocation[] = [];
       for (const attachment of files) {
-        const filePath = attachment.path;
-        if (typeof filePath !== 'string' || filePath.trim() === '') {
+        if (!isNonEmptyString(attachment.path)) {
           continue;
         }
+        const filePath = attachment.path;
         const location = pathToLocation(filePath);
         try {
           if (await AbsoluteFS.exists(location.absolutePath)) {

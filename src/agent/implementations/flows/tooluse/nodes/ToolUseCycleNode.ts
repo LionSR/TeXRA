@@ -1,8 +1,3 @@
-/**
- * ToolUseCycleNode - Runs the tool-use cycle (API call + tool execution).
- *
- * Creates and runs the ToolUseCycleFlow for model interaction.
- */
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -22,11 +17,6 @@ import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
 import type { TodoItem } from '@shared/schemas';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
-/**
- * Cycle outcome — single discriminated union that maps 1:1 to post() actions.
- * Eliminates the prior chain: shared flags → interpretCycleCompletion() →
- * InvocationResult mapping → post() switch.
- */
 type ToolUseCycleOutcome =
   | { outcome: 'completed'; messages: ProviderMessage[] }
   | { outcome: 'skipped' }
@@ -92,7 +82,6 @@ export class ToolUseCycleNode<C> extends Node<
     try {
       await flow.run(cycleShared);
 
-      // Determine outcome from shared state flags
       if (cycleShared.shouldStop && cycleShared.lastError) {
         return {
           outcome: 'failed',
