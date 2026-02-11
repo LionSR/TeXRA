@@ -1028,39 +1028,24 @@ export class RequestPanels extends LitElement {
   ): string | null {
     if (!details) return null;
 
-    const formatBody = (body: unknown) =>
-      typeof body === 'object' ? JSON.stringify(body, null, 2) : String(body);
+    const formatBody = (v: unknown) =>
+      typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v);
 
     const lines = [
-      details.message && `message: ${details.message}`,
       details.provider && `provider: ${details.provider}`,
-      details.statusCode != null && `statusCode: ${details.statusCode}`,
-      details.statusText && `statusText: ${details.statusText}`,
-      details.isRelayError != null && `isRelayError: ${details.isRelayError}`,
-      details.retryable != null && `retryable: ${details.retryable}`,
       details.requestId && `requestId: ${details.requestId}`,
       details.rawErrorBody != null &&
         `rawErrorBody: ${formatBody(details.rawErrorBody)}`,
     ].filter(Boolean);
 
-    if (details.streamDiagnostics) {
-      const diag = details.streamDiagnostics;
-      lines.push('--- Stream Diagnostics ---');
-      lines.push(`  messageStartReceived: ${diag.messageStartReceived}`);
-      lines.push(`  messageStopReceived: ${diag.messageStopReceived}`);
-      lines.push(`  stopReason: ${diag.stopReason ?? 'null'}`);
-      lines.push(`  anthropicMessageId: ${diag.anthropicMessageId ?? 'null'}`);
-      lines.push(`  eventsProcessed: ${diag.eventsProcessed}`);
-      lines.push(`  lastEventType: ${diag.lastEventType ?? 'null'}`);
-      lines.push(`  thinkingChars: ${diag.thinkingChars}`);
-      lines.push(`  textChars: ${diag.textChars}`);
-      lines.push(`  toolInputChars: ${diag.toolInputChars}`);
-      lines.push(
-        `  blockTypesSeen: [${diag.blockTypesSeen?.join(', ') || ''}]`,
+    const diag = details.streamDiagnostics;
+    if (diag && (diag.eventsProcessed > 0 || diag.messageStartReceived)) {
+      const entries = Object.entries(diag).map(([k, v]) =>
+        k === 'blockTypesSeen'
+          ? `  ${k}: [${(v as string[])?.join(', ') || ''}]`
+          : `  ${k}: ${v ?? 'null'}`,
       );
-      lines.push(`  elapsedSecs: ${diag.elapsedSecs}`);
-      lines.push(`  secsSinceLastEvent: ${diag.secsSinceLastEvent}`);
-      lines.push(`  finalized: ${diag.finalized}`);
+      lines.push('--- Stream Diagnostics ---', ...entries);
     }
 
     return lines.length > 0 ? lines.join('\n') : null;

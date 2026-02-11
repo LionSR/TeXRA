@@ -774,7 +774,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           // Response may not be available (e.g. network error before HTTP response)
         }
 
-        this.logger.error(
+        this.logger.debug(
           `Stream failed: ${streamError instanceof Error ? streamError.message : String(streamError)}`,
           {
             data: {
