@@ -1,8 +1,3 @@
-/**
- * ToolUsePrepareNode - Initializes tool-use session state.
- *
- * Handles both fresh starts and resumption from saved state.
- */
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { createRunState } from '@agent/core/AgentState';
@@ -12,7 +7,6 @@ import { buildInitialToolUsePrompts } from '@utils/prompt';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
 import type { ToolUseRunShared, PrepareResult } from './types';
 
-/** Result type for prepare node execution - success or error from execFallback. */
 type PrepareExecResult =
   | { kind: 'success'; result: PrepareResult }
   | { kind: 'error'; error: Error };
@@ -58,9 +52,6 @@ export class ToolUsePrepareNode<C> extends Node<
         { memoryEnabled },
       );
 
-    // Log the initial instruction as a user message (consistent with follow-ups
-    // logged in ToolUseWaitNode). This ensures the message is in stored logs
-    // with correct timestamp, avoiding duplicate rendering issues on refresh.
     if (userRequest) {
       logger.userMessage(userRequest);
     }

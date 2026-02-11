@@ -553,11 +553,10 @@ export class ProgressViewState {
   }
 
   private cleanupToolUseAgentRegistry(): void {
-    const activeStreams = new Set(
-      [...this.taskStates]
-        .filter(([, state]) => isToolUseTaskState(state))
-        .map(([stream]) => stream),
-    );
+    const activeStreams = new Set<StreamTabId>();
+    for (const [stream, state] of this.taskStates) {
+      if (isToolUseTaskState(state)) activeStreams.add(stream);
+    }
     cleanupInactiveAgents(activeStreams);
   }
 

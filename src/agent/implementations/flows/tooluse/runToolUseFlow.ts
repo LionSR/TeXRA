@@ -1,10 +1,3 @@
-/**
- * Entry point for tool-use flow execution.
- *
- * Manages session lifecycle, tool execution cycles, interrupt handling,
- * and state persistence via PersistedFlow.
- */
-
 import {
   END_GROUP_STATUS,
   EXECUTION_STATUS,
@@ -39,11 +32,6 @@ import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
 
-/**
- * Input for running a tool-use flow.
- * Follows same pattern as RunReflectionFlowInput: extends BaseFlowContextInit
- * and adds flow-specific fields. toolRegistry is a separate parameter.
- */
 export interface RunToolUseFlowInput<
   C = unknown,
 > extends BaseFlowContextInit<C> {
@@ -56,29 +44,19 @@ export interface RunToolUseFlowInput<
   onBeforeWaiting?: (lastResponse: string | undefined) => void;
 }
 
-/** Result from running a tool-use flow. */
 export interface RunToolUseFlowResult {
   status: EndGroupStatus;
   lastResponse?: string;
 }
 
-/**
- * Runtime context for tool-use flow execution (implements IInterruptible).
- * Exposes only the fields needed by external consumers (agentCommands,
- * ToolUseAgentRegistry) — services stay internal to runToolUseFlow.
- */
 export interface ToolUseFlowContext {
-  /** Direct accessor for follow-up operations. */
   readonly session: ToolUseSessionLifecycle;
-  /** Model handler for compaction requests (used by agentCommands). */
   readonly modelHandler: ToolUseServices['modelHandler'];
   interrupt(): void;
 }
 
-/** Setup callback invoked after context creation, before execution starts. */
 export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
 
-/** Delegation tool names that subagents must not receive (includes legacy aliases). */
 const DELEGATION_TOOLS = new Set([
   'delegate_workflow',
   'delegate_agent',
@@ -86,18 +64,11 @@ const DELEGATION_TOOLS = new Set([
   'propose_agent',
 ]);
 
-/** Options for tool resolution. */
-interface ResolveToolsOptions {
-  /** When true, delegation tools are filtered out to prevent nesting. */
-  isSubagent?: boolean;
-}
-
-/** Resolve tool definitions from agent settings, validating against registry. */
 function resolveTools(
   tools: AgentToolUseSetting['tools'],
   registry: IToolRegistry,
   logger: { warn: (msg: string) => void },
-  options?: ResolveToolsOptions,
+  options?: { isSubagent?: boolean },
 ): ToolDefinition[] {
   const toolConfigs = Array.isArray(tools) ? tools : [];
   const resolved = toolConfigs
@@ -121,12 +92,6 @@ function resolveTools(
   return resolved;
 }
 
-/**
- * Run a tool-use flow. Interrupt registration is handled automatically.
- * @param input - Flow input (extends BaseFlowContextInit with tool-use fields)
- * @param toolRegistry - Optional tool registry (defaults to global registry)
- * @param onSetup - Optional callback invoked after context creation
- */
 export async function runToolUseFlow<C = unknown>(
   input: RunToolUseFlowInput<C>,
   toolRegistry?: IToolRegistry,
@@ -139,7 +104,6 @@ export async function runToolUseFlow<C = unknown>(
     isSubagent: input.isSubagent,
   });
 
-  // Build services: spread input + add computed fields (matches reflection flow pattern)
   const services: ToolUseServices<C> = {
     ...input,
     session: sessionLifecycle,
@@ -161,7 +125,6 @@ export async function runToolUseFlow<C = unknown>(
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
-  // Shared state is declared outside try block for access in finally (cleanup decision based on userCancelledRetry)
   const shared: ToolUseRunShared = {
     messages: [],
     shouldSkipCycle: false,
@@ -176,14 +139,11 @@ export async function runToolUseFlow<C = unknown>(
     let flowRecord: FlowRecord | null = null;
     try {
       flowRecord = (await kv.read<FlowRecord>(`flow:${executionId}`)) ?? null;
-    } catch (error) {
-      logger.debug(
-        `Resume parse failed, starting fresh: ${error instanceof Error ? error.message : 'unknown'}`,
-      );
+    } catch {
+      logger.debug('Resume parse failed, starting fresh');
     }
     if (flowRecord?.shared) {
       logger.debug('Resuming tool-use flow from persistence');
-      // Migrate legacy nested format to flat format if needed
       const migrationResult = migrateSharedState(flowRecord.shared);
       if (migrationResult === null) {
         logger.warn('Failed to parse flow record shared state, starting fresh');
@@ -196,7 +156,6 @@ export async function runToolUseFlow<C = unknown>(
       }
     }
 
-    // Create flow nodes and wire transitions inline
     const prepareNode = new ToolUsePrepareNode<C>();
     const cycleNode = new ToolUseCycleNode<C>();
     const waitNode = new ToolUseWaitNode<C>();
@@ -219,8 +178,6 @@ export async function runToolUseFlow<C = unknown>(
     status = END_GROUP_STATUS.ERROR;
     throw error;
   } finally {
-    // Preserve flow record if user cancelled retry (for resume), otherwise delete
-    // Use the local shared object directly - it's updated in place during pf.run()
     if (shared.userCancelledRetry) {
       logger.debug('Flow record preserved for resume after retry cancellation');
     } else {

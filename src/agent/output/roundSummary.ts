@@ -24,11 +24,6 @@ import {
 } from './outputState';
 import type { RoundFileMapping } from './types';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-/** Result of summarizing a round. */
 export interface RoundSummary {
   storageKey: StorageKey;
   currRound: number;
@@ -39,11 +34,6 @@ export interface RoundSummary {
   stage?: AgentLogStage;
 }
 
-// ============================================================================
-// Public API
-// ============================================================================
-
-/** Summarizes a round after processing, computing diff stats and collecting artifacts. */
 export async function summarizeRound(
   state: OutputState,
   deps: OutputDependencies,
@@ -102,7 +92,6 @@ export async function summarizeRound(
   );
 }
 
-/** Gets round output artifacts. */
 export async function getRoundOutput(
   state: OutputState,
   baseFiles: FileLocation[],

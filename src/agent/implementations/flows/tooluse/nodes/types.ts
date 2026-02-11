@@ -1,6 +1,3 @@
-/**
- * Shared types for tool-use flow nodes.
- */
 import { z } from 'zod';
 
 import type { AgentRunStateSnapshot } from '@agent/core/AgentState';
@@ -17,7 +14,6 @@ export interface StateSlicesSnapshot {
   userChannels: UserVariableChannels;
 }
 
-/** Runtime shared state for tool-use flows (flat structure for PersistedFlow). */
 export interface ToolUseRunShared {
   messages: ProviderMessage[];
   shouldSkipCycle: boolean;
@@ -31,18 +27,15 @@ interface NodeResultStateBase {
   userChannels: UserVariableChannels;
 }
 
-/** Result from ToolUsePrepareNode. */
 export interface PrepareResult extends NodeResultStateBase {
   messages: ProviderMessage[];
   shouldSkipCycle: boolean;
 }
 
-/** Result from ToolUseWaitNode exec phase. */
 export type WaitExecResult =
   | { kind: 'continue'; followUp: string }
   | { kind: 'stop' };
 
-/** Result from ToolUseCycleNode prep phase. */
 export interface CyclePrepResult extends NodeResultStateBase {
   messages: ProviderMessage[];
   shouldSkip: boolean;
@@ -52,7 +45,6 @@ export type PreparedShared = ToolUseRunShared & {
   stateSlices: StateSlicesSnapshot;
 };
 
-/** Walk messages backwards to find the last assistant text. */
 export function findLastAssistantText(
   messages: ProviderMessage[],
   extractAssistantText: (message: ProviderMessage) => string | undefined,
@@ -72,55 +64,48 @@ export function assertPreparedShared(
   }
 }
 
-/** Lightweight schema for detecting shared state format (handles both field names). */
-const MessagesSchema = z.looseObject({
-  messages: z.array(z.unknown()),
-});
+const MessagesSchema = z.looseObject({ messages: z.array(z.unknown()) });
 const LegacyConversationSchema = z.looseObject({
   conversation: z.array(z.unknown()),
 });
 
-/**
- * Migrate legacy shared state formats to current ToolUseRunShared:
- * 1. Nested `{ state: {...} }` → flat format
- * 2. Legacy `conversation` field → `messages` field
- * Returns null if the state is unparseable.
- */
-export function migrateSharedState(
-  shared: unknown,
+/** Try to interpret an object as ToolUseRunShared, migrating `conversation` to `messages` if needed. */
+function tryAsRunShared(
+  obj: unknown,
 ): { data: ToolUseRunShared; migrated: boolean } | null {
-  // Try current format first (flat with `messages`)
-  const currentResult = MessagesSchema.safeParse(shared);
-  if (currentResult.success && !('state' in currentResult.data)) {
-    return { data: shared as ToolUseRunShared, migrated: false };
-  }
+  if (!obj || typeof obj !== 'object') return null;
 
-  // Try legacy flat format (`conversation` → `messages`)
-  const legacyFlatResult = LegacyConversationSchema.safeParse(shared);
-  if (legacyFlatResult.success && !('state' in legacyFlatResult.data)) {
-    const { conversation, ...rest } = shared as Record<string, unknown>;
+  if (MessagesSchema.safeParse(obj).success) {
+    return { data: obj as ToolUseRunShared, migrated: false };
+  }
+  if (LegacyConversationSchema.safeParse(obj).success) {
+    const { conversation, ...rest } = obj as Record<string, unknown>;
     return {
       data: { ...rest, messages: conversation } as ToolUseRunShared,
       migrated: true,
     };
   }
+  return null;
+}
 
-  // Try nested format (`{ state: {...} }`)
-  const obj = shared as Record<string, unknown>;
-  if (obj && typeof obj === 'object' && 'state' in obj) {
-    const nestedCurrent = MessagesSchema.safeParse(obj.state);
-    if (nestedCurrent.success) {
-      return { data: obj.state as ToolUseRunShared, migrated: true };
-    }
-    const nestedLegacy = LegacyConversationSchema.safeParse(obj.state);
-    if (nestedLegacy.success) {
-      const { conversation, ...rest } = obj.state as Record<string, unknown>;
-      return {
-        data: { ...rest, messages: conversation } as ToolUseRunShared,
-        migrated: true,
-      };
-    }
+/**
+ * Migrate legacy shared state formats to current ToolUseRunShared.
+ * Handles: flat with `messages`, flat with `conversation`, and nested `{ state: {...} }`.
+ * Returns null if unparseable.
+ */
+export function migrateSharedState(
+  shared: unknown,
+): { data: ToolUseRunShared; migrated: boolean } | null {
+  if (!shared || typeof shared !== 'object') return null;
+
+  // Try flat format first (reject nested `{ state: {...} }` wrapper)
+  if (!('state' in shared)) {
+    return tryAsRunShared(shared);
   }
+
+  // Nested format: unwrap and parse inner object
+  const inner = tryAsRunShared((shared as Record<string, unknown>).state);
+  if (inner) return { data: inner.data, migrated: true };
 
   return null;
 }

@@ -135,8 +135,8 @@ export class LogList extends LitElement {
         .groups=${this.groups}
         .messages=${this.messages}
         .activeRunId=${this.activeRunId}
-        ?isToolUse=${this.isToolUse}
-        ?hasStreams=${this.hasStreams}
+        .isToolUse=${this.isToolUse}
+        .hasStreams=${this.hasStreams}
         .toggleStates=${this.toggleStates}
       ></task-group-list>
     `;
