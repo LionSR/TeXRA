@@ -9,6 +9,7 @@ import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { agentDirectories, validateYamlAndPromptAdd } from '@frontend/agents';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
+import { hasExtension } from '@utils/core/pathCore';
 import { AbsoluteFS } from '@utils/files';
 
 // Local file imports
@@ -234,7 +235,7 @@ export class ExplorerOperations {
             if (
               item.collapsibleState === vscode.TreeItemCollapsibleState.None
             ) {
-              const content = newPath.endsWith('.yaml')
+              const content = hasExtension(newPath, '.yaml')
                 ? NEW_AGENT_TEMPLATE
                 : '';
               await AbsoluteFS.write(newPath, content);

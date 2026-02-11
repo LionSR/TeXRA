@@ -1,6 +1,7 @@
 import * as path from 'path';
 
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { hasExtension } from '@utils/core/pathCore';
 import { WorkspaceFS, type FileLocation } from '@utils/files';
 import { runLatexFormatter } from '@latex/texFormatter';
 
@@ -13,7 +14,7 @@ export async function indentLatexFile(
   fileLocation: FileLocation,
   logger: Logger,
 ): Promise<void> {
-  if (!fileLocation.absolutePath.endsWith('.tex')) {
+  if (!hasExtension(fileLocation.absolutePath, '.tex')) {
     return;
   }
   logger.debug(`Formatting ${fileLocation.absolutePath}`);

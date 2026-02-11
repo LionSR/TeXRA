@@ -79,16 +79,27 @@ const StateSlicesSchema = z.object({
   userChannels: UserVariableChannelsSchema,
 });
 
-/** Core fields schema (shared between flat and legacy formats) */
-const ToolUseStateFieldsSchema = z.object({
-  conversation: z.array(ProviderMessageSchema),
-  stateSlices: StateSlicesSchema,
-});
+/** Core fields schema — accepts `messages` (current) or `conversation` (legacy), normalizing to `messages`. */
+const ToolUseStateFieldsSchema = z
+  .union([
+    z.object({
+      messages: z.array(ProviderMessageSchema),
+      stateSlices: StateSlicesSchema,
+    }),
+    z.object({
+      conversation: z.array(ProviderMessageSchema),
+      stateSlices: StateSlicesSchema,
+    }),
+  ])
+  .transform((data) => ({
+    messages: 'messages' in data ? data.messages : data.conversation,
+    stateSlices: data.stateSlices,
+  }));
 
 /**
  * Schema that accepts both flat and legacy formats, normalizing to flat.
- * - Flat format: { conversation, stateSlices, ... }
- * - Legacy format: { state: { conversation, stateSlices, ... } }
+ * - Flat format: { messages, stateSlices, ... }
+ * - Legacy format: { state: { messages, stateSlices, ... } }
  */
 const ToolUseFlowRecordStateSchema = z
   .union([
@@ -197,7 +208,7 @@ async function retrieveToolUseResumeData(
       return null;
     }
 
-    const { conversation, stateSlices } = parsedState;
+    const { messages, stateSlices } = parsedState;
 
     // Construct and validate the complete snapshot.
     // Validation provides defense-in-depth: even if flow record is valid,
@@ -207,7 +218,7 @@ async function retrieveToolUseResumeData(
       executionId,
       streamId,
       agentConfig: taskState.agentConfig,
-      messages: conversation,
+      messages,
       run: stateSlices.runStateSnapshot,
       workspace: stateSlices.workspaceSnapshot,
       user: stateSlices.userChannels,

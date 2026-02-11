@@ -9,6 +9,7 @@ import * as path from 'path';
 
 import { isFileNotFoundError } from '@common/errors';
 import { isFile } from '@common/files/fsEntryType';
+import { hasExtension } from '@utils/core/pathCore';
 
 import { StorageFS } from '@utils/files';
 import type { ExecutionId } from '@shared/schemas';
@@ -102,7 +103,7 @@ class StorageFSKVStore implements ExecutionKVStore {
     );
     return entries
       .filter(([name, type]) => {
-        if (!isFile(type) || !name.endsWith('.json')) return false;
+        if (!isFile(type) || !hasExtension(name, '.json')) return false;
         return !prefix || jsonFileToKey(name).startsWith(prefix);
       })
       .map(([name]) => jsonFileToKey(name));
