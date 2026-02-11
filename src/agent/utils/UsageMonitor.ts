@@ -182,16 +182,13 @@ export class UsageMonitor {
   ): number {
     if (!supportsCaching) return 0;
 
-    const totalCacheReadTokens = totals.totalCacheReadInputTokens;
-    const totalCacheCreationTokens = totals.totalCacheCreationInputTokens;
-
     const totalCacheableTokens = this.modelInfo.capabilities
       .supportsPromptCaching
-      ? totalCacheCreationTokens + totalCacheReadTokens
+      ? totals.totalCacheCreationInputTokens + totals.totalCacheReadInputTokens
       : totals.totalInputTokens;
 
     if (totalCacheableTokens === 0) return 0;
-    return (totalCacheReadTokens / totalCacheableTokens) * 100;
+    return (totals.totalCacheReadInputTokens / totalCacheableTokens) * 100;
   }
 
   /**

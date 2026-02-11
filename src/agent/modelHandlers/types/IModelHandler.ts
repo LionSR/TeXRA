@@ -191,28 +191,14 @@ export interface IModelHandler<
   C = unknown,
   Resp = unknown,
 > {
-  /** Model configuration used by the handler. */
   config: ModelConfig;
-
-  /** Capabilities supported by the model. */
   capabilities: ModelCapabilities;
-
-  /** Indicates if the model uses the OpenAI API. */
   readonly isOpenai: boolean;
-
-  /** Indicates if the model is served by Anthropic. */
   readonly isAnthropic: boolean;
 
-  /** Determine if streaming should be used for the current model. */
   getStreamingConfig(): boolean;
-
-  /** Enable or disable streaming of model output text. */
   setOutputStreaming(enabled: boolean): void;
-
-  /** Check if output streaming is enabled. */
   isOutputStreamingEnabled(): boolean;
-
-  /** Check if background mode is active for this handler. */
   isBackgroundModeActive(): boolean;
 
   /** Whether this handler supports manual context compaction. */
@@ -225,28 +211,16 @@ export interface IModelHandler<
    */
   requestCompaction(): void;
 
-  /** Indicates if the model is served by Google. */
   readonly isGoogle: boolean;
-
-  /** Indicates if the model is served by DeepSeek. */
   readonly isDeepSeek: boolean;
-
-  /** Indicates if the model is from Moonshot/Kimi provider. */
   readonly isKimi: boolean;
 
   /** Whether the handler supports processing attachments in tool results. */
   readonly canProcessToolResultAttachments: boolean;
 
-  /** Set the logger instance for the handler. */
   setLogger(logger: AgentLogger): void;
-
-  /** Inform the handler about the active agent category. */
   setAgentCategory(agentCategory?: AgentCategory | null): void;
-
-  /** Retrieve the agent category currently associated with the handler, if any. */
   getAgentCategory(): AgentCategory | undefined;
-
-  /** Retrieve an authenticated client instance. */
   getClient(): Promise<C>;
 
   /**
@@ -258,7 +232,6 @@ export interface IModelHandler<
     options: CreateResponseOptions<M, C>,
   ): Promise<CreateResponseResult<Resp, M>>;
 
-  /** Initialize the conversation for the first round. */
   initializeMessages(
     userPrefix: string,
     userRequest: string,
@@ -266,34 +239,27 @@ export interface IModelHandler<
     systemPrompt?: string,
   ): Promise<M[]>;
 
-  /** Create messages for a follow-up round. */
   createRoundMessages(
     messages: M[],
     userMessage: string,
     mediaFiles?: FileLocation[],
   ): Promise<M[]>;
 
-  /** Format media content for provider APIs. */
   createMediaContent(mediaMessage: MediaEntry[]): unknown[];
-
-  /** Extract the response text and usage from the provider response. */
   extractResponse(responseObject: Resp, endTag: string): ExtractResponseResult;
 
-  /** Handle continuation for models supporting prefill. */
   addContinueMessageWithPrefill(
     messages: M[],
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
   ): void;
 
-  /** Handle continuation for models without prefill. */
   addContinueMessageWithoutPrefill(
     messages: M[],
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
   ): void;
 
-  /** Prepare output files and prefill content. */
   initializeOutputAndPrefill(
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
@@ -303,7 +269,6 @@ export interface IModelHandler<
     prefill: string,
   ): Promise<[boolean, M[]]>;
 
-  /** Compute the cost for a response. */
   computePrice(responseUsage: U): number;
 
   /**
@@ -313,7 +278,6 @@ export interface IModelHandler<
    */
   normalizeUsage(rawUsage: U, responseTimeMs: number): NormalizedUsage;
 
-  /** Update messages when prefill is supported. */
   updateMessageContentWithPrefill(
     messages: M[],
     bestConnector: string,
@@ -321,7 +285,6 @@ export interface IModelHandler<
     workspaceState: AgentWorkspaceState,
   ): void;
 
-  /** Update messages when prefill is not supported. */
   updateMessageContentWithoutPrefill(
     messages: M[],
     bestConnector: string,
@@ -329,7 +292,6 @@ export interface IModelHandler<
     workspaceState: AgentWorkspaceState,
   ): void;
 
-  /** Determine whether generation should continue. */
   shouldContinue(
     stopReason: ProviderStopReason,
     newResponse: string,
@@ -348,13 +310,11 @@ export interface IModelHandler<
     agentSetting: AgentSetting,
   ): StopConditionsResult;
 
-  /** Extract intermediate "thinking" content from a response. */
   processThinkingBlock(
     responseObject: Resp,
     workspaceState?: AgentWorkspaceState,
   ): string | null;
 
-  /** Extract tool-use details from a provider response. */
   extractToolUse(responseObject: Resp): T[];
 
   /**
