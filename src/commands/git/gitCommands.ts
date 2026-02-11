@@ -16,8 +16,9 @@ const COMMIT_HASH_PATTERN = /^[0-9a-fA-F]{4,40}$/;
 const LATEX_PROJECT_ID_PATTERN = /^[a-f0-9]{24}$/i;
 const LATEX_GIT_URL_PATTERN =
   /^https?:\/\/(?:git@)?([^/]+)(\/git)?\/([a-f0-9]{24})$/i;
-const OVERLEAF_PROJECT_URL_PATTERN =
-  /^https?:\/\/(?:www\.)?overleaf\.com\/project\/([a-f0-9]{24})$/i;
+const LATEX_PROJECT_URL_PATTERN =
+  /^https?:\/\/([^/]+)\/project\/([a-f0-9]{24})\/?$/i;
+const OVERLEAF_GIT_TOKEN_URL = 'https://www.overleaf.com/user/settings';
 
 export const gitCommands = {
   isGitRepository: 'texra.isGitRepository',
@@ -134,11 +135,13 @@ function findCommitInHistory(commitHash: string): string | null {
 }
 
 /**
- * Parse Overleaf or ShareLaTeX git URL. Returns null if invalid.
+ * Parse Overleaf or ShareLaTeX URL. Returns null if invalid.
  * Accepts:
  *   - https://git.overleaf.com/<24-char-hex>
  *   - https://sharelatex.example.com/git/<24-char-hex>
  *   - https://git@sharelatex.example.com/git/<24-char-hex>
+ *   - https://www.overleaf.com/project/<24-char-hex>
+ *   - https://sharelatex.example.com/project/<24-char-hex>
  *   - bare 24-char hex (assumes Overleaf)
  */
 function parseLatexGitUrl(
@@ -157,11 +160,17 @@ function parseLatexGitUrl(
     };
   }
 
-  // Normal Overleaf project URL (e.g. https://www.overleaf.com/project/<id>)
-  const overleafMatch = OVERLEAF_PROJECT_URL_PATTERN.exec(trimmed);
-  if (overleafMatch) {
-    const [, id] = overleafMatch;
-    return { host: 'git.overleaf.com', path: `/${id}`, isOverleaf: true };
+  // Project URL (e.g. https://www.overleaf.com/project/<id> or https://sharelatex.example.com/project/<id>)
+  const projectMatch = LATEX_PROJECT_URL_PATTERN.exec(trimmed);
+  if (projectMatch) {
+    const [, rawHost, id] = projectMatch;
+    const host = rawHost.replace(/^www\./, '');
+    const isOverleaf = host === 'overleaf.com';
+    return {
+      host: isOverleaf ? 'git.overleaf.com' : host,
+      path: isOverleaf ? `/${id}` : `/git/${id}`,
+      isOverleaf,
+    };
   }
 
   // Bare project ID -> Overleaf
@@ -319,9 +328,30 @@ async function cloneOverleafProject(
     );
     vscode.window.showInformationMessage(`${label} project cloned.`);
   } catch (e) {
-    vscode.window.showErrorMessage(
-      'Clone failed. Check credentials and connection.',
-    );
+    const isAuthError =
+      e instanceof Error &&
+      /auth|401|403|fatal: could not read/i.test(e.message);
+
+    if (isAuthError) {
+      // Clear the stored bad token so the user is prompted for a new one next time
+      await context.secrets.delete(tokenKey);
+
+      const action = parsed.isOverleaf ? 'Get Token' : 'Retry';
+      const selected = await vscode.window.showErrorMessage(
+        `Clone failed: authentication error. ${parsed.isOverleaf ? 'Your git token may be invalid or expired.' : 'Check your credentials.'}`,
+        action,
+      );
+      if (selected === 'Get Token') {
+        void vscode.env.openExternal(
+          vscode.Uri.parse(OVERLEAF_GIT_TOKEN_URL),
+        );
+      }
+    } else {
+      vscode.window.showErrorMessage(
+        'Clone failed. Check credentials and connection.',
+      );
+    }
+
     if (e instanceof Error) {
       let msg = e.message;
       for (const s of creds.sensitive) msg = msg.replaceAll(s, '***');
