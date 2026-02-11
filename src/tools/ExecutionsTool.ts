@@ -32,9 +32,14 @@ import { AgentHistoryManager } from '@common/history/AgentHistoryManager';
 import { StorageFS } from '@utils/files';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
+import { formatDuration } from '@utils/core';
 import { ToolError, type ToolResult } from './result';
 import { defineTool } from './core/define';
-import { STREAM_STATUS, type ExecutionId } from '@shared/schemas';
+import {
+  STREAM_STATUS,
+  EXECUTION_STATUS,
+  type ExecutionId,
+} from '@shared/schemas';
 
 // ============================================================================
 // Schema
@@ -71,17 +76,6 @@ export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
  * - /executions/{id}/files - List generated files
  * - /executions/{id}/files/{path} - Read specific file
  */
-/** Format elapsed milliseconds as a human-readable string. */
-function formatElapsed(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
-  if (totalSec < 60) return `${totalSec}s`;
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  if (min < 60) return `${min}m ${sec}s`;
-  const hr = Math.floor(min / 60);
-  return `${hr}h ${min % 60}m`;
-}
-
 interface ExecutionStatusInfo {
   status: string;
   elapsed: string | null;
@@ -119,14 +113,15 @@ function getExecutionStatusInfo(
   // Check execution registry first (covers all executions)
   const streamId = getStreamIdForExecution(executionId);
   if (streamId) {
-    status = StreamStatusService.get(streamId) ?? 'running';
+    status = StreamStatusService.get(streamId) ?? STREAM_STATUS.RUNNING;
   } else {
     // Check subagent lineage (covers async subagents whose stream may have settled)
     const entry = getActiveSubagent(executionId);
     if (entry) {
-      status = StreamStatusService.get(entry.childStreamId) ?? 'running';
+      status =
+        StreamStatusService.get(entry.childStreamId) ?? STREAM_STATUS.RUNNING;
     } else {
-      return { status: 'completed', elapsed: null };
+      return { status: EXECUTION_STATUS.COMPLETED, elapsed: null };
     }
   }
 
@@ -138,7 +133,7 @@ function getExecutionStatusInfo(
   const startedAt = resolveStartedAt(executionId, historyTimestamp);
   return {
     status,
-    elapsed: startedAt ? formatElapsed(Date.now() - startedAt) : null,
+    elapsed: startedAt ? formatDuration(Date.now() - startedAt) : null,
   };
 }
 
