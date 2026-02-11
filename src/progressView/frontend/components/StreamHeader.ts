@@ -321,6 +321,27 @@ export class StreamHeader extends LitElement {
           );
       }
 
+      .parent-link {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-tiny);
+        font-size: var(--font-size-sm);
+        color: var(--color-text-secondary);
+        cursor: pointer;
+        white-space: nowrap;
+        opacity: var(--opacity-subtle);
+        transition: opacity 0.15s ease;
+      }
+
+      .parent-link:hover {
+        opacity: var(--opacity-full);
+        color: var(--color-text-link);
+      }
+
+      .parent-link .codicon {
+        font-size: var(--font-size-xs, 10px);
+      }
+
       .subagent-badge {
         display: inline-flex;
         align-items: center;
@@ -387,6 +408,7 @@ export class StreamHeader extends LitElement {
       <div class="log-header">
         <div class="log-header__primary">
           <div class="header-left">
+            ${this.renderParentLink()}
             <div class="stream-header">
               <span
                 id=${ELEMENT_IDS.ACTIVE_STREAM_NAME}
@@ -508,6 +530,36 @@ export class StreamHeader extends LitElement {
     const hidden = EXECUTION_DEPENDENT_BUTTONS.has(buttonId) && !hasExecutionId;
     const disabled = hidden || !enabledButtons.has(buttonId);
     return { disabled, hidden };
+  }
+
+  private renderParentLink(): TemplateResult | typeof nothing {
+    const parentStreamId = this.stream?.parentStreamId;
+    if (!parentStreamId) return nothing;
+
+    // Extract agent name from stream ID (format: "agentName@timestamp")
+    const rawName = parentStreamId.split('@')[0];
+    // Strip source prefix (e.g., "builtin:assistant" → "assistant")
+    const colonIdx = rawName.indexOf(':');
+    const displayName = colonIdx !== -1 ? rawName.slice(colonIdx + 1) : rawName;
+
+    return html`
+      <span
+        class="parent-link"
+        title="Go to parent: ${displayName}"
+        @click=${this.navigateToParent}
+      >
+        <i class="codicon codicon-arrow-left"></i>
+        ${displayName}
+      </span>
+    `;
+  }
+
+  private navigateToParent(): void {
+    const parentStreamId = this.stream?.parentStreamId;
+    if (!parentStreamId) return;
+    this.dispatchEvent(
+      ProgressEvents.streamSwitch({ streamId: parentStreamId }),
+    );
   }
 
   private handleToolbarClick(event: MouseEvent) {
