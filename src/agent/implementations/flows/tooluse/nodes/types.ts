@@ -52,6 +52,18 @@ export type PreparedShared = ToolUseRunShared & {
   stateSlices: StateSlicesSnapshot;
 };
 
+/** Walk messages backwards to find the last assistant text. */
+export function findLastAssistantText(
+  messages: ProviderMessage[],
+  extractAssistantText: (message: ProviderMessage) => string | undefined,
+): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const text = extractAssistantText(messages[i]);
+    if (text !== undefined) return text;
+  }
+  return undefined;
+}
+
 export function assertPreparedShared(
   shared: ToolUseRunShared,
 ): asserts shared is PreparedShared {
