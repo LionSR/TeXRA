@@ -122,10 +122,6 @@ export const commonViewStyles: CSSResult = css`
     opacity: 1;
   }
 
-  .details-summary::-webkit-details-marker {
-    display: none;
-  }
-
   /* Toggle icon for collapsible details - applies to any summary */
   summary .toggle-icon {
     opacity: var(--opacity-subtle);

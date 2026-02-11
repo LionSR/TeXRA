@@ -55,9 +55,7 @@ export const codeBlockStyles = css`
     transition:
       background-color 0.15s,
       color 0.15s;
-  }
 
-  .code-block-copy {
     &:hover {
       background-color: var(
         --vscode-toolbar-hoverBackground,
