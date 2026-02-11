@@ -1017,6 +1017,88 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
+  it('uses the Anthropic minimum trigger for manual compaction requests', async () => {
+    const handler = createAnthropicHandler({
+      supportsTokenCounting: false,
+      supportsReasoning: false,
+    });
+    handler.config.fullName = 'claude-opus-4-6';
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    handler.requestCompaction();
+
+    const loggerStub = {
+      streamId: 'test',
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      fileList: () => {},
+      withCurrentGroup: () => undefined,
+      runWithinCurrentGroup: async (fn: () => any) => fn(),
+      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
+      logContextManagement: () => {},
+    };
+    handler.setLogger(loggerStub as unknown as AgentLogger);
+    (handler as any).getStreamingConfig = () => false;
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'hello', citations: null }],
+      },
+    ];
+    const messageOptions: any[] = [];
+    const client = {
+      beta: {
+        messages: {
+          create: async (opts: any) => {
+            messageOptions.push(opts);
+            return {
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-opus-4-6',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            } as any;
+          },
+        },
+      },
+    } as any;
+
+    const originalGetConfig = configModule.getConfig;
+    try {
+      (configModule as any).getConfig = (
+        path: string,
+        defaultValue?: unknown,
+      ) => {
+        if (path === 'texra.model.compactionThresholdPercent') return 0;
+        return defaultValue as unknown;
+      };
+
+      await handler.createResponse({ client, messages, temperature: 0 });
+    } finally {
+      (configModule as any).getConfig = originalGetConfig;
+    }
+
+    const options = messageOptions[0] ?? {};
+    const edits = options.context_management?.edits ?? [];
+    const compactionEdit = edits.find(
+      (edit: { type: string }) => edit.type === 'compact_20260112',
+    );
+
+    assert.ok(
+      compactionEdit,
+      'manual request should add compact_20260112 edit',
+    );
+    assert.equal(
+      compactionEdit.trigger?.value,
+      50_000,
+      'manual compaction should honor Anthropic minimum trigger tokens',
+    );
+  });
+
   it('does not add native compaction context edit for non-Opus models', async () => {
     const handler = createAnthropicHandler({
       supportsTokenCounting: false,
