@@ -74,7 +74,7 @@ export class TodoList extends LitElement {
       }
 
       .todo-item--pending {
-        opacity: 0.7;
+        opacity: var(--opacity-subtle);
       }
 
       .todo-item--pending .todo-item__icon {
@@ -90,7 +90,7 @@ export class TodoList extends LitElement {
       }
 
       .todo-item--completed {
-        opacity: 0.6;
+        opacity: var(--opacity-disabled);
       }
 
       .todo-item--completed .todo-item__icon {
