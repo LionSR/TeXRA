@@ -14,6 +14,7 @@ export {
   isNonEmptyString,
   isString,
   extractErrorMessage,
+  formatDuration,
   serializeError,
   type SerializedError,
 } from './stringCore';

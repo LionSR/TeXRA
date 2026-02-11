@@ -12,7 +12,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports
-import { formatDuration } from '../formatters/timestampUtils';
+import { formatDuration } from '@utils/core';
 
 @customElement('tool-timer')
 export class ToolTimer extends LitElement {
