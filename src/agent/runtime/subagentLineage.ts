@@ -57,6 +57,7 @@ export function registerSubagent(
     startedAt: Date.now(),
   });
   emitActiveSubagentsUpdate(parentStreamId);
+  bus.emit('setParentStream', { childStreamId, parentStreamId });
 
   // .catch suppresses the derived promise's unhandled rejection —
   // the original promise's rejection is handled by the caller.
@@ -102,9 +103,7 @@ export function getActiveChildrenSummary(
 }
 
 /** Get the start timestamp (ms) for an active subagent. */
-export function getSubagentStartedAt(
-  executionId: string,
-): number | undefined {
+export function getSubagentStartedAt(executionId: string): number | undefined {
   return activeSubagents.get(executionId)?.startedAt;
 }
 
