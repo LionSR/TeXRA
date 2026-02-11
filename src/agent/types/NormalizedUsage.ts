@@ -21,7 +21,7 @@ export const UsageProviderSchema = z.enum([
   'openrouter',
   'dashscope',
   'xai',
-  'kimi',
+  'moonshot',
   'unknown',
 ]);
 
