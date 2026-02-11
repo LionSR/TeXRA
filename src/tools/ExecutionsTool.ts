@@ -14,8 +14,14 @@ import { z } from 'zod';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { getStreamIdForExecution } from '@agent/runtime/executionRegistry';
-import { getActiveSubagent } from '@agent/runtime/subagentLineage';
+import {
+  getStreamIdForExecution,
+  getExecutionStartedAt,
+} from '@agent/runtime/executionRegistry';
+import {
+  getActiveSubagent,
+  getSubagentStartedAt,
+} from '@agent/runtime/subagentLineage';
 
 // Local imports - common
 import { AgentHistoryManager } from '@common/history/AgentHistoryManager';
@@ -28,7 +34,7 @@ import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 import { ToolError, type ToolResult } from './result';
 import { defineTool } from './core/define';
-import type { ExecutionId } from '@shared/schemas';
+import { STREAM_STATUS, type ExecutionId } from '@shared/schemas';
 
 // ============================================================================
 // Schema
@@ -65,23 +71,75 @@ export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
  * - /executions/{id}/files - List generated files
  * - /executions/{id}/files/{path} - Read specific file
  */
+/** Format elapsed milliseconds as a human-readable string. */
+function formatElapsed(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  if (totalSec < 60) return `${totalSec}s`;
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  if (min < 60) return `${min}m ${sec}s`;
+  const hr = Math.floor(min / 60);
+  return `${hr}h ${min % 60}m`;
+}
+
+interface ExecutionStatusInfo {
+  status: string;
+  elapsed: string | null;
+}
+
+/** Statuses that represent an actively running execution. */
+const ACTIVE_STATUSES: ReadonlySet<string> = new Set([
+  STREAM_STATUS.RUNNING,
+  STREAM_STATUS.INITIALIZING,
+  STREAM_STATUS.RESUMING,
+]);
+
+/** Resolve start time from registry, subagent lineage, or history timestamp. */
+function resolveStartedAt(
+  executionId: string,
+  historyTimestamp?: string,
+): number | undefined {
+  return (
+    getExecutionStartedAt(executionId) ??
+    getSubagentStartedAt(executionId) ??
+    (historyTimestamp ? new Date(historyTimestamp).getTime() : undefined)
+  );
+}
+
 /**
  * Resolve the runtime status for an execution ID.
- * Returns the stream status if still active, otherwise 'completed'.
+ * Returns stream status + elapsed time for active executions.
  */
-function getExecutionStatus(executionId: string): string {
+function getExecutionStatusInfo(
+  executionId: string,
+  historyTimestamp?: string,
+): ExecutionStatusInfo {
+  let status: string;
+
   // Check execution registry first (covers all executions)
   const streamId = getStreamIdForExecution(executionId);
   if (streamId) {
-    return StreamStatusService.get(streamId) ?? 'running';
+    status = StreamStatusService.get(streamId) ?? 'running';
+  } else {
+    // Check subagent lineage (covers async subagents whose stream may have settled)
+    const entry = getActiveSubagent(executionId);
+    if (entry) {
+      status = StreamStatusService.get(entry.childStreamId) ?? 'running';
+    } else {
+      return { status: 'completed', elapsed: null };
+    }
   }
-  // Check subagent lineage (covers async subagents whose stream may have settled)
-  const entry = getActiveSubagent(executionId);
-  if (entry) {
-    const childStatus = StreamStatusService.get(entry.childStreamId);
-    return childStatus ?? 'running';
+
+  // Only show elapsed time for actively running executions
+  if (!ACTIVE_STATUSES.has(status)) {
+    return { status, elapsed: null };
   }
-  return 'completed';
+
+  const startedAt = resolveStartedAt(executionId, historyTimestamp);
+  return {
+    status,
+    elapsed: startedAt ? formatElapsed(Date.now() - startedAt) : null,
+  };
 }
 
 export class ExecutionsTool extends defineTool({
@@ -89,15 +147,17 @@ export class ExecutionsTool extends defineTool({
   description: `View execution history and generated files (read-only).
 
 Paths:
-- /executions - List all past executions (with status: running/completed)
-- /executions/{id} - Execution summary (agent, model, timestamp, status)
+- /executions - List all past executions (with status and elapsed time)
+- /executions/{id} - Execution summary (agent, model, timestamp, status, elapsed)
 - /executions/{id}/config - Agent configuration JSON (for delegate_workflow/delegate_agent)
 - /executions/{id}/conversation - Full message history
 - /executions/{id}/files - List generated files
 - /executions/{id}/files/{path} - Read specific file
 
 Use "current" as {id} to access the active execution.
-Use view_range: [start, end] to paginate large outputs.`,
+Use view_range: [start, end] to paginate large outputs.
+
+NOTE: Workflow and research subagents typically take 10-30+ minutes to complete. Do not expect results within the first few minutes — check back periodically.`,
   schema: ExecutionsToolInputSchema,
 }) {
   protected async execute(input: ExecutionsToolInput): Promise<ToolResult> {
@@ -180,8 +240,11 @@ Use view_range: [start, end] to paginate large outputs.`,
       const model = item.agentConfig.model ?? 'unknown';
       // Format timestamp: extract date and time
       const ts = item.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
-      const status = getExecutionStatus(item.id);
-      return `${item.id}  ${ts}  ${agent}  ${model}  [${status}]`;
+      const info = getExecutionStatusInfo(item.id, item.timestamp);
+      const statusStr = info.elapsed
+        ? `${info.status}, ${info.elapsed}`
+        : info.status;
+      return `${item.id}  ${ts}  ${agent}  ${model}  [${statusStr}]`;
     });
 
     return {
@@ -203,20 +266,26 @@ Use view_range: [start, end] to paginate large outputs.`,
       if (!flow) {
         throw new ToolError(`Execution not found: ${executionId}`);
       }
-      const status = getExecutionStatus(executionId);
+      const info = getExecutionStatusInfo(executionId);
+      const statusStr = info.elapsed
+        ? `${info.status} (${info.elapsed} elapsed)`
+        : info.status;
       return {
-        output: `Execution: ${executionId}\nStatus: ${status}\n(No metadata available - use /executions/${executionId}/conversation to view messages)`,
+        output: `Execution: ${executionId}\nStatus: ${statusStr}\n(No metadata available - use /executions/${executionId}/conversation to view messages)`,
       };
     }
 
     const config = historyItem.agentConfig;
-    const status = getExecutionStatus(executionId);
+    const info = getExecutionStatusInfo(executionId, historyItem.timestamp);
+    const statusStr = info.elapsed
+      ? `${info.status} (${info.elapsed} elapsed)`
+      : info.status;
     const lines = [
       `Execution: ${executionId}`,
       `Agent: ${config.agent}`,
       `Model: ${config.model ?? 'default'}`,
       `Timestamp: ${historyItem.timestamp}`,
-      `Status: ${status}`,
+      `Status: ${statusStr}`,
     ];
 
     lines.push('');
