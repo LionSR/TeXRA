@@ -234,6 +234,7 @@ export class ProgressViewState {
     parentStreamId: StreamTabId,
   ): void {
     this.getOrCreateSession(childStreamId).parentStreamId = parentStreamId;
+    this.saveParentStreamIds();
   }
 
   getParentStreamId(streamId: StreamTabId): StreamTabId | undefined {
@@ -317,6 +318,27 @@ export class ProgressViewState {
     void this.storage.update(WorkspaceStateKey.ACTIVE_RUN_IDS, record);
   }
 
+  private loadParentStreamIds(): void {
+    const stored = this.loadRecord(WorkspaceStateKey.PARENT_STREAM_IDS);
+
+    for (const [stream, parentId] of Object.entries(stored)) {
+      if (typeof parentId === 'string' && parentId.length > 0) {
+        this.getOrCreateSession(stream as StreamTabId).parentStreamId =
+          parentId as StreamTabId;
+      }
+    }
+  }
+
+  private saveParentStreamIds(): void {
+    const record: Record<string, string> = {};
+    for (const [stream, state] of this._sessionState.entries()) {
+      if (state.parentStreamId) {
+        record[stream] = state.parentStreamId;
+      }
+    }
+    void this.storage.update(WorkspaceStateKey.PARENT_STREAM_IDS, record);
+  }
+
   // Task state management
   setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
     this.taskStates.set(streamTabId, taskState);
@@ -376,6 +398,7 @@ export class ProgressViewState {
     }
     this.saveExecutionIds();
     this.saveActiveRunIds();
+    this.saveParentStreamIds();
   }
 
   async clearAll(): Promise<void> {
@@ -399,6 +422,7 @@ export class ProgressViewState {
     this.saveTaskStates();
     this.saveExecutionIds();
     this.saveActiveRunIds();
+    this.saveParentStreamIds();
     this.cleanupToolUseAgentRegistry();
   }
 
@@ -422,6 +446,7 @@ export class ProgressViewState {
     this.loadTaskStates();
     this.loadExecutionIds();
     this.loadActiveRunIds();
+    this.loadParentStreamIds();
 
     this.logger.info(
       `[Persistence] State load complete - taskStates: ${this.taskStates.size}, executionIds: ${this._executionIds.size}`,
