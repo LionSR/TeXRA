@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { AgentCategorySchema } from './agent';
-import { ExecutionIdSchema } from './identifiers';
+import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 
 export const STREAM_STATUS = {
   RUNNING: 'running',
@@ -59,6 +59,7 @@ export const StreamTabInfoSchema = z.object({
   creationTimestamp: z.number().optional(),
   status: StreamStatusSchema.nullish(),
   executionId: ExecutionIdSchema.optional(),
+  parentStreamId: StreamTabIdSchema.optional(),
 });
 export type StreamTabInfo = z.infer<typeof StreamTabInfoSchema>;
 

@@ -6,6 +6,7 @@ import {
   createStreamState,
   StorageKeySchema,
   StorageRecordSchema,
+  StreamTabIdSchema,
   TodoItemSchema,
   type AgentCategoryFilter,
   type ContextStateData,
@@ -57,6 +58,7 @@ export const StreamSessionStateSchema = z.object({
   todos: z.array(TodoItemSchema).prefault([]),
   contextState: ContextStateDataSchema.nullable().prefault(null),
   activeRunId: StorageKeySchema.nullable().prefault(null),
+  parentStreamId: StreamTabIdSchema.optional(),
 });
 
 type StreamSessionState = z.output<typeof StreamSessionStateSchema>;
@@ -225,6 +227,17 @@ export class ProgressViewState {
 
   getActiveRunId(stream: StreamTabId): StorageKey | null {
     return this._sessionState.get(stream)?.activeRunId ?? null;
+  }
+
+  setParentStream(
+    childStreamId: StreamTabId,
+    parentStreamId: StreamTabId,
+  ): void {
+    this.getOrCreateSession(childStreamId).parentStreamId = parentStreamId;
+  }
+
+  getParentStreamId(streamId: StreamTabId): StreamTabId | undefined {
+    return this._sessionState.get(streamId)?.parentStreamId;
   }
 
   getOrCreateStreamState(
