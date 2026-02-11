@@ -46,31 +46,17 @@ export class WolframTool extends defineTool({
     }
 
     // Build informative error message with all available context
-    const errorParts: string[] = [];
-
-    // Check for timeout first - most common cause of silent failures
+    const parts: string[] = [];
     if (result.timedOut) {
-      errorParts.push(buildTimeoutMessage('Execution', effectiveTimeout));
+      parts.push(buildTimeoutMessage('Execution', effectiveTimeout));
     }
-
-    // Include exit code for debugging (non-zero indicates error)
     if (result.exitCode !== null && result.exitCode !== 0) {
-      errorParts.push(`exit code ${result.exitCode}`);
+      parts.push(`exit code ${result.exitCode}`);
     }
+    if (result.error) parts.push(`<stderr>${result.error}</stderr>`);
+    if (result.output) parts.push(`<stdout>${result.output}</stdout>`);
 
-    // Wolfram often outputs errors to stdout rather than stderr
-    // Include both if available for complete context, wrapped in XML tags
-    if (result.error) {
-      errorParts.push(`<stderr>${result.error}</stderr>`);
-    }
-    if (result.output) {
-      errorParts.push(`<stdout>${result.output}</stdout>`);
-    }
-
-    const errorDetails =
-      errorParts.length > 0
-        ? errorParts.join('\n')
-        : 'No error details available';
-    throw new ToolError(`Wolfram execution failed: ${errorDetails}`);
+    const details = parts.join('\n') || 'No error details available';
+    throw new ToolError(`Wolfram execution failed: ${details}`);
   }
 }

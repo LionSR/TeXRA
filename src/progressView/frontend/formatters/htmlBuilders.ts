@@ -152,11 +152,7 @@ export function buildDetailsSummary(
     ? html` <span class="timestamp" title=${timestamp.tooltip}>${timestamp.display}</span>`
     : nothing;
   const copyTemplate = copyButton
-    ? buildCopyButton(copyButton.title, {
-        hidden: copyButton.hidden,
-        content: copyButton.content,
-        contentId: copyButton.contentId,
-      })
+    ? buildCopyButton(copyButton.title, copyButton)
     : nothing;
   const extraTemplate = extraContent ?? nothing;
   // Toggle icon uses CSS rotation via details[open] selector - always start with chevron-right

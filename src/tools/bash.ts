@@ -79,18 +79,19 @@ export class BashTool extends defineTool({
     }
 
     if (result.success) {
-      const commandPreview =
+      const preview =
         input.command.length > 60
           ? `${input.command.slice(0, 57)}…`
           : input.command;
       return {
-        summary: `Executed: ${commandPreview} (exit 0)`,
+        summary: `Executed: ${preview} (exit 0)`,
         output: result.stdout || '',
       };
     }
     // Many CLI tools (including latexmk) write errors to stdout, not stderr
-    const outputs = [result.stderr, result.stdout].filter(Boolean);
-    const errorOutput = outputs.join('\n') || 'No error output available';
+    const errorOutput =
+      [result.stderr, result.stdout].filter(Boolean).join('\n') ||
+      'No error output available';
     throw new ToolError(`Command failed: ${errorOutput}`);
   }
 }

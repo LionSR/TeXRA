@@ -81,13 +81,14 @@ export async function computeOutputDiffStats(
       const baseLocation = mapping.baseToOutput.get(locationPath) ?? null;
       const originalLocation = mapping.originByOutput.get(locationPath) ?? null;
 
-      const useOriginalAsDiffBase =
-        !baseLocation &&
-        originalLocation &&
-        getComparablePath(originalLocation) !== locationPath;
-      const diffBaseLocation = useOriginalAsDiffBase
-        ? originalLocation
-        : baseLocation;
+      // Use original as diff base when there's no direct base mapping
+      // and the original is a different file (not self-referencing)
+      const diffBaseLocation =
+        baseLocation ??
+        (originalLocation &&
+        getComparablePath(originalLocation) !== locationPath
+          ? originalLocation
+          : null);
 
       const effectiveOriginal = suppressLineage ? null : originalLocation;
       const effectiveDiffBase = suppressLineage ? null : diffBaseLocation;

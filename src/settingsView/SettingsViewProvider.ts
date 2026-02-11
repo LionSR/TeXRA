@@ -58,12 +58,11 @@ export class SettingsViewProvider
       await this.messageHandler.sendAllData(this._view.webview);
     }
 
-    // Switch to requested tab if specified
     if (tabIndex !== undefined && this._view) {
       await this._view.webview.postMessage({
         command: SETTINGS_VIEW_COMMANDS.SET_TAB,
         tabIndex,
-        ...(agentSubTab ? { agentSubTab } : {}),
+        ...(agentSubTab && { agentSubTab }),
       });
     }
   }

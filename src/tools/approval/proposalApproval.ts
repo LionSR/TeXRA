@@ -58,9 +58,10 @@ export function _clearAllProposalBypass(): void {
  * @internal Called when the workspace feature is disabled.
  */
 export function _disableAllProposalBypasses(): StreamTabId[] {
-  const affected = [...proposalsBypassedByStream.entries()]
-    .filter(([, active]) => active)
-    .map(([id]) => id);
+  const affected: StreamTabId[] = [];
+  for (const [id, active] of proposalsBypassedByStream) {
+    if (active) affected.push(id);
+  }
   proposalsBypassedByStream.clear();
   for (const streamId of affected) {
     notifyProposalBypassState(streamId);
