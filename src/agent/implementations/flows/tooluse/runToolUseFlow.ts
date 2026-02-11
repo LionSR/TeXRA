@@ -30,7 +30,11 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
-import { migrateSharedState, type ToolUseRunShared } from './nodes/types';
+import {
+  findLastAssistantText,
+  migrateSharedState,
+  type ToolUseRunShared,
+} from './nodes/types';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
@@ -234,15 +238,9 @@ export async function runToolUseFlow<C = unknown>(
     unregisterInterruptible(streamId);
   }
 
-  // Extract last assistant text using the model handler's typed extraction
-  let lastResponse: string | undefined;
-  for (let i = shared.messages.length - 1; i >= 0; i--) {
-    const text = input.modelHandler.extractAssistantText(shared.messages[i]);
-    if (text !== undefined) {
-      lastResponse = text;
-      break;
-    }
-  }
+  const lastResponse = findLastAssistantText(shared.messages, (m) =>
+    input.modelHandler.extractAssistantText(m),
+  );
 
   return { status, lastResponse };
 }

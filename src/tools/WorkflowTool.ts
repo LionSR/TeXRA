@@ -229,6 +229,45 @@ function applyModelOverride<T extends { model: string }>(
   return result.model ? { ...proposal, model: result.model } : proposal;
 }
 
+/**
+ * Shared proposal-or-bypass flow used by both delegate_workflow and delegate_agent.
+ *
+ * If Super YOLO is active for this stream, skips the proposal and launches immediately.
+ * Otherwise, waits for user approval via the proposal coordinator.
+ */
+async function proposeAndExecute(
+  proposal: WorkflowAgentProposal | ToolUseAgentProposal,
+  agentName: string,
+  streamId: StreamTabId,
+  context: 'workflow' | 'delegation',
+): Promise<ToolResult> {
+  if (isSuperYoloFeatureEnabled() && isProposalBypassedForStream(streamId)) {
+    return executeSubagent(toConfigPayload(proposal), agentName, streamId, {
+      enableYoloOnChild: true,
+    });
+  }
+
+  const proposalId = randomUUID();
+
+  const result = await proposalCoordinator.waitForProposal(streamId, {
+    proposalId,
+    proposal,
+  });
+
+  const nonApproveResult = proposalResultToToolResult(
+    result,
+    agentName,
+    context,
+  );
+  if (nonApproveResult) return nonApproveResult;
+
+  const effective = applyModelOverride(
+    proposal,
+    result as ProposalResult & { action: 'approve' },
+  );
+  return executeSubagent(toConfigPayload(effective), agentName, streamId);
+}
+
 // ============================================================================
 // delegate_workflow tool - for document processing agents
 // ============================================================================
@@ -395,34 +434,7 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       useMultipleOutputs: input.useMultipleOutputs,
     } satisfies WorkflowAgentProposal);
 
-    const streamId = ctx.streamId;
-
-    // Super YOLO: skip proposal when feature enabled AND stream bypassed
-    if (isSuperYoloFeatureEnabled() && isProposalBypassedForStream(streamId)) {
-      return executeSubagent(toConfigPayload(proposal), input.agent, streamId, {
-        enableYoloOnChild: true,
-      });
-    }
-
-    const proposalId = randomUUID();
-
-    const result = await proposalCoordinator.waitForProposal(streamId, {
-      proposalId,
-      proposal,
-    });
-
-    const nonApproveResult = proposalResultToToolResult(
-      result,
-      input.agent,
-      'workflow',
-    );
-    if (nonApproveResult) return nonApproveResult;
-
-    const effective = applyModelOverride(
-      proposal,
-      result as ProposalResult & { action: 'approve' },
-    );
-    return executeSubagent(toConfigPayload(effective), input.agent, streamId);
+    return proposeAndExecute(proposal, input.agent, ctx.streamId, 'workflow');
   }
 }
 
@@ -493,33 +505,6 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
       mode: 'async',
     } satisfies ToolUseAgentProposal);
 
-    const streamId = ctx.streamId;
-
-    // Super YOLO: skip proposal when feature enabled AND stream bypassed
-    if (isSuperYoloFeatureEnabled() && isProposalBypassedForStream(streamId)) {
-      return executeSubagent(toConfigPayload(proposal), input.agent, streamId, {
-        enableYoloOnChild: true,
-      });
-    }
-
-    const proposalId = randomUUID();
-
-    const result = await proposalCoordinator.waitForProposal(streamId, {
-      proposalId,
-      proposal,
-    });
-
-    const nonApproveResult = proposalResultToToolResult(
-      result,
-      input.agent,
-      'delegation',
-    );
-    if (nonApproveResult) return nonApproveResult;
-
-    const effective = applyModelOverride(
-      proposal,
-      result as ProposalResult & { action: 'approve' },
-    );
-    return executeSubagent(toConfigPayload(effective), input.agent, streamId);
+    return proposeAndExecute(proposal, input.agent, ctx.streamId, 'delegation');
   }
 }
