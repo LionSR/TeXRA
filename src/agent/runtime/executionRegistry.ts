@@ -7,14 +7,19 @@
 
 import type { StreamTabId } from '@shared/schemas';
 
-const registry = new Map<string, StreamTabId>();
+interface ExecutionEntry {
+  streamId: StreamTabId;
+  startedAt: number;
+}
+
+const registry = new Map<string, ExecutionEntry>();
 
 /** Track an active execution. */
 export function trackExecution(
   executionId: string,
   streamId: StreamTabId,
 ): void {
-  registry.set(executionId, streamId);
+  registry.set(executionId, { streamId, startedAt: Date.now() });
 }
 
 /** Remove a completed execution. */
@@ -26,5 +31,12 @@ export function untrackExecution(executionId: string): void {
 export function getStreamIdForExecution(
   executionId: string,
 ): StreamTabId | undefined {
-  return registry.get(executionId);
+  return registry.get(executionId)?.streamId;
+}
+
+/** Get the start timestamp (ms) for an active execution. */
+export function getExecutionStartedAt(
+  executionId: string,
+): number | undefined {
+  return registry.get(executionId)?.startedAt;
 }

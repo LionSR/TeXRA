@@ -51,3 +51,19 @@ export function _clearProposalBypassForStream(streamId: StreamTabId): void {
 export function _clearAllProposalBypass(): void {
   proposalsBypassedByStream.clear();
 }
+
+/**
+ * Clear all per-stream proposal bypasses and notify each stream.
+ * Returns the list of streams that were previously bypassed.
+ * @internal Called when the workspace feature is disabled.
+ */
+export function _disableAllProposalBypasses(): StreamTabId[] {
+  const affected = [...proposalsBypassedByStream.entries()]
+    .filter(([, active]) => active)
+    .map(([id]) => id);
+  proposalsBypassedByStream.clear();
+  for (const streamId of affected) {
+    notifyProposalBypassState(streamId);
+  }
+  return affected;
+}

@@ -23,6 +23,7 @@ interface SubagentEntry {
   parentStreamId: StreamTabId;
   childStreamId: StreamTabId;
   childAgentName: string;
+  startedAt: number;
 }
 
 const activeSubagents = new Map<string, SubagentEntry>();
@@ -53,6 +54,7 @@ export function registerSubagent(
     parentStreamId,
     childStreamId,
     childAgentName,
+    startedAt: Date.now(),
   });
   emitActiveSubagentsUpdate(parentStreamId);
 
@@ -97,6 +99,13 @@ export function getActiveChildrenSummary(
       executionId: execId,
       agentName: e.childAgentName,
     }));
+}
+
+/** Get the start timestamp (ms) for an active subagent. */
+export function getSubagentStartedAt(
+  executionId: string,
+): number | undefined {
+  return activeSubagents.get(executionId)?.startedAt;
 }
 
 /** Check if a stream is itself a subagent (has a parent). */
