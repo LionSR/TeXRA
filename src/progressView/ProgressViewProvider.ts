@@ -361,7 +361,8 @@ export class ProgressViewProvider
 
     this.toolEditHandler.replay();
     this.bashApprovalHandler.replay();
-    this.sendYoloStateForStream(this.state.activeStream);
+    // YOLO / Super YOLO state is already sent by updateWebview() which is
+    // always called before replayPendingPrompts() in markWebviewReady().
 
     this.retryRequestHandler.replay();
     this.agentProposalHandler.replay();

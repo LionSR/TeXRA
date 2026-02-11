@@ -337,14 +337,15 @@ async function cloneOverleafProject(
       await context.secrets.delete(tokenKey);
 
       const action = parsed.isOverleaf ? 'Get Token' : 'Retry';
+      const detail = parsed.isOverleaf
+        ? 'Your git token may be invalid or expired.'
+        : 'Check your credentials.';
       const selected = await vscode.window.showErrorMessage(
-        `Clone failed: authentication error. ${parsed.isOverleaf ? 'Your git token may be invalid or expired.' : 'Check your credentials.'}`,
+        `Clone failed: authentication error. ${detail}`,
         action,
       );
       if (selected === 'Get Token') {
-        void vscode.env.openExternal(
-          vscode.Uri.parse(OVERLEAF_GIT_TOKEN_URL),
-        );
+        void vscode.env.openExternal(vscode.Uri.parse(OVERLEAF_GIT_TOKEN_URL));
       }
     } else {
       vscode.window.showErrorMessage(
