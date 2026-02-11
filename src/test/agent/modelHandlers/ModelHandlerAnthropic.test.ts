@@ -76,6 +76,35 @@ function getCacheMarker(block?: ContentBlockParam | ContentBlock): unknown {
   return (block as { cache_control?: unknown }).cache_control;
 }
 
+/** Create a no-op logger stub for handler tests, with optional overrides. */
+function createLoggerStub(
+  overrides?: Partial<Record<string, unknown>>,
+): unknown {
+  return {
+    streamId: 'test',
+    debug: () => {},
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+    fileList: () => {},
+    withCurrentGroup: () => undefined,
+    runWithinCurrentGroup: async (fn: () => any) => fn(),
+    runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
+    ...overrides,
+  };
+}
+
+/** Attach a logger stub and disable streaming for a handler under test. */
+function stubHandlerForTest(
+  handler: ModelHandlerAnthropic,
+  loggerOverrides?: Partial<Record<string, unknown>>,
+): void {
+  handler.setLogger(
+    createLoggerStub(loggerOverrides) as unknown as AgentLogger,
+  );
+  (handler as any).getStreamingConfig = () => false;
+}
+
 class PdfStubAnthropicHandler extends ModelHandlerAnthropic {
   private mediaContent: ContentBlockParam[] = [];
 
@@ -433,19 +462,7 @@ describe('ModelHandlerAnthropic message guards', () => {
 
   it('uploads base64 PDF documents before creating responses', async () => {
     const handler = createAnthropicHandler({ supportsNativePdf: true });
-    const loggerStub = {
-      streamId: 'test',
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-      fileList: () => {},
-      withCurrentGroup: () => undefined,
-      runWithinCurrentGroup: async (fn: () => any) => fn(),
-      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
-    };
-    handler.setLogger(loggerStub as unknown as AgentLogger);
-    (handler as any).getStreamingConfig = () => false;
+    stubHandlerForTest(handler);
 
     const messages: MessageParam[] = [
       {
@@ -520,19 +537,7 @@ describe('ModelHandlerAnthropic message guards', () => {
 
   it('sanitizes uploaded PDF filenames to strip directories and forbidden characters', async () => {
     const handler = createAnthropicHandler({ supportsNativePdf: true });
-    const loggerStub = {
-      streamId: 'test',
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-      fileList: () => {},
-      withCurrentGroup: () => undefined,
-      runWithinCurrentGroup: async (fn: () => any) => fn(),
-      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
-    };
-    handler.setLogger(loggerStub as unknown as AgentLogger);
-    (handler as any).getStreamingConfig = () => false;
+    stubHandlerForTest(handler);
 
     const messages: MessageParam[] = [
       {
@@ -596,19 +601,7 @@ describe('ModelHandlerAnthropic message guards', () => {
 
   it('opts into the Files API when messages already reference uploaded PDFs', async () => {
     const handler = createAnthropicHandler({ supportsNativePdf: true });
-    const loggerStub = {
-      streamId: 'test',
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-      fileList: () => {},
-      withCurrentGroup: () => undefined,
-      runWithinCurrentGroup: async (fn: () => any) => fn(),
-      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
-    };
-    handler.setLogger(loggerStub as unknown as AgentLogger);
-    (handler as any).getStreamingConfig = () => false;
+    stubHandlerForTest(handler);
 
     const messages: MessageParam[] = [
       {
@@ -680,19 +673,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       supportsNativePdf: true,
       supportsTokenCounting: true,
     });
-    const loggerStub = {
-      streamId: 'test',
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-      fileList: () => {},
-      withCurrentGroup: () => undefined,
-      runWithinCurrentGroup: async (fn: () => any) => fn(),
-      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
-    };
-    handler.setLogger(loggerStub as unknown as AgentLogger);
-    (handler as any).getStreamingConfig = () => false;
+    stubHandlerForTest(handler);
 
     const messages: MessageParam[] = [
       {
@@ -760,19 +741,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       supportsNativePdf: true,
       supportsTokenCounting: true,
     });
-    const loggerStub = {
-      streamId: 'test',
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-      fileList: () => {},
-      withCurrentGroup: () => undefined,
-      runWithinCurrentGroup: async (fn: () => any) => fn(),
-      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
-    };
-    handler.setLogger(loggerStub as unknown as AgentLogger);
-    (handler as any).getStreamingConfig = () => false;
+    stubHandlerForTest(handler);
 
     const messages: MessageParam[] = [
       {
@@ -838,21 +807,11 @@ describe('ModelHandlerAnthropic message guards', () => {
     handler.config.fullName = 'claude-sonnet-4-20250514';
 
     const warnMessages: string[] = [];
-    const loggerStub = {
-      streamId: 'test',
-      debug: () => {},
-      info: () => {},
+    stubHandlerForTest(handler, {
       warn: (message: string) => {
         warnMessages.push(message);
       },
-      error: () => {},
-      fileList: () => {},
-      withCurrentGroup: () => undefined,
-      runWithinCurrentGroup: async (fn: () => any) => fn(),
-      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
-    };
-    handler.setLogger(loggerStub as unknown as AgentLogger);
-    (handler as any).getStreamingConfig = () => false;
+    });
 
     const messages: MessageParam[] = [
       {
@@ -935,20 +894,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     handler.config.fullName = 'claude-opus-4-6';
     handler.setAgentCategory(AgentCategory.ToolUse);
 
-    const loggerStub = {
-      streamId: 'test',
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-      fileList: () => {},
-      withCurrentGroup: () => undefined,
-      runWithinCurrentGroup: async (fn: () => any) => fn(),
-      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
-      logContextManagement: () => {},
-    };
-    handler.setLogger(loggerStub as unknown as AgentLogger);
-    (handler as any).getStreamingConfig = () => false;
+    stubHandlerForTest(handler, { logContextManagement: () => {} });
 
     const messages: MessageParam[] = [
       {
@@ -1026,20 +972,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     handler.setAgentCategory(AgentCategory.ToolUse);
     handler.requestCompaction();
 
-    const loggerStub = {
-      streamId: 'test',
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-      fileList: () => {},
-      withCurrentGroup: () => undefined,
-      runWithinCurrentGroup: async (fn: () => any) => fn(),
-      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
-      logContextManagement: () => {},
-    };
-    handler.setLogger(loggerStub as unknown as AgentLogger);
-    (handler as any).getStreamingConfig = () => false;
+    stubHandlerForTest(handler, { logContextManagement: () => {} });
 
     const messages: MessageParam[] = [
       {
@@ -1107,20 +1040,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     handler.config.fullName = 'claude-sonnet-4-5';
     handler.setAgentCategory(AgentCategory.ToolUse);
 
-    const loggerStub = {
-      streamId: 'test',
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-      fileList: () => {},
-      withCurrentGroup: () => undefined,
-      runWithinCurrentGroup: async (fn: () => any) => fn(),
-      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
-      logContextManagement: () => {},
-    };
-    handler.setLogger(loggerStub as unknown as AgentLogger);
-    (handler as any).getStreamingConfig = () => false;
+    stubHandlerForTest(handler, { logContextManagement: () => {} });
 
     const messages: MessageParam[] = [
       {
@@ -1240,21 +1160,13 @@ describe('ModelHandlerAnthropic message guards', () => {
     const handler = createAnthropicHandler();
     const events: Array<{ message: string; data: unknown }> = [];
 
-    const loggerStub = {
-      streamId: 'test',
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-      fileList: () => {},
-      withCurrentGroup: () => undefined,
-      runWithinCurrentGroup: async (fn: () => any) => fn(),
-      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
-      logContextManagement: (message: string, data: unknown) => {
-        events.push({ message, data });
-      },
-    };
-    handler.setLogger(loggerStub as unknown as AgentLogger);
+    handler.setLogger(
+      createLoggerStub({
+        logContextManagement: (message: string, data: unknown) => {
+          events.push({ message, data });
+        },
+      }) as unknown as AgentLogger,
+    );
 
     (handler as any).logContextManagementFromResponse(
       {

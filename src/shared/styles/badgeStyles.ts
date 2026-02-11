@@ -104,7 +104,7 @@ export const proposalModeBadgeStyles: CSSResult = css`
   }
 `;
 
-export const badgeStyles = [
+export const badgeStyles: CSSResult[] = [
   baseBadgeStyles,
   categoryBadgeStyles,
   searchHighlightStyles,

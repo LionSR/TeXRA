@@ -103,7 +103,7 @@ export class UsageStatsManager extends PersistentMapManager<
   /**
    * Accumulate usage statistics for a stream (adds deltas to existing values).
    * Returns the accumulated value to avoid race conditions from separate read.
-   * @param storageKey - THE key for storage operations
+   * @param storageKey - The key for storage operations
    * @returns The accumulated usage, or undefined if delta was empty
    */
   async setRunUsage(
@@ -151,7 +151,7 @@ export class UsageStatsManager extends PersistentMapManager<
     }
   }
 
-  /** Normalize loaded usage records */
+  /** Convert run usage map to a plain record for storage */
   protected override serialize(value: RunUsageMap, _key: StreamTabId): unknown {
     return mapToRecord(value);
   }
