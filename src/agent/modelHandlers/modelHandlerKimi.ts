@@ -31,7 +31,7 @@ interface KimiTokenEstimateResponse {
  */
 export class ModelHandlerKimi extends ModelHandlerOpenAI {
   protected override get usageProvider(): NormalizedUsage['provider'] {
-    return 'kimi';
+    return 'moonshot';
   }
 
   protected override createStreamingAggregator(): BaseReasoningStreamAggregator | null {
