@@ -85,10 +85,10 @@ export class QueuedFollowUps extends LitElement {
 
   private truncateMessage(message: string): {
     display: string;
-    full: string | null;
+    full: string | undefined;
   } {
     if (message.length <= MAX_MESSAGE_LENGTH) {
-      return { display: message, full: null };
+      return { display: message, full: undefined };
     }
     return {
       display: message.substring(0, MAX_MESSAGE_LENGTH) + '...',
@@ -117,10 +117,7 @@ export class QueuedFollowUps extends LitElement {
             (message) => {
               const { display, full } = this.truncateMessage(message);
               return html`
-                <div
-                  class="queued-follow-up-item"
-                  title=${ifDefined(full ?? undefined)}
-                >
+                <div class="queued-follow-up-item" title=${ifDefined(full)}>
                   <i class="codicon codicon-comment queued-follow-up-icon"></i>
                   <span class="queued-follow-up-text">${display}</span>
                 </div>

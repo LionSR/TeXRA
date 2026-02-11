@@ -6,7 +6,7 @@
  */
 
 // Third-party imports
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -219,7 +219,7 @@ export class InstructionPanel extends LitElement {
     this.dispatchEvent(MainViewEvents.instructionInput({ value }));
   }
 
-  /** Handle paste event on instruction textarea (Lit-native) */
+  /** Handle paste event on instruction textarea */
   private handleInstructionPaste = async (event: Event): Promise<void> => {
     if (!(event instanceof ClipboardEvent)) return;
     if (!this.instructionTextarea) return;
@@ -255,40 +255,10 @@ export class InstructionPanel extends LitElement {
     this.dispatchEvent(MainViewEvents.focusInstruction({ key, text }));
   }
 
-  private renderWorkflowAgentOptions(): TemplateResult {
+  override render(): TemplateResult | typeof nothing {
     const session = this.sessionData;
     if (!session) {
-      return html``;
-    }
-    return renderAgentOptions(
-      session.workflowAgentOptions,
-      session.workflowAgent,
-    );
-  }
-
-  private renderToolUseAgentOptions(): TemplateResult {
-    const session = this.sessionData;
-    if (!session) {
-      return html``;
-    }
-    return renderAgentOptions(
-      session.toolUseAgentOptions,
-      session.toolUseAgent,
-    );
-  }
-
-  private renderModelOptionsTemplate(): TemplateResult {
-    const session = this.sessionData;
-    if (!session) {
-      return html``;
-    }
-    return renderModelOptions(session.modelOptions, session.model);
-  }
-
-  override render(): TemplateResult {
-    const session = this.sessionData;
-    if (!session) {
-      return html``;
+      return nothing;
     }
     return html`
       <div class="instruction-box">
@@ -440,7 +410,10 @@ export class InstructionPanel extends LitElement {
                       );
                     }}
                   >
-                    ${this.renderWorkflowAgentOptions()}
+                    ${renderAgentOptions(
+                      session.workflowAgentOptions,
+                      session.workflowAgent,
+                    )}
                   </vscode-single-select>
                   <vscode-single-select
                     id="toolUseAgent"
@@ -468,7 +441,10 @@ export class InstructionPanel extends LitElement {
                       );
                     }}
                   >
-                    ${this.renderToolUseAgentOptions()}
+                    ${renderAgentOptions(
+                      session.toolUseAgentOptions,
+                      session.toolUseAgent,
+                    )}
                   </vscode-single-select>
                 </div>
               </div>
@@ -497,7 +473,7 @@ export class InstructionPanel extends LitElement {
                   this.handleModelChange(target.value);
                 }}
               >
-                ${this.renderModelOptionsTemplate()}
+                ${renderModelOptions(session.modelOptions, session.model)}
               </vscode-single-select>
             </div>
           </div>
