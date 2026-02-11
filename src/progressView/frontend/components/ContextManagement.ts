@@ -98,7 +98,7 @@ export class ContextManagement extends LitElement {
         padding: var(--spacing-small);
         white-space: pre-wrap;
         word-break: break-word;
-        border: 1px solid var(--vscode-widget-border);
+        border: var(--border-thin) solid var(--vscode-widget-border);
         border-radius: var(--radius-sm);
         background: var(--vscode-editorWidget-background);
       }
