@@ -80,12 +80,12 @@ export class WebviewUpdater {
     }
 
     const lineCount = text.split(/\r?\n/).length;
-    const showToggle = lineCount > 6 || text.length > 600;
-    // Preserve existing timestamp or set new one when instruction is first created
     const timestamp = existingTimestamp ?? Date.now();
-    return showToggle
-      ? { text, metadata: { showToggle: true }, timestamp }
-      : { text, timestamp };
+    const showToggle = lineCount > 6 || text.length > 600;
+    if (showToggle) {
+      return { text, metadata: { showToggle: true }, timestamp };
+    }
+    return { text, timestamp };
   }
 
   /**

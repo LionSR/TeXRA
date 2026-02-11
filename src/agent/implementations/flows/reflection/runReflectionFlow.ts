@@ -154,11 +154,8 @@ function deriveConfig(
   // Compute total rounds: max(setting.rounds, userRequest count)
   const { userRequest } = prompt;
   let requestCount = 0;
-  if (Array.isArray(userRequest)) {
-    requestCount = userRequest.length;
-  } else if (userRequest) {
-    requestCount = 1;
-  }
+  if (Array.isArray(userRequest)) requestCount = userRequest.length;
+  else if (userRequest) requestCount = 1;
   // Use fallback to handle edge cases where schema defaults may not apply
   const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
 

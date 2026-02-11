@@ -309,7 +309,7 @@ export class StreamTabs extends LitElement {
   private renderTab(stream: StreamTabInfo): TemplateResult {
     const isActive = stream.name === this.activeStreamId;
     const tooltip = this.buildTooltip(stream);
-    const status = this.normalizeStatus(stream.status);
+    const status = stream.status ?? STREAM_STATUS.READY;
     const statusLabel = formatStatusLabel(status);
     const agentDecorator = getAgentCategoryDecorator(stream.agentCategory);
 
@@ -425,20 +425,18 @@ export class StreamTabs extends LitElement {
   }
 
   private buildTooltip(info: StreamTabInfo): string {
-    const mainParts = [
+    const mainLine = [
       info.label,
       info.model && `Model: ${info.model}`,
       info.inputFile && `Input: ${info.inputFile}`,
-    ].filter(Boolean);
-    const mainLine = mainParts.join(' • ');
+    ]
+      .filter(Boolean)
+      .join(' • ');
     if (!info.lastTimestamp) return mainLine;
     const lastSeen = formatRelativeTime(info.lastTimestamp);
-    return lastSeen && mainLine
-      ? `${mainLine}\nLast activity ${lastSeen}`
-      : mainLine;
-  }
-
-  private normalizeStatus(status?: string | null): string {
-    return status ?? STREAM_STATUS.READY;
+    if (lastSeen && mainLine) {
+      return `${mainLine}\nLast activity ${lastSeen}`;
+    }
+    return mainLine;
   }
 }

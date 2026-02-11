@@ -227,11 +227,9 @@ export class LogList extends LitElement {
     );
     if (proposalLink?.dataset.proposalId) {
       event.preventDefault();
-      const stored = getProposalInput(proposalLink.dataset.proposalId);
-      if (stored) {
-        postMessage(COMMANDS.RESTORE_PROPOSAL_CONFIG, {
-          proposal: stored.proposal,
-        });
+      const proposal = getProposalInput(proposalLink.dataset.proposalId);
+      if (proposal) {
+        postMessage(COMMANDS.RESTORE_PROPOSAL_CONFIG, { proposal });
       }
       return;
     }

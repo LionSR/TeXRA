@@ -107,9 +107,7 @@ const EXTENSION_ALIASES = new Map<string, string>([
 
 /** Get highlight.js language from file path based on extension. Uses alias map for non-standard extensions, otherwise tries the extension directly. */
 export function getLanguageFromPath(filePath: string): string {
-  if (!filePath || typeof filePath !== 'string') {
-    return 'plaintext';
-  }
+  if (!filePath) return 'plaintext';
 
   const fileName = getBasename(filePath) || filePath;
   const lowerFileName = fileName.toLowerCase();

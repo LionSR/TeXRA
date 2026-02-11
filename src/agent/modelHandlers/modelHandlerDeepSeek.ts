@@ -50,7 +50,6 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
   }
 
   protected override createStreamingAggregator(): BaseReasoningStreamAggregator | null {
-    // Only create aggregator when reasoning is enabled
     return this.capabilities.supportsReasoning
       ? new BaseReasoningStreamAggregator()
       : null;

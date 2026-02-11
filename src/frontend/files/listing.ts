@@ -129,16 +129,16 @@ function passesFileFilters(
   fileNameLower: string,
   filters: FileFilters,
 ): boolean {
-  const matchesInclude =
-    filters.includeExt.length === 0 ||
-    filters.includeExt.some((ext) => fileNameLower.endsWith(ext));
-
-  if (!matchesInclude) return false;
+  if (
+    filters.includeExt.length > 0 &&
+    !filters.includeExt.some((ext) => fileNameLower.endsWith(ext))
+  ) {
+    return false;
+  }
   if (filters.excludeExt.some((ext) => fileNameLower.endsWith(ext)))
     return false;
   if (filters.excludeKeywords.some((kw) => fileNameLower.includes(kw)))
     return false;
-
   return true;
 }
 

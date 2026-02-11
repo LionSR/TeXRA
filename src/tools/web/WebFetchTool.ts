@@ -64,21 +64,15 @@ export class WebFetchTool extends defineTool({
     }
 
     const ipVersion = isIP(hostname);
-    if (ipVersion === 4) {
-      const isPrivateIp = PRIVATE_IPV4_PATTERNS.some((pattern) =>
-        pattern.test(hostname),
+    const isPrivateIp =
+      (ipVersion === 4 &&
+        PRIVATE_IPV4_PATTERNS.some((p) => p.test(hostname))) ||
+      (ipVersion === 6 &&
+        PRIVATE_IPV6_PREFIXES.some((prefix) => hostname.startsWith(prefix)));
+    if (isPrivateIp) {
+      throw new ToolError(
+        'Cannot fetch private network IPs. Provide a public URL instead.',
       );
-      if (isPrivateIp) {
-        throw new ToolError(
-          'Cannot fetch private network IPs. Provide a public URL instead.',
-        );
-      }
-    } else if (ipVersion === 6) {
-      if (PRIVATE_IPV6_PREFIXES.some((prefix) => hostname.startsWith(prefix))) {
-        throw new ToolError(
-          'Cannot fetch private network IPs. Provide a public URL instead.',
-        );
-      }
     }
 
     let response;
@@ -117,18 +111,17 @@ export class WebFetchTool extends defineTool({
     }
 
     const rawBody = response.data;
-
     const contentType = String(
       response.headers?.['content-type'] ?? '',
     ).toLowerCase();
-    const shouldConvertToMarkdown =
+    const isMarkupContent =
       contentType.includes('html') ||
       contentType.includes('xml') ||
       contentType.includes('xhtml') ||
       (!contentType && rawBody.trim().startsWith('<'));
 
     let markdown: string;
-    if (shouldConvertToMarkdown) {
+    if (isMarkupContent) {
       try {
         markdown = this.turndown.turndown(rawBody);
       } catch (error) {

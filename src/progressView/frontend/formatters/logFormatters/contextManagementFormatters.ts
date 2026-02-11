@@ -77,18 +77,7 @@ function buildContextManagementItems(data: ContextManagementData): {
   items: ContextStatItem[];
   summary?: string;
 } {
-  const {
-    action,
-    tokensBefore,
-    tokensAfter,
-    contextWindow,
-    utilizationBefore,
-    utilizationAfter,
-    originalMaxTokens,
-    reducedMaxTokens,
-    details,
-    summary,
-  } = data;
+  const { action } = data;
 
   const config: ActionConfig = ACTION_CONFIG[action] || {
     icon: 'codicon-history',
@@ -96,25 +85,24 @@ function buildContextManagementItems(data: ContextManagementData): {
     color: 'var(--vscode-foreground)',
   };
 
-  // Build stat items
   const items: ContextStatItem[] = [];
 
   // For max_tokens_reduced, show the reduction
   if (
     action === 'max_tokens_reduced' &&
-    originalMaxTokens !== undefined &&
-    reducedMaxTokens !== undefined
+    data.originalMaxTokens !== undefined &&
+    data.reducedMaxTokens !== undefined
   ) {
     items.push({
       icon: 'codicon-arrow-down',
       label: 'Max tokens reduced',
-      value: `${formatTokens(originalMaxTokens)} → ${formatTokens(reducedMaxTokens)}`,
+      value: `${formatTokens(data.originalMaxTokens)} → ${formatTokens(data.reducedMaxTokens)}`,
     });
   }
 
   // For clearing actions, show tokens freed
-  if (TOKENS_FREED_ACTIONS.has(action) && tokensAfter !== undefined) {
-    const tokensFreed = tokensBefore - tokensAfter;
+  if (TOKENS_FREED_ACTIONS.has(action) && data.tokensAfter !== undefined) {
+    const tokensFreed = data.tokensBefore - data.tokensAfter;
     if (tokensFreed > 0) {
       items.push({
         icon: 'codicon-dash',
@@ -126,32 +114,30 @@ function buildContextManagementItems(data: ContextManagementData): {
 
   // Show context utilization
   const utilizationDisplay =
-    utilizationAfter !== undefined
-      ? `${utilizationBefore.toFixed(1)}% → ${utilizationAfter.toFixed(1)}%`
-      : `${utilizationBefore.toFixed(1)}%`;
+    data.utilizationAfter !== undefined
+      ? `${data.utilizationBefore.toFixed(1)}% → ${data.utilizationAfter.toFixed(1)}%`
+      : `${data.utilizationBefore.toFixed(1)}%`;
   items.push({
     icon: 'codicon-pie-chart',
     label: 'Context utilization',
     value: utilizationDisplay,
   });
 
-  // Show context window
   items.push({
     icon: 'codicon-window',
     label: 'Context window',
-    value: formatTokens(contextWindow),
+    value: formatTokens(data.contextWindow),
   });
 
-  // Show details if present
-  if (details) {
+  if (data.details) {
     items.push({
       icon: 'codicon-info',
       label: 'Details',
-      value: details,
+      value: data.details,
     });
   }
 
-  return { config, items, summary };
+  return { config, items, summary: data.summary };
 }
 
 /** Format context management event as TemplateResult. */
