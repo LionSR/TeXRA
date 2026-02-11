@@ -1,7 +1,3 @@
-/**
- * MediaExtractionNode - Extracts media files (figures, TikZ, PDFs) from LaTeX files.
- */
-
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -14,11 +10,6 @@ import type {
   ReflectionServices,
 } from '../ReflectionServices';
 
-/**
- * Prep result: computed values needed by exec.
- * - workspaceState: reconstructed from snapshot, modified in exec, saved in post
- * - files/extraMediaFiles: computed once to avoid redundant calls
- */
 interface PrepInput {
   files: FileLocation[];
   extraMediaFiles: FileLocation[];

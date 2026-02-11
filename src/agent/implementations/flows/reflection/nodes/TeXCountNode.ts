@@ -1,7 +1,3 @@
-/**
- * TeXCountNode - Computes TeXCount statistics and adds to messages.
- */
-
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { FileLocation } from '@utils/files';

@@ -86,13 +86,11 @@ export const toolUseStyles = css`
     color: var(--vscode-editorWarning-foreground, #ff8c00);
   }
 
-  .tool-use-user-feedback > .details-summary .tool-use-title,
-  .tool-use-user-feedback > .details-summary .codicon {
+  .tool-use-user-feedback > .details-summary :is(.tool-use-title, .codicon) {
     color: var(--vscode-textLink-foreground, #3794ff);
   }
 
-  .tool-use-in-progress > .details-summary .tool-use-title,
-  .tool-use-in-progress > .details-summary .codicon {
+  .tool-use-in-progress > .details-summary :is(.tool-use-title, .codicon) {
     color: var(--vscode-charts-yellow, #cca700);
   }
 
