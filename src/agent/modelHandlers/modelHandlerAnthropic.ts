@@ -555,17 +555,21 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
       // budget_tokens must be < max_tokens; use 50% to leave room for actual output
       const maxBudget = Math.floor(options.max_tokens * 0.5);
+
       // Opus 4.6 tool-use uses a FIXED budget to preserve the messages cache.
       // Changing budget_tokens between rounds invalidates cache because thinking
       // tokens are stored inline. Workflow and non-tool-use modes use maxBudget
       // (single-round or long-output scenarios where cache stability is less critical).
-      const defaultBudget = this.isClaudeOpus46()
-        ? this.isToolUseMode()
-          ? OPUS_46_TOOL_USE_THINKING_BUDGET
-          : maxBudget
-        : useStreaming
-          ? 32768
-          : 4096;
+      let defaultBudget: number;
+      if (this.isClaudeOpus46() && this.isToolUseMode()) {
+        defaultBudget = OPUS_46_TOOL_USE_THINKING_BUDGET;
+      } else if (this.isClaudeOpus46()) {
+        defaultBudget = maxBudget;
+      } else if (useStreaming) {
+        defaultBudget = 32768;
+      } else {
+        defaultBudget = 4096;
+      }
       const thinkingBudget = Math.min(defaultBudget, maxBudget);
 
       options.thinking = {
@@ -1565,7 +1569,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     prefill: string,
   ): Promise<[boolean, MessageParam[]]> {
     const workflowSetting = requireWorkflowSetting(agentSetting);
-    let endTurn = false;
 
     if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
       if (this.capabilities.supportsAssistantPrefill) {
@@ -1585,20 +1588,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
       } else {
         // For thinking-enabled models that don't support assistant prefill,
         // add prefill as part of the user message like OpenAI handler
-
-        const PseudoPrefillMsgContentString = `Start your response with:\n${prefill}`;
+        const pseudoPrefillText = `Start your response with:\n${prefill}`;
         const lastMsg = messages.at(-1);
         if (lastMsg && Array.isArray(lastMsg.content)) {
           lastMsg.content.push({
             type: 'text',
-            text: PseudoPrefillMsgContentString,
+            text: pseudoPrefillText,
           } as ContentBlockParam);
         }
         this.logger.debug(
-          `Added pseudo prefill message to messages:\n${PseudoPrefillMsgContentString}`,
+          `Added pseudo prefill message to messages:\n${pseudoPrefillText}`,
         );
       }
-      return [endTurn, messages];
+      return [false, messages];
     }
 
     // Prepare existing file content (read, clean, extract scratchpad, update state)
@@ -1621,9 +1623,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       });
 
       this.updateCacheControlTarget(undefined);
-
-      endTurn = true;
-      return [endTurn, messages];
+      return [true, messages];
     }
 
     this.logger.warn(
@@ -1633,12 +1633,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // For thinking-enabled models that don't support assistant prefill,
     // add continuation as part of the user message
 
-    const content: ContentBlockParam[] = [
-      {
-        type: 'text' as const,
-        text: fileContent,
-      },
-    ];
+    const content: ContentBlockParam[] = [{ type: 'text', text: fileContent }];
     this.logger.debug(
       `Using existing content as prefill: ${outputLocation.absolutePath}`,
     );
@@ -1660,8 +1655,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       );
     }
 
-    endTurn = false;
-    return [endTurn, messages];
+    return [false, messages];
   }
 
   /** Calculates API usage cost based on input/output tokens and cache usage if supported. */

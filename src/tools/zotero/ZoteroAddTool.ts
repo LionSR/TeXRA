@@ -306,8 +306,7 @@ function toZoteroItem(item: z.infer<typeof ZoteroItemSchema>): object {
       })
     : undefined;
 
-  // Build Zotero item, filtering out undefined values
-  const zoteroItem: Record<string, unknown> = {
+  return {
     itemType: item.itemType || 'journalArticle',
     ...(item.title && { title: item.title }),
     ...(item.doi && { DOI: item.doi }),
@@ -320,8 +319,6 @@ function toZoteroItem(item: z.infer<typeof ZoteroItemSchema>): object {
     ...(item.issue && { issue: item.issue }),
     ...(item.pages && { pages: item.pages }),
   };
-
-  return zoteroItem;
 }
 
 export class ZoteroAddTool extends defineTool({
@@ -389,12 +386,8 @@ export class ZoteroAddTool extends defineTool({
       results.push({ item: itemLabel, ...result });
     }
 
-    let successCount = 0;
-    let errorCount = 0;
-    for (const r of results) {
-      if (r.status === 'success') successCount++;
-      else if (r.status === 'error') errorCount++;
-    }
+    const successCount = results.filter((r) => r.status === 'success').length;
+    const errorCount = results.length - successCount;
 
     const output = results
       .map((r) => {

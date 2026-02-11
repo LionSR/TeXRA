@@ -75,35 +75,6 @@ export const commonViewStyles: CSSResult = css`
 
   vscode-toolbar-button {
     flex-shrink: 0;
-    position: relative;
-  }
-
-  /* Tooltip on hover for icon-only toolbar buttons */
-  vscode-toolbar-button[title]:not(:empty)::after {
-    display: none;
-  }
-
-  vscode-toolbar-button[title]::after {
-    content: attr(title);
-    position: absolute;
-    left: 50%;
-    top: 100%;
-    transform: translateX(-50%);
-    margin-top: var(--spacing-tiny);
-    padding: var(--spacing-small) var(--spacing-medium);
-    background: var(--background-color);
-    border: var(--border-thin) solid var(--color-border);
-    border-radius: var(--border-radius-small);
-    font-size: var(--font-size-sm);
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    z-index: 100;
-  }
-
-  vscode-toolbar-button[title]:hover::after {
-    opacity: var(--opacity-full);
   }
 
   .clickable-link {

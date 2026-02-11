@@ -32,8 +32,11 @@ export function sumUsageStats(
     total.inputTokens += usage.inputTokens;
     total.outputTokens += usage.outputTokens;
     total.cost += usage.cost;
-    total.cacheReadInputTokens! += usage.cacheReadInputTokens ?? 0;
-    total.cacheCreationInputTokens! += usage.cacheCreationInputTokens ?? 0;
+    total.cacheReadInputTokens =
+      (total.cacheReadInputTokens ?? 0) + (usage.cacheReadInputTokens ?? 0);
+    total.cacheCreationInputTokens =
+      (total.cacheCreationInputTokens ?? 0) +
+      (usage.cacheCreationInputTokens ?? 0);
   }
   return total;
 }

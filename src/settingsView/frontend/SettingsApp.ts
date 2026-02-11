@@ -51,7 +51,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
 import { settingsViewStyles } from './styles';
 
 // Local imports - shared schema types
-import type { AgentCategory, AgentSourceType } from '@shared/schemas/agent';
+import type { AgentCategory } from '@shared/schemas/agent';
 
 // Local imports - settings view tabs (side-effect: register)
 import './tabs/MemoryTab';
@@ -66,6 +66,13 @@ const HISTORY_ACTION_COMMANDS: Record<string, string> = {
   restore: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
   rerun: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
 };
+
+/** Create an event handler that forwards event.detail to a postMessage command. */
+function forwardDetail<T extends Record<string, unknown>>(
+  command: string,
+): (event: CustomEvent<T>) => void {
+  return (event: CustomEvent<T>) => postMessage(command, event.detail);
+}
 
 @customElement('settings-app')
 export class SettingsApp extends BaseWebviewApp {
@@ -303,21 +310,13 @@ export class SettingsApp extends BaseWebviewApp {
     postMessage(SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER);
   }
 
-  private handleMemoryToggleEnabled(
-    event: CustomEvent<{ enabled: boolean }>,
-  ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED, {
-      enabled: event.detail.enabled,
-    });
-  }
+  private handleMemoryToggleEnabled = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED,
+  );
 
-  private handleMemoryOpenItem(
-    event: CustomEvent<{ storagePath: string }>,
-  ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE, {
-      storagePath: event.detail.storagePath,
-    });
-  }
+  private handleMemoryOpenItem = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE,
+  );
 
   private handleMemoryDeleteItem(
     event: CustomEvent<{ storagePath: string; displayPath?: string }>,
@@ -350,143 +349,67 @@ export class SettingsApp extends BaseWebviewApp {
     postMessage(SETTINGS_VIEW_COMMANDS.SIGN_OUT);
   }
 
-  private handleApiAccessMode(
-    event: CustomEvent<{ mode: 'included' | 'personal' }>,
-  ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE, {
-      mode: event.detail.mode,
-    });
-  }
+  private handleApiAccessMode = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
+  );
 
-  private handleSetProviderKey(event: CustomEvent<{ provider: string }>): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, {
-      provider: event.detail.provider,
-    });
-  }
+  private handleSetProviderKey = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
+  );
 
-  private handleRemoveProviderKey(
-    event: CustomEvent<{ provider: string }>,
-  ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY, {
-      provider: event.detail.provider,
-    });
-  }
+  private handleRemoveProviderKey = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
+  );
 
-  private handleOpenProviderKeyUrl(
-    event: CustomEvent<{ provider: string }>,
-  ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL, {
-      provider: event.detail.provider,
-    });
-  }
+  private handleOpenProviderKeyUrl = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL,
+  );
 
-  private handleSetProviderStreaming(
-    event: CustomEvent<{ provider: string; enabled: boolean }>,
-  ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_STREAMING, {
-      provider: event.detail.provider,
-      enabled: event.detail.enabled,
-    });
-  }
+  private handleSetProviderStreaming = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_PROVIDER_STREAMING,
+  );
 
-  private handleSetProviderEndpoint(
-    event: CustomEvent<{ provider: string; endpoint: string }>,
-  ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_ENDPOINT, {
-      provider: event.detail.provider,
-      endpoint: event.detail.endpoint,
-    });
-  }
+  private handleSetProviderEndpoint = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_PROVIDER_ENDPOINT,
+  );
 
-  private handleSetGlobalStreaming(
-    event: CustomEvent<{ enabled: boolean }>,
-  ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING, {
-      enabled: event.detail.enabled,
-    });
-  }
+  private handleSetGlobalStreaming = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING,
+  );
 
-  private handleSetProviderVscodeSetting(
-    event: CustomEvent<{ key: string; value: boolean | number }>,
-  ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING, {
-      key: event.detail.key,
-      value: event.detail.value,
-    });
-  }
+  private handleSetProviderVscodeSetting = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING,
+  );
 
-  private handleOpenUrl(event: CustomEvent<{ url: string }>): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL, {
-      url: event.detail.url,
-    });
-  }
+  private handleOpenUrl = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL,
+  );
 
   // Model selection event handlers
-  private handleSetModelEnabled(
-    event: CustomEvent<{ modelName: string; enabled: boolean }>,
-  ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED, {
-      modelName: event.detail.modelName,
-      enabled: event.detail.enabled,
-    });
-  }
+  private handleSetModelEnabled = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED,
+  );
 
-  private handleSetPolishModel(
-    event: CustomEvent<{ modelName: string }>,
-  ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_POLISH_MODEL, {
-      modelName: event.detail.modelName,
-    });
-  }
+  private handleSetPolishModel = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_POLISH_MODEL,
+  );
 
   // Agent selection event handlers
-  private handleOpenAgentYaml(
-    event: CustomEvent<{
-      agentName: string;
-      agentSource: AgentSourceType;
-      variant: 'base' | 'multiple';
-    }>,
-  ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML, {
-      agentName: event.detail.agentName,
-      agentSource: event.detail.agentSource,
-      variant: event.detail.variant,
-    });
-  }
+  private handleOpenAgentYaml = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML,
+  );
 
-  private handleSetAgentEnabled(
-    event: CustomEvent<{
-      agentName: string;
-      agentSource: AgentSourceType;
-      category: 'workflow' | 'toolUse';
-      enabled: boolean;
-    }>,
-  ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED, {
-      agentName: event.detail.agentName,
-      agentSource: event.detail.agentSource,
-      category: event.detail.category,
-      enabled: event.detail.enabled,
-    });
-  }
+  private handleSetAgentEnabled = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
+  );
 
-  private handleOpenAgentFolder(
-    event: CustomEvent<{
-      folderType: 'custom' | 'builtInWorkflow' | 'builtInToolUse';
-    }>,
-  ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER, {
-      folderType: event.detail.folderType,
-    });
-  }
+  private handleOpenAgentFolder = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER,
+  );
 
-  private handleCreateAgent(
-    event: CustomEvent<{ category: 'workflow' | 'toolUse' }>,
-  ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.CREATE_AGENT, {
-      category: event.detail.category,
-    });
-  }
+  private handleCreateAgent = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.CREATE_AGENT,
+  );
 
   private handleSetCustomAgentDir(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR);
@@ -496,21 +419,13 @@ export class SettingsApp extends BaseWebviewApp {
     postMessage(SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR);
   }
 
-  private handleSetAutoShowRemote(
-    event: CustomEvent<{ enabled: boolean }>,
-  ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_AUTO_SHOW_REMOTE, {
-      enabled: event.detail.enabled,
-    });
-  }
+  private handleSetAutoShowRemote = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_AUTO_SHOW_REMOTE,
+  );
 
-  private handleSuperYoloToggle(
-    event: CustomEvent<{ enabled: boolean }>,
-  ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED, {
-      enabled: event.detail.enabled,
-    });
-  }
+  private handleSuperYoloToggle = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED,
+  );
 
   private handleOpenVscodeSettings(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS);

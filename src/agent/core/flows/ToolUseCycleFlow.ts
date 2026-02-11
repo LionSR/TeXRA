@@ -110,17 +110,12 @@ function parseToolInput(
   }
 }
 
-/** Type guard for Zod validation errors. */
-function isZodError(error: unknown): error is z.ZodError {
-  return error instanceof z.ZodError;
-}
-
 /** Normalize a tool call error into a user-friendly message with optional diagnostics. */
 function normalizeToolCallError(
   toolName: string,
   error: unknown,
 ): { message: string; diagnostics?: ValidationErrorDiagnostics } {
-  if (!isZodError(error)) {
+  if (!(error instanceof z.ZodError)) {
     return { message: `${toolName}: ${toErrorMessage(error)}` };
   }
 
@@ -666,7 +661,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     const isDeferred = DEFERRED_LOG_TOOLS.has(call.name);
 
     // Capture groupId at start. For deferred tools, delay logging until onExecutionReady.
-    const logRef: { logId: string | undefined; groupId: string | undefined } =
+    const logRef: ToolExecutionResult['logRef'] =
       SLOW_TOOLS.has(call.name) && !isDeferred
         ? options.logger.logToolUseStart(call.name, parsedInput ?? call.raw)
         : { logId: undefined, groupId: options.logger.resolveActiveGroupId() };

@@ -34,7 +34,11 @@ import { customElement, state } from 'lit/decorators.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 // Local imports - progress view utilities
-import { getRunGroups, type RunGroup } from '../stateUtils';
+import {
+  filterPermissionsForStream,
+  getRunGroups,
+  type RunGroup,
+} from '../stateUtils';
 
 // Local imports - progress view contexts
 import {
@@ -100,10 +104,6 @@ export class ToolUseStreamContent extends LitElement {
     }
   }
 
-  /**
-   * Compute filtered prompts for this stream.
-   * Only prompts matching this stream's ID (or with no streamId) are shown.
-   */
   private get currentStreamInfo(): StreamTabInfo | null {
     return this.streamContext?.streamInfo ?? null;
   }
@@ -115,12 +115,9 @@ export class ToolUseStreamContent extends LitElement {
   }
 
   private computeFilteredPermissions(): PermissionState[] {
-    const streamId = this.currentStreamInfo?.name;
-    if (!streamId) return [];
-    const permissions = this.permissionContext ?? [];
-    return permissions.filter(
-      (permission) =>
-        !permission.data.streamId || permission.data.streamId === streamId,
+    return filterPermissionsForStream(
+      this.permissionContext ?? [],
+      this.currentStreamInfo?.name,
     );
   }
 
