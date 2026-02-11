@@ -25,10 +25,6 @@ import {
   type FileLocation,
 } from '@utils/files';
 
-// ============================================================================
-// Schemas and Types
-// ============================================================================
-
 const RoundDataSchema = z.object({
   outputs: OutputFileInfoSchema.array().prefault(() => []),
   rawOutput: FileLocationSchema.nullable().prefault(null),
@@ -37,7 +33,6 @@ const RoundDataSchema = z.object({
 
 export type RoundData = z.infer<typeof RoundDataSchema>;
 
-/** Mutable state for output processing across rounds. */
 export interface OutputState {
   rounds: Map<number, RoundData>;
   openedOutputs: Set<string>;
@@ -45,11 +40,6 @@ export interface OutputState {
   runPreparation: Promise<void> | null;
 }
 
-/** Dependencies needed by output utility functions.
- *
- * Field names match AgentCore/ReflectionServices so that `services` objects
- * satisfy this interface structurally — no wrapper object needed.
- */
 export interface OutputDependencies {
   setting: AgentWorkflowSetting;
   config: AgentConfig;
@@ -60,11 +50,6 @@ export interface OutputDependencies {
   streamId: string;
 }
 
-// ============================================================================
-// State Creation
-// ============================================================================
-
-/** Creates the mutable state object for output processing. */
 export function createOutputState(): OutputState {
   return {
     rounds: new Map(),
@@ -74,14 +59,6 @@ export function createOutputState(): OutputState {
   };
 }
 
-// ============================================================================
-// Stage Helper
-// ============================================================================
-
-/**
- * Wraps an operation in an output processing stage for logging.
- * Shared helper to avoid duplication across output processing modules.
- */
 export async function withOutputStage<T>(
   deps: OutputDependencies,
   label: string,
@@ -95,16 +72,10 @@ export async function withOutputStage<T>(
   return stage.run(() => fn(stage));
 }
 
-// ============================================================================
-// State Accessors
-// ============================================================================
-
-/** Gets the storage key from state, falling back to a normalized null key. */
 export function getStorageKey(state: OutputState): StorageKey {
   return state.storageKey ?? normalizeRunId(null);
 }
 
-/** Ensures round data exists and returns it. */
 export function ensureRoundData(state: OutputState, round: number): RoundData {
   let data = state.rounds.get(round);
   if (!data) {
@@ -114,12 +85,10 @@ export function ensureRoundData(state: OutputState, round: number): RoundData {
   return data;
 }
 
-/** Returns true if a round has outputs. */
 export function hasRoundOutputs(state: OutputState, round: number): boolean {
   return (state.rounds.get(round)?.outputs.length ?? 0) > 0;
 }
 
-/** Ensures a round exists and returns its outputs. */
 export function ensureRound(
   state: OutputState,
   round: number,
@@ -127,7 +96,6 @@ export function ensureRound(
   return ensureRoundData(state, round).outputs;
 }
 
-/** Returns the map of output files by round. */
 export function getOutputFilesByRound(state: OutputState): {
   [key: number]: OutputFileInfo[];
 } {
@@ -136,11 +104,6 @@ export function getOutputFilesByRound(state: OutputState): {
   );
 }
 
-// ============================================================================
-// State Mutation
-// ============================================================================
-
-/** Collects support files from agent config for workspace preparation. */
 function collectRunSupportFiles(agentConfig: AgentConfig): FileLocation[] {
   const allPaths = [
     agentConfig.referenceFile,
@@ -163,7 +126,6 @@ function collectRunSupportFiles(agentConfig: AgentConfig): FileLocation[] {
   return [...extras.values()];
 }
 
-/** Sets the active run and prepares the workspace. */
 export function setActiveRun(
   state: OutputState,
   deps: OutputDependencies,

@@ -20,10 +20,6 @@ export enum WorkspaceStateKey {
   ENABLED_TOOL_USE_AGENTS = 'texra.enabledToolUseAgents',
   PARENT_STREAM_IDS = 'texra.parentStreamIds',
   SUPER_YOLO_ENABLED = 'texra.superYoloEnabled',
-  // Legacy keys (kept for reference, no longer used):
-  // ACTIVE_STREAM_TAB = 'texra.activeStreamTab',
-  // STREAM_SORT_ORDER = 'texra.streamSortOrder',
-  // STREAM_AGENT_FILTER = 'texra.streamAgentFilter',
 }
 
 export enum GlobalStateKey {

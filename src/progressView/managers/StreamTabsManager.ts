@@ -145,6 +145,28 @@ export class StreamTabsManager extends PersistentMapManager<
     return original;
   }
 
+  /** Execute a write and track it as the in-flight operation. */
+  private executeWrite(resolve: (() => void) | null): Promise<void> {
+    const writePromise = super
+      .save()
+      .catch(() => {
+        // Keep save/flush contract non-throwing to avoid interrupting stream updates.
+      })
+      .finally(() => {
+        // Only clean up if this is still the active write — a newer save()
+        // may have already replaced inFlightWrite/savePromise.
+        if (this.inFlightWrite === writePromise) {
+          this.inFlightWrite = null;
+          if (!this.pendingResolve) {
+            this.savePromise = null;
+          }
+        }
+        resolve?.();
+      });
+    this.inFlightWrite = writePromise;
+    return writePromise;
+  }
+
   /** Debounced save — coalesces rapid-fire log mutations into a single write. */
   override async save(): Promise<void> {
     if (this.saveTimer !== null) clearTimeout(this.saveTimer);
@@ -159,23 +181,7 @@ export class StreamTabsManager extends PersistentMapManager<
       const resolve = this.pendingResolve;
       this.pendingResolve = null;
       this.saveTimer = null;
-
-      const writePromise = this.writeToStorage()
-        .catch(() => {
-          // Keep save contract non-throwing to avoid interrupting stream updates.
-        })
-        .finally(() => {
-          // Only clean up if this is still the active write — a newer save()
-          // may have already replaced inFlightWrite/savePromise.
-          if (this.inFlightWrite === writePromise) {
-            this.inFlightWrite = null;
-            if (!this.pendingResolve) {
-              this.savePromise = null;
-            }
-          }
-          resolve?.();
-        });
-      this.inFlightWrite = writePromise;
+      this.executeWrite(resolve);
     }, SAVE_DEBOUNCE_MS);
 
     return this.savePromise;
@@ -191,22 +197,7 @@ export class StreamTabsManager extends PersistentMapManager<
       this.saveTimer = null;
       const resolve = this.pendingResolve;
       this.pendingResolve = null;
-
-      const writePromise = this.writeToStorage()
-        .catch(() => {
-          // Keep flush contract non-throwing to match save() behavior.
-        })
-        .finally(() => {
-          if (this.inFlightWrite === writePromise) {
-            this.inFlightWrite = null;
-            if (!this.pendingResolve) {
-              this.savePromise = null;
-            }
-          }
-          resolve?.();
-        });
-      this.inFlightWrite = writePromise;
-      await writePromise;
+      await this.executeWrite(resolve);
     } else if (this.inFlightWrite) {
       await this.inFlightWrite;
     }

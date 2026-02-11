@@ -84,8 +84,6 @@ export class WorkspaceFS extends RelativeFS {
         return { kind: 'external', absolutePath: inputPath };
       }
       const relative = this.relativePath(inputPath);
-      // relativePath() returns forward-slash normalized paths.
-      // Outside-workspace paths remain absolute — detect with path.isAbsolute().
       if (!path.isAbsolute(relative) && !relative.startsWith('..')) {
         return {
           kind: 'workspace',

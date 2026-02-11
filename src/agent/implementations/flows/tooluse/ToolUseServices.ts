@@ -1,14 +1,3 @@
-/**
- * Service interfaces for tool-use flow.
- *
- * Extends BaseFlowContextInit with:
- * - Narrowed setting type (AgentToolUseSetting)
- * - Required onRoundFinalized (narrowed from optional)
- * - Tool-use specific services (session, resolvedTools, toolRegistry, etc.)
- *
- * Services are injected via flow.setServices() and accessed via this.services.
- */
-
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
@@ -20,23 +9,15 @@ import type {
 import type { IToolUseSession } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
-/** Services for tool-use flow nodes. Extends BaseFlowContextInit with tool-use specific dependencies. */
 export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
-  /** Narrowed from AgentSetting to tool-use specific type */
   readonly setting: AgentToolUseSetting;
   readonly session: IToolUseSession;
   readonly resolvedTools: ToolDefinition[];
-  /** Tool registry for looking up tools during execution. */
   readonly toolRegistry: IToolRegistry;
-  /** Resume snapshot for session recovery (null for fresh start). */
   readonly snapshot: ToolUseSessionSnapshot | null;
-  /** Narrowed from optional to required for tool-use flows */
   readonly onRoundFinalized: RoundFinalizedCallback;
-  /** Callback invoked when a queued follow-up message is consumed (clears UI). */
   readonly onFollowUpConsumed?: () => void;
-  /** Fires before the subagent enters WAITING, delivering the last response to the orchestrator. */
   readonly onBeforeWaiting?: (lastResponse: string | undefined) => void;
 }
 
-/** Flow params type for tool-use flows. Alias for base FlowParams. */
 export type { FlowParams as ToolUseFlowParams };

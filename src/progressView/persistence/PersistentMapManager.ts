@@ -91,30 +91,31 @@ export abstract class PersistentMapManager<K extends string, V> {
 
   /** Load state from persistence */
   async load(): Promise<void> {
-    const record = this.loadRecord();
-    if (Object.keys(record).length > 0) {
-      await this.populateFromRecord(record);
-    } else {
-      this.items.clear();
-    }
-  }
-
-  /** Load record from storage with null/invalid fallback */
-  private loadRecord(): Record<string, unknown> {
     const stored = this.storage.get(this.storageKey);
     const result = StorageRecordSchema.safeParse(stored);
     if (!result.success) {
       console.warn(
         `[PersistentMapManager] Invalid storage data for ${this.storageKey}, resetting.`,
       );
-      return {};
+      this.items.clear();
+      return;
     }
-    return result.data;
+
+    const record = result.data;
+    if (Object.keys(record).length === 0) {
+      this.items.clear();
+      return;
+    }
+    await this.populateFromRecord(record);
   }
 
   /** Persist current in-memory state to storage. */
   async save(): Promise<void> {
-    await this.writeToStorage();
+    const record: Record<string, unknown> = {};
+    for (const [key, value] of this.items) {
+      record[key] = this.serialize(value, key);
+    }
+    await this.storage.update(this.storageKey, record);
   }
 
   /**
@@ -125,21 +126,11 @@ export abstract class PersistentMapManager<K extends string, V> {
     // Immediate saves have nothing to flush
   }
 
-  /** Perform the actual serialization + storage write. */
-  protected async writeToStorage(): Promise<void> {
-    const record: Record<string, unknown> = {};
-    for (const [key, value] of this.items) {
-      record[key] = this.serialize(value, key);
-    }
-    await this.storage.update(this.storageKey, record);
-  }
-
   private async populateFromRecord(
     record: Record<string, unknown>,
   ): Promise<void> {
     const entries: [K, V][] = [];
     for (const [key, value] of Object.entries(record)) {
-      // await handles both sync and async deserialize implementations
       const deserialized = await this.deserialize(value, key as K);
       entries.push([key as K, deserialized]);
     }

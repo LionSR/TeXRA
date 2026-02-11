@@ -1,15 +1,3 @@
-/**
- * OutputNode - Handles output processing after response cycle.
- *
- * Processes output files, handles latexdiff, and finalizes round artifacts.
- * Non-critical operations can fail gracefully (logged as warnings).
- *
- * PocketFlow compliance:
- * - prep(): Extracts data from shared (output location, round info)
- * - exec(): Pure computation — XML processing, file extraction, latexdiff, summary
- * - post(): All side effects — event emission, file opening, validation, state updates
- */
-
 import { Node } from '@agent/node';
 import type { RoundFileMapping } from '@agent/output/types';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
@@ -37,31 +25,18 @@ import type {
   ReflectionServices,
 } from '../ReflectionServices';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-/** Prep result carries validated output location and round info for exec(). */
 interface OutputPrepInput {
   outputLocation: AgentFileLocation;
   currentRound: number;
   endTurn: boolean;
 }
 
-/** Exec result bundles both the round output and the summary for post() side effects. */
 interface OutputExecResult {
   roundOutput: RoundOutput;
   summary: RoundSummary;
 }
 
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/**
- * Execute an operation that can fail gracefully.
- * Logs warnings on failure but doesn't throw.
- */
+/** Execute an operation that can fail gracefully (logs warnings, doesn't throw). */
 async function tryOperation(
   label: string,
   operation: () => Promise<void>,
@@ -73,10 +48,6 @@ async function tryOperation(
     logger.warn(`${label} failed: ${toErrorMessage(error)}`);
   }
 }
-
-// ============================================================================
-// Node Implementation
-// ============================================================================
 
 export class OutputNode<C = unknown> extends Node<
   ReflectionFlowShared,
@@ -97,10 +68,6 @@ export class OutputNode<C = unknown> extends Node<
     };
   }
 
-  /**
-   * Pure computation: XML processing, file extraction, latexdiff, round summary.
-   * No event emission, no file opening, no UI notifications.
-   */
   async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
     const {
       outputState,
@@ -226,9 +193,6 @@ export class OutputNode<C = unknown> extends Node<
     };
   }
 
-  /**
-   * All side effects: event emission, file opening, validation, state updates.
-   */
   async post(
     shared: ReflectionFlowShared,
     prepRes: OutputPrepInput,
