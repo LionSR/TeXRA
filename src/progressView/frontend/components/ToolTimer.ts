@@ -8,7 +8,7 @@
  */
 
 // Third-party imports
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports
@@ -65,8 +65,8 @@ export class ToolTimer extends LitElement {
     }
   }
 
-  override render(): TemplateResult {
-    if (!this._elapsed) return html``;
+  override render(): TemplateResult | typeof nothing {
+    if (!this._elapsed) return nothing;
     if (this.timeoutMs > 0) {
       const limit = formatDuration(this.timeoutMs);
       // prettier-ignore

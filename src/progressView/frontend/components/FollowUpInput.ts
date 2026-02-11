@@ -103,7 +103,6 @@ export class FollowUpInput extends LitElement {
   @property({ type: String }) value = '';
   @property({ type: Array }) queuedMessages: string[] = [];
 
-  // Reactive properties for Lit-native patterns (Phase 9e)
   @property({ type: Boolean }) shouldFocus = false;
   @property({ type: String }) polishedText: string | null = null;
   @property({ type: Number }) polishRevision = 0;
@@ -169,7 +168,7 @@ export class FollowUpInput extends LitElement {
     }
   }
 
-  /** Handle keyboard events on the textarea - Lit-native pattern */
+  /** Handle keyboard events on the textarea */
   private handleKeydown(event: KeyboardEvent): void {
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
       event.preventDefault();

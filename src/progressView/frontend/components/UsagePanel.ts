@@ -8,13 +8,13 @@ import { designTokens } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared schemas
+import type { TokenUsageStats } from '@shared/schemas';
 
 // Local imports - progress view formatters
 import { formatTokens } from '../formatters/timestampUtils';
 
-// Local imports - progress view constants
+// Local imports - progress view constants and types
 import { ELEMENT_IDS } from '../constants';
-import type { TokenUsageStats } from '@shared/schemas';
 import type { ContextState } from '../store';
 
 @customElement('usage-panel')
@@ -42,19 +42,22 @@ export class UsagePanel extends LitElement {
         color: var(--color-text-secondary);
       }
 
-      .run-summary {
+      :is(.run-summary, .context-state) {
         display: inline-flex;
         align-items: center;
         gap: var(--spacing-tiny);
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
-        opacity: 0.9;
-        margin-left: auto;
+        opacity: var(--opacity-normal);
       }
 
-      .run-summary .codicon {
+      :is(.run-summary, .context-state) .codicon {
         font-size: var(--font-size-icon-sm);
-        opacity: 0.75;
+        opacity: var(--opacity-subtle);
+      }
+
+      .run-summary {
+        margin-left: auto;
       }
 
       .run-summary__label {
@@ -62,25 +65,7 @@ export class UsagePanel extends LitElement {
         color: var(--color-text-secondary);
       }
 
-      .run-summary__value {
-        color: var(--vscode-foreground);
-      }
-
-      .context-state {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--spacing-tiny);
-        color: var(--color-text-secondary);
-        font-size: var(--font-size-sm);
-        opacity: 0.9;
-      }
-
-      .context-state .codicon {
-        font-size: var(--font-size-icon-sm);
-        opacity: 0.75;
-      }
-
-      .context-state__value {
+      :is(.run-summary__value, .context-state__value) {
         color: var(--vscode-foreground);
       }
     `,

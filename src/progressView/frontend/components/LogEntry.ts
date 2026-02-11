@@ -4,7 +4,7 @@
  */
 
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - formatters
@@ -29,8 +29,8 @@ export class LogEntry extends LitElement {
   @property({ type: Object }) message!: LogMessageData;
   @property({ type: Boolean }) defaultOpen = false;
 
-  override render(): TemplateResult {
-    if (!this.message) return html``;
+  override render(): TemplateResult | typeof nothing {
+    if (!this.message) return nothing;
     return formatLogEntry(this.message, { defaultOpen: this.defaultOpen });
   }
 }
