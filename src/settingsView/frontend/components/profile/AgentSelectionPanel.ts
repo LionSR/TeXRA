@@ -247,7 +247,7 @@ export class AgentSelectionPanel extends LitElement {
   ];
 
   @property({ attribute: false }) agents: AgentSelectionItem[] = [];
-  @property({ type: String }) category: AgentCategory = 'workflow';
+  @property({ attribute: false }) category: AgentCategory = 'workflow';
 
   @state() private selectedKey: string | null = null;
 

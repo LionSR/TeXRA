@@ -103,7 +103,7 @@ export class TodoList extends LitElement {
     `,
   ];
 
-  @property({ type: Array }) todos: TodoItem[] = [];
+  @property({ attribute: false }) todos: TodoItem[] = [];
 
   override render(): TemplateResult | typeof nothing {
     if (this.todos.length === 0) {

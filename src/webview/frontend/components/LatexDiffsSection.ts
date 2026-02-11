@@ -104,24 +104,19 @@ export class LatexDiffsSection extends LitElement {
     );
   }
 
-  private handleBaseFileChange(value: string): void {
+  private handleBaseSelectChange(event: Event): void {
+    const value = (event.currentTarget as HTMLSelectElement).value;
     this.dispatchEvent(MainViewEvents.baseFileChange({ value }));
   }
 
-  private handleEditedFileChange(value: string): void {
+  private handleEditedSelectChange(event: Event): void {
+    const value = (event.currentTarget as HTMLSelectElement).value;
     this.dispatchEvent(MainViewEvents.editedFileChange({ value }));
   }
 
-  private handleCommitChange(value: string): void {
+  private handleCommitSelectChange(event: Event): void {
+    const value = (event.currentTarget as HTMLSelectElement).value;
     this.dispatchEvent(MainViewEvents.commitChange({ value }));
-  }
-
-  private handleGetCurrentFile(type: 'base' | 'edited'): void {
-    this.dispatchEvent(MainViewEvents.getCurrentFile({ type }));
-  }
-
-  private handleEmptyFile(type: 'base' | 'edited'): void {
-    this.dispatchEvent(MainViewEvents.emptyFile({ type }));
   }
 
   private handleRefreshEditedFiles(): void {
@@ -132,17 +127,45 @@ export class LatexDiffsSection extends LitElement {
     this.dispatchEvent(MainViewEvents.refreshCommits());
   }
 
-  private handleAction(
-    action:
-      | 'latexdiff'
-      | 'latexdiffvc'
-      | 'packLatexdiffvc'
-      | 'cleanLatexdiffvc'
-      | 'merge'
-      | 'compare'
-      | 'accept',
-  ): void {
-    this.dispatchEvent(MainViewEvents.latexDiffsAction({ action }));
+  /**
+   * Combined delegation handler for toolbar buttons.
+   * Routes to the appropriate action based on `data-diff-action` or `data-file-action`.
+   */
+  private handleToolbarClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+
+    const diffButton = target.closest<HTMLElement>('[data-diff-action]');
+    if (diffButton?.dataset.diffAction) {
+      this.dispatchEvent(
+        MainViewEvents.latexDiffsAction({
+          action: diffButton.dataset.diffAction as
+            | 'latexdiff'
+            | 'latexdiffvc'
+            | 'packLatexdiffvc'
+            | 'cleanLatexdiffvc'
+            | 'merge'
+            | 'compare'
+            | 'accept',
+        }),
+      );
+      return;
+    }
+
+    const fileButton = target.closest<HTMLElement>(
+      '[data-file-action][data-file-type]',
+    );
+    if (!fileButton) return;
+    const fileAction = fileButton.dataset.fileAction;
+    const fileType = fileButton.dataset.fileType as
+      | 'base'
+      | 'edited'
+      | undefined;
+    if (!fileType) return;
+    if (fileAction === 'current') {
+      this.dispatchEvent(MainViewEvents.getCurrentFile({ type: fileType }));
+    } else if (fileAction === 'empty') {
+      this.dispatchEvent(MainViewEvents.emptyFile({ type: fileType }));
+    }
   }
 
   private renderFileOptions(
@@ -224,20 +247,25 @@ export class LatexDiffsSection extends LitElement {
               <div class="file-select-label-group">
                 <label for="baseFile">Base</label>
               </div>
-              <vscode-toolbar-container class="file-select-actions">
+              <vscode-toolbar-container
+                class="file-select-actions"
+                @click=${this.handleToolbarClick}
+              >
                 <vscode-toolbar-button
                   id="currentBaseFileButton"
                   icon="file-code"
                   label="Set current file as base"
                   title="Set current file as base"
-                  @click=${() => this.handleGetCurrentFile('base')}
+                  data-file-action="current"
+                  data-file-type="base"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="emptyBaseFileButton"
                   icon="close"
                   label="Clear base file"
                   title="Clear base file"
-                  @click=${() => this.handleEmptyFile('base')}
+                  data-file-action="empty"
+                  data-file-type="base"
                 ></vscode-toolbar-button>
               </vscode-toolbar-container>
             </div>
@@ -245,10 +273,7 @@ export class LatexDiffsSection extends LitElement {
               id="baseFile"
               position="above"
               .value=${this.baseFile}
-              @change=${(event: Event) => {
-                const target = event.currentTarget as HTMLInputElement;
-                this.handleBaseFileChange(target.value);
-              }}
+              @change=${this.handleBaseSelectChange}
             >
               ${this.renderFileOptions(this.baseFileOptions, this.baseFile)}
             </vscode-single-select>
@@ -270,48 +295,53 @@ export class LatexDiffsSection extends LitElement {
                   Edited
                 </label>
               </div>
-              <vscode-toolbar-container class="file-select-actions">
+              <vscode-toolbar-container
+                class="file-select-actions"
+                @click=${this.handleToolbarClick}
+              >
                 <vscode-toolbar-button
                   id="acceptButton"
                   icon="check"
                   label="Accept changes"
                   title="Accept changes from edited file and overwrite base file"
-                  @click=${() => this.handleAction('accept')}
+                  data-diff-action="accept"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="compareButton"
                   icon="diff"
                   label="Compare files"
                   title="Compare the selected edited file with the selected base file"
-                  @click=${() => this.handleAction('compare')}
+                  data-diff-action="compare"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="mergeButton"
                   icon="merge"
                   label="Merge edits"
                   title="Create a new version of the base file by merging the edits suggested by the edited file"
-                  @click=${() => this.handleAction('merge')}
+                  data-diff-action="merge"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="latexdiffButton"
                   icon="diff-single"
                   label="LaTeXdiff"
                   title="LaTeXdiff the selected edited file with the selected base file"
-                  @click=${() => this.handleAction('latexdiff')}
+                  data-diff-action="latexdiff"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="currentEditedFileButton"
                   icon="file-code"
                   label="Set current file as edited"
                   title="Set current file as edited"
-                  @click=${() => this.handleGetCurrentFile('edited')}
+                  data-file-action="current"
+                  data-file-type="edited"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="emptyEditedFileButton"
                   icon="close"
                   label="Clear edited file"
                   title="Clear edited file"
-                  @click=${() => this.handleEmptyFile('edited')}
+                  data-file-action="empty"
+                  data-file-type="edited"
                 ></vscode-toolbar-button>
               </vscode-toolbar-container>
             </div>
@@ -319,10 +349,7 @@ export class LatexDiffsSection extends LitElement {
               id="editedFile"
               position="above"
               .value=${this.editedFile}
-              @change=${(event: Event) => {
-                const target = event.currentTarget as HTMLInputElement;
-                this.handleEditedFileChange(target.value);
-              }}
+              @change=${this.handleEditedSelectChange}
             >
               ${this.renderFileOptions(this.editedFileOptions, this.editedFile)}
             </vscode-single-select>
@@ -339,27 +366,30 @@ export class LatexDiffsSection extends LitElement {
                 ></vscode-toolbar-button>
                 <label for="commit">Commit</label>
               </div>
-              <vscode-toolbar-container class="file-select-actions">
+              <vscode-toolbar-container
+                class="file-select-actions"
+                @click=${this.handleToolbarClick}
+              >
                 <vscode-toolbar-button
                   id="latexdiffvcButton"
                   icon="diff-single"
                   label="LaTeXdiff with commit"
                   title="LaTeXdiff the selected base file with another git commit"
-                  @click=${() => this.handleAction('latexdiffvc')}
+                  data-diff-action="latexdiffvc"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="packLatexdiffvcButton"
                   icon="archive"
                   label="Pack latexdiff output"
                   title="Pack the latexdiff-vc output into the History folder"
-                  @click=${() => this.handleAction('packLatexdiffvc')}
+                  data-diff-action="packLatexdiffvc"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="cleanLatexdiffvcButton"
                   icon="trash"
                   label="Clean latexdiff output"
                   title="Clean the latexdiff-vc output"
-                  @click=${() => this.handleAction('cleanLatexdiffvc')}
+                  data-diff-action="cleanLatexdiffvc"
                 ></vscode-toolbar-button>
               </vscode-toolbar-container>
             </div>
@@ -368,10 +398,7 @@ export class LatexDiffsSection extends LitElement {
               position="above"
               .value=${this.commit}
               ?disabled=${!this.isGitRepo}
-              @change=${(event: Event) => {
-                const target = event.currentTarget as HTMLInputElement;
-                this.handleCommitChange(target.value);
-              }}
+              @change=${this.handleCommitSelectChange}
             >
               ${this.renderCommitOptions()}
             </vscode-single-select>

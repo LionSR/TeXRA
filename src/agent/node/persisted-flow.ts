@@ -89,7 +89,7 @@ export class PersistedFlow<
   async run(shared: S): Promise<Action | undefined> {
     await this.ensureRecord(shared);
     while (await this.step()) {
-      // Do nothing
+      // step loop
     }
     return this.cachedRecord?.nodes.at(-1)?.action as Action | undefined;
   }

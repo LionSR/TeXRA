@@ -198,16 +198,11 @@ export class SupabaseClient {
         return null;
       }
 
-      interface StoredSession {
+      const { accessToken, refreshToken } = JSON.parse(sessionData) as {
         accessToken: string;
         refreshToken: string;
-      }
-
-      const session: StoredSession = JSON.parse(sessionData);
-      return {
-        accessToken: session.accessToken,
-        refreshToken: session.refreshToken,
       };
+      return { accessToken, refreshToken };
     } catch (error) {
       logger.error(
         'SupabaseClient',

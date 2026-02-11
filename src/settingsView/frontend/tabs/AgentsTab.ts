@@ -199,7 +199,7 @@ export class AgentsTab extends LitElement {
   @property({ attribute: false }) toolUseAgents: AgentSelectionItem[] = [];
   @property({ attribute: false }) customAgentDir = '';
   @property({ attribute: false }) customAgentDirIsDefault = true;
-  @property({ type: Boolean }) autoShowRemote = true;
+  @property({ attribute: false }) autoShowRemote = true;
   @property({ attribute: false }) initialSubTab?: AgentCategory;
 
   @state() private activeSubTab: AgentCategory = 'workflow';

@@ -30,11 +30,11 @@ export class MemoryToggle extends LitElement {
     `,
   ];
 
-  @property({ type: Boolean }) enabled = false;
-  @property({ type: Boolean }) disabled = false;
+  @property({ attribute: false }) enabled = false;
+  @property({ attribute: false }) disabled = false;
 
   private handleChange(event: Event): void {
-    const target = event.target as HTMLInputElement | null;
+    const target = event.currentTarget as HTMLInputElement | null;
     this.dispatchEvent(
       MemoryViewEvents.toggleEnabled({ enabled: Boolean(target?.checked) }),
     );
