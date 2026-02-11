@@ -8,7 +8,7 @@ import { toErrorMessage } from '@common/errors';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - core utilities
-import { normalizeLatexPath, getPathSegments } from '@utils/core';
+import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';
 
 // Local file imports
 import { flexibleFS } from './flexibleFS';

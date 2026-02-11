@@ -12,6 +12,7 @@ import {
 } from '@common/errors';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import * as logger from '@logger/logUtils';
+import { hasExtension } from '@utils/core/pathCore';
 import { RoundKeySchema } from '@progressView/persistence/schemaUtils';
 import { getConfig } from '@utils/config';
 import {
@@ -732,7 +733,10 @@ async function runLatexdiffViaWorkspaceScan(params: {
     );
 
     for (const [fileName, fileType] of dirEntries) {
-      if (fileType !== vscode.FileType.File || !fileName.endsWith('.tex')) {
+      if (
+        fileType !== vscode.FileType.File ||
+        !hasExtension(fileName, '.tex')
+      ) {
         continue;
       }
 
