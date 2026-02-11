@@ -192,11 +192,6 @@ export interface LspResult<T> {
   error?: string;
 }
 
-/** Create an error result */
-function errorResult<T>(error: string): LspResult<T> {
-  return { data: null, error };
-}
-
 async function sendPositionRequest<T>(
   filePath: string,
   line: number,
@@ -210,7 +205,7 @@ async function sendPositionRequest<T>(
   // Get client provider
   const clientProvider = await getClientProvider().catch(() => null);
   if (!clientProvider) {
-    return errorResult('Lean 4 extension not found or not activated');
+    return { data: null, error: 'Lean 4 extension not found or not activated' };
   }
 
   // Open file in editor so LSP server has processed it
@@ -218,7 +213,7 @@ async function sendPositionRequest<T>(
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preserveFocus: true });
   } catch (e) {
-    return errorResult(`Failed to open file ${absolutePath}: ${e}`);
+    return { data: null, error: `Failed to open file ${absolutePath}: ${e}` };
   }
 
   // Find and validate Lean client (uses duck-typed FileUri for Lean 4 extension compatibility)
@@ -226,19 +221,22 @@ async function sendPositionRequest<T>(
   try {
     client = clientProvider.findClient(leanUri);
   } catch {
-    return errorResult(
-      `Error finding Lean client for ${absolutePath}. Is this file in a Lean project?`,
-    );
+    return {
+      data: null,
+      error: `Error finding Lean client for ${absolutePath}. Is this file in a Lean project?`,
+    };
   }
   if (!client) {
-    return errorResult(
-      `No Lean client for ${absolutePath}. Is this file in a Lean project with a lakefile?`,
-    );
+    return {
+      data: null,
+      error: `No Lean client for ${absolutePath}. Is this file in a Lean project with a lakefile?`,
+    };
   }
   if (!client.isRunning()) {
-    return errorResult(
-      'Lean server not running. Try lean_project restart_server.',
-    );
+    return {
+      data: null,
+      error: 'Lean server not running. Try lean_project restart_server.',
+    };
   }
 
   // Send LSP request
@@ -250,7 +248,7 @@ async function sendPositionRequest<T>(
     const result = await client.sendRequest(method, params);
     return { data: result as T };
   } catch (e) {
-    return errorResult(`LSP request ${method} failed: ${e}`);
+    return { data: null, error: `LSP request ${method} failed: ${e}` };
   }
 }
 

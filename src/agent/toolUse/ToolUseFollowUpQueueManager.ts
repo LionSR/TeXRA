@@ -75,9 +75,7 @@ export class ToolUseFollowUpQueue {
 
   static drain(streamId: StreamTabId): string[] {
     const queue = this.queues.get(streamId);
-    if (!queue) {
-      return [];
-    }
+    if (!queue) return [];
     const drained = queue.drain();
     logger.debug(
       `Drained ${drained.length} queued follow-ups for stream ${streamId}.`,
@@ -90,10 +88,6 @@ export class ToolUseFollowUpQueue {
    * Used for UI display purposes.
    */
   static getAll(streamId: StreamTabId): string[] {
-    const queue = this.queues.get(streamId);
-    if (!queue) {
-      return [];
-    }
-    return queue.getAll();
+    return this.queues.get(streamId)?.getAll() ?? [];
   }
 }

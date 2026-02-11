@@ -28,25 +28,15 @@ export const DEFAULT_TOTALS = {
 
 /** Schema for run usage totals. Internal only. */
 const RunUsageTotalsSchema = z.object({
-  firstInputTokens: z.number().prefault(DEFAULT_TOTALS.firstInputTokens),
-  totalInputTokens: z.number().prefault(DEFAULT_TOTALS.totalInputTokens),
-  totalOutputTokens: z.number().prefault(DEFAULT_TOTALS.totalOutputTokens),
-  totalCost: z.number().prefault(DEFAULT_TOTALS.totalCost),
-  totalCacheReadInputTokens: z
-    .number()
-    .prefault(DEFAULT_TOTALS.totalCacheReadInputTokens),
-  totalCacheCreationInputTokens: z
-    .number()
-    .prefault(DEFAULT_TOTALS.totalCacheCreationInputTokens),
-  totalReasoningTokens: z
-    .number()
-    .prefault(DEFAULT_TOTALS.totalReasoningTokens),
-  totalToolUsePromptTokens: z
-    .number()
-    .prefault(DEFAULT_TOTALS.totalToolUsePromptTokens),
-  totalServerToolRequests: z
-    .number()
-    .prefault(DEFAULT_TOTALS.totalServerToolRequests),
+  firstInputTokens: z.number().prefault(0),
+  totalInputTokens: z.number().prefault(0),
+  totalOutputTokens: z.number().prefault(0),
+  totalCost: z.number().prefault(0),
+  totalCacheReadInputTokens: z.number().prefault(0),
+  totalCacheCreationInputTokens: z.number().prefault(0),
+  totalReasoningTokens: z.number().prefault(0),
+  totalToolUsePromptTokens: z.number().prefault(0),
+  totalServerToolRequests: z.number().prefault(0),
 });
 export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
 

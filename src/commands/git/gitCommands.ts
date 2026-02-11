@@ -214,8 +214,7 @@ async function getGitToken(
   // Try stored token first
   const stored = (await secrets.get(key))?.trim() ?? '';
   if (stored && isValid(stored)) {
-    const encoded = encodeURIComponent(stored);
-    return { remote: `git:${encoded}`, sensitive: [stored, encoded] };
+    return buildTokenResult(stored);
   }
 
   // Clear invalid stored token
@@ -229,17 +228,22 @@ async function getGitToken(
     'Enter your Git authentication token.',
     true,
   );
-  if (!input) {
-    return null;
-  }
+  if (!input) return null;
   if (!isValid(input)) {
     vscode.window.showErrorMessage('Invalid token format.');
     return null;
   }
 
   await secrets.store(key, input);
-  const encoded = encodeURIComponent(input);
-  return { remote: `git:${encoded}`, sensitive: [input, encoded] };
+  return buildTokenResult(input);
+}
+
+function buildTokenResult(token: string): {
+  remote: string;
+  sensitive: string[];
+} {
+  const encoded = encodeURIComponent(token);
+  return { remote: `git:${encoded}`, sensitive: [token, encoded] };
 }
 
 const IGNORED_FILES = new Set(['.DS_Store', 'Thumbs.db']);

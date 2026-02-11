@@ -110,14 +110,6 @@ const ToolUseFlowRecordStateSchema = z
 
 type NormalizedToolUseState = z.infer<typeof ToolUseFlowRecordStateSchema>;
 
-/** Parse tool-use flow record state, returns null if invalid. */
-function parseToolUseFlowRecordState(
-  shared: unknown,
-): NormalizedToolUseState | null {
-  const result = ToolUseFlowRecordStateSchema.safeParse(shared);
-  return result.success ? result.data : null;
-}
-
 /**
  * Minimal schema for validating workflow flow record exists and has resumable state.
  * Full validation happens when the flow actually resumes.
@@ -200,15 +192,17 @@ async function retrieveToolUseResumeData(
     }
 
     // Parse shared state, supporting both flat and legacy formats
-    const parsedState = parseToolUseFlowRecordState(flowRecord.shared);
-    if (!parsedState) {
+    const parseResult = ToolUseFlowRecordStateSchema.safeParse(
+      flowRecord.shared,
+    );
+    if (!parseResult.success) {
       logger.warn(
         `Invalid flow record structure for execution: ${executionId}`,
       );
       return null;
     }
 
-    const { messages, stateSlices } = parsedState;
+    const { messages, stateSlices } = parseResult.data;
 
     // Construct and validate the complete snapshot.
     // Validation provides defense-in-depth: even if flow record is valid,
