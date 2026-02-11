@@ -39,15 +39,15 @@ export class ModelsTab extends LitElement {
     `,
   ];
 
-  @property({ type: Boolean }) authenticated = false;
-  @property({ type: String }) apiAccessMode: 'included' | 'personal' =
+  @property({ attribute: false }) authenticated = false;
+  @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
     'personal';
   @property({ attribute: false }) allowedModels: string[] | null = [];
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
-  @property({ type: Boolean }) globalStreamingDefault = true;
+  @property({ attribute: false }) globalStreamingDefault = true;
   @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
     [];
-  @property({ type: String }) polishModel = '';
+  @property({ attribute: false }) polishModel = '';
 
   override render(): TemplateResult {
     const apiAccessSection = this.authenticated

@@ -87,8 +87,8 @@ export class MultiAgentTab extends LitElement {
     `,
   ];
 
-  @property({ type: Boolean }) superYoloEnabled = false;
-  @property({ type: Boolean }) toggleDisabled = true;
+  @property({ attribute: false }) superYoloEnabled = false;
+  @property({ attribute: false }) toggleDisabled = true;
   @property({ attribute: false }) reliabilitySettings: NumberVscodeSetting[] =
     [];
 
