@@ -1,10 +1,11 @@
 /**
  * Tool for accepting output files from a completed run into the workspace.
  *
- * After a workflow agent completes, its output files live in run storage
- * (taskRuns/{executionId}/). This tool copies selected files from run
- * storage into the workspace, replacing local files — the programmatic
- * equivalent of the "Accept" button in the progress view.
+ * After a workflow agent completes, its output files may live in run storage
+ * (taskRuns/{executionId}/) or directly in the workspace, depending on the
+ * agent's storage mode. This tool locates files in either location and copies
+ * them into the workspace — the programmatic equivalent of the "Accept" button
+ * in the progress view.
  *
  * Each file goes through the standard tool edit approval flow (same diff
  * panel as write_file), so the user can review, edit, or reject each file.
@@ -35,9 +36,15 @@ import {
   WorkspaceFS,
   flexibleFS,
   createRunStorageLocation,
+  createWorkspaceLocation,
 } from '@utils/files';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
+
+// Local imports - history
+import { AgentHistoryManager } from '@common/history/AgentHistoryManager';
+
+import type { FileLocation } from '@shared/schemas';
 
 // ============================================================================
 // Schema
@@ -82,8 +89,9 @@ export class AcceptRunFilesTool extends defineTool({
   name: 'accept_run_files',
   description: `Accept output files from a completed run into the workspace.
 
-Copies selected output files from a run into the workspace, replacing
-existing files. Each file is shown to the user for review before writing.
+Locates output files in run storage or the workspace (depending on storage
+mode) and writes them to the workspace. Each file is shown to the user for
+review before writing.
 
 Example: Accept corrected file back to its original location:
   execution_id: "d4f5e6a7-1234-4b89-abcd-ef0123456789"
@@ -94,11 +102,16 @@ Example: Accept corrected file back to its original location:
     const { execution_id: executionId, files } = input;
     const runDir = path.join(TASK_RUNS_DIR, executionId);
 
-    // Verify run directory exists
-    if (!(await StorageFS.exists(runDir))) {
-      throw new ToolError(
-        `Run not found: ${executionId}. Use /executions to list available executions.`,
-      );
+    // Verify execution exists — run dir may not exist in workspace storage mode
+    const runDirExists = await StorageFS.exists(runDir);
+    if (!runDirExists) {
+      const historyItem =
+        await AgentHistoryManager.getHistoryItemById(executionId);
+      if (!historyItem) {
+        throw new ToolError(
+          `Run not found: ${executionId}. Use /executions to list available executions.`,
+        );
+      }
     }
 
     // Phase 1: Validate all source paths and read content before any approvals
@@ -110,19 +123,8 @@ Example: Accept corrected file back to its original location:
           );
         }
 
-        const sourceRelative = path.join(
-          TASK_RUNS_DIR,
-          executionId,
-          mapping.run_path,
-        );
-        const sourceAbsolute = StorageFS.fullPath(sourceRelative);
-
-        if (!(await StorageFS.exists(sourceRelative))) {
-          throw new ToolError(
-            `File not found: ${mapping.run_path} in run ${executionId}. ` +
-              `Use executions tool with path /executions/${executionId}/files to list available files.`,
-          );
-        }
+        const { sourceAbsolute, sourceLocation } =
+          await this.resolveSourceFile(executionId, mapping.run_path, runDirExists);
 
         const destPath = mapping.workspace_path ?? mapping.run_path;
         const dest = WorkspaceFS.locatePath(destPath);
@@ -132,15 +134,15 @@ Example: Accept corrected file back to its original location:
           );
         }
 
-        const sourceLocation = createRunStorageLocation(
-          sourceAbsolute,
-          mapping.run_path,
-          executionId,
-        );
         const proposedContent = await flexibleFS.read(sourceLocation);
         const destExists = await WorkspaceFS.exists(dest.relativePath);
-        const originalContent = destExists
-          ? await WorkspaceFS.read(dest.relativePath)
+        // If source and dest are the same workspace file, no change needed
+        const isSameFile =
+          sourceLocation.kind === 'workspace' &&
+          sourceAbsolute === dest.absolutePath;
+        const originalContent =
+          isSameFile ? proposedContent
+          : destExists ? await WorkspaceFS.read(dest.relativePath)
           : '';
 
         return {
@@ -212,5 +214,48 @@ Example: Accept corrected file back to its original location:
       output: `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`,
       edits,
     };
+  }
+
+  /**
+   * Resolves a source file by checking run storage first, then workspace.
+   * In taskRunStorage mode, files live under StorageFS. In workspace mode,
+   * files are written directly to the workspace.
+   */
+  private async resolveSourceFile(
+    executionId: string,
+    runPath: string,
+    runDirExists: boolean,
+  ): Promise<{ sourceAbsolute: string; sourceLocation: FileLocation }> {
+    // Try run storage first
+    if (runDirExists) {
+      const rel = path.join(TASK_RUNS_DIR, executionId, runPath);
+      if (await StorageFS.exists(rel)) {
+        const abs = StorageFS.fullPath(rel);
+        return {
+          sourceAbsolute: abs,
+          sourceLocation: createRunStorageLocation(abs, runPath, executionId),
+        };
+      }
+    }
+
+    // Fall back to workspace
+    const wsLoc = WorkspaceFS.locatePath(runPath);
+    if (
+      wsLoc.kind !== 'external' &&
+      (await WorkspaceFS.exists(wsLoc.relativePath))
+    ) {
+      return {
+        sourceAbsolute: wsLoc.absolutePath,
+        sourceLocation: createWorkspaceLocation(
+          wsLoc.absolutePath,
+          wsLoc.relativePath,
+        ),
+      };
+    }
+
+    throw new ToolError(
+      `File not found in run storage or workspace: ${runPath}. ` +
+        `Use executions tool with path /executions/${executionId}/files to list available files.`,
+    );
   }
 }
