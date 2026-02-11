@@ -66,10 +66,12 @@ export async function computeOutputDiffStats(
   baseFiles: FileLocation[],
   currRound: number,
   precomputedMapping?: RoundFileMapping,
+  options?: { isRewrite?: boolean },
 ): Promise<OutputFileInfo[]> {
   const roundOutputs = ensureRound(state, currRound);
   const mapping =
     precomputedMapping ?? traceFileLineage(state, baseFiles, currRound);
+  const suppressLineage = options?.isRewrite === false;
 
   return Promise.all(
     roundOutputs.map(async (output) => {
@@ -87,15 +89,17 @@ export async function computeOutputDiffStats(
         ? originalLocation
         : baseLocation;
 
-      const stats = await computeDiffStats(diffBaseLocation, location);
+      const effectiveOriginal = suppressLineage ? null : originalLocation;
+      const effectiveDiffBase = suppressLineage ? null : diffBaseLocation;
+      const stats = await computeDiffStats(effectiveDiffBase, location);
 
       return {
         source: output.source,
         round: output.round,
         location,
         lineage: {
-          original: originalLocation,
-          diffBase: diffBaseLocation,
+          original: effectiveOriginal,
+          diffBase: effectiveDiffBase,
           diffFile: null,
         },
         diff: stats,

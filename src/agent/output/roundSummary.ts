@@ -53,6 +53,7 @@ export async function summarizeRound(
     endTurn: boolean;
     stage?: AgentLogStage;
     mapping?: RoundFileMapping;
+    isRewrite?: boolean;
   },
 ): Promise<RoundSummary> {
   return withOutputStage(
@@ -68,6 +69,7 @@ export async function summarizeRound(
         deps.baseFiles,
         currRound,
         options.mapping,
+        { isRewrite: options.isRewrite },
       );
       data.outputs = fileInfos;
       const storageKey = getStorageKey(state);
@@ -105,11 +107,18 @@ export async function getRoundOutput(
   state: OutputState,
   baseFiles: FileLocation[],
   round: number,
+  options?: { isRewrite?: boolean },
 ): Promise<RoundOutput> {
   const data = ensureRoundData(state, round);
 
   if (data.outputs.length === 0) {
-    data.outputs = await computeOutputDiffStats(state, baseFiles, round);
+    data.outputs = await computeOutputDiffStats(
+      state,
+      baseFiles,
+      round,
+      undefined,
+      options,
+    );
   }
 
   return {
