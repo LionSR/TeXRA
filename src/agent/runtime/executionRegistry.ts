@@ -35,8 +35,6 @@ export function getStreamIdForExecution(
 }
 
 /** Get the start timestamp (ms) for an active execution. */
-export function getExecutionStartedAt(
-  executionId: string,
-): number | undefined {
+export function getExecutionStartedAt(executionId: string): number | undefined {
   return registry.get(executionId)?.startedAt;
 }
