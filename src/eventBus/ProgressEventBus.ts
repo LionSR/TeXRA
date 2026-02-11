@@ -96,6 +96,10 @@ export interface ProgressEventPayloads {
     parentStreamId: StreamTabId;
     children: ActiveSubagentInfo[];
   };
+  setParentStream: {
+    childStreamId: StreamTabId;
+    parentStreamId: StreamTabId;
+  };
   extensionDeactivating: undefined;
 }
 

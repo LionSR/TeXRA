@@ -72,6 +72,7 @@ export class ProgressEventHandler {
     bus.on('updateActiveSubagents', this.handleUpdateActiveSubagents, {
       signal,
     });
+    bus.on('setParentStream', this.handleSetParentStream, { signal });
     bus.on('extensionDeactivating', this.markAllRunningTasksAsCancelled, {
       signal,
     });
@@ -270,6 +271,25 @@ export class ProgressEventHandler {
           this.webviewUpdater.isAvailable() &&
           parentStreamId === this.state.activeStream
         ) {
+          this.webviewUpdater.updateAll(
+            this.state,
+            StreamStatusService.getAll(),
+          );
+        }
+      },
+    );
+  };
+
+  private handleSetParentStream = (
+    data: ProgressEventPayloads['setParentStream'],
+  ): void => {
+    withEventErrorHandling(
+      'SetParentStream',
+      'failed to handle setParentStream',
+      () => {
+        this.state.setParentStream(data.childStreamId, data.parentStreamId);
+
+        if (this.webviewUpdater.isAvailable()) {
           this.webviewUpdater.updateAll(
             this.state,
             StreamStatusService.getAll(),
