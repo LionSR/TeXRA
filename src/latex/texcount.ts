@@ -89,20 +89,6 @@ async function validateTexFile(
   return { valid: true };
 }
 
-async function detectChineseMode(
-  fileLocation: FileLocation,
-  channel: string,
-): Promise<boolean> {
-  const hasChinese = await hasChinesePackages(fileLocation);
-  if (hasChinese) {
-    logger.debug(
-      channel,
-      `Chinese packages detected in ${fileLocation.absolutePath}`,
-    );
-  }
-  return hasChinese;
-}
-
 async function runTexcount(
   args: string[],
   channel: string,
@@ -161,7 +147,7 @@ async function getIndividualCounts(
       if (includeReferenced) {
         args.push('-inc');
       }
-      if (await detectChineseMode(fileLocation, channel)) {
+      if (await hasChinesePackages(fileLocation)) {
         args.push('-ch-only');
       }
       args.push(filePath);

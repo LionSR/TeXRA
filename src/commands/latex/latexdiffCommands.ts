@@ -420,10 +420,7 @@ async function handleRunLatexdiff(
       `Between-round diffs enabled: ${generateBetweenRoundDiffs}`,
     );
 
-    const runId =
-      typeof config.runId === 'string' && config.runId.length > 0
-        ? config.runId
-        : undefined;
+    const runId = config.runId || undefined;
 
     // Normalize outputsByRound from raw config
     let outputsByRound: Map<number, OutputFileInfo[]> | null = null;
@@ -586,11 +583,10 @@ async function runLatexdiffFromMetadata(params: {
         info.location.kind === 'external'
           ? info.location.absolutePath
           : info.location.relativePath;
-      const group = groupedByRelative.get(key) ?? [];
       if (!groupedByRelative.has(key)) {
-        groupedByRelative.set(key, group);
+        groupedByRelative.set(key, []);
       }
-      group.push({ round, info });
+      groupedByRelative.get(key)!.push({ round, info });
     }
   }
 

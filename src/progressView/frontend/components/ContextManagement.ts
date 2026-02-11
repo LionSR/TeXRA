@@ -106,20 +106,20 @@ export class ContextManagement extends LitElement {
   ];
 
   /** Log ID for tracking */
-  @property({ type: String }) logId = '';
+  @property({ attribute: false }) logId = '';
 
   /** Action configuration (icon, label, color) */
-  @property({ type: Object }) config: ActionConfig = {
+  @property({ attribute: false }) config: ActionConfig = {
     icon: 'codicon-history',
     label: 'Context Management',
     color: 'var(--vscode-foreground)',
   };
 
   /** Statistics items to display */
-  @property({ type: Array }) items: StatItem[] = [];
+  @property({ attribute: false }) items: StatItem[] = [];
 
   /** Optional summary text for compaction events */
-  @property({ type: String }) summary = '';
+  @property({ attribute: false }) summary = '';
 
   override render(): TemplateResult | typeof nothing {
     if (this.items.length === 0) {

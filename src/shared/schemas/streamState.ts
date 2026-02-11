@@ -88,11 +88,15 @@ export type WorkflowUIState = z.infer<typeof WorkflowUIStateSchema>;
 
 // Workflow Stream State
 
-const RunScopedRecord = <T extends z.ZodType>(valueSchema: T) =>
-  z.record(z.string(), valueSchema).prefault({});
+function RunScopedRecord<T extends z.ZodType>(valueSchema: T) {
+  return z.record(z.string(), valueSchema).prefault({});
+}
 
-const RoundScopedRecord = <T extends z.ZodType>(valueSchema: T) =>
-  z.record(z.string(), z.record(z.string(), z.array(valueSchema))).prefault({});
+function RoundScopedRecord<T extends z.ZodType>(valueSchema: T) {
+  return z
+    .record(z.string(), z.record(z.string(), z.array(valueSchema)))
+    .prefault({});
+}
 
 export const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
   kind: z.literal(AGENT_CATEGORY.WORKFLOW),

@@ -57,22 +57,22 @@ export class TaskGroupList extends LitElement {
   ];
 
   /** All task groups to render */
-  @property({ type: Array }) groups: TaskGroup[] = [];
+  @property({ attribute: false }) groups: TaskGroup[] = [];
 
   /** All log messages to render */
-  @property({ type: Array }) messages: LogMessageData[] = [];
+  @property({ attribute: false }) messages: LogMessageData[] = [];
 
   /** Currently visible run ID (null = show all) */
-  @property({ type: String }) activeRunId: string | null = null;
+  @property({ attribute: false }) activeRunId: string | null = null;
 
   /** Whether this is a tool-use session (affects run filtering) */
-  @property({ type: Boolean }) isToolUse = false;
+  @property({ attribute: false }) isToolUse = false;
 
   /** Whether there are any streams in the current filter (controls placeholder) */
-  @property({ type: Boolean }) hasStreams = false;
+  @property({ attribute: false }) hasStreams = false;
 
   /** Toggle state store for persistence */
-  @property({ type: Object }) toggleStates: ToggleStateStore | null = null;
+  @property({ attribute: false }) toggleStates: ToggleStateStore | null = null;
 
   /** Track previous group statuses to detect completion (not rendered — no @state needed) */
   private previousStatuses = new Map<string, string>();

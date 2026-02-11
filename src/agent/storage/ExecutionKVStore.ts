@@ -51,9 +51,6 @@ async function withNotFoundFallback<T>(
   }
 }
 
-/**
- * Extracts key name from a JSON filename.
- */
 function jsonFileToKey(filename: string): string {
   return filename.replace(/\.json$/, '');
 }
@@ -122,9 +119,6 @@ class StorageFSKVStore implements ExecutionKVStore {
 // Cached stores for reuse
 const storeCache = new Map<ExecutionId, ExecutionKVStore>();
 
-/**
- * Get or create a store for an execution.
- */
 export function getExecutionStore(executionId: ExecutionId): ExecutionKVStore {
   const cached = storeCache.get(executionId);
   if (cached) return cached;

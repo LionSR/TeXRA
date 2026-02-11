@@ -99,10 +99,17 @@ export class OutputFilesSection extends LitElement {
     );
   }
 
-  private handleRemoveFile(file: string): void {
-    this.dispatchEvent(
-      MainViewEvents.removeFile({ listId: 'outputFiles', file }),
+  private handleRemoveClick(event: MouseEvent): void {
+    const button = (event.target as HTMLElement).closest<HTMLElement>(
+      '[data-remove-file]',
     );
+    if (!button) return;
+    const file = button.dataset.removeFile;
+    if (file) {
+      this.dispatchEvent(
+        MainViewEvents.removeFile({ listId: 'outputFiles', file }),
+      );
+    }
   }
 
   private renderFileList(): TemplateResult {
@@ -112,21 +119,23 @@ export class OutputFilesSection extends LitElement {
       </div>`;
     }
 
-    return html`${repeat(
-      this.currentFiles,
-      (file) => file,
-      (file) => html`
-        <div class="file-item" data-path=${file}>
-          <span class="file-name">${file}</span>
-          <button
-            class="remove-button codicon codicon-trash"
-            type="button"
-            aria-label="Remove output file"
-            @click=${() => this.handleRemoveFile(file)}
-          ></button>
-        </div>
-      `,
-    )}`;
+    return html`<div @click=${this.handleRemoveClick}>
+      ${repeat(
+        this.currentFiles,
+        (file) => file,
+        (file) => html`
+          <div class="file-item" data-path=${file}>
+            <span class="file-name">${file}</span>
+            <button
+              class="remove-button codicon codicon-trash"
+              type="button"
+              aria-label="Remove output file"
+              data-remove-file=${file}
+            ></button>
+          </div>
+        `,
+      )}
+    </div>`;
   }
 
   override render(): TemplateResult {

@@ -36,7 +36,7 @@ export class LogPlaceholder extends LitElement {
   ];
 
   /** HTML content to display (supports links) */
-  @property({ type: String }) content = '';
+  @property({ attribute: false }) content = '';
 
   override render(): TemplateResult {
     return html`${unsafeHTML(this.content)}`;

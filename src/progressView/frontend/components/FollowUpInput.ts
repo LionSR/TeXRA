@@ -100,14 +100,14 @@ export class FollowUpInput extends LitElement {
   ];
 
   @property({ type: Boolean, reflect: true }) visible = false;
-  @property({ type: String }) value = '';
-  @property({ type: Array }) queuedMessages: string[] = [];
+  @property({ attribute: false }) value = '';
+  @property({ attribute: false }) queuedMessages: string[] = [];
 
-  @property({ type: Boolean }) shouldFocus = false;
-  @property({ type: String }) polishedText: string | null = null;
-  @property({ type: Number }) polishRevision = 0;
-  @property({ type: String }) transcribedText: string | null = null;
-  @property({ type: Boolean }) recording = false;
+  @property({ attribute: false }) shouldFocus = false;
+  @property({ attribute: false }) polishedText: string | null = null;
+  @property({ attribute: false }) polishRevision = 0;
+  @property({ attribute: false }) transcribedText: string | null = null;
+  @property({ attribute: false }) recording = false;
 
   @state() private polishing = false;
 
@@ -269,7 +269,7 @@ export class FollowUpInput extends LitElement {
   }
 
   private handleInput(event: InputEvent): void {
-    const target = event.target as HTMLTextAreaElement | null;
+    const target = event.currentTarget as HTMLTextAreaElement | null;
     const value = target?.value ?? '';
     this.dispatchEvent(ProgressEvents.followupChange({ value }));
   }
