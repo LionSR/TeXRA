@@ -920,15 +920,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         continue;
       }
 
-      for (const block of contentBlocks) {
-        if (block.type !== 'document') {
-          continue;
-        }
-
-        if (!block.source) {
-          continue;
-        }
-
+      for (const block of this.extractDocumentBlocks(contentBlocks)) {
         // Cast to beta source type: upload code stores BetaFileDocumentSource
         // entries (via Files API) into non-beta message arrays.
         const source = block.source as BetaRequestDocumentBlock['source'];
@@ -1000,6 +992,33 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return { uploaded, hasFileReference };
   }
 
+  /**
+   * Extracts all document blocks from a content block array, including those
+   * nested inside tool_result blocks. PDFs attached as tool result attachments
+   * (e.g., from ArXiv downloads) are nested inside tool_result content and
+   * would be missed by a top-level-only scan.
+   */
+  private extractDocumentBlocks(
+    contentBlocks: ContentBlockParam[],
+  ): DocumentBlockParam[] {
+    const documents: DocumentBlockParam[] = [];
+    for (const block of contentBlocks) {
+      if (block.type === 'document' && block.source) {
+        documents.push(block);
+      } else if (block.type === 'tool_result' && Array.isArray(block.content)) {
+        for (const nested of block.content) {
+          if (
+            nested.type === 'document' &&
+            (nested as DocumentBlockParam).source
+          ) {
+            documents.push(nested as DocumentBlockParam);
+          }
+        }
+      }
+    }
+    return documents;
+  }
+
   private analyzeDocumentSources(messages: MessageParam[]): {
     hasFileSource: boolean;
     hasBase64Pdf: boolean;
@@ -1013,12 +1032,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         continue;
       }
 
-      for (const block of contentBlocks) {
-        // Skip non-document blocks or those without source
-        if (block.type !== 'document' || !block.source) {
-          continue;
-        }
-
+      for (const block of this.extractDocumentBlocks(contentBlocks)) {
         const source = block.source as BetaRequestDocumentBlock['source'];
         if (source.type === 'file') {
           hasFileSource = true;
@@ -1075,11 +1089,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         continue;
       }
 
-      for (const block of contentBlocks) {
-        if (block.type !== 'document' || !block.source) {
-          continue;
-        }
-
+      for (const block of this.extractDocumentBlocks(contentBlocks)) {
         // Cast to beta source type: upload code stores BetaFileDocumentSource
         // entries (via Files API) into non-beta message arrays.
         const source = block.source as BetaRequestDocumentBlock['source'];

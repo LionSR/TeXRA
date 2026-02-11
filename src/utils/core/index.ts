@@ -2,14 +2,9 @@
  * Core utilities - consolidated path, string, type, and async helpers.
  */
 
-export {
-  toPosixPath,
-  getPathSegments,
-  normalizeLatexPath,
-  hasExtension,
-  joinLatexPath,
-  ensureExtension,
-} from './pathCore';
+// NOTE: pathCore is NOT re-exported here because it depends on Node.js 'path'.
+// This barrel is used by webview frontend code (browser context).
+// Backend code should import directly: import { ... } from '@utils/core/pathCore';
 export {
   isNonEmptyString,
   isString,
