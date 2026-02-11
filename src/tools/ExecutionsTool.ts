@@ -18,7 +18,9 @@ import {
   getStreamIdForExecution,
   getExecutionStartedAt,
   getExecutionProgress,
+  getActiveExecutionIds,
   waitForExecutionChange,
+  waitForAnyExecutionChange,
 } from '@agent/runtime/executionRegistry';
 import {
   getActiveSubagent,
@@ -64,7 +66,7 @@ const ExecutionsToolInputSchema = z.strictObject({
     .boolean()
     .prefault(false)
     .describe(
-      'On /executions/{id}: wait for status change (round completed, execution finished) instead of polling. Workflow subagents take 10-30+ min; use block=true to wait efficiently.',
+      'Wait for status change instead of polling. On /executions: wait for any active execution to change. On /executions/{id}: wait for a specific execution. Subagents deliver results automatically as follow-up messages; use block to check intermediate progress.',
     ),
 
   /** Max seconds to wait when block=true. */
@@ -189,7 +191,10 @@ Use view_range: [start, end] to paginate large outputs.`,
 
     // /executions - list all executions
     if (!id) {
-      return this.listExecutions();
+      return this.listExecutions({
+        block: input.block,
+        timeout: input.timeout,
+      });
     }
 
     const executionId = this.resolveExecutionId(id);
@@ -248,7 +253,21 @@ Use view_range: [start, end] to paginate large outputs.`,
     return result.data as ExecutionId;
   }
 
-  private async listExecutions(): Promise<ToolResult> {
+  private async listExecutions(
+    options: { block: boolean; timeout: number },
+  ): Promise<ToolResult> {
+    // Blocking wait: wait for any active execution to change
+    if (options.block) {
+      const activeIds = getActiveExecutionIds();
+      if (activeIds.length > 0) {
+        const timeoutMs = options.timeout * 1000;
+        await Promise.race([
+          waitForAnyExecutionChange(activeIds),
+          new Promise<void>((r) => setTimeout(r, timeoutMs)),
+        ]);
+      }
+    }
+
     const history = await AgentHistoryManager.getHistory();
 
     if (history.length === 0) {
