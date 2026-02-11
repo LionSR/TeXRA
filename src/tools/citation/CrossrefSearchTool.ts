@@ -53,7 +53,7 @@ export class CrossrefSearchTool extends defineTool({
     const options: ExtendedQueryWorksParams = {
       query: trimmedQuery,
       rows: input.rows,
-      ...(typeof input.offset === 'number' && { offset: input.offset }),
+      ...(input.offset != null && { offset: input.offset }),
       ...(input.sort && { sort: input.sort as WorkSortOptions }),
       ...(input.order && {
         order: input.order === 'asc' ? SortOrder.ASC : SortOrder.DESC,

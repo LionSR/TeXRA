@@ -41,11 +41,7 @@ const LenientWorkflowProposalSchema = WorkflowAgentProposalSchema.extend({
   useMultipleOutputs: z.boolean().prefault(false),
 });
 
-export interface StoredProposal {
-  proposal: AgentProposal;
-}
-
-const proposalInputStore = new Map<string, StoredProposal>();
+const proposalInputStore = new Map<string, AgentProposal>();
 
 function parseProposalInput(
   input: unknown,
@@ -72,11 +68,6 @@ function parseProposalInput(
   return null;
 }
 
-function buildId(proposal: AgentProposal): string {
-  const serialized = JSON.stringify(proposal);
-  return `proposal:${serialized.length}:${hashString(serialized)}`;
-}
-
 /**
  * Register proposal input and return a stable ID for lookup.
  */
@@ -87,9 +78,10 @@ export function registerProposalInput(
   const proposal = parseProposalInput(input, toolName);
   if (!proposal) return null;
 
-  const id = buildId(proposal);
+  const serialized = JSON.stringify(proposal);
+  const id = `proposal:${serialized.length}:${hashString(serialized)}`;
   if (!proposalInputStore.has(id)) {
-    proposalInputStore.set(id, { proposal });
+    proposalInputStore.set(id, proposal);
   }
   return id;
 }
@@ -97,6 +89,6 @@ export function registerProposalInput(
 /**
  * Retrieve proposal input by ID.
  */
-export function getProposalInput(id: string): StoredProposal | undefined {
+export function getProposalInput(id: string): AgentProposal | undefined {
   return proposalInputStore.get(id);
 }

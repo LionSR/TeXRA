@@ -225,22 +225,19 @@ function detectStatusText(
   err: unknown,
   statusCode?: number,
 ): string | undefined {
-  if (!isObject(err)) {
-    return statusCode ? safeGetReasonPhrase(statusCode) : undefined;
+  if (isObject(err)) {
+    const candidate = err as {
+      statusText?: string;
+      response?: { statusText?: string };
+      error?: { statusText?: string };
+    };
+    const explicit =
+      candidate.statusText ??
+      candidate.response?.statusText ??
+      candidate.error?.statusText;
+    if (explicit) return explicit;
   }
-
-  const candidate = err as {
-    statusText?: string;
-    response?: { statusText?: string };
-    error?: { statusText?: string };
-  };
-
-  return (
-    candidate.statusText ??
-    candidate.response?.statusText ??
-    candidate.error?.statusText ??
-    (statusCode ? safeGetReasonPhrase(statusCode) : undefined)
-  );
+  return statusCode ? safeGetReasonPhrase(statusCode) : undefined;
 }
 
 function detectProvider(err: unknown): string | undefined {
@@ -268,9 +265,7 @@ function detectProvider(err: unknown): string | undefined {
 
 /** Extract request ID from SDK errors (property or headers). */
 function detectRequestId(err: unknown): string | undefined {
-  if (!isObject(err)) {
-    return undefined;
-  }
+  if (!isObject(err)) return undefined;
 
   const candidate = err as {
     request_id?: string;
@@ -278,7 +273,6 @@ function detectRequestId(err: unknown): string | undefined {
     headers?: { get?: (key: string) => string | null };
   };
 
-  // Try property names first
   if (isString(candidate.request_id) && candidate.request_id) {
     return candidate.request_id;
   }
@@ -287,14 +281,11 @@ function detectRequestId(err: unknown): string | undefined {
   }
 
   // Try headers (Anthropic SDK uses 'request-id'; relay may use 'x-request-id')
-  const headerValue =
+  return (
     candidate.headers?.get?.('request-id') ??
-    candidate.headers?.get?.('x-request-id');
-  if (headerValue) {
-    return headerValue;
-  }
-
-  return undefined;
+    candidate.headers?.get?.('x-request-id') ??
+    undefined
+  );
 }
 
 /** Extract raw error body from SDK errors for relay error debugging. */

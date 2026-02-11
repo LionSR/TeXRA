@@ -339,23 +339,16 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     depth: number,
     entries: Array<{ path: string; size: number; mtime: number }>,
   ): Promise<void> {
-    if (depth >= DIRECTORY_LISTING_DEPTH) {
-      return;
-    }
+    if (depth >= DIRECTORY_LISTING_DEPTH) return;
 
     const children = await StorageFS.readDir(currentPath);
     for (const [name, type] of children) {
-      if (shouldSkipEntry(name)) {
-        continue;
-      }
+      if (shouldSkipEntry(name)) continue;
       const childPath = path.join(currentPath, name);
       const stats = await StorageFS.stat(childPath);
       entries.push({ path: childPath, size: stats.size, mtime: stats.mtime });
 
-      if (
-        type === vscode.FileType.Directory &&
-        depth + 1 < DIRECTORY_LISTING_DEPTH
-      ) {
+      if (type === vscode.FileType.Directory) {
         await this.walkDirectory(childPath, depth + 1, entries);
       }
     }

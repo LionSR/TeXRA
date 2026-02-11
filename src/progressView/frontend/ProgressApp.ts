@@ -459,17 +459,9 @@ export class ProgressApp extends BaseWebviewApp {
       },
       setStreamState: (streamId, updater) =>
         this.setStreamState(streamId, updater),
-      getFollowUpRef: () => this.getFollowUpRef(),
+      getFollowUpRef: () => this.toolUseContentRef.value?.getFollowUpRef(),
       savePrefs: (prefs) => this.prefsManager.update(prefs),
     };
-  }
-
-  /**
-   * Get FollowUpInput ref from the tool-use container.
-   * Returns undefined for workflow streams (they don't have follow-up input).
-   */
-  private getFollowUpRef(): FollowUpInput | undefined {
-    return this.toolUseContentRef.value?.getFollowUpRef();
   }
 
   private createMessageHandlerContext(): MessageHandlerContext {

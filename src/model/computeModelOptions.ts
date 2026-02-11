@@ -76,20 +76,16 @@ async function hasPersonalKeyForModel(
   config: ModelConfig,
   hasOpenRouter: boolean,
 ): Promise<boolean> {
-  // openRouterOnly models require OpenRouter
   if (config.openRouterOnly) return hasOpenRouter;
-
-  // Providers not in API_PROVIDERS don't require keys (e.g., COPILOT)
   if (!SecretManager.API_PROVIDERS.includes(config.provider as ApiProvider)) {
     return true;
   }
 
-  // Check provider-specific API key or OpenRouter fallback
   try {
-    if (await SecretManager.apiKeyExists(config.provider as ApiProvider)) {
-      return true;
-    }
-    return Boolean(config.openrouterFullName && hasOpenRouter);
+    return (
+      (await SecretManager.apiKeyExists(config.provider as ApiProvider)) ||
+      Boolean(config.openrouterFullName && hasOpenRouter)
+    );
   } catch {
     return false;
   }

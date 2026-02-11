@@ -61,16 +61,11 @@ export type ZoteroSearchInput = z.infer<typeof ZoteroSearchInputSchema>;
 function describeSearch(
   input: Pick<ZoteroSearchInput, 'query' | 'title' | 'author' | 'year'>,
 ): string {
-  const hasStructuredSearch = !!(input.title || input.author || input.year);
-  if (hasStructuredSearch) {
-    const parts: string[] = [];
-    if (input.title) parts.push(`title="${input.title}"`);
-    if (input.author) parts.push(`author="${input.author}"`);
-    if (input.year) parts.push(`year=${input.year}`);
-    return parts.join(', ');
-  }
-
-  return input.query ?? 'query';
+  const parts: string[] = [];
+  if (input.title) parts.push(`title="${input.title}"`);
+  if (input.author) parts.push(`author="${input.author}"`);
+  if (input.year) parts.push(`year=${input.year}`);
+  return parts.length > 0 ? parts.join(', ') : (input.query ?? 'query');
 }
 
 /**
@@ -130,21 +125,16 @@ export class ZoteroSearchTool extends defineTool({
 
     // Build search params: use advanced tuple search when structured fields
     // are provided, otherwise fall back to simple quick-search string.
-    let searchTerms: unknown;
-    if (title || author || year) {
-      const conditions: [string, string, string][] = [];
-      if (title) conditions.push(['title', 'contains', title]);
-      if (author) conditions.push(['creator', 'contains', author]);
-      if (year) conditions.push(['date', 'is', String(year)]);
-      searchTerms = conditions;
-    } else {
-      searchTerms = query!;
-    }
+    const useStructured = !!(title || author || year);
+    const searchTerms: unknown = useStructured
+      ? [
+          ...(title ? [['title', 'contains', title]] : []),
+          ...(author ? [['creator', 'contains', author]] : []),
+          ...(year ? [['date', 'is', String(year)]] : []),
+        ]
+      : query!;
 
-    const params: unknown[] = [searchTerms];
-    if (library) {
-      params.push(library);
-    }
+    const params: unknown[] = library ? [searchTerms, library] : [searchTerms];
 
     const result = await callBetterBibTeX<BbtSearchResultItem[]>(
       'item.search',

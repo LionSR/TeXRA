@@ -249,10 +249,9 @@ export abstract class ModelHandler<
    * they occurred in the response, rather than being logged after streaming.
    */
   protected emitWebSearchResult(result: WebSearchResult): void {
-    if (!this.progressViewEnabled) {
-      return;
+    if (this.progressViewEnabled) {
+      this.logger.logWebSearch(result);
     }
-    this.logger.logWebSearch(result);
   }
 
   /**

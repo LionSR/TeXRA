@@ -9,11 +9,6 @@ import { hashString } from './hashUtils';
 // Local module state
 const copyContentStore = new Map<string, string>();
 
-function buildDefaultId(content: string): string {
-  const normalized = content ?? '';
-  return `auto:${normalized.length}:${hashString(normalized)}`;
-}
-
 /**
  * Register copy content and return a stable ID for lookup.
  */
@@ -21,10 +16,9 @@ export function registerCopyContent(
   content: string,
   contentId?: string,
 ): string {
-  const normalized = content ?? '';
-  const id = contentId ?? buildDefaultId(normalized);
-  if (copyContentStore.get(id) !== normalized) {
-    copyContentStore.set(id, normalized);
+  const id = contentId ?? `auto:${content.length}:${hashString(content)}`;
+  if (copyContentStore.get(id) !== content) {
+    copyContentStore.set(id, content);
   }
   return id;
 }

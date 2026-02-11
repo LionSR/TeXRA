@@ -248,18 +248,22 @@ export class AgentDirectoryManager {
    * Called by the settings view after updating CUSTOM_AGENT_DIR in globalSM.
    */
   async refreshAfterDirChange(): Promise<void> {
-    await this.refreshAgentWatchers();
+    if (this.watcherSubscriptions.size > 0) {
+      await this.ensureAgentWatchers();
+    }
   }
 
   private sameDirectories(
     current: Array<{ directory: string; source: AgentSource }>,
     next: Array<{ directory: string; source: AgentSource }>,
   ): boolean {
-    if (current.length !== next.length) return false;
-    return current.every(
-      (entry, index) =>
-        entry.directory === next[index].directory &&
-        entry.source === next[index].source,
+    return (
+      current.length === next.length &&
+      current.every(
+        (entry, i) =>
+          entry.directory === next[i].directory &&
+          entry.source === next[i].source,
+      )
     );
   }
 
@@ -290,13 +294,6 @@ export class AgentDirectoryManager {
       resolveSetup!();
       this.watcherSetupPromise = null;
     }
-  }
-
-  private async refreshAgentWatchers(): Promise<void> {
-    if (this.watcherSubscriptions.size === 0) {
-      return;
-    }
-    await this.ensureAgentWatchers();
   }
 
   private buildAgentWatchers(

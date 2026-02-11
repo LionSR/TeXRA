@@ -251,11 +251,10 @@ export class ModelHandlerOpenAI<
     const streamingAggregator = this.createStreamingAggregator();
 
     const onContentDelta = ({ delta }: ContentDeltaEvent): void => {
-      if (!delta) {
-        return;
+      if (delta) {
+        output?.append(delta);
+        streamingAggregator?.appendContent(delta);
       }
-      output?.append(delta);
-      streamingAggregator?.appendContent(delta);
     };
 
     const onChunk = (chunk: ChatCompletionChunk): void => {
@@ -291,7 +290,7 @@ export class ModelHandlerOpenAI<
         }
       }
 
-      this.finalizeStreams(thinking, output ?? undefined, finalResponse);
+      this.finalizeStreams(thinking, output, finalResponse);
       return finalResponse;
     } finally {
       cleanup();
@@ -447,35 +446,10 @@ export class ModelHandlerOpenAI<
     }
 
     // Phase 4: EXECUTE
-    if (useStreaming) {
-      const response = await this.executeStreamingChat(
-        client,
-        baseParams,
-        signal,
-      );
-      return { response };
-    }
-
-    const response = await this.executeNonStreamingChat(
-      client,
-      baseParams,
-      signal,
-    );
+    const response = useStreaming
+      ? await this.executeStreamingChat(client, baseParams, signal)
+      : await this.executeNonStreamingChat(client, baseParams, signal);
     return { response };
-  }
-
-  /**
-   * Normalizes OpenAI chat messages based on provided options.
-   * Subclasses can opt-in by passing normalization settings.
-   */
-  protected normalizeMessages<T extends ChatCompletionMessageParam>(
-    messages: T[],
-    options?: NormalizeOpenAIMessageContentOptions,
-  ): T[] {
-    if (!options) {
-      return messages;
-    }
-    return normalizeOpenAIMessageContent(messages, options);
   }
 
   /**
@@ -489,7 +463,9 @@ export class ModelHandlerOpenAI<
     options?: NormalizeOpenAIMessageContentOptions,
     providerLabel: string = this.config.provider,
   ): T[] {
-    const normalizedMessages = this.normalizeMessages(messages, options);
+    const normalizedMessages = options
+      ? normalizeOpenAIMessageContent(messages, options)
+      : messages;
 
     if (normalizedMessages.length !== messages.length) {
       this.logger.info(
@@ -801,7 +777,6 @@ export class ModelHandlerOpenAI<
 
       this.logger.debug('Received tool call without message content');
     } else {
-      newResponse = '';
       this.logger.error(
         `Response object: ${objectToLogString(responseObject)}`,
       );
@@ -921,8 +896,7 @@ export class ModelHandlerOpenAI<
       agentSetting,
     );
 
-    endTurn = false;
-    return [endTurn, messages];
+    return [false, messages];
   }
 
   /** Computes cost based on token usage and model pricing. */
