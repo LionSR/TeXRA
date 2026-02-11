@@ -1,108 +1,40 @@
-/**
- * Shared constants for context management across model handlers.
- * Single source of truth for compaction/truncation settings.
- */
-
-/**
- * Default compaction threshold percentage.
- * When context utilization exceeds this percentage of the model's context window,
- * context management (compaction, truncation, or clearing) is triggered.
- *
- * This value must match the default in package.json for:
- * - texra.model.compactionThresholdPercent
- *
- * Set to 0 to disable context management entirely.
- */
+/** Must match `texra.model.compactionThresholdPercent` default in package.json. Set 0 to disable. */
 export const DEFAULT_COMPACTION_THRESHOLD_PERCENT = 75;
 
-/**
- * Minimum completion tokens to ensure the model can produce output.
- * Used when reducing max tokens due to context pressure.
- */
+/** Minimum completion tokens when reducing max tokens due to context pressure. */
 export const MIN_COMPLETION_TOKENS = 100;
 
-/**
- * Safety buffer subtracted from available tokens.
- * Used by handlers that perform exact token counting (Anthropic, Google).
- */
+/** Safety buffer for exact token counting (Anthropic, Google). */
 export const TOKEN_SAFETY_BUFFER = 10;
 
-/**
- * Larger safety buffer for heuristic token counting (OpenAI).
- * Accounts for estimation uncertainty.
- */
+/** Safety buffer for heuristic token counting (OpenAI). */
 export const HEURISTIC_TOKEN_BUFFER = 5000;
 
-/**
- * Factor to reduce max output tokens for tool-use agents (0 < factor <= 1).
- * Tool-use conversations accumulate context over many turns, so reserving
- * a smaller portion for output leaves more headroom for context growth.
- */
+/** Max output factor for tool-use agents (reserves headroom for context growth). */
 export const TOOL_USE_MAX_OUTPUT_FACTOR = 0.7;
 
-/**
- * Factor to reduce max output tokens when using response chaining
- * (`previous_response_id`). Chained requests can include additional server-side
- * context that is not fully reflected in client-side estimates.
- */
+/** Max output factor for chained responses (previous_response_id). */
 export const CHAINED_RESPONSE_MAX_OUTPUT_FACTOR = 0.7;
 
-/**
- * Larger safety buffer for tool-use mode token validation.
- * Accounts for tokenization differences between client estimates and
- * server-side counting, API framing overhead, and edge cases in long
- * multi-turn conversations.
- */
+/** Safety buffer for tool-use mode (accounts for tokenization differences and API framing). */
 export const TOOL_USE_SAFETY_BUFFER = 2000;
 
-/**
- * Percentage-based safety margin for chained responses (previous_response_id).
- * The pre-flight /responses/input_tokens endpoint can undercount server-side
- * context (reasoning tokens, framing overhead, etc.). A proportional margin
- * scales with conversation size - critical at high utilization where even a
- * small percentage error in a 270k-token count can exceed the context window.
- * 5% of context window provides adequate headroom without unnecessarily
- * limiting output at low utilization.
- */
+/** Percentage safety margin for chained responses (scales with conversation size). */
 export const CHAINED_RESPONSE_SAFETY_MARGIN_PERCENT = 5;
 
-/**
- * Maximum character length for tool result text sent to models.
- * Tool results exceeding this limit return an error to prevent context window overflow.
- * Set to 200KB (200,000 characters) which is roughly 50,000-66,000 tokens depending on content.
- */
+/** Max character length for tool result text (200KB ~ 50-66k tokens). */
 export const MAX_TOOL_RESULT_TEXT_LENGTH = 200_000;
 
-/**
- * Maximum number of PDF pages allowed per Anthropic API request.
- * The API returns HTTP 400 with "A maximum of 100 PDF pages may be provided"
- * when this limit is exceeded. We validate client-side to surface a friendlier
- * error message before the request is sent.
- */
+/** Max PDF pages per Anthropic API request. */
 export const ANTHROPIC_MAX_PDF_PAGES = 100;
 
-/**
- * Compute reduced max tokens when context pressure requires adjustment.
- * Ensures minimum completion tokens while respecting available space.
- *
- * @param availableTokens - Tokens available for output (contextWindow - inputTokens)
- * @param tokenBuffer - Safety buffer to subtract (default: TOKEN_SAFETY_BUFFER)
- * @returns Reduced max tokens value (minimum 1)
- */
+/** Compute reduced max tokens under context pressure (minimum 1). */
 export function computeReducedMaxTokens(
   availableTokens: number,
   tokenBuffer: number = TOKEN_SAFETY_BUFFER,
 ): number {
-  if (availableTokens <= 0) {
-    return 1;
-  }
+  if (availableTokens <= 0) return 1;
 
   const buffered = availableTokens - tokenBuffer;
-
-  // If buffered value is below minimum, skip buffer and use all available space
-  if (buffered < MIN_COMPLETION_TOKENS) {
-    return availableTokens;
-  }
-
-  return buffered;
+  return buffered < MIN_COMPLETION_TOKENS ? availableTokens : buffered;
 }

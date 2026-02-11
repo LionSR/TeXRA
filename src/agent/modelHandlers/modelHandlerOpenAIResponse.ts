@@ -192,10 +192,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Statuses indicating the background response is still processing. */
   private static readonly BACKGROUND_PENDING_STATUSES: readonly ResponseStatus[] =
     ['queued', 'in_progress'];
-  /** Statuses indicating the background response has finished (success or failure). */
-  private static readonly BACKGROUND_TERMINAL_STATUSES: readonly ResponseStatus[] =
-    ['completed', 'failed', 'cancelled', 'incomplete'];
-
   private previousResponseId: string | null = null;
 
   /**
@@ -771,13 +767,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
     }
 
-    if (userContent.length > 0) {
-      messages.push({
-        type: 'message',
-        role: 'user',
-        content: userContent,
-      } as ResponseInputItem);
-    }
+    messages.push({
+      type: 'message',
+      role: 'user',
+      content: userContent,
+    } as ResponseInputItem);
 
     const requestRole = this.capabilities.supportsIntermDevMsgs
       ? 'system'
@@ -998,16 +992,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * When true, the handler will use OpenAI's /responses/input_tokens endpoint
    * for exact token counts instead of heuristics.
    */
-  protected get supportsNativeTokenCounting(): boolean {
-    return !this.isOpenRouterRoutingEnabled();
-  }
-
-  /**
-   * Whether this handler supports native token counting.
-   * Maps to supportsNativeTokenCounting for consistency with other handlers.
-   */
   override get supportsTokenCounting(): boolean {
-    return this.supportsNativeTokenCounting;
+    return !this.isOpenRouterRoutingEnabled();
   }
 
   /**
@@ -1023,7 +1009,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     messages: ResponseInputItem[],
     options?: TokenCountOptions<OpenAI>,
   ): Promise<number> {
-    if (!this.supportsNativeTokenCounting) {
+    if (!this.supportsTokenCounting) {
       throw new Error(
         'Token counting not available when routing through OpenRouter',
       );
@@ -1076,26 +1062,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       'texra.model.useBackgroundResponses',
       false,
     );
-    const isEligible = this.isBackgroundModeEligible();
-    if (backgroundToggleEnabled && !this.backgroundModeSupported) {
-      this.logger.debug(
-        'Background mode toggle is enabled but this handler does not support background execution. Falling back to synchronous requests.',
-      );
-    }
-    if (
-      backgroundToggleEnabled &&
-      this.backgroundModeSupported &&
-      !isEligible
-    ) {
-      this.logger.debug(
-        'Background mode toggle is enabled but not eligible for this model/agent type (requires GPT 5 series with workflow agents). Falling back to synchronous requests.',
-      );
-    }
     const useBackgroundResponses =
-      this.backgroundModeSupported && backgroundToggleEnabled && isEligible;
+      this.backgroundModeSupported &&
+      backgroundToggleEnabled &&
+      this.isBackgroundModeEligible();
     const useStreaming = streamingToggleEnabled && !useBackgroundResponses;
 
-    if (streamingToggleEnabled && useBackgroundResponses) {
+    if (backgroundToggleEnabled && !useBackgroundResponses) {
+      const reason = !this.backgroundModeSupported
+        ? 'this handler does not support background execution'
+        : 'not eligible for this model/agent type (requires GPT 5 series with workflow agents)';
+      this.logger.debug(
+        `Background mode toggle is enabled but ${reason}. Falling back to synchronous requests.`,
+      );
+    } else if (streamingToggleEnabled && useBackgroundResponses) {
       this.logger.debug(
         'Background mode enabled; skipping streaming to avoid unstable behavior.',
       );
@@ -1703,13 +1683,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   private isBackgroundPending(response: Response): boolean {
-    const status = response.status;
-    if (!status) {
-      return false;
-    }
-
     return ModelHandlerOpenAIResponse.BACKGROUND_PENDING_STATUSES.includes(
-      status,
+      response.status as ResponseStatus,
     );
   }
 
@@ -1865,51 +1840,31 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       },
     );
 
-    const finalStatus = current.status;
-
-    const isTerminal =
-      finalStatus !== undefined &&
-      ModelHandlerOpenAIResponse.BACKGROUND_TERMINAL_STATUSES.includes(
-        finalStatus,
-      );
-
-    if (!isTerminal) {
-      this.logger.warn(
-        `Background response ${responseId} returned non-terminal status ${finalStatus ?? 'unknown'} after polling loop`,
-        {
-          data: {
-            responseId,
-            status: finalStatus,
-            pollCount,
-            elapsedMs,
-          },
-        },
-      );
+    if (current.status === 'completed') {
+      return current;
     }
 
-    if (current.status !== 'completed') {
-      const fallbackStatus = current.status ?? 'unknown';
-      const errorDetail =
-        current.error?.message ??
-        current.incomplete_details?.reason ??
-        'Background response did not complete successfully.';
-      this.logger.error(
-        `Background response ${responseId} ended with status ${fallbackStatus}`,
-        {
-          data: {
-            responseId,
-            status: current.status,
-            error: current.error ?? undefined,
-            incomplete: current.incomplete_details ?? undefined,
-          },
+    const fallbackStatus = current.status ?? 'unknown';
+    const errorDetail =
+      current.error?.message ??
+      current.incomplete_details?.reason ??
+      'Background response did not complete successfully.';
+    this.logger.error(
+      `Background response ${responseId} ended with status ${fallbackStatus}`,
+      {
+        data: {
+          responseId,
+          status: current.status,
+          pollCount,
+          elapsedMs,
+          error: current.error ?? undefined,
+          incomplete: current.incomplete_details ?? undefined,
         },
-      );
-      throw new Error(
-        `Background response ${responseId} ended with status ${fallbackStatus}: ${errorDetail}. Retrieve the latest status with client.responses.retrieve("${responseId}").`,
-      );
-    }
-
-    return current;
+      },
+    );
+    throw new Error(
+      `Background response ${responseId} ended with status ${fallbackStatus}: ${errorDetail}. Retrieve the latest status with client.responses.retrieve("${responseId}").`,
+    );
   }
 
   /** Adds continuation instructions for models without prefill support. */
@@ -1998,7 +1953,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       agentSetting,
     );
 
-    endTurn = false;
     return [endTurn, messages];
   }
 
@@ -2625,20 +2579,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (Array.isArray(content)) {
       existingText = content
         .map((part) => {
-          const type = (part as { type?: unknown }).type;
-          const partText = (part as { text?: unknown }).text;
-          if (type === 'input_text' && typeof partText === 'string') {
-            return partText;
-          }
-          if (type === 'output_text' && typeof partText === 'string') {
-            return partText;
-          }
-          return '';
+          const { type, text: partText } = part as {
+            type?: string;
+            text?: string;
+          };
+          return (type === 'input_text' || type === 'output_text') &&
+            typeof partText === 'string'
+            ? partText
+            : '';
         })
         .join('');
     }
-
-    // It could be that: If an assistant message's content is not a string or a recognized input content list (e.g., ResponseOutputMessage with output_text parts), its existing content is not extracted. This results in existingText being empty, and the original message content is completely overwritten by the new appended text. But we will see if that is the case.
 
     Object.assign(
       message,

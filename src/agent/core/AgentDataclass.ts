@@ -34,7 +34,6 @@ export const AgentSettingBaseSchema = z.strictObject({
   tools: z.array(ToolDefinitionSchema).prefault([]),
 });
 
-/** Internal schema for XML structure mode - not exported. */
 const XmlStructureMode = z.enum(['never', 'scratchpadOnly', 'always']);
 
 export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({

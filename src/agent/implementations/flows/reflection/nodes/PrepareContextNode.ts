@@ -1,10 +1,3 @@
-/**
- * PrepareContextNode - Prepares round context (prompts and messages).
- *
- * Builds prompts and initializes base messages via modelHandler.
- * TeXCount stats and media are added by subsequent nodes.
- */
-
 import { Node } from '@agent/node';
 import { createRoundState } from '@agent/core/AgentState';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
@@ -19,7 +12,6 @@ import type {
   ReflectionServices,
 } from '../ReflectionServices';
 
-/** Fields extracted from shared for exec (avoids passing entire shared object). */
 interface PrepInput {
   currentRound: number;
   conversation: ProviderMessage[];
