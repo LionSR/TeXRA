@@ -1,7 +1,6 @@
-import { randomUUID } from 'crypto';
-
 import { getCleanAgentName, getMultipleName } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import { generateExecutionId } from '@utils/core/executionId';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 export function getStreamTabId(
@@ -18,7 +17,7 @@ export function getStreamTabId(
 
   if (options.agentCategory === AgentCategory.ToolUse) {
     const shortId =
-      options.executionId?.slice(0, 8) ?? randomUUID().slice(0, 8);
+      options.executionId?.slice(0, 8) ?? generateExecutionId().slice(0, 8);
     return `${cleanAgent}@${model}#${shortId}`;
   }
 

@@ -1,6 +1,3 @@
-// Standard library imports
-import { randomUUID } from 'crypto';
-
 // Third-party imports
 import * as vscode from 'vscode';
 import { ZodError } from 'zod';
@@ -11,6 +8,7 @@ import { executeAgent } from '@agent/runtime/executeAgent';
 import { formatZodError } from '@common/errors';
 import { AgentHistoryManager } from '@common/history/AgentHistoryManager';
 import * as logger from '@logger/logUtils';
+import { generateExecutionId } from '@utils/core/executionId';
 import type { ExecutionId } from '@shared/schemas';
 
 const CHANNEL = 'ExecuteCommand';
@@ -47,7 +45,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     // Use provided executionId (resume) or create new one (fresh)
     const executionId =
       (wrapped?.executionId as ExecutionId | undefined) ??
-      (randomUUID() as ExecutionId);
+      generateExecutionId();
     const isResume = wrapped?.executionId !== undefined;
 
     if (!isResume) {
