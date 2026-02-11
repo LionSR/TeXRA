@@ -1,7 +1,6 @@
 import * as path from 'path';
 
 import * as vscode from 'vscode';
-import { workspace } from 'vscode';
 
 import { getAgent } from '@agent/index';
 import {
