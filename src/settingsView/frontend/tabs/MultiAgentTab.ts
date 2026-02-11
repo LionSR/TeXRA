@@ -131,10 +131,7 @@ export class MultiAgentTab extends LitElement {
           min=${setting.min ?? nothing}
           max=${setting.max ?? nothing}
           @change=${(e: Event) =>
-            this.handleReliabilityChange(
-              setting,
-              e.target as HTMLInputElement,
-            )}
+            this.handleReliabilityChange(setting, e.target as HTMLInputElement)}
         />
         ${setting.unit
           ? html`<span class="reliability-unit">${setting.unit}</span>`
