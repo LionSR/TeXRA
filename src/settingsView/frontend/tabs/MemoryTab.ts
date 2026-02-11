@@ -42,8 +42,8 @@ export class MemoryTab extends LitElement {
   ];
 
   @property({ attribute: false }) items: MemoryViewItem[] = [];
-  @property({ type: Boolean }) enabled = false;
-  @property({ type: Boolean }) toggleDisabled = true;
+  @property({ attribute: false }) enabled = false;
+  @property({ attribute: false }) toggleDisabled = true;
 
   override render(): TemplateResult {
     return html`
