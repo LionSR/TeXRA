@@ -55,19 +55,47 @@ export function updateExecutionProgress(
   notifyWaiters(executionId);
 }
 
+/** All currently tracked (active) execution IDs. */
+export function getActiveExecutionIds(): string[] {
+  return [...registry.keys()];
+}
+
 /**
  * Wait for a progress update or execution completion.
  * Resolves when `updateExecutionProgress` or `untrackExecution` is called.
  */
 export function waitForExecutionChange(executionId: string): Promise<void> {
   return new Promise<void>((resolve) => {
-    let callbacks = changeCallbacks.get(executionId);
-    if (!callbacks) {
-      callbacks = [];
-      changeCallbacks.set(executionId, callbacks);
-    }
-    callbacks.push(resolve);
+    addChangeCallback(executionId, resolve);
   });
+}
+
+/**
+ * Wait for any of the given executions to change.
+ * Resolves with the execution ID that changed first.
+ */
+export function waitForAnyExecutionChange(
+  executionIds: string[],
+): Promise<string> {
+  return new Promise<string>((resolve) => {
+    let resolved = false;
+    for (const id of executionIds) {
+      addChangeCallback(id, () => {
+        if (resolved) return;
+        resolved = true;
+        resolve(id);
+      });
+    }
+  });
+}
+
+function addChangeCallback(executionId: string, cb: () => void): void {
+  let callbacks = changeCallbacks.get(executionId);
+  if (!callbacks) {
+    callbacks = [];
+    changeCallbacks.set(executionId, callbacks);
+  }
+  callbacks.push(cb);
 }
 
 function notifyWaiters(executionId: string): void {
