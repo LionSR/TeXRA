@@ -16,6 +16,7 @@ import type {
 
 // Local imports
 import type { FrontendEventHandlerContext } from './eventHandlers';
+import type { PermissionState } from './components/PermissionCard';
 
 /**
  * Updates a nested Record<runId, Record<round, T[]>> structure.
@@ -102,6 +103,21 @@ export function hasOutputFiles(
     }
   }
   return false;
+}
+
+/**
+ * Filter permissions to those relevant to a specific stream.
+ * Keeps permissions that have no streamId or match the given streamId.
+ */
+export function filterPermissionsForStream(
+  permissions: PermissionState[],
+  streamId: string | undefined,
+): PermissionState[] {
+  if (!streamId) return [];
+  return permissions.filter(
+    (permission) =>
+      !permission.data.streamId || permission.data.streamId === streamId,
+  );
 }
 
 // =============================================================================

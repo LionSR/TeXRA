@@ -29,10 +29,7 @@ import {
 import type { AgentConfigPayload } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import {
-  proposalCoordinator,
-  type ProposalResult,
-} from '@agent/runtime/AgentProposalCoordinator';
+import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { registerSubagent } from '@agent/runtime/subagentLineage';
 import {
   getCurrentToolFileInteractionContext,
@@ -221,14 +218,6 @@ function proposalResultToToolResult(
   }
 }
 
-/** Apply model override from an approved proposal result. */
-function applyModelOverride<T extends { model: string }>(
-  proposal: T,
-  result: ProposalResult & { action: 'approve' },
-): T {
-  return result.model ? { ...proposal, model: result.model } : proposal;
-}
-
 /**
  * Shared proposal-or-bypass flow used by both delegate_workflow and delegate_agent.
  *
@@ -261,10 +250,11 @@ async function proposeAndExecute(
   );
   if (nonApproveResult) return nonApproveResult;
 
-  const effective = applyModelOverride(
-    proposal,
-    result as ProposalResult & { action: 'approve' },
-  );
+  // At this point result.action === 'approve' (all other cases returned above)
+  const effective =
+    result.action === 'approve' && result.model
+      ? { ...proposal, model: result.model }
+      : proposal;
   return executeSubagent(toConfigPayload(effective), agentName, streamId);
 }
 

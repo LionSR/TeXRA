@@ -26,8 +26,6 @@ import {
 // Local imports - common
 import { AgentHistoryManager } from '@common/history/AgentHistoryManager';
 
-// Local imports - tools
-
 // Local imports - utils
 import { StorageFS } from '@utils/files';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
@@ -79,6 +77,13 @@ export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
 interface ExecutionStatusInfo {
   status: string;
   elapsed: string | null;
+}
+
+/** Format status info as a display string. */
+function formatStatusInfo(info: ExecutionStatusInfo): string {
+  return info.elapsed
+    ? `${info.status} (${info.elapsed} elapsed)`
+    : info.status;
 }
 
 /** Statuses that represent an actively running execution. */
@@ -204,9 +209,6 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
     );
   }
 
-  /**
-   * Resolve "current" to active execution ID, or return as-is.
-   */
   private resolveExecutionId(id: string): ExecutionId {
     if (id === 'current') {
       const ctx = getCurrentToolFileInteractionContext();
@@ -220,9 +222,6 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
     return id as ExecutionId;
   }
 
-  /**
-   * List all executions from history (most recent first).
-   */
   private async listExecutions(): Promise<ToolResult> {
     const history = await AgentHistoryManager.getHistory();
 
@@ -233,13 +232,9 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
     const lines = history.map((item) => {
       const agent = item.agentConfig.agent;
       const model = item.agentConfig.model ?? 'unknown';
-      // Format timestamp: extract date and time
       const ts = item.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
       const info = getExecutionStatusInfo(item.id, item.timestamp);
-      const statusStr = info.elapsed
-        ? `${info.status}, ${info.elapsed}`
-        : info.status;
-      return `${item.id}  ${ts}  ${agent}  ${model}  [${statusStr}]`;
+      return `${item.id}  ${ts}  ${agent}  ${model}  [${formatStatusInfo(info)}]`;
     });
 
     return {
@@ -247,9 +242,6 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
     };
   }
 
-  /**
-   * Show execution summary (brief metadata).
-   */
   private async showSummary(executionId: ExecutionId): Promise<ToolResult> {
     const historyItem =
       await AgentHistoryManager.getHistoryItemById(executionId);
@@ -262,25 +254,19 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
         throw new ToolError(`Execution not found: ${executionId}`);
       }
       const info = getExecutionStatusInfo(executionId);
-      const statusStr = info.elapsed
-        ? `${info.status} (${info.elapsed} elapsed)`
-        : info.status;
       return {
-        output: `Execution: ${executionId}\nStatus: ${statusStr}\n(No metadata available - use /executions/${executionId}/conversation to view messages)`,
+        output: `Execution: ${executionId}\nStatus: ${formatStatusInfo(info)}\n(No metadata available - use /executions/${executionId}/conversation to view messages)`,
       };
     }
 
     const config = historyItem.agentConfig;
     const info = getExecutionStatusInfo(executionId, historyItem.timestamp);
-    const statusStr = info.elapsed
-      ? `${info.status} (${info.elapsed} elapsed)`
-      : info.status;
     const lines = [
       `Execution: ${executionId}`,
       `Agent: ${config.agent}`,
       `Model: ${config.model ?? 'default'}`,
       `Timestamp: ${historyItem.timestamp}`,
-      `Status: ${statusStr}`,
+      `Status: ${formatStatusInfo(info)}`,
     ];
 
     lines.push('');
@@ -294,9 +280,6 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
     return { output: lines.join('\n') };
   }
 
-  /**
-   * Show agent configuration as JSON.
-   */
   private async showConfig(executionId: ExecutionId): Promise<ToolResult> {
     const historyItem =
       await AgentHistoryManager.getHistoryItemById(executionId);
@@ -307,15 +290,11 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
       );
     }
 
-    const config = historyItem.agentConfig;
     return {
-      output: JSON.stringify(config, null, 2),
+      output: JSON.stringify(historyItem.agentConfig, null, 2),
     };
   }
 
-  /**
-   * Show conversation/message history.
-   */
   private async showConversation(
     executionId: ExecutionId,
     viewRange?: number[],
@@ -329,7 +308,7 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
       throw new ToolError(`Execution not found: ${executionId}`);
     }
 
-    const conversation = flow?.shared?.conversation;
+    const conversation = flow.shared?.conversation;
     if (!Array.isArray(conversation) || conversation.length === 0) {
       return { output: '(No conversation history available)' };
     }
@@ -350,9 +329,6 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
     return { output };
   }
 
-  /**
-   * Format message content for display.
-   */
   private formatMessageContent(content: unknown): string {
     if (typeof content === 'string') {
       return this.truncate(content, 500);
@@ -363,9 +339,6 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
     return this.truncate(JSON.stringify(content), 500);
   }
 
-  /**
-   * Format a single content block.
-   */
   private formatBlock(block: unknown): string {
     if (typeof block === 'string') {
       return block;
@@ -386,16 +359,10 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
     }
   }
 
-  /**
-   * Truncate string with ellipsis if too long.
-   */
   private truncate(str: string, maxLen: number): string {
     return str.length > maxLen ? str.slice(0, maxLen - 3) + '...' : str;
   }
 
-  /**
-   * List files in task run directory.
-   */
   private async listFiles(executionId: ExecutionId): Promise<ToolResult> {
     const runDir = path.join(TASK_RUNS_DIR, executionId);
 
@@ -419,9 +386,6 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
     };
   }
 
-  /**
-   * Walk directory up to maxDepth levels.
-   */
   private async walkDirectory(
     basePath: string,
     relativePath: string,
@@ -466,9 +430,6 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
     return results;
   }
 
-  /**
-   * Read a specific file from task run storage.
-   */
   private async readFile(
     executionId: ExecutionId,
     filePath: string,
@@ -498,18 +459,12 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
     return { output };
   }
 
-  /**
-   * Format bytes to human-readable size.
-   */
   private formatSize(bytes: number): string {
     if (bytes < 1024) return `${bytes}B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}K`;
     return `${(bytes / (1024 * 1024)).toFixed(1)}M`;
   }
 
-  /**
-   * Apply view_range to output string (line-based pagination).
-   */
   private applyViewRange(output: string, viewRange?: number[]): string {
     if (!viewRange || viewRange.length < 2) return output;
     const lines = output.split('\n');

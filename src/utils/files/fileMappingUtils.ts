@@ -40,6 +40,10 @@ export function createFileMapping(
   for (const target of targetFiles) {
     const targetPath = getComparablePath(target);
     const targetBaseName = path.basename(targetPath);
+    const targetName = path.parse(targetBaseName).name;
+    const targetNameNormalized = roundAware
+      ? targetName.split('_r')[0]
+      : targetName;
 
     let bestMatchSourcePath: string | null = null;
     let bestMatchScore = 0;
@@ -51,16 +55,10 @@ export function createFileMapping(
 
       const sourcePath = getComparablePath(sourceFile);
       const sourceBaseName = path.basename(sourcePath);
-
       const sourceName = path.parse(sourceBaseName).name;
-      const targetName = path.parse(targetBaseName).name;
-
       const sourceNameNormalized = roundAware
         ? sourceName.split('_r')[0]
         : sourceName;
-      const targetNameNormalized = roundAware
-        ? targetName.split('_r')[0]
-        : targetName;
 
       let isMatch = false;
       let matchScore = 0;

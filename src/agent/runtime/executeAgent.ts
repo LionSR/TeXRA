@@ -281,11 +281,6 @@ function acquireStreamOrThrow(
   );
 }
 
-function isApiKeyError(err: unknown): boolean {
-  const msg = toErrorMessage(err);
-  return msg.includes('Missing API key') || msg.includes('API key not found');
-}
-
 /** Map workflow RoundOutput[] to OutputFileSummary[] for AgentFlowResult. */
 function toOutputSummaries(roundOutputs: RoundOutput[]): OutputFileSummary[] {
   return roundOutputs.flatMap((r) =>
@@ -339,7 +334,11 @@ async function runFlowWithLifecycle(
     // Subagents propagate errors to the orchestrator via FollowUpQueue —
     // don't show VS Code popups that would confuse the user.
     if (!options?.isSubagent) {
-      if (isApiKeyError(err)) {
+      const msg = toErrorMessage(err);
+      if (
+        msg.includes('Missing API key') ||
+        msg.includes('API key not found')
+      ) {
         await showApiKeyErrorNotification();
       } else {
         vscode.window.showErrorMessage(errorMsg);
@@ -350,20 +349,17 @@ async function runFlowWithLifecycle(
   }
 }
 
-function getOutputInfo(config: AgentConfig): string {
-  const { outputFiles = [], useMultipleOutputs } = config;
-  if (useMultipleOutputs && outputFiles.length > 1) {
-    return `to ${outputFiles.length} files`;
-  }
-  const firstOutput = outputFiles[0];
-  return firstOutput ? `to ${path.basename(firstOutput)}` : '';
-}
-
 async function showAgentNotification(config: AgentConfig): Promise<void> {
   const inputName = config.inputFile
     ? path.basename(config.inputFile)
     : 'selected input';
-  const outputInfo = getOutputInfo(config);
+  const { outputFiles = [], useMultipleOutputs } = config;
+  let outputInfo: string;
+  if (useMultipleOutputs && outputFiles.length > 1) {
+    outputInfo = `to ${outputFiles.length} files`;
+  } else {
+    outputInfo = outputFiles[0] ? `to ${path.basename(outputFiles[0])}` : '';
+  }
 
   const selection = await vscode.window.showInformationMessage(
     `TeXRA Agent Started: "${config.agent}" is processing ${inputName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,

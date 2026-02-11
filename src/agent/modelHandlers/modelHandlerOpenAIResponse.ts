@@ -8,7 +8,6 @@ import type { InputTokenCountParams } from 'openai/resources/responses/input-tok
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
-// Internal imports
 import { hasEndTag, type AgentSetting } from '@agent/core/AgentDataclass';
 import { type OpenAIAPIResponseUsage } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -24,12 +23,10 @@ import {
 
 // Type imports
 import type { ModelConfig } from 'llm-zoo';
-
-// Type imports
 import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 
-// Internal imports
+// Local imports - utils
 import { K_SLICE, getConfig } from '@utils/config';
 import { delay } from '@utils/core';
 import { flexibleFS } from '@utils/files';

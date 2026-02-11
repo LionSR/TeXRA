@@ -157,18 +157,14 @@ export class ResponseCycleNode<C = unknown> extends Node<
       );
       await flow.run(cycleShared);
 
-      // Determine outcome from cycle state (single interpretation)
-      if (cycleShared.shouldStop && cycleShared.lastError) {
+      // Determine outcome from cycle state
+      if (cycleShared.lastError) {
         return {
           outcome: 'failed',
           error: new Error(cycleShared.lastError.message),
         };
       }
-      if (
-        cycleShared.shouldStop &&
-        !cycleShared.lastError &&
-        !cycleShared.endTurn
-      ) {
+      if (cycleShared.shouldStop && !cycleShared.endTurn) {
         return { outcome: 'cancelled' };
       }
       return { outcome: 'completed', endTurn: cycleShared.endTurn };
