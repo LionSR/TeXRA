@@ -58,14 +58,6 @@ export class ProviderKeyList extends LitElement {
       this.expandedProvider === provider ? null : provider;
   }
 
-  private renderStatusBadge(
-    status: ProviderKeyStatus['status'],
-  ): TemplateResult {
-    return html`<span class="key-status-badge ${status}"
-      >${STATUS_LABELS[status]}</span
-    >`;
-  }
-
   private renderActions(entry: ProviderKeyStatus): TemplateResult {
     const { provider } = entry;
     const removeButton =
@@ -149,15 +141,12 @@ export class ProviderKeyList extends LitElement {
         `
       : nothing;
 
-    const vscodeToggles = entry.vscodeSettings.map((setting) =>
-      this.renderVscodeSetting(setting),
-    );
-
     return html`
       <tr class="provider-detail-row">
         <td colspan="3">
           <div class="provider-settings">
-            ${streamingToggle} ${endpointInput} ${vscodeToggles}
+            ${streamingToggle} ${endpointInput}
+            ${entry.vscodeSettings.map((s) => this.renderVscodeSetting(s))}
           </div>
         </td>
       </tr>
@@ -232,7 +221,11 @@ export class ProviderKeyList extends LitElement {
             <span class="provider-name">${entry.displayName}</span>
           </div>
         </td>
-        <td>${this.renderStatusBadge(entry.status)}</td>
+        <td>
+          <span class="key-status-badge ${entry.status}"
+            >${STATUS_LABELS[entry.status]}</span
+          >
+        </td>
         <td>${this.renderActions(entry)}</td>
       </tr>
     `;

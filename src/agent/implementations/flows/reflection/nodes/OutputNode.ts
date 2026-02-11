@@ -41,13 +41,11 @@ import type {
 // Types
 // ============================================================================
 
-/**
- * Prep result carries shared reference and validated output location.
- * Other fields are accessed directly from shared and services.
- */
+/** Prep result carries validated output location and round info for exec(). */
 interface OutputPrepInput {
-  shared: ReflectionFlowShared;
   outputLocation: AgentFileLocation;
+  currentRound: number;
+  endTurn: boolean;
 }
 
 /** Exec result bundles both the round output and the summary for post() side effects. */
@@ -93,8 +91,9 @@ export class OutputNode<C = unknown> extends Node<
     }
 
     return {
-      shared,
       outputLocation: shared.outputLocation,
+      currentRound: shared.currentRound,
+      endTurn: shared.endTurn,
     };
   }
 
@@ -112,8 +111,7 @@ export class OutputNode<C = unknown> extends Node<
       baseFiles,
       shouldEnsureXmlStructure: shouldEnsureXml,
     } = this.services;
-    const { shared, outputLocation } = prepRes;
-    const { currentRound, endTurn } = shared;
+    const { outputLocation, currentRound, endTurn } = prepRes;
 
     let mapping: RoundFileMapping | undefined;
 
@@ -187,35 +185,34 @@ export class OutputNode<C = unknown> extends Node<
     prepRes: OutputPrepInput,
     error: Error,
   ): Promise<OutputExecResult> {
-    const { logger, outputState } = this.services;
-    const { shared, outputLocation } = prepRes;
+    const { logger, outputState, setting } = this.services;
+    const { outputLocation, currentRound, endTurn } = prepRes;
     logger.warn(`Output processing failed: ${error.message}`);
 
     // Still summarize what we can for post() side effects
-    const { setting } = this.services;
     let summary: RoundSummary;
     try {
       summary = await summarizeRound(
         outputState,
         this.services,
         outputLocation,
-        shared.currentRound,
-        { endTurn: shared.endTurn, isRewrite: setting.isRewrite },
+        currentRound,
+        { endTurn, isRewrite: setting.isRewrite },
       );
     } catch {
       summary = {
         storageKey: getStorageKey(outputState),
-        currRound: shared.currentRound,
+        currRound: currentRound,
         fileInfos: [],
         filesToOpen: [],
         outputFile: outputLocation,
-        endTurn: shared.endTurn,
+        endTurn,
       };
     }
 
     return {
       roundOutput: {
-        round: shared.currentRound,
+        round: currentRound,
         rawOutput: null,
         outputs: [],
         xmlSummary: {
@@ -233,13 +230,12 @@ export class OutputNode<C = unknown> extends Node<
    * All side effects: event emission, file opening, validation, state updates.
    */
   async post(
-    _shared: ReflectionFlowShared,
+    shared: ReflectionFlowShared,
     prepRes: OutputPrepInput,
     execRes: OutputExecResult,
   ): Promise<string | undefined> {
     const { streamId, logger, outputState } = this.services;
-    const { shared, outputLocation } = prepRes;
-    const { currentRound, endTurn } = shared;
+    const { outputLocation, currentRound, endTurn } = prepRes;
     const { summary, roundOutput } = execRes;
 
     // Emit output files event

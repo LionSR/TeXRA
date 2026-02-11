@@ -166,20 +166,6 @@ export async function loadAgents(): Promise<void> {
   return initPromise;
 }
 
-/**
- * Ensure agents are loaded, without triggering a re-scan if already loaded.
- * Prefer this over loadAgents() when you just need to access the cache.
- */
-async function ensureAgentsLoaded(): Promise<void> {
-  if (initialized) {
-    return;
-  }
-  if (initPromise) {
-    return initPromise;
-  }
-  return loadAgents();
-}
-
 async function doLoad(): Promise<void> {
   const startTime = Date.now();
   cache.clear();
@@ -771,27 +757,22 @@ function sortAgentEntries(
 }
 
 /**
- * Build typed agent options data for Lit-native rendering.
- */
-function buildAgentOptionsData(): AgentOptionsDataPayload {
-  const visibleWorkflow = getVisibleWorkflowAgents();
-  const visibleToolUse = getVisibleToolUseAgents();
-
-  return {
-    workflow: sortAgentEntries(visibleWorkflow, DEFAULT_WORKFLOW_AGENT).map(
-      entryToOptionData,
-    ),
-    toolUse: sortAgentEntries(visibleToolUse, DEFAULT_TOOL_USE_AGENT).map(
-      entryToOptionData,
-    ),
-  };
-}
-
-/**
- * Async version - ensures cache is loaded first.
- * Returns typed data for Lit-native rendering.
+ * Compute typed agent options data for Lit-native rendering.
+ * Ensures cache is loaded first.
  */
 export async function computeAgentOptionsData(): Promise<AgentOptionsDataPayload> {
-  await ensureAgentsLoaded();
-  return buildAgentOptionsData();
+  if (!initialized) {
+    await (initPromise ?? loadAgents());
+  }
+
+  return {
+    workflow: sortAgentEntries(
+      getVisibleWorkflowAgents(),
+      DEFAULT_WORKFLOW_AGENT,
+    ).map(entryToOptionData),
+    toolUse: sortAgentEntries(
+      getVisibleToolUseAgents(),
+      DEFAULT_TOOL_USE_AGENT,
+    ).map(entryToOptionData),
+  };
 }

@@ -225,11 +225,6 @@ async function handleCreateAgentWithAI(
   }
 }
 
-async function resolveAgentFilePath(agentName: string): Promise<vscode.Uri> {
-  const targetDir = await agentDirectories.custom();
-  return vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`));
-}
-
 async function createWorkflowAgent(
   config: CreatorConfig,
   agentName: string,
@@ -262,7 +257,8 @@ async function createWorkflowAgent(
     outputFilesNote = files.map((f) => `    - ${f}`).join('\n');
   }
 
-  const filePath = await resolveAgentFilePath(agentName);
+  const targetDir = await agentDirectories.custom();
+  const filePath = vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`));
   const multipleNote = isMultipleOutput
     ? [
         'IMPORTANT: This agent must handle MULTIPLE output files. Adjust the structure above:',
@@ -311,7 +307,8 @@ async function createToolUseAgent(
   agentName: string,
   description: string,
 ) {
-  const filePath = await resolveAgentFilePath(agentName);
+  const targetDir = await agentDirectories.custom();
+  const filePath = vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`));
   const vars = { AGENT_NAME: agentName, DESCRIPTION: description };
   let yamlContent = await tryAIGeneration(config, 'toolUse', vars);
 

@@ -313,12 +313,6 @@ export function handleInvocationResult<T extends { response: unknown }>(
 ): (T & { kind: 'success' }) | null {
   const { logger, operationName } = options;
 
-  /** Mark flow as stopped without ending the turn (error/cancellation path). */
-  function stopWithoutEndTurn(): void {
-    state.shouldStop = true;
-    state.endTurn = false;
-  }
-
   if (result.kind === 'skipped') {
     logger.debug(`${operationName} skipped: shouldStop was already true`);
     return null;
@@ -326,13 +320,15 @@ export function handleInvocationResult<T extends { response: unknown }>(
 
   if (result.kind === 'cancelled') {
     retryState.lastError = undefined;
-    stopWithoutEndTurn();
+    state.shouldStop = true;
+    state.endTurn = false;
     return null;
   }
 
   if (result.kind === 'failed') {
     retryState.lastError = { message: result.message, retryable: false };
-    stopWithoutEndTurn();
+    state.shouldStop = true;
+    state.endTurn = false;
     return null;
   }
 
@@ -342,7 +338,8 @@ export function handleInvocationResult<T extends { response: unknown }>(
       message: EMPTY_RESPONSE_ERROR_MESSAGE,
       retryable: false,
     };
-    stopWithoutEndTurn();
+    state.shouldStop = true;
+    state.endTurn = false;
     return null;
   }
 
