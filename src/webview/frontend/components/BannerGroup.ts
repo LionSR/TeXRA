@@ -48,7 +48,8 @@ export class BannerGroup extends LitElement {
       .dependency-banner {
         background-color: var(--vscode-inputValidation-warningBackground);
         color: var(--vscode-inputValidation-warningForeground);
-        border: 1px solid var(--vscode-inputValidation-warningBorder);
+        border: var(--border-thin) solid
+          var(--vscode-inputValidation-warningBorder);
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -57,7 +58,8 @@ export class BannerGroup extends LitElement {
       .getting-started-banner {
         background-color: var(--vscode-inputValidation-infoBackground);
         color: var(--vscode-inputValidation-infoForeground);
-        border: 1px solid var(--vscode-inputValidation-infoBorder);
+        border: var(--border-thin) solid
+          var(--vscode-inputValidation-infoBorder);
         line-height: 1.5;
       }
 
@@ -101,7 +103,8 @@ export class BannerGroup extends LitElement {
             100%
         );
         color: var(--vscode-inputValidation-infoForeground);
-        border: 1px solid var(--vscode-inputValidation-infoBorder);
+        border: var(--border-thin) solid
+          var(--vscode-inputValidation-infoBorder);
         border-radius: var(--border-radius);
         padding: var(--spacing-medium);
         margin-bottom: var(--spacing-large);
@@ -137,8 +140,8 @@ export class BannerGroup extends LitElement {
       }
 
       .login-banner-description {
-        font-size: 0.9em;
-        opacity: 0.9;
+        font-size: var(--font-size-sm);
+        opacity: var(--opacity-normal);
       }
 
       .login-banner .actions {
