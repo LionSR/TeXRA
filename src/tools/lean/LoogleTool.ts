@@ -229,18 +229,20 @@ Useful for finding the right lemma when you know roughly what type it should hav
     }
 
     const totalHits = allResults.length;
-    const summary =
-      totalHits > 0
-        ? `${totalHits} result${totalHits > 1 ? 's' : ''} across ${queries.length} queries`
-        : errorCount === queries.length
-          ? `All ${queries.length} queries failed`
-          : `No results across ${queries.length} queries`;
+    let summary: string;
+    if (totalHits > 0) {
+      summary = `${totalHits} result${totalHits > 1 ? 's' : ''} across ${queries.length} queries`;
+    } else if (errorCount === queries.length) {
+      summary = `All ${queries.length} queries failed`;
+    } else {
+      summary = `No results across ${queries.length} queries`;
+    }
 
     return {
       summary,
       output: sections.join('\n\n---\n\n'),
-      results: allResults.length > 0 ? allResults : undefined,
-      isError: errorCount === queries.length ? true : undefined,
+      results: totalHits > 0 ? allResults : undefined,
+      isError: errorCount === queries.length || undefined,
     };
   }
 }

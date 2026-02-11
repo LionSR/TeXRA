@@ -133,7 +133,6 @@ export async function runToolUseFlow<C = unknown>(
   onSetup?: ToolUseFlowSetupCallback,
 ): Promise<RunToolUseFlowResult> {
   const { logger, streamId, executionId, setting, onInterrupt } = input;
-  const snapshot = input.resumeSnapshot ?? null;
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const registry = toolRegistry ?? getDefaultToolRegistry();
   const resolvedTools = resolveTools(setting.tools, registry, logger, {
@@ -146,7 +145,7 @@ export async function runToolUseFlow<C = unknown>(
     session: sessionLifecycle,
     resolvedTools,
     toolRegistry: registry,
-    snapshot,
+    snapshot: input.resumeSnapshot ?? null,
     onRoundFinalized: input.onRoundFinalized ?? (async () => {}),
   };
 
@@ -204,12 +203,11 @@ export async function runToolUseFlow<C = unknown>(
     prepareNode.next(cycleNode);
     cycleNode.next(waitNode);
     waitNode.on(FlowTransition.CONTINUE, cycleNode);
-    const startNode = prepareNode;
     const pf = new PersistedFlow<
       ToolUseRunShared,
       Record<string, unknown>,
       ToolUseServices<C>
-    >(startNode, kv);
+    >(prepareNode, kv);
     pf.setServices(services);
     await pf.run(shared);
 

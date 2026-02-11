@@ -147,9 +147,7 @@ export class StreamTabsManager extends PersistentMapManager<
 
   /** Debounced save — coalesces rapid-fire log mutations into a single write. */
   override async save(): Promise<void> {
-    if (this.saveTimer !== null) {
-      clearTimeout(this.saveTimer);
-    }
+    if (this.saveTimer !== null) clearTimeout(this.saveTimer);
 
     if (!this.savePromise || this.pendingResolve === null) {
       this.savePromise = new Promise<void>((resolve) => {
@@ -209,10 +207,7 @@ export class StreamTabsManager extends PersistentMapManager<
         });
       this.inFlightWrite = writePromise;
       await writePromise;
-      return;
-    }
-
-    if (this.inFlightWrite) {
+    } else if (this.inFlightWrite) {
       await this.inFlightWrite;
     }
   }

@@ -321,23 +321,21 @@ export class ProgressViewProvider
       this.eventHandler.refreshStreamSurface(activeStream);
     }
 
-    this.sendYoloStateForStream(activeStream);
-
     this._pendingUpdateOptions = null;
-  }
 
-  private sendYoloStateForStream(streamId: StreamTabId): void {
-    if (!this.canSendToWebview()) return;
-    const id = streamId || ('' as StreamTabId);
-    this.webviewUpdater.updateToolEditApprovalState(
-      id,
-      streamId ? isApprovalBypassedForStream(streamId) : false,
-    );
-    this.webviewUpdater.updateSuperYoloBypassState(
-      id,
-      streamId ? isProposalBypassedForStream(streamId) : false,
-      isSuperYoloFeatureEnabled(),
-    );
+    // Send YOLO/Super YOLO bypass state for the active stream
+    if (this.canSendToWebview()) {
+      const bypassStreamId = activeStream || ('' as StreamTabId);
+      this.webviewUpdater.updateToolEditApprovalState(
+        bypassStreamId,
+        activeStream ? isApprovalBypassedForStream(activeStream) : false,
+      );
+      this.webviewUpdater.updateSuperYoloBypassState(
+        bypassStreamId,
+        activeStream ? isProposalBypassedForStream(activeStream) : false,
+        isSuperYoloFeatureEnabled(),
+      );
+    }
   }
 
   public markWebviewReady(
@@ -487,7 +485,7 @@ export class ProgressViewProvider
   private disposePanelResources(disposeView = false): void {
     const panelView = this._panelView;
     this._panelView = undefined;
-    this._panelDisposables.forEach((d) => d.dispose());
+    for (const d of this._panelDisposables) d.dispose();
     this._panelDisposables = [];
     this._panelReady = false;
     if (disposeView) {
