@@ -49,11 +49,6 @@ function formatWorkflowOutputs(outputs: OutputFileSummary[]): string[] {
   return lines;
 }
 
-/** Build the opening <subagent-result> tag. */
-function resultTag(result: AgentFlowResult, agentName: string): string {
-  return `<subagent-result id="${result.executionId}" agent="${agentName}" category="${result.category}" status="${result.status}">`;
-}
-
 /**
  * Format an AgentFlowResult as a delivery message for async mode.
  * Injected into the orchestrator's FollowUpQueue as a user-role message.
@@ -62,7 +57,9 @@ export function formatSubagentDelivery(
   agentName: string,
   result: AgentFlowResult,
 ): string {
-  const lines = [resultTag(result, agentName)];
+  const lines = [
+    `<subagent-result id="${result.executionId}" agent="${agentName}" category="${result.category}" status="${result.status}">`,
+  ];
 
   if (result.category === 'workflow' && result.outputs.length > 0) {
     lines.push(...formatWorkflowOutputs(result.outputs));

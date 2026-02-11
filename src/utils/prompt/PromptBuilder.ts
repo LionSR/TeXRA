@@ -145,25 +145,22 @@ export class PromptBuilder {
   }
 
   private getRoundTemplate(currRound: number): string | undefined {
-    const normalizedRound = Math.max(0, currRound);
     const { userRequest } = this.agentPrompt;
-    const requestArray = Array.isArray(userRequest)
+    const templates = Array.isArray(userRequest)
       ? userRequest
       : userRequest
         ? [userRequest]
         : [];
 
-    const template = requestArray[normalizedRound];
-    if (template !== undefined) {
-      return template;
-    }
+    const round = Math.max(0, currRound);
+    if (round < templates.length) return templates[round];
 
     // For rounds beyond configured templates, fall back to the second template
-    if (normalizedRound > 0 && requestArray.length > 1) {
+    if (round > 0 && templates.length > 1) {
       this.logger?.debug(
         `No prompt configured for round ${currRound}. Falling back to second template (index 1).`,
       );
-      return requestArray[1];
+      return templates[1];
     }
 
     return undefined;

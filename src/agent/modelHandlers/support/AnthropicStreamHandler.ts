@@ -245,33 +245,33 @@ export class AnthropicStreamHandler {
     // Track block type for diagnostics
     this.diagnostics.blockTypesSeen.add(blockType);
 
-    if (blockType === 'thinking') {
-      // Finalize any pending text stream before starting thinking
+    // Check for consecutive text blocks that share a stream.
+    // Consecutive means: immediately following (by index) AND previous was text.
+    // The outputStream !== null check ensures previous block was text
+    // (we null it for thinking/tool blocks).
+    const isConsecutiveText =
+      blockType === 'text' &&
+      this.config.outputEnabled &&
+      this.state.outputStream !== null &&
+      blockIndex === this.state.lastBlockIndex + 1;
+
+    // Finalize pending text stream for all non-consecutive cases
+    if (!isConsecutiveText) {
       this.finalizeOutputStream();
+    }
+
+    if (blockType === 'thinking') {
       this.thinkingStreams.set(
         blockIndex,
         this.factories.createThinkingStream(),
       );
     } else if (blockType === 'compaction') {
-      // Compaction summaries are internal context artifacts and should not be streamed.
       this.logger.debug('Compaction block started in stream');
-      this.finalizeOutputStream();
     } else if (blockType === 'text' && this.config.outputEnabled) {
-      // Consecutive text blocks share a stream
-      // Consecutive means: immediately following (by index) AND previous was text
-      // The outputStream !== null check ensures previous block was text
-      // (we null it for thinking/tool blocks)
-      const isConsecutive =
-        this.state.outputStream !== null &&
-        blockIndex === this.state.lastBlockIndex + 1;
-
-      if (!isConsecutive) {
-        // First text block or non-consecutive - create new stream
-        this.finalizeOutputStream();
+      if (!isConsecutiveText) {
         this.state.outputStream = this.factories.createOutputStream();
       }
     } else if (blockType === 'server_tool_use') {
-      // Track web search server tool use to get query
       const block = event.content_block as ServerToolUseBlock;
       if (block.name === 'web_search') {
         this.state.pendingSearches.set(block.id, {
@@ -279,18 +279,10 @@ export class AnthropicStreamHandler {
           input: '',
         });
       }
-      // Finalize any pending text stream
-      this.finalizeOutputStream();
     } else if (blockType === 'web_search_tool_result') {
       this.handleWebSearchResult(
         event.content_block as WebSearchToolResultBlock,
       );
-      // Finalize any pending text stream
-      this.finalizeOutputStream();
-    } else {
-      // Other non-text, non-thinking blocks (tool_use, etc.)
-      // Finalize any pending text stream
-      this.finalizeOutputStream();
     }
 
     // Always update lastBlockIndex for ALL block types
@@ -434,9 +426,8 @@ export class AnthropicStreamHandler {
    * Emits a web search result to the progress view.
    */
   private emitWebSearchResult(result: WebSearchResult): void {
-    if (!this.config.progressViewEnabled) {
-      return;
+    if (this.config.progressViewEnabled) {
+      this.logger.logWebSearch(result);
     }
-    this.logger.logWebSearch(result);
   }
 }

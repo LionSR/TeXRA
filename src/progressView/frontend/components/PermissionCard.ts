@@ -192,9 +192,9 @@ export class PermissionCard extends LitElement {
     if (!this.permission) return '';
 
     if (this.permission.kind === PERMISSION_KIND.PROPOSAL) {
-      const isWorkflow =
-        this.permission.data.agentCategory === AGENT_CATEGORY.WORKFLOW;
-      return `Agent proposal (${isWorkflow ? 'Workflow' : 'Tool-Use'})`;
+      return this.permission.data.agentCategory === AGENT_CATEGORY.WORKFLOW
+        ? 'Agent proposal (Workflow)'
+        : 'Agent proposal (Tool-Use)';
     }
 
     return PERMISSION_TITLES[this.permission.kind];
@@ -412,11 +412,6 @@ export class PermissionCard extends LitElement {
   }
 
   private handleRejectClick(action: string): void {
-    if (!this.canCollectFeedback()) {
-      this.emitAction(action);
-      return;
-    }
-
     if (!this.showFeedback) {
       // First click: show feedback form
       this.showFeedback = true;

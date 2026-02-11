@@ -113,7 +113,8 @@ export class TaskGroupList extends LitElement {
 
     if (groupsChanged) {
       // Structural change — always full rebuild
-      this.fullTreeRebuild();
+      [this.cachedTree, this.cachedUserMessages, this.cachedOtherUngrouped] =
+        this.buildGroupTree();
     } else if (messagesChanged) {
       // Only messages changed — use Lit's old value to pick incremental path
       const prevMessages = changedProperties.get('messages') as
@@ -131,7 +132,8 @@ export class TaskGroupList extends LitElement {
         this.appendNewMessages(prevCount);
       } else {
         // Messages shrunk (e.g. clear) — full rebuild
-        this.fullTreeRebuild();
+        [this.cachedTree, this.cachedUserMessages, this.cachedOtherUngrouped] =
+          this.buildGroupTree();
       }
     }
 
@@ -144,14 +146,6 @@ export class TaskGroupList extends LitElement {
         this.groups.filter((g) => !g.parentGroupId).map((g) => g.id),
       );
     }
-  }
-
-  /** Full tree rebuild — used when groups change or on first render. */
-  private fullTreeRebuild(): void {
-    const [tree, userMessages, otherUngrouped] = this.buildGroupTree();
-    this.cachedTree = tree;
-    this.cachedUserMessages = userMessages;
-    this.cachedOtherUngrouped = otherUngrouped;
   }
 
   /**
@@ -424,23 +418,18 @@ export class TaskGroupList extends LitElement {
       `;
     }
 
-    // Use memoized tree data computed in willUpdate()
-    const tree = this.cachedTree;
-    const userMessages = this.cachedUserMessages;
-    const otherUngrouped = this.cachedOtherUngrouped;
-
     // Tool-use: user messages first, then tree, then other ungrouped (errors etc)
     // This preserves chronological order for errors while ensuring user prompts appear first.
     // Workflow: tree first, then all ungrouped messages
     const [ungroupedBefore, ungroupedAfter] = this.isToolUse
-      ? [userMessages, otherUngrouped]
-      : [[], [...userMessages, ...otherUngrouped]];
+      ? [this.cachedUserMessages, this.cachedOtherUngrouped]
+      : [[], [...this.cachedUserMessages, ...this.cachedOtherUngrouped]];
 
     return html`
       <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
         ${this.renderUngroupedMessages(ungroupedBefore)}
         ${repeat(
-          tree,
+          this.cachedTree,
           (t) => t.group.id,
           (t) => this.renderGroupNode(t),
         )}

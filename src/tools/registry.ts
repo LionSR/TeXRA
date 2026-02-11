@@ -108,18 +108,8 @@ export function resetDefaultToolRegistry(): void {
   defaultRegistryInstance = null;
 }
 
-/**
- * Valid tool name pattern: starts with letter/underscore, followed by alphanumeric/underscores.
- */
-const VALID_TOOL_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-
-/**
- * Validates a tool name contains only allowed characters.
- * @returns true if valid, false otherwise
- */
-function isValidToolName(name: string): boolean {
-  return VALID_TOOL_NAME_PATTERN.test(name);
-}
+/** Valid tool name pattern: starts with letter/underscore, followed by alphanumeric/underscores. */
+const VALID_TOOL_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 /**
  * Raw tool configuration from YAML - can be a string name or partial definition.
@@ -146,7 +136,7 @@ export function resolveToolDefinitions(
   return tools.map((item): ToolDefinition => {
     const name = typeof item === 'string' ? item : item.name;
 
-    if (!isValidToolName(name)) {
+    if (!VALID_TOOL_NAME.test(name)) {
       warnOnMissing?.(name);
       return { name };
     }
