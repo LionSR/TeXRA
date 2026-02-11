@@ -59,6 +59,7 @@ export interface RunReflectionFlowInput<
   parentStage: AgentLogStage;
   getOutputFileLocation?: (round: number) => AgentFileLocation;
   usageMonitor?: UsageMonitor;
+  onRoundCompleted?: (roundIndex: number, totalRounds: number) => void;
 }
 
 export interface RunReflectionFlowResult {
@@ -261,6 +262,9 @@ export async function runReflectionFlow<C = unknown>(
           s.workspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
         },
         checkInterruption,
+        onRoundCompleted: (roundIndex, s) => {
+          input.onRoundCompleted?.(roundIndex, s.totalRounds);
+        },
       },
     });
 

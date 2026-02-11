@@ -1,5 +1,4 @@
 import * as path from 'path';
-import { randomUUID } from 'crypto';
 
 import * as vscode from 'vscode';
 import { ZodError } from 'zod';
@@ -64,13 +63,19 @@ import {
 } from '@logger/index';
 import { TaskRunFileService } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
+import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
 
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
 import { createInterruptCallbacks } from './InterruptManager';
-import { trackExecution, untrackExecution } from './executionRegistry';
+import {
+  trackExecution,
+  untrackExecution,
+  updateExecutionProgress,
+  type ExecutionProgress,
+} from './executionRegistry';
 import type { AgentFlowResult, OutputFileSummary } from './AgentFlowResult';
 
 const CHANNEL = 'executeAgent';
@@ -148,8 +153,7 @@ async function resolveAgentBase(
   providedExecutionId?: ExecutionId,
   options?: ResolveAgentOptions,
 ): Promise<ResolvedAgentBase> {
-  const executionId: ExecutionId =
-    providedExecutionId ?? (randomUUID() as ExecutionId);
+  const executionId: ExecutionId = providedExecutionId ?? generateExecutionId();
 
   const fullConfig = AgentConfigSchema.parse(configPayload);
   const resolution = await getAgentPath(fullConfig.agent, {
@@ -304,9 +308,16 @@ async function runFlowWithLifecycle(
   streamId: StreamTabId,
   agentName: string,
   runner: () => Promise<AgentFlowResult>,
-  options?: { isSubagent?: boolean },
+  options?: { isSubagent?: boolean; progress?: ExecutionProgress },
 ): Promise<AgentFlowResult> {
-  trackExecution(ctx.executionId, streamId);
+  trackExecution(
+    ctx.executionId,
+    streamId,
+    options?.progress ?? {
+      category: 'workflow',
+      agentName,
+    },
+  );
   try {
     const result = await runner();
     untrackExecution(ctx.executionId);
@@ -530,6 +541,11 @@ export async function executeAgent(
   options?.onStreamResolved?.(streamId);
 
   const isSubagent = options?.isSubagent;
+  const progress: ExecutionProgress = {
+    category:
+      setting.agentCategory === AgentCategory.ToolUse ? 'toolUse' : 'workflow',
+    agentName,
+  };
   return runFlowWithLifecycle(
     ctx,
     streamId,
@@ -572,6 +588,12 @@ export async function executeAgent(
             ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
           setting: ctx.setting as AgentWorkflowSetting,
           parentStage: ctx.parentStage,
+          onRoundCompleted: (roundIndex, totalRounds) => {
+            updateExecutionProgress(ctx.executionId, {
+              currentRound: roundIndex,
+              totalRounds,
+            });
+          },
         });
         return {
           category: 'workflow' as const,
@@ -582,7 +604,7 @@ export async function executeAgent(
         };
       });
     },
-    { isSubagent },
+    { isSubagent, progress },
   );
 }
 
@@ -622,6 +644,12 @@ export async function executeMergeAgent(
           fileService,
         ),
         parentStage: ctx.parentStage,
+        onRoundCompleted: (roundIndex, totalRounds) => {
+          updateExecutionProgress(ctx.executionId, {
+            currentRound: roundIndex,
+            totalRounds,
+          });
+        },
       });
       return {
         category: 'workflow' as const,
@@ -679,6 +707,12 @@ export async function resumeToolUseFromSnapshot(
         executionId: ctx.executionId,
         streamId,
       };
+    },
+    {
+      progress: {
+        category: 'toolUse',
+        agentName: snapshot.agentConfig.agent,
+      },
     },
   );
 }

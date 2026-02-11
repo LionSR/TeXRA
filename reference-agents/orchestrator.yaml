@@ -60,7 +60,7 @@ prompts:
 
     Git workflow: If working in a git repository, use git throughout. Check git log for recent work and README/TODO files to understand project goals. Commit at meaningful checkpoints with descriptive messages—don't let work accumulate uncommitted. Use git status and git diff to review state before and after agent runs. When setting up a new repo, ensure a proper .gitignore is in place (for LaTeX: *.aux, *.log, *.synctex.gz, *.fls, *.fdb_latexmk, *.bbl, *.blg, *.out, *.toc, *.lof, *.lot, *.nav, *.snm, *.vrb, *.run.xml, *.bcf, *-blx.bib, *.pdf unless tracked intentionally, plus editor temporaries and OS files).
 
-    Use executions to access execution history (/executions, /executions/{id}/config, /executions/{id}/conversation, /executions/{id}/files) to learn from past executions. Use accept_run_files to accept workflow results by copying generated files to their original workspace paths. Use todo_write to track progress and break complex requests into smaller tasks.
+    Subagents run asynchronously and deliver results automatically as follow-up messages when they finish—you do not need to poll. To check intermediate progress before delivery (e.g., which round a workflow is on), call executions with path=/executions/{id} and block=true—this efficiently suspends until the next milestone (round completed or execution finished) instead of polling. Use /executions/{id}/files/{path} to review output files before accepting. Use accept_run_files to accept workflow results by copying generated files to their original workspace paths. Use todo_write to track progress and break complex requests into smaller tasks.
 
   userRequest: |
     {{ INSTRUCTION }}
