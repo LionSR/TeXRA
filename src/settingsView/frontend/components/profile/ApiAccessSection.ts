@@ -19,10 +19,10 @@ import { ProfileViewEvents } from './events';
 export class ApiAccessSection extends LitElement {
   static override styles = [designTokens, profileViewStyles];
 
-  @property({ type: String }) mode: 'included' | 'personal' = 'personal';
+  @property({ attribute: false }) mode: 'included' | 'personal' = 'personal';
 
   private handleModeChange(event: Event): void {
-    const target = event.target as HTMLInputElement | null;
+    const target = event.currentTarget as HTMLInputElement | null;
     const mode = target?.value === 'included' ? 'included' : 'personal';
     if (mode !== this.mode) {
       this.dispatchEvent(ProfileViewEvents.setApiAccessMode({ mode }));

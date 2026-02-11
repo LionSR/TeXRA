@@ -361,16 +361,16 @@ export class StreamHeader extends LitElement {
     `,
   ];
 
-  @property({ type: Object }) stream: StreamTabInfo | null = null;
-  @property({ type: Object }) streamState: StreamState | null = null;
-  @property({ type: String }) runId: string | null = null;
-  @property({ type: Array }) runs: Array<{
+  @property({ attribute: false }) stream: StreamTabInfo | null = null;
+  @property({ attribute: false }) streamState: StreamState | null = null;
+  @property({ attribute: false }) runId: string | null = null;
+  @property({ attribute: false }) runs: Array<{
     id: string;
     name: string;
     startTime: number;
   }> = [];
-  @property({ type: Boolean }) yoloActive = false;
-  @property({ type: Boolean }) superYoloActive = false;
+  @property({ attribute: false }) yoloActive = false;
+  @property({ attribute: false }) superYoloActive = false;
 
   override render(): TemplateResult | typeof nothing {
     if (!this.stream) {

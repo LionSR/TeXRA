@@ -40,9 +40,9 @@ export class HistoryItem extends LitElement {
   ];
 
   @property({ attribute: false }) item?: HistoryItemData;
-  @property({ type: Boolean }) open = false;
+  @property({ attribute: false }) open = false;
   /** Local index of the mark to highlight as current, or null if none in this item */
-  @property({ type: Number }) highlightedMatchIndex: number | null = null;
+  @property({ attribute: false }) highlightedMatchIndex: number | null = null;
 
   private markInstance: Mark | null = null;
   private previousHighlightedIndex: number | null = null;
@@ -82,6 +82,17 @@ export class HistoryItem extends LitElement {
     this.dispatchEvent(
       HistoryViewEvents.historyAction({ action, historyId: this.item.id }),
     );
+  }
+
+  private handleActionClick(event: MouseEvent): void {
+    const button = (event.target as HTMLElement).closest<HTMLElement>(
+      '[data-action]',
+    );
+    if (!button) return;
+    const action = button.dataset.action;
+    if (action) {
+      this.handleAction(action);
+    }
   }
 
   private handleToggle(event: CustomEvent<{ open?: boolean }>): void {
@@ -242,24 +253,27 @@ export class HistoryItem extends LitElement {
       <div class="list-item history-item">
         <div class="list-item-header">
           <div class="text-secondary history-timestamp">${timestamp}</div>
-          <vscode-toolbar-container class="history-actions">
+          <vscode-toolbar-container
+            class="history-actions"
+            @click=${this.handleActionClick}
+          >
             <vscode-toolbar-button
               icon="trash"
               label="Delete"
               title="Delete"
-              @click=${() => this.handleAction('delete')}
+              data-action="delete"
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               icon="reply"
               label="Restore"
               title="Restore"
-              @click=${() => this.handleAction('restore')}
+              data-action="restore"
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               icon="debug-rerun"
               label="Rerun"
               title="Rerun"
-              @click=${() => this.handleAction('rerun')}
+              data-action="rerun"
             ></vscode-toolbar-button>
           </vscode-toolbar-container>
         </div>

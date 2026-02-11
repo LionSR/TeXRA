@@ -273,14 +273,13 @@ function detectRequestId(err: unknown): string | undefined {
     headers?: { get?: (key: string) => string | null };
   };
 
-  if (isString(candidate.request_id) && candidate.request_id) {
-    return candidate.request_id;
-  }
-  if (isString(candidate.requestId) && candidate.requestId) {
-    return candidate.requestId;
+  const directId = candidate.request_id ?? candidate.requestId;
+  if (isString(directId) && directId) {
+    return directId;
   }
 
   // Try headers (Anthropic SDK uses 'request-id'; relay may use 'x-request-id')
+  // ?? undefined converts null from headers.get() to undefined
   return (
     candidate.headers?.get?.('request-id') ??
     candidate.headers?.get?.('x-request-id') ??

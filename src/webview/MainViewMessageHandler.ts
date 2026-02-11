@@ -79,15 +79,21 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.DEBUG_MODE_SET]: (m) =>
         this.handleDebugMode(m, webviewView),
       [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: () => this.handleWebviewReady(),
-      [MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: (m) =>
-        this.handleInfoMessage(m),
+      [MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: (m) => {
+        vscode.window.showInformationMessage(m.text);
+        this.logger.debug(this.channel, `Information message: ${m.text}`);
+      },
       [MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION]: (m) =>
         showInstructionWithSuppress(m.key, m.text),
       [MAIN_VIEW_COMMANDS.GET_THEME]: () => this.handleThemeRequest(),
       [MAIN_VIEW_COMMANDS.GET_DEBUG_MODE]: () => this.handleDebugModeRequest(),
 
       // Settings messages
-      [MAIN_VIEW_COMMANDS.MODEL_SELECTED]: (m) => this.handleModelSelection(m),
+      [MAIN_VIEW_COMMANDS.MODEL_SELECTED]: (m) =>
+        this.postToActiveView({
+          command: MAIN_VIEW_COMMANDS.MODEL_SELECTED,
+          model: m.model,
+        }),
       [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: () =>
         safeExecuteCommand(
           'workbench.action.openSettings',
@@ -350,13 +356,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
 
       // Navigation messages
       [MAIN_VIEW_COMMANDS.SHOW_AGENT_HISTORY]: () =>
-        this.handleShowAgentHistory(),
+        safeExecuteCommand('texra.showAgentHistory', [], this.viewName),
     };
-  }
-
-  private handleInfoMessage(message: { text: string }): void {
-    vscode.window.showInformationMessage(message.text);
-    this.logger.debug(this.channel, `Information message: ${message.text}`);
   }
 
   private handleThemeRequest(): void {
@@ -376,20 +377,9 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     });
   }
 
-  private handleModelSelection(message: { model: string }): void {
-    this.postToActiveView({
-      command: MAIN_VIEW_COMMANDS.MODEL_SELECTED,
-      model: message.model,
-    });
-  }
-
   /** Post message to active view if available */
   private postToActiveView(message: unknown): void {
     this.getActiveView()?.webview.postMessage(message);
-  }
-
-  private async handleShowAgentHistory(): Promise<void> {
-    await safeExecuteCommand('texra.showAgentHistory', [], this.viewName);
   }
 
   protected async handleWebviewReady(): Promise<void> {

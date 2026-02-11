@@ -18,8 +18,8 @@ import { HistoryViewEvents } from './events';
 export class SearchBar extends LitElement {
   static override styles = [designTokens, codiconStyles, historyViewStyles];
 
-  @property({ type: String }) searchTerm = '';
-  @property({ type: String }) matchCount = '';
+  @property({ attribute: false }) searchTerm = '';
+  @property({ attribute: false }) matchCount = '';
 
   private searchTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -32,7 +32,7 @@ export class SearchBar extends LitElement {
   }
 
   private handleInput(event: Event): void {
-    const target = event.target as HTMLInputElement | null;
+    const target = event.currentTarget as HTMLInputElement | null;
     const term = target?.value?.trim() ?? '';
     if (this.searchTimeoutId) {
       clearTimeout(this.searchTimeoutId);

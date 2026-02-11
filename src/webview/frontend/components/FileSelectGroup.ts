@@ -44,7 +44,7 @@ export class FileSelectGroup extends LitElement {
   ];
 
   /** File type configuration */
-  @property({ type: Object }) config!: FileSelectConfig;
+  @property({ attribute: false }) config!: FileSelectConfig;
 
   @consume({ context: fileStateContext, subscribe: true })
   private fileState?: FileStateContextValue;
@@ -150,10 +150,17 @@ export class FileSelectGroup extends LitElement {
     );
   }
 
-  private handleRemoveFile(file: string): void {
-    this.dispatchEvent(
-      MainViewEvents.removeFile({ listId: this.listId, file }),
+  private handleRemoveClick(event: MouseEvent): void {
+    const button = (event.target as HTMLElement).closest<HTMLElement>(
+      '[data-remove-file]',
     );
+    if (!button) return;
+    const file = button.dataset.removeFile;
+    if (file) {
+      this.dispatchEvent(
+        MainViewEvents.removeFile({ listId: this.listId, file }),
+      );
+    }
   }
 
   private handleCheckboxChange(id: string, checked: boolean): void {
@@ -405,21 +412,23 @@ export class FileSelectGroup extends LitElement {
       return html`<div class="file-list-placeholder">No files selected.</div>`;
     }
 
-    return html`${repeat(
-      this.currentFiles,
-      (file) => file,
-      (file) => html`
-        <div class="file-item" data-path=${file}>
-          <span class="file-name">${file}</span>
-          <button
-            class="remove-button codicon codicon-trash"
-            type="button"
-            aria-label="Remove file"
-            @click=${() => this.handleRemoveFile(file)}
-          ></button>
-        </div>
-      `,
-    )}`;
+    return html`<div @click=${this.handleRemoveClick}>
+      ${repeat(
+        this.currentFiles,
+        (file) => file,
+        (file) => html`
+          <div class="file-item" data-path=${file}>
+            <span class="file-name">${file}</span>
+            <button
+              class="remove-button codicon codicon-trash"
+              type="button"
+              aria-label="Remove file"
+              data-remove-file=${file}
+            ></button>
+          </div>
+        `,
+      )}
+    </div>`;
   }
 
   override render(): TemplateResult {

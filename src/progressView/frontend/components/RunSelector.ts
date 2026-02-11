@@ -33,12 +33,12 @@ export class RunSelector extends LitElement {
     `,
   ];
 
-  @property({ type: Array }) runs: Array<{
+  @property({ attribute: false }) runs: Array<{
     id: string;
     name?: string;
     startTime?: number | string | Date;
   }> = [];
-  @property({ type: String }) activeRunId: string | null = null;
+  @property({ attribute: false }) activeRunId: string | null = null;
 
   override render(): TemplateResult {
     const sortedRuns = [...this.runs].sort((a, b) => {
@@ -73,7 +73,7 @@ export class RunSelector extends LitElement {
 
   /** Handle select change from the run selector. */
   private handleChange(event: Event): void {
-    const target = event.target as HTMLSelectElement | null;
+    const target = event.currentTarget as HTMLSelectElement | null;
     const runId = target?.value ?? '';
     this.dispatchEvent(ProgressEvents.runSelected({ runId: runId || null }));
   }

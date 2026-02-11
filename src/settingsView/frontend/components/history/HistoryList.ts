@@ -41,11 +41,11 @@ export class HistoryList extends LitElement {
 
   // === Reactive search properties (Lit-native Phase 9) ===
   /** Search term from parent - triggers search when changed */
-  @property({ type: String }) searchTerm = '';
+  @property({ attribute: false }) searchTerm = '';
   /** Navigation action trigger - 'next' | 'prev' | null */
-  @property({ type: String }) searchAction: SearchAction = null;
+  @property({ attribute: false }) searchAction: SearchAction = null;
   /** Trigger to clear search state (set true to clear, resets to false) */
-  @property({ type: Boolean }) clearSearchTrigger = false;
+  @property({ attribute: false }) clearSearchTrigger = false;
 
   /** Match counts per item, keyed by item.id - used to compute highlighted index */
   @state() private matchCounts: Map<string, number> = new Map();

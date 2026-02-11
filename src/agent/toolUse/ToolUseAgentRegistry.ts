@@ -1,12 +1,5 @@
-/**
- * Unified execution registry for agent interruption.
- *
- * This module provides a single registry for all interruptible executions,
- * primarily tool-use flow contexts. The registry enables unified interrupt
- * handling from agentCommands.
- */
+/** Unified execution registry for agent interruption. */
 
-// Local imports - agent
 import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse';
 import type { StreamTabId } from '@shared/schemas';
 
@@ -33,9 +26,6 @@ export interface IInterruptible {
 
 const registry = new Map<StreamTabId, IInterruptible>();
 
-/**
- * Register an interruptible execution by stream ID.
- */
 export function registerInterruptible(
   streamTabId: StreamTabId,
   interruptible: IInterruptible,
@@ -43,25 +33,16 @@ export function registerInterruptible(
   registry.set(streamTabId, interruptible);
 }
 
-/**
- * Unregister an execution from the registry.
- */
 export function unregisterInterruptible(streamTabId: StreamTabId): void {
   registry.delete(streamTabId);
 }
 
-/**
- * Get the interruptible execution for a stream.
- */
 export function getInterruptible(
   streamTabId: StreamTabId,
 ): IInterruptible | undefined {
   return registry.get(streamTabId);
 }
 
-/**
- * Type guard: ToolUseFlowContext has a session with appendFollowUp method.
- */
 function isToolUseFlowContext(
   entry: IInterruptible | undefined,
 ): entry is ToolUseFlowContext {
@@ -69,10 +50,6 @@ function isToolUseFlowContext(
   return session !== undefined && typeof session.appendFollowUp === 'function';
 }
 
-/**
- * Get a tool-use flow context by stream ID.
- * Returns undefined if the entry is not a ToolUseFlowContext.
- */
 export function getToolUseFlowContext(
   streamTabId: StreamTabId,
 ): ToolUseFlowContext | undefined {
@@ -80,9 +57,6 @@ export function getToolUseFlowContext(
   return isToolUseFlowContext(entry) ? entry : undefined;
 }
 
-/**
- * Remove registry entries for streams that no longer have an active session.
- */
 export function cleanupInactiveAgents(activeStreams: Set<StreamTabId>): void {
   for (const streamId of registry.keys()) {
     if (!activeStreams.has(streamId)) {

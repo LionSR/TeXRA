@@ -1,7 +1,5 @@
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports - response usage types
 import {
   NormalizedUsageSchema,
   type NormalizedUsage,
@@ -11,17 +9,7 @@ import {
   RunUsageAccumulatorJSONSchema,
   createUsageAccumulator,
   recordNormalizedUsage,
-  type RunUsageAccumulatorJSON,
 } from './RunUsageAccumulator';
-
-// ============================================================================
-// ConversationRoundState — plain data + functions
-// ============================================================================
-
-/**
- * Schema for ConversationRoundState snapshot.
- * Defaults are defined inline via .prefault() - schema is the single source of truth.
- */
 export const ConversationRoundStateSnapshotSchema = z.object({
   roundIndex: z.int().nonnegative(),
   continuationCount: z.int().nonnegative().prefault(0),
@@ -29,10 +17,6 @@ export const ConversationRoundStateSnapshotSchema = z.object({
   normalizedUsage: NormalizedUsageSchema.nullable().prefault(null),
 });
 
-/**
- * Single source of truth for ConversationRoundState serialization format.
- * Uses z.output<> to get the type after parsing (all fields required).
- */
 export type ConversationRoundStateSnapshot = z.output<
   typeof ConversationRoundStateSnapshotSchema
 >;
@@ -49,14 +33,6 @@ export function createRoundState(
   };
 }
 
-// ============================================================================
-// AgentRunState — plain data + functions
-// ============================================================================
-
-/**
- * Schema for AgentRunState snapshot.
- * Defaults are defined inline via .prefault() - schema is the single source of truth.
- */
 export const AgentRunStateSnapshotSchema = z.object({
   totalRounds: z.int().nonnegative().prefault(0),
   totalResponseTimeMs: z.number().nonnegative().prefault(0),
@@ -66,10 +42,6 @@ export const AgentRunStateSnapshotSchema = z.object({
   }),
 });
 
-/**
- * Single source of truth for AgentRunState serialization format.
- * Uses z.output<> to get the type after parsing (all fields required).
- */
 export type AgentRunStateSnapshot = z.output<
   typeof AgentRunStateSnapshotSchema
 >;
@@ -99,10 +71,7 @@ export function recordCycleMetrics(
   run.totalResponseTimeMs += responseTimeMs;
 }
 
-/**
- * Record round metrics from a ConversationRoundState snapshot.
- * Delegates to recordCycleMetrics() for the actual work.
- */
+/** Record round metrics from a ConversationRoundState snapshot. */
 export function recordRound(
   run: AgentRunStateSnapshot,
   roundState: ConversationRoundStateSnapshot,

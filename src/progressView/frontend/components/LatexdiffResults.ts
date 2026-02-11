@@ -73,13 +73,13 @@ export class LatexdiffResults extends LitElement {
   ];
 
   /** Log ID for tracking */
-  @property({ type: String }) logId = '';
+  @property({ attribute: false }) logId = '';
 
   /** Run ID for tracking */
-  @property({ type: String }) runId = '';
+  @property({ attribute: false }) runId = '';
 
   /** Diff result entries to display */
-  @property({ type: Array }) entries: DiffResultDisplay[] = [];
+  @property({ attribute: false }) entries: DiffResultDisplay[] = [];
 
   private handleFileClick(filePath: string): void {
     this.dispatchEvent(ProgressEvents.fileClick({ file: filePath }));

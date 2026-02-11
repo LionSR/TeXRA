@@ -32,15 +32,14 @@ export function registerAgentCommands(context: vscode.ExtensionContext): void {
           return;
         }
 
-        const modelHandler = flowContext.modelHandler;
-        if (!modelHandler.supportsManualCompaction) {
+        if (!flowContext.modelHandler.supportsManualCompaction) {
           await vscode.window.showInformationMessage(
             'Manual context compaction is not yet available for this model. Stay tuned!',
           );
           return;
         }
 
-        modelHandler.requestCompaction();
+        flowContext.modelHandler.requestCompaction();
         await vscode.window.showInformationMessage(
           'Context compaction requested. The conversation will be compacted on the next API call.',
         );

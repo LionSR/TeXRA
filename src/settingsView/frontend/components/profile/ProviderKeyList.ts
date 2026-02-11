@@ -39,9 +39,9 @@ export class ProviderKeyList extends LitElement {
   ];
 
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
-  @property({ type: String }) apiAccessMode: 'included' | 'personal' =
+  @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
     'personal';
-  @property({ type: Boolean }) globalStreamingDefault = true;
+  @property({ attribute: false }) globalStreamingDefault = true;
 
   @state() private expandedProvider: string | null = null;
 

@@ -26,8 +26,8 @@ export class LogEntry extends LitElement {
     ...logStyles,
   ];
 
-  @property({ type: Object }) message!: LogMessageData;
-  @property({ type: Boolean }) defaultOpen = false;
+  @property({ attribute: false }) message!: LogMessageData;
+  @property({ attribute: false }) defaultOpen = false;
 
   override render(): TemplateResult | typeof nothing {
     if (!this.message) return nothing;

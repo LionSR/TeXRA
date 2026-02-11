@@ -94,7 +94,7 @@ export class InstructionPanel extends LitElement {
     `,
   ];
 
-  @property({ type: Object }) instruction: InstructionUpdate | null = null;
+  @property({ attribute: false }) instruction: InstructionUpdate | null = null;
   @property({ type: Boolean, reflect: true }) visible = false;
 
   private copyController = new CopyButtonController(this, {

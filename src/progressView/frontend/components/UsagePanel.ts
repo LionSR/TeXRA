@@ -71,8 +71,8 @@ export class UsagePanel extends LitElement {
     `,
   ];
 
-  @property({ type: Object }) usage: TokenUsageStats | null = null;
-  @property({ type: Object }) contextState: ContextState | null = null;
+  @property({ attribute: false }) usage: TokenUsageStats | null = null;
+  @property({ attribute: false }) contextState: ContextState | null = null;
 
   override render(): TemplateResult | typeof nothing {
     const hasUsage =

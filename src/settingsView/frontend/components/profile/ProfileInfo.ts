@@ -19,11 +19,11 @@ import { ProfileViewEvents } from './events';
 export class ProfileInfo extends LitElement {
   static override styles = [designTokens, ...badgeStyles, profileViewStyles];
 
-  @property({ type: String }) email = '';
-  @property({ type: String }) userId = '';
-  @property({ type: String }) tier = 'free';
-  @property({ type: String }) accessExpiresAt: string | null = null;
-  @property({ type: Boolean }) showSignOut = false;
+  @property({ attribute: false }) email = '';
+  @property({ attribute: false }) userId = '';
+  @property({ attribute: false }) tier = 'free';
+  @property({ attribute: false }) accessExpiresAt: string | null = null;
+  @property({ attribute: false }) showSignOut = false;
 
   private handleSignOut(): void {
     this.dispatchEvent(ProfileViewEvents.signOut());

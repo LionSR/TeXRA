@@ -5,40 +5,22 @@
  * producing structured output. Behavior is configuration-driven:
  * - Total rounds = max(setting.rounds, userRequest.length)
  * - `setting.xmlStructureMode`: 'never' | 'scratchpadOnly' | 'always'
- *
- * The flow manages:
- * - Round progression and stage lifecycle
- * - Prompt building and output handling
- * - Interrupt handling and cleanup
- *
- * ## Koala-code-reader Pattern
- *
- * Following koala's approach:
- * - shared state is natively serializable (snapshots, not class instances)
- * - services contain runtime dependencies (parentStage, logger, etc.)
- * - PersistedFlow handles persistence transparently
  */
 
 import * as path from 'path';
 
 import {
   END_GROUP_STATUS,
-  EXECUTION_STATUS,
   type EndGroupStatus,
-  type ExecutionStatus,
   type RoundOutput,
   type StorageKey,
 } from '@shared/schemas';
 import { executionToEndStatus } from '@common/constants/streamStatus';
-import {
-  getExecutionStore,
-  type ExecutionKVStore,
-} from '@agent/storage/ExecutionKVStore';
+import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import {
   createOutputState,
   setActiveRun,
   getOutputFilesByRound,
-  type OutputState,
 } from '@agent/output/outputState';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
@@ -53,7 +35,7 @@ import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { createRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import { type FlowRecord } from '@agent/node/persisted-flow';
+import type { FlowRecord } from '@agent/node/persisted-flow';
 import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
 import type { UsageMonitor } from '@agent/utils/UsageMonitor';
 import type { AgentLogStage } from '@logger/AgentLogger';
@@ -156,7 +138,6 @@ function deriveConfig(
   let requestCount = 0;
   if (Array.isArray(userRequest)) requestCount = userRequest.length;
   else if (userRequest) requestCount = 1;
-  // Use fallback to handle edge cases where schema defaults may not apply
   const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
 
   return {
@@ -195,10 +176,6 @@ export async function runReflectionFlow<C = unknown>(
   let shared: ReflectionFlowShared | undefined;
   let services: ReflectionServices<C> | undefined;
 
-  // ========================================================================
-  // Create services inline (previously in createReflectionFlowContext)
-  // ========================================================================
-
   const fileService = new TaskRunFileService(executionId);
 
   // Create workspace file locations for latexdiff base files
@@ -210,9 +187,7 @@ export async function runReflectionFlow<C = unknown>(
     return createWorkspaceLocation(absolutePath, relativePath);
   });
 
-  // Create output state (deps are now derived from services via structural subtyping)
-  const outputState: OutputState = createOutputState();
-  // Create managers directly (no factory indirection)
+  const outputState = createOutputState();
   const xmlManager = new XmlOutputManager(setting, config, logger, fileService);
   const diffManager = new LatexDiffManager(
     setting,
@@ -256,7 +231,6 @@ export async function runReflectionFlow<C = unknown>(
       return fileService.createLocation(fileName) as AgentFileLocation;
     });
 
-  // Create interruptible object for registration
   const interruptible: IInterruptible = {
     interrupt(): void {
       input.onInterrupt?.();
@@ -264,7 +238,6 @@ export async function runReflectionFlow<C = unknown>(
     },
   };
 
-  // Set active run for output state (inline deps — services not yet assembled)
   setActiveRun(
     outputState,
     { setting, config, baseFiles, logger, fileService, executionId, streamId },
@@ -275,8 +248,7 @@ export async function runReflectionFlow<C = unknown>(
     // Register for interrupt handling
     registerInterruptible(streamId, interruptible);
 
-    // Get execution-scoped storage for persistence
-    const kv: ExecutionKVStore = getExecutionStore(executionId);
+    const kv = getExecutionStore(executionId);
 
     // Try to restore full state from persisted flow (resume scenario)
     const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
@@ -309,9 +281,7 @@ export async function runReflectionFlow<C = unknown>(
       };
     }
 
-    // Create flow nodes and wire transitions inline
-    // Wire the linear node chain: prep → texcount → media → cycle → output.
-    // Round looping is handled by RoundPersistedFlow (no dedicated decision node).
+    // Wire the linear node chain: prep → texcount → media → cycle → output
     const prepContextNode = new PrepareContextNode<C>();
     const texCountNode = new TeXCountNode<C>();
     const mediaNode = new MediaExtractionNode<C>();
@@ -330,11 +300,10 @@ export async function runReflectionFlow<C = unknown>(
     >(prepContextNode, kv, {
       parentStage,
       callbacks: {
-        createRoundStage: async (roundIndex, parent) => {
-          return await logger.stage(`r${roundIndex}`, {
+        createRoundStage: (roundIndex, parent) =>
+          logger.stage(`r${roundIndex}`, {
             parent: parent ?? undefined,
-          });
-        },
+          }),
         onStageCreated: (stage) => {
           usageMonitor?.setActiveGroupId(stage.id);
         },
@@ -345,9 +314,6 @@ export async function runReflectionFlow<C = unknown>(
       },
     });
 
-    // Build services: spread input + add computed fields
-    // ReflectionServices structurally satisfies OutputDependencies, so no
-    // separate outputDeps object is needed — output functions accept services directly.
     services = {
       ...input,
       onRoundFinalized,

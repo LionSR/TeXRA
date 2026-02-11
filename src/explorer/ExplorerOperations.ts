@@ -57,18 +57,20 @@ export class ExplorerOperations {
   }
 
   /**
-   * Check if a path is within (or equal to) the built-in agents or tool-use directories.
+   * Check if targetPath is within (or equal to) a base directory.
    * Uses path.sep boundary to avoid false matches with sibling directories
    * (e.g., "agents" must not match "agents_backup").
    */
+  private static isWithin(targetPath: string, base: string): boolean {
+    return (
+      !!base && (targetPath === base || targetPath.startsWith(base + path.sep))
+    );
+  }
+
   private isBuiltInPath(targetPath: string): boolean {
     return (
-      (!!this.builtInAgentsPath &&
-        (targetPath === this.builtInAgentsPath ||
-          targetPath.startsWith(this.builtInAgentsPath + path.sep))) ||
-      (!!this.builtInToolUsePath &&
-        (targetPath === this.builtInToolUsePath ||
-          targetPath.startsWith(this.builtInToolUsePath + path.sep)))
+      ExplorerOperations.isWithin(targetPath, this.builtInAgentsPath) ||
+      ExplorerOperations.isWithin(targetPath, this.builtInToolUsePath)
     );
   }
 
@@ -91,11 +93,12 @@ export class ExplorerOperations {
   private resolveCustomPath(targetPath: string, customBase: string): string {
     if (!this.isBuiltInPath(targetPath)) return targetPath;
 
-    const isToolUse =
-      this.builtInToolUsePath &&
-      (targetPath === this.builtInToolUsePath ||
-        targetPath.startsWith(this.builtInToolUsePath + path.sep));
-    const base = isToolUse ? this.builtInToolUsePath : this.builtInAgentsPath;
+    const base = ExplorerOperations.isWithin(
+      targetPath,
+      this.builtInToolUsePath,
+    )
+      ? this.builtInToolUsePath
+      : this.builtInAgentsPath;
     return path.join(customBase, path.relative(base, targetPath));
   }
 

@@ -1,11 +1,4 @@
-/**
- * Common types shared across cycle flows (ResponseCycleFlow, ToolUseCycleFlow).
- *
- * Schema-First: `BaseCycleFieldsSchema` is the single source of truth for shared fields.
- *
- * PocketFlow Separation: prep() extracts data, exec() computes (no shared access),
- * post() writes results. Services accessed via `this.services`.
- */
+/** Common types shared across cycle flows (ResponseCycleFlow, ToolUseCycleFlow). */
 
 import { z } from 'zod';
 
@@ -14,10 +7,9 @@ import {
   ProviderMessageSchema,
   type ProviderMessage,
 } from '@agent/modelHandlers/types/ProviderMessage';
+import type { DebugContext } from '@agent/utils/debugMessageSaver';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { ExecutionId } from '@shared/schemas';
-
-// --- Base Cycle Schema (Single Source of Truth) ---
 
 /** Base schema for fields common to all cycle flows. */
 export const BaseCycleFieldsSchema = z.object({
@@ -32,19 +24,11 @@ export const BaseCycleFieldsSchema = z.object({
 
 export type BaseCycleFields = z.infer<typeof BaseCycleFieldsSchema>;
 
-/** Internal debug context - use getDebugContext() to create. */
-interface CycleDebugContext {
-  logger: AgentLogger;
-  modelName?: string;
-  executionId?: ExecutionId;
-  isRemote?: boolean;
-}
-
 /** Derive debug context from services at call site. */
 export function getDebugContext(
   services: { logger: AgentLogger; executionId?: ExecutionId },
   params: { modelName?: string; isRemote?: boolean },
-): CycleDebugContext {
+): DebugContext {
   return {
     logger: services.logger,
     executionId: services.executionId,

@@ -36,22 +36,15 @@ export async function handleParseXml(): Promise<void> {
       `Parsing XML content from: ${editor.document.fileName}`,
     );
 
-    // Parse XML using the same configuration as OutputHandler
     const parser = new XMLParser({
       ignoreAttributes: false,
-      // preserveOrder: true,
       parseTagValue: true,
       textNodeName: 'content',
       attributeNamePrefix: '',
     });
 
     const parsedXml = parser.parse(content);
-
-    logger.debug(CHANNEL, 'Parsed XML(JSON)');
-    logger.debug(
-      CHANNEL,
-      `Parsed structure: ${JSON.stringify(parsedXml, null, 2)}`,
-    );
+    logger.debug(CHANNEL, `Parsed XML:\n${JSON.stringify(parsedXml, null, 2)}`);
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error parsing XML', err);
   }
