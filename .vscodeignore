@@ -81,3 +81,5 @@ prds/**
 .prettierignore
 
 slides/**
+scripts/**
+.texpadtmp/**
