@@ -67,7 +67,7 @@ export class AgentsTab extends LitElement {
         color: var(--color-text-secondary);
         background: none;
         border: none;
-        border-bottom: 2px solid transparent;
+        border-bottom: var(--border-medium) solid transparent;
         cursor: pointer;
         transition:
           color 0.15s ease,
@@ -87,15 +87,15 @@ export class AgentsTab extends LitElement {
       .agents-sub-tab-count {
         font-size: var(--font-size-xs, 11px);
         color: var(--color-text-secondary);
-        opacity: 0.8;
+        opacity: var(--opacity-normal);
       }
 
       .agents-folder-btn {
         display: inline-flex;
         align-items: center;
         gap: var(--spacing-small);
-        padding: 2px var(--spacing-small);
-        font-size: var(--font-size-xs, 11px);
+        padding: var(--spacing-tiny) var(--spacing-small);
+        font-size: var(--font-size-xs);
         font-family: inherit;
         color: var(--color-text-secondary);
         background: none;
@@ -133,7 +133,7 @@ export class AgentsTab extends LitElement {
       }
 
       .agents-dir-bar .codicon {
-        font-size: 14px;
+        font-size: var(--font-size);
         flex-shrink: 0;
       }
 
@@ -153,19 +153,19 @@ export class AgentsTab extends LitElement {
 
       .agents-dir-default-badge {
         flex-shrink: 0;
-        padding: 0 4px;
-        font-size: 10px;
+        padding: 0 var(--spacing-small);
+        font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
-        border-radius: 3px;
+        border-radius: var(--border-radius);
       }
 
       .agents-dir-separator {
         flex-shrink: 0;
-        width: 1px;
-        height: 14px;
+        width: var(--border-thin);
+        height: var(--font-size);
         background: var(--color-border);
-        margin: 0 2px;
+        margin: 0 var(--spacing-tiny);
       }
 
       .agents-dir-actions {

@@ -145,7 +145,8 @@ export const multiFilesStyles = css`
 
   .multiple-files-list {
     background-color: var(--background-color);
-    border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
+    border: var(--border-thin) solid
+      var(--vscode-widget-border, var(--dropdown-border));
     border-radius: var(--border-radius);
     padding: var(--spacing-small);
     font-size: var(--font-size);
@@ -216,7 +217,7 @@ export const dropdownStyles = css`
     display: block;
     background-color: var(--vscode-menu-background);
     color: var(--vscode-menu-foreground);
-    border: 1px solid var(--vscode-menu-border);
+    border: var(--border-thin) solid var(--vscode-menu-border);
     border-radius: var(--border-radius);
     min-width: 160px;
   }

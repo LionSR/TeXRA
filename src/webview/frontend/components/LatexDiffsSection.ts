@@ -41,7 +41,8 @@ export class LatexDiffsSection extends LitElement {
 
       .latexdiffs-section[data-expanded='true'] {
         background-color: var(--background-color);
-        border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
+        border: var(--border-thin) solid
+          var(--vscode-widget-border, var(--dropdown-border));
         border-radius: var(--border-radius);
         padding: var(--spacing-medium);
         overflow: visible;

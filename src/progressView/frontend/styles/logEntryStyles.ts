@@ -36,7 +36,7 @@ export const logEntryStyles = css`
     padding: var(--spacing-small) var(--spacing-medium);
     margin: var(--spacing-small) 0;
     background: var(--vscode-inputValidation-warningBackground);
-    border: 1px solid var(--vscode-inputValidation-warningBorder);
+    border: var(--border-thin) solid var(--vscode-inputValidation-warningBorder);
     border-radius: var(--border-radius);
     color: var(--color-warning);
     font-style: italic;
