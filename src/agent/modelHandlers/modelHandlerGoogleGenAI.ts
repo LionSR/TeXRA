@@ -60,7 +60,6 @@ import type { FileLocation } from '@utils/files';
 
 // Local constant
 import { K_SLICE } from '@utils/config';
-import { isNonEmptyString } from '@utils/core';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import {
   computeCachePercentage,
@@ -619,15 +618,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
               baseResponse.modelVersion = chunk.modelVersion;
             }
             if (chunk.automaticFunctionCallingHistory?.length) {
-              const existingHistory =
-                baseResponse.automaticFunctionCallingHistory ?? [];
-              baseResponse.automaticFunctionCallingHistory =
-                existingHistory.length === 0
-                  ? [...chunk.automaticFunctionCallingHistory]
-                  : [
-                      ...existingHistory,
-                      ...chunk.automaticFunctionCallingHistory,
-                    ];
+              baseResponse.automaticFunctionCallingHistory = [
+                ...(baseResponse.automaticFunctionCallingHistory ?? []),
+                ...chunk.automaticFunctionCallingHistory,
+              ];
             }
             if (chunk.responseId) {
               baseResponse.responseId = chunk.responseId;
@@ -853,12 +847,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     if (!responseObject.candidates || responseObject.candidates.length === 0) {
       if (responseObject?.promptFeedback?.blockReason) {
-        const blockReason = responseObject.promptFeedback.blockReason;
-        const safetyRatings = JSON.stringify(
-          responseObject.promptFeedback.safetyRatings,
+        const { blockReason, safetyRatings } = responseObject.promptFeedback;
+        this.logger.error(
+          `Request blocked due to ${blockReason}. Safety ratings: ${JSON.stringify(safetyRatings)}`,
         );
-        const errorMsg = `Request blocked due to ${blockReason}. Safety ratings: ${safetyRatings}`;
-        this.logger.error(errorMsg);
         return {
           text: '',
           usage: responseObject.usageMetadata || undefined,
@@ -1181,28 +1173,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     responseObject: GenerateContentResponse,
     workspaceState?: AgentWorkspaceState,
   ): string | null {
-    if (
-      !responseObject ||
-      !responseObject.candidates ||
-      responseObject.candidates.length === 0
-    ) {
-      return null;
-    }
-
-    const candidate = responseObject.candidates[0];
-    const parts = candidate?.content?.parts;
-    if (!Array.isArray(parts)) {
-      return null;
-    }
+    const parts = responseObject?.candidates?.[0]?.content?.parts;
+    if (!Array.isArray(parts)) return null;
 
     const thoughtParts = parts.filter(
       (part): part is Part & { text: string } =>
         Boolean(part.thought) && isTextPart(part),
     );
-
-    if (thoughtParts.length === 0) {
-      return null;
-    }
+    if (thoughtParts.length === 0) return null;
 
     const thoughtContent = thoughtParts
       .map((p) => p.text ?? '')
@@ -1228,45 +1206,26 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   extractToolUse(responseObject: GenerateContentResponse): GoogleToolCall[] {
-    const candidate = responseObject?.candidates?.[0];
-    const parts = candidate?.content?.parts;
-    if (!Array.isArray(parts)) {
-      return [];
+    const parts = responseObject?.candidates?.[0]?.content?.parts;
+    if (!Array.isArray(parts)) return [];
+
+    const results: GoogleToolCall[] = [];
+    for (const part of parts) {
+      const call = part.functionCall;
+      if (!call?.name) continue;
+      results.push({
+        provider: 'google',
+        callId: call.id ?? randomUUID(),
+        name: call.name,
+        input: call.args,
+        raw: call,
+        thoughtSignature:
+          typeof part.thoughtSignature === 'string'
+            ? part.thoughtSignature
+            : undefined,
+      });
     }
-
-    type FunctionCallWithSignature = {
-      call: FunctionCall;
-      thoughtSignature: string | undefined;
-    };
-
-    const functionCalls = parts
-      .map<FunctionCallWithSignature | null>((part) => {
-        const call = part.functionCall;
-        if (!call?.name) {
-          return null;
-        }
-        return {
-          call,
-          thoughtSignature:
-            typeof part.thoughtSignature === 'string'
-              ? part.thoughtSignature
-              : undefined,
-        };
-      })
-      .filter((part): part is FunctionCallWithSignature => part !== null);
-
-    if (functionCalls.length === 0) {
-      return [];
-    }
-
-    return functionCalls.map(({ call, thoughtSignature }) => ({
-      provider: 'google',
-      callId: call.id ?? randomUUID(),
-      name: call.name!,
-      input: call.args,
-      raw: call,
-      thoughtSignature,
-    }));
+    return results;
   }
 
   /**

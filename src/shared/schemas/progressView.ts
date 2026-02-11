@@ -516,7 +516,7 @@ const SortStreamsMessageSchema = z.object({
 
 const FilterStreamsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.FILTER_STREAMS),
-  filter: z.union([z.literal('all'), AgentCategorySchema]),
+  filter: AgentCategoryFilterSchema,
 });
 
 const ShowInformationMessageSchema = z.object({
