@@ -71,6 +71,9 @@ export interface RoundCallbacks<S extends RoundAwareState> {
 
   /** Reset workspace state for a new round. */
   resetForNextRound?: (shared: S) => void;
+
+  /** Called when a round completes (after all nodes finish, before transition). */
+  onRoundCompleted?: (roundIndex: number, shared: S) => void | Promise<void>;
 }
 
 // ============================================================================
@@ -147,6 +150,12 @@ export class RoundPersistedFlow<
         currentShared = await this.executeRoundSteps(currentShared);
       }
 
+      // Notify final round completion
+      await this.callbacks.onRoundCompleted?.(
+        currentShared.currentRound,
+        currentShared,
+      );
+
       // Determine final status
       const completedAllRounds = isRoundAtOrBeyondLimit(
         currentShared.currentRound + 1,
@@ -208,6 +217,9 @@ export class RoundPersistedFlow<
    * reset node history so the flow starts from the beginning again.
    */
   private async transitionToNextRound(shared: S): Promise<void> {
+    // Notify round completion before ending the stage
+    await this.callbacks.onRoundCompleted?.(shared.currentRound, shared);
+
     // End previous round stage
     this.currentRoundStage?.end();
     this.currentRoundStage = null;

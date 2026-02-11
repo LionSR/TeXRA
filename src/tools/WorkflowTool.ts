@@ -61,6 +61,7 @@ import { defineTool } from '@tools/core/define';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
+import { generateExecutionId } from '@utils/core/executionId';
 
 // ============================================================================
 // Shared utilities
@@ -111,7 +112,7 @@ function executeSubagent(
   orchestratorStreamId: StreamTabId,
   options?: { enableYoloOnChild?: boolean },
 ): ToolResult {
-  const executionId = randomUUID() as ExecutionId;
+  const executionId = generateExecutionId();
 
   // Track whether result has already been delivered (via onBeforeWaiting)
   // to avoid duplicate delivery when the promise eventually resolves.
@@ -160,10 +161,9 @@ function executeSubagent(
   return {
     summary: `Launched '${agentName}' (async)`,
     output: [
-      `Subagent '${agentName}' launched in async mode.`,
+      `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,
       `Execution ID: ${executionId}`,
-      `Check progress: executions tool with path /executions/${executionId}`,
-      'Result will be delivered as a follow-up message when complete.',
+      `To check intermediate progress: executions tool with path=/executions/${executionId} and block=true (waits for next milestone).`,
     ].join('\n'),
   };
 }
