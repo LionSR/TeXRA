@@ -167,38 +167,33 @@ export class FollowupSection extends LitElement {
     `,
   ];
 
-  // Declarative visibility props - parent computes, component renders
-  @property({ type: String }) agentCategory: string = '';
-  @property({ type: String }) status: string = '';
-  @property({ type: Boolean }) hasOutputFiles: boolean = false;
+  @property({ type: String }) agentCategory = '';
+  @property({ type: String }) status = '';
+  @property({ type: Boolean }) hasOutputFiles = false;
 
   // Configuration props
   @property({ type: Object }) options: FollowupOptions | null = null;
   @property({ type: String }) mode: FollowupMode = 'chat';
   @property({ type: String }) streamModel: string | null = null;
 
-  // Reactive form state (Lit-native pattern)
   @state() private includeInstruction = true;
   @state() private attachOutputs = false;
   @state() private initialQuestion = '';
   @state() private selectedAgent = '';
   @state() private selectedModel = '';
 
-  // Typed options for Lit-native rendering
   @state() private workflowAgentOptions: AgentOptionData[] = [];
   @state() private toolUseAgentOptions: AgentOptionData[] = [];
   @state() private modelOptions: ModelOptionData[] = [];
 
   updated(changedProps: PropertyValues): void {
-    // Radio group sync handled by .value binding, only need to apply options
     if (changedProps.has('mode') || changedProps.has('options')) {
       this.applyOptions();
     }
   }
 
   override render(): TemplateResult | typeof nothing {
-    // Visibility computed from declarative props
-    // Note: READY streams have their status deleted from statusMemory, so
+    // READY streams have their status deleted from statusMemory, so
     // this.status will be undefined for ready streams. Treat undefined as ready.
     const isTerminal =
       this.status === STREAM_STATUS.STOPPED ||
@@ -334,11 +329,9 @@ export class FollowupSection extends LitElement {
   private handleToggle(event: CustomEvent): void {
     if (!event.detail?.open) return;
     this.dispatchEvent(ProgressEvents.followupRequestOptions());
-    // Radio group sync handled automatically by Lit's .value binding
   }
 
   private getFormData(): FollowupFormData | null {
-    // All form data now from reactive state (Lit-native)
     const agent = this.mode === 'merge' ? MERGE_AGENT_NAME : this.selectedAgent;
     const model = this.selectedModel;
     if (!agent || !model) return null;
@@ -390,7 +383,6 @@ export class FollowupSection extends LitElement {
     );
   }
 
-  // Form input handlers (Lit-native pattern)
   private handleQuestionInput(event: Event): void {
     const target = event.target as HTMLTextAreaElement | null;
     this.initialQuestion = target?.value ?? '';
@@ -409,7 +401,6 @@ export class FollowupSection extends LitElement {
   private applyOptions(): void {
     if (!this.options) return;
 
-    // Update typed options for Lit-native rendering
     if (this.options.workflowAgentsData) {
       this.workflowAgentOptions = this.options.workflowAgentsData;
     }

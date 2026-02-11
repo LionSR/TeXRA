@@ -143,7 +143,7 @@ export const requestPanelStyles: CSSResult = css`
   .approval-request__diff-label {
     color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
-    opacity: 0.9;
+    opacity: var(--opacity-normal);
   }
 
   .approval-request__actions .diff-dropdown {
