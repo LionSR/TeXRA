@@ -169,7 +169,7 @@ export class OutputNode<C = unknown> extends Node<
       this.services,
       outputLocation,
       currentRound,
-      { endTurn, mapping },
+      { endTurn, mapping, isRewrite: setting.isRewrite },
     );
 
     // Get round output — critical, throw if it fails
@@ -177,6 +177,7 @@ export class OutputNode<C = unknown> extends Node<
       outputState,
       baseFiles,
       currentRound,
+      { isRewrite: setting.isRewrite },
     );
 
     return { roundOutput, summary };
@@ -191,6 +192,7 @@ export class OutputNode<C = unknown> extends Node<
     logger.warn(`Output processing failed: ${error.message}`);
 
     // Still summarize what we can for post() side effects
+    const { setting } = this.services;
     let summary: RoundSummary;
     try {
       summary = await summarizeRound(
@@ -198,7 +200,7 @@ export class OutputNode<C = unknown> extends Node<
         this.services,
         outputLocation,
         shared.currentRound,
-        { endTurn: shared.endTurn },
+        { endTurn: shared.endTurn, isRewrite: setting.isRewrite },
       );
     } catch {
       summary = {
