@@ -335,7 +335,10 @@ export class StreamTabs extends LitElement {
               })}
               data-status=${statusLabel}
             ></span>
-            <span class="tab-title">${stream.label || stream.name}</span>
+            <span class="tab-title"
+              >${stream.parentStreamId ? '↳ ' : ''}${stream.label ||
+              stream.name}</span
+            >
           </div>
           <div class="tab-meta">
             <span class="last-active"
