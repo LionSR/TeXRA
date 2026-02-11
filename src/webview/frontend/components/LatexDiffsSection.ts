@@ -75,28 +75,28 @@ export class LatexDiffsSection extends LitElement {
   ];
 
   /** Whether the section is expanded */
-  @property({ type: Boolean }) visible = false;
+  @property({ attribute: false }) visible = false;
 
   /** Base file value */
-  @property({ type: String }) baseFile = '';
+  @property({ attribute: false }) baseFile = '';
 
   /** Base file options */
-  @property({ type: Array }) baseFileOptions: string[] = [];
+  @property({ attribute: false }) baseFileOptions: string[] = [];
 
   /** Edited file value */
-  @property({ type: String }) editedFile = '';
+  @property({ attribute: false }) editedFile = '';
 
   /** Edited file options */
-  @property({ type: Array }) editedFileOptions: string[] = [];
+  @property({ attribute: false }) editedFileOptions: string[] = [];
 
   /** Commit value */
-  @property({ type: String }) commit = 'HEAD';
+  @property({ attribute: false }) commit = 'HEAD';
 
   /** Commit options */
-  @property({ type: Array }) commitOptions: string[] = [];
+  @property({ attribute: false }) commitOptions: string[] = [];
 
   /** Whether this is a git repo */
-  @property({ type: Boolean }) isGitRepo = true;
+  @property({ attribute: false }) isGitRepo = true;
 
   private handleToggle(): void {
     this.dispatchEvent(
