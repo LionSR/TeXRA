@@ -17,6 +17,8 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   getStreamIdForExecution,
   getExecutionStartedAt,
+  getExecutionProgress,
+  waitForExecutionChange,
 } from '@agent/runtime/executionRegistry';
 import {
   getActiveSubagent,
@@ -36,6 +38,7 @@ import { defineTool } from './core/define';
 import {
   STREAM_STATUS,
   EXECUTION_STATUS,
+  ExecutionIdSchema,
   type ExecutionId,
 } from '@shared/schemas';
 
@@ -55,6 +58,22 @@ const ExecutionsToolInputSchema = z.strictObject({
       error: 'view_range[1] must be >= view_range[0]',
     })
     .nullish(),
+
+  /** Block on /executions/{id} until next status change instead of polling. */
+  block: z
+    .boolean()
+    .prefault(false)
+    .describe(
+      'On /executions/{id}: wait for status change (round completed, execution finished) instead of polling. Workflow subagents take 10-30+ min; use block=true to wait efficiently.',
+    ),
+
+  /** Max seconds to wait when block=true. */
+  timeout: z
+    .number()
+    .min(1)
+    .max(1800)
+    .prefault(300)
+    .describe('Max seconds to wait when block=true. Default: 300, max: 1800.'),
 });
 
 export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
@@ -148,16 +167,14 @@ export class ExecutionsTool extends defineTool({
 
 Paths:
 - /executions - List all past executions (with status and elapsed time)
-- /executions/{id} - Execution summary (agent, model, timestamp, status, elapsed)
+- /executions/{id} - Execution summary (agent, model, timestamp, status, elapsed, progress)
 - /executions/{id}/config - Agent configuration JSON (for delegate_workflow/delegate_agent)
 - /executions/{id}/conversation - Full message history
 - /executions/{id}/files - List generated files
 - /executions/{id}/files/{path} - Read specific file
 
 Use "current" as {id} to access the active execution.
-Use view_range: [start, end] to paginate large outputs.
-
-NOTE: Workflow and research subagents typically take 10-30+ minutes to complete. Do not expect results within the first few minutes — check back periodically.`,
+Use view_range: [start, end] to paginate large outputs.`,
   schema: ExecutionsToolInputSchema,
 }) {
   protected async execute(input: ExecutionsToolInput): Promise<ToolResult> {
@@ -179,7 +196,10 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
 
     // /executions/{id} - execution summary
     if (!resource) {
-      return this.showSummary(executionId);
+      return this.showSummary(executionId, {
+        block: input.block,
+        timeout: input.timeout,
+      });
     }
 
     // /executions/{id}/config - agent configuration
@@ -219,7 +239,13 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
       }
       return ctx.executionId;
     }
-    return id as ExecutionId;
+    const result = ExecutionIdSchema.safeParse(id);
+    if (!result.success) {
+      throw new ToolError(
+        `Invalid execution ID format: ${id}. Expected 12-char hex ID or UUID.`,
+      );
+    }
+    return result.data as ExecutionId;
   }
 
   private async listExecutions(): Promise<ToolResult> {
@@ -242,7 +268,22 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
     };
   }
 
-  private async showSummary(executionId: ExecutionId): Promise<ToolResult> {
+  private async showSummary(
+    executionId: ExecutionId,
+    options: { block: boolean; timeout: number },
+  ): Promise<ToolResult> {
+    // Blocking wait: if requested and execution is active, wait for a status change
+    if (options.block) {
+      const info = getExecutionStatusInfo(executionId);
+      if (ACTIVE_STATUSES.has(info.status)) {
+        const timeoutMs = options.timeout * 1000;
+        await Promise.race([
+          waitForExecutionChange(executionId),
+          new Promise<void>((r) => setTimeout(r, timeoutMs)),
+        ]);
+      }
+    }
+
     const historyItem =
       await AgentHistoryManager.getHistoryItemById(executionId);
 
@@ -254,9 +295,20 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
         throw new ToolError(`Execution not found: ${executionId}`);
       }
       const info = getExecutionStatusInfo(executionId);
-      return {
-        output: `Execution: ${executionId}\nStatus: ${formatStatusInfo(info)}\n(No metadata available - use /executions/${executionId}/conversation to view messages)`,
-      };
+      const lines = [
+        `Execution: ${executionId}`,
+        `Status: ${formatStatusInfo(info)}`,
+      ];
+      const progress = getExecutionProgress(executionId);
+      if (progress?.currentRound != null && progress.totalRounds != null) {
+        lines.push(
+          `Progress: round ${progress.currentRound + 1}/${progress.totalRounds}`,
+        );
+      }
+      lines.push(
+        `(No metadata available - use /executions/${executionId}/conversation to view messages)`,
+      );
+      return { output: lines.join('\n') };
     }
 
     const config = historyItem.agentConfig;
@@ -268,6 +320,13 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
       `Timestamp: ${historyItem.timestamp}`,
       `Status: ${formatStatusInfo(info)}`,
     ];
+
+    const progress = getExecutionProgress(executionId);
+    if (progress?.currentRound != null && progress.totalRounds != null) {
+      lines.push(
+        `Progress: round ${progress.currentRound + 1}/${progress.totalRounds}`,
+      );
+    }
 
     lines.push('');
     lines.push('Available paths:');
