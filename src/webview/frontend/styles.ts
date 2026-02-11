@@ -35,7 +35,8 @@ export const mainViewStyles: CSSResult = css`
 
   .file-selection-group {
     background-color: var(--background-color);
-    border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
+    border: var(--border-thin) solid
+      var(--vscode-widget-border, var(--dropdown-border));
     border-radius: var(--border-radius);
     padding: var(--spacing-medium);
     margin-bottom: var(--spacing-large);

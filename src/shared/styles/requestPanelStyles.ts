@@ -102,7 +102,7 @@ export const requestPanelStyles: CSSResult = css`
 
   /* Approval requests */
   .approval-requests {
-    border: 1px solid var(--vscode-input-border);
+    border: var(--border-thin) solid var(--vscode-input-border);
     background: var(--vscode-editor-background);
   }
 
@@ -166,7 +166,7 @@ export const requestPanelStyles: CSSResult = css`
     padding: 0;
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
-    border-left: 1px solid
+    border-left: var(--border-thin) solid
       var(--vscode-button-separator, var(--vscode-input-border));
   }
 
@@ -191,7 +191,7 @@ export const requestPanelStyles: CSSResult = css`
 
   /* Bash approval requests */
   .bash-approval-requests {
-    border: 1px solid var(--vscode-input-border);
+    border: var(--border-thin) solid var(--vscode-input-border);
     background: var(--vscode-editor-background);
   }
 
@@ -219,7 +219,7 @@ export const requestPanelStyles: CSSResult = css`
 
   /* Retry requests */
   .retry-requests {
-    border: 1px solid var(--vscode-input-border);
+    border: var(--border-thin) solid var(--vscode-input-border);
     background: var(--vscode-editor-background);
   }
 
@@ -296,7 +296,7 @@ export const requestPanelStyles: CSSResult = css`
 
   /* Workflow proposals */
   .workflow-proposals {
-    border: 1px solid var(--vscode-inputValidation-infoBorder);
+    border: var(--border-thin) solid var(--vscode-inputValidation-infoBorder);
     background: var(--vscode-inputValidation-infoBackground);
   }
 
@@ -382,7 +382,7 @@ export const requestPanelStyles: CSSResult = css`
     overflow-y: auto;
     line-height: 1.4;
     padding: var(--spacing-small) 0;
-    border-bottom: 1px solid var(--vscode-editorWidget-border);
+    border-bottom: var(--border-thin) solid var(--vscode-editorWidget-border);
   }
 
   .workflow-proposal__files {
