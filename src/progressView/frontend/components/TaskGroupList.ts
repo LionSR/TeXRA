@@ -387,7 +387,7 @@ export class TaskGroupList extends LitElement {
     return html`
       <task-group-item
         .group=${group}
-        ?expanded=${this.isExpanded(group.id)}
+        .expanded=${this.isExpanded(group.id)}
         @group-toggle=${this.handleGroupToggle}
       >
         ${repeat(
