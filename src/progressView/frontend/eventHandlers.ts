@@ -58,15 +58,17 @@ export interface FrontendEventHandlerContext {
 export function handleStreamSwitch(
   event: CustomEvent<StreamEventDetail>,
 ): void {
-  const { streamId } = event.detail;
-  postMessage(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, { stream: streamId });
+  postMessage(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, {
+    stream: event.detail.streamId,
+  });
 }
 
 export function handleStreamDelete(
   event: CustomEvent<StreamEventDetail>,
 ): void {
-  const { streamId } = event.detail;
-  postMessage(PROGRESS_VIEW_COMMANDS.DELETE_STREAM, { stream: streamId });
+  postMessage(PROGRESS_VIEW_COMMANDS.DELETE_STREAM, {
+    stream: event.detail.streamId,
+  });
 }
 
 export function handleFilterChange(
@@ -107,14 +109,12 @@ export function handleRunSelected(
   event: CustomEvent<RunSelectedDetail>,
   ctx: FrontendEventHandlerContext,
 ): void {
-  const { runId } = event.detail;
-  const state = ctx.getState();
-  const streamId = state.activeStreamId;
+  const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
 
   ctx.setStreamState(streamId, (prev) => {
     if (!isWorkflowState(prev)) return prev;
-    return { ...prev, ui: { ...prev.ui, selectedRunId: runId } };
+    return { ...prev, ui: { ...prev.ui, selectedRunId: event.detail.runId } };
   });
 }
 
@@ -122,23 +122,22 @@ export function handleFileAction(
   event: CustomEvent<ProgressFileActionDetail>,
 ): void {
   const { command, file, base, prev } = event.detail;
-  const payload: Record<string, string> = { file };
-  if (base) payload.base = base;
-  if (prev) payload.prev = prev;
-  postMessage(command, payload);
+  postMessage(command, {
+    file,
+    ...(base && { base }),
+    ...(prev && { prev }),
+  });
 }
 
 export function handleFollowUpChange(
   event: CustomEvent<FollowUpChangeDetail>,
   ctx: FrontendEventHandlerContext,
 ): void {
-  const { value } = event.detail;
-  const state = ctx.getState();
-  const streamId = state.activeStreamId;
+  const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
   ctx.setStreamState(streamId, (prev) => {
     if (!isToolUseState(prev)) return prev;
-    return { ...prev, ui: { ...prev.ui, followUpText: value } };
+    return { ...prev, ui: { ...prev.ui, followUpText: event.detail.value } };
   });
 }
 
@@ -211,12 +210,11 @@ export function handleFollowupModeChange(
   event: CustomEvent<FollowupModeDetail>,
   ctx: FrontendEventHandlerContext,
 ): void {
-  const { mode } = event.detail;
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
   ctx.setStreamState(streamId, (prev) => {
     if (!isWorkflowState(prev)) return prev;
-    return { ...prev, followupMode: mode };
+    return { ...prev, followupMode: event.detail.mode };
   });
 }
 
@@ -255,19 +253,18 @@ export function handlePermissionAction(
 
   switch (permission.kind) {
     case PERMISSION_KIND.TOOL_EDIT:
-      postMessage(PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION, {
+    case PERMISSION_KIND.BASH: {
+      const command =
+        permission.kind === PERMISSION_KIND.TOOL_EDIT
+          ? PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION
+          : PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION;
+      postMessage(command, {
         requestId: permission.data.requestId,
         action,
         feedback,
       });
       break;
-    case PERMISSION_KIND.BASH:
-      postMessage(PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION, {
-        requestId: permission.data.requestId,
-        action,
-        feedback,
-      });
-      break;
+    }
     case PERMISSION_KIND.RETRY:
       if (action === 'retry') {
         postMessage(PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST, {

@@ -75,7 +75,7 @@ export class ContextManagement extends LitElement {
       }
 
       .stat-item .codicon {
-        opacity: 0.7;
+        opacity: var(--opacity-subtle);
       }
 
       .summary-block {
@@ -99,7 +99,7 @@ export class ContextManagement extends LitElement {
         white-space: pre-wrap;
         word-break: break-word;
         border: var(--border-thin) solid var(--vscode-widget-border);
-        border-radius: var(--radius-sm);
+        border-radius: var(--border-radius-small);
         background: var(--vscode-editorWidget-background);
       }
     `,
@@ -116,14 +116,14 @@ export class ContextManagement extends LitElement {
   };
 
   /** Statistics items to display */
-  @property({ type: Array }) items: ContextStatItem[] = [];
+  @property({ type: Array }) items: StatItem[] = [];
 
   /** Optional summary text for compaction events */
   @property({ type: String }) summary = '';
 
-  override render(): TemplateResult {
+  override render(): TemplateResult | typeof nothing {
     if (this.items.length === 0) {
-      return html`${nothing}`;
+      return nothing;
     }
 
     return html`

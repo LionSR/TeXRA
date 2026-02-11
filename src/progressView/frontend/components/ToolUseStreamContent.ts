@@ -26,6 +26,7 @@ import {
   LitElement,
   css,
   html,
+  nothing,
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
@@ -121,11 +122,11 @@ export class ToolUseStreamContent extends LitElement {
     );
   }
 
-  override render(): TemplateResult {
+  override render(): TemplateResult | typeof nothing {
     const currentState = this.currentState;
     const streamInfo = this.currentStreamInfo;
     if (!currentState || !streamInfo) {
-      return html``;
+      return nothing;
     }
 
     return html`

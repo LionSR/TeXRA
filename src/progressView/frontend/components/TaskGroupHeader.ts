@@ -4,7 +4,7 @@
  */
 
 // Third-party imports
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - progress view constants
@@ -68,14 +68,14 @@ export class TaskGroupHeader extends LitElement {
       <span class="group-status-icon">
         <i class="codicon codicon-${getStatusIcon(group.status)}"></i>
       </span>
-      ${isRoot ? null : html`<span class="group-title">${group.name}</span>`}
+      ${isRoot ? nothing : html`<span class="group-title">${group.name}</span>`}
       <span class="group-time">
         <span class="group-start-time" data-start=${String(group.startTime)}>
           <i class="codicon codicon-clock"></i> ${formattedStartTime}
         </span>
         ${durationText
           ? html`<span class="group-duration">${durationText}</span>`
-          : null}
+          : nothing}
       </span>
     `;
   }

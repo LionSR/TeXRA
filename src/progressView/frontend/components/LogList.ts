@@ -72,7 +72,6 @@ export class LogList extends LitElement {
   @state()
   private streamContext?: StreamLogContextValue;
 
-  // Direct getters from log context (no .streamState. nesting)
   private get groups(): TaskGroup[] {
     return this.streamContext?.taskGroups ?? [];
   }
@@ -97,7 +96,6 @@ export class LogList extends LitElement {
   @query('task-group-list')
   private taskGroupList?: TaskGroupList;
 
-  // Non-reactive state
   private storage = createWebviewStorage(vscode);
   private stateManager?: PersistedState<LogListState>;
   private toggleStates: ToggleStateStore;
@@ -111,9 +109,6 @@ export class LogList extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    // Use component-level listeners instead of document-level
-    // Events bubble to the host element for delegated handling
-    // Note: Toggle icon rotation is handled by CSS via details[open] selector
     this.addEventListener('click', this.handleClickEvent);
     this.addEventListener('file-click', this.handleFileClickEvent);
   }

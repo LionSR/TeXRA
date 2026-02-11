@@ -40,7 +40,6 @@ function renderAgentOption(
       data-remote=${opt.isRemote ? 'true' : nothing}
       data-custom=${opt.isCustom ? 'true' : nothing}
       data-description=${opt.description || nothing}
-      style=${opt.isMultiple ? 'opacity: 0.9' : nothing}
     >
       ${opt.label}
       ${opt.isMultiple
