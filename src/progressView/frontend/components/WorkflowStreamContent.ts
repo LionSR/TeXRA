@@ -34,7 +34,12 @@ import { consume } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 
 // Local imports - progress view utilities
-import { getRunGroups, hasOutputFiles, type RunGroup } from '../stateUtils';
+import {
+  filterPermissionsForStream,
+  getRunGroups,
+  hasOutputFiles,
+  type RunGroup,
+} from '../stateUtils';
 
 // Local imports - progress view contexts
 import {
@@ -140,12 +145,9 @@ export class WorkflowStreamContent extends LitElement {
   }
 
   private computeFilteredPermissions(): PermissionState[] {
-    const streamId = this.currentStreamInfo?.name;
-    if (!streamId) return [];
-    const permissions = this.permissionContext ?? [];
-    return permissions.filter(
-      (permission) =>
-        !permission.data.streamId || permission.data.streamId === streamId,
+    return filterPermissionsForStream(
+      this.permissionContext ?? [],
+      this.currentStreamInfo?.name,
     );
   }
 

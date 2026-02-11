@@ -203,10 +203,22 @@ export class RequestPanels extends LitElement {
     if (this.permissions.length === 0) return nothing;
 
     return html`
-      ${this.renderApprovalSection(this.approvalPermissions)}
-      ${this.renderBashSection(this.bashPermissions)}
-      ${this.renderRetrySection(this.retryPermissions)}
-      ${this.renderProposalSection(this.proposalPermissions)}
+      ${this.renderSection(
+        SECTION_CONFIGS.approval,
+        this.approvalPermissions,
+        (p) => this.renderToolEditRequest(p),
+      )}
+      ${this.renderSection(SECTION_CONFIGS.bash, this.bashPermissions, (p) =>
+        this.renderBashRequest(p),
+      )}
+      ${this.renderSection(SECTION_CONFIGS.retry, this.retryPermissions, (p) =>
+        this.renderRetryRequest(p),
+      )}
+      ${this.renderSection(
+        SECTION_CONFIGS.proposal,
+        this.proposalPermissions,
+        (p) => this.renderProposalRequest(p),
+      )}
     `;
   }
 
@@ -236,38 +248,6 @@ export class RequestPanels extends LitElement {
         </div>
       </section>
     `;
-  }
-
-  private renderApprovalSection(
-    prompts: PermissionState[],
-  ): TemplateResult | typeof nothing {
-    return this.renderSection(SECTION_CONFIGS.approval, prompts, (p) =>
-      this.renderToolEditRequest(p),
-    );
-  }
-
-  private renderBashSection(
-    prompts: PermissionState[],
-  ): TemplateResult | typeof nothing {
-    return this.renderSection(SECTION_CONFIGS.bash, prompts, (p) =>
-      this.renderBashRequest(p),
-    );
-  }
-
-  private renderRetrySection(
-    prompts: PermissionState[],
-  ): TemplateResult | typeof nothing {
-    return this.renderSection(SECTION_CONFIGS.retry, prompts, (p) =>
-      this.renderRetryRequest(p),
-    );
-  }
-
-  private renderProposalSection(
-    prompts: PermissionState[],
-  ): TemplateResult | typeof nothing {
-    return this.renderSection(SECTION_CONFIGS.proposal, prompts, (p) =>
-      this.renderProposalRequest(p),
-    );
   }
 
   // ===========================================================================
@@ -917,9 +897,8 @@ export class RequestPanels extends LitElement {
     const input = this.renderRoot.querySelector<HTMLElement>(
       `[data-feedback-for="${key}"]`,
     ) as HTMLElement & { value?: string };
-    const raw = input?.value ?? '';
-    const trimmed = raw.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
+    const trimmed = (input?.value ?? '').trim();
+    return trimmed || undefined;
   }
 
   // ===========================================================================

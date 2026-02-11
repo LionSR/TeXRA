@@ -259,66 +259,62 @@ export class StreamHeader extends LitElement {
         color: var(--color-success);
       }
 
-      .yolo-toggle-button {
-        flex-shrink: 0;
-        transition: all 0.2s ease;
-      }
-
-      .yolo-toggle-button.is-active {
-        color: var(--color-error);
-        background-color: color-mix(
-          in srgb,
-          var(--color-error) 15%,
-          transparent
-        );
-        border-radius: var(--border-radius);
-        box-shadow: 0 0 8px
-          color-mix(in srgb, var(--color-error) 40%, transparent);
-      }
-
-      .yolo-toggle-button.is-active:hover {
-        background-color: color-mix(
-          in srgb,
-          var(--color-error) 25%,
-          transparent
-        );
-        box-shadow: 0 0 12px
-          color-mix(in srgb, var(--color-error) 60%, transparent);
-      }
-
+      /* Shared toggle button base */
+      .yolo-toggle-button,
       .super-yolo-toggle-button {
         flex-shrink: 0;
         transition: all 0.2s ease;
       }
 
+      .yolo-toggle-button.is-active,
       .super-yolo-toggle-button.is-active {
-        color: var(--color-warning, var(--vscode-charts-orange));
+        border-radius: var(--border-radius);
+      }
+
+      /* YOLO toggle: error color */
+      .yolo-toggle-button.is-active {
+        --_toggle-color: var(--color-error);
+        color: var(--_toggle-color);
         background-color: color-mix(
           in srgb,
-          var(--color-warning, var(--vscode-charts-orange)) 15%,
+          var(--_toggle-color) 15%,
           transparent
         );
-        border-radius: var(--border-radius);
         box-shadow: 0 0 8px
-          color-mix(
-            in srgb,
-            var(--color-warning, var(--vscode-charts-orange)) 40%,
-            transparent
-          );
+          color-mix(in srgb, var(--_toggle-color) 40%, transparent);
+      }
+
+      .yolo-toggle-button.is-active:hover {
+        background-color: color-mix(
+          in srgb,
+          var(--_toggle-color) 25%,
+          transparent
+        );
+        box-shadow: 0 0 12px
+          color-mix(in srgb, var(--_toggle-color) 60%, transparent);
+      }
+
+      /* Super YOLO toggle: warning color */
+      .super-yolo-toggle-button.is-active {
+        --_toggle-color: var(--color-warning, var(--vscode-charts-orange));
+        color: var(--_toggle-color);
+        background-color: color-mix(
+          in srgb,
+          var(--_toggle-color) 15%,
+          transparent
+        );
+        box-shadow: 0 0 8px
+          color-mix(in srgb, var(--_toggle-color) 40%, transparent);
       }
 
       .super-yolo-toggle-button.is-active:hover {
         background-color: color-mix(
           in srgb,
-          var(--color-warning, var(--vscode-charts-orange)) 25%,
+          var(--_toggle-color) 25%,
           transparent
         );
         box-shadow: 0 0 12px
-          color-mix(
-            in srgb,
-            var(--color-warning, var(--vscode-charts-orange)) 60%,
-            transparent
-          );
+          color-mix(in srgb, var(--_toggle-color) 60%, transparent);
       }
 
       .parent-link {

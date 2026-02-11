@@ -227,7 +227,7 @@ export class TaskRunFileService {
   }
 
   public updateRunContext(executionId?: ExecutionId | null): void {
-    this.applyExecutionContext(executionId ?? undefined);
+    this.applyExecutionContext(executionId);
   }
 
   public getExecutionId(): ExecutionId | undefined {
@@ -263,15 +263,7 @@ export class TaskRunFileService {
     } = {},
   ): Promise<void> {
     const executionId = this.metadata.executionId;
-    if (!executionId) {
-      return;
-    }
-
-    if (!this.useRunStorage) {
-      return;
-    }
-
-    if (this.hasPreparedSnapshot) {
+    if (!executionId || !this.useRunStorage || this.hasPreparedSnapshot) {
       return;
     }
 
@@ -289,29 +281,21 @@ export class TaskRunFileService {
     }
 
     const captureTasks = baseFiles.map(async (target) => {
-      if (!target) {
+      if (!target || target.kind !== 'workspace') {
         return;
       }
 
-      const sourceLocation = target;
-      if (sourceLocation.kind !== 'workspace') {
-        return;
-      }
-
-      if (shouldSkipRelocation(sourceLocation.relativePath)) {
+      if (shouldSkipRelocation(target.relativePath)) {
         return;
       }
 
       try {
-        const stats = await fs.stat(sourceLocation.absolutePath);
+        const stats = await fs.stat(target.absolutePath);
         if (!stats.isFile()) {
           return;
         }
 
-        const snapshotRelative = path.join(
-          'original',
-          sourceLocation.relativePath,
-        );
+        const snapshotRelative = path.join('original', target.relativePath);
         const snapshotPaths = getRunStoragePaths(executionId, snapshotRelative);
 
         try {
@@ -330,7 +314,7 @@ export class TaskRunFileService {
         }
 
         await ensureParentDir(snapshotPaths.absolute);
-        await fs.copyFile(sourceLocation.absolutePath, snapshotPaths.absolute);
+        await fs.copyFile(target.absolutePath, snapshotPaths.absolute);
       } catch (error) {
         const err = error as NodeJS.ErrnoException;
         if (err?.code === 'ENOENT') {
@@ -427,18 +411,18 @@ export class TaskRunFileService {
       return createExternalLocation(resolved.absolutePath);
     }
 
-    // Check if run storage is enabled
+    // Route to run storage when enabled
     const executionId = this.metadata.executionId;
     if (executionId && this.useRunStorage) {
-      const runDir = this.metadata.runDirectory;
-      if (runDir) {
-        const runAbsolute = path.join(runDir, resolved.relativePath);
-        return createRunStorageLocation(
-          runAbsolute,
-          resolved.relativePath,
-          executionId,
-        );
-      }
+      const runAbsolute = path.join(
+        getRunDir(executionId),
+        resolved.relativePath,
+      );
+      return createRunStorageLocation(
+        runAbsolute,
+        resolved.relativePath,
+        executionId,
+      );
     }
 
     // Default to workspace location

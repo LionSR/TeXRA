@@ -16,3 +16,5 @@ export {
   type SortableReorderCallback,
   type SortableReorderResult,
 } from './SortableController';
+
+export { installToolbarTooltips } from './TooltipController';

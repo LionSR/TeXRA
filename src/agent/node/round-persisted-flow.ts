@@ -196,12 +196,11 @@ export class RoundPersistedFlow<
    * This is the SINGLE SOURCE OF TRUTH for the continue/finalize decision.
    */
   private shouldContinueNextRound(shared: S): boolean {
-    if (this.callbacks.checkInterruption?.()) return false;
-    if (!shared.continueRounds) return false;
-    if (isRoundAtOrBeyondLimit(shared.currentRound + 1, shared.totalRounds)) {
-      return false;
-    }
-    return true;
+    return (
+      !this.callbacks.checkInterruption?.() &&
+      shared.continueRounds &&
+      !isRoundAtOrBeyondLimit(shared.currentRound + 1, shared.totalRounds)
+    );
   }
 
   /**
