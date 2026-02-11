@@ -52,6 +52,18 @@ export const ProviderVscodeSettingSchema = z.object({
 });
 export type ProviderVscodeSetting = z.infer<typeof ProviderVscodeSettingSchema>;
 
+/** A VS Code numeric configuration surfaced in a settings section. */
+export const NumberVscodeSettingSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  description: z.string(),
+  value: z.number(),
+  min: z.number().optional(),
+  max: z.number().optional(),
+  unit: z.string().optional(),
+});
+export type NumberVscodeSetting = z.infer<typeof NumberVscodeSettingSchema>;
+
 export const ProviderKeyStatusSchema = z.object({
   provider: z.string(),
   displayName: z.string(),

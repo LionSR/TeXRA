@@ -74,12 +74,17 @@ import {
 } from '@utils/config/constants';
 import { getConfig } from '@utils/config/configUtils';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
+import {
+  _disableAllProposalBypasses,
+  setToolEditApprovalSessionBypass,
+} from '@tools/approval';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import type {
   RemoteAgent,
   ProviderKeyStatus,
   ProviderVscodeSetting,
+  NumberVscodeSetting,
 } from '@shared/schemas/profileViewMessages';
 
 // Type helper for extracting specific message types
@@ -128,12 +133,45 @@ const PROVIDER_VSCODE_SETTINGS: Record<
   ],
 };
 
+/** Reliability settings surfaced in the Multi-Agent tab. */
+const RELIABILITY_SETTINGS: (Omit<NumberVscodeSetting, 'value'> & {
+  defaultValue: number;
+})[] = [
+  {
+    key: 'texra.model.compactionThresholdPercent',
+    label: 'Compaction threshold',
+    description:
+      'Context window percentage to trigger automatic context compaction. Set to 0 to disable.',
+    min: 0,
+    max: 100,
+    unit: '%',
+    defaultValue: 75,
+  },
+  {
+    key: 'texra.model.retry.maxAttempts',
+    label: 'Retry attempts',
+    description:
+      'Automatic retry attempts before showing a manual retry button. Set to 0 for manual-only.',
+    min: 0,
+    defaultValue: 0,
+  },
+  {
+    key: 'texra.model.retry.backoffMs',
+    label: 'Retry backoff',
+    description: 'Base delay between retry attempts.',
+    min: 0,
+    unit: 'ms',
+    defaultValue: 1000,
+  },
+];
+
 /** Allowed setting keys that the frontend can toggle (whitelist for safety). */
-const ALLOWED_VSCODE_SETTING_KEYS = new Set(
-  Object.values(PROVIDER_VSCODE_SETTINGS)
+const ALLOWED_VSCODE_SETTING_KEYS = new Set([
+  ...Object.values(PROVIDER_VSCODE_SETTINGS)
     .flat()
     .map((s) => s.key),
-);
+  ...RELIABILITY_SETTINGS.map((s) => s.key),
+]);
 
 function getProviderVscodeSettings(provider: string): ProviderVscodeSetting[] {
   const defs = PROVIDER_VSCODE_SETTINGS[provider.toLowerCase()];
@@ -142,6 +180,13 @@ function getProviderVscodeSettings(provider: string): ProviderVscodeSetting[] {
   return defs.map((def) => ({
     ...def,
     value: getConfig<boolean>(def.key, false),
+  }));
+}
+
+function getReliabilitySettings(): NumberVscodeSetting[] {
+  return RELIABILITY_SETTINGS.map(({ defaultValue, ...def }) => ({
+    ...def,
+    value: getConfig<number>(def.key, defaultValue),
   }));
 }
 
@@ -572,6 +617,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
       enabled,
+      reliabilitySettings: getReliabilitySettings(),
     });
   }
 
@@ -587,6 +633,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       WorkspaceStateKey.SUPER_YOLO_ENABLED,
       data.enabled,
     );
+
+    // Disabling the feature: clear all per-stream Super YOLO and YOLO bypasses
+    if (!data.enabled) {
+      const affected = _disableAllProposalBypasses();
+      for (const streamId of affected) {
+        setToolEditApprovalSessionBypass(streamId, false);
+      }
+    }
 
     const view = this.getActiveView();
     if (view) await this.sendSuperYoloEnabled(view.webview);
@@ -987,7 +1041,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     const view = this.getActiveView();
     if (view) {
-      await this.sendProfileData(view.webview);
+      await Promise.all([
+        this.sendProfileData(view.webview),
+        this.sendSuperYoloEnabled(view.webview),
+      ]);
     }
   }
 

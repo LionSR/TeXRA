@@ -54,6 +54,7 @@ import { ToolResult } from '@tools/result';
 import {
   isSuperYoloFeatureEnabled,
   isProposalBypassedForStream,
+  setToolEditApprovalSessionBypass,
 } from '@tools/approval';
 import {
   formatSubagentDelivery,
@@ -111,6 +112,7 @@ function executeSubagent(
   configPayload: AgentConfigPayload,
   agentName: string,
   orchestratorStreamId: StreamTabId,
+  options?: { enableYoloOnChild?: boolean },
 ): ToolResult {
   const executionId = randomUUID() as ExecutionId;
 
@@ -123,6 +125,9 @@ function executeSubagent(
     isSubagent: true,
     onStreamResolved: (resolvedStreamId) => {
       childStreamId = resolvedStreamId;
+      if (options?.enableYoloOnChild) {
+        setToolEditApprovalSessionBypass(resolvedStreamId, true);
+      }
       registerSubagent(
         executionId,
         orchestratorStreamId,
@@ -394,7 +399,9 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
 
     // Super YOLO: skip proposal when feature enabled AND stream bypassed
     if (isSuperYoloFeatureEnabled() && isProposalBypassedForStream(streamId)) {
-      return executeSubagent(toConfigPayload(proposal), input.agent, streamId);
+      return executeSubagent(toConfigPayload(proposal), input.agent, streamId, {
+        enableYoloOnChild: true,
+      });
     }
 
     const proposalId = randomUUID();
@@ -490,7 +497,9 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
 
     // Super YOLO: skip proposal when feature enabled AND stream bypassed
     if (isSuperYoloFeatureEnabled() && isProposalBypassedForStream(streamId)) {
-      return executeSubagent(toConfigPayload(proposal), input.agent, streamId);
+      return executeSubagent(toConfigPayload(proposal), input.agent, streamId, {
+        enableYoloOnChild: true,
+      });
     }
 
     const proposalId = randomUUID();

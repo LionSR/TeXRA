@@ -14,6 +14,10 @@ import {
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
 import { isApprovalBypassedForStream } from '@tools/approval/toolEditApproval';
+import {
+  isProposalBypassedForStream,
+  isSuperYoloFeatureEnabled,
+} from '@tools/approval/proposalApproval';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 import { ProgressEventHandler } from './events/ProgressEventHandler';
@@ -324,12 +328,15 @@ export class ProgressViewProvider
 
   private sendYoloStateForStream(streamId: StreamTabId): void {
     if (!this.canSendToWebview()) return;
-    const bypassActive = streamId
-      ? isApprovalBypassedForStream(streamId)
-      : false;
+    const id = streamId || ('' as StreamTabId);
     this.webviewUpdater.updateToolEditApprovalState(
-      streamId || ('' as StreamTabId),
-      bypassActive,
+      id,
+      streamId ? isApprovalBypassedForStream(streamId) : false,
+    );
+    this.webviewUpdater.updateSuperYoloBypassState(
+      id,
+      streamId ? isProposalBypassedForStream(streamId) : false,
+      isSuperYoloFeatureEnabled(),
     );
   }
 

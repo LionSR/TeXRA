@@ -18,6 +18,7 @@ import {
   SETTINGS_VIEW_COMMANDS,
 } from '@common/webview/commands';
 import { AgentCategorySchema, AgentSourceSchema } from './agent';
+import { NumberVscodeSettingSchema } from './profileViewMessages';
 export { SETTINGS_VIEW_CMD };
 
 /** Tab name order - single source of truth for tab indices */
@@ -75,12 +76,14 @@ export {
   TierConstantsSchema,
   ProviderKeyStatusSchema,
   ProviderVscodeSettingSchema,
+  NumberVscodeSettingSchema,
   type ProfileUser,
   type RemoteAgent,
   type ApiAccessMode,
   type TierConstants,
   type ProviderKeyStatus,
   type ProviderVscodeSetting,
+  type NumberVscodeSetting,
   type SelectAgentMessage,
   type SetApiAccessModeMessage,
 } from './profileViewMessages';
@@ -167,10 +170,11 @@ export type UpdateCustomAgentDirMessage = z.infer<
 // Super YOLO enabled data schema
 // ============================================================
 
-/** Outbound: backend → frontend Super YOLO enabled toggle */
+/** Outbound: backend → frontend Super YOLO enabled toggle + reliability settings */
 export const UpdateSuperYoloEnabledMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED),
   enabled: z.boolean(),
+  reliabilitySettings: z.array(NumberVscodeSettingSchema).prefault([]),
 });
 export type UpdateSuperYoloEnabledMessage = z.infer<
   typeof UpdateSuperYoloEnabledMessageSchema
@@ -291,7 +295,7 @@ const SetGlobalStreamingMessageSchema = z.object({
 const SetProviderVscodeSettingMessageSchema = z.object({
   command: z.literal(CMD.SET_PROVIDER_VSCODE_SETTING),
   key: z.string().min(1),
-  value: z.boolean(),
+  value: z.union([z.boolean(), z.number()]),
 });
 
 const OpenExternalUrlMessageSchema = z.object({
