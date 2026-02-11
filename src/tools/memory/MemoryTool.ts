@@ -22,6 +22,7 @@ import {
   shouldSkipEntry,
 } from './constants';
 import { toDisplayPath, formatSize, displayToStoragePath } from './memoryUtils';
+import { formatRelativeTime } from '@shared/utils/string';
 
 const MemoryToolInputSchema = z.strictObject({
   command: z.enum([
@@ -150,7 +151,8 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
       return {
         summary: `Listed directory: ${inputPath}`,
         output: [
-          `Here're the files and directories up to 2 levels deep in ${inputPath}, excluding hidden items and node_modules:`,
+          `Contents of ${inputPath} (up to 2 levels deep):`,
+          `SIZE\tMODIFIED\tPATH`,
           ...listing,
         ].join('\n'),
       };
@@ -315,22 +317,23 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
   }
 
   private async buildDirectoryListing(resolvedPath: string): Promise<string[]> {
-    const entries: Array<{ path: string; size: number }> = [];
+    const entries: Array<{ path: string; size: number; mtime: number }> = [];
     const rootStats = await StorageFS.stat(resolvedPath);
-    entries.push({ path: resolvedPath, size: rootStats.size });
+    entries.push({ path: resolvedPath, size: rootStats.size, mtime: rootStats.mtime });
 
     await this.walkDirectory(resolvedPath, 0, entries);
 
     return entries.map((entry) => {
       const display = toDisplayPath(entry.path);
-      return `${formatSize(entry.size)}\t${display}`;
+      const age = formatRelativeTime(entry.mtime);
+      return `${formatSize(entry.size)}\t${age}\t${display}`;
     });
   }
 
   private async walkDirectory(
     currentPath: string,
     depth: number,
-    entries: Array<{ path: string; size: number }>,
+    entries: Array<{ path: string; size: number; mtime: number }>,
   ): Promise<void> {
     if (depth >= DIRECTORY_LISTING_DEPTH) {
       return;
@@ -343,7 +346,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
       }
       const childPath = path.join(currentPath, name);
       const stats = await StorageFS.stat(childPath);
-      entries.push({ path: childPath, size: stats.size });
+      entries.push({ path: childPath, size: stats.size, mtime: stats.mtime });
 
       if (
         type === vscode.FileType.Directory &&

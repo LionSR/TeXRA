@@ -23,6 +23,7 @@ import {
 import {
   _clearAllProposalBypass,
   _clearProposalBypassForStream,
+  _disableAllProposalBypasses,
 } from './proposalApproval';
 import type { StreamTabId } from '@shared/schemas';
 
@@ -66,6 +67,7 @@ export {
   toggleProposalBypass,
   isProposalBypassedForStream,
   isSuperYoloFeatureEnabled,
+  _disableAllProposalBypasses,
 } from './proposalApproval';
 
 export {
