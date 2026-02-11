@@ -1,6 +1,6 @@
 // Internal imports
 import { getConfig } from '@utils/config';
-import { hasExtension } from '@utils/core';
+import { hasExtension } from '@utils/core/pathCore';
 
 /**
  * File categories for extension configuration lookups.

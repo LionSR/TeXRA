@@ -25,7 +25,7 @@ import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 
 // Local imports - core utilities
-import { getPathSegments } from '@utils/core';
+import { getPathSegments } from '@utils/core/pathCore';
 
 // Local file imports
 import { StorageFS } from './storageFS';

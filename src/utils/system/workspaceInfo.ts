@@ -1,5 +1,6 @@
 // Standard library imports
 import * as os from 'os';
+import * as path from 'path';
 
 // Third-party imports
 import { execa } from 'execa';
@@ -36,7 +37,7 @@ function detectShell(): string | undefined {
     // On Windows, check for common shells
     const comspec = process.env.ComSpec;
     if (comspec) {
-      const name = comspec.split(/[\\/]/).pop()?.toLowerCase();
+      const name = path.basename(comspec).toLowerCase();
       if (name === 'powershell.exe' || name === 'pwsh.exe') return 'PowerShell';
       if (name === 'cmd.exe') return 'cmd';
       return name?.replace(/\.exe$/, '');
@@ -47,7 +48,7 @@ function detectShell(): string | undefined {
   // Unix: SHELL env var is the login shell
   const shell = process.env.SHELL;
   if (!shell) return undefined;
-  return shell.split('/').pop(); // "bash", "zsh", "fish", etc.
+  return path.basename(shell); // "bash", "zsh", "fish", etc.
 }
 
 /**

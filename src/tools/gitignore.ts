@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 // Local imports - utils
-import { toPosixPath } from '@utils/core';
+import { toPosixPath } from '@utils/core/pathCore';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 
 // Local file imports

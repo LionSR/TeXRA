@@ -3,6 +3,7 @@ import { z } from 'zod';
 // Local imports - log
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { hasExtension } from '@utils/core/pathCore';
 import { flexibleFS, pathToLocation } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';
@@ -79,7 +80,7 @@ async function validateTexFile(
     return { valid: false, reason };
   }
 
-  if (!filePath.endsWith('.tex')) {
+  if (!hasExtension(filePath, '.tex')) {
     const reason = `Error: File ${filePath} is not a LaTeX file. Skipping.`;
     logger.warn(channel, reason);
     return { valid: false, reason };

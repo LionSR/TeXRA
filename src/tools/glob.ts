@@ -12,7 +12,7 @@ import {
   pluralize,
 } from '@tools/utils';
 import { getGitignoreMatcher } from '@tools/gitignore';
-import { toPosixPath } from '@utils/core';
+import { toPosixPath } from '@utils/core/pathCore';
 import { WorkspaceFS } from '@utils/files';
 
 // Local file imports
