@@ -425,6 +425,18 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   // ============================================================
+  // Helpers
+  // ============================================================
+
+  /** Run a callback with the active view's webview, if available. */
+  private async withActiveWebview(
+    fn: (webview: vscode.Webview) => Promise<void>,
+  ): Promise<void> {
+    const view = this.getActiveView();
+    if (view) await fn(view.webview);
+  }
+
+  // ============================================================
   // Public methods for external access
   // ============================================================
 
@@ -592,8 +604,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleGetAutoShowRemote(): Promise<void> {
-    const view = this.getActiveView();
-    if (view) await this.sendAutoShowRemote(view.webview);
+    await this.withActiveWebview((w) => this.sendAutoShowRemote(w));
   }
 
   private async handleSetAutoShowRemote(
@@ -601,9 +612,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     await globalSM.update(GlobalStateKey.AUTO_SHOW_REMOTE_AGENTS, data.enabled);
     void vscode.commands.executeCommand('texra.refreshAllOptions');
-
-    const view = this.getActiveView();
-    if (view) await this.sendAutoShowRemote(view.webview);
+    await this.withActiveWebview((w) => this.sendAutoShowRemote(w));
   }
 
   // ============================================================
@@ -622,8 +631,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleGetSuperYoloEnabled(): Promise<void> {
-    const view = this.getActiveView();
-    if (view) await this.sendSuperYoloEnabled(view.webview);
+    await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
   }
 
   private async handleSetSuperYoloEnabled(
@@ -642,11 +650,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       }
     }
 
-    const view = this.getActiveView();
-    if (view) await this.sendSuperYoloEnabled(view.webview);
-
-    const label = data.enabled ? 'enabled' : 'disabled';
-    void vscode.window.showInformationMessage(`Super YOLO mode ${label}`);
+    await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
+    void vscode.window.showInformationMessage(
+      `Super YOLO mode ${data.enabled ? 'enabled' : 'disabled'}`,
+    );
   }
 
   // ============================================================
@@ -665,10 +672,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
 
   private async handleGetMemoryData(): Promise<void> {
-    const view = this.getActiveView();
-    if (view) {
-      await this.sendMemoryData(view.webview);
-    }
+    await this.withActiveWebview((w) => this.sendMemoryData(w));
   }
 
   private async handleOpenMemoryFile(
@@ -737,21 +741,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleGetMemoryEnabled(): Promise<void> {
-    const view = this.getActiveView();
-    if (view) {
-      await this.sendMemoryEnabled(view.webview);
-    }
+    await this.withActiveWebview((w) => this.sendMemoryEnabled(w));
   }
 
   private async handleSetMemoryEnabled(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MEMORY_ENABLED>,
   ): Promise<void> {
-    const view = this.getActiveView();
     await setToolUseMemoryEnabled(data.enabled);
-
-    if (view) {
-      await this.sendMemoryEnabled(view.webview);
-    }
+    await this.withActiveWebview((w) => this.sendMemoryEnabled(w));
   }
 
   // ============================================================
@@ -759,10 +756,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
 
   private async handleGetHistoryData(): Promise<void> {
-    const view = this.getActiveView();
-    if (view) {
-      await this.sendHistoryData(view.webview);
-    }
+    await this.withActiveWebview((w) => this.sendHistoryData(w));
   }
 
   private async handleRerunAgent(
@@ -857,10 +851,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
 
   private async handleGetProfileData(): Promise<void> {
-    const view = this.getActiveView();
-    if (view) {
-      await this.sendProfileData(view.webview);
-    }
+    await this.withActiveWebview((w) => this.sendProfileData(w));
   }
 
   private async handleSelectAgent(
@@ -883,16 +874,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetApiAccessMode(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_API_ACCESS_MODE>,
   ): Promise<void> {
-    const view = this.getActiveView();
-
     const useIncludedAccess = data.mode === 'included';
     await getServerSideKeyService().setUseIncludedModelAccess(
       useIncludedAccess,
     );
 
-    if (view) {
-      await this.sendProfileData(view.webview);
-    }
+    await this.withActiveWebview((w) => this.sendProfileData(w));
 
     const modeLabel =
       data.mode === 'included' ? 'Included Access' : 'My Own Keys';
@@ -933,10 +920,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         error,
       );
     } finally {
-      const view = this.getActiveView();
-      if (view) {
-        await this.sendProfileData(view.webview);
-      }
+      await this.withActiveWebview((w) => this.sendProfileData(w));
     }
   }
 
@@ -959,10 +943,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         error,
       );
     } finally {
-      const view = this.getActiveView();
-      if (view) {
-        await this.sendProfileData(view.webview);
-      }
+      await this.withActiveWebview((w) => this.sendProfileData(w));
     }
   }
 
@@ -986,33 +967,21 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_STREAMING>,
   ): Promise<void> {
     await setProviderStreaming(data.provider, data.enabled);
-
-    const view = this.getActiveView();
-    if (view) {
-      await this.sendProfileData(view.webview);
-    }
+    await this.withActiveWebview((w) => this.sendProfileData(w));
   }
 
   private async handleSetProviderEndpoint(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_ENDPOINT>,
   ): Promise<void> {
     await setProviderEndpoint(data.provider, data.endpoint);
-
-    const view = this.getActiveView();
-    if (view) {
-      await this.sendProfileData(view.webview);
-    }
+    await this.withActiveWebview((w) => this.sendProfileData(w));
   }
 
   private async handleSetGlobalStreaming(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GLOBAL_STREAMING>,
   ): Promise<void> {
     await setGlobalStreaming(data.enabled);
-
-    const view = this.getActiveView();
-    if (view) {
-      await this.sendProfileData(view.webview);
-    }
+    await this.withActiveWebview((w) => this.sendProfileData(w));
   }
 
   private async handleOpenExternalUrl(
@@ -1039,13 +1008,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       vscode.ConfigurationTarget.Global,
     );
 
-    const view = this.getActiveView();
-    if (view) {
+    await this.withActiveWebview(async (w) => {
       await Promise.all([
-        this.sendProfileData(view.webview),
-        this.sendSuperYoloEnabled(view.webview),
+        this.sendProfileData(w),
+        this.sendSuperYoloEnabled(w),
       ]);
-    }
+    });
   }
 
   // ============================================================
@@ -1053,10 +1021,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
 
   private async handleGetModelSelection(): Promise<void> {
-    const view = this.getActiveView();
-    if (view) {
-      await this.sendModelSelectionData(view.webview);
-    }
+    await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
   private async handleSetModelEnabled(
@@ -1091,18 +1056,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     }
 
     void vscode.commands.executeCommand('texra.refreshAllOptions');
-
-    const view = this.getActiveView();
-    if (view) await this.sendModelSelectionData(view.webview);
+    await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
   private async handleSetPolishModel(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_POLISH_MODEL>,
   ): Promise<void> {
     await globalSM.update(GlobalStateKey.POLISH_MODEL, data.modelName);
-
-    const view = this.getActiveView();
-    if (view) await this.sendModelSelectionData(view.webview);
+    await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
   // ============================================================
@@ -1110,10 +1071,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
 
   private async handleGetAgentSelection(): Promise<void> {
-    const view = this.getActiveView();
-    if (view) {
-      await this.sendAgentSelectionData(view.webview);
-    }
+    await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
   }
 
   private async handleOpenAgentYaml(
@@ -1191,9 +1149,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       await workspaceSM.update(stateKey, updated);
 
       void vscode.commands.executeCommand('texra.refreshAllOptions');
-
-      const view = this.getActiveView();
-      if (view) await this.sendAgentSelectionData(view.webview);
+      await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
@@ -1235,9 +1191,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       data.category,
     );
 
-    // Refresh agent list after creation
-    const view = this.getActiveView();
-    if (view) await this.sendAgentSelectionData(view.webview);
+    await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
   }
 
   // ============================================================
@@ -1245,28 +1199,27 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
 
   private async handleGetCustomAgentDir(): Promise<void> {
-    const view = this.getActiveView();
-    if (view) {
-      await this.sendCustomAgentDir(view.webview);
-    }
+    await this.withActiveWebview((w) => this.sendCustomAgentDir(w));
+  }
+
+  /** Refresh agent dir + selection after a directory change. */
+  private async refreshAgentDirUI(): Promise<void> {
+    await agentDirectories.refreshAfterDirChange();
+    await loadAgents();
+    await this.withActiveWebview(async (w) => {
+      await Promise.all([
+        this.sendCustomAgentDir(w),
+        this.sendAgentSelectionData(w),
+      ]);
+    });
+    void vscode.commands.executeCommand('texra.refreshAllOptions');
   }
 
   private async handleSetCustomAgentDir(): Promise<void> {
-    const view = this.getActiveView();
     try {
       const selectedPath = await agentDirectories.promptCustom();
-      if (!selectedPath) return; // User cancelled
-
-      // Reload agents from new directory and refresh UI
-      await agentDirectories.refreshAfterDirChange();
-      await loadAgents();
-      if (view) {
-        await Promise.all([
-          this.sendCustomAgentDir(view.webview),
-          this.sendAgentSelectionData(view.webview),
-        ]);
-      }
-      void vscode.commands.executeCommand('texra.refreshAllOptions');
+      if (!selectedPath) return;
+      await this.refreshAgentDirUI();
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
@@ -1277,20 +1230,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleResetCustomAgentDir(): Promise<void> {
-    const view = this.getActiveView();
     try {
       await globalSM.update(GlobalStateKey.CUSTOM_AGENT_DIR, '');
-
-      // Reload agents from default directory and refresh UI
-      await agentDirectories.refreshAfterDirChange();
-      await loadAgents();
-      if (view) {
-        await Promise.all([
-          this.sendCustomAgentDir(view.webview),
-          this.sendAgentSelectionData(view.webview),
-        ]);
-      }
-      void vscode.commands.executeCommand('texra.refreshAllOptions');
+      await this.refreshAgentDirUI();
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
