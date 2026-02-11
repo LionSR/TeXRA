@@ -40,6 +40,7 @@ import {
   UpdateCustomAgentDirMessageSchema,
   UpdateSuperYoloEnabledMessageSchema,
   type AgentSelectionItem,
+  type NumberVscodeSetting,
 } from '@shared/schemas/settingsViewMessages';
 import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
 
@@ -137,9 +138,10 @@ export class SettingsApp extends BaseWebviewApp {
   @state() private autoShowRemote = true;
   @state() private agentSubTab: AgentCategory | undefined;
 
-  // Super YOLO state
+  // Super YOLO / reliability state
   @state() private superYoloEnabled = false;
   @state() private superYoloToggleDisabled = true;
+  @state() private reliabilitySettings: NumberVscodeSetting[] = [];
 
   protected get readyCommand(): string | null {
     return null;
@@ -266,6 +268,7 @@ export class SettingsApp extends BaseWebviewApp {
         if (!data) return;
         this.superYoloEnabled = data.enabled;
         this.superYoloToggleDisabled = false;
+        this.reliabilitySettings = data.reliabilitySettings;
         return;
       }
 
@@ -404,7 +407,7 @@ export class SettingsApp extends BaseWebviewApp {
   }
 
   private handleSetProviderVscodeSetting(
-    event: CustomEvent<{ key: string; value: boolean }>,
+    event: CustomEvent<{ key: string; value: boolean | number }>,
   ): void {
     postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING, {
       key: event.detail.key,
@@ -645,7 +648,10 @@ export class SettingsApp extends BaseWebviewApp {
             <multi-agent-tab
               .superYoloEnabled=${this.superYoloEnabled}
               .toggleDisabled=${this.superYoloToggleDisabled}
+              .reliabilitySettings=${this.reliabilitySettings}
               @super-yolo-toggle=${this.handleSuperYoloToggle}
+              @reliability-setting-change=${this
+                .handleSetProviderVscodeSetting}
             ></multi-agent-tab>
           </vscode-tab-panel>
         </vscode-tabs>

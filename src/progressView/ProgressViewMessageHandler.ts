@@ -180,13 +180,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           return;
         }
         const isNowEnabled = toggleProposalBypass(data.stream);
-        // Super YOLO implies normal YOLO — auto-enable it when turning on
-        if (isNowEnabled && !isApprovalBypassedForStream(data.stream)) {
-          setToolEditApprovalSessionBypass(data.stream, true);
+        if (isNowEnabled) {
+          // Super YOLO ON: also enable YOLO
+          if (!isApprovalBypassedForStream(data.stream)) {
+            setToolEditApprovalSessionBypass(data.stream, true);
+          }
+        } else {
+          // Super YOLO OFF: also disable YOLO
+          setToolEditApprovalSessionBypass(data.stream, false);
         }
         const msg = isNowEnabled
           ? 'Super YOLO enabled: Agent proposals and tool actions will be auto-approved for this stream.'
-          : 'Super YOLO disabled: Agent proposals will prompt for approval.';
+          : 'Super YOLO disabled: Agent proposals and tool actions will prompt for approval.';
         await vscode.window.showInformationMessage(msg);
       },
       [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]: (data) =>
