@@ -14,6 +14,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
+import { findLastAssistantText } from './types';
 import type { ToolUseRunShared, WaitExecResult } from './types';
 
 /** Result from prep: last assistant response for subagent reporting. */
@@ -32,13 +33,11 @@ export class ToolUseWaitNode<C> extends Node<
     // Only extract last response when the callback is wired (subagent mode)
     if (!onBeforeWaiting) return { lastResponse: undefined };
 
-    for (let i = shared.messages.length - 1; i >= 0; i--) {
-      const text = modelHandler.extractAssistantText(shared.messages[i]);
-      if (text !== undefined) {
-        return { lastResponse: text };
-      }
-    }
-    return { lastResponse: undefined };
+    return {
+      lastResponse: findLastAssistantText(shared.messages, (m) =>
+        modelHandler.extractAssistantText(m),
+      ),
+    };
   }
 
   async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {

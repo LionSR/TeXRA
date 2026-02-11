@@ -34,8 +34,6 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly onRoundFinalized: RoundFinalizedCallback;
   /** Callback invoked when a queued follow-up message is consumed (clears UI). */
   readonly onFollowUpConsumed?: () => void;
-  /** When true, this flow is running as a delegated subagent. */
-  readonly isSubagent?: boolean;
   /** Fires before the subagent enters WAITING, delivering the last response to the orchestrator. */
   readonly onBeforeWaiting?: (lastResponse: string | undefined) => void;
 }
