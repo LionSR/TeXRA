@@ -104,10 +104,16 @@ export class AgentHistoryManager {
     const legacy = workspaceSM.get<unknown[]>(storageKey, []);
     const { normalized } = this.sanitizeHistoryEntries(legacy);
 
-    // Always persist — creates index.json so migration never re-runs
-    await this.persistIndex(normalized);
-    if (normalized.length > 0) {
-      await workspaceSM.update(storageKey, []);
+    // Persist to filesystem so migration never re-runs.
+    // On failure, cache in-memory so the current session still works.
+    try {
+      await this.persistIndex(normalized);
+      if (normalized.length > 0) {
+        await workspaceSM.update(storageKey, []);
+      }
+    } catch (err) {
+      logger.error(CHANNEL, `Failed to persist history migration: ${err}`);
+      this.cache = normalized;
     }
 
     return normalized;

@@ -34,8 +34,15 @@ import { WorkspaceFS } from './workspaceFS';
 const CHANNEL = 'taskRunStorage';
 logger.initialize(CHANNEL);
 
-/** Directory for task run artifacts (debug JSONs, logs, etc.) */
-export const TASK_RUNS_DIR = 'taskRuns';
+/**
+ * Directory for all per-execution artifacts (KV data, debug JSONs, logs, workflow outputs, etc.).
+ * NOTE: This is 'executions', NOT 'taskRuns'. Name kept for import compatibility;
+ * the legacy 'taskRuns' directory is LEGACY_RUNS_DIR below.
+ */
+export const TASK_RUNS_DIR = 'executions';
+
+/** Legacy directory name — checked as read fallback for pre-consolidation data. */
+export const LEGACY_RUNS_DIR = 'taskRuns';
 
 export type {
   WorkspaceFileLocation,
@@ -90,12 +97,32 @@ export function getFileDirectory(location: FileLocation): string {
 }
 
 /**
- * Get the full path to a specific task run directory.
- * @param id - The execution ID for the task run
- * @returns The full path to the task run directory
+ * Get the full path to a specific execution's run directory.
+ * @param id - The execution ID
+ * @returns The full path to the run directory (always under TASK_RUNS_DIR)
  */
 export function getRunDir(id: ExecutionId): string {
   return StorageFS.fullPath(path.join(TASK_RUNS_DIR, id));
+}
+
+/**
+ * Resolve the run directory for an execution, checking the current path first
+ * then falling back to the legacy `taskRuns/` location. Returns the full
+ * filesystem path if the directory exists, or `undefined` if neither location
+ * exists.
+ */
+export async function resolveRunDir(
+  id: ExecutionId,
+): Promise<string | undefined> {
+  const primaryRel = path.join(TASK_RUNS_DIR, id);
+  if (await StorageFS.exists(primaryRel)) {
+    return StorageFS.fullPath(primaryRel);
+  }
+  const legacyRel = path.join(LEGACY_RUNS_DIR, id);
+  if (await StorageFS.exists(legacyRel)) {
+    return StorageFS.fullPath(legacyRel);
+  }
+  return undefined;
 }
 
 /**
@@ -248,7 +275,7 @@ export class TaskRunFileService {
    * Prepare run storage before processing begins by capturing the original
    * versions of the selected base files and mirroring any declared dependencies.
    *
-   * Base files are copied into `taskRuns/<id>/original/` as immutable snapshots
+   * Base files are copied into `executions/<id>/original/` as immutable snapshots
    * so the workspace can be restored even after the agent edits files in-place.
    * Additional workspace dependencies (references, auxiliaries, extracted
    * figures, etc.) are mirrored into the active run directory via symlinks so
@@ -469,10 +496,9 @@ export class TaskRunFileService {
 }
 
 /**
- * Ensure a task run directory exists, creating it if necessary.
- * Also ensures the parent taskRuns directory exists.
- * @param id - The execution ID for the task run
- * @throws Error if the execution ID is invalid
+ * Ensure an execution's run directory exists, creating it if necessary.
+ * Also ensures the parent executions directory exists.
+ * @param id - The execution ID
  */
 export async function ensureRunDir(id: ExecutionId): Promise<void> {
   await StorageFS.ensureDir(TASK_RUNS_DIR);
