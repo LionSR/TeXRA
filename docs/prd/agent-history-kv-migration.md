@@ -15,14 +15,14 @@
 
 Phase 1 established KV as the primary store with history fallback:
 
-| Data | KV Key | Written At | Reader | Fallback |
-|------|--------|------------|--------|----------|
-| Config | `config` | Execution start | `readConfig()` | `getHistoryItemById().agentConfig` |
-| Metadata | `meta` | Execution start | `readMeta()` | `getHistoryItemById().{timestamp,parentExecutionId}` |
-| Conversation | `conversation` | Flow completion | `readConversation()` | `flow:{id}` blob extraction |
-| Todos | `todos` | Flow completion | `readTodos()` | `flow:{id}` blob extraction |
-| Children | `child-{childId}` | Child launch | `readChildren()` | `getChildrenOf()` history scan |
-| Report | `report` | Subagent/process completion | `readReport()` | (none — always KV) |
+| Data         | KV Key            | Written At                  | Reader               | Fallback                                             |
+| ------------ | ----------------- | --------------------------- | -------------------- | ---------------------------------------------------- |
+| Config       | `config`          | Execution start             | `readConfig()`       | `getHistoryItemById().agentConfig`                   |
+| Metadata     | `meta`            | Execution start             | `readMeta()`         | `getHistoryItemById().{timestamp,parentExecutionId}` |
+| Conversation | `conversation`    | Flow completion             | `readConversation()` | `flow:{id}` blob extraction                          |
+| Todos        | `todos`           | Flow completion             | `readTodos()`        | `flow:{id}` blob extraction                          |
+| Children     | `child-{childId}` | Child launch                | `readChildren()`     | `getChildrenOf()` history scan                       |
+| Report       | `report`          | Subagent/process completion | `readReport()`       | (none — always KV)                                   |
 
 `ExecutionsTool.showSummary` reads entirely from KV readers (parallel `Promise.all`). `AgentHistoryManager` is only used for `getHistory()` (the ordered listing in `listExecutions`).
 
@@ -85,16 +85,17 @@ public static async addToHistory(
 
 **3. Update consumers**
 
-| Consumer | Current | After |
-|----------|---------|-------|
-| `formatHistoryLine` | `item.agentConfig.agent` | `item.agent` |
-| `SettingsViewMessageHandler.sendHistoryData` | Sends full items | Sends index items; webview uses `readConfig(id)` for full config on demand |
-| `AcceptRunFilesTool` | `getHistoryItemById` for existence | `getExecutionStore(id).exists('meta')` |
-| `SettingsViewMessageHandler.withHistoryItem` | Uses `historyItem.agentConfig` for re-run | Calls `readConfig(id)` for full config |
+| Consumer                                     | Current                                   | After                                                                      |
+| -------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------- |
+| `formatHistoryLine`                          | `item.agentConfig.agent`                  | `item.agent`                                                               |
+| `SettingsViewMessageHandler.sendHistoryData` | Sends full items                          | Sends index items; webview uses `readConfig(id)` for full config on demand |
+| `AcceptRunFilesTool`                         | `getHistoryItemById` for existence        | `getExecutionStore(id).exists('meta')`                                     |
+| `SettingsViewMessageHandler.withHistoryItem` | Uses `historyItem.agentConfig` for re-run | Calls `readConfig(id)` for full config                                     |
 
 **4. Backward compatibility**
 
 `sanitizeHistoryEntries` already handles legacy formats. Add a migration path:
+
 - Old items with `agentConfig` → extract `agent` and `model`, discard the rest
 - New items with `agent`/`model` → use directly
 
@@ -104,13 +105,13 @@ A typical `AgentConfig` is 500-2000 bytes (instruction text, file paths, tool li
 
 ### Files Modified
 
-| File | Change |
-|------|--------|
-| `src/common/history/AgentHistoryManager.ts` | Slim `AgentHistoryItem`, update `addToHistory` and `sanitizeHistoryEntries` |
-| `src/tools/ExecutionsTool.ts` | Update `formatHistoryLine` to use `item.agent` |
-| `src/settingsView/SettingsViewMessageHandler.ts` | Lazy-load full config via `readConfig()` |
-| `src/settingsView/` webview components | Request config on demand instead of receiving it upfront |
-| `src/tools/AcceptRunFilesTool.ts` | Use KV existence check |
+| File                                             | Change                                                                      |
+| ------------------------------------------------ | --------------------------------------------------------------------------- |
+| `src/common/history/AgentHistoryManager.ts`      | Slim `AgentHistoryItem`, update `addToHistory` and `sanitizeHistoryEntries` |
+| `src/tools/ExecutionsTool.ts`                    | Update `formatHistoryLine` to use `item.agent`                              |
+| `src/settingsView/SettingsViewMessageHandler.ts` | Lazy-load full config via `readConfig()`                                    |
+| `src/settingsView/` webview components           | Request config on demand instead of receiving it upfront                    |
+| `src/tools/AcceptRunFilesTool.ts`                | Use KV existence check                                                      |
 
 ## Phase 3: Remove History Fallbacks from Readers (Future)
 
