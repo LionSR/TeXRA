@@ -49,6 +49,7 @@
  * Endpoints:
  * - GET /relay/providers - Returns list of providers with configured API keys (public)
  * - GET /relay/tier-config - Returns tier-based model access configuration (public)
+ * - GET /relay/capacity - Infrastructure capacity estimation (requires auth)
  * - POST /relay/{provider}/{...path} - Proxy request to provider (requires Ultra/Max tier)
  *
  * Example: /relay/openai/v1/chat/completions
@@ -70,6 +71,10 @@ import {
   ULTRA_TIER,
   FREE_TIER,
 } from './models.ts';
+import {
+  buildCapacityEstimate,
+  type CapacityStats,
+} from './capacity.ts';
 
 // =============================================================================
 // Constants
@@ -448,6 +453,76 @@ app.get('/tier-config', async (c) => {
   }
 
   return c.json(config);
+});
+
+// =============================================================================
+// Capacity Estimation Route (Admin Only)
+// =============================================================================
+
+/**
+ * GET /relay/capacity - Relay capacity estimation and current utilization
+ *
+ * Requires authentication. Returns infrastructure specs, current usage stats,
+ * estimated capacity limits, and utilization percentages.
+ *
+ * The response combines real-time database aggregates (user counts, spending)
+ * with theoretical capacity estimates based on infrastructure constraints
+ * (connection pool limits, spending ceilings).
+ */
+app.get('/capacity', async (c) => {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+  if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) {
+    return jsonError('Server configuration error', 500);
+  }
+
+  // Require valid JWT
+  const jwtToken = extractJwtFromRequest(c.req.raw);
+  if (!jwtToken) {
+    return jsonError('Missing authorization token', 401);
+  }
+
+  const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${jwtToken}` } },
+  });
+
+  const {
+    data: { user },
+    error: userError,
+  } = await userClient.auth.getUser();
+
+  if (userError || !user) {
+    return jsonError('Invalid or expired token', 401);
+  }
+
+  // Fetch capacity stats via service role (aggregate data requires admin access)
+  const adminClient = createClient(supabaseUrl, serviceRoleKey);
+  const monthStart = getCurrentMonthStartUTC();
+
+  const { data, error } = await adminClient.rpc('get_relay_capacity_stats', {
+    p_month_start: monthStart,
+  });
+
+  if (error) {
+    console.error('[RELAY] Failed to fetch capacity stats:', error.message);
+    return jsonError('Failed to fetch capacity stats', 500);
+  }
+
+  // The RPC returns a JSON object; parse it into CapacityStats
+  const raw = typeof data === 'string' ? JSON.parse(data) : data;
+  const stats: CapacityStats = {
+    registeredUsers: Number(raw?.registeredUsers) || 0,
+    usersByTier: raw?.usersByTier ?? {},
+    activeUsersThisMonth: Number(raw?.activeUsersThisMonth) || 0,
+    monthlySpendUsd: Number(raw?.monthlySpendUsd) || 0,
+    monthlyRequests: Number(raw?.monthlyRequests) || 0,
+  };
+
+  const estimate = buildCapacityEstimate(stats);
+
+  return c.json({ _relay: RELAY_VERSION, ...estimate });
 });
 
 // =============================================================================

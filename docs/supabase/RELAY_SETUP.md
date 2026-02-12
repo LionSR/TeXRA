@@ -137,8 +137,51 @@ supabase functions deploy relay
 
 Changes take effect immediately. Client caches expire after 5 minutes.
 
+## Capacity Estimation
+
+The relay includes a capacity estimation endpoint for infrastructure planning.
+
+### GET /relay/capacity
+
+Returns real-time usage stats combined with theoretical capacity limits. Requires authentication.
+
+```bash
+curl -s 'https://your-project.supabase.co/functions/v1/relay/capacity' \
+  -H 'Authorization: Bearer YOUR_SUPABASE_JWT' | jq .
+```
+
+**Response fields:**
+
+| Section | Field | Description |
+|---------|-------|-------------|
+| `infrastructure` | `plan`, `compute`, `cpus`, `memoryGb` | Current Supabase specs |
+| `infrastructure` | `maxPooledConnections` | PgBouncer connection limit |
+| `current` | `registeredUsers` | Total registered users |
+| `current` | `usersByTier` | User count per tier (`free`, `Max`, `Ultra`) |
+| `current` | `activeUsersThisMonth` | Distinct relay users this month |
+| `current` | `monthlySpendUsd` | Total relay spending this month |
+| `current` | `monthlyRequests` | Total relay requests this month |
+| `limits` | `maxConcurrentUsers` | Connection-pool-bound concurrency limit |
+| `limits` | `maxRegisteredUsers` | `{ low, high }` range based on usage patterns |
+| `limits` | `maxMonthlyCostUsd` | Financial ceiling if all users hit limits |
+| `limits` | `currentSpendingCapacityUsd` | Sum of all users' spending limits |
+| `utilization` | `registeredPercent` | Registered users as % of estimated max |
+| `utilization` | `spendPercent` | Monthly spend as % of spending capacity |
+| `utilization` | `activePercent` | Active users as % of concurrent capacity |
+
+### Capacity model
+
+The estimation is based on three bottlenecks:
+
+1. **Database connections** — Each relay request briefly holds ~2 pooled connections (auth + spending check). With PgBouncer's 200-connection pool and 30% headroom, this yields ~70 max concurrent users.
+2. **Financial ceiling** — Sum of all users' tier spending limits (free: $10, Max: $50, Ultra: $500 per month).
+3. **Edge Function compute** — Requests are I/O bound (proxying to upstream providers), so CPU is rarely the bottleneck.
+
+Infrastructure constants are in `supabase/functions/relay/capacity.ts`. Update `INFRA_SPECS` when changing Supabase compute tier.
+
 ## Future Enhancements
 
 - [ ] Rate limiting per user
+- [x] Capacity estimation endpoint
 - [ ] Usage tracking and quotas
 - [ ] Cost tracking per user
