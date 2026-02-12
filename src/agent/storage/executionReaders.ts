@@ -116,17 +116,22 @@ export async function readChildren(
 /**
  * Persist a terminal status on an existing execution's metadata.
  * Reads the current meta, merges `terminalStatus`, and writes back.
- * Designed for fire-and-forget use — callers should not await.
+ * Never throws — storage failures are swallowed so callers' lifecycle
+ * logic (untrackExecution, follow-up delivery) always runs.
  */
 export async function writeTerminalStatus(
   executionId: ExecutionId,
   status: string,
 ): Promise<void> {
-  const store = getExecutionStore(executionId);
-  const existing = await store.read<ExecutionMeta>('meta');
-  if (!existing) return;
-  await store.write('meta', { ...existing, terminalStatus: status });
-  invalidateListingCache();
+  try {
+    const store = getExecutionStore(executionId);
+    const existing = await store.read<ExecutionMeta>('meta');
+    if (!existing) return;
+    await store.write('meta', { ...existing, terminalStatus: status });
+    invalidateListingCache();
+  } catch {
+    // Non-critical bookkeeping — don't let I/O errors disrupt execution lifecycle.
+  }
 }
 
 // ============================================================================
@@ -142,16 +147,17 @@ export async function registerExecution(
   config: AgentConfig,
   agentName: string,
   parentExecutionId?: ExecutionId,
+  category?: string,
 ): Promise<void> {
   const timestamp = new Date().toISOString();
   const store = getExecutionStore(executionId);
 
+  const meta: ExecutionMeta = { timestamp, parentExecutionId };
+  if (category) meta.category = category;
+
   const writes: Promise<void>[] = [
     store.write('config', config),
-    store.write('meta', {
-      timestamp,
-      parentExecutionId,
-    } satisfies ExecutionMeta),
+    store.write('meta', meta),
   ];
 
   if (parentExecutionId) {
