@@ -2,7 +2,7 @@
  * Tool for accepting output files from a completed run into the workspace.
  *
  * After a workflow agent completes, its output files may live in run storage
- * (taskRuns/{executionId}/) or directly in the workspace, depending on the
+ * (executions/{executionId}/) or directly in the workspace, depending on the
  * agent's storage mode. This tool locates files in either location and copies
  * them into the workspace — the programmatic equivalent of the "Accept" button
  * in the progress view.
@@ -10,9 +10,6 @@
  * Each file goes through the standard tool edit approval flow (same diff
  * panel as write_file), so the user can review, edit, or reject each file.
  */
-
-// Standard library imports
-import * as path from 'path';
 
 // Third-party imports
 import { z } from 'zod';
@@ -38,39 +35,41 @@ import {
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files';
-import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 
-// Local imports - history
-import { AgentHistoryManager } from '@common/history/AgentHistoryManager';
+// Local imports - storage
+import { getExecutionStore } from '@agent/storage';
 
-import type { FileLocation } from '@shared/schemas';
+import type { ExecutionId, FileLocation } from '@shared/schemas';
 
 // ============================================================================
 // Schema
 // ============================================================================
 
 const FileMapping = z.strictObject({
-  /** File path within the run (as shown by /executions/{id}/files). */
-  run_path: z
+  /** Output file path (matches `path` attribute in subagent-result XML). */
+  path: z
     .string()
-    .describe('File path within the run (as listed by /executions/{id}/files)'),
+    .describe(
+      'Output file path (matches path attribute in subagent-result delivery)',
+    ),
   /**
-   * Workspace-relative path to write to.
-   * If omitted, defaults to run_path (same relative path).
+   * Original workspace path to restore to (matches `original` attribute in
+   * subagent-result XML). If omitted, defaults to path.
    */
-  workspace_path: z
+  original: z
     .string()
     .nullish()
     .describe(
-      'Workspace-relative destination path. Defaults to run_path if omitted.',
+      'Original workspace path to write to (matches original attribute in delivery). Defaults to path if omitted.',
     ),
 });
 
 const AcceptRunFilesInputSchema = z.strictObject({
-  /** Execution ID of the completed run (UUID). */
+  /** Execution ID (matches `id` attribute in subagent-result XML). */
   execution_id: ExecutionIdSchema.describe(
-    'Execution ID (from subagent-result id attribute or /executions)',
+    'Execution ID (matches id attribute in subagent-result delivery)',
   ),
   /** Files to accept from run storage into the workspace. */
   files: z
@@ -93,21 +92,32 @@ Locates output files in run storage or the workspace (depending on storage
 mode) and writes them to the workspace. Each file is shown to the user for
 review before writing.
 
-Example: Accept corrected file back to its original location:
-  execution_id: "d4f5e6a7-1234-4b89-abcd-ef0123456789"
-  files: [{run_path: "paper__correct__r0_gemini.tex", workspace_path: "paper.tex"}]`,
+Parameters map directly to subagent-result delivery attributes:
+  execution_id ← <subagent-result id="...">
+  path         ← <file path="...">
+  original     ← <file original="...">
+
+Example — given delivery:
+  <subagent-result id="a1b2c3d4" agent="correct" category="workflow" status="completed">
+    <file path="paper__correct__r0_gemini.tex" original="paper.tex" added="42" removed="15" />
+  </subagent-result>
+
+Call:
+  execution_id: "a1b2c3d4"
+  files: [{path: "paper__correct__r0_gemini.tex", original: "paper.tex"}]`,
   schema: AcceptRunFilesInputSchema,
 }) {
   protected async execute(input: AcceptRunFilesInput): Promise<ToolResult> {
     const { execution_id: executionId, files } = input;
-    const runDir = path.join(TASK_RUNS_DIR, executionId);
+    const runDir = await resolveStoragePath(executionId);
+    const runDirExists = runDir !== undefined;
 
     // Verify execution exists — run dir may not exist in workspace storage mode
-    const runDirExists = await StorageFS.exists(runDir);
     if (!runDirExists) {
-      const historyItem =
-        await AgentHistoryManager.getHistoryItemById(executionId);
-      if (!historyItem) {
+      const exists = await getExecutionStore(executionId as ExecutionId).exists(
+        'meta',
+      );
+      if (!exists) {
         throw new ToolError(
           `Run not found: ${executionId}. Use /executions to list available executions.`,
         );
@@ -117,23 +127,21 @@ Example: Accept corrected file back to its original location:
     // Phase 1: Validate all source paths and read content before any approvals
     const prepared = await Promise.all(
       files.map(async (mapping) => {
-        if (getPathSegments(mapping.run_path).includes('..')) {
-          throw new ToolError(
-            `run_path must not contain '..': ${mapping.run_path}`,
-          );
+        if (getPathSegments(mapping.path).includes('..')) {
+          throw new ToolError(`path must not contain '..': ${mapping.path}`);
         }
 
         const { sourceAbsolute, sourceLocation } = await this.resolveSourceFile(
           executionId,
-          mapping.run_path,
+          mapping.path,
           runDirExists,
         );
 
-        const destPath = mapping.workspace_path ?? mapping.run_path;
+        const destPath = mapping.original ?? mapping.path;
         const dest = WorkspaceFS.locatePath(destPath);
         if (dest.kind === 'external') {
           throw new ToolError(
-            `workspace_path must be inside the workspace: ${destPath}`,
+            `original must be inside the workspace: ${destPath}`,
           );
         }
 
@@ -154,8 +162,8 @@ Example: Accept corrected file back to its original location:
         }
 
         return {
-          runPath: mapping.run_path,
-          workspacePath: dest.relativePath,
+          path: mapping.path,
+          original: dest.relativePath,
           proposedContent,
           originalContent,
           destExists,
@@ -171,10 +179,10 @@ Example: Accept corrected file back to its original location:
 
     for (const entry of prepared) {
       const mappingNote =
-        entry.runPath !== entry.workspacePath ? ` (from ${entry.runPath})` : '';
+        entry.path !== entry.original ? ` (from ${entry.path})` : '';
 
       const approval = await requestToolEditApproval({
-        path: entry.workspacePath,
+        path: entry.original,
         originalContent: entry.originalContent,
         proposedContent: entry.proposedContent,
         sourceTool: 'accept_run_files',
@@ -183,21 +191,21 @@ Example: Accept corrected file back to its original location:
       if (!approval.accepted) {
         rejected++;
         if (approval.userMessage) rejectionMessages.push(approval.userMessage);
-        results.push(`rejected: ${entry.workspacePath}${mappingNote}`);
+        results.push(`rejected: ${entry.original}${mappingNote}`);
         continue;
       }
 
       const finalContent = getApprovedContent(approval, entry.proposedContent);
       await writeApprovedContent(
-        entry.workspacePath,
+        entry.original,
         entry.originalContent,
         finalContent,
       );
 
       const action = entry.destExists ? 'replaced' : 'created';
-      results.push(`${action}: ${entry.workspacePath}${mappingNote}`);
+      results.push(`${action}: ${entry.original}${mappingNote}`);
       edits.push({
-        path: entry.workspacePath,
+        path: entry.original,
         lineChanges: approval.lineChanges,
         startLine: approval.startLine,
       });
@@ -206,7 +214,7 @@ Example: Accept corrected file back to its original location:
     // Single rejection → return rejection result
     if (rejected === files.length) {
       return buildApprovalRejectedResult(
-        prepared[0].workspacePath,
+        prepared[0].original,
         'accept_run_files',
         rejectionMessages.join('\n'),
       );
@@ -231,10 +239,10 @@ Example: Accept corrected file back to its original location:
     runPath: string,
     runDirExists: boolean,
   ): Promise<{ sourceAbsolute: string; sourceLocation: FileLocation }> {
-    // Try run storage first
+    // Try run storage first (primary then legacy)
     if (runDirExists) {
-      const rel = path.join(TASK_RUNS_DIR, executionId, runPath);
-      if (await StorageFS.exists(rel)) {
+      const rel = await resolveStoragePath(executionId, runPath);
+      if (rel) {
         const abs = StorageFS.fullPath(rel);
         return {
           sourceAbsolute: abs,

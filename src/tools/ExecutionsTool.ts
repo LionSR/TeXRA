@@ -1,9 +1,12 @@
 /**
- * Tool for viewing execution history and generated files.
- * Read-only access to past executions - agents can learn from history.
+ * Tool for viewing and managing execution history, generated files, and
+ * running processes. Supports viewing past executions, waiting for status
+ * changes, reading output from background processes, and killing running
+ * executions.
  */
 
 // Standard library imports
+import * as fs from 'fs';
 import * as path from 'path';
 
 // Third-party imports
@@ -11,33 +14,81 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - agent
-import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
+import {
+  getExecutionStore,
+  type ExecutionListingEntry,
+  type ChildRecord,
+  type TodoEntry,
+  listExecutions,
+  readTodos,
+  readConversation,
+  readReport,
+  readMeta,
+  readConfig,
+  readChildren,
+} from '@agent/storage';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
-  getStreamIdForExecution,
-  getExecutionStartedAt,
+  type ExecutionHandle,
+  type ExecutionStatusInfo,
+  ACTIVE_STATUSES,
+  getHandle,
+  getActiveExecutionIds,
+  waitForExecutionChange,
+  waitForAnyExecutionChange,
+  killExecution,
 } from '@agent/runtime/executionRegistry';
-import {
-  getActiveSubagent,
-  getSubagentStartedAt,
-} from '@agent/runtime/subagentLineage';
-
-// Local imports - common
-import { AgentHistoryManager } from '@common/history/AgentHistoryManager';
+import { ProcessExecutionHandle } from '@agent/runtime/ExecutionHandle';
 
 // Local imports - utils
 import { StorageFS } from '@utils/files';
-import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
-import { formatDuration } from '@utils/core';
 import { ToolError, type ToolResult } from './result';
 import { defineTool } from './core/define';
 import {
-  STREAM_STATUS,
   EXECUTION_STATUS,
+  ExecutionIdSchema,
   type ExecutionId,
 } from '@shared/schemas';
+
+// ============================================================================
+// Category-aware field filtering
+// ============================================================================
+
+/** Config fields only relevant to workflow agents — hidden for toolUse. */
+const WORKFLOW_ONLY_FIELDS = new Set([
+  'inputFile',
+  'inputFiles',
+  'referenceFile',
+  'referenceFiles',
+  'auxiliaryFile',
+  'auxiliaryFiles',
+  'mediaFile',
+  'mediaFiles',
+  'outputFiles',
+  'editedFile',
+  'editedFiles',
+  'useMultipleOutputs',
+]);
+
+/** Config fields only relevant to toolUse agents — hidden for workflow. */
+const TOOL_USE_ONLY_FIELDS = new Set(['toolConfig']);
+
+/** Return paths available for a given agent category. */
+function getAvailablePaths(category?: string): string[] {
+  const common = ['config', 'report', 'children'];
+  switch (category) {
+    case 'toolUse':
+      return [...common, 'conversation', 'todos'];
+    case 'workflow':
+      return [...common, 'files'];
+    case 'process':
+      return [...common, 'output'];
+    default:
+      return [...common, 'conversation', 'todos', 'files', 'output'];
+  }
+}
 
 // ============================================================================
 // Schema
@@ -47,37 +98,44 @@ const ExecutionsToolInputSchema = z.strictObject({
   /** Virtual path: /executions, /executions/{id}, /executions/{id}/files, /executions/{id}/files/{path} */
   path: z.string().describe('Path starting with /executions'),
 
-  /** Optional line range [start, end] for large outputs */
+  /** Action to perform. */
+  action: z
+    .enum(['view', 'wait', 'kill'])
+    .prefault('view')
+    .describe(
+      'view: read execution data (returns immediately). ' +
+        'wait: wait for a status change on /executions or /executions/{id}, then return the same data as view (avoids sleep-poll loops). ' +
+        'kill: terminate a running execution by ID (use on /executions/{id}).',
+    ),
+
+  /** Optional line range [start, end] for large outputs (action="view" only). */
   view_range: z
     .array(z.int().min(1))
     .length(2)
     .refine(([start, end]) => end >= start, {
       error: 'view_range[1] must be >= view_range[0]',
     })
-    .nullish(),
+    .nullish()
+    .describe(
+      'Line range [start, end] for paginating large outputs (action="view" only).',
+    ),
+
+  /** Max seconds to wait (action="wait" only). Default: 300. */
+  timeout: z
+    .number()
+    .min(60)
+    .max(1800)
+    .nullish()
+    .describe(
+      'Max seconds to wait for a status change (action="wait" only). Default: 300, max: 1800.',
+    ),
 });
 
 export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
 
 // ============================================================================
-// Tool Implementation
+// Helpers
 // ============================================================================
-
-/**
- * Read-only tool for viewing execution history and generated files.
- *
- * Paths:
- * - /executions - List all past executions
- * - /executions/{id} - Execution summary
- * - /executions/{id}/config - Agent configuration (JSON)
- * - /executions/{id}/conversation - Message history
- * - /executions/{id}/files - List generated files
- * - /executions/{id}/files/{path} - Read specific file
- */
-interface ExecutionStatusInfo {
-  status: string;
-  elapsed: string | null;
-}
 
 /** Format status info as a display string. */
 function formatStatusInfo(info: ExecutionStatusInfo): string {
@@ -86,78 +144,84 @@ function formatStatusInfo(info: ExecutionStatusInfo): string {
     : info.status;
 }
 
-/** Statuses that represent an actively running execution. */
-const ACTIVE_STATUSES: ReadonlySet<string> = new Set([
-  STREAM_STATUS.RUNNING,
-  STREAM_STATUS.INITIALIZING,
-  STREAM_STATUS.RESUMING,
-]);
-
-/** Resolve start time from registry, subagent lineage, or history timestamp. */
-function resolveStartedAt(
-  executionId: string,
-  historyTimestamp?: string,
-): number | undefined {
-  return (
-    getExecutionStartedAt(executionId) ??
-    getSubagentStartedAt(executionId) ??
-    (historyTimestamp ? new Date(historyTimestamp).getTime() : undefined)
-  );
-}
-
-/**
- * Resolve the runtime status for an execution ID.
- * Returns stream status + elapsed time for active executions.
- */
+/** Resolve the runtime status for an execution ID, using persisted terminal status as fallback. */
 function getExecutionStatusInfo(
   executionId: string,
-  historyTimestamp?: string,
+  terminalStatus?: string,
 ): ExecutionStatusInfo {
-  let status: string;
-
-  // Check execution registry first (covers all executions)
-  const streamId = getStreamIdForExecution(executionId);
-  if (streamId) {
-    status = StreamStatusService.get(streamId) ?? STREAM_STATUS.RUNNING;
-  } else {
-    // Check subagent lineage (covers async subagents whose stream may have settled)
-    const entry = getActiveSubagent(executionId);
-    if (entry) {
-      status =
-        StreamStatusService.get(entry.childStreamId) ?? STREAM_STATUS.RUNNING;
-    } else {
-      return { status: EXECUTION_STATUS.COMPLETED, elapsed: null };
-    }
-  }
-
-  // Only show elapsed time for actively running executions
-  if (!ACTIVE_STATUSES.has(status)) {
-    return { status, elapsed: null };
-  }
-
-  const startedAt = resolveStartedAt(executionId, historyTimestamp);
+  const handle = getHandle(executionId);
+  if (handle) return handle.getStatus();
   return {
-    status,
-    elapsed: startedAt ? formatDuration(Date.now() - startedAt) : null,
+    status: terminalStatus ?? EXECUTION_STATUS.COMPLETED,
+    elapsed: null,
   };
+}
+
+/** Format round progress as a display line, or empty string if unavailable. */
+function formatProgressLine(handle: ExecutionHandle | undefined): string {
+  const progress = handle?.getProgress();
+  if (
+    progress?.currentRound === undefined ||
+    progress.totalRounds === undefined
+  ) {
+    return '';
+  }
+  return `Progress: round ${progress.currentRound + 1}/${progress.totalRounds}`;
+}
+
+/** Format a listing entry as a single summary line. */
+function formatListingLine(entry: ExecutionListingEntry): string {
+  const ts = entry.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
+  const info = getExecutionStatusInfo(entry.id, entry.terminalStatus);
+  const categoryTag = entry.category ? `  ${entry.category}` : '';
+  const parentSuffix = entry.parentExecutionId
+    ? `  parent=${entry.parentExecutionId}`
+    : '';
+  return `${entry.id}  ${ts}  ${entry.agent}${categoryTag}  ${entry.model}  [${formatStatusInfo(info)}]${parentSuffix}`;
+}
+
+const TODO_ICON: Record<string, string> = {
+  completed: '[x]',
+  in_progress: '[>]',
+  pending: '[ ]',
+};
+
+/** Format todo items as a checklist. */
+function formatTodoSection(todos: TodoEntry[]): string[] {
+  return todos.map((t) => {
+    const icon = TODO_ICON[t.status ?? ''] ?? '[ ]';
+    return `${icon} ${t.content ?? '(no description)'}`;
+  });
+}
+
+/** Format a todo header with counts. */
+function formatTodoHeader(executionId: string, todos: TodoEntry[]): string {
+  const completed = todos.filter((t) => t.status === 'completed').length;
+  const inProgress = todos.filter((t) => t.status === 'in_progress').length;
+  const pending = todos.length - completed - inProgress;
+  return `Tasks for ${executionId} (${completed} done, ${inProgress} active, ${pending} pending):`;
 }
 
 export class ExecutionsTool extends defineTool({
   name: 'executions',
-  description: `View execution history and generated files (read-only).
+  description: `View execution history and manage running executions.
 
 Paths:
-- /executions - List all past executions (with status and elapsed time)
-- /executions/{id} - Execution summary (agent, model, timestamp, status, elapsed)
-- /executions/{id}/config - Agent configuration JSON (for delegate_workflow/delegate_agent)
-- /executions/{id}/conversation - Full message history
-- /executions/{id}/files - List generated files
-- /executions/{id}/files/{path} - Read specific file
+- /executions - List all executions (with status and elapsed time)
+- /executions/{id} - Execution summary (agent, model, timestamp, status, progress, children, todos)
+- /executions/{id}/config - Agent configuration JSON
+- /executions/{id}/conversation - Full message history (subagents)
+- /executions/{id}/todos - Task list (tool-use subagents)
+- /executions/{id}/report - Result report (persists after context compaction)
+- /executions/{id}/children - Child executions
+- /executions/{id}/output - stdout/stderr (background processes only)
+- /executions/{id}/files - Generated files (workflows only)
+- /executions/{id}/files/{path} - Read specific generated file (workflows only)
 
 Use "current" as {id} to access the active execution.
-Use view_range: [start, end] to paginate large outputs.
-
-NOTE: Workflow and research subagents typically take 10-30+ minutes to complete. Do not expect results within the first few minutes — check back periodically.`,
+Use view_range: [start, end] to paginate conversation, output, and file content.
+Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
+Use action: "kill" on /executions/{id} to terminate a running execution.`,
   schema: ExecutionsToolInputSchema,
 }) {
   protected async execute(input: ExecutionsToolInput): Promise<ToolResult> {
@@ -172,13 +236,21 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
 
     // /executions - list all executions
     if (!id) {
+      if (input.action === 'wait')
+        await this.waitForAnyChange(input.timeout ?? 300);
       return this.listExecutions();
     }
 
     const executionId = this.resolveExecutionId(id);
 
-    // /executions/{id} - execution summary
+    // /executions/{id} - execution summary or actions
     if (!resource) {
+      // Kill action: terminate a running execution (only valid on /executions/{id})
+      if (input.action === 'kill') {
+        return this.handleKill(executionId);
+      }
+      if (input.action === 'wait')
+        await this.waitForChange(executionId, input.timeout ?? 300);
       return this.showSummary(executionId);
     }
 
@@ -190,6 +262,26 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
     // /executions/{id}/conversation - message history
     if (resource === 'conversation') {
       return this.showConversation(executionId, input.view_range ?? undefined);
+    }
+
+    // /executions/{id}/todos - subagent task list
+    if (resource === 'todos') {
+      return this.showTodos(executionId);
+    }
+
+    // /executions/{id}/report - persisted result report
+    if (resource === 'report') {
+      return this.showReport(executionId);
+    }
+
+    // /executions/{id}/children - child executions
+    if (resource === 'children') {
+      return this.showChildren(executionId);
+    }
+
+    // /executions/{id}/output - background process output
+    if (resource === 'output') {
+      return this.readProcessOutput(executionId, input.view_range ?? undefined);
     }
 
     // /executions/{id}/files or /executions/{id}/files/{path}
@@ -205,7 +297,7 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
     }
 
     throw new ToolError(
-      `Unknown path: ${input.path}. Valid: /executions/{id}, /executions/{id}/config, /executions/{id}/conversation, /executions/{id}/files`,
+      `Unknown path: ${input.path}. Valid: /executions/{id}, /executions/{id}/config, /executions/{id}/conversation, /executions/{id}/todos, /executions/{id}/report, /executions/{id}/children, /executions/{id}/output, /executions/{id}/files`,
     );
   }
 
@@ -219,79 +311,296 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
       }
       return ctx.executionId;
     }
-    return id as ExecutionId;
+    const result = ExecutionIdSchema.safeParse(id);
+    if (!result.success) {
+      throw new ToolError(
+        `Invalid execution ID format: ${id}. Expected hex string.`,
+      );
+    }
+    return result.data;
+  }
+
+  /** Wait for any active execution to change status, with timeout. */
+  private async waitForAnyChange(timeout: number): Promise<void> {
+    const activeIds = getActiveExecutionIds();
+    if (activeIds.length === 0) return;
+
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeout * 1000);
+    // Register callback before re-checking to close the race window
+    const waitPromise = waitForAnyExecutionChange(activeIds, ac.signal);
+    // If all originally watched executions completed between
+    // getActiveExecutionIds() and callback registration, abort immediately
+    // so we don't block until timeout. Check the original IDs, not the
+    // global set (new executions starting shouldn't prevent abort).
+    if (activeIds.every((id) => !getHandle(id))) {
+      ac.abort();
+    }
+    await waitPromise;
+    clearTimeout(timer);
+  }
+
+  /** Wait for a specific execution to change status, with timeout. */
+  private async waitForChange(
+    executionId: ExecutionId,
+    timeout: number,
+  ): Promise<void> {
+    const info = getExecutionStatusInfo(executionId);
+    if (!ACTIVE_STATUSES.has(info.status)) return;
+
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeout * 1000);
+    // Register callback before re-checking to close the race window
+    const waitPromise = waitForExecutionChange(executionId, ac.signal);
+    // If execution completed between status check and callback registration,
+    // abort immediately so we don't block until timeout.
+    const rechecked = getExecutionStatusInfo(executionId);
+    if (!ACTIVE_STATUSES.has(rechecked.status)) {
+      ac.abort();
+    }
+    await waitPromise;
+    clearTimeout(timer);
   }
 
   private async listExecutions(): Promise<ToolResult> {
-    const history = await AgentHistoryManager.getHistory();
+    const entries = await listExecutions();
 
-    if (history.length === 0) {
+    if (entries.length === 0) {
       return { output: 'No execution history found.' };
     }
 
-    const lines = history.map((item) => {
-      const agent = item.agentConfig.agent;
-      const model = item.agentConfig.model ?? 'unknown';
-      const ts = item.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
-      const info = getExecutionStatusInfo(item.id, item.timestamp);
-      return `${item.id}  ${ts}  ${agent}  ${model}  [${formatStatusInfo(info)}]`;
-    });
+    const lines = entries.map(formatListingLine);
+
+    // Count active background processes for the header
+    const activeIds = getActiveExecutionIds();
+    const bgCount = activeIds.filter(
+      (id) => getHandle(id)?.category === 'process',
+    ).length;
+    const header =
+      bgCount > 0
+        ? `Executions (${entries.length} total, ${bgCount} background process${bgCount > 1 ? 'es' : ''} running):`
+        : `Executions (${entries.length}, most recent first):`;
 
     return {
-      output: `Executions (${history.length}, most recent first):\n\n${lines.join('\n')}`,
+      output: `${header}\n\n${lines.join('\n')}`,
     };
   }
 
   private async showSummary(executionId: ExecutionId): Promise<ToolResult> {
-    const historyItem =
-      await AgentHistoryManager.getHistoryItemById(executionId);
+    // Check in-memory handle first (free) — running executions have everything we need
+    const handle = getHandle(executionId);
 
-    if (!historyItem) {
-      // Check if flow exists even without history entry
+    if (handle) {
+      // Running execution: agent/status from handle, only fetch live data from KV
+      const [children, todos] = await Promise.all([
+        readChildren(executionId),
+        readTodos(executionId),
+      ]);
+
+      const info = handle.getStatus();
+      const lines = [
+        `Execution: ${executionId}`,
+        `Agent: ${handle.agentName}`,
+        `Category: ${handle.category}`,
+        `Started: ${new Date(handle.startedAt).toISOString()}`,
+        `Status: ${formatStatusInfo(info)}`,
+      ];
+
+      const progressLine = formatProgressLine(handle);
+      if (progressLine) lines.push(progressLine);
+
+      this.appendChildren(lines, children);
+
+      if (todos.length > 0) {
+        lines.push('', ...formatTodoSection(todos));
+      }
+
+      const runningPaths = getAvailablePaths(handle.category);
+      lines.push(
+        '',
+        `Available paths: ${runningPaths.map((p) => `/executions/${executionId}/${p}`).join(', ')}`,
+      );
+
+      return { output: lines.join('\n') };
+    }
+
+    // Completed execution: full KV fetch
+    const [meta, config, children, todos, report] = await Promise.all([
+      readMeta(executionId),
+      readConfig(executionId),
+      readChildren(executionId),
+      readTodos(executionId),
+      readReport(executionId),
+    ]);
+
+    if (!meta && !config) {
       const store = getExecutionStore(executionId);
-      const flow = await store.read(`flow:${executionId}`);
-      if (!flow) {
+      const hasFlow = await store.exists(`flow:${executionId}`);
+      if (!hasFlow) {
         throw new ToolError(`Execution not found: ${executionId}`);
       }
-      const info = getExecutionStatusInfo(executionId);
       return {
-        output: `Execution: ${executionId}\nStatus: ${formatStatusInfo(info)}\n(No metadata available - use /executions/${executionId}/conversation to view messages)`,
+        output: `Execution: ${executionId}\nStatus: completed\n(No metadata available - use /executions/${executionId}/conversation to view messages)`,
       };
     }
 
-    const config = historyItem.agentConfig;
-    const info = getExecutionStatusInfo(executionId, historyItem.timestamp);
+    const category = meta?.category ?? config?.agentCategory;
+    const info = getExecutionStatusInfo(executionId, meta?.terminalStatus);
     const lines = [
       `Execution: ${executionId}`,
-      `Agent: ${config.agent}`,
-      `Model: ${config.model ?? 'default'}`,
-      `Timestamp: ${historyItem.timestamp}`,
+      `Agent: ${config?.agent ?? 'unknown'}`,
+      ...(category ? [`Category: ${category}`] : []),
+      `Model: ${config?.model ?? 'default'}`,
+      `Timestamp: ${meta?.timestamp ?? 'unknown'}`,
       `Status: ${formatStatusInfo(info)}`,
     ];
 
-    lines.push('');
-    lines.push('Available paths:');
+    if (meta?.parentExecutionId) {
+      lines.push(`Parent: ${meta.parentExecutionId}`);
+    }
+
+    this.appendChildren(lines, children);
+
+    if (todos.length > 0) {
+      lines.push('', ...formatTodoSection(todos));
+    }
+
+    if (report) {
+      lines.push('', 'Result:', report);
+    }
+
+    const completedPaths = getAvailablePaths(category);
     lines.push(
-      `  /executions/${executionId}/config - Agent configuration (JSON)`,
+      '',
+      `Available paths: ${completedPaths.map((p) => `/executions/${executionId}/${p}`).join(', ')}`,
     );
-    lines.push(`  /executions/${executionId}/conversation - Message history`);
-    lines.push(`  /executions/${executionId}/files - Generated files`);
 
     return { output: lines.join('\n') };
   }
 
-  private async showConfig(executionId: ExecutionId): Promise<ToolResult> {
-    const historyItem =
-      await AgentHistoryManager.getHistoryItemById(executionId);
-
-    if (!historyItem) {
-      throw new ToolError(
-        `Config not found for execution: ${executionId}. Config is only available for executions in history.`,
+  /** Append formatted child entries to output lines. */
+  private appendChildren(lines: string[], children: ChildRecord[]): void {
+    if (children.length === 0) return;
+    lines.push('', `Children (${children.length}):`);
+    for (const child of children) {
+      const childInfo = getExecutionStatusInfo(child.id);
+      const ts = child.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
+      lines.push(
+        `  ${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(childInfo)}]`,
       );
+    }
+  }
+
+  private handleKill(executionId: ExecutionId): ToolResult {
+    const ctx = getCurrentToolFileInteractionContext();
+    if (ctx?.executionId === executionId) {
+      return {
+        output: `Cannot kill your own execution (${executionId}).`,
+        isError: true,
+      };
+    }
+    const success = killExecution(executionId);
+    if (success) {
+      return { output: `Execution ${executionId} terminated.` };
+    }
+    return {
+      output: `Execution ${executionId} not found or already completed.`,
+      isError: true,
+    };
+  }
+
+  private async readProcessOutput(
+    executionId: ExecutionId,
+    viewRange?: number[],
+  ): Promise<ToolResult> {
+    // Running process: read live output from ephemeral temp files
+    const handle = getHandle(executionId);
+    if (handle instanceof ProcessExecutionHandle && handle.outputPaths) {
+      const [stdout, stderr] = await Promise.all([
+        fs.promises
+          .readFile(handle.outputPaths.stdout, 'utf-8')
+          .catch(() => ''),
+        fs.promises
+          .readFile(handle.outputPaths.stderr, 'utf-8')
+          .catch(() => ''),
+      ]);
+      const sections: string[] = [`Output for ${executionId}:`];
+      if (stdout) sections.push('', '<stdout>', stdout, '</stdout>');
+      if (stderr) sections.push('', '<stderr>', stderr, '</stderr>');
+      if (!stdout && !stderr) sections.push('', '(no output yet)');
+      return { output: this.applyViewRange(sections.join('\n'), viewRange) };
+    }
+
+    // Completed process: temp files already cleaned up
+    return {
+      output: `Output for ${executionId} is no longer available (ephemeral output is cleaned up on completion). Use /executions/${executionId}/report to view the result summary.`,
+    };
+  }
+
+  private async showTodos(executionId: ExecutionId): Promise<ToolResult> {
+    const todos = await readTodos(executionId);
+
+    if (todos.length === 0) {
+      return { output: `No task list found for execution ${executionId}.` };
+    }
+
+    const lines = formatTodoSection(todos);
+    const header = formatTodoHeader(executionId, todos);
+
+    return { output: `${header}\n\n${lines.join('\n')}` };
+  }
+
+  private async showReport(executionId: ExecutionId): Promise<ToolResult> {
+    const report = await readReport(executionId);
+    if (!report) {
+      return {
+        output: `No report found for execution ${executionId}. Reports are persisted when subagents or background processes complete.`,
+      };
+    }
+    return { output: report };
+  }
+
+  private async showChildren(executionId: ExecutionId): Promise<ToolResult> {
+    const children = await readChildren(executionId);
+    if (children.length === 0) {
+      return {
+        output: `No child executions found for ${executionId}.`,
+      };
+    }
+
+    const lines = children.map((child) => {
+      const info = getExecutionStatusInfo(child.id);
+      const ts = child.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
+      return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]`;
+    });
+
+    return {
+      output: `Children of ${executionId} (${children.length}):\n\n${lines.join('\n')}`,
+    };
+  }
+
+  private async showConfig(executionId: ExecutionId): Promise<ToolResult> {
+    const config = await readConfig(executionId);
+
+    if (!config) {
+      throw new ToolError(`Config not found for execution: ${executionId}.`);
+    }
+
+    // Filter out fields irrelevant to this agent's category
+    const { agentCategory } = config;
+    if (agentCategory) {
+      const excludeSet =
+        agentCategory === 'toolUse'
+          ? WORKFLOW_ONLY_FIELDS
+          : TOOL_USE_ONLY_FIELDS;
+      const filtered = Object.fromEntries(
+        Object.entries(config).filter(([key]) => !excludeSet.has(key)),
+      );
+      return { output: JSON.stringify(filtered, null, 2) };
     }
 
     return {
-      output: JSON.stringify(historyItem.agentConfig, null, 2),
+      output: JSON.stringify(config, null, 2),
     };
   }
 
@@ -299,17 +608,18 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
     executionId: ExecutionId,
     viewRange?: number[],
   ): Promise<ToolResult> {
-    const store = getExecutionStore(executionId);
-    const flow = await store.read<{ shared?: { conversation?: unknown[] } }>(
-      `flow:${executionId}`,
-    );
+    const conversation = await readConversation(executionId);
 
-    if (!flow) {
-      throw new ToolError(`Execution not found: ${executionId}`);
-    }
-
-    const conversation = flow.shared?.conversation;
-    if (!Array.isArray(conversation) || conversation.length === 0) {
+    if (!conversation) {
+      // readConversation already checked the flow blob; use lightweight
+      // exists checks to distinguish "no execution" from "no messages yet"
+      const store = getExecutionStore(executionId);
+      const exists =
+        (await store.exists('meta')) ||
+        (await store.exists(`flow:${executionId}`));
+      if (!exists) {
+        throw new ToolError(`Execution not found: ${executionId}`);
+      }
       return { output: '(No conversation history available)' };
     }
 
@@ -363,14 +673,33 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
     return str.length > maxLen ? str.slice(0, maxLen - 3) + '...' : str;
   }
 
-  private async listFiles(executionId: ExecutionId): Promise<ToolResult> {
-    const runDir = path.join(TASK_RUNS_DIR, executionId);
+  /** Internal KV metadata files stored alongside generated files. */
+  private static readonly KV_FILES = new Set([
+    'meta.json',
+    'config.json',
+    'conversation.json',
+    'todos.json',
+    'report.json',
+    'result-meta.json',
+  ]);
 
-    if (!(await StorageFS.exists(runDir))) {
+  private isKVFile(name: string): boolean {
+    return (
+      ExecutionsTool.KV_FILES.has(name) ||
+      name.startsWith('child-') ||
+      name.startsWith('flow_')
+    );
+  }
+
+  private async listFiles(executionId: ExecutionId): Promise<ToolResult> {
+    const runDir = await resolveStoragePath(executionId);
+    if (!runDir) {
       return { output: 'No files generated for this execution.' };
     }
 
-    const entries = await this.walkDirectory(runDir, '', 2);
+    const entries = (await this.walkDirectory(runDir, '', 2)).filter(
+      (entry) => !this.isKVFile(entry.path.split('/').pop() ?? ''),
+    );
 
     if (entries.length === 0) {
       return { output: 'No files generated for this execution.' };
@@ -435,9 +764,8 @@ NOTE: Workflow and research subagents typically take 10-30+ minutes to complete.
     filePath: string,
     viewRange?: number[],
   ): Promise<ToolResult> {
-    const fullPath = path.join(TASK_RUNS_DIR, executionId, filePath);
-
-    if (!(await StorageFS.exists(fullPath))) {
+    const fullPath = await resolveStoragePath(executionId, filePath);
+    if (!fullPath) {
       throw new ToolError(
         `File not found: /executions/${executionId}/files/${filePath}`,
       );

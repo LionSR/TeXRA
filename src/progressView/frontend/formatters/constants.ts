@@ -200,4 +200,5 @@ export const TOOL_ICON_MAP: Record<string, string> = {
   // Execution history
   executions: 'codicon-history',
   runs: 'codicon-history',
+  accept_run_files: 'codicon-check',
 };

@@ -140,7 +140,14 @@ export class StreamTabsManager extends PersistentMapManager<
 
     const original = messages[index];
     if (guard && !guard(original)) return undefined;
-    messages[index] = { ...original, ...updates };
+    // Preserve messageType from the original if the update doesn't explicitly
+    // provide one — spreading { messageType: undefined } would overwrite it,
+    // causing the entry to lose its formatter and render as a green-dot default.
+    const merged = { ...original, ...updates };
+    if (updates.messageType === undefined && original.messageType) {
+      merged.messageType = original.messageType;
+    }
+    messages[index] = merged;
     void this.save();
     return original;
   }
