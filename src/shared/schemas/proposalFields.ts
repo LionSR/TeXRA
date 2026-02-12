@@ -1,16 +1,9 @@
 import { z } from 'zod';
 
-/** Always async. Catch ensures backward compat if legacy 'sync' values are persisted. */
-export const ProposalModeSchema = z
-  .enum(['sync', 'async'])
-  .transform(() => 'async' as const)
-  .catch('async' as const);
-
 export const BaseProposalFieldsSchema = z.object({
   agent: z.string(),
   model: z.string(),
   instruction: z.string(),
-  mode: ProposalModeSchema,
 });
 
 const FileFieldsSchema = z.object({
