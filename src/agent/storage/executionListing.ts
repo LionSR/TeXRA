@@ -126,7 +126,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
           agent: cfg?.agent ?? 'unknown',
           model: cfg?.model ?? 'unknown',
           agentConfig: cfg ?? null,
-          category: cfg?.agentCategory,
+          category: meta.category ?? cfg?.agentCategory,
           terminalStatus: meta.terminalStatus,
         };
       } catch (error) {
