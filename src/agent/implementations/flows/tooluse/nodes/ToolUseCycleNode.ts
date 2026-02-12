@@ -131,6 +131,10 @@ export class ToolUseCycleNode<C> extends Node<
         return FlowTransition.DEFAULT;
 
       case 'failed':
+        shared.lastError = {
+          message: execRes.message,
+          retryable: execRes.retryable ?? false,
+        };
         throw new Error(execRes.message);
 
       case 'cancelled':

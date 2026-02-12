@@ -148,6 +148,7 @@ export class BashTool extends defineTool({
     await ensureRunDir(executionId);
     const outputPath = path.join(getRunDir(executionId), 'output.log');
     const outputStream = fs.createWriteStream(outputPath, { flags: 'a' });
+    outputStream.on('error', () => {}); // prevent unhandled emitter crash
 
     const appendToOutput = (chunk: string): void => {
       outputStream.write(chunk);

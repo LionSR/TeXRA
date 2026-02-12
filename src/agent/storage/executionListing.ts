@@ -40,6 +40,8 @@ export interface ExecutionListingEntry {
   agent: string;
   model: string;
   agentConfig: unknown;
+  category?: string;
+  terminalStatus?: string;
 }
 
 // ============================================================================
@@ -104,6 +106,8 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
           agent: (cfg?.agent as string) ?? 'unknown',
           model: (cfg?.model as string) ?? 'unknown',
           agentConfig: config ?? {},
+          category: (cfg?.agentCategory as string) ?? undefined,
+          terminalStatus: meta.terminalStatus,
         };
       } catch (error) {
         logger.warn(CHANNEL, `Skipping corrupt execution ${id}`, {
