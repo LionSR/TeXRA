@@ -98,6 +98,7 @@ export const proposalModeBadgeStyles: CSSResult = css`
     color: var(--vscode-editor-background);
   }
 
+  /* All delegations are async; sync style retained for legacy log entries */
   .proposal-mode-badge--sync {
     background: var(--vscode-editorWidget-border);
     color: var(--vscode-editor-foreground);
