@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.36.0] - 2026-02-12
+
+### Features
+
+- Added **review agent** for manuscript verification — checks mathematical correctness, derivation soundness, notation consistency, and code-manuscript consistency using Wolfram with Python/SymPy fallback.
+- Added **Super YOLO mode** for auto-approving agent proposals (delegate_workflow, delegate_agent) without user interaction, with per-stream toggle in the stream header and settings in the Multi-Agent tab.
+- **Subagent model inheritance** — delegated agents now default to the parent agent's model instead of a fixed default, with a dynamic available models list in tool descriptions.
+- Added **reliability settings** (compaction threshold, retry attempts, retry backoff) to the Multi-Agent tab in settings view.
+- Added **parent agent breadcrumbs** on subagent stream tabs with clickable navigation back to the parent stream.
+- Added **modification timestamps** and column headers to memory tool directory listings.
+### Bug Fixes
+
+- Fixed **Kimi tool-use batching** — reasoning_content now included in batched follow-up messages to prevent API errors on parallel tool calls.
+- Fixed **Anthropic manual compaction** trigger not being honored.
+- Fixed **gzip-only arXiv sources** not decompressing correctly for single-file downloads.
+- Fixed **Overleaf/ShareLaTeX project URLs** — clone dialog now accepts standard project URLs and any domain with `/project/<id>`; auth failures show a "Get Token" button linking to the settings page.
+- Fixed **Super YOLO toggle** not syncing state on stream switch or webview reload; disabling now clears all per-stream bypasses.
+- Fixed **parent stream link** persistence across extension restarts.
+- Fixed **stream-switch events** from parent breadcrumb links not reaching the handler in split layout.
+- Fixed **stream diagnostics** rendering to only show when events were actually processed.
+
+### Improvements
+
+- Removed **deprecated models** (sonnet45, opus46, kimi25, qwen3max) from the default model list.
+- Suppressed **file lineage** display for non-rewrite agents to avoid misleading diff output.
+- Updated dependencies.
+
 ## [0.35.10] - 2026-02-10
 
 ### Features
