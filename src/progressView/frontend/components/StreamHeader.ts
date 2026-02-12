@@ -19,6 +19,7 @@ import { ELEMENT_IDS, STREAM_STATUS, TOOLBAR_BUTTONS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
 import type { StreamState } from '../store';
+import './RunSelector';
 
 // Local imports - shared schemas
 import type { StreamTabInfo } from '@shared/schemas';
