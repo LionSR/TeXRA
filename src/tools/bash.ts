@@ -13,7 +13,11 @@ import {
   untrackExecution,
   ProcessExecutionHandle,
 } from '@agent/runtime/executionRegistry';
-import { getExecutionStore, registerExecution, writeTerminalStatus } from '@agent/storage';
+import {
+  getExecutionStore,
+  registerExecution,
+  writeTerminalStatus,
+} from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
@@ -187,19 +191,29 @@ export class BashTool extends defineTool({
       agent: 'bash',
       instruction: command,
     });
-    await registerExecution(
-      executionId,
-      syntheticConfig,
-      'bash',
-      parentExecutionId,
-    );
 
+    // Attach lifecycle handlers BEFORE registerExecution so they're
+    // always wired, even if registration throws.
     const handle = new ProcessExecutionHandle(
       executionId,
       parentStreamId,
       preview,
       kill,
     );
+
+    try {
+      await registerExecution(
+        executionId,
+        syntheticConfig,
+        'bash',
+        parentExecutionId,
+      );
+    } catch {
+      // Registration failed — still attach cleanup but don't track
+      void promise.finally(() => outputStream.end());
+      throw new ToolError('Failed to register background execution.');
+    }
+
     trackExecution(handle);
 
     void promise
