@@ -12,6 +12,10 @@ import { isPlainObject } from '@shared/utils/string';
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
+import type { EditInput } from '@tools/EditTool';
+import type { TextEditorInput } from '@tools/TextEditorTool';
+import type { ReadInput } from '@tools/ReadTool';
+import type { WriteInput } from '@tools/WriteTool';
 import type {
   DelegateAgentInput,
   WorkflowAgentInput,
@@ -260,74 +264,58 @@ export function formatToolUseTemplate(
       : '';
 
   // Handle edit tools with diff display
-  if (
-    TOOLS_WITH_DIFF_INPUT.has(toolName) &&
-    typeof input === 'object' &&
-    input !== null &&
-    'old_str' in input &&
-    'new_str' in input &&
-    typeof (input as { old_str?: string }).old_str === 'string' &&
-    typeof (input as { new_str?: string }).new_str === 'string'
-  ) {
-    // Extract startLine from output.edits[0] for file link navigation
-    const outputData = parsed.output;
-    const edits =
-      outputData && typeof outputData === 'object' && 'edits' in outputData
-        ? (outputData as { edits?: Array<{ startLine?: number }> }).edits
-        : undefined;
-    const startLine = edits?.[0]?.startLine;
+  if (TOOLS_WITH_DIFF_INPUT.has(toolName) && isPlainObject(input)) {
+    const editInput = input as EditInput | TextEditorInput;
+    if (
+      typeof editInput.old_str === 'string' &&
+      typeof editInput.new_str === 'string'
+    ) {
+      // Extract startLine from output.edits[0] for file link navigation
+      const outputData = parsed.output;
+      const edits =
+        outputData && typeof outputData === 'object' && 'edits' in outputData
+          ? (outputData as { edits?: Array<{ startLine?: number }> }).edits
+          : undefined;
+      const startLine = edits?.[0]?.startLine;
 
-    if (filePath) {
+      if (filePath) {
+        sections.push(
+          buildToolUseSection(
+            'File:',
+            buildFileLinkWithLines(filePath, { startLine }),
+          ),
+        );
+      }
       sections.push(
         buildToolUseSection(
-          'File:',
-          buildFileLinkWithLines(filePath, { startLine }),
+          'Changes:',
+          buildEditDiffSection(editInput.old_str, editInput.new_str),
         ),
       );
     }
-    sections.push(
-      buildToolUseSection(
-        'Changes:',
-        buildEditDiffSection(
-          (input as { old_str: string }).old_str,
-          (input as { new_str: string }).new_str,
-        ),
-      ),
-    );
   }
   // Handle read tools with file link
   else if (TOOLS_WITH_FILE_LINK.has(toolName) && filePath) {
-    const range =
-      typeof input === 'object' && input !== null && 'range' in input
-        ? (input as { range?: { start?: number; end?: number } }).range
-        : undefined;
+    const readInput = input as ReadInput;
     sections.push(
       buildToolUseSection(
         'File:',
         buildFileLinkWithLines(filePath, {
-          startLine: range?.start,
-          endLine: range?.end,
+          startLine: readInput.range?.start,
+          endLine: readInput.range?.end ?? undefined,
         }),
       ),
     );
   }
   // Handle write tools with file link + content
-  else if (
-    TOOLS_WITH_FILE_CONTENT.has(toolName) &&
-    filePath &&
-    typeof input === 'object' &&
-    input !== null &&
-    'content' in input
-  ) {
+  else if (TOOLS_WITH_FILE_CONTENT.has(toolName) && filePath) {
+    const writeInput = input as WriteInput;
     sections.push(
       buildToolUseSection('File:', buildFileLinkWithLines(filePath)),
     );
     const contentLanguage = getLanguageFromPath(filePath);
-    const rawContent = (input as { content?: unknown }).content;
-    const contentText =
-      typeof rawContent === 'string' ? rawContent : String(rawContent ?? '');
     sections.push(
-      buildToolSection('Content:', contentText, {
+      buildToolSection('Content:', writeInput.content, {
         toolName,
         language: contentLanguage,
       }),
@@ -429,9 +417,7 @@ export function formatToolUseTemplate(
       );
     } else if (action === 'kill') {
       // kill: show action
-      sections.push(
-        buildToolUseSection('Action:', wrapInPre('kill')),
-      );
+      sections.push(buildToolUseSection('Action:', wrapInPre('kill')));
     }
     // view: path section above is sufficient
 
@@ -439,10 +425,7 @@ export function formatToolUseTemplate(
     if (execInput.view_range) {
       const [start, end] = execInput.view_range;
       sections.push(
-        buildToolUseSection(
-          'Range:',
-          wrapInPre(`lines ${start}–${end}`),
-        ),
+        buildToolUseSection('Range:', wrapInPre(`lines ${start}–${end}`)),
       );
     }
   }
@@ -526,9 +509,7 @@ export function formatToolUseTemplate(
 
     // Workflow file fields (delegate_workflow / propose_workflow)
     const fileGroups =
-      'inputFile' in delegateInput
-        ? getProposalFileGroups(delegateInput)
-        : [];
+      'inputFile' in delegateInput ? getProposalFileGroups(delegateInput) : [];
     if (fileGroups.length > 0) {
       // prettier-ignore
       const fileItems = html`${fileGroups.flatMap((g) => g.files.map((f) => html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="file-link clickable-link" data-file=${f}>${f}</span> <span class="file-source">(${g.label})</span></li>`))}`;

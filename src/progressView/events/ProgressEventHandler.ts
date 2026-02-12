@@ -262,13 +262,18 @@ export class ProgressEventHandler {
 
         // Update active list and accumulate finished count
         this.state.updateStreamState(parentStreamId, (prev) => {
-          const prevIds = new Set(prev.activeSubagents.map((s) => s.executionId));
+          const prevIds = new Set(
+            prev.activeSubagents.map((s) => s.executionId),
+          );
           const nextIds = new Set(children.map((s) => s.executionId));
-          const newlyFinished = [...prevIds].filter((id) => !nextIds.has(id)).length;
+          const newlyFinished = [...prevIds].filter(
+            (id) => !nextIds.has(id),
+          ).length;
           return {
             ...prev,
             activeSubagents: children,
-            finishedSubagentCount: (prev.finishedSubagentCount ?? 0) + newlyFinished,
+            finishedSubagentCount:
+              (prev.finishedSubagentCount ?? 0) + newlyFinished,
           };
         });
 
@@ -296,13 +301,18 @@ export class ProgressEventHandler {
         const { parentStreamId, processes } = data;
 
         this.state.updateStreamState(parentStreamId, (prev) => {
-          const prevIds = new Set(prev.activeProcesses.map((p) => p.executionId));
+          const prevIds = new Set(
+            prev.activeProcesses.map((p) => p.executionId),
+          );
           const nextIds = new Set(processes.map((p) => p.executionId));
-          const newlyFinished = [...prevIds].filter((id) => !nextIds.has(id)).length;
+          const newlyFinished = [...prevIds].filter(
+            (id) => !nextIds.has(id),
+          ).length;
           return {
             ...prev,
             activeProcesses: processes,
-            finishedProcessCount: (prev.finishedProcessCount ?? 0) + newlyFinished,
+            finishedProcessCount:
+              (prev.finishedProcessCount ?? 0) + newlyFinished,
           };
         });
 
