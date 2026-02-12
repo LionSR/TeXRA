@@ -108,18 +108,18 @@ function toConfigPayload(
  * so the orchestrator gets the response without waiting for flow exit.
  * For workflow subagents, delivery happens when the promise resolves.
  */
-function executeSubagent(
+async function executeSubagent(
   configPayload: AgentConfigPayload,
   agentName: string,
   orchestratorStreamId: StreamTabId,
   options?: { enableYoloOnChild?: boolean },
-): ToolResult {
+): Promise<ToolResult> {
   const executionId = generateExecutionId();
 
   const ctx = getCurrentToolFileInteractionContext();
   const parentExecutionId = ctx?.executionId;
   const syntheticConfig = AgentConfigSchema.parse(configPayload);
-  void registerExecution(
+  await registerExecution(
     executionId,
     syntheticConfig,
     agentName,
@@ -153,20 +153,19 @@ function executeSubagent(
       void getExecutionStore(executionId).write('report', msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     },
-  });
-  promise
-    .then((result) => {
+    onCompleted: (result) => {
       if (hasDelivered) return;
       hasDelivered = true;
       const msg = formatSubagentDelivery(agentName, result);
       void getExecutionStore(executionId).write('report', msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
-    })
-    .catch((err: unknown) => {
-      const msg = formatSubagentError(executionId, agentName, err);
-      void getExecutionStore(executionId).write('report', msg);
-      ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
-    });
+    },
+  });
+  promise.catch((err: unknown) => {
+    const msg = formatSubagentError(executionId, agentName, err);
+    void getExecutionStore(executionId).write('report', msg);
+    ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+  });
   return {
     summary: `Launched '${agentName}' (async)`,
     output: [

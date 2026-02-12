@@ -41,7 +41,7 @@ import {
 
 // Local imports - utils
 import { StorageFS } from '@utils/files';
-import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import { LEGACY_RUNS_DIR, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 import { ToolError, type ToolResult } from './result';
 import { defineTool } from './core/define';
@@ -51,7 +51,15 @@ import {
   type ExecutionId,
 } from '@shared/schemas';
 
-const EXECUTIONS_DIR = 'executions';
+/**
+ * Resolve a storage-relative path, checking executions/ first then legacy taskRuns/.
+ * Returns the path that exists, or the legacy path if neither does (caller checks).
+ */
+async function resolveStoragePath(...segments: string[]): Promise<string> {
+  const primary = path.join(TASK_RUNS_DIR, ...segments);
+  if (await StorageFS.exists(primary)) return primary;
+  return path.join(LEGACY_RUNS_DIR, ...segments);
+}
 
 // ============================================================================
 // Schema
@@ -406,9 +414,7 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
     }
 
     if (report) {
-      const preview =
-        report.length > 500 ? `${report.slice(0, 497)}...` : report;
-      lines.push('', 'Report preview:', preview);
+      lines.push('', 'Result:', report);
     }
 
     return { output: lines.join('\n') };
@@ -429,10 +435,7 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
     executionId: ExecutionId,
     viewRange?: number[],
   ): Promise<ToolResult> {
-    // Check new location first (executions/), fall back to legacy (taskRuns/)
-    const newPath = path.join(EXECUTIONS_DIR, executionId, 'output.log');
-    const legacyPath = path.join(TASK_RUNS_DIR, executionId, 'output.log');
-    const outputPath = (await StorageFS.exists(newPath)) ? newPath : legacyPath;
+    const outputPath = await resolveStoragePath(executionId, 'output.log');
 
     if (!(await StorageFS.exists(outputPath))) {
       throw new ToolError(
@@ -573,7 +576,7 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
   }
 
   private async listFiles(executionId: ExecutionId): Promise<ToolResult> {
-    const runDir = path.join(TASK_RUNS_DIR, executionId);
+    const runDir = await resolveStoragePath(executionId);
 
     if (!(await StorageFS.exists(runDir))) {
       return { output: 'No files generated for this execution.' };
@@ -644,7 +647,7 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
     filePath: string,
     viewRange?: number[],
   ): Promise<ToolResult> {
-    const fullPath = path.join(TASK_RUNS_DIR, executionId, filePath);
+    const fullPath = await resolveStoragePath(executionId, filePath);
 
     if (!(await StorageFS.exists(fullPath))) {
       throw new ToolError(
