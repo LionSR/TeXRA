@@ -74,7 +74,7 @@ import {
   trackExecution,
   untrackExecution,
   updateExecutionProgress,
-  type ExecutionProgress,
+  AgentExecutionHandle,
 } from './executionRegistry';
 import type { AgentFlowResult, OutputFileSummary } from './AgentFlowResult';
 
@@ -303,21 +303,39 @@ function toOutputSummaries(roundOutputs: RoundOutput[]): OutputFileSummary[] {
   );
 }
 
+/** Create an onRoundCompleted callback that feeds progress into the execution registry. */
+function createRoundProgressCallback(
+  executionId: ExecutionId,
+): (roundIndex: number, totalRounds: number) => void {
+  return (roundIndex, totalRounds) => {
+    updateExecutionProgress(executionId, {
+      currentRound: roundIndex,
+      totalRounds,
+    });
+  };
+}
+
 async function runFlowWithLifecycle(
   ctx: ResolvedAgentBase,
   streamId: StreamTabId,
   agentName: string,
   runner: () => Promise<AgentFlowResult>,
-  options?: { isSubagent?: boolean; progress?: ExecutionProgress },
+  options?: {
+    isSubagent?: boolean;
+    category?: 'workflow' | 'toolUse';
+    parentStreamId?: StreamTabId;
+  },
 ): Promise<AgentFlowResult> {
-  trackExecution(
+  const category = options?.category ?? 'workflow';
+  const parentStreamId = options?.parentStreamId ?? streamId;
+  const handle = new AgentExecutionHandle(
     ctx.executionId,
+    parentStreamId,
     streamId,
-    options?.progress ?? {
-      category: 'workflow',
-      agentName,
-    },
+    agentName,
+    category,
   );
+  trackExecution(handle);
   try {
     const result = await runner();
     untrackExecution(ctx.executionId);
@@ -523,6 +541,8 @@ async function prepareAgentUI(
 export interface ExecuteAgentOptions {
   /** When true, proposal tools are filtered out to prevent nesting. */
   isSubagent?: boolean;
+  /** Parent stream ID for subagent lineage tracking. Defaults to own streamId. */
+  parentStreamId?: StreamTabId;
   /** Fires early with the real streamId, before flow execution starts. */
   onStreamResolved?: (streamId: StreamTabId) => void;
   /** Fires before a tool-use subagent enters WAITING, delivering interim result to orchestrator. */
@@ -541,11 +561,10 @@ export async function executeAgent(
   options?.onStreamResolved?.(streamId);
 
   const isSubagent = options?.isSubagent;
-  const progress: ExecutionProgress = {
-    category:
-      setting.agentCategory === AgentCategory.ToolUse ? 'toolUse' : 'workflow',
-    agentName,
-  };
+  const category =
+    setting.agentCategory === AgentCategory.ToolUse
+      ? ('toolUse' as const)
+      : ('workflow' as const);
   return runFlowWithLifecycle(
     ctx,
     streamId,
@@ -588,12 +607,7 @@ export async function executeAgent(
             ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
           setting: ctx.setting as AgentWorkflowSetting,
           parentStage: ctx.parentStage,
-          onRoundCompleted: (roundIndex, totalRounds) => {
-            updateExecutionProgress(ctx.executionId, {
-              currentRound: roundIndex,
-              totalRounds,
-            });
-          },
+          onRoundCompleted: createRoundProgressCallback(ctx.executionId),
         });
         return {
           category: 'workflow' as const,
@@ -604,7 +618,7 @@ export async function executeAgent(
         };
       });
     },
-    { isSubagent, progress },
+    { isSubagent, category, parentStreamId: options?.parentStreamId },
   );
 }
 
@@ -644,12 +658,7 @@ export async function executeMergeAgent(
           fileService,
         ),
         parentStage: ctx.parentStage,
-        onRoundCompleted: (roundIndex, totalRounds) => {
-          updateExecutionProgress(ctx.executionId, {
-            currentRound: roundIndex,
-            totalRounds,
-          });
-        },
+        onRoundCompleted: createRoundProgressCallback(ctx.executionId),
       });
       return {
         category: 'workflow' as const,
@@ -708,11 +717,6 @@ export async function resumeToolUseFromSnapshot(
         streamId,
       };
     },
-    {
-      progress: {
-        category: 'toolUse',
-        agentName: snapshot.agentConfig.agent,
-      },
-    },
+    { category: 'toolUse' },
   );
 }
