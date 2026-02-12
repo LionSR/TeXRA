@@ -292,7 +292,10 @@ export async function runReflectionFlow<C = unknown>(
 
     // Persist conversation as direct key for consistent KV access
     if (shared?.conversation?.length) {
-      void getExecutionStore(executionId).write('conversation', shared.conversation);
+      void getExecutionStore(executionId).write(
+        'conversation',
+        shared.conversation,
+      );
     }
 
     status = executionToEndStatus(flowStatus) as EndGroupStatus;

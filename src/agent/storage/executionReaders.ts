@@ -87,12 +87,14 @@ export async function readMeta(
   if (direct?.timestamp) return direct;
 
   // Fallback: workspace state history
-  const { AgentHistoryManager } = await import(
-    '@common/history/AgentHistoryManager'
-  );
+  const { AgentHistoryManager } =
+    await import('@common/history/AgentHistoryManager');
   const item = await AgentHistoryManager.getHistoryItemById(executionId);
   if (!item) return null;
-  return { timestamp: item.timestamp, parentExecutionId: item.parentExecutionId };
+  return {
+    timestamp: item.timestamp,
+    parentExecutionId: item.parentExecutionId,
+  };
 }
 
 /** Read agent config: direct key first, history fallback. */
@@ -104,9 +106,8 @@ export async function readConfig(
   if (direct) return direct;
 
   // Fallback: workspace state history
-  const { AgentHistoryManager } = await import(
-    '@common/history/AgentHistoryManager'
-  );
+  const { AgentHistoryManager } =
+    await import('@common/history/AgentHistoryManager');
   const item = await AgentHistoryManager.getHistoryItemById(executionId);
   return item?.agentConfig ?? null;
 }
@@ -122,17 +123,20 @@ export async function readChildren(
     const entries = await Promise.all(
       childKeys.map(async (key) => {
         const id = key.replace('child-', '') as ExecutionId;
-        const data = await store.read<{ agent: string; timestamp: string }>(key);
-        return data ? { id, agent: data.agent, timestamp: data.timestamp } : null;
+        const data = await store.read<{ agent: string; timestamp: string }>(
+          key,
+        );
+        return data
+          ? { id, agent: data.agent, timestamp: data.timestamp }
+          : null;
       }),
     );
     return entries.filter((e): e is ChildRecord => e !== null);
   }
 
   // Fallback: history filter
-  const { AgentHistoryManager } = await import(
-    '@common/history/AgentHistoryManager'
-  );
+  const { AgentHistoryManager } =
+    await import('@common/history/AgentHistoryManager');
   const items = await AgentHistoryManager.getChildrenOf(executionId);
   return items.map((item) => ({
     id: item.id,

@@ -364,7 +364,10 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
       return { output: lines.join('\n') };
     }
 
-    const cfg = config && typeof config === 'object' ? (config as Record<string, unknown>) : null;
+    const cfg =
+      config && typeof config === 'object'
+        ? (config as Record<string, unknown>)
+        : null;
     const info = getExecutionStatusInfo(executionId);
     const lines = [
       `Execution: ${executionId}`,
@@ -386,7 +389,9 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
       for (const child of children) {
         const childInfo = getExecutionStatusInfo(child.id);
         const ts = child.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
-        lines.push(`  ${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(childInfo)}]`);
+        lines.push(
+          `  ${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(childInfo)}]`,
+        );
       }
     }
 
@@ -499,9 +504,7 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
     const config = await readConfig(executionId);
 
     if (!config) {
-      throw new ToolError(
-        `Config not found for execution: ${executionId}.`,
-      );
+      throw new ToolError(`Config not found for execution: ${executionId}.`);
     }
 
     return {
