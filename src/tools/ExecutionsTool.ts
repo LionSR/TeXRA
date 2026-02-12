@@ -76,12 +76,14 @@ const ExecutionsToolInputSchema = z.strictObject({
     })
     .nullish(),
 
-  /** Block on /executions/{id} until next status change instead of polling. */
+  /** Block until next status change instead of returning immediately. */
   block: z
     .boolean()
     .prefault(false)
     .describe(
-      'Wait for status change instead of polling. On /executions: wait for any active execution to change. On /executions/{id}: wait for a specific execution. Subagents deliver results automatically as follow-up messages; use block to check intermediate progress.',
+      'Wait for a status change instead of returning immediately (avoids sleep-poll loops). ' +
+        'On /executions: wait for any active execution to change. ' +
+        'On /executions/{id}: wait for that specific execution to change.',
     ),
 
   /** Max seconds to wait when block=true. */
@@ -90,7 +92,9 @@ const ExecutionsToolInputSchema = z.strictObject({
     .min(1)
     .max(1800)
     .prefault(300)
-    .describe('Max seconds to wait when block=true. Default: 300, max: 1800.'),
+    .describe(
+      'Max seconds to wait when block=true. Ignored otherwise. Default: 300, max: 1800.',
+    ),
 });
 
 export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
@@ -404,24 +408,6 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
         report.length > 500 ? `${report.slice(0, 497)}...` : report;
       lines.push('', 'Report preview:', preview);
     }
-
-    const category = getHandle(executionId)?.category;
-    lines.push('');
-    lines.push('Available paths:');
-    lines.push(
-      `  /executions/${executionId}/config - Agent configuration (JSON)`,
-    );
-    if (category === 'process') {
-      lines.push(`  /executions/${executionId}/output - Process stdout/stderr`);
-    } else {
-      lines.push(`  /executions/${executionId}/conversation - Message history`);
-      if (category === 'toolUse') {
-        lines.push(`  /executions/${executionId}/todos - Task list`);
-      }
-    }
-    lines.push(`  /executions/${executionId}/report - Result report`);
-    lines.push(`  /executions/${executionId}/children - Child executions`);
-    lines.push(`  /executions/${executionId}/files - Generated files`);
 
     return { output: lines.join('\n') };
   }
