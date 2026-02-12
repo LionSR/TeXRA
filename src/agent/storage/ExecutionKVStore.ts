@@ -30,6 +30,12 @@ export interface ExecutionKVStore {
   getExecutionId(): ExecutionId;
 }
 
+/** Execution metadata stored alongside config at launch time. */
+export interface ExecutionMeta {
+  timestamp: string;
+  parentExecutionId?: ExecutionId;
+}
+
 /**
  * Storage directory for all execution data (KV, output logs, etc.).
  * This matches TASK_RUNS_DIR by design — both point to 'executions/' so

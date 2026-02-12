@@ -109,28 +109,51 @@ export function updateExecutionProgress(
 /**
  * Wait for a progress update or execution completion.
  * Resolves when `updateExecutionProgress` or `untrackExecution` is called.
+ * Pass an AbortSignal to clean up the callback if the caller times out.
  */
-export function waitForExecutionChange(executionId: string): Promise<void> {
+export function waitForExecutionChange(
+  executionId: string,
+  signal?: AbortSignal,
+): Promise<void> {
   return new Promise<void>((resolve) => {
-    addChangeCallback(executionId, resolve);
+    const cb = (): void => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    };
+    const onAbort = (): void => {
+      removeChangeCallback(executionId, cb);
+      resolve();
+    };
+    addChangeCallback(executionId, cb);
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
 
 /**
  * Wait for any of the given executions to change.
- * Resolves with the execution ID that changed first.
+ * Resolves with the execution ID that changed first (or '' on abort).
+ * Pass an AbortSignal to clean up callbacks if the caller times out.
  */
 export function waitForAnyExecutionChange(
   executionIds: string[],
+  signal?: AbortSignal,
 ): Promise<string> {
   return new Promise<string>((resolve) => {
     let resolved = false;
     const callbacks = new Map<string, () => void>();
 
     const cleanup = (): void => {
+      signal?.removeEventListener('abort', onAbort);
       for (const [id, cb] of callbacks) {
         removeChangeCallback(id, cb);
       }
+    };
+
+    const onAbort = (): void => {
+      if (resolved) return;
+      resolved = true;
+      cleanup();
+      resolve('');
     };
 
     for (const id of executionIds) {
@@ -143,6 +166,8 @@ export function waitForAnyExecutionChange(
       callbacks.set(id, cb);
       addChangeCallback(id, cb);
     }
+
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
 

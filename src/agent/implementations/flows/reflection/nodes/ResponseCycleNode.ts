@@ -11,6 +11,7 @@ import type {
   ConversationRoundStateSnapshot,
 } from '@agent/core/AgentState';
 import { buildCycleServices } from '@agent/core/flows/CycleServices';
+import { formatProviderHttpError } from '@common/errors';
 import type { AgentFileLocation } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -30,7 +31,7 @@ interface CyclePrepInput {
 type CycleOutcome =
   | { outcome: 'completed'; endTurn: boolean }
   | { outcome: 'cancelled' }
-  | { outcome: 'failed'; error: Error };
+  | { outcome: 'failed'; error: Error; retryable?: boolean };
 
 export class ResponseCycleNode<C = unknown> extends Node<
   ReflectionFlowShared,
@@ -108,6 +109,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
         return {
           outcome: 'failed',
           error: new Error(cycleShared.lastError.message),
+          retryable: cycleShared.lastError.retryable,
         };
       }
       if (cycleShared.shouldStop && !cycleShared.endTurn) {
@@ -119,9 +121,11 @@ export class ResponseCycleNode<C = unknown> extends Node<
       if (this.services.onRoundFinalized) {
         await this.services.onRoundFinalized(prepRes.run);
       }
+      const formatted = formatProviderHttpError(error);
       return {
         outcome: 'failed',
         error: error instanceof Error ? error : new Error(String(error)),
+        retryable: formatted.retryable,
       };
     }
   }
@@ -130,7 +134,8 @@ export class ResponseCycleNode<C = unknown> extends Node<
     _prepRes: CyclePrepInput,
     error: Error,
   ): Promise<CycleOutcome> {
-    return { outcome: 'failed', error };
+    const formatted = formatProviderHttpError(error);
+    return { outcome: 'failed', error, retryable: formatted.retryable };
   }
 
   async post(
@@ -144,7 +149,10 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
     if (execRes.outcome === 'failed') {
       logger.error(`Response cycle failed: ${execRes.error.message}`);
-      shared.lastError = { message: execRes.error.message, retryable: false };
+      shared.lastError = {
+        message: execRes.error.message,
+        retryable: execRes.retryable ?? false,
+      };
       throw execRes.error;
     }
 
