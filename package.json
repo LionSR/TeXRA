@@ -1459,7 +1459,7 @@
     "lit": "^3.3.2",
     "llm-zoo": "^1.0.6",
     "mark.js": "^8.11.1",
-    "markdown-it": "^14.1.0",
+    "markdown-it": "^14.1.1",
     "markdown-it-texmath": "^1.0.0",
     "mime-types": "^3.0.1",
     "minimatch": "^10.1.2",
