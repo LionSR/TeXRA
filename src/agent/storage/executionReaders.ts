@@ -8,9 +8,11 @@
 
 import type { AgentConfig } from '@agent/core/AgentConfig';
 
-import { getExecutionStore } from './ExecutionKVStore';
+import { type ExecutionMeta, getExecutionStore } from './ExecutionKVStore';
 import { invalidateListingCache } from './executionListing';
 import type { ExecutionId } from '@shared/schemas';
+
+export type { ExecutionMeta };
 
 /** Shape of a persisted todo item from tool-use flow state. */
 export interface TodoEntry {
@@ -72,12 +74,6 @@ export async function readReport(
 ): Promise<string | null> {
   const store = getExecutionStore(executionId);
   return (await store.read<string>('report')) ?? null;
-}
-
-/** Execution metadata stored alongside config at launch time. */
-export interface ExecutionMeta {
-  timestamp: string;
-  parentExecutionId?: ExecutionId;
 }
 
 /** Read execution metadata from KV. */

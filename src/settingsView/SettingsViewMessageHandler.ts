@@ -801,9 +801,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     const view = this.getActiveView();
     try {
-      const deleted = await deleteExecution(
-        data.historyId as ExecutionId,
-      );
+      const deleted = await deleteExecution(data.historyId as ExecutionId);
       if (deleted && view) {
         await this.sendHistoryData(view.webview);
       } else if (!deleted) {

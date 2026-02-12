@@ -34,8 +34,14 @@ export function getProposalFileGroups(
 
   return [
     { label: 'Input', files: combine(data.inputFile, data.inputFiles) },
-    { label: 'Reference', files: combine(data.referenceFile, data.referenceFiles) },
-    { label: 'Auxiliary', files: combine(data.auxiliaryFile, data.auxiliaryFiles) },
+    {
+      label: 'Reference',
+      files: combine(data.referenceFile, data.referenceFiles),
+    },
+    {
+      label: 'Auxiliary',
+      files: combine(data.auxiliaryFile, data.auxiliaryFiles),
+    },
     { label: 'Media', files: combine(data.mediaFile, data.mediaFiles) },
     { label: 'Output', files: data.outputFiles ?? [] },
   ].filter((g) => g.files.length > 0);

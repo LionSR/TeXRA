@@ -171,7 +171,7 @@ async function executeSubagent(
     output: [
       `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,
       `Execution ID: ${executionId}`,
-      `To check intermediate progress: executions tool with path=/executions/${executionId} and block=true (waits for next milestone).`,
+      `To check intermediate progress: executions tool with path=/executions/${executionId} and action=wait (waits for next status change).`,
     ].join('\n'),
   };
 }
