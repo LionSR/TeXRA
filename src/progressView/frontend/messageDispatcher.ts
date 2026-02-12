@@ -87,30 +87,6 @@ function clearPendingLogUpdatesForStream(streamId: string): void {
   }
 }
 
-function prependToolUseInstructionIfNeeded(
-  logs: LogMessageData[],
-  runInstructions: Record<string, { text: string }> | undefined,
-  activeRunId: string | undefined,
-): LogMessageData[] {
-  if (!activeRunId) return logs;
-
-  const instructionText = runInstructions?.[activeRunId]?.text?.trim();
-  if (!instructionText) return logs;
-
-  const firstMessage = logs[0];
-  if (firstMessage?.messageType === 'userMessage') return logs;
-
-  return [
-    {
-      id: `tool-use-instruction:${activeRunId}`,
-      text: instructionText,
-      level: 'info',
-      timestamp: (firstMessage?.timestamp ?? Date.now()) - 1,
-      messageType: 'userMessage',
-    },
-    ...logs,
-  ];
-}
 
 function addPermission(
   ctx: MessageHandlerContext,
@@ -340,20 +316,11 @@ const handlers: HandlerRegistry = {
         contextState,
       } = data;
 
-      const nextLogs =
-        !isClear && isToolUseState(prev)
-          ? prependToolUseInstructionIfNeeded(
-              messages,
-              runInstructions,
-              activeRunId ?? undefined,
-            )
-          : messages;
-
       // Common overrides shared by both state types.
       // Spread the narrowed `prev` (not the union) in each branch so
       // TypeScript can resolve the return back to the discriminated union.
       const base = {
-        logs: isClear ? [] : nextLogs,
+        logs: isClear ? [] : messages,
         taskGroups: isClear ? [] : (groups ?? prev.taskGroups),
         contextState: contextState ?? prev.contextState,
       };

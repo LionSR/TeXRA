@@ -124,6 +124,9 @@ export class ProcessExecutionHandle implements ExecutionHandle {
   readonly category = 'process' as const;
   readonly startedAt = Date.now();
 
+  /** Ephemeral temp file paths for live output (set after construction, cleared on completion). */
+  outputPaths?: { readonly stdout: string; readonly stderr: string };
+
   constructor(
     readonly executionId: string,
     readonly parentStreamId: StreamTabId,

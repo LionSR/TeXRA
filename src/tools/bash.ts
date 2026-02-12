@@ -1,5 +1,6 @@
 // Standard library imports
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 
 // Third-party imports
@@ -33,7 +34,7 @@ import { executeCommand } from '@utils/system/execUtils';
 
 // Local imports - utils
 import { generateExecutionId } from '@utils/core/executionId';
-import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
+import { ensureRunDir } from '@utils/files/taskRunStorage';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -149,14 +150,21 @@ export class BashTool extends defineTool({
 
     const executionId = generateExecutionId();
 
-    await ensureRunDir(executionId);
-    const outputPath = path.join(getRunDir(executionId), 'output.log');
-    const outputStream = fs.createWriteStream(outputPath, { flags: 'a' });
-    outputStream.on('error', () => {}); // prevent unhandled emitter crash
+    // Ephemeral temp files for live output (cleaned up on completion)
+    const stdoutPath = path.join(
+      os.tmpdir(),
+      `texra-bg-${executionId}-stdout.log`,
+    );
+    const stderrPath = path.join(
+      os.tmpdir(),
+      `texra-bg-${executionId}-stderr.log`,
+    );
+    const stdoutStream = fs.createWriteStream(stdoutPath, { flags: 'a' });
+    const stderrStream = fs.createWriteStream(stderrPath, { flags: 'a' });
+    stdoutStream.on('error', () => {}); // prevent unhandled emitter crash
+    stderrStream.on('error', () => {});
 
-    const appendToOutput = (chunk: string): void => {
-      outputStream.write(chunk);
-    };
+    await ensureRunDir(executionId);
 
     const preview = command.length > 60 ? `${command.slice(0, 57)}…` : command;
 
@@ -168,8 +176,8 @@ export class BashTool extends defineTool({
       onPid: (p) => {
         pid = p;
       },
-      onStdout: appendToOutput,
-      onStderr: appendToOutput,
+      onStdout: (chunk) => stdoutStream.write(chunk),
+      onStderr: (chunk) => stderrStream.write(chunk),
     });
 
     const kill = (): boolean => {
@@ -200,6 +208,7 @@ export class BashTool extends defineTool({
       preview,
       kill,
     );
+    handle.outputPaths = { stdout: stdoutPath, stderr: stderrPath };
 
     try {
       await registerExecution(
@@ -210,11 +219,23 @@ export class BashTool extends defineTool({
       );
     } catch {
       // Registration failed — still attach cleanup but don't track
-      void promise.finally(() => outputStream.end());
+      void promise.finally(() => {
+        stdoutStream.end();
+        stderrStream.end();
+      });
       throw new ToolError('Failed to register background execution.');
     }
 
     trackExecution(handle);
+
+    const cleanupTempFiles = (): void => {
+      stdoutStream.end();
+      stderrStream.end();
+      handle.outputPaths = undefined;
+      // Fire-and-forget unlink
+      void fs.promises.unlink(stdoutPath).catch(() => {});
+      void fs.promises.unlink(stderrPath).catch(() => {});
+    };
 
     void promise
       .then(async (result) => {
@@ -228,6 +249,13 @@ export class BashTool extends defineTool({
           command,
         });
 
+        // Read tail of temp files before cleanup (fixes blank preview bug
+        // caused by buffer:false leaving result.stdout empty)
+        const [outputTail, stderrTail] = await Promise.all([
+          fs.promises.readFile(stdoutPath, 'utf-8').catch(() => ''),
+          fs.promises.readFile(stderrPath, 'utf-8').catch(() => ''),
+        ]);
+
         const terminalStatus = result.success ? 'completed' : 'error';
         await writeTerminalStatus(executionId, terminalStatus);
         untrackExecution(executionId);
@@ -237,6 +265,8 @@ export class BashTool extends defineTool({
           command,
           wallTimeMs,
           result,
+          outputTail,
+          stderrTail,
         );
         await store.write('report', msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
@@ -249,9 +279,7 @@ export class BashTool extends defineTool({
         await getExecutionStore(executionId).write('report', msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
       })
-      .finally(() => {
-        outputStream.end();
-      });
+      .finally(cleanupTempFiles);
 
     return {
       summary: `Launched background: ${preview}`,

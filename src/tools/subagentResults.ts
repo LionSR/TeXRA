@@ -100,21 +100,33 @@ const OUTPUT_PREVIEW_LINES = 20;
 /**
  * Format a completed background bash result as a delivery message.
  * Injected into the orchestrator's FollowUpQueue.
+ *
+ * `outputTail` and `stderrTail` are read from ephemeral temp files before
+ * cleanup, since `buffer: false` means `result.stdout` is always empty.
  */
 export function formatBashDelivery(
   executionId: string,
   command: string,
   wallTimeMs: number,
   result: ExecResult,
+  outputTail: string,
+  stderrTail: string,
 ): string {
-  const preview = lastNLines(result.stdout ?? '', OUTPUT_PREVIEW_LINES);
-  return [
+  const stdoutPreview = lastNLines(outputTail, OUTPUT_PREVIEW_LINES);
+  const stderrPreview = lastNLines(stderrTail, OUTPUT_PREVIEW_LINES);
+  const lines = [
     `<background-result id="${executionId}" command="${escapeAttr(command)}">`,
     `<exit-code>${result.exitCode ?? 'unknown'}</exit-code>`,
     `<wall-time>${formatDuration(wallTimeMs)}</wall-time>`,
-    `<output-preview>${escapeText(preview)}</output-preview>`,
-    '</background-result>',
-  ].join('\n');
+  ];
+  if (stdoutPreview) {
+    lines.push(`<output-preview>${escapeText(stdoutPreview)}</output-preview>`);
+  }
+  if (stderrPreview) {
+    lines.push(`<stderr-preview>${escapeText(stderrPreview)}</stderr-preview>`);
+  }
+  lines.push('</background-result>');
+  return lines.join('\n');
 }
 
 /**
