@@ -41,12 +41,6 @@ export class PrepareContextNode<C = unknown> extends Node<
       const { systemPrompt, userRequest, userPrefix } =
         await promptBuilder.buildInitialPrompts();
 
-      // Log the initial instruction as a userMessage so it appears in the
-      // progress view logs — consistent with tool-use agents (ToolUsePrepareNode).
-      if (userRequest) {
-        logger.userMessage(userRequest);
-      }
-
       messages = await modelHandler.initializeMessages(
         userPrefix,
         userRequest,

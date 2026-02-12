@@ -6,6 +6,7 @@
  */
 
 // Standard library imports
+import * as fs from 'fs';
 import * as path from 'path';
 
 // Third-party imports
@@ -37,6 +38,7 @@ import {
   waitForAnyExecutionChange,
   killExecution,
 } from '@agent/runtime/executionRegistry';
+import { ProcessExecutionHandle } from '@agent/runtime/ExecutionHandle';
 
 // Local imports - utils
 import { StorageFS } from '@utils/files';
@@ -509,20 +511,24 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     executionId: ExecutionId,
     viewRange?: number[],
   ): Promise<ToolResult> {
-    const outputPath = await resolveStoragePath(executionId, 'output.log');
-    if (!outputPath) {
-      throw new ToolError(
-        `No output found for execution ${executionId}. This path is only available for background bash processes.`,
-      );
+    // Running process: read live output from ephemeral temp files
+    const handle = getHandle(executionId);
+    if (handle instanceof ProcessExecutionHandle && handle.outputPaths) {
+      const [stdout, stderr] = await Promise.all([
+        fs.promises.readFile(handle.outputPaths.stdout, 'utf-8').catch(() => ''),
+        fs.promises.readFile(handle.outputPaths.stderr, 'utf-8').catch(() => ''),
+      ]);
+      const sections: string[] = [`Output for ${executionId}:`];
+      if (stdout) sections.push('', '<stdout>', stdout, '</stdout>');
+      if (stderr) sections.push('', '<stderr>', stderr, '</stderr>');
+      if (!stdout && !stderr) sections.push('', '(no output yet)');
+      return { output: this.applyViewRange(sections.join('\n'), viewRange) };
     }
 
-    const content = await StorageFS.read(outputPath);
-    const output = this.applyViewRange(
-      `Output for ${executionId}:\n\n${content}`,
-      viewRange,
-    );
-
-    return { output };
+    // Completed process: temp files already cleaned up
+    return {
+      output: `Output for ${executionId} is no longer available (ephemeral output is cleaned up on completion). Use /executions/${executionId}/report to view the result summary.`,
+    };
   }
 
   private async showTodos(executionId: ExecutionId): Promise<ToolResult> {
@@ -669,7 +675,6 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     'todos.json',
     'report.json',
     'result-meta.json',
-    'output.log',
   ]);
 
   private isKVFile(name: string): boolean {
