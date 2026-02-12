@@ -42,9 +42,12 @@ import {
 } from '@common/webview';
 import { showLoggedErrorMessage } from '@common/errors';
 import {
-  AgentHistoryManager,
-  type AgentHistoryItem,
-} from '@common/history/AgentHistoryManager';
+  listExecutions,
+  deleteExecution,
+  deleteAllExecutions,
+  readConfig,
+} from '@agent/storage';
+import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   GlobalStateKey,
   WorkspaceStateKey,
@@ -86,6 +89,7 @@ import type {
   ProviderVscodeSetting,
   NumberVscodeSetting,
 } from '@shared/schemas/profileViewMessages';
+import type { ExecutionId } from '@shared/schemas';
 
 // Type helper for extracting specific message types
 type MessageFor<C extends SettingsViewInboundMessage['command']> = Extract<
@@ -471,10 +475,15 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendHistoryData(webview: vscode.Webview): Promise<void> {
-    const history = await AgentHistoryManager.getHistory();
+    const entries = await listExecutions();
+    const historyItems = entries.map((entry) => ({
+      id: entry.id,
+      timestamp: entry.timestamp,
+      agentConfig: entry.agentConfig,
+    }));
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY,
-      historyItems: history,
+      historyItems,
     });
   }
 
@@ -762,14 +771,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleRerunAgent(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.RERUN_AGENT>,
   ): Promise<void> {
-    await this.withHistoryItem(
+    await this.withHistoryConfig(
       data.historyId,
       'Failed to rerun agent',
-      async (historyItem) => {
+      async (config) => {
         await vscode.window.showInformationMessage(
           'Rerunning agent from history',
         );
-        await runExecuteCommand(historyItem.agentConfig);
+        await runExecuteCommand(config);
       },
     );
   }
@@ -777,11 +786,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleRestoreAgent(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.RESTORE_AGENT>,
   ): Promise<void> {
-    await this.withHistoryItem(
+    await this.withHistoryConfig(
       data.historyId,
       'Failed to restore configuration',
-      async (historyItem) => {
-        const taskState = agentConfigToTaskState(historyItem.agentConfig);
+      async (config) => {
+        const taskState = agentConfigToTaskState(config);
         await vscode.commands.executeCommand('texra.restoreState', taskState);
       },
     );
@@ -792,8 +801,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     const view = this.getActiveView();
     try {
-      const deleted = await AgentHistoryManager.deleteHistoryItemById(
-        data.historyId,
+      const deleted = await deleteExecution(
+        data.historyId as ExecutionId,
       );
       if (deleted && view) {
         await this.sendHistoryData(view.webview);
@@ -814,7 +823,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleClearHistory(): Promise<void> {
     const view = this.getActiveView();
     try {
-      await AgentHistoryManager.clearHistory();
+      await deleteAllExecutions();
       await vscode.window.showInformationMessage('Agent history cleared');
       await view?.webview.postMessage({
         command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
@@ -828,19 +837,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     }
   }
 
-  private async withHistoryItem(
+  private async withHistoryConfig(
     historyId: string,
     errorPrefix: string,
-    action: (historyItem: AgentHistoryItem) => Promise<void>,
+    action: (config: AgentConfig) => Promise<void>,
   ): Promise<void> {
     try {
-      const historyItem =
-        await AgentHistoryManager.getHistoryItemById(historyId);
-      if (!historyItem) {
+      const raw = await readConfig(historyId as ExecutionId);
+      if (!raw) {
         await vscode.window.showErrorMessage('History item not found');
         return;
       }
-      await action(historyItem);
+      const config = AgentConfigSchema.parse(raw);
+      await action(config);
     } catch (error) {
       await showLoggedErrorMessage(this.channel, errorPrefix, error);
     }

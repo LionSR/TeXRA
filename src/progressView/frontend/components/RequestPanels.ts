@@ -37,6 +37,7 @@ import {
   type ToolEditPermission,
   type WorkflowAgentProposalPermission,
 } from '@shared/schemas';
+import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 
 // Local imports - shared utilities
 import { getBasename } from '@shared/utils/path';
@@ -555,31 +556,8 @@ export class RequestPanels extends LitElement {
   private renderProposalFiles(
     permission: WorkflowAgentProposalPermission,
   ): TemplateResult | typeof nothing {
-    const combine = (single: string | null | undefined, arr: string[] = []) =>
-      [single, ...arr].filter((f): f is string => Boolean(f));
-
-    const fileLists = [
-      {
-        label: 'Input',
-        files: combine(permission.inputFile, permission.inputFiles),
-      },
-      {
-        label: 'Reference',
-        files: combine(permission.referenceFile, permission.referenceFiles),
-      },
-      {
-        label: 'Auxiliary',
-        files: combine(permission.auxiliaryFile, permission.auxiliaryFiles),
-      },
-      {
-        label: 'Media',
-        files: combine(permission.mediaFile, permission.mediaFiles),
-      },
-      { label: 'Output', files: permission.outputFiles ?? [] },
-    ];
-
     return html`${repeat(
-      fileLists,
+      getProposalFileGroups(permission),
       ({ label }) => label,
       ({ label, files }) => this.renderProposalFileList(label, files),
     )}`;

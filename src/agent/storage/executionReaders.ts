@@ -2,21 +2,15 @@
  * Persistence readers and registration for execution-scoped data.
  *
  * Each reader tries a direct KV key first (written at production time),
- * then falls back to extracting from the flow blob or history for
+ * then falls back to extracting from the flow blob for
  * backward compatibility and in-flight executions.
  */
 
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { ExecutionId } from '@shared/schemas';
 
 import { getExecutionStore } from './ExecutionKVStore';
-
-/** Lazy-loaded AgentHistoryManager to avoid circular imports. */
-async function getHistoryManager() {
-  const { AgentHistoryManager } =
-    await import('@common/history/AgentHistoryManager');
-  return AgentHistoryManager;
-}
+import { invalidateListingCache } from './executionListing';
+import type { ExecutionId } from '@shared/schemas';
 
 /** Shape of a persisted todo item from tool-use flow state. */
 export interface TodoEntry {
@@ -86,68 +80,41 @@ export interface ExecutionMeta {
   parentExecutionId?: ExecutionId;
 }
 
-/** Read execution metadata: direct key first, history fallback. */
+/** Read execution metadata from KV. */
 export async function readMeta(
   executionId: ExecutionId,
 ): Promise<ExecutionMeta | null> {
   const store = getExecutionStore(executionId);
   const direct = await store.read<ExecutionMeta>('meta');
   if (direct?.timestamp) return direct;
-
-  // Fallback: history index
-  const mgr = await getHistoryManager();
-  const item = await mgr.getHistoryItemById(executionId);
-  if (!item) return null;
-  return {
-    timestamp: item.timestamp,
-    parentExecutionId: item.parentExecutionId,
-  };
+  return null;
 }
 
-/** Read agent config: direct key first, history fallback. */
+/** Read agent config from KV. */
 export async function readConfig(
   executionId: ExecutionId,
 ): Promise<unknown | null> {
   const store = getExecutionStore(executionId);
-  const direct = await store.read('config');
-  if (direct) return direct;
-
-  // Fallback: history index
-  const mgr = await getHistoryManager();
-  const item = await mgr.getHistoryItemById(executionId);
-  return item?.agentConfig ?? null;
+  return (await store.read('config')) ?? null;
 }
 
-/** Read children: per-child KV keys first, history fallback. */
+/** Read children: per-child KV keys. */
 export async function readChildren(
   executionId: ExecutionId,
 ): Promise<ChildRecord[]> {
   const store = getExecutionStore(executionId);
   const childKeys = await store.listKeys('child-');
 
-  if (childKeys.length > 0) {
-    const entries = await Promise.all(
-      childKeys.map(async (key) => {
-        const id = key.replace('child-', '') as ExecutionId;
-        const data = await store.read<{ agent: string; timestamp: string }>(
-          key,
-        );
-        return data
-          ? { id, agent: data.agent, timestamp: data.timestamp }
-          : null;
-      }),
-    );
-    return entries.filter((e): e is ChildRecord => e !== null);
-  }
+  if (childKeys.length === 0) return [];
 
-  // Fallback: history index
-  const mgr = await getHistoryManager();
-  const items = await mgr.getChildrenOf(executionId);
-  return items.map((item) => ({
-    id: item.id,
-    agent: item.agentConfig.agent,
-    timestamp: item.timestamp,
-  }));
+  const entries = await Promise.all(
+    childKeys.map(async (key) => {
+      const id = key.replace('child-', '') as ExecutionId;
+      const data = await store.read<{ agent: string; timestamp: string }>(key);
+      return data ? { id, agent: data.agent, timestamp: data.timestamp } : null;
+    }),
+  );
+  return entries.filter((e): e is ChildRecord => e !== null);
 }
 
 // ============================================================================
@@ -155,8 +122,8 @@ export async function readChildren(
 // ============================================================================
 
 /**
- * Register a new execution: persist config, metadata, history entry,
- * and parent linkage. Awaits all writes before returning.
+ * Register a new execution: persist config, metadata, and parent linkage.
+ * Awaits all writes before returning, then invalidates the listing cache.
  */
 export async function registerExecution(
   executionId: ExecutionId,
@@ -166,10 +133,8 @@ export async function registerExecution(
 ): Promise<void> {
   const timestamp = new Date().toISOString();
   const store = getExecutionStore(executionId);
-  const mgr = await getHistoryManager();
 
   const writes: Promise<void>[] = [
-    mgr.addToHistory(executionId, config, parentExecutionId),
     store.write('config', config),
     store.write('meta', {
       timestamp,
@@ -187,4 +152,5 @@ export async function registerExecution(
   }
 
   await Promise.all(writes);
+  invalidateListingCache();
 }
