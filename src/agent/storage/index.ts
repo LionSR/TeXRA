@@ -21,3 +21,10 @@ export {
   readChildren,
   registerExecution,
 } from './executionReaders';
+export {
+  type ExecutionListingEntry,
+  listExecutions,
+  invalidateListingCache,
+  deleteExecution,
+  deleteAllExecutions,
+} from './executionListing';
