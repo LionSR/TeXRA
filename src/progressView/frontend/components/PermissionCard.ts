@@ -6,6 +6,7 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports - shared
 import { AGENT_CATEGORY } from '@shared/schemas';
+import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import { getBasename } from '@shared/utils/path';
 import { getTextareaValue } from '@shared/utils/textarea';
 import {
@@ -288,25 +289,8 @@ export class PermissionCard extends LitElement {
   private renderWorkflowFiles(
     data: WorkflowAgentProposalPermission,
   ): TemplateResult {
-    const combine = (single: string | null | undefined, arr: string[] = []) =>
-      [single, ...arr].filter((f): f is string => Boolean(f));
-
-    const fileLists = [
-      { label: 'Input', files: combine(data.inputFile, data.inputFiles) },
-      {
-        label: 'Reference',
-        files: combine(data.referenceFile, data.referenceFiles),
-      },
-      {
-        label: 'Auxiliary',
-        files: combine(data.auxiliaryFile, data.auxiliaryFiles),
-      },
-      { label: 'Media', files: combine(data.mediaFile, data.mediaFiles) },
-      { label: 'Output', files: data.outputFiles ?? [] },
-    ];
-
     return html`${repeat(
-      fileLists,
+      getProposalFileGroups(data),
       ({ label }) => label,
       ({ label, files }) => this.renderFileList(label, files),
     )}`;

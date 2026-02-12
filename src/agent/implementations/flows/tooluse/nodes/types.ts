@@ -7,6 +7,7 @@ import type {
 } from '@agent/core/AgentWorkspaceState';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { RetryErrorInfo } from '@shared/schemas';
 
 export interface StateSlicesSnapshot {
   runStateSnapshot: AgentRunStateSnapshot;
@@ -19,6 +20,8 @@ export interface ToolUseRunShared {
   shouldSkipCycle: boolean;
   stateSlices: StateSlicesSnapshot | null;
   userCancelledRetry?: boolean;
+  /** Distinguishes failure from cancellation during resume. */
+  lastError?: RetryErrorInfo;
 }
 
 interface NodeResultStateBase {

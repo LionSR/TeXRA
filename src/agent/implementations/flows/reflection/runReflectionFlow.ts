@@ -7,7 +7,7 @@ import {
   type StorageKey,
 } from '@shared/schemas';
 import { executionToEndStatus } from '@common/constants/streamStatus';
-import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
+import { getExecutionStore } from '@agent/storage';
 import {
   createOutputState,
   setActiveRun,
@@ -59,6 +59,7 @@ export interface RunReflectionFlowInput<
   parentStage: AgentLogStage;
   getOutputFileLocation?: (round: number) => AgentFileLocation;
   usageMonitor?: UsageMonitor;
+  onRoundCompleted?: (roundIndex: number, totalRounds: number) => void;
 }
 
 export interface RunReflectionFlowResult {
@@ -261,6 +262,9 @@ export async function runReflectionFlow<C = unknown>(
           s.workspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
         },
         checkInterruption,
+        onRoundCompleted: (roundIndex, s) => {
+          input.onRoundCompleted?.(roundIndex, s.totalRounds);
+        },
       },
     });
 
@@ -285,6 +289,15 @@ export async function runReflectionFlow<C = unknown>(
 
     const flowStatus = await pf.run(shared);
     shared = await pf.getShared();
+
+    // Persist conversation as direct key for consistent KV access
+    if (shared?.conversation?.length) {
+      await getExecutionStore(executionId).write(
+        'conversation',
+        shared.conversation,
+      );
+    }
+
     status = executionToEndStatus(flowStatus) as EndGroupStatus;
   } catch (error) {
     status = END_GROUP_STATUS.ERROR;

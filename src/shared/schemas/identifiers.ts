@@ -3,17 +3,19 @@ import { z } from 'zod';
 export const StreamTabIdSchema = z.string().min(1);
 export type StreamTabId = z.infer<typeof StreamTabIdSchema>;
 
-export const ExecutionIdSchema = z.uuid();
+/** Hex string (8-char current, 6/12-char and UUID legacy). */
+export const ExecutionIdSchema = z
+  .string()
+  .min(6)
+  .regex(/^[0-9a-f][-0-9a-f]*$/i, 'Invalid execution ID: expected hex');
 export type ExecutionId = z.infer<typeof ExecutionIdSchema>;
 
-const STORAGE_KEY_PATTERN =
-  /^(__default__|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
-
+/** Execution ID or the __default__ sentinel for legacy storage. */
 export const StorageKeySchema = z
   .string()
   .regex(
-    STORAGE_KEY_PATTERN,
-    'Invalid storage key: must be UUID or __default__',
+    /^(__default__|[0-9a-f][-0-9a-f]*)$/i,
+    'Invalid storage key: must be execution ID or __default__',
   )
   .transform((val) => val as StorageKey);
 export type StorageKey = string & { readonly __brand: 'StorageKey' };
