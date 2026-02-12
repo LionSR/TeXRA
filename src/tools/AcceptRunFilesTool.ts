@@ -11,9 +11,6 @@
  * panel as write_file), so the user can review, edit, or reject each file.
  */
 
-// Standard library imports
-import * as path from 'path';
-
 // Third-party imports
 import { z } from 'zod';
 
@@ -38,7 +35,7 @@ import {
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files';
-import { LEGACY_RUNS_DIR, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 
 // Local imports - history
@@ -100,11 +97,8 @@ Example: Accept corrected file back to its original location:
 }) {
   protected async execute(input: AcceptRunFilesInput): Promise<ToolResult> {
     const { execution_id: executionId, files } = input;
-    const primaryDir = path.join(TASK_RUNS_DIR, executionId);
-    const legacyDir = path.join(LEGACY_RUNS_DIR, executionId);
-    const runDirExists =
-      (await StorageFS.exists(primaryDir)) ||
-      (await StorageFS.exists(legacyDir));
+    const runDir = await resolveStoragePath(executionId);
+    const runDirExists = runDir !== undefined;
 
     // Verify execution exists — run dir may not exist in workspace storage mode
     if (!runDirExists) {
@@ -236,15 +230,13 @@ Example: Accept corrected file back to its original location:
   ): Promise<{ sourceAbsolute: string; sourceLocation: FileLocation }> {
     // Try run storage first (primary then legacy)
     if (runDirExists) {
-      for (const dir of [TASK_RUNS_DIR, LEGACY_RUNS_DIR]) {
-        const rel = path.join(dir, executionId, runPath);
-        if (await StorageFS.exists(rel)) {
-          const abs = StorageFS.fullPath(rel);
-          return {
-            sourceAbsolute: abs,
-            sourceLocation: createRunStorageLocation(abs, runPath, executionId),
-          };
-        }
+      const rel = await resolveStoragePath(executionId, runPath);
+      if (rel) {
+        const abs = StorageFS.fullPath(rel);
+        return {
+          sourceAbsolute: abs,
+          sourceLocation: createRunStorageLocation(abs, runPath, executionId),
+        };
       }
     }
 

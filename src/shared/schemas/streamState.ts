@@ -28,14 +28,14 @@ export const FollowupModeSchema = z.enum([
 
 export type FollowupMode = z.infer<typeof FollowupModeSchema>;
 
-// Active Subagent Info (for orchestrator badge)
+// Active Child Info (shared shape for subagent and process badges)
 
-export const ActiveSubagentInfoSchema = z.object({
+export const ActiveChildInfoSchema = z.object({
   executionId: z.string(),
   agentName: z.string(),
 });
 
-export type ActiveSubagentInfo = z.infer<typeof ActiveSubagentInfoSchema>;
+export type ActiveChildInfo = z.infer<typeof ActiveChildInfoSchema>;
 
 // Base Stream State
 
@@ -46,7 +46,9 @@ const BaseStreamStateSchema = z.object({
   taskGroups: z.array(TaskGroupSchema).prefault([]),
   contextState: ContextStateSchema.optional(),
   /** Active subagents running under this stream (ephemeral, not persisted). */
-  activeSubagents: z.array(ActiveSubagentInfoSchema).prefault([]),
+  activeSubagents: z.array(ActiveChildInfoSchema).prefault([]),
+  /** Active background processes running under this stream (ephemeral, not persisted). */
+  activeProcesses: z.array(ActiveChildInfoSchema).prefault([]),
 });
 
 // Tool-Use UI State (frontend-only, preserved during backend updates)
