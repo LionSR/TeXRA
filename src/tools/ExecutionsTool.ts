@@ -1,7 +1,8 @@
 /**
  * Tool for viewing and managing execution history, generated files, and
- * running processes. Supports viewing past executions, reading output
- * from background processes, and killing running executions.
+ * running processes. Supports viewing past executions, waiting for status
+ * changes, reading output from background processes, and killing running
+ * executions.
  */
 
 // Standard library imports
@@ -14,7 +15,9 @@ import { z } from 'zod';
 // Local imports - agent
 import {
   getExecutionStore,
+  type ExecutionListingEntry,
   type TodoEntry,
+  listExecutions,
   readTodos,
   readConversation,
   readReport,
@@ -32,12 +35,6 @@ import {
   waitForAnyExecutionChange,
   killExecution,
 } from '@agent/runtime/executionRegistry';
-
-// Local imports - common
-import {
-  AgentHistoryManager,
-  type AgentHistoryItem,
-} from '@common/history/AgentHistoryManager';
 
 // Local imports - utils
 import { StorageFS } from '@utils/files';
@@ -65,7 +62,7 @@ const ExecutionsToolInputSchema = z.strictObject({
     .prefault('view')
     .describe(
       'view: read execution data (returns immediately). ' +
-        'wait: block until a status change, then return data (avoids sleep-poll loops). ' +
+        'wait: suspend until a status change, then return data (avoids sleep-poll loops). ' +
         'On /executions: wait for any active execution to change. ' +
         'On /executions/{id}: wait for that specific execution to change. ' +
         'kill: terminate a running execution by ID (use on /executions/{id}).',
@@ -124,16 +121,14 @@ function formatProgressLine(executionId: string): string {
   return `Progress: round ${progress.currentRound + 1}/${progress.totalRounds}`;
 }
 
-/** Format a history item as a single summary line. */
-function formatHistoryLine(item: AgentHistoryItem): string {
-  const agent = item.agentConfig.agent;
-  const model = item.agentConfig.model ?? 'unknown';
-  const ts = item.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
-  const info = getExecutionStatusInfo(item.id);
-  const parentSuffix = item.parentExecutionId
-    ? `  parent=${item.parentExecutionId}`
+/** Format a listing entry as a single summary line. */
+function formatListingLine(entry: ExecutionListingEntry): string {
+  const ts = entry.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
+  const info = getExecutionStatusInfo(entry.id);
+  const parentSuffix = entry.parentExecutionId
+    ? `  parent=${entry.parentExecutionId}`
     : '';
-  return `${item.id}  ${ts}  ${agent}  ${model}  [${formatStatusInfo(info)}]${parentSuffix}`;
+  return `${entry.id}  ${ts}  ${entry.agent}  ${entry.model}  [${formatStatusInfo(info)}]${parentSuffix}`;
 }
 
 const TODO_ICON: Record<string, string> = {
@@ -176,6 +171,7 @@ Paths:
 
 Use "current" as {id} to access the active execution.
 Use view_range: [start, end] to paginate large outputs.
+Use action: "wait" to suspend until a status change (avoids sleep-poll loops).
 Use action: "kill" with /executions/{id} to terminate a running execution.`,
   schema: ExecutionsToolInputSchema,
 }) {
@@ -189,12 +185,12 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
       );
     }
 
+    const isWait = input.action === 'wait';
+
     // /executions - list all executions
     if (!id) {
-      return this.listExecutions({
-        block: input.block,
-        timeout: input.timeout,
-      });
+      if (isWait) await this.waitForAnyChange(input.timeout);
+      return this.listExecutions();
     }
 
     const executionId = this.resolveExecutionId(id);
@@ -206,10 +202,8 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
 
     // /executions/{id} - execution summary
     if (!resource) {
-      return this.showSummary(executionId, {
-        block: input.block,
-        timeout: input.timeout,
-      });
+      if (isWait) await this.waitForChange(executionId, input.timeout);
+      return this.showSummary(executionId);
     }
 
     // /executions/{id}/config - agent configuration
@@ -278,29 +272,39 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
     return result.data;
   }
 
-  private async listExecutions(options: {
-    block: boolean;
-    timeout: number;
-  }): Promise<ToolResult> {
-    // Blocking wait: wait for any active execution to change
-    if (options.block) {
-      const activeIds = getActiveExecutionIds();
-      if (activeIds.length > 0) {
-        const timeoutMs = options.timeout * 1000;
-        await Promise.race([
-          waitForAnyExecutionChange(activeIds),
-          new Promise<void>((r) => setTimeout(r, timeoutMs)),
-        ]);
-      }
+  /** Wait for any active execution to change status, with timeout. */
+  private async waitForAnyChange(timeout: number): Promise<void> {
+    const activeIds = getActiveExecutionIds();
+    if (activeIds.length > 0) {
+      await Promise.race([
+        waitForAnyExecutionChange(activeIds),
+        new Promise<void>((r) => setTimeout(r, timeout * 1000)),
+      ]);
     }
+  }
 
-    const history = await AgentHistoryManager.getHistory();
+  /** Wait for a specific execution to change status, with timeout. */
+  private async waitForChange(
+    executionId: ExecutionId,
+    timeout: number,
+  ): Promise<void> {
+    const info = getExecutionStatusInfo(executionId);
+    if (ACTIVE_STATUSES.has(info.status)) {
+      await Promise.race([
+        waitForExecutionChange(executionId),
+        new Promise<void>((r) => setTimeout(r, timeout * 1000)),
+      ]);
+    }
+  }
 
-    if (history.length === 0) {
+  private async listExecutions(): Promise<ToolResult> {
+    const entries = await listExecutions();
+
+    if (entries.length === 0) {
       return { output: 'No execution history found.' };
     }
 
-    const lines = history.map(formatHistoryLine);
+    const lines = entries.map(formatListingLine);
 
     // Count active background processes for the header
     const activeIds = getActiveExecutionIds();
@@ -309,30 +313,15 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
     ).length;
     const header =
       bgCount > 0
-        ? `Executions (${history.length} total, ${bgCount} background process${bgCount > 1 ? 'es' : ''} running):`
-        : `Executions (${history.length}, most recent first):`;
+        ? `Executions (${entries.length} total, ${bgCount} background process${bgCount > 1 ? 'es' : ''} running):`
+        : `Executions (${entries.length}, most recent first):`;
 
     return {
       output: `${header}\n\n${lines.join('\n')}`,
     };
   }
 
-  private async showSummary(
-    executionId: ExecutionId,
-    options: { block: boolean; timeout: number },
-  ): Promise<ToolResult> {
-    // Blocking wait: if requested and execution is active, wait for a status change
-    if (options.block) {
-      const info = getExecutionStatusInfo(executionId);
-      if (ACTIVE_STATUSES.has(info.status)) {
-        const timeoutMs = options.timeout * 1000;
-        await Promise.race([
-          waitForExecutionChange(executionId),
-          new Promise<void>((r) => setTimeout(r, timeoutMs)),
-        ]);
-      }
-    }
-
+  private async showSummary(executionId: ExecutionId): Promise<ToolResult> {
     // Parallel fetch all data from KV (each reader has its own fallback)
     const [meta, config, children, todos, report] = await Promise.all([
       readMeta(executionId),
@@ -343,22 +332,48 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
     ]);
 
     if (!meta && !config) {
-      // Check if flow exists even without metadata
-      const store = getExecutionStore(executionId);
-      const hasFlow = await store.exists(`flow:${executionId}`);
-      if (!hasFlow) {
-        throw new ToolError(`Execution not found: ${executionId}`);
+      // Check runtime handle first — it has agent metadata even before KV is populated
+      const handle = getHandle(executionId);
+      if (!handle) {
+        // No handle and no KV data — check if flow blob exists (completed execution)
+        const store = getExecutionStore(executionId);
+        const hasFlow = await store.exists(`flow:${executionId}`);
+        if (!hasFlow) {
+          throw new ToolError(`Execution not found: ${executionId}`);
+        }
       }
+
       const info = getExecutionStatusInfo(executionId);
-      const lines = [
-        `Execution: ${executionId}`,
-        `Status: ${formatStatusInfo(info)}`,
-      ];
+      const lines = [`Execution: ${executionId}`];
+
+      if (handle) {
+        lines.push(
+          `Agent: ${handle.agentName}`,
+          `Category: ${handle.category}`,
+          `Started: ${new Date(handle.startedAt).toISOString()}`,
+        );
+      }
+
+      lines.push(`Status: ${formatStatusInfo(info)}`);
+
       const progressLine = formatProgressLine(executionId);
       if (progressLine) lines.push(progressLine);
-      lines.push(
-        `(No metadata available - use /executions/${executionId}/conversation to view messages)`,
-      );
+
+      if (children.length > 0) {
+        lines.push('', `Children (${children.length}):`);
+        for (const child of children) {
+          const childInfo = getExecutionStatusInfo(child.id);
+          const ts = child.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
+          lines.push(
+            `  ${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(childInfo)}]`,
+          );
+        }
+      }
+
+      if (todos.length > 0) {
+        lines.push('', ...formatTodoSection(todos));
+      }
+
       return { output: lines.join('\n') };
     }
 
