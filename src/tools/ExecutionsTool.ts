@@ -123,11 +123,11 @@ const ExecutionsToolInputSchema = z.strictObject({
   /** Max seconds to wait (action="wait" only). Default: 300. */
   timeout: z
     .number()
-    .min(1)
+    .min(60)
     .max(1800)
     .nullish()
     .describe(
-      'Max seconds to wait (action="wait" only). Default: 300, max: 1800.',
+      'Max seconds to wait for a status change (action="wait" only). Default: 300, max: 1800.',
     ),
 });
 
@@ -444,7 +444,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       };
     }
 
-    const category = config?.agentCategory;
+    const category = meta?.category ?? config?.agentCategory;
     const info = getExecutionStatusInfo(executionId, meta?.terminalStatus);
     const lines = [
       `Execution: ${executionId}`,
