@@ -364,12 +364,12 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
       return { output: lines.join('\n') };
     }
 
-    const agentConfig = config as { agent?: string; model?: string } | null;
+    const cfg = config && typeof config === 'object' ? (config as Record<string, unknown>) : null;
     const info = getExecutionStatusInfo(executionId);
     const lines = [
       `Execution: ${executionId}`,
-      `Agent: ${agentConfig?.agent ?? 'unknown'}`,
-      `Model: ${agentConfig?.model ?? 'default'}`,
+      `Agent: ${(cfg?.agent as string) ?? 'unknown'}`,
+      `Model: ${(cfg?.model as string) ?? 'default'}`,
       `Timestamp: ${meta?.timestamp ?? 'unknown'}`,
       `Status: ${formatStatusInfo(info)}`,
     ];
