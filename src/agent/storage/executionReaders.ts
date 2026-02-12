@@ -89,9 +89,9 @@ export async function readMeta(
 /** Read agent config from KV. */
 export async function readConfig(
   executionId: ExecutionId,
-): Promise<unknown | null> {
+): Promise<AgentConfig | null> {
   const store = getExecutionStore(executionId);
-  return (await store.read('config')) ?? null;
+  return (await store.read<AgentConfig>('config')) ?? null;
 }
 
 /** Read children: per-child KV keys. */
@@ -126,6 +126,7 @@ export async function writeTerminalStatus(
   const existing = await store.read<ExecutionMeta>('meta');
   if (!existing) return;
   await store.write('meta', { ...existing, terminalStatus: status });
+  invalidateListingCache();
 }
 
 // ============================================================================

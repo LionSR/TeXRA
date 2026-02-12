@@ -19,9 +19,9 @@ import { formatDuration } from '@utils/core';
 /** Format a single output file summary as XML. */
 function formatOutputFile(o: OutputFileSummary): string {
   const attrs = [
-    `path="${o.relativePath}"`,
-    `location="${o.location}"`,
-    o.originalPath !== null ? `original="${o.originalPath}"` : '',
+    `path="${escapeAttr(o.relativePath)}"`,
+    `location="${escapeAttr(o.location)}"`,
+    o.originalPath !== null ? `original="${escapeAttr(o.originalPath)}"` : '',
     o.added !== null ? `added="${o.added}"` : '',
     o.removed !== null ? `removed="${o.removed}"` : '',
   ]
@@ -61,7 +61,7 @@ export function formatSubagentDelivery(
   result: AgentFlowResult,
 ): string {
   const lines = [
-    `<subagent-result id="${result.executionId}" agent="${agentName}" category="${result.category}" status="${result.status}">`,
+    `<subagent-result id="${escapeAttr(result.executionId)}" agent="${escapeAttr(agentName)}" category="${escapeAttr(result.category)}" status="${escapeAttr(result.status)}">`,
   ];
 
   if (result.category === 'workflow' && result.outputs.length > 0) {
@@ -84,8 +84,8 @@ export function formatSubagentError(
 ): string {
   const message = err instanceof Error ? err.message : String(err);
   return [
-    `<subagent-error id="${executionId}" agent="${agentName}">`,
-    `<message>${message}</message>`,
+    `<subagent-error id="${escapeAttr(executionId)}" agent="${escapeAttr(agentName)}">`,
+    `<message>${escapeAttr(message)}</message>`,
     '</subagent-error>',
   ].join('\n');
 }

@@ -124,7 +124,6 @@ const SDK_ERRORS: SdkErrorEntry[] = [
 
 /** 4xx status codes that are retryable (most 4xx are not) */
 const RETRYABLE_4XX_CODES = new Set([
-  StatusCodes.BAD_REQUEST, // 400
   StatusCodes.REQUEST_TIMEOUT, // 408
   StatusCodes.TOO_MANY_REQUESTS, // 429
 ]);

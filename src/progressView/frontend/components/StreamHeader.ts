@@ -425,7 +425,8 @@ export class StreamHeader extends LitElement {
                   <i class="codicon codicon-server-process"></i>
                   ${activeSubagents.length > 0
                     ? html`${activeSubagents.length} running`
-                    : nothing}${activeSubagents.length > 0 && finishedSubagentCount > 0
+                    : nothing}${activeSubagents.length > 0 &&
+                  finishedSubagentCount > 0
                     ? html`, `
                     : nothing}${finishedSubagentCount > 0
                     ? html`${finishedSubagentCount} done`
@@ -440,7 +441,8 @@ export class StreamHeader extends LitElement {
                   <i class="codicon codicon-terminal"></i>
                   ${activeProcesses.length > 0
                     ? html`${activeProcesses.length} running`
-                    : nothing}${activeProcesses.length > 0 && finishedProcessCount > 0
+                    : nothing}${activeProcesses.length > 0 &&
+                  finishedProcessCount > 0
                     ? html`, `
                     : nothing}${finishedProcessCount > 0
                     ? html`${finishedProcessCount} done`
