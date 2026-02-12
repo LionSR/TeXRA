@@ -479,8 +479,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const entries = await listExecutions();
     const historyItems = entries
       .filter(
-        (entry) =>
-          entry.agentConfig !== null && entry.category !== 'process',
+        (entry) => entry.agentConfig !== null && entry.category !== 'process',
       )
       .map((entry) => ({
         id: entry.id,
@@ -807,6 +806,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     const view = this.getActiveView();
     try {
+      const activeIds = getActiveExecutionIds();
+      if (activeIds.includes(data.historyId)) {
+        await vscode.window.showWarningMessage(
+          'Cannot delete a running execution',
+        );
+        return;
+      }
       const deleted = await deleteExecution(data.historyId as ExecutionId);
       if (deleted && view) {
         await this.sendHistoryData(view.webview);

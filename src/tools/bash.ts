@@ -258,7 +258,7 @@ export class BashTool extends defineTool({
         ]);
 
         const terminalStatus = result.success ? 'completed' : 'error';
-        await writeTerminalStatus(executionId, terminalStatus);
+        await writeTerminalStatus(executionId, terminalStatus).catch(() => {});
         untrackExecution(executionId);
 
         const msg = formatBashDelivery(
@@ -273,7 +273,7 @@ export class BashTool extends defineTool({
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
       })
       .catch(async (err: unknown) => {
-        await writeTerminalStatus(executionId, 'error');
+        await writeTerminalStatus(executionId, 'error').catch(() => {});
         untrackExecution(executionId);
 
         const msg = formatBashError(executionId, command, err);
