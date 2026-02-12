@@ -19,4 +19,5 @@ export {
   readMeta,
   readConfig,
   readChildren,
+  registerExecution,
 } from './executionReaders';
