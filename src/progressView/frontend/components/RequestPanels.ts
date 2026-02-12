@@ -16,7 +16,6 @@ import {
   codiconIconClasses,
   commonViewStyles,
   designTokens,
-  proposalModeBadgeStyles,
   requestPanelStyles,
   selectStyles,
 } from '@shared/styles';
@@ -120,7 +119,6 @@ export class RequestPanels extends LitElement {
     codiconIconClasses,
     codeBlockStyles,
     requestPanelStyles,
-    proposalModeBadgeStyles,
     selectStyles,
   ];
 

@@ -6,6 +6,7 @@ import {
   createToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
 import { buildCycleServices } from '@agent/core/flows/CycleServices';
+import { formatProviderHttpError } from '@common/errors';
 import { bus } from '@eventBus/ProgressEventBus';
 
 import {
@@ -21,7 +22,7 @@ type ToolUseCycleOutcome =
   | { outcome: 'completed'; messages: ProviderMessage[] }
   | { outcome: 'skipped' }
   | { outcome: 'cancelled' }
-  | { outcome: 'failed'; message: string };
+  | { outcome: 'failed'; message: string; retryable?: boolean };
 
 export class ToolUseCycleNode<C> extends Node<
   ToolUseRunShared,
@@ -86,6 +87,7 @@ export class ToolUseCycleNode<C> extends Node<
         return {
           outcome: 'failed',
           message: cycleShared.lastError.message ?? 'Cycle failed',
+          retryable: cycleShared.lastError.retryable,
         };
       }
       if (cycleShared.shouldStop && !cycleShared.endTurn) {
@@ -101,7 +103,8 @@ export class ToolUseCycleNode<C> extends Node<
     _prepRes: CyclePrepResult,
     error: Error,
   ): Promise<ToolUseCycleOutcome> {
-    return { outcome: 'failed', message: error.message };
+    const formatted = formatProviderHttpError(error);
+    return { outcome: 'failed', message: error.message, retryable: formatted.retryable };
   }
 
   async post(

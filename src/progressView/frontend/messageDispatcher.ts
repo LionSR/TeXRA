@@ -429,10 +429,14 @@ const handlers: HandlerRegistry = {
       pendingLogUpdates.delete(getPendingLogKey(data.stream, logId));
     }
 
-    ctx.setStreamState(data.stream, (prev) => ({
-      ...prev,
-      logs: [...prev.logs, mergedLogMessage],
-    }));
+    ctx.setStreamState(data.stream, (prev) => {
+      // Guard: skip if this message is already in the log list (race between
+      // UPDATE_LOGS and APPEND_LOG can cause the same entry to arrive twice).
+      if (logId && prev.logs.some((entry) => entry.id === logId)) {
+        return prev;
+      }
+      return { ...prev, logs: [...prev.logs, mergedLogMessage] };
+    });
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_LOG]: (data, ctx) => {

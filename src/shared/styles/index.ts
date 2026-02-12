@@ -10,7 +10,7 @@ export { permissionCardStyles } from './permissionCardStyles';
 export { requestPanelStyles } from './requestPanelStyles';
 
 // Badge styles (combined array used by multiple views)
-export { badgeStyles, proposalModeBadgeStyles } from './badgeStyles';
+export { badgeStyles } from './badgeStyles';
 
 // History/search styles
 export {

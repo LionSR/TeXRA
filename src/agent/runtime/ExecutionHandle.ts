@@ -128,7 +128,7 @@ export class ProcessExecutionHandle implements ExecutionHandle {
     readonly executionId: string,
     readonly parentStreamId: StreamTabId,
     readonly agentName: string,
-    private readonly killFn: () => void,
+    private readonly killFn: () => boolean,
   ) {}
 
   getStatus(): ExecutionStatusInfo {
@@ -140,8 +140,7 @@ export class ProcessExecutionHandle implements ExecutionHandle {
   }
 
   terminate(): boolean {
-    this.killFn();
-    return true;
+    return this.killFn();
   }
 
   getProgress(): { currentRound?: number; totalRounds?: number } {
@@ -167,10 +166,7 @@ export function interruptActiveChildren(
   handles: Iterable<ExecutionHandle>,
 ): void {
   for (const handle of handles) {
-    if (
-      handle.parentStreamId === parentStreamId &&
-      handle instanceof AgentExecutionHandle
-    ) {
+    if (handle.parentStreamId === parentStreamId) {
       handle.terminate();
     }
   }
