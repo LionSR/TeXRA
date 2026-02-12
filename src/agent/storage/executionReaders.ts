@@ -1,14 +1,22 @@
 /**
- * Persistence readers for execution-scoped data.
+ * Persistence readers and registration for execution-scoped data.
  *
  * Each reader tries a direct KV key first (written at production time),
  * then falls back to extracting from the flow blob or history for
  * backward compatibility and in-flight executions.
  */
 
+import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { ExecutionId } from '@shared/schemas';
 
 import { getExecutionStore } from './ExecutionKVStore';
+
+/** Lazy-loaded AgentHistoryManager to avoid circular imports. */
+async function getHistoryManager() {
+  const { AgentHistoryManager } =
+    await import('@common/history/AgentHistoryManager');
+  return AgentHistoryManager;
+}
 
 /** Shape of a persisted todo item from tool-use flow state. */
 export interface TodoEntry {
@@ -86,10 +94,9 @@ export async function readMeta(
   const direct = await store.read<ExecutionMeta>('meta');
   if (direct?.timestamp) return direct;
 
-  // Fallback: workspace state history
-  const { AgentHistoryManager } =
-    await import('@common/history/AgentHistoryManager');
-  const item = await AgentHistoryManager.getHistoryItemById(executionId);
+  // Fallback: history index
+  const mgr = await getHistoryManager();
+  const item = await mgr.getHistoryItemById(executionId);
   if (!item) return null;
   return {
     timestamp: item.timestamp,
@@ -105,10 +112,9 @@ export async function readConfig(
   const direct = await store.read('config');
   if (direct) return direct;
 
-  // Fallback: workspace state history
-  const { AgentHistoryManager } =
-    await import('@common/history/AgentHistoryManager');
-  const item = await AgentHistoryManager.getHistoryItemById(executionId);
+  // Fallback: history index
+  const mgr = await getHistoryManager();
+  const item = await mgr.getHistoryItemById(executionId);
   return item?.agentConfig ?? null;
 }
 
@@ -134,13 +140,51 @@ export async function readChildren(
     return entries.filter((e): e is ChildRecord => e !== null);
   }
 
-  // Fallback: history filter
-  const { AgentHistoryManager } =
-    await import('@common/history/AgentHistoryManager');
-  const items = await AgentHistoryManager.getChildrenOf(executionId);
+  // Fallback: history index
+  const mgr = await getHistoryManager();
+  const items = await mgr.getChildrenOf(executionId);
   return items.map((item) => ({
     id: item.id,
     agent: item.agentConfig.agent,
     timestamp: item.timestamp,
   }));
+}
+
+// ============================================================================
+// Registration (write path)
+// ============================================================================
+
+/**
+ * Register a new execution: persist config, metadata, history entry,
+ * and parent linkage. Awaits all writes before returning.
+ */
+export async function registerExecution(
+  executionId: ExecutionId,
+  config: AgentConfig,
+  agentName: string,
+  parentExecutionId?: ExecutionId,
+): Promise<void> {
+  const timestamp = new Date().toISOString();
+  const store = getExecutionStore(executionId);
+  const mgr = await getHistoryManager();
+
+  const writes: Promise<void>[] = [
+    mgr.addToHistory(executionId, config, parentExecutionId),
+    store.write('config', config),
+    store.write('meta', {
+      timestamp,
+      parentExecutionId,
+    } satisfies ExecutionMeta),
+  ];
+
+  if (parentExecutionId) {
+    writes.push(
+      getExecutionStore(parentExecutionId).write(`child-${executionId}`, {
+        agent: agentName,
+        timestamp,
+      }),
+    );
+  }
+
+  await Promise.all(writes);
 }

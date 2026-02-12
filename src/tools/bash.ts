@@ -1,6 +1,5 @@
 // Standard library imports
 import * as fs from 'fs';
-import { writeFile } from 'fs/promises';
 import * as path from 'path';
 
 // Third-party imports
@@ -14,12 +13,9 @@ import {
   untrackExecution,
   ProcessExecutionHandle,
 } from '@agent/runtime/executionRegistry';
-import { getExecutionStore } from '@agent/storage';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-
-// Local imports - common
-import { AgentHistoryManager } from '@common/history/AgentHistoryManager';
+import { getExecutionStore, registerExecution } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
 // Local imports - tools
 import { ToolError, type ToolResult } from '@tools/result';
@@ -33,7 +29,7 @@ import { executeCommand } from '@utils/system/execUtils';
 
 // Local imports - utils
 import { generateExecutionId } from '@utils/core/executionId';
-import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
+import { StorageFS } from '@utils/files';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -141,10 +137,18 @@ export class BashTool extends defineTool({
     parentStreamId: StreamTabId | undefined,
     parentExecutionId: ExecutionId | undefined,
   ): Promise<ToolResult> {
-    const executionId = generateExecutionId();
-    await ensureRunDir(executionId);
+    if (!parentStreamId) {
+      throw new ToolError(
+        'Background execution requires a parent stream context.',
+      );
+    }
 
-    const outputPath = path.join(getRunDir(executionId), 'output.log');
+    const executionId = generateExecutionId();
+
+    // Write output.log alongside other execution data in executions/{id}/
+    const outputDir = path.join('executions', executionId);
+    await StorageFS.ensureDir(outputDir);
+    const outputPath = StorageFS.fullPath(path.join(outputDir, 'output.log'));
     const outputStream = fs.createWriteStream(outputPath, { flags: 'a' });
 
     const appendToOutput = (chunk: string): void => {
@@ -180,7 +184,7 @@ export class BashTool extends defineTool({
 
     const handle = new ProcessExecutionHandle(
       executionId,
-      parentStreamId ?? executionId,
+      parentStreamId,
       preview,
       kill,
     );
@@ -190,63 +194,42 @@ export class BashTool extends defineTool({
       agent: 'bash',
       instruction: command,
     });
-    const timestamp = new Date().toISOString();
-    void AgentHistoryManager.addToHistory(
+    void registerExecution(
       executionId,
       syntheticConfig,
+      'bash',
       parentExecutionId,
     );
-    const kvStore = getExecutionStore(executionId);
-    void kvStore.write('config', syntheticConfig);
-    void kvStore.write('meta', { timestamp, parentExecutionId });
-    if (parentExecutionId) {
-      void getExecutionStore(parentExecutionId).write(`child-${executionId}`, {
-        agent: 'bash',
-        timestamp,
-      });
-    }
 
     void promise
       .then(async (result) => {
         const wallTimeMs = Date.now() - startedAt;
+        const store = getExecutionStore(executionId);
+        await store.write('result-meta', {
+          exitCode: result.exitCode,
+          wallTimeMs,
+          success: result.success,
+          timedOut: result.timedOut,
+          command,
+        });
 
-        const metaPath = path.join(getRunDir(executionId), 'meta.json');
-        await writeFile(
-          metaPath,
-          JSON.stringify(
-            {
-              exitCode: result.exitCode,
-              wallTimeMs,
-              success: result.success,
-              timedOut: result.timedOut,
-              command,
-            },
-            null,
-            2,
-          ),
+        untrackExecution(executionId);
+
+        const msg = formatBashDelivery(
+          executionId,
+          command,
+          wallTimeMs,
+          result,
         );
-
-        untrackExecution(executionId);
-
-        if (parentStreamId) {
-          const msg = formatBashDelivery(
-            executionId,
-            command,
-            wallTimeMs,
-            result,
-          );
-          void getExecutionStore(executionId).write('report', msg);
-          ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
-        }
+        await store.write('report', msg);
+        ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
       })
-      .catch((err: unknown) => {
+      .catch(async (err: unknown) => {
         untrackExecution(executionId);
 
-        if (parentStreamId) {
-          const msg = formatBashError(executionId, command, err);
-          void getExecutionStore(executionId).write('report', msg);
-          ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
-        }
+        const msg = formatBashError(executionId, command, err);
+        await getExecutionStore(executionId).write('report', msg);
+        ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
       })
       .finally(() => {
         outputStream.end();

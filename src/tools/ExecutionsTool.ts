@@ -51,6 +51,8 @@ import {
   type ExecutionId,
 } from '@shared/schemas';
 
+const EXECUTIONS_DIR = 'executions';
+
 // ============================================================================
 // Schema
 // ============================================================================
@@ -166,19 +168,19 @@ function formatTodoHeader(executionId: string, todos: TodoEntry[]): string {
 
 export class ExecutionsTool extends defineTool({
   name: 'executions',
-  description: `View execution history, generated files, and background process output. Kill running executions.
+  description: `View execution history and manage running executions.
 
 Paths:
-- /executions - List all past executions (with status and elapsed time)
-- /executions/{id} - Execution summary (agent, model, timestamp, status, elapsed, progress)
-- /executions/{id}/config - Agent configuration JSON (for delegate_workflow/delegate_agent)
-- /executions/{id}/conversation - Full message history
-- /executions/{id}/todos - Subagent task list (if using todo_write)
-- /executions/{id}/report - Subagent or background process result report (persists after context compaction)
-- /executions/{id}/children - List child executions (subagents and background processes launched by this execution)
-- /executions/{id}/output - Background process stdout/stderr (with view_range support)
-- /executions/{id}/files - List generated files
-- /executions/{id}/files/{path} - Read specific file
+- /executions - List all executions (with status and elapsed time)
+- /executions/{id} - Execution summary (agent, model, timestamp, status, progress, children, todos)
+- /executions/{id}/config - Agent configuration JSON
+- /executions/{id}/conversation - Full message history (subagents)
+- /executions/{id}/todos - Task list (tool-use subagents)
+- /executions/{id}/report - Result report (persists after context compaction)
+- /executions/{id}/children - Child executions
+- /executions/{id}/output - stdout/stderr (background processes only)
+- /executions/{id}/files - Generated files (workflows only)
+- /executions/{id}/files/{path} - Read specific generated file (workflows only)
 
 Use "current" as {id} to access the active execution.
 Use view_range: [start, end] to paginate large outputs.
@@ -278,7 +280,7 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
     const result = ExecutionIdSchema.safeParse(id);
     if (!result.success) {
       throw new ToolError(
-        `Invalid execution ID format: ${id}. Expected 12-char hex ID or UUID.`,
+        `Invalid execution ID format: ${id}. Expected hex string.`,
       );
     }
     return result.data;
@@ -427,7 +429,10 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
     executionId: ExecutionId,
     viewRange?: number[],
   ): Promise<ToolResult> {
-    const outputPath = path.join(TASK_RUNS_DIR, executionId, 'output.log');
+    // Check new location first (executions/), fall back to legacy (taskRuns/)
+    const newPath = path.join(EXECUTIONS_DIR, executionId, 'output.log');
+    const legacyPath = path.join(TASK_RUNS_DIR, executionId, 'output.log');
+    const outputPath = (await StorageFS.exists(newPath)) ? newPath : legacyPath;
 
     if (!(await StorageFS.exists(outputPath))) {
       throw new ToolError(
