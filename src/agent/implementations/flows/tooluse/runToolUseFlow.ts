@@ -170,15 +170,16 @@ export async function runToolUseFlow<C = unknown>(
     pf.setServices(services);
     await pf.run(shared);
 
-    // Persist conversation and todos as direct keys (flow record is deleted in finally)
-    const kv2 = getExecutionStore(executionId);
+    // Persist conversation and todos as direct keys before finally deletes the flow record
+    const writes: Promise<void>[] = [];
     if (shared.messages.length > 0) {
-      void kv2.write('conversation', shared.messages);
+      writes.push(kv.write('conversation', shared.messages));
     }
     const todos = shared.stateSlices?.workspaceSnapshot?.todos?.todos;
     if (Array.isArray(todos) && todos.length > 0) {
-      void kv2.write('todos', todos);
+      writes.push(kv.write('todos', todos));
     }
+    await Promise.all(writes);
 
     const execStatus = input.checkInterruption()
       ? EXECUTION_STATUS.INTERRUPTED
