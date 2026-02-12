@@ -478,7 +478,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   public async sendHistoryData(webview: vscode.Webview): Promise<void> {
     const entries = await listExecutions();
     const historyItems = entries
-      .filter((entry) => entry.agentConfig !== null)
+      .filter(
+        (entry) =>
+          entry.agentConfig !== null && entry.category !== 'process',
+      )
       .map((entry) => ({
         id: entry.id,
         timestamp: entry.timestamp,
