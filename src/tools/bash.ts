@@ -29,7 +29,7 @@ import { executeCommand } from '@utils/system/execUtils';
 
 // Local imports - utils
 import { generateExecutionId } from '@utils/core/executionId';
-import { StorageFS } from '@utils/files';
+import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -145,10 +145,8 @@ export class BashTool extends defineTool({
 
     const executionId = generateExecutionId();
 
-    // Write output.log alongside other execution data in executions/{id}/
-    const outputDir = path.join('executions', executionId);
-    await StorageFS.ensureDir(outputDir);
-    const outputPath = StorageFS.fullPath(path.join(outputDir, 'output.log'));
+    await ensureRunDir(executionId);
+    const outputPath = path.join(getRunDir(executionId), 'output.log');
     const outputStream = fs.createWriteStream(outputPath, { flags: 'a' });
 
     const appendToOutput = (chunk: string): void => {
@@ -194,7 +192,7 @@ export class BashTool extends defineTool({
       agent: 'bash',
       instruction: command,
     });
-    void registerExecution(
+    await registerExecution(
       executionId,
       syntheticConfig,
       'bash',

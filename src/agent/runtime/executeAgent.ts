@@ -324,6 +324,7 @@ async function runFlowWithLifecycle(
     isSubagent?: boolean;
     category?: 'workflow' | 'toolUse';
     parentStreamId?: StreamTabId;
+    onCompleted?: (result: AgentFlowResult) => void;
   },
 ): Promise<AgentFlowResult> {
   const category = options?.category ?? 'workflow';
@@ -338,6 +339,7 @@ async function runFlowWithLifecycle(
   trackExecution(handle);
   try {
     const result = await runner();
+    options?.onCompleted?.(result);
     untrackExecution(ctx.executionId);
     ctx.parentStage.end(result.status);
 
@@ -547,6 +549,8 @@ export interface ExecuteAgentOptions {
   onStreamResolved?: (streamId: StreamTabId) => void;
   /** Fires before a tool-use subagent enters WAITING, delivering interim result to orchestrator. */
   onBeforeWaiting?: (lastResponse: string | undefined) => void;
+  /** Fires after flow completes but BEFORE untrackExecution, so follow-ups are enqueued before waiters resolve. */
+  onCompleted?: (result: AgentFlowResult) => void;
 }
 
 export async function executeAgent(
@@ -618,7 +622,12 @@ export async function executeAgent(
         };
       });
     },
-    { isSubagent, category, parentStreamId: options?.parentStreamId },
+    {
+      isSubagent,
+      category,
+      parentStreamId: options?.parentStreamId,
+      onCompleted: options?.onCompleted,
+    },
   );
 }
 

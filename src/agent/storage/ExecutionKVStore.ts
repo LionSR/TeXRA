@@ -30,8 +30,12 @@ export interface ExecutionKVStore {
   getExecutionId(): ExecutionId;
 }
 
-// Storage directory for executions
-const EXECUTIONS_DIR = 'executions';
+/**
+ * Storage directory for all execution data (KV, output logs, etc.).
+ * This matches TASK_RUNS_DIR by design — both point to 'executions/' so
+ * KV metadata and workflow output files share the same per-execution directory.
+ */
+export const EXECUTIONS_DIR = 'executions';
 
 /**
  * Executes an async operation, returning a fallback value if file/directory not found.

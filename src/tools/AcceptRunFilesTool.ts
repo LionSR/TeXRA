@@ -2,7 +2,7 @@
  * Tool for accepting output files from a completed run into the workspace.
  *
  * After a workflow agent completes, its output files may live in run storage
- * (taskRuns/{executionId}/) or directly in the workspace, depending on the
+ * (executions/{executionId}/) or directly in the workspace, depending on the
  * agent's storage mode. This tool locates files in either location and copies
  * them into the workspace — the programmatic equivalent of the "Accept" button
  * in the progress view.
@@ -38,7 +38,7 @@ import {
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files';
-import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import { LEGACY_RUNS_DIR, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 
 // Local imports - history
@@ -100,10 +100,13 @@ Example: Accept corrected file back to its original location:
 }) {
   protected async execute(input: AcceptRunFilesInput): Promise<ToolResult> {
     const { execution_id: executionId, files } = input;
-    const runDir = path.join(TASK_RUNS_DIR, executionId);
+    const primaryDir = path.join(TASK_RUNS_DIR, executionId);
+    const legacyDir = path.join(LEGACY_RUNS_DIR, executionId);
+    const runDirExists =
+      (await StorageFS.exists(primaryDir)) ||
+      (await StorageFS.exists(legacyDir));
 
     // Verify execution exists — run dir may not exist in workspace storage mode
-    const runDirExists = await StorageFS.exists(runDir);
     if (!runDirExists) {
       const historyItem =
         await AgentHistoryManager.getHistoryItemById(executionId);
@@ -231,15 +234,17 @@ Example: Accept corrected file back to its original location:
     runPath: string,
     runDirExists: boolean,
   ): Promise<{ sourceAbsolute: string; sourceLocation: FileLocation }> {
-    // Try run storage first
+    // Try run storage first (primary then legacy)
     if (runDirExists) {
-      const rel = path.join(TASK_RUNS_DIR, executionId, runPath);
-      if (await StorageFS.exists(rel)) {
-        const abs = StorageFS.fullPath(rel);
-        return {
-          sourceAbsolute: abs,
-          sourceLocation: createRunStorageLocation(abs, runPath, executionId),
-        };
+      for (const dir of [TASK_RUNS_DIR, LEGACY_RUNS_DIR]) {
+        const rel = path.join(dir, executionId, runPath);
+        if (await StorageFS.exists(rel)) {
+          const abs = StorageFS.fullPath(rel);
+          return {
+            sourceAbsolute: abs,
+            sourceLocation: createRunStorageLocation(abs, runPath, executionId),
+          };
+        }
       }
     }
 
