@@ -186,12 +186,20 @@ function collectChildSummary(
 ): ActiveChildInfo[] {
   const result: ActiveChildInfo[] = [];
   for (const [, handle] of handles) {
-    if (handle.parentStreamId === parentStreamId && handle instanceof ctor) {
-      result.push({
-        executionId: handle.executionId,
-        agentName: handle.agentName,
-      });
+    if (handle.parentStreamId !== parentStreamId || !(handle instanceof ctor)) {
+      continue;
     }
+    // Exclude the parent itself (parentStreamId === childStreamId)
+    if (
+      handle instanceof AgentExecutionHandle &&
+      handle.childStreamId === parentStreamId
+    ) {
+      continue;
+    }
+    result.push({
+      executionId: handle.executionId,
+      agentName: handle.agentName,
+    });
   }
   return result;
 }
