@@ -22,6 +22,8 @@ export interface AgentHistoryItem {
   id: ExecutionId;
   timestamp: string;
   agentConfig: AgentConfig;
+  /** Execution ID of the parent that launched this execution (subagents and background processes). */
+  parentExecutionId?: ExecutionId;
 }
 
 /**
@@ -37,6 +39,7 @@ export class AgentHistoryManager {
   public static async addToHistory(
     executionId: ExecutionId,
     config: AgentConfig,
+    parentExecutionId?: ExecutionId,
   ): Promise<void> {
     const normalizedConfig = AgentConfigSchema.parse(config);
 
@@ -44,6 +47,7 @@ export class AgentHistoryManager {
       id: executionId,
       timestamp: new Date().toISOString(),
       agentConfig: normalizedConfig,
+      parentExecutionId,
     };
 
     const history = await this.getHistory();
@@ -101,6 +105,7 @@ export class AgentHistoryManager {
         timestamp?: string;
         agentConfig?: AgentConfig;
         config?: AgentConfig; // Legacy field name
+        parentExecutionId?: ExecutionId;
       };
 
       const rawConfig = candidate.agentConfig || candidate.config;
@@ -127,6 +132,7 @@ export class AgentHistoryManager {
         id: candidate.id,
         timestamp: candidate.timestamp,
         agentConfig: normalizedConfig,
+        parentExecutionId: candidate.parentExecutionId,
       });
     }
 
@@ -160,6 +166,18 @@ export class AgentHistoryManager {
     return workspaceFolder
       ? `${this.HISTORY_STORAGE_KEY}.${workspaceFolder.uri.fsPath}`
       : this.HISTORY_STORAGE_KEY;
+  }
+
+  /**
+   * Get all history items that are children of a given execution.
+   */
+  public static async getChildrenOf(
+    parentExecutionId: ExecutionId,
+  ): Promise<AgentHistoryItem[]> {
+    const history = await this.getHistory();
+    return history.filter(
+      (item) => item.parentExecutionId === parentExecutionId,
+    );
   }
 
   /**
