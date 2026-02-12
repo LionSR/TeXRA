@@ -178,8 +178,11 @@ export class StreamHeader extends LitElement {
       }
 
       .run-selector {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
         min-width: 180px;
-        max-width: 260px;
+        max-width: 360px;
         flex-shrink: 0;
       }
 
