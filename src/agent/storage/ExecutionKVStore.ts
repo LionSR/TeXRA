@@ -34,6 +34,8 @@ export interface ExecutionKVStore {
 export interface ExecutionMeta {
   timestamp: string;
   parentExecutionId?: ExecutionId;
+  /** Persisted when execution reaches a terminal state (success or error). */
+  terminalStatus?: string;
 }
 
 /**

@@ -51,6 +51,44 @@ import {
 } from '@shared/schemas';
 
 // ============================================================================
+// Category-aware field filtering
+// ============================================================================
+
+/** Config fields only relevant to workflow agents — hidden for toolUse. */
+const WORKFLOW_ONLY_FIELDS = new Set([
+  'inputFile',
+  'inputFiles',
+  'referenceFile',
+  'referenceFiles',
+  'auxiliaryFile',
+  'auxiliaryFiles',
+  'mediaFile',
+  'mediaFiles',
+  'outputFiles',
+  'editedFile',
+  'editedFiles',
+  'useMultipleOutputs',
+]);
+
+/** Config fields only relevant to toolUse agents — hidden for workflow. */
+const TOOL_USE_ONLY_FIELDS = new Set(['toolConfig']);
+
+/** Return paths available for a given agent category. */
+function getAvailablePaths(category?: string): string[] {
+  const common = ['config', 'report', 'children'];
+  switch (category) {
+    case 'toolUse':
+      return [...common, 'conversation', 'todos'];
+    case 'workflow':
+      return [...common, 'files'];
+    case 'process':
+      return [...common, 'output'];
+    default:
+      return [...common, 'conversation', 'todos', 'files', 'output'];
+  }
+}
+
+// ============================================================================
 // Schema
 // ============================================================================
 
@@ -104,11 +142,17 @@ function formatStatusInfo(info: ExecutionStatusInfo): string {
     : info.status;
 }
 
-/** Resolve the runtime status for an execution ID. */
-function getExecutionStatusInfo(executionId: string): ExecutionStatusInfo {
+/** Resolve the runtime status for an execution ID, using persisted terminal status as fallback. */
+function getExecutionStatusInfo(
+  executionId: string,
+  terminalStatus?: string,
+): ExecutionStatusInfo {
   const handle = getHandle(executionId);
   if (handle) return handle.getStatus();
-  return { status: EXECUTION_STATUS.COMPLETED, elapsed: null };
+  return {
+    status: terminalStatus ?? EXECUTION_STATUS.COMPLETED,
+    elapsed: null,
+  };
 }
 
 /** Format round progress as a display line, or empty string if unavailable. */
@@ -126,11 +170,12 @@ function formatProgressLine(handle: ExecutionHandle | undefined): string {
 /** Format a listing entry as a single summary line. */
 function formatListingLine(entry: ExecutionListingEntry): string {
   const ts = entry.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
-  const info = getExecutionStatusInfo(entry.id);
+  const info = getExecutionStatusInfo(entry.id, entry.terminalStatus);
+  const categoryTag = entry.category ? `  ${entry.category}` : '';
   const parentSuffix = entry.parentExecutionId
     ? `  parent=${entry.parentExecutionId}`
     : '';
-  return `${entry.id}  ${ts}  ${entry.agent}  ${entry.model}  [${formatStatusInfo(info)}]${parentSuffix}`;
+  return `${entry.id}  ${ts}  ${entry.agent}${categoryTag}  ${entry.model}  [${formatStatusInfo(info)}]${parentSuffix}`;
 }
 
 const TODO_ICON: Record<string, string> = {
@@ -352,6 +397,12 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
         lines.push('', ...formatTodoSection(todos));
       }
 
+      const runningPaths = getAvailablePaths(handle.category);
+      lines.push(
+        '',
+        `Available paths: ${runningPaths.map((p) => `/executions/${executionId}/${p}`).join(', ')}`,
+      );
+
       return { output: lines.join('\n') };
     }
 
@@ -379,10 +430,12 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       config && typeof config === 'object'
         ? (config as Record<string, unknown>)
         : null;
-    const info = getExecutionStatusInfo(executionId);
+    const category = (cfg?.agentCategory as string) ?? undefined;
+    const info = getExecutionStatusInfo(executionId, meta?.terminalStatus);
     const lines = [
       `Execution: ${executionId}`,
       `Agent: ${(cfg?.agent as string) ?? 'unknown'}`,
+      ...(category ? [`Category: ${category}`] : []),
       `Model: ${(cfg?.model as string) ?? 'default'}`,
       `Timestamp: ${meta?.timestamp ?? 'unknown'}`,
       `Status: ${formatStatusInfo(info)}`,
@@ -401,6 +454,12 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     if (report) {
       lines.push('', 'Result:', report);
     }
+
+    const completedPaths = getAvailablePaths(category);
+    lines.push(
+      '',
+      `Available paths: ${completedPaths.map((p) => `/executions/${executionId}/${p}`).join(', ')}`,
+    );
 
     return { output: lines.join('\n') };
   }
@@ -498,8 +557,20 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       throw new ToolError(`Config not found for execution: ${executionId}.`);
     }
 
+    // Filter out fields irrelevant to this agent's category
+    const cfg = config as Record<string, unknown>;
+    const category = cfg.agentCategory as string | undefined;
+    let filtered = cfg;
+    if (category) {
+      const excludeSet =
+        category === 'toolUse' ? WORKFLOW_ONLY_FIELDS : TOOL_USE_ONLY_FIELDS;
+      filtered = Object.fromEntries(
+        Object.entries(cfg).filter(([key]) => !excludeSet.has(key)),
+      );
+    }
+
     return {
-      output: JSON.stringify(config, null, 2),
+      output: JSON.stringify(filtered, null, 2),
     };
   }
 

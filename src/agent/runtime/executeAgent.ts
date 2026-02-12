@@ -67,6 +67,7 @@ import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
 
+import { writeTerminalStatus } from '@agent/storage';
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
 import { createInterruptCallbacks } from './InterruptManager';
@@ -341,6 +342,7 @@ async function runFlowWithLifecycle(
     const result = await runner();
     options?.onCompleted?.(result);
     untrackExecution(ctx.executionId);
+    void writeTerminalStatus(ctx.executionId, result.status);
     ctx.parentStage.end(result.status);
 
     if (!StreamStatusService.shouldPreserveOnCompletion(streamId)) {
@@ -352,6 +354,7 @@ async function runFlowWithLifecycle(
     return result;
   } catch (err) {
     untrackExecution(ctx.executionId);
+    void writeTerminalStatus(ctx.executionId, 'error');
     const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
     // Log error BEFORE ending the group so it gets the correct groupId
