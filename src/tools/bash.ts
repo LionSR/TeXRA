@@ -13,7 +13,7 @@ import {
   untrackExecution,
   ProcessExecutionHandle,
 } from '@agent/runtime/executionRegistry';
-import { getExecutionStore, registerExecution } from '@agent/storage';
+import { getExecutionStore, registerExecution, writeTerminalStatus } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
@@ -213,6 +213,8 @@ export class BashTool extends defineTool({
           command,
         });
 
+        const terminalStatus = result.success ? 'completed' : 'error';
+        await writeTerminalStatus(executionId, terminalStatus);
         untrackExecution(executionId);
 
         const msg = formatBashDelivery(
@@ -225,6 +227,7 @@ export class BashTool extends defineTool({
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
       })
       .catch(async (err: unknown) => {
+        await writeTerminalStatus(executionId, 'error');
         untrackExecution(executionId);
 
         const msg = formatBashError(executionId, command, err);

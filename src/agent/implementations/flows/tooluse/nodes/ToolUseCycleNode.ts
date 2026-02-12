@@ -104,7 +104,11 @@ export class ToolUseCycleNode<C> extends Node<
     error: Error,
   ): Promise<ToolUseCycleOutcome> {
     const formatted = formatProviderHttpError(error);
-    return { outcome: 'failed', message: error.message, retryable: formatted.retryable };
+    return {
+      outcome: 'failed',
+      message: error.message,
+      retryable: formatted.retryable,
+    };
   }
 
   async post(

@@ -39,7 +39,7 @@ export interface ExecutionListingEntry {
   parentExecutionId?: ExecutionId;
   agent: string;
   model: string;
-  agentConfig: unknown;
+  agentConfig: AgentConfig | null;
   category?: string;
   terminalStatus?: string;
 }
@@ -50,9 +50,22 @@ export interface ExecutionListingEntry {
 
 let cache: ExecutionListingEntry[] | null = null;
 let migrated = false;
+let cachedWorkspaceUri: string | undefined;
+
+/** Get the current workspace folder URI for cache keying. */
+function getWorkspaceUri(): string | undefined {
+  return vscode.workspace.workspaceFolders?.[0]?.uri.toString();
+}
 
 export function invalidateListingCache(): void {
   cache = null;
+}
+
+/** Reset all module state (cache + migration flag). Called on workspace change. */
+export function resetListingState(): void {
+  cache = null;
+  migrated = false;
+  cachedWorkspaceUri = undefined;
 }
 
 // ============================================================================
@@ -64,6 +77,14 @@ export function invalidateListingCache(): void {
  * Results are cached until invalidated.
  */
 export async function listExecutions(): Promise<ExecutionListingEntry[]> {
+  // Invalidate if workspace changed since last cache build
+  const currentUri = getWorkspaceUri();
+  if (currentUri !== cachedWorkspaceUri) {
+    cache = null;
+    migrated = false;
+    cachedWorkspaceUri = currentUri;
+  }
+
   if (cache) return cache;
 
   if (!migrated) {
@@ -91,22 +112,21 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     executionDirs.map(async (id): Promise<ExecutionListingEntry | null> => {
       try {
         const store = getExecutionStore(id);
-        const [meta, config] = await Promise.all([
+        const [meta, cfg] = await Promise.all([
           store.read<ExecutionMeta>('meta'),
-          store.read<unknown>('config'),
+          store.read<AgentConfig>('config'),
         ]);
 
         if (!meta?.timestamp) return null;
 
-        const cfg = config as Record<string, unknown> | undefined;
         return {
           id,
           timestamp: meta.timestamp,
           parentExecutionId: meta.parentExecutionId,
-          agent: (cfg?.agent as string) ?? 'unknown',
-          model: (cfg?.model as string) ?? 'unknown',
-          agentConfig: config ?? {},
-          category: (cfg?.agentCategory as string) ?? undefined,
+          agent: cfg?.agent ?? 'unknown',
+          model: cfg?.model ?? 'unknown',
+          agentConfig: cfg ?? null,
+          category: cfg?.agentCategory,
           terminalStatus: meta.terminalStatus,
         };
       } catch (error) {
