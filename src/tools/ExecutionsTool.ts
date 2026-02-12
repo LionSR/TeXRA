@@ -329,9 +329,11 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     const timer = setTimeout(() => ac.abort(), timeout * 1000);
     // Register callback before re-checking to close the race window
     const waitPromise = waitForAnyExecutionChange(activeIds, ac.signal);
-    // If all executions completed between getActiveExecutionIds() and callback
-    // registration, abort immediately so we don't block until timeout.
-    if (getActiveExecutionIds().length === 0) {
+    // If all originally watched executions completed between
+    // getActiveExecutionIds() and callback registration, abort immediately
+    // so we don't block until timeout. Check the original IDs, not the
+    // global set (new executions starting shouldn't prevent abort).
+    if (activeIds.every((id) => !getHandle(id))) {
       ac.abort();
     }
     await waitPromise;
@@ -515,8 +517,12 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     const handle = getHandle(executionId);
     if (handle instanceof ProcessExecutionHandle && handle.outputPaths) {
       const [stdout, stderr] = await Promise.all([
-        fs.promises.readFile(handle.outputPaths.stdout, 'utf-8').catch(() => ''),
-        fs.promises.readFile(handle.outputPaths.stderr, 'utf-8').catch(() => ''),
+        fs.promises
+          .readFile(handle.outputPaths.stdout, 'utf-8')
+          .catch(() => ''),
+        fs.promises
+          .readFile(handle.outputPaths.stderr, 'utf-8')
+          .catch(() => ''),
       ]);
       const sections: string[] = [`Output for ${executionId}:`];
       if (stdout) sections.push('', '<stdout>', stdout, '</stdout>');

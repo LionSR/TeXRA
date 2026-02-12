@@ -87,7 +87,6 @@ function clearPendingLogUpdatesForStream(streamId: string): void {
   }
 }
 
-
 function addPermission(
   ctx: MessageHandlerContext,
   permission: PermissionState,
