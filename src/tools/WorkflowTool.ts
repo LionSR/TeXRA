@@ -19,18 +19,19 @@ import {
   type WorkflowAgentProposal,
   type ToolUseAgentProposal,
   type StreamTabId,
-  type ExecutionId,
 } from '@shared/schemas';
 import {
   getAgent,
   getVisibleWorkflowAgents,
   getVisibleToolUseAgents,
 } from '@agent/index/agentRegistry';
-import type { AgentConfigPayload } from '@agent/core/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfigPayload,
+} from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
-import { registerSubagent } from '@agent/runtime/subagentLineage';
 import {
   getCurrentToolFileInteractionContext,
   type ToolFileInteractionContext,
@@ -59,9 +60,13 @@ import {
 } from '@tools/subagentResults';
 import { defineTool } from '@tools/core/define';
 
+// Local imports - common
+import { AgentHistoryManager } from '@common/history/AgentHistoryManager';
+
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 import { generateExecutionId } from '@utils/core/executionId';
+import { getExecutionStore } from '@agent/storage';
 
 // ============================================================================
 // Shared utilities
@@ -114,6 +119,25 @@ function executeSubagent(
 ): ToolResult {
   const executionId = generateExecutionId();
 
+  const ctx = getCurrentToolFileInteractionContext();
+  const parentExecutionId = ctx?.executionId;
+  const syntheticConfig = AgentConfigSchema.parse(configPayload);
+  const timestamp = new Date().toISOString();
+  void AgentHistoryManager.addToHistory(
+    executionId,
+    syntheticConfig,
+    parentExecutionId,
+  );
+  const store = getExecutionStore(executionId);
+  void store.write('config', syntheticConfig);
+  void store.write('meta', { timestamp, parentExecutionId });
+  if (parentExecutionId) {
+    void getExecutionStore(parentExecutionId).write(`child-${executionId}`, {
+      agent: agentName,
+      timestamp,
+    });
+  }
+
   // Track whether result has already been delivered (via onBeforeWaiting)
   // to avoid duplicate delivery when the promise eventually resolves.
   let hasDelivered = false;
@@ -121,18 +145,12 @@ function executeSubagent(
 
   const promise = executeAgent(configPayload, executionId, {
     isSubagent: true,
+    parentStreamId: orchestratorStreamId,
     onStreamResolved: (resolvedStreamId) => {
       childStreamId = resolvedStreamId;
       if (options?.enableYoloOnChild) {
         setToolEditApprovalSessionBypass(resolvedStreamId, true);
       }
-      registerSubagent(
-        executionId,
-        orchestratorStreamId,
-        resolvedStreamId,
-        agentName,
-        promise,
-      );
     },
     onBeforeWaiting: (lastResponse) => {
       if (hasDelivered || !childStreamId) return;
@@ -144,6 +162,7 @@ function executeSubagent(
         executionId,
         streamId: childStreamId,
       });
+      void getExecutionStore(executionId).write('report', msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     },
   });
@@ -152,10 +171,12 @@ function executeSubagent(
       if (hasDelivered) return;
       hasDelivered = true;
       const msg = formatSubagentDelivery(agentName, result);
+      void getExecutionStore(executionId).write('report', msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     })
     .catch((err: unknown) => {
       const msg = formatSubagentError(executionId, agentName, err);
+      void getExecutionStore(executionId).write('report', msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     });
   return {

@@ -7,7 +7,7 @@ import {
   type StorageKey,
 } from '@shared/schemas';
 import { executionToEndStatus } from '@common/constants/streamStatus';
-import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
+import { getExecutionStore } from '@agent/storage';
 import {
   createOutputState,
   setActiveRun,
@@ -289,6 +289,12 @@ export async function runReflectionFlow<C = unknown>(
 
     const flowStatus = await pf.run(shared);
     shared = await pf.getShared();
+
+    // Persist conversation as direct key for consistent KV access
+    if (shared?.conversation?.length) {
+      void getExecutionStore(executionId).write('conversation', shared.conversation);
+    }
+
     status = executionToEndStatus(flowStatus) as EndGroupStatus;
   } catch (error) {
     status = END_GROUP_STATUS.ERROR;

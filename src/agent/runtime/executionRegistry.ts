@@ -1,64 +1,98 @@
+/**
+ * Handle-based execution registry.
+ *
+ * Manages ExecutionHandle instances, providing registration, lookup,
+ * change notification, and subagent lineage tracking in a single module.
+ */
+
+import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas';
 
-export interface ExecutionProgress {
-  category: 'workflow' | 'toolUse';
-  agentName: string;
-  currentRound?: number;
-  totalRounds?: number;
-}
+import {
+  type ExecutionHandle,
+  AgentExecutionHandle,
+  emitActiveSubagentsUpdate,
+  interruptActiveChildren as interruptActiveChildrenImpl,
+} from './ExecutionHandle';
 
-interface ExecutionEntry {
-  streamId: StreamTabId;
-  startedAt: number;
-  progress: ExecutionProgress;
-}
+export type { ExecutionHandle } from './ExecutionHandle';
+export {
+  type ExecutionStatusInfo,
+  ACTIVE_STATUSES,
+  AgentExecutionHandle,
+  ProcessExecutionHandle,
+} from './ExecutionHandle';
 
-const registry = new Map<string, ExecutionEntry>();
+const registry = new Map<string, ExecutionHandle>();
 const changeCallbacks = new Map<string, Array<() => void>>();
 
-export function trackExecution(
-  executionId: string,
-  streamId: StreamTabId,
-  progress: ExecutionProgress,
-): void {
-  registry.set(executionId, { streamId, startedAt: Date.now(), progress });
+// ============================================================================
+// Core registry operations
+// ============================================================================
+
+/** Register an execution handle. */
+export function trackExecution(handle: ExecutionHandle): void {
+  registry.set(handle.executionId, handle);
+
+  // Emit subagent UI update and parent linkage only for actual subagents
+  // (where parentStreamId differs from childStreamId)
+  if (handle instanceof AgentExecutionHandle) {
+    if (handle.parentStreamId !== handle.childStreamId) {
+      emitActiveSubagentsUpdate(handle.parentStreamId, registry.entries());
+      bus.emit('setParentStream', {
+        childStreamId: handle.childStreamId,
+        parentStreamId: handle.parentStreamId,
+      });
+    }
+  }
 }
 
+/** Remove an execution handle and notify waiters. */
 export function untrackExecution(executionId: string): void {
+  const handle = registry.get(executionId);
   registry.delete(executionId);
   notifyWaiters(executionId);
+
+  // Emit subagent UI update on removal (only for actual subagents)
+  if (
+    handle instanceof AgentExecutionHandle &&
+    handle.parentStreamId !== handle.childStreamId
+  ) {
+    emitActiveSubagentsUpdate(handle.parentStreamId, registry.entries());
+  }
 }
 
-export function getStreamIdForExecution(
-  executionId: string,
-): StreamTabId | undefined {
-  return registry.get(executionId)?.streamId;
+/** Get a handle by execution ID. */
+export function getHandle(executionId: string): ExecutionHandle | undefined {
+  return registry.get(executionId);
 }
 
-export function getExecutionStartedAt(executionId: string): number | undefined {
-  return registry.get(executionId)?.startedAt;
-}
-
-export function getExecutionProgress(
-  executionId: string,
-): ExecutionProgress | undefined {
-  return registry.get(executionId)?.progress;
-}
-
-export function updateExecutionProgress(
-  executionId: string,
-  update: Partial<ExecutionProgress>,
-): void {
-  const entry = registry.get(executionId);
-  if (!entry) return;
-  Object.assign(entry.progress, update);
-  notifyWaiters(executionId);
+/** Terminate an execution via its handle. Returns true if successful. */
+export function killExecution(executionId: string): boolean {
+  const handle = registry.get(executionId);
+  if (!handle) return false;
+  return handle.terminate();
 }
 
 /** All currently tracked (active) execution IDs. */
 export function getActiveExecutionIds(): string[] {
   return [...registry.keys()];
 }
+
+/** Delegate progress update to the handle. */
+export function updateExecutionProgress(
+  executionId: string,
+  update: { currentRound?: number; totalRounds?: number },
+): void {
+  const handle = registry.get(executionId);
+  if (!handle) return;
+  handle.updateProgress(update);
+  notifyWaiters(executionId);
+}
+
+// ============================================================================
+// Blocking wait
+// ============================================================================
 
 /**
  * Wait for a progress update or execution completion.
@@ -79,15 +113,43 @@ export function waitForAnyExecutionChange(
 ): Promise<string> {
   return new Promise<string>((resolve) => {
     let resolved = false;
+    const callbacks = new Map<string, () => void>();
+
+    const cleanup = (): void => {
+      for (const [id, cb] of callbacks) {
+        removeChangeCallback(id, cb);
+      }
+    };
+
     for (const id of executionIds) {
-      addChangeCallback(id, () => {
+      const cb = (): void => {
         if (resolved) return;
         resolved = true;
+        cleanup();
         resolve(id);
-      });
+      };
+      callbacks.set(id, cb);
+      addChangeCallback(id, cb);
     }
   });
 }
+
+// ============================================================================
+// Subagent lineage
+// ============================================================================
+
+/**
+ * Interrupt all active subagents of a parent stream.
+ * Called before interrupting the parent so subagents stop
+ * promptly instead of running to completion.
+ */
+export function interruptActiveChildren(parentStreamId: StreamTabId): void {
+  interruptActiveChildrenImpl(parentStreamId, registry.values());
+}
+
+// ============================================================================
+// Internal helpers
+// ============================================================================
 
 function addChangeCallback(executionId: string, cb: () => void): void {
   let callbacks = changeCallbacks.get(executionId);
@@ -96,6 +158,14 @@ function addChangeCallback(executionId: string, cb: () => void): void {
     changeCallbacks.set(executionId, callbacks);
   }
   callbacks.push(cb);
+}
+
+function removeChangeCallback(executionId: string, cb: () => void): void {
+  const callbacks = changeCallbacks.get(executionId);
+  if (!callbacks) return;
+  const idx = callbacks.indexOf(cb);
+  if (idx !== -1) callbacks.splice(idx, 1);
+  if (callbacks.length === 0) changeCallbacks.delete(executionId);
 }
 
 function notifyWaiters(executionId: string): void {

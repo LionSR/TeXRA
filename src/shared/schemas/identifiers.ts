@@ -9,7 +9,10 @@ const EXECUTION_ID_PATTERN =
 
 export const ExecutionIdSchema = z
   .string()
-  .regex(EXECUTION_ID_PATTERN, 'Invalid execution ID: expected 12-char hex or UUID');
+  .regex(
+    EXECUTION_ID_PATTERN,
+    'Invalid execution ID: expected 12-char hex or UUID',
+  );
 export type ExecutionId = z.infer<typeof ExecutionIdSchema>;
 
 /** Accepts execution IDs (compact or legacy UUID) and the __default__ sentinel. */
