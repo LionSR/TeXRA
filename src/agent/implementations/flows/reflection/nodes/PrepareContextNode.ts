@@ -40,6 +40,7 @@ export class PrepareContextNode<C = unknown> extends Node<
     if (isFirstRound) {
       const { systemPrompt, userRequest, userPrefix } =
         await promptBuilder.buildInitialPrompts();
+
       messages = await modelHandler.initializeMessages(
         userPrefix,
         userRequest,

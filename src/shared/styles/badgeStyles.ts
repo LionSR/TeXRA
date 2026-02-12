@@ -82,28 +82,6 @@ export const emptyStateStyles: CSSResult = css`
   }
 `;
 
-export const proposalModeBadgeStyles: CSSResult = css`
-  .proposal-mode-badge {
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 2px 6px;
-    border-radius: var(--border-radius);
-    white-space: nowrap;
-  }
-
-  .proposal-mode-badge--async {
-    background: var(--vscode-editorWarning-foreground);
-    color: var(--vscode-editor-background);
-  }
-
-  .proposal-mode-badge--sync {
-    background: var(--vscode-editorWidget-border);
-    color: var(--vscode-editor-foreground);
-  }
-`;
-
 export const badgeStyles: CSSResult[] = [
   baseBadgeStyles,
   categoryBadgeStyles,

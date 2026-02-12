@@ -44,7 +44,7 @@ interface ManualRetryPromptResult {
 /** success: model response | failed: retries exhausted | cancelled: user cancelled | skipped: shouldStop was true */
 export type InvocationResult<TSuccess> =
   | ({ kind: 'success' } & TSuccess)
-  | { kind: 'failed'; message: string }
+  | { kind: 'failed'; message: string; retryable?: boolean }
   | { kind: 'cancelled' }
   | { kind: 'skipped' };
 
@@ -280,7 +280,9 @@ export abstract class RetryableInvocationNode<
 
   protected getFallbackResult(
     error: Error,
-  ): { kind: 'cancelled' } | { kind: 'failed'; message: string } {
+  ):
+    | { kind: 'cancelled' }
+    | { kind: 'failed'; message: string; retryable?: boolean } {
     if (this._userCancelled) {
       return { kind: 'cancelled' };
     }
@@ -292,7 +294,11 @@ export abstract class RetryableInvocationNode<
         formatted,
       );
     }
-    return { kind: 'failed', message: formatted.message };
+    return {
+      kind: 'failed',
+      message: formatted.message,
+      retryable: formatted.retryable,
+    };
   }
 }
 
@@ -326,7 +332,10 @@ export function handleInvocationResult<T extends { response: unknown }>(
   }
 
   if (result.kind === 'failed') {
-    retryState.lastError = { message: result.message, retryable: false };
+    retryState.lastError = {
+      message: result.message,
+      retryable: result.retryable ?? false,
+    };
     state.shouldStop = true;
     state.endTurn = false;
     return null;

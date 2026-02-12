@@ -109,6 +109,7 @@ function hasStreamStateMetaChange(
     prev.status !== next.status ||
     prev.contextState !== next.contextState ||
     prev.activeSubagents !== next.activeSubagents ||
+    prev.activeProcesses !== next.activeProcesses ||
     prev.taskGroups !== next.taskGroups
   )
     return true;
