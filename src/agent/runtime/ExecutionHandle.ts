@@ -26,8 +26,16 @@ export interface ExecutionStatusInfo {
   elapsed: string | null;
 }
 
-/** Statuses that represent an actively running execution. */
+/** Statuses that represent a live execution (running, transitioning, or paused). */
 export const ACTIVE_STATUSES: ReadonlySet<string> = new Set([
+  STREAM_STATUS.RUNNING,
+  STREAM_STATUS.INITIALIZING,
+  STREAM_STATUS.RESUMING,
+  STREAM_STATUS.WAITING,
+]);
+
+/** Statuses where the execution is actively processing (show elapsed time). */
+const PROCESSING_STATUSES: ReadonlySet<string> = new Set([
   STREAM_STATUS.RUNNING,
   STREAM_STATUS.INITIALIZING,
   STREAM_STATUS.RESUMING,
@@ -83,7 +91,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
   getStatus(): ExecutionStatusInfo {
     const status =
       StreamStatusService.get(this.childStreamId) ?? STREAM_STATUS.RUNNING;
-    if (!ACTIVE_STATUSES.has(status)) {
+    if (!PROCESSING_STATUSES.has(status)) {
       return { status, elapsed: null };
     }
     return {

@@ -216,6 +216,7 @@ export class BashTool extends defineTool({
         syntheticConfig,
         'bash',
         parentExecutionId,
+        'process',
       );
     } catch {
       // Registration failed — still attach cleanup but don't track

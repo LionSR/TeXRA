@@ -36,6 +36,8 @@ export interface ExecutionMeta {
   parentExecutionId?: ExecutionId;
   /** Persisted when execution reaches a terminal state (success or error). */
   terminalStatus?: string;
+  /** Runtime category override (e.g. 'process' for background bash). */
+  category?: string;
 }
 
 /**
