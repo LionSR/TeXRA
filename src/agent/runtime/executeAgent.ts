@@ -341,8 +341,8 @@ async function runFlowWithLifecycle(
   try {
     const result = await runner();
     options?.onCompleted?.(result);
+    await writeTerminalStatus(ctx.executionId, result.status);
     untrackExecution(ctx.executionId);
-    void writeTerminalStatus(ctx.executionId, result.status);
     ctx.parentStage.end(result.status);
 
     if (!StreamStatusService.shouldPreserveOnCompletion(streamId)) {
@@ -353,8 +353,8 @@ async function runFlowWithLifecycle(
     logger.debug(`Task completed with status: ${result.status}`);
     return result;
   } catch (err) {
+    await writeTerminalStatus(ctx.executionId, 'error');
     untrackExecution(ctx.executionId);
-    void writeTerminalStatus(ctx.executionId, 'error');
     const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
     // Log error BEFORE ending the group so it gets the correct groupId

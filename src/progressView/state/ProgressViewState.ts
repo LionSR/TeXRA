@@ -265,6 +265,22 @@ export class ProgressViewState {
     }
   }
 
+  /** Reset per-run finished child counters when a new run starts on the same stream. */
+  resetFinishedChildCounters(stream: StreamTabId): void {
+    const current = this._streamStates.get(stream);
+    if (
+      current &&
+      (current.finishedSubagentCount !== 0 ||
+        current.finishedProcessCount !== 0)
+    ) {
+      this._streamStates.set(stream, {
+        ...current,
+        finishedSubagentCount: 0,
+        finishedProcessCount: 0,
+      });
+    }
+  }
+
   getAllStreamStates(): Record<StreamTabId, StreamState> {
     return Object.fromEntries(this._streamStates.entries());
   }
@@ -347,6 +363,9 @@ export class ProgressViewState {
     // Create or update frontend stream state with correct discriminated type
     const agentCategory = taskState.agentConfig.agentCategory;
     this.getOrCreateStreamState(streamTabId, agentCategory);
+
+    // Reset finished child counters for the new run (they are per-run, not per-stream)
+    this.resetFinishedChildCounters(streamTabId);
 
     this.saveTaskStates();
     this.cleanupToolUseAgentRegistry();

@@ -307,9 +307,7 @@ export function buildMemoryPathDisplay(memoryPath: string): TemplateResult {
 // ============================================================================
 
 /** Build an executions path display with history icon. Execution paths are virtual (/executions/...) and not directly openable in the editor. */
-export function buildExecutionsPathDisplay(
-  execPath: string,
-): TemplateResult {
+export function buildExecutionsPathDisplay(execPath: string): TemplateResult {
   if (!execPath) return html``;
   // prettier-ignore
   return html`<span class="memory-path"><i class="codicon codicon-history"></i> ${execPath}</span>`;

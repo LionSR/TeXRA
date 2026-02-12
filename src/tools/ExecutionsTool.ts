@@ -426,17 +426,13 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       };
     }
 
-    const cfg =
-      config && typeof config === 'object'
-        ? (config as Record<string, unknown>)
-        : null;
-    const category = (cfg?.agentCategory as string) ?? undefined;
+    const category = config?.agentCategory;
     const info = getExecutionStatusInfo(executionId, meta?.terminalStatus);
     const lines = [
       `Execution: ${executionId}`,
-      `Agent: ${(cfg?.agent as string) ?? 'unknown'}`,
+      `Agent: ${config?.agent ?? 'unknown'}`,
       ...(category ? [`Category: ${category}`] : []),
-      `Model: ${(cfg?.model as string) ?? 'default'}`,
+      `Model: ${config?.model ?? 'default'}`,
       `Timestamp: ${meta?.timestamp ?? 'unknown'}`,
       `Status: ${formatStatusInfo(info)}`,
     ];
@@ -478,6 +474,13 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
   }
 
   private handleKill(executionId: ExecutionId): ToolResult {
+    const ctx = getCurrentToolFileInteractionContext();
+    if (ctx?.executionId === executionId) {
+      return {
+        output: `Cannot kill your own execution (${executionId}).`,
+        isError: true,
+      };
+    }
     const success = killExecution(executionId);
     if (success) {
       return { output: `Execution ${executionId} terminated.` };
@@ -558,19 +561,20 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     }
 
     // Filter out fields irrelevant to this agent's category
-    const cfg = config as Record<string, unknown>;
-    const category = cfg.agentCategory as string | undefined;
-    let filtered = cfg;
-    if (category) {
+    const { agentCategory } = config;
+    if (agentCategory) {
       const excludeSet =
-        category === 'toolUse' ? WORKFLOW_ONLY_FIELDS : TOOL_USE_ONLY_FIELDS;
-      filtered = Object.fromEntries(
-        Object.entries(cfg).filter(([key]) => !excludeSet.has(key)),
+        agentCategory === 'toolUse'
+          ? WORKFLOW_ONLY_FIELDS
+          : TOOL_USE_ONLY_FIELDS;
+      const filtered = Object.fromEntries(
+        Object.entries(config).filter(([key]) => !excludeSet.has(key)),
       );
+      return { output: JSON.stringify(filtered, null, 2) };
     }
 
     return {
-      output: JSON.stringify(filtered, null, 2),
+      output: JSON.stringify(config, null, 2),
     };
   }
 
@@ -643,13 +647,34 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     return str.length > maxLen ? str.slice(0, maxLen - 3) + '...' : str;
   }
 
+  /** Internal KV metadata files stored alongside generated files. */
+  private static readonly KV_FILES = new Set([
+    'meta.json',
+    'config.json',
+    'conversation.json',
+    'todos.json',
+    'report.json',
+    'result-meta.json',
+    'output.log',
+  ]);
+
+  private isKVFile(name: string): boolean {
+    return (
+      ExecutionsTool.KV_FILES.has(name) ||
+      name.startsWith('child-') ||
+      name.startsWith('flow_')
+    );
+  }
+
   private async listFiles(executionId: ExecutionId): Promise<ToolResult> {
     const runDir = await resolveStoragePath(executionId);
     if (!runDir) {
       return { output: 'No files generated for this execution.' };
     }
 
-    const entries = await this.walkDirectory(runDir, '', 2);
+    const entries = (await this.walkDirectory(runDir, '', 2)).filter(
+      (entry) => !this.isKVFile(entry.path.split('/').pop() ?? ''),
+    );
 
     if (entries.length === 0) {
       return { output: 'No files generated for this execution.' };
