@@ -112,7 +112,7 @@ export function formatBashDelivery(
     `<background-result id="${executionId}" command="${escapeAttr(command)}">`,
     `<exit-code>${result.exitCode ?? 'unknown'}</exit-code>`,
     `<wall-time>${formatDuration(wallTimeMs)}</wall-time>`,
-    `<output-preview>${preview}</output-preview>`,
+    `<output-preview>${escapeText(preview)}</output-preview>`,
     '</background-result>',
   ].join('\n');
 }
@@ -128,7 +128,7 @@ export function formatBashError(
   const message = err instanceof Error ? err.message : String(err);
   return [
     `<background-error id="${executionId}" command="${escapeAttr(command)}">`,
-    `<message>${message}</message>`,
+    `<message>${escapeText(message)}</message>`,
     '</background-error>',
   ].join('\n');
 }
@@ -143,4 +143,9 @@ function escapeAttr(s: string): string {
     .replaceAll('&', '&amp;')
     .replaceAll('"', '&quot;')
     .replaceAll('<', '&lt;');
+}
+
+/** Escape XML text content (element bodies). */
+function escapeText(s: string): string {
+  return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
 }
