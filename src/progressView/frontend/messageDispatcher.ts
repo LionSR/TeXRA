@@ -87,31 +87,6 @@ function clearPendingLogUpdatesForStream(streamId: string): void {
   }
 }
 
-function prependToolUseInstructionIfNeeded(
-  logs: LogMessageData[],
-  runInstructions: Record<string, { text: string }> | undefined,
-  activeRunId: string | undefined,
-): LogMessageData[] {
-  if (!activeRunId) return logs;
-
-  const instructionText = runInstructions?.[activeRunId]?.text?.trim();
-  if (!instructionText) return logs;
-
-  const firstMessage = logs[0];
-  if (firstMessage?.messageType === 'userMessage') return logs;
-
-  return [
-    {
-      id: `tool-use-instruction:${activeRunId}`,
-      text: instructionText,
-      level: 'info',
-      timestamp: (firstMessage?.timestamp ?? Date.now()) - 1,
-      messageType: 'userMessage',
-    },
-    ...logs,
-  ];
-}
-
 function addPermission(
   ctx: MessageHandlerContext,
   permission: PermissionState,
@@ -190,16 +165,27 @@ function updateStreamInfo(
     const backendState = backendStates?.[stream.name];
     if (backendState) {
       const existing = nextStates.get(stream.name);
-      // Preserve frontend-owned properties:
+      // Preserve frontend-owned properties that backend _streamStates never populates:
       // - 'ui': frontend UI state (follow-up text, polish state, etc.)
       // - 'logs': managed by APPEND_LOG/UPDATE_LOGS, not UPDATE_STREAMS
       // - 'taskGroups': managed by ADD_TASK_GROUP/UPDATE_TASK_GROUP
-      // Backend's _streamStates never populates logs/taskGroups (always [])
+      // - Workflow run-scoped fields: managed by UPDATE_INSTRUCTION, UPDATE_RUN_USAGE,
+      //   UPDATE_FILES, UPDATE_MISSING_OUTPUTS, and UPDATE_LOGS (not UPDATE_STREAMS)
       const preserveUI = existing && existing.kind === backendState.kind;
+      const preserveWorkflow =
+        existing && isWorkflowState(existing) && isWorkflowState(backendState);
       nextStates.set(stream.name, {
         ...backendState,
         logs: existing?.logs ?? backendState.logs,
         taskGroups: existing?.taskGroups ?? backendState.taskGroups,
+        ...(preserveWorkflow && {
+          runInstructions: existing.runInstructions,
+          runUsage: existing.runUsage,
+          runFiles: existing.runFiles,
+          runMissingOutputs: existing.runMissingOutputs,
+          activeRunId: existing.activeRunId,
+          followupMode: existing.followupMode,
+        }),
         ...(preserveUI && { ui: existing.ui }),
         info: stream,
       } as StreamState);
@@ -329,20 +315,11 @@ const handlers: HandlerRegistry = {
         contextState,
       } = data;
 
-      const nextLogs =
-        !isClear && isToolUseState(prev)
-          ? prependToolUseInstructionIfNeeded(
-              messages,
-              runInstructions,
-              activeRunId ?? undefined,
-            )
-          : messages;
-
       // Common overrides shared by both state types.
       // Spread the narrowed `prev` (not the union) in each branch so
       // TypeScript can resolve the return back to the discriminated union.
       const base = {
-        logs: isClear ? [] : nextLogs,
+        logs: isClear ? [] : messages,
         taskGroups: isClear ? [] : (groups ?? prev.taskGroups),
         contextState: contextState ?? prev.contextState,
       };
@@ -418,10 +395,14 @@ const handlers: HandlerRegistry = {
       pendingLogUpdates.delete(getPendingLogKey(data.stream, logId));
     }
 
-    ctx.setStreamState(data.stream, (prev) => ({
-      ...prev,
-      logs: [...prev.logs, mergedLogMessage],
-    }));
+    ctx.setStreamState(data.stream, (prev) => {
+      // Guard: skip if this message is already in the log list (race between
+      // UPDATE_LOGS and APPEND_LOG can cause the same entry to arrive twice).
+      if (logId && prev.logs.some((entry) => entry.id === logId)) {
+        return prev;
+      }
+      return { ...prev, logs: [...prev.logs, mergedLogMessage] };
+    });
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_LOG]: (data, ctx) => {

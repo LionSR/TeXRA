@@ -19,6 +19,7 @@ import { ELEMENT_IDS, STREAM_STATUS, TOOLBAR_BUTTONS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
 import type { StreamState } from '../store';
+import './RunSelector';
 
 // Local imports - shared schemas
 import type { StreamTabInfo } from '@shared/schemas';
@@ -177,8 +178,11 @@ export class StreamHeader extends LitElement {
       }
 
       .run-selector {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
         min-width: 180px;
-        max-width: 260px;
+        max-width: 360px;
         flex-shrink: 0;
       }
 
@@ -323,25 +327,29 @@ export class StreamHeader extends LitElement {
         font-size: var(--font-size-xs, 10px);
       }
 
-      .subagent-badge {
+      .child-badge {
         display: inline-flex;
         align-items: center;
         gap: var(--spacing-tiny);
         padding: 1px var(--spacing-small);
         font-size: var(--font-size-xs, 10px);
         font-weight: 600;
-        color: var(--color-info, var(--vscode-charts-blue));
-        background: color-mix(
-          in srgb,
-          var(--color-info, var(--vscode-charts-blue)) 12%,
-          transparent
-        );
+        color: var(--_badge-color);
+        background: color-mix(in srgb, var(--_badge-color) 12%, transparent);
         border-radius: var(--border-radius-small);
         white-space: nowrap;
       }
 
-      .subagent-badge .codicon {
+      .child-badge .codicon {
         font-size: var(--font-size-xs, 10px);
+      }
+
+      .subagent-badge {
+        --_badge-color: var(--color-info, var(--vscode-charts-blue));
+      }
+
+      .process-badge {
+        --_badge-color: var(--color-warning, var(--vscode-charts-orange));
       }
 
       @media (max-width: 500px) {
@@ -384,6 +392,11 @@ export class StreamHeader extends LitElement {
     const toolbarButtons =
       TOOLBAR_BUTTONS[agentCategory] ?? TOOLBAR_BUTTONS.workflow;
     const activeSubagents = this.streamState?.activeSubagents ?? [];
+    const finishedSubagentCount = this.streamState?.finishedSubagentCount ?? 0;
+    const activeProcesses = this.streamState?.activeProcesses ?? [];
+    const finishedProcessCount = this.streamState?.finishedProcessCount ?? 0;
+    const totalSubagents = activeSubagents.length + finishedSubagentCount;
+    const totalProcesses = activeProcesses.length + finishedProcessCount;
 
     return html`
       <div class="log-header">
@@ -407,14 +420,36 @@ export class StreamHeader extends LitElement {
               })}
               data-status=${statusLabel}
             ></span>
-            ${activeSubagents.length > 0
+            ${totalSubagents > 0
               ? html`<span
-                  class="subagent-badge"
+                  class="child-badge subagent-badge"
                   title=${activeSubagents.map((s) => s.agentName).join(', ')}
                 >
                   <i class="codicon codicon-server-process"></i>
-                  ${activeSubagents.length}
-                  subagent${activeSubagents.length > 1 ? 's' : ''}
+                  ${activeSubagents.length > 0
+                    ? html`${activeSubagents.length} running`
+                    : nothing}${activeSubagents.length > 0 &&
+                  finishedSubagentCount > 0
+                    ? html`, `
+                    : nothing}${finishedSubagentCount > 0
+                    ? html`${finishedSubagentCount} done`
+                    : nothing}
+                </span>`
+              : nothing}
+            ${totalProcesses > 0
+              ? html`<span
+                  class="child-badge process-badge"
+                  title=${activeProcesses.map((p) => p.agentName).join(', ')}
+                >
+                  <i class="codicon codicon-terminal"></i>
+                  ${activeProcesses.length > 0
+                    ? html`${activeProcesses.length} running`
+                    : nothing}${activeProcesses.length > 0 &&
+                  finishedProcessCount > 0
+                    ? html`, `
+                    : nothing}${finishedProcessCount > 0
+                    ? html`${finishedProcessCount} done`
+                    : nothing}
                 </span>`
               : nothing}
           </div>

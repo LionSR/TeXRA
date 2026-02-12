@@ -65,10 +65,13 @@ function handleUpdateLogMessage(
 
       const isActive = streamId === ctx.state.activeStream;
       if (isActive && ctx.webviewUpdater.isAvailable()) {
-        ctx.webviewUpdater.updateLogMessage(streamId, {
-          ...existing,
-          ...updates,
-        });
+        // Preserve messageType from existing if update doesn't provide one —
+        // spreading { messageType: undefined } would strip it on the frontend.
+        const merged = { ...existing, ...updates };
+        if (updates.messageType === undefined && existing.messageType) {
+          merged.messageType = existing.messageType;
+        }
+        ctx.webviewUpdater.updateLogMessage(streamId, merged);
       }
     },
   );

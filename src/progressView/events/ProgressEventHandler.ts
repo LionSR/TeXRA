@@ -72,6 +72,9 @@ export class ProgressEventHandler {
     bus.on('updateActiveSubagents', this.handleUpdateActiveSubagents, {
       signal,
     });
+    bus.on('updateActiveProcesses', this.handleUpdateActiveProcesses, {
+      signal,
+    });
     bus.on('setParentStream', this.handleSetParentStream, { signal });
     bus.on('extensionDeactivating', this.markAllRunningTasksAsCancelled, {
       signal,
@@ -257,13 +260,62 @@ export class ProgressEventHandler {
       () => {
         const { parentStreamId, children } = data;
 
-        // Update the parent stream's state with active subagent info
-        this.state.updateStreamState(parentStreamId, (prev) => ({
-          ...prev,
-          activeSubagents: children,
-        }));
+        // Update active list and accumulate finished count
+        this.state.updateStreamState(parentStreamId, (prev) => {
+          const prevIds = new Set(
+            prev.activeSubagents.map((s) => s.executionId),
+          );
+          const nextIds = new Set(children.map((s) => s.executionId));
+          const newlyFinished = [...prevIds].filter(
+            (id) => !nextIds.has(id),
+          ).length;
+          return {
+            ...prev,
+            activeSubagents: children,
+            finishedSubagentCount:
+              (prev.finishedSubagentCount ?? 0) + newlyFinished,
+          };
+        });
 
         // Only push to webview if the orchestrator is the active stream
+        if (
+          this.webviewUpdater.isAvailable() &&
+          parentStreamId === this.state.activeStream
+        ) {
+          this.webviewUpdater.updateAll(
+            this.state,
+            StreamStatusService.getAll(),
+          );
+        }
+      },
+    );
+  };
+
+  private handleUpdateActiveProcesses = (
+    data: ProgressEventPayloads['updateActiveProcesses'],
+  ): void => {
+    withEventErrorHandling(
+      'ActiveProcesses',
+      'failed to handle updateActiveProcesses',
+      () => {
+        const { parentStreamId, processes } = data;
+
+        this.state.updateStreamState(parentStreamId, (prev) => {
+          const prevIds = new Set(
+            prev.activeProcesses.map((p) => p.executionId),
+          );
+          const nextIds = new Set(processes.map((p) => p.executionId));
+          const newlyFinished = [...prevIds].filter(
+            (id) => !nextIds.has(id),
+          ).length;
+          return {
+            ...prev,
+            activeProcesses: processes,
+            finishedProcessCount:
+              (prev.finishedProcessCount ?? 0) + newlyFinished,
+          };
+        });
+
         if (
           this.webviewUpdater.isAvailable() &&
           parentStreamId === this.state.activeStream
@@ -367,13 +419,37 @@ export class ProgressEventHandler {
       return null;
     }
 
-    const messages = this.state.streamTabs.getMessages(stream);
+    let messages = this.state.streamTabs.getMessages(stream);
     const groups = [...this.state.taskGroups.getStreamGroups(stream).values()];
     const activeRunId = this.state.getActiveRunId(stream);
 
     const runInstructions = Object.fromEntries(
       this.state.getRunInstructions(stream).entries(),
     );
+
+    // Legacy fallback: old tool-use sessions saved before ToolUsePrepareNode
+    // started emitting logger.userMessage() won't have a userMessage log entry.
+    // Synthesise one from runInstructions so the instruction still renders.
+    if (
+      activeRunId &&
+      this.getStreamCategory(stream) === AgentCategory.ToolUse &&
+      messages[0]?.messageType !== 'userMessage'
+    ) {
+      const instructionText = runInstructions[activeRunId]?.text?.trim();
+      if (instructionText) {
+        messages = [
+          {
+            id: `tool-use-instruction:${activeRunId}`,
+            text: instructionText,
+            level: 'info',
+            timestamp: (messages[0]?.timestamp ?? Date.now()) - 1,
+            messageType: 'userMessage',
+          },
+          ...messages,
+        ];
+      }
+    }
+
     const runFiles = nestedMapToRecord(this.state.outputFiles.getFiles(stream));
     const runMissingOutputs = nestedMapToRecord(
       this.state.outputFiles.getMissingOutputs(stream),

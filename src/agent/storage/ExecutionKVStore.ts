@@ -30,8 +30,22 @@ export interface ExecutionKVStore {
   getExecutionId(): ExecutionId;
 }
 
-// Storage directory for executions
-const EXECUTIONS_DIR = 'executions';
+/** Execution metadata stored alongside config at launch time. */
+export interface ExecutionMeta {
+  timestamp: string;
+  parentExecutionId?: ExecutionId;
+  /** Persisted when execution reaches a terminal state (success or error). */
+  terminalStatus?: string;
+  /** Runtime category override (e.g. 'process' for background bash). */
+  category?: string;
+}
+
+/**
+ * Storage directory for all execution data (KV, output logs, etc.).
+ * This matches TASK_RUNS_DIR by design — both point to 'executions/' so
+ * KV metadata and workflow output files share the same per-execution directory.
+ */
+export const EXECUTIONS_DIR = 'executions';
 
 /**
  * Executes an async operation, returning a fallback value if file/directory not found.

@@ -19,18 +19,19 @@ import {
   type WorkflowAgentProposal,
   type ToolUseAgentProposal,
   type StreamTabId,
-  type ExecutionId,
 } from '@shared/schemas';
 import {
   getAgent,
   getVisibleWorkflowAgents,
   getVisibleToolUseAgents,
 } from '@agent/index/agentRegistry';
-import type { AgentConfigPayload } from '@agent/core/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfigPayload,
+} from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
-import { registerSubagent } from '@agent/runtime/subagentLineage';
 import {
   getCurrentToolFileInteractionContext,
   type ToolFileInteractionContext,
@@ -61,6 +62,8 @@ import { defineTool } from '@tools/core/define';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
+import { generateExecutionId } from '@utils/core/executionId';
+import { getExecutionStore, registerExecution } from '@agent/storage';
 
 // ============================================================================
 // Shared utilities
@@ -105,13 +108,23 @@ function toConfigPayload(
  * so the orchestrator gets the response without waiting for flow exit.
  * For workflow subagents, delivery happens when the promise resolves.
  */
-function executeSubagent(
+async function executeSubagent(
   configPayload: AgentConfigPayload,
   agentName: string,
   orchestratorStreamId: StreamTabId,
   options?: { enableYoloOnChild?: boolean },
-): ToolResult {
-  const executionId = randomUUID() as ExecutionId;
+): Promise<ToolResult> {
+  const executionId = generateExecutionId();
+
+  const ctx = getCurrentToolFileInteractionContext();
+  const parentExecutionId = ctx?.executionId;
+  const syntheticConfig = AgentConfigSchema.parse(configPayload);
+  await registerExecution(
+    executionId,
+    syntheticConfig,
+    agentName,
+    parentExecutionId,
+  );
 
   // Track whether result has already been delivered (via onBeforeWaiting)
   // to avoid duplicate delivery when the promise eventually resolves.
@@ -120,18 +133,12 @@ function executeSubagent(
 
   const promise = executeAgent(configPayload, executionId, {
     isSubagent: true,
+    parentStreamId: orchestratorStreamId,
     onStreamResolved: (resolvedStreamId) => {
       childStreamId = resolvedStreamId;
       if (options?.enableYoloOnChild) {
         setToolEditApprovalSessionBypass(resolvedStreamId, true);
       }
-      registerSubagent(
-        executionId,
-        orchestratorStreamId,
-        resolvedStreamId,
-        agentName,
-        promise,
-      );
     },
     onBeforeWaiting: (lastResponse) => {
       if (hasDelivered || !childStreamId) return;
@@ -143,27 +150,28 @@ function executeSubagent(
         executionId,
         streamId: childStreamId,
       });
+      void getExecutionStore(executionId).write('report', msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     },
-  });
-  promise
-    .then((result) => {
+    onCompleted: (result) => {
       if (hasDelivered) return;
       hasDelivered = true;
       const msg = formatSubagentDelivery(agentName, result);
+      void getExecutionStore(executionId).write('report', msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
-    })
-    .catch((err: unknown) => {
-      const msg = formatSubagentError(executionId, agentName, err);
-      ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
-    });
+    },
+  });
+  promise.catch((err: unknown) => {
+    const msg = formatSubagentError(executionId, agentName, err);
+    void getExecutionStore(executionId).write('report', msg);
+    ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+  });
   return {
     summary: `Launched '${agentName}' (async)`,
     output: [
-      `Subagent '${agentName}' launched in async mode.`,
+      `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,
       `Execution ID: ${executionId}`,
-      `Check progress: executions tool with path /executions/${executionId}`,
-      'Result will be delivered as a follow-up message when complete.',
+      `To check intermediate progress: executions tool with path=/executions/${executionId} and action=wait (waits for next status change).`,
     ].join('\n'),
   };
 }
@@ -411,7 +419,6 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       agent: input.agent,
       model,
       instruction: input.instruction,
-      mode: 'async',
       inputFile: input.inputFile,
       inputFiles: input.inputFiles,
       referenceFile: input.referenceFile,
@@ -492,7 +499,6 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
       agent: input.agent,
       model,
       instruction: input.instruction,
-      mode: 'async',
     } satisfies ToolUseAgentProposal);
 
     return proposeAndExecute(proposal, input.agent, ctx.streamId, 'delegation');
