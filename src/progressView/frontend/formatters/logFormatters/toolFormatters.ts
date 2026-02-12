@@ -9,7 +9,18 @@
 
 // Local imports - shared utilities
 import { isPlainObject } from '@shared/utils/string';
+import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import type { MemoryToolInput } from '@tools/memory/MemoryTool';
+import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
+import type { EditInput } from '@tools/EditTool';
+import type { TextEditorInput } from '@tools/TextEditorTool';
+import type { ReadInput } from '@tools/ReadTool';
+import type { WriteInput } from '@tools/WriteTool';
+import type {
+  DelegateAgentInput,
+  WorkflowAgentInput,
+} from '@tools/WorkflowTool';
+import type { AcceptRunFilesInput } from '@tools/AcceptRunFilesTool';
 
 // Local imports - Lit template utilities
 import {
@@ -29,6 +40,7 @@ import {
   buildFileLinkWithLines,
   buildEditDiffSection,
   buildMemoryPathDisplay,
+  buildExecutionsPathDisplay,
   buildCodeBlock,
   buildDetailsSummary,
 } from '../htmlBuilders';
@@ -52,9 +64,27 @@ import '../../components/ToolTimer';
 /** Default bash tool timeout (matches BASH_TIMEOUT_MS in src/tools/bash.ts). */
 const BASH_DEFAULT_TIMEOUT_MS = 120_000;
 
+/** Default executions tool timeout (matches code default in ExecutionsTool.ts). */
+const EXECUTIONS_DEFAULT_TIMEOUT_MS = 300_000;
+
 /** Known per-tool default timeouts (ms) for display in the running timer. */
 const TOOL_DEFAULT_TIMEOUTS: Record<string, number> = {
   bash: BASH_DEFAULT_TIMEOUT_MS,
+  executions: EXECUTIONS_DEFAULT_TIMEOUT_MS,
+};
+
+/**
+ * Tools whose `timeout` input field is in seconds (converted to ms for display).
+ * Most tools use milliseconds directly.
+ */
+const TIMEOUT_IN_SECONDS = new Set(['executions']);
+
+/**
+ * Tools where the timeout only applies to a specific action value.
+ * For these tools, only show the timer limit when that action is used.
+ */
+const TIMEOUT_GATED_BY_ACTION: Record<string, string> = {
+  executions: 'wait',
 };
 
 /**
@@ -67,8 +97,21 @@ function getToolTimeoutMs(
 ): number | undefined {
   const defaultTimeout = TOOL_DEFAULT_TIMEOUTS[toolName];
   if (defaultTimeout === undefined) return undefined;
+
+  // Some tools only have a meaningful timeout for a specific action
+  const requiredAction = TIMEOUT_GATED_BY_ACTION[toolName];
+  if (
+    requiredAction &&
+    isPlainObject(input) &&
+    input.action !== requiredAction
+  ) {
+    return undefined;
+  }
+
   if (isPlainObject(input) && typeof input.timeout === 'number') {
-    return input.timeout;
+    return TIMEOUT_IN_SECONDS.has(toolName)
+      ? input.timeout * 1000
+      : input.timeout;
   }
   return defaultTimeout;
 }
@@ -221,74 +264,58 @@ export function formatToolUseTemplate(
       : '';
 
   // Handle edit tools with diff display
-  if (
-    TOOLS_WITH_DIFF_INPUT.has(toolName) &&
-    typeof input === 'object' &&
-    input !== null &&
-    'old_str' in input &&
-    'new_str' in input &&
-    typeof (input as { old_str?: string }).old_str === 'string' &&
-    typeof (input as { new_str?: string }).new_str === 'string'
-  ) {
-    // Extract startLine from output.edits[0] for file link navigation
-    const outputData = parsed.output;
-    const edits =
-      outputData && typeof outputData === 'object' && 'edits' in outputData
-        ? (outputData as { edits?: Array<{ startLine?: number }> }).edits
-        : undefined;
-    const startLine = edits?.[0]?.startLine;
+  if (TOOLS_WITH_DIFF_INPUT.has(toolName) && isPlainObject(input)) {
+    const editInput = input as EditInput | TextEditorInput;
+    if (
+      typeof editInput.old_str === 'string' &&
+      typeof editInput.new_str === 'string'
+    ) {
+      // Extract startLine from output.edits[0] for file link navigation
+      const outputData = parsed.output;
+      const edits =
+        outputData && typeof outputData === 'object' && 'edits' in outputData
+          ? (outputData as { edits?: Array<{ startLine?: number }> }).edits
+          : undefined;
+      const startLine = edits?.[0]?.startLine;
 
-    if (filePath) {
+      if (filePath) {
+        sections.push(
+          buildToolUseSection(
+            'File:',
+            buildFileLinkWithLines(filePath, { startLine }),
+          ),
+        );
+      }
       sections.push(
         buildToolUseSection(
-          'File:',
-          buildFileLinkWithLines(filePath, { startLine }),
+          'Changes:',
+          buildEditDiffSection(editInput.old_str, editInput.new_str),
         ),
       );
     }
-    sections.push(
-      buildToolUseSection(
-        'Changes:',
-        buildEditDiffSection(
-          (input as { old_str: string }).old_str,
-          (input as { new_str: string }).new_str,
-        ),
-      ),
-    );
   }
   // Handle read tools with file link
   else if (TOOLS_WITH_FILE_LINK.has(toolName) && filePath) {
-    const range =
-      typeof input === 'object' && input !== null && 'range' in input
-        ? (input as { range?: { start?: number; end?: number } }).range
-        : undefined;
+    const readInput = input as ReadInput;
     sections.push(
       buildToolUseSection(
         'File:',
         buildFileLinkWithLines(filePath, {
-          startLine: range?.start,
-          endLine: range?.end,
+          startLine: readInput.range?.start,
+          endLine: readInput.range?.end ?? undefined,
         }),
       ),
     );
   }
   // Handle write tools with file link + content
-  else if (
-    TOOLS_WITH_FILE_CONTENT.has(toolName) &&
-    filePath &&
-    typeof input === 'object' &&
-    input !== null &&
-    'content' in input
-  ) {
+  else if (TOOLS_WITH_FILE_CONTENT.has(toolName) && filePath) {
+    const writeInput = input as WriteInput;
     sections.push(
       buildToolUseSection('File:', buildFileLinkWithLines(filePath)),
     );
     const contentLanguage = getLanguageFromPath(filePath);
-    const rawContent = (input as { content?: unknown }).content;
-    const contentText =
-      typeof rawContent === 'string' ? rawContent : String(rawContent ?? '');
     sections.push(
-      buildToolSection('Content:', contentText, {
+      buildToolSection('Content:', writeInput.content, {
         toolName,
         language: contentLanguage,
       }),
@@ -361,6 +388,134 @@ export function formatToolUseTemplate(
       }
     }
     // view and delete: file path section above is sufficient
+  }
+  // Handle executions tool with specialized formatting based on action
+  else if (
+    toolName === 'executions' &&
+    typeof input === 'object' &&
+    input !== null
+  ) {
+    const execInput = input as ExecutionsToolInput;
+    const execPath = execInput.path ?? '';
+    const action = execInput.action ?? 'view';
+
+    // Show the virtual path being accessed
+    if (execPath) {
+      sections.push(
+        buildToolUseSection('Path:', buildExecutionsPathDisplay(execPath)),
+      );
+    }
+
+    if (action === 'wait') {
+      // wait: show timeout info
+      const timeout = execInput.timeout ?? 300;
+      sections.push(
+        buildToolUseSection(
+          'Action:',
+          wrapInPre(`wait (timeout: ${timeout}s)`),
+        ),
+      );
+    } else if (action === 'kill') {
+      // kill: show action
+      sections.push(buildToolUseSection('Action:', wrapInPre('kill')));
+    }
+    // view: path section above is sufficient
+
+    // Show view_range if specified
+    if (execInput.view_range) {
+      const [start, end] = execInput.view_range;
+      sections.push(
+        buildToolUseSection('Range:', wrapInPre(`lines ${start}–${end}`)),
+      );
+    }
+  }
+  // Handle accept_run_files with file list display
+  else if (
+    toolName === 'accept_run_files' &&
+    typeof input === 'object' &&
+    input !== null
+  ) {
+    const acceptInput = input as AcceptRunFilesInput;
+
+    // Show execution ID
+    if (acceptInput.execution_id) {
+      // prettier-ignore
+      sections.push(buildToolUseSection('Execution:', html`<code class="execution-id">${acceptInput.execution_id}</code>`));
+    }
+
+    // Show file mappings as a list with file links
+    const files = acceptInput.files;
+    if (Array.isArray(files) && files.length > 0) {
+      // Extract per-file edits from output for diff stats
+      const outputData = parsed.output;
+      const edits =
+        outputData && typeof outputData === 'object' && 'edits' in outputData
+          ? (
+              outputData as {
+                edits?: Array<{
+                  path?: string;
+                  lineChanges?: { added: number; removed: number };
+                }>;
+              }
+            ).edits
+          : undefined;
+      const editsByPath = new Map(
+        (edits ?? []).filter((e) => e.path).map((e) => [e.path!, e] as const),
+      );
+
+      // prettier-ignore
+      const fileItems = html`${files.map((f) => {
+        const dest = f.original ?? f.path ?? '';
+        const source = f.path ?? '';
+        const isMapped = dest && source && dest !== source;
+        const edit = editsByPath.get(dest);
+        const diffStats = edit?.lineChanges
+          ? html` <span class="file-stats"><span class="added">+${edit.lineChanges.added}</span><span class="removed" style="margin-left:4px">-${edit.lineChanges.removed}</span></span>`
+          : nothing;
+        // prettier-ignore
+        return html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="file-link clickable-link" data-file=${dest}>${dest}</span>${isMapped ? html` <span class="file-source">(from ${source})</span>` : nothing}${diffStats}</li>`;
+      })}`;
+      // prettier-ignore
+      sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
+    }
+  }
+  // Handle delegation tools with structured display
+  else if (
+    DELEGATION_TOOLS.has(toolName) &&
+    typeof input === 'object' &&
+    input !== null
+  ) {
+    const delegateInput = input as DelegateAgentInput | WorkflowAgentInput;
+
+    // Agent and model on one line
+    const agent = delegateInput.agent;
+    const model = delegateInput.model;
+    if (agent || model) {
+      const agentPart = agent ?? 'unknown';
+      const modelPart = model
+        ? html` <span class="file-source">(${model})</span>`
+        : nothing;
+      // prettier-ignore
+      sections.push(buildToolUseSection('Agent:', html`<code class="execution-id">${agentPart}</code>${modelPart}`));
+    }
+
+    // Instruction as readable text
+    const instruction = delegateInput.instruction;
+    if (instruction) {
+      sections.push(
+        buildToolUseSection('Instruction:', wrapInPre(instruction)),
+      );
+    }
+
+    // Workflow file fields (delegate_workflow / propose_workflow)
+    const fileGroups =
+      'inputFile' in delegateInput ? getProposalFileGroups(delegateInput) : [];
+    if (fileGroups.length > 0) {
+      // prettier-ignore
+      const fileItems = html`${fileGroups.flatMap((g) => g.files.map((f) => html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="file-link clickable-link" data-file=${f}>${f}</span> <span class="file-source">(${g.label})</span></li>`))}`;
+      // prettier-ignore
+      sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
+    }
   }
   // Default handling for other tools
   else if (input !== undefined && input !== null) {
@@ -442,22 +597,15 @@ export function formatToolUseTemplate(
   // prettier-ignore
   const timerTemplate = isInProgress ? html`<tool-timer .startTime=${timestamp} .timeoutMs=${toolTimeoutMs ?? 0}></tool-timer>` : undefined;
 
-  // Delegation banner extras: mode badge + setup link (shown in summary row)
+  // Delegation banner extras: setup link (shown in summary row)
   const isDelegation = DELEGATION_TOOLS.has(toolName);
-  let proposalMode = '';
-  if (isDelegation) {
-    proposalMode =
-      isPlainObject(input) && typeof input.mode === 'string'
-        ? input.mode
-        : 'sync';
-  }
   const proposalId =
     isDelegation && !isInProgress
       ? registerProposalInput(input, toolName)
       : null;
 
   // prettier-ignore
-  const extraContent = html`${timerTemplate ?? nothing}${proposalMode ? html`<span class=${classMap({ 'proposal-mode-badge': true, 'proposal-mode-badge--async': proposalMode === 'async', 'proposal-mode-badge--sync': proposalMode === 'sync' })}>${proposalMode}</span>` : nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Restore this proposal configuration"><i class="codicon codicon-reply"></i> Setup</span>` : nothing}`;
+  const extraContent = html`${timerTemplate ?? nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Restore this proposal configuration"><i class="codicon codicon-reply"></i> Setup</span>` : nothing}`;
 
   // prettier-ignore
   return html`<details class=${classMap({

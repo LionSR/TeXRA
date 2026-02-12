@@ -1,5 +1,4 @@
 import * as path from 'path';
-import { randomUUID } from 'crypto';
 
 import * as vscode from 'vscode';
 import { ZodError } from 'zod';
@@ -64,13 +63,20 @@ import {
 } from '@logger/index';
 import { TaskRunFileService } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
+import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
 
+import { writeTerminalStatus } from '@agent/storage';
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
 import { createInterruptCallbacks } from './InterruptManager';
-import { trackExecution, untrackExecution } from './executionRegistry';
+import {
+  trackExecution,
+  untrackExecution,
+  updateExecutionProgress,
+  AgentExecutionHandle,
+} from './executionRegistry';
 import type { AgentFlowResult, OutputFileSummary } from './AgentFlowResult';
 
 const CHANNEL = 'executeAgent';
@@ -148,8 +154,7 @@ async function resolveAgentBase(
   providedExecutionId?: ExecutionId,
   options?: ResolveAgentOptions,
 ): Promise<ResolvedAgentBase> {
-  const executionId: ExecutionId =
-    providedExecutionId ?? (randomUUID() as ExecutionId);
+  const executionId: ExecutionId = providedExecutionId ?? generateExecutionId();
 
   const fullConfig = AgentConfigSchema.parse(configPayload);
   const resolution = await getAgentPath(fullConfig.agent, {
@@ -299,16 +304,44 @@ function toOutputSummaries(roundOutputs: RoundOutput[]): OutputFileSummary[] {
   );
 }
 
+/** Create an onRoundCompleted callback that feeds progress into the execution registry. */
+function createRoundProgressCallback(
+  executionId: ExecutionId,
+): (roundIndex: number, totalRounds: number) => void {
+  return (roundIndex, totalRounds) => {
+    updateExecutionProgress(executionId, {
+      currentRound: roundIndex,
+      totalRounds,
+    });
+  };
+}
+
 async function runFlowWithLifecycle(
   ctx: ResolvedAgentBase,
   streamId: StreamTabId,
   agentName: string,
   runner: () => Promise<AgentFlowResult>,
-  options?: { isSubagent?: boolean },
+  options?: {
+    isSubagent?: boolean;
+    category?: 'workflow' | 'toolUse';
+    parentStreamId?: StreamTabId;
+    onCompleted?: (result: AgentFlowResult) => void;
+  },
 ): Promise<AgentFlowResult> {
-  trackExecution(ctx.executionId, streamId);
+  const category = options?.category ?? 'workflow';
+  const parentStreamId = options?.parentStreamId ?? streamId;
+  const handle = new AgentExecutionHandle(
+    ctx.executionId,
+    parentStreamId,
+    streamId,
+    agentName,
+    category,
+  );
+  trackExecution(handle);
   try {
     const result = await runner();
+    options?.onCompleted?.(result);
+    await writeTerminalStatus(ctx.executionId, result.status).catch(() => {});
     untrackExecution(ctx.executionId);
     ctx.parentStage.end(result.status);
 
@@ -320,6 +353,7 @@ async function runFlowWithLifecycle(
     logger.debug(`Task completed with status: ${result.status}`);
     return result;
   } catch (err) {
+    await writeTerminalStatus(ctx.executionId, 'error').catch(() => {});
     untrackExecution(ctx.executionId);
     const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
@@ -512,10 +546,14 @@ async function prepareAgentUI(
 export interface ExecuteAgentOptions {
   /** When true, proposal tools are filtered out to prevent nesting. */
   isSubagent?: boolean;
+  /** Parent stream ID for subagent lineage tracking. Defaults to own streamId. */
+  parentStreamId?: StreamTabId;
   /** Fires early with the real streamId, before flow execution starts. */
   onStreamResolved?: (streamId: StreamTabId) => void;
   /** Fires before a tool-use subagent enters WAITING, delivering interim result to orchestrator. */
   onBeforeWaiting?: (lastResponse: string | undefined) => void;
+  /** Fires after flow completes but BEFORE untrackExecution, so follow-ups are enqueued before waiters resolve. */
+  onCompleted?: (result: AgentFlowResult) => void;
 }
 
 export async function executeAgent(
@@ -530,6 +568,10 @@ export async function executeAgent(
   options?.onStreamResolved?.(streamId);
 
   const isSubagent = options?.isSubagent;
+  const category =
+    setting.agentCategory === AgentCategory.ToolUse
+      ? ('toolUse' as const)
+      : ('workflow' as const);
   return runFlowWithLifecycle(
     ctx,
     streamId,
@@ -572,6 +614,7 @@ export async function executeAgent(
             ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
           setting: ctx.setting as AgentWorkflowSetting,
           parentStage: ctx.parentStage,
+          onRoundCompleted: createRoundProgressCallback(ctx.executionId),
         });
         return {
           category: 'workflow' as const,
@@ -582,7 +625,12 @@ export async function executeAgent(
         };
       });
     },
-    { isSubagent },
+    {
+      isSubagent,
+      category,
+      parentStreamId: options?.parentStreamId,
+      onCompleted: options?.onCompleted,
+    },
   );
 }
 
@@ -622,6 +670,7 @@ export async function executeMergeAgent(
           fileService,
         ),
         parentStage: ctx.parentStage,
+        onRoundCompleted: createRoundProgressCallback(ctx.executionId),
       });
       return {
         category: 'workflow' as const,
@@ -680,5 +729,6 @@ export async function resumeToolUseFromSnapshot(
         streamId,
       };
     },
+    { category: 'toolUse' },
   );
 }
