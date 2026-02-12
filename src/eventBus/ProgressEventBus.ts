@@ -3,7 +3,7 @@ import { EventEmitter } from 'events';
 import type { AgentCategory } from '@agent/core/AgentDataclass';
 import type { TaskState } from '@logger/TaskState';
 import type {
-  ActiveSubagentInfo,
+  ActiveChildInfo,
   AddTaskGroupPayload,
   AgentProposalPermission,
   BashPermission,
@@ -94,7 +94,11 @@ export interface ProgressEventPayloads {
   updateQueuedFollowUps: { streamId: StreamTabId };
   updateActiveSubagents: {
     parentStreamId: StreamTabId;
-    children: ActiveSubagentInfo[];
+    children: ActiveChildInfo[];
+  };
+  updateActiveProcesses: {
+    parentStreamId: StreamTabId;
+    processes: ActiveChildInfo[];
   };
   setParentStream: {
     childStreamId: StreamTabId;

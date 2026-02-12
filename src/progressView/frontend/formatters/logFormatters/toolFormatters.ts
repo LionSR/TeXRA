@@ -427,6 +427,66 @@ export function formatToolUseTemplate(
       sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
     }
   }
+  // Handle delegation tools with structured display
+  else if (
+    DELEGATION_TOOLS.has(toolName) &&
+    typeof input === 'object' &&
+    input !== null
+  ) {
+    const delegateInput = input as {
+      agent?: string;
+      model?: string;
+      instruction?: string;
+      inputFile?: string | null;
+      inputFiles?: string[];
+      referenceFile?: string | null;
+      referenceFiles?: string[];
+      auxiliaryFile?: string | null;
+      auxiliaryFiles?: string[];
+      mediaFile?: string | null;
+      mediaFiles?: string[];
+      outputFiles?: string[];
+    };
+
+    // Agent and model on one line
+    if (delegateInput.agent || delegateInput.model) {
+      const agentPart = delegateInput.agent ?? 'unknown';
+      const modelPart = delegateInput.model
+        ? html` <span class="file-source">(${delegateInput.model})</span>`
+        : nothing;
+      // prettier-ignore
+      sections.push(buildToolUseSection('Agent:', html`<code class="execution-id">${agentPart}</code>${modelPart}`));
+    }
+
+    // Instruction as readable text
+    if (delegateInput.instruction) {
+      sections.push(
+        buildToolUseSection(
+          'Instruction:',
+          wrapInPre(delegateInput.instruction),
+        ),
+      );
+    }
+
+    // Workflow file fields (delegate_workflow / propose_workflow)
+    // Merge singular + plural fields (same pattern as RequestPanels.renderProposalFiles)
+    const combine = (single: string | null | undefined, arr: string[] = []) =>
+      [single, ...arr].filter((f): f is string => Boolean(f));
+    const fileGroups = [
+      { label: 'Input', files: combine(delegateInput.inputFile, delegateInput.inputFiles) },
+      { label: 'Reference', files: combine(delegateInput.referenceFile, delegateInput.referenceFiles) },
+      { label: 'Auxiliary', files: combine(delegateInput.auxiliaryFile, delegateInput.auxiliaryFiles) },
+      { label: 'Media', files: combine(delegateInput.mediaFile, delegateInput.mediaFiles) },
+      { label: 'Output', files: delegateInput.outputFiles ?? [] },
+    ];
+    const nonEmptyGroups = fileGroups.filter((g) => g.files.length > 0);
+    if (nonEmptyGroups.length > 0) {
+      // prettier-ignore
+      const fileItems = html`${nonEmptyGroups.flatMap((g) => g.files.map((f) => html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="file-link clickable-link" data-file=${f}>${f}</span> <span class="file-source">(${g.label})</span></li>`))}`;
+      // prettier-ignore
+      sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
+    }
+  }
   // Default handling for other tools
   else if (input !== undefined && input !== null) {
     const codeLanguage = TOOL_CODE_LANGUAGES.get(toolName);

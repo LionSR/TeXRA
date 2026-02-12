@@ -72,6 +72,9 @@ export class ProgressEventHandler {
     bus.on('updateActiveSubagents', this.handleUpdateActiveSubagents, {
       signal,
     });
+    bus.on('updateActiveProcesses', this.handleUpdateActiveProcesses, {
+      signal,
+    });
     bus.on('setParentStream', this.handleSetParentStream, { signal });
     bus.on('extensionDeactivating', this.markAllRunningTasksAsCancelled, {
       signal,
@@ -264,6 +267,33 @@ export class ProgressEventHandler {
         }));
 
         // Only push to webview if the orchestrator is the active stream
+        if (
+          this.webviewUpdater.isAvailable() &&
+          parentStreamId === this.state.activeStream
+        ) {
+          this.webviewUpdater.updateAll(
+            this.state,
+            StreamStatusService.getAll(),
+          );
+        }
+      },
+    );
+  };
+
+  private handleUpdateActiveProcesses = (
+    data: ProgressEventPayloads['updateActiveProcesses'],
+  ): void => {
+    withEventErrorHandling(
+      'ActiveProcesses',
+      'failed to handle updateActiveProcesses',
+      () => {
+        const { parentStreamId, processes } = data;
+
+        this.state.updateStreamState(parentStreamId, (prev) => ({
+          ...prev,
+          activeProcesses: processes,
+        }));
+
         if (
           this.webviewUpdater.isAvailable() &&
           parentStreamId === this.state.activeStream

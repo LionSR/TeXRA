@@ -345,6 +345,27 @@ export class StreamHeader extends LitElement {
         font-size: var(--font-size-xs, 10px);
       }
 
+      .process-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-tiny);
+        padding: 1px var(--spacing-small);
+        font-size: var(--font-size-xs, 10px);
+        font-weight: 600;
+        color: var(--color-warning, var(--vscode-charts-orange));
+        background: color-mix(
+          in srgb,
+          var(--color-warning, var(--vscode-charts-orange)) 12%,
+          transparent
+        );
+        border-radius: var(--border-radius-small);
+        white-space: nowrap;
+      }
+
+      .process-badge .codicon {
+        font-size: var(--font-size-xs, 10px);
+      }
+
       @media (max-width: 500px) {
         .log-header {
           flex-wrap: wrap;
@@ -385,6 +406,7 @@ export class StreamHeader extends LitElement {
     const toolbarButtons =
       TOOLBAR_BUTTONS[agentCategory] ?? TOOLBAR_BUTTONS.workflow;
     const activeSubagents = this.streamState?.activeSubagents ?? [];
+    const activeProcesses = this.streamState?.activeProcesses ?? [];
 
     return html`
       <div class="log-header">
@@ -416,6 +438,16 @@ export class StreamHeader extends LitElement {
                   <i class="codicon codicon-server-process"></i>
                   ${activeSubagents.length}
                   subagent${activeSubagents.length > 1 ? 's' : ''}
+                </span>`
+              : nothing}
+            ${activeProcesses.length > 0
+              ? html`<span
+                  class="process-badge"
+                  title=${activeProcesses.map((p) => p.agentName).join(', ')}
+                >
+                  <i class="codicon codicon-terminal"></i>
+                  ${activeProcesses.length}
+                  process${activeProcesses.length > 1 ? 'es' : ''}
                 </span>`
               : nothing}
           </div>

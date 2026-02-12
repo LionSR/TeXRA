@@ -41,7 +41,7 @@ import {
 
 // Local imports - utils
 import { StorageFS } from '@utils/files';
-import { LEGACY_RUNS_DIR, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 import { ToolError, type ToolResult } from './result';
 import { defineTool } from './core/define';
@@ -50,16 +50,6 @@ import {
   ExecutionIdSchema,
   type ExecutionId,
 } from '@shared/schemas';
-
-/**
- * Resolve a storage-relative path, checking executions/ first then legacy taskRuns/.
- * Returns the path that exists, or the legacy path if neither does (caller checks).
- */
-async function resolveStoragePath(...segments: string[]): Promise<string> {
-  const primary = path.join(TASK_RUNS_DIR, ...segments);
-  if (await StorageFS.exists(primary)) return primary;
-  return path.join(LEGACY_RUNS_DIR, ...segments);
-}
 
 // ============================================================================
 // Schema
@@ -71,10 +61,14 @@ const ExecutionsToolInputSchema = z.strictObject({
 
   /** Action to perform. */
   action: z
-    .enum(['view', 'kill'])
+    .enum(['view', 'wait', 'kill'])
     .prefault('view')
     .describe(
-      'view: read execution data. kill: terminate a running execution by ID (use on /executions/{id}).',
+      'view: read execution data (returns immediately). ' +
+        'wait: block until a status change, then return data (avoids sleep-poll loops). ' +
+        'On /executions: wait for any active execution to change. ' +
+        'On /executions/{id}: wait for that specific execution to change. ' +
+        'kill: terminate a running execution by ID (use on /executions/{id}).',
     ),
 
   /** Optional line range [start, end] for large outputs */
@@ -86,24 +80,14 @@ const ExecutionsToolInputSchema = z.strictObject({
     })
     .nullish(),
 
-  /** Block until next status change instead of returning immediately. */
-  block: z
-    .boolean()
-    .prefault(false)
-    .describe(
-      'Wait for a status change instead of returning immediately (avoids sleep-poll loops). ' +
-        'On /executions: wait for any active execution to change. ' +
-        'On /executions/{id}: wait for that specific execution to change.',
-    ),
-
-  /** Max seconds to wait when block=true. */
+  /** Max seconds to wait when action="wait". Ignored otherwise. */
   timeout: z
     .number()
     .min(1)
     .max(1800)
     .prefault(300)
     .describe(
-      'Max seconds to wait when block=true. Ignored otherwise. Default: 300, max: 1800.',
+      'Max seconds to wait when action="wait". Ignored otherwise. Default: 300, max: 1800.',
     ),
 });
 
@@ -436,8 +420,7 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
     viewRange?: number[],
   ): Promise<ToolResult> {
     const outputPath = await resolveStoragePath(executionId, 'output.log');
-
-    if (!(await StorageFS.exists(outputPath))) {
+    if (!outputPath) {
       throw new ToolError(
         `No output found for execution ${executionId}. This path is only available for background bash processes.`,
       );
@@ -577,8 +560,7 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
 
   private async listFiles(executionId: ExecutionId): Promise<ToolResult> {
     const runDir = await resolveStoragePath(executionId);
-
-    if (!(await StorageFS.exists(runDir))) {
+    if (!runDir) {
       return { output: 'No files generated for this execution.' };
     }
 
@@ -648,8 +630,7 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
     viewRange?: number[],
   ): Promise<ToolResult> {
     const fullPath = await resolveStoragePath(executionId, filePath);
-
-    if (!(await StorageFS.exists(fullPath))) {
+    if (!fullPath) {
       throw new ToolError(
         `File not found: /executions/${executionId}/files/${filePath}`,
       );
