@@ -8,7 +8,7 @@ import {
   getToolUseFlowContext,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { interruptActiveChildren } from '@agent/runtime/subagentLineage';
+import { interruptActiveChildren } from '@agent/runtime/executionRegistry';
 import type { StreamTabId } from '@shared/schemas';
 
 export function registerAgentCommands(context: vscode.ExtensionContext): void {

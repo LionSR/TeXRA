@@ -9,6 +9,9 @@ import type {
   AgentFlowResult,
   OutputFileSummary,
 } from '@agent/runtime/AgentFlowResult';
+import type { ExecResult } from '@agent/types/ResultTypes';
+import { formatDuration } from '@utils/core';
+
 // ============================================================================
 // Formatting helpers
 // ============================================================================
@@ -85,4 +88,59 @@ export function formatSubagentError(
     `<message>${message}</message>`,
     '</subagent-error>',
   ].join('\n');
+}
+
+// ============================================================================
+// Background bash result formatting
+// ============================================================================
+
+/** Last N lines of output for the delivery preview. */
+const OUTPUT_PREVIEW_LINES = 20;
+
+/**
+ * Format a completed background bash result as a delivery message.
+ * Injected into the orchestrator's FollowUpQueue.
+ */
+export function formatBashDelivery(
+  executionId: string,
+  command: string,
+  wallTimeMs: number,
+  result: ExecResult,
+): string {
+  const preview = lastNLines(result.stdout ?? '', OUTPUT_PREVIEW_LINES);
+  return [
+    `<background-result id="${executionId}" command="${escapeAttr(command)}">`,
+    `<exit-code>${result.exitCode ?? 'unknown'}</exit-code>`,
+    `<wall-time>${formatDuration(wallTimeMs)}</wall-time>`,
+    `<output-preview>${preview}</output-preview>`,
+    '</background-result>',
+  ].join('\n');
+}
+
+/**
+ * Format a failed background bash result as a delivery message.
+ */
+export function formatBashError(
+  executionId: string,
+  command: string,
+  err: unknown,
+): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return [
+    `<background-error id="${executionId}" command="${escapeAttr(command)}">`,
+    `<message>${message}</message>`,
+    '</background-error>',
+  ].join('\n');
+}
+
+function lastNLines(text: string, n: number): string {
+  const lines = text.split('\n');
+  return lines.length <= n ? text : lines.slice(-n).join('\n');
+}
+
+function escapeAttr(s: string): string {
+  return s
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;');
 }

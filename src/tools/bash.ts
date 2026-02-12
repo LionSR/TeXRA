@@ -1,17 +1,39 @@
-// Local imports - core
+// Standard library imports
+import * as fs from 'fs';
+import { writeFile } from 'fs/promises';
+import * as path from 'path';
+
+// Third-party imports
 import { z } from 'zod';
 
 // Local imports - agent
+import type { StreamTabId, ExecutionId } from '@shared/schemas';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import {
+  trackExecution,
+  untrackExecution,
+  ProcessExecutionHandle,
+} from '@agent/runtime/executionRegistry';
+import { getExecutionStore } from '@agent/storage';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+
+// Local imports - common
+import { AgentHistoryManager } from '@common/history/AgentHistoryManager';
+import { AgentConfigSchema } from '@agent/core/AgentConfig';
 
 // Local imports - tools
-import { ToolError, ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@tools/result';
 import { buildTimeoutMessage } from '@tools/timeouts';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
 } from '@tools/approval/bashApproval';
+import { formatBashDelivery, formatBashError } from '@tools/subagentResults';
 import { executeCommand } from '@utils/system/execUtils';
+
+// Local imports - utils
+import { generateExecutionId } from '@utils/core/executionId';
+import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -29,6 +51,12 @@ const BashInputSchema = z.strictObject({
     .describe(
       'Timeout in milliseconds (max 600,000 ms / 10 min, default 120,000 ms / 2 min).',
     ),
+  run_in_background: z
+    .boolean()
+    .prefault(false)
+    .describe(
+      'Run command in background. Returns immediately with execution ID. Output captured to executions/{id}/output. Result delivered as follow-up when complete.',
+    ),
 });
 
 export type BashInput = z.infer<typeof BashInputSchema>;
@@ -36,7 +64,7 @@ export type BashInput = z.infer<typeof BashInputSchema>;
 export class BashTool extends defineTool({
   name: 'bash',
   description:
-    'Execute shell commands. Returns stdout on success, throws error with stderr on failure.',
+    'Execute shell commands. Returns stdout on success, throws error with stderr on failure. Use run_in_background for long-running commands.',
   schema: BashInputSchema,
 }) {
   protected async execute(input: BashInput): Promise<ToolResult> {
@@ -56,10 +84,24 @@ export class BashTool extends defineTool({
 
     const timeoutMs = input.timeout ?? BASH_TIMEOUT_MS;
 
-    // Truncation only applies to internal logging so long-running commands keep
-    // the output channel readable while still returning the complete stdout.
-    // Stream both stdout and stderr through the same callback for live UI updates.
-    const result = await executeCommand(input.command, {
+    if (input.run_in_background) {
+      return this.executeBackground(
+        input.command,
+        timeoutMs,
+        ctx?.streamId,
+        ctx?.executionId,
+      );
+    }
+
+    return this.executeForeground(input.command, timeoutMs, ctx);
+  }
+
+  private async executeForeground(
+    command: string,
+    timeoutMs: number,
+    ctx: ReturnType<typeof getCurrentToolFileInteractionContext>,
+  ): Promise<ToolResult> {
+    const result = await executeCommand(command, {
       truncate: true,
       timeout: timeoutMs,
       onStdout: ctx?.onToolOutput,
@@ -80,9 +122,7 @@ export class BashTool extends defineTool({
 
     if (result.success) {
       const preview =
-        input.command.length > 60
-          ? `${input.command.slice(0, 57)}…`
-          : input.command;
+        command.length > 60 ? `${command.slice(0, 57)}…` : command;
       return {
         summary: `Executed: ${preview} (exit 0)`,
         output: result.stdout || '',
@@ -93,5 +133,134 @@ export class BashTool extends defineTool({
       [result.stderr, result.stdout].filter(Boolean).join('\n') ||
       'No error output available';
     throw new ToolError(`Command failed: ${errorOutput}`);
+  }
+
+  private async executeBackground(
+    command: string,
+    timeoutMs: number,
+    parentStreamId: StreamTabId | undefined,
+    parentExecutionId: ExecutionId | undefined,
+  ): Promise<ToolResult> {
+    const executionId = generateExecutionId();
+    await ensureRunDir(executionId);
+
+    const outputPath = path.join(getRunDir(executionId), 'output.log');
+    const outputStream = fs.createWriteStream(outputPath, { flags: 'a' });
+
+    const appendToOutput = (chunk: string): void => {
+      outputStream.write(chunk);
+    };
+
+    const preview = command.length > 60 ? `${command.slice(0, 57)}…` : command;
+
+    let pid: number | undefined;
+    const startedAt = Date.now();
+    const promise = executeCommand(command, {
+      timeout: timeoutMs,
+      onPid: (p) => {
+        pid = p;
+      },
+      onStdout: appendToOutput,
+      onStderr: appendToOutput,
+    });
+
+    const kill = (): void => {
+      if (!pid) return;
+      // Try process-group kill first; fall back to direct PID on Windows or if already exited
+      try {
+        process.kill(-pid, 'SIGTERM');
+      } catch {
+        try {
+          process.kill(pid, 'SIGTERM');
+        } catch {
+          /* already exited */
+        }
+      }
+    };
+
+    const handle = new ProcessExecutionHandle(
+      executionId,
+      parentStreamId ?? executionId,
+      preview,
+      kill,
+    );
+    trackExecution(handle);
+
+    const syntheticConfig = AgentConfigSchema.parse({
+      agent: 'bash',
+      instruction: command,
+    });
+    const timestamp = new Date().toISOString();
+    void AgentHistoryManager.addToHistory(
+      executionId,
+      syntheticConfig,
+      parentExecutionId,
+    );
+    const kvStore = getExecutionStore(executionId);
+    void kvStore.write('config', syntheticConfig);
+    void kvStore.write('meta', { timestamp, parentExecutionId });
+    if (parentExecutionId) {
+      void getExecutionStore(parentExecutionId).write(`child-${executionId}`, {
+        agent: 'bash',
+        timestamp,
+      });
+    }
+
+    void promise
+      .then(async (result) => {
+        const wallTimeMs = Date.now() - startedAt;
+
+        const metaPath = path.join(getRunDir(executionId), 'meta.json');
+        await writeFile(
+          metaPath,
+          JSON.stringify(
+            {
+              exitCode: result.exitCode,
+              wallTimeMs,
+              success: result.success,
+              timedOut: result.timedOut,
+              command,
+            },
+            null,
+            2,
+          ),
+        );
+
+        untrackExecution(executionId);
+
+        if (parentStreamId) {
+          const msg = formatBashDelivery(
+            executionId,
+            command,
+            wallTimeMs,
+            result,
+          );
+          void getExecutionStore(executionId).write('report', msg);
+          ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
+        }
+      })
+      .catch((err: unknown) => {
+        untrackExecution(executionId);
+
+        if (parentStreamId) {
+          const msg = formatBashError(executionId, command, err);
+          void getExecutionStore(executionId).write('report', msg);
+          ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
+        }
+      })
+      .finally(() => {
+        outputStream.end();
+      });
+
+    return {
+      summary: `Launched background: ${preview}`,
+      output: [
+        `Command launched in background.`,
+        `Execution ID: ${executionId}`,
+        `Output: executions path=/executions/${executionId}/output`,
+        `Status: executions path=/executions/${executionId} block=true`,
+        'Result will be delivered as a follow-up message when complete.',
+      ].join('\n'),
+    };
   }
 }
