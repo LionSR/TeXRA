@@ -341,7 +341,7 @@ async function runFlowWithLifecycle(
   try {
     const result = await runner();
     options?.onCompleted?.(result);
-    await writeTerminalStatus(ctx.executionId, result.status);
+    await writeTerminalStatus(ctx.executionId, result.status).catch(() => {});
     untrackExecution(ctx.executionId);
     ctx.parentStage.end(result.status);
 
@@ -353,7 +353,7 @@ async function runFlowWithLifecycle(
     logger.debug(`Task completed with status: ${result.status}`);
     return result;
   } catch (err) {
-    await writeTerminalStatus(ctx.executionId, 'error');
+    await writeTerminalStatus(ctx.executionId, 'error').catch(() => {});
     untrackExecution(ctx.executionId);
     const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
