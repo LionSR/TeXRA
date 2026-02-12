@@ -3,14 +3,15 @@ import * as vscode from 'vscode';
 
 // Local imports - agent metadata
 import { type AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
-// Type imports
 
 // Local imports - workspace state
 import { workspaceSM } from '@common/state/stateManager';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
+import { StorageFS } from '@utils/files';
 
 const CHANNEL = 'AgentHistoryManager';
+const INDEX_PATH = 'executions/index.json';
 
 /**
  * Represents a historical agent execution.
@@ -32,6 +33,8 @@ export interface AgentHistoryItem {
 export class AgentHistoryManager {
   private static readonly HISTORY_STORAGE_KEY = 'texra.agentHistory';
   private static readonly MAX_HISTORY_ITEMS = 500;
+  private static cache: AgentHistoryItem[] | null = null;
+  private static dirEnsured = false;
 
   /**
    * Add an agent execution to history with the given ID.
@@ -57,30 +60,71 @@ export class AgentHistoryManager {
       history.splice(this.MAX_HISTORY_ITEMS);
     }
 
-    await this.saveHistory(history);
+    await this.persistIndex(history);
   }
 
   /**
-   * Get all history items for the current workspace
+   * Get all history items for the current workspace.
+   * On first access, tries filesystem, then migrates from workspace state.
    */
   public static async getHistory(): Promise<AgentHistoryItem[]> {
-    const storageKey = this.getWorkspaceStorageKey();
-    const history = workspaceSM.get<unknown[]>(storageKey, []);
-    const { normalized, mutated } = this.sanitizeHistoryEntries(history);
+    if (this.cache) return this.cache;
 
-    if (mutated) {
-      await this.saveHistory(normalized);
+    // Try filesystem first
+    let items: unknown[] | null = null;
+    try {
+      items = await StorageFS.readJson<unknown[]>(INDEX_PATH);
+    } catch {
+      // File doesn't exist yet — try migration
+    }
+
+    if (Array.isArray(items)) {
+      const { normalized, mutated } = this.sanitizeHistoryEntries(items);
+      if (mutated) {
+        await this.persistIndex(normalized);
+      } else {
+        this.cache = normalized;
+      }
+      return normalized;
+    }
+
+    // TODO: Remove legacy migration after all users have migrated (added 2026-02)
+    const normalized = await this.migrateFromWorkspaceState();
+    return normalized;
+  }
+
+  /**
+   * One-time migration from workspace state to filesystem.
+   * TODO: Remove after all users have migrated (added 2026-02)
+   */
+  private static async migrateFromWorkspaceState(): Promise<
+    AgentHistoryItem[]
+  > {
+    const storageKey = this.getWorkspaceStorageKey();
+    const legacy = workspaceSM.get<unknown[]>(storageKey, []);
+    const { normalized } = this.sanitizeHistoryEntries(legacy);
+
+    // Always persist — creates index.json so migration never re-runs
+    await this.persistIndex(normalized);
+    if (normalized.length > 0) {
+      await workspaceSM.update(storageKey, []);
     }
 
     return normalized;
   }
 
   /**
-   * Save history items for the current workspace
+   * Persist the index to filesystem and update the in-memory cache.
    */
-  private static async saveHistory(history: AgentHistoryItem[]): Promise<void> {
-    const storageKey = this.getWorkspaceStorageKey();
-    await workspaceSM.update(storageKey, history);
+  private static async persistIndex(
+    history: AgentHistoryItem[],
+  ): Promise<void> {
+    if (!this.dirEnsured) {
+      await StorageFS.ensureDir('executions');
+      this.dirEnsured = true;
+    }
+    await StorageFS.writeJson(INDEX_PATH, history);
+    this.cache = history;
   }
 
   /**
@@ -154,14 +198,13 @@ export class AgentHistoryManager {
    * Clear all history for current workspace
    */
   public static async clearHistory(): Promise<void> {
-    const storageKey = this.getWorkspaceStorageKey();
-    await workspaceSM.update(storageKey, []);
+    await this.persistIndex([]);
   }
 
   /**
-   * Get workspace-specific storage key
+   * Get workspace-specific storage key (used only for legacy migration)
    */
-  public static getWorkspaceStorageKey(): string {
+  private static getWorkspaceStorageKey(): string {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     return workspaceFolder
       ? `${this.HISTORY_STORAGE_KEY}.${workspaceFolder.uri.fsPath}`
@@ -191,7 +234,7 @@ export class AgentHistoryManager {
       return false;
     }
 
-    await this.saveHistory(filteredHistory);
+    await this.persistIndex(filteredHistory);
     return true;
   }
 }

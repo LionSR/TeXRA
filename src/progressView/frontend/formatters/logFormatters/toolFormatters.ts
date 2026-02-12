@@ -52,10 +52,20 @@ import '../../components/ToolTimer';
 /** Default bash tool timeout (matches BASH_TIMEOUT_MS in src/tools/bash.ts). */
 const BASH_DEFAULT_TIMEOUT_MS = 120_000;
 
+/** Default executions tool timeout (matches schema default in ExecutionsTool.ts). */
+const EXECUTIONS_DEFAULT_TIMEOUT_MS = 300_000;
+
 /** Known per-tool default timeouts (ms) for display in the running timer. */
 const TOOL_DEFAULT_TIMEOUTS: Record<string, number> = {
   bash: BASH_DEFAULT_TIMEOUT_MS,
+  executions: EXECUTIONS_DEFAULT_TIMEOUT_MS,
 };
+
+/**
+ * Tools whose `timeout` input field is in seconds (converted to ms for display).
+ * Most tools use milliseconds directly.
+ */
+const TIMEOUT_IN_SECONDS = new Set(['executions']);
 
 /**
  * Extract the effective timeout for a tool call from its input.
@@ -68,7 +78,9 @@ function getToolTimeoutMs(
   const defaultTimeout = TOOL_DEFAULT_TIMEOUTS[toolName];
   if (defaultTimeout === undefined) return undefined;
   if (isPlainObject(input) && typeof input.timeout === 'number') {
-    return input.timeout;
+    return TIMEOUT_IN_SECONDS.has(toolName)
+      ? input.timeout * 1000
+      : input.timeout;
   }
   return defaultTimeout;
 }
@@ -444,20 +456,13 @@ export function formatToolUseTemplate(
 
   // Delegation banner extras: mode badge + setup link (shown in summary row)
   const isDelegation = DELEGATION_TOOLS.has(toolName);
-  let proposalMode = '';
-  if (isDelegation) {
-    proposalMode =
-      isPlainObject(input) && typeof input.mode === 'string'
-        ? input.mode
-        : 'sync';
-  }
   const proposalId =
     isDelegation && !isInProgress
       ? registerProposalInput(input, toolName)
       : null;
 
   // prettier-ignore
-  const extraContent = html`${timerTemplate ?? nothing}${proposalMode ? html`<span class=${classMap({ 'proposal-mode-badge': true, 'proposal-mode-badge--async': proposalMode === 'async', 'proposal-mode-badge--sync': proposalMode === 'sync' })}>${proposalMode}</span>` : nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Restore this proposal configuration"><i class="codicon codicon-reply"></i> Setup</span>` : nothing}`;
+  const extraContent = html`${timerTemplate ?? nothing}${isDelegation ? html`<span class="proposal-mode-badge proposal-mode-badge--async">async</span>` : nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Restore this proposal configuration"><i class="codicon codicon-reply"></i> Setup</span>` : nothing}`;
 
   // prettier-ignore
   return html`<details class=${classMap({
