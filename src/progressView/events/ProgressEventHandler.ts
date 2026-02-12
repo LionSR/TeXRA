@@ -419,13 +419,38 @@ export class ProgressEventHandler {
       return null;
     }
 
-    const messages = this.state.streamTabs.getMessages(stream);
+    let messages = this.state.streamTabs.getMessages(stream);
     const groups = [...this.state.taskGroups.getStreamGroups(stream).values()];
     const activeRunId = this.state.getActiveRunId(stream);
 
     const runInstructions = Object.fromEntries(
       this.state.getRunInstructions(stream).entries(),
     );
+
+    // Legacy fallback: old tool-use sessions saved before ToolUsePrepareNode
+    // started emitting logger.userMessage() won't have a userMessage log entry.
+    // Synthesise one from runInstructions so the instruction still renders.
+    if (
+      activeRunId &&
+      this.getStreamCategory(stream) === AgentCategory.ToolUse &&
+      messages[0]?.messageType !== 'userMessage'
+    ) {
+      const instructionText =
+        runInstructions[activeRunId]?.text?.trim();
+      if (instructionText) {
+        messages = [
+          {
+            id: `tool-use-instruction:${activeRunId}`,
+            text: instructionText,
+            level: 'info',
+            timestamp: (messages[0]?.timestamp ?? Date.now()) - 1,
+            messageType: 'userMessage',
+          },
+          ...messages,
+        ];
+      }
+    }
+
     const runFiles = nestedMapToRecord(this.state.outputFiles.getFiles(stream));
     const runMissingOutputs = nestedMapToRecord(
       this.state.outputFiles.getMissingOutputs(stream),
