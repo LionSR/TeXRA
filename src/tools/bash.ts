@@ -160,6 +160,7 @@ export class BashTool extends defineTool({
     const startedAt = Date.now();
     const promise = executeCommand(command, {
       timeout: timeoutMs,
+      buffer: false, // Output is streamed to disk; don't buffer in memory
       onPid: (p) => {
         pid = p;
       },
