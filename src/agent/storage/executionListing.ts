@@ -166,9 +166,11 @@ export async function deleteExecution(
 }
 
 /**
- * Delete all executions.
+ * Delete all executions, optionally excluding a set of IDs (e.g. active runs).
  */
-export async function deleteAllExecutions(): Promise<void> {
+export async function deleteAllExecutions(
+  exclude?: ReadonlySet<string>,
+): Promise<void> {
   let entries: [string, vscode.FileType][];
   try {
     entries = await StorageFS.readDir(EXECUTIONS_DIR);
@@ -179,7 +181,10 @@ export async function deleteAllExecutions(): Promise<void> {
 
   const executionDirs = entries
     .filter(
-      ([name, type]) => isDirectory(type) && /^[0-9a-f][-0-9a-f]*$/i.test(name),
+      ([name, type]) =>
+        isDirectory(type) &&
+        /^[0-9a-f][-0-9a-f]*$/i.test(name) &&
+        !exclude?.has(name),
     )
     .map(([name]) => name as ExecutionId);
 
