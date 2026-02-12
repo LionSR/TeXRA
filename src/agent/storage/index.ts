@@ -20,6 +20,7 @@ export {
   readConfig,
   readChildren,
   registerExecution,
+  writeTerminalStatus,
 } from './executionReaders';
 export {
   type ExecutionListingEntry,

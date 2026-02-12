@@ -166,9 +166,15 @@ export function interruptActiveChildren(
   handles: Iterable<ExecutionHandle>,
 ): void {
   for (const handle of handles) {
-    if (handle.parentStreamId === parentStreamId) {
-      handle.terminate();
+    if (handle.parentStreamId !== parentStreamId) continue;
+    // Skip the parent itself — only terminate its children
+    if (
+      handle instanceof AgentExecutionHandle &&
+      handle.childStreamId === parentStreamId
+    ) {
+      continue;
     }
+    handle.terminate();
   }
 }
 
