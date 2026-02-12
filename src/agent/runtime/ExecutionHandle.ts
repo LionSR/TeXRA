@@ -11,7 +11,7 @@ import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   STREAM_STATUS,
-  type ActiveSubagentInfo,
+  type ActiveChildInfo,
   type StreamTabId,
 } from '@shared/schemas';
 import { formatDuration } from '@utils/core';
@@ -203,4 +203,33 @@ export function emitActiveSubagentsUpdate(
 ): void {
   const children = getActiveChildrenSummary(parentStreamId, handles);
   bus.emit('updateActiveSubagents', { parentStreamId, children });
+}
+
+/** Get summary of active process children for a parent stream (for UI display). */
+function getActiveProcessesSummary(
+  parentStreamId: StreamTabId,
+  handles: Iterable<[string, ExecutionHandle]>,
+): ActiveProcessInfo[] {
+  const result: ActiveProcessInfo[] = [];
+  for (const [, handle] of handles) {
+    if (
+      handle.parentStreamId === parentStreamId &&
+      handle instanceof ProcessExecutionHandle
+    ) {
+      result.push({
+        executionId: handle.executionId,
+        agentName: handle.agentName,
+      });
+    }
+  }
+  return result;
+}
+
+/** Emit the current active processes list for a parent to the progress UI. */
+export function emitActiveProcessesUpdate(
+  parentStreamId: StreamTabId,
+  handles: Iterable<[string, ExecutionHandle]>,
+): void {
+  const processes = getActiveProcessesSummary(parentStreamId, handles);
+  bus.emit('updateActiveProcesses', { parentStreamId, processes });
 }

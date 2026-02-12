@@ -11,7 +11,9 @@ import type { StreamTabId } from '@shared/schemas';
 import {
   type ExecutionHandle,
   AgentExecutionHandle,
+  ProcessExecutionHandle,
   emitActiveSubagentsUpdate,
+  emitActiveProcessesUpdate,
   interruptActiveChildren as interruptActiveChildrenImpl,
 } from './ExecutionHandle';
 
@@ -45,6 +47,11 @@ export function trackExecution(handle: ExecutionHandle): void {
       });
     }
   }
+
+  // Emit process badge update for background bash processes
+  if (handle instanceof ProcessExecutionHandle) {
+    emitActiveProcessesUpdate(handle.parentStreamId, registry.entries());
+  }
 }
 
 /** Remove an execution handle and notify waiters. */
@@ -59,6 +66,11 @@ export function untrackExecution(executionId: string): void {
     handle.parentStreamId !== handle.childStreamId
   ) {
     emitActiveSubagentsUpdate(handle.parentStreamId, registry.entries());
+  }
+
+  // Emit process badge update on removal
+  if (handle instanceof ProcessExecutionHandle) {
+    emitActiveProcessesUpdate(handle.parentStreamId, registry.entries());
   }
 }
 

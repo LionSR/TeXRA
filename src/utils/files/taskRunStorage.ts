@@ -106,23 +106,30 @@ export function getRunDir(id: ExecutionId): string {
 }
 
 /**
- * Resolve the run directory for an execution, checking the current path first
- * then falling back to the legacy `taskRuns/` location. Returns the full
- * filesystem path if the directory exists, or `undefined` if neither location
- * exists.
+ * Resolve a storage-relative path, checking `executions/` first then
+ * legacy `taskRuns/`. Returns the storage-relative path that exists,
+ * or `undefined` if neither location has the target.
+ */
+export async function resolveStoragePath(
+  ...segments: string[]
+): Promise<string | undefined> {
+  const primary = path.join(TASK_RUNS_DIR, ...segments);
+  if (await StorageFS.exists(primary)) return primary;
+  const legacy = path.join(LEGACY_RUNS_DIR, ...segments);
+  if (await StorageFS.exists(legacy)) return legacy;
+  return undefined;
+}
+
+/**
+ * Resolve the full filesystem path for an execution's run directory,
+ * checking `executions/` first then legacy `taskRuns/`.
+ * Returns `undefined` if neither location exists.
  */
 export async function resolveRunDir(
   id: ExecutionId,
 ): Promise<string | undefined> {
-  const primaryRel = path.join(TASK_RUNS_DIR, id);
-  if (await StorageFS.exists(primaryRel)) {
-    return StorageFS.fullPath(primaryRel);
-  }
-  const legacyRel = path.join(LEGACY_RUNS_DIR, id);
-  if (await StorageFS.exists(legacyRel)) {
-    return StorageFS.fullPath(legacyRel);
-  }
-  return undefined;
+  const rel = await resolveStoragePath(id);
+  return rel ? StorageFS.fullPath(rel) : undefined;
 }
 
 /**
