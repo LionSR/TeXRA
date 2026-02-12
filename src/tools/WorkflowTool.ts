@@ -60,13 +60,10 @@ import {
 } from '@tools/subagentResults';
 import { defineTool } from '@tools/core/define';
 
-// Local imports - common
-import { AgentHistoryManager } from '@common/history/AgentHistoryManager';
-
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 import { generateExecutionId } from '@utils/core/executionId';
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionStore, registerExecution } from '@agent/storage';
 
 // ============================================================================
 // Shared utilities
@@ -122,21 +119,12 @@ function executeSubagent(
   const ctx = getCurrentToolFileInteractionContext();
   const parentExecutionId = ctx?.executionId;
   const syntheticConfig = AgentConfigSchema.parse(configPayload);
-  const timestamp = new Date().toISOString();
-  void AgentHistoryManager.addToHistory(
+  void registerExecution(
     executionId,
     syntheticConfig,
+    agentName,
     parentExecutionId,
   );
-  const store = getExecutionStore(executionId);
-  void store.write('config', syntheticConfig);
-  void store.write('meta', { timestamp, parentExecutionId });
-  if (parentExecutionId) {
-    void getExecutionStore(parentExecutionId).write(`child-${executionId}`, {
-      agent: agentName,
-      timestamp,
-    });
-  }
 
   // Track whether result has already been delivered (via onBeforeWaiting)
   // to avoid duplicate delivery when the promise eventually resolves.
@@ -432,7 +420,6 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       agent: input.agent,
       model,
       instruction: input.instruction,
-      mode: 'async',
       inputFile: input.inputFile,
       inputFiles: input.inputFiles,
       referenceFile: input.referenceFile,
@@ -513,7 +500,6 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
       agent: input.agent,
       model,
       instruction: input.instruction,
-      mode: 'async',
     } satisfies ToolUseAgentProposal);
 
     return proposeAndExecute(proposal, input.agent, ctx.streamId, 'delegation');

@@ -6,8 +6,8 @@
  * - For legacy data migration: Normalize to DEFAULT_RUN_ID for backward compatibility
  *
  * ## When NOT to use normalizeRunId()
- * - For tool-use agents: Use executionId directly as the runId (it's always a UUID)
- * - For ExecutionId values: Never normalize - they are always UUIDs by design
+ * - For tool-use agents: Use executionId directly as the runId
+ * - For ExecutionId values: Never normalize - they are always valid by design
  *
  * @see IdentifierTypes.ts for the full execution model documentation
  */

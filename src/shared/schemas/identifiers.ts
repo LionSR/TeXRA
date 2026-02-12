@@ -3,27 +3,18 @@ import { z } from 'zod';
 export const StreamTabIdSchema = z.string().min(1);
 export type StreamTabId = z.infer<typeof StreamTabIdSchema>;
 
-/** Compact 12-char hex ID (new format) or legacy 36-char UUID. */
-const EXECUTION_ID_PATTERN =
-  /^([0-9a-f]{12}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
-
+/** Hex string of any length (16-char current, 6/12-char and UUID legacy). */
 export const ExecutionIdSchema = z
   .string()
-  .regex(
-    EXECUTION_ID_PATTERN,
-    'Invalid execution ID: expected 12-char hex or UUID',
-  );
+  .regex(/^[0-9a-f][-0-9a-f]*$/i, 'Invalid execution ID: expected hex');
 export type ExecutionId = z.infer<typeof ExecutionIdSchema>;
 
-/** Accepts execution IDs (compact or legacy UUID) and the __default__ sentinel. */
-const STORAGE_KEY_PATTERN =
-  /^(__default__|[0-9a-f]{12}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
-
+/** Execution ID or the __default__ sentinel for legacy storage. */
 export const StorageKeySchema = z
   .string()
   .regex(
-    STORAGE_KEY_PATTERN,
-    'Invalid storage key: must be execution ID, UUID, or __default__',
+    /^(__default__|[0-9a-f][-0-9a-f]*)$/i,
+    'Invalid storage key: must be execution ID or __default__',
   )
   .transform((val) => val as StorageKey);
 export type StorageKey = string & { readonly __brand: 'StorageKey' };
