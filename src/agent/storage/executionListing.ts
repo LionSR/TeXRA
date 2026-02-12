@@ -18,8 +18,11 @@ import { workspaceSM } from '@common/state/stateManager';
 import * as logger from '@logger/logUtils';
 import { StorageFS } from '@utils/files';
 
-import { EXECUTIONS_DIR, getExecutionStore } from './ExecutionKVStore';
-import type { ExecutionMeta } from './executionReaders';
+import {
+  type ExecutionMeta,
+  EXECUTIONS_DIR,
+  getExecutionStore,
+} from './ExecutionKVStore';
 import type { ExecutionId } from '@shared/schemas';
 
 const CHANNEL = 'ExecutionListing';
@@ -83,34 +86,32 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
 
   // Read meta + config in parallel
   const results = await Promise.all(
-    executionDirs.map(
-      async (id): Promise<ExecutionListingEntry | null> => {
-        try {
-          const store = getExecutionStore(id);
-          const [meta, config] = await Promise.all([
-            store.read<ExecutionMeta>('meta'),
-            store.read<unknown>('config'),
-          ]);
+    executionDirs.map(async (id): Promise<ExecutionListingEntry | null> => {
+      try {
+        const store = getExecutionStore(id);
+        const [meta, config] = await Promise.all([
+          store.read<ExecutionMeta>('meta'),
+          store.read<unknown>('config'),
+        ]);
 
-          if (!meta?.timestamp) return null;
+        if (!meta?.timestamp) return null;
 
-          const cfg = config as Record<string, unknown> | undefined;
-          return {
-            id,
-            timestamp: meta.timestamp,
-            parentExecutionId: meta.parentExecutionId,
-            agent: (cfg?.agent as string) ?? 'unknown',
-            model: (cfg?.model as string) ?? 'unknown',
-            agentConfig: config ?? {},
-          };
-        } catch (error) {
-          logger.warn(CHANNEL, `Skipping corrupt execution ${id}`, {
-            data: error,
-          });
-          return null;
-        }
-      },
-    ),
+        const cfg = config as Record<string, unknown> | undefined;
+        return {
+          id,
+          timestamp: meta.timestamp,
+          parentExecutionId: meta.parentExecutionId,
+          agent: (cfg?.agent as string) ?? 'unknown',
+          model: (cfg?.model as string) ?? 'unknown',
+          agentConfig: config ?? {},
+        };
+      } catch (error) {
+        logger.warn(CHANNEL, `Skipping corrupt execution ${id}`, {
+          data: error,
+        });
+        return null;
+      }
+    }),
   );
 
   const listing = results
@@ -223,39 +224,41 @@ function getWorkspaceStorageKey(): string {
  * Only writes if meta.json doesn't already exist (no overwriting).
  */
 async function backfillEntries(entries: unknown[]): Promise<void> {
-  for (const rawEntry of entries) {
-    if (!rawEntry || typeof rawEntry !== 'object') continue;
+  await Promise.all(
+    entries.map(async (rawEntry) => {
+      if (!rawEntry || typeof rawEntry !== 'object') return;
 
-    const candidate = rawEntry as {
-      id?: ExecutionId;
-      timestamp?: string;
-      agentConfig?: AgentConfig;
-      config?: AgentConfig; // Legacy field name
-      parentExecutionId?: ExecutionId;
-    };
+      const candidate = rawEntry as {
+        id?: ExecutionId;
+        timestamp?: string;
+        agentConfig?: AgentConfig;
+        config?: AgentConfig; // Legacy field name
+        parentExecutionId?: ExecutionId;
+      };
 
-    const rawConfig = candidate.agentConfig ?? candidate.config;
-    if (!candidate.id || !candidate.timestamp || !rawConfig) continue;
+      const rawConfig = candidate.agentConfig ?? candidate.config;
+      if (!candidate.id || !candidate.timestamp || !rawConfig) return;
 
-    let normalizedConfig: AgentConfig;
-    try {
-      normalizedConfig = AgentConfigSchema.parse(rawConfig);
-    } catch {
-      logger.warn(CHANNEL, `Skipping malformed legacy entry ${candidate.id}`);
-      continue;
-    }
+      let normalizedConfig: AgentConfig;
+      try {
+        normalizedConfig = AgentConfigSchema.parse(rawConfig);
+      } catch {
+        logger.warn(CHANNEL, `Skipping malformed legacy entry ${candidate.id}`);
+        return;
+      }
 
-    const store = getExecutionStore(candidate.id);
+      const store = getExecutionStore(candidate.id);
 
-    // Don't overwrite existing KV data
-    if (await store.exists('meta')) continue;
+      // Don't overwrite existing KV data
+      if (await store.exists('meta')) return;
 
-    await Promise.all([
-      store.write('meta', {
-        timestamp: candidate.timestamp,
-        parentExecutionId: candidate.parentExecutionId,
-      } satisfies ExecutionMeta),
-      store.write('config', normalizedConfig),
-    ]);
-  }
+      await Promise.all([
+        store.write('meta', {
+          timestamp: candidate.timestamp,
+          parentExecutionId: candidate.parentExecutionId,
+        } satisfies ExecutionMeta),
+        store.write('config', normalizedConfig),
+      ]);
+    }),
+  );
 }

@@ -31,5 +31,5 @@ Enable the orchestrator to send follow-up instructions to a subagent that has re
 
 ## Non-Goals
 
-- This design does not cover real-time streaming of subagent progress to the orchestrator. Progress is already available via the executions tool with `block=true`.
+- This design does not cover real-time streaming of subagent progress to the orchestrator. Progress is already available via the executions tool with `action=wait`.
 - This does not replace the proposal system for launching new agents. Bidirectional follow-ups are for iterating on an already-running subagent.

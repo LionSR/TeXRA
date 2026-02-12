@@ -16,6 +16,7 @@ import { z } from 'zod';
 import {
   getExecutionStore,
   type ExecutionListingEntry,
+  type ChildRecord,
   type TodoEntry,
   listExecutions,
   readTodos,
@@ -27,6 +28,7 @@ import {
 } from '@agent/storage';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
+  type ExecutionHandle,
   type ExecutionStatusInfo,
   ACTIVE_STATUSES,
   getHandle,
@@ -62,29 +64,30 @@ const ExecutionsToolInputSchema = z.strictObject({
     .prefault('view')
     .describe(
       'view: read execution data (returns immediately). ' +
-        'wait: suspend until a status change, then return data (avoids sleep-poll loops). ' +
-        'On /executions: wait for any active execution to change. ' +
-        'On /executions/{id}: wait for that specific execution to change. ' +
+        'wait: wait for a status change on /executions or /executions/{id}, then return the same data as view (avoids sleep-poll loops). ' +
         'kill: terminate a running execution by ID (use on /executions/{id}).',
     ),
 
-  /** Optional line range [start, end] for large outputs */
+  /** Optional line range [start, end] for large outputs (action="view" only). */
   view_range: z
     .array(z.int().min(1))
     .length(2)
     .refine(([start, end]) => end >= start, {
       error: 'view_range[1] must be >= view_range[0]',
     })
-    .nullish(),
+    .nullish()
+    .describe(
+      'Line range [start, end] for paginating large outputs (action="view" only).',
+    ),
 
-  /** Max seconds to wait when action="wait". Ignored otherwise. */
+  /** Max seconds to wait (action="wait" only). Default: 300. */
   timeout: z
     .number()
     .min(1)
     .max(1800)
-    .prefault(300)
+    .nullish()
     .describe(
-      'Max seconds to wait when action="wait". Ignored otherwise. Default: 300, max: 1800.',
+      'Max seconds to wait (action="wait" only). Default: 300, max: 1800.',
     ),
 });
 
@@ -109,8 +112,7 @@ function getExecutionStatusInfo(executionId: string): ExecutionStatusInfo {
 }
 
 /** Format round progress as a display line, or empty string if unavailable. */
-function formatProgressLine(executionId: string): string {
-  const handle = getHandle(executionId);
+function formatProgressLine(handle: ExecutionHandle | undefined): string {
   const progress = handle?.getProgress();
   if (
     progress?.currentRound === undefined ||
@@ -170,9 +172,9 @@ Paths:
 - /executions/{id}/files/{path} - Read specific generated file (workflows only)
 
 Use "current" as {id} to access the active execution.
-Use view_range: [start, end] to paginate large outputs.
-Use action: "wait" to suspend until a status change (avoids sleep-poll loops).
-Use action: "kill" with /executions/{id} to terminate a running execution.`,
+Use view_range: [start, end] to paginate conversation, output, and file content.
+Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
+Use action: "kill" on /executions/{id} to terminate a running execution.`,
   schema: ExecutionsToolInputSchema,
 }) {
   protected async execute(input: ExecutionsToolInput): Promise<ToolResult> {
@@ -185,11 +187,10 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
       );
     }
 
-    const isWait = input.action === 'wait';
-
     // /executions - list all executions
     if (!id) {
-      if (isWait) await this.waitForAnyChange(input.timeout);
+      if (input.action === 'wait')
+        await this.waitForAnyChange(input.timeout ?? 300);
       return this.listExecutions();
     }
 
@@ -202,7 +203,8 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
 
     // /executions/{id} - execution summary
     if (!resource) {
-      if (isWait) await this.waitForChange(executionId, input.timeout);
+      if (input.action === 'wait')
+        await this.waitForChange(executionId, input.timeout ?? 300);
       return this.showSummary(executionId);
     }
 
@@ -276,10 +278,10 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
   private async waitForAnyChange(timeout: number): Promise<void> {
     const activeIds = getActiveExecutionIds();
     if (activeIds.length > 0) {
-      await Promise.race([
-        waitForAnyExecutionChange(activeIds),
-        new Promise<void>((r) => setTimeout(r, timeout * 1000)),
-      ]);
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), timeout * 1000);
+      await waitForAnyExecutionChange(activeIds, ac.signal);
+      clearTimeout(timer);
     }
   }
 
@@ -290,10 +292,10 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
   ): Promise<void> {
     const info = getExecutionStatusInfo(executionId);
     if (ACTIVE_STATUSES.has(info.status)) {
-      await Promise.race([
-        waitForExecutionChange(executionId),
-        new Promise<void>((r) => setTimeout(r, timeout * 1000)),
-      ]);
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), timeout * 1000);
+      await waitForExecutionChange(executionId, ac.signal);
+      clearTimeout(timer);
     }
   }
 
@@ -322,7 +324,38 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
   }
 
   private async showSummary(executionId: ExecutionId): Promise<ToolResult> {
-    // Parallel fetch all data from KV (each reader has its own fallback)
+    // Check in-memory handle first (free) — running executions have everything we need
+    const handle = getHandle(executionId);
+
+    if (handle) {
+      // Running execution: agent/status from handle, only fetch live data from KV
+      const [children, todos] = await Promise.all([
+        readChildren(executionId),
+        readTodos(executionId),
+      ]);
+
+      const info = handle.getStatus();
+      const lines = [
+        `Execution: ${executionId}`,
+        `Agent: ${handle.agentName}`,
+        `Category: ${handle.category}`,
+        `Started: ${new Date(handle.startedAt).toISOString()}`,
+        `Status: ${formatStatusInfo(info)}`,
+      ];
+
+      const progressLine = formatProgressLine(handle);
+      if (progressLine) lines.push(progressLine);
+
+      this.appendChildren(lines, children);
+
+      if (todos.length > 0) {
+        lines.push('', ...formatTodoSection(todos));
+      }
+
+      return { output: lines.join('\n') };
+    }
+
+    // Completed execution: full KV fetch
     const [meta, config, children, todos, report] = await Promise.all([
       readMeta(executionId),
       readConfig(executionId),
@@ -332,49 +365,14 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
     ]);
 
     if (!meta && !config) {
-      // Check runtime handle first — it has agent metadata even before KV is populated
-      const handle = getHandle(executionId);
-      if (!handle) {
-        // No handle and no KV data — check if flow blob exists (completed execution)
-        const store = getExecutionStore(executionId);
-        const hasFlow = await store.exists(`flow:${executionId}`);
-        if (!hasFlow) {
-          throw new ToolError(`Execution not found: ${executionId}`);
-        }
+      const store = getExecutionStore(executionId);
+      const hasFlow = await store.exists(`flow:${executionId}`);
+      if (!hasFlow) {
+        throw new ToolError(`Execution not found: ${executionId}`);
       }
-
-      const info = getExecutionStatusInfo(executionId);
-      const lines = [`Execution: ${executionId}`];
-
-      if (handle) {
-        lines.push(
-          `Agent: ${handle.agentName}`,
-          `Category: ${handle.category}`,
-          `Started: ${new Date(handle.startedAt).toISOString()}`,
-        );
-      }
-
-      lines.push(`Status: ${formatStatusInfo(info)}`);
-
-      const progressLine = formatProgressLine(executionId);
-      if (progressLine) lines.push(progressLine);
-
-      if (children.length > 0) {
-        lines.push('', `Children (${children.length}):`);
-        for (const child of children) {
-          const childInfo = getExecutionStatusInfo(child.id);
-          const ts = child.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
-          lines.push(
-            `  ${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(childInfo)}]`,
-          );
-        }
-      }
-
-      if (todos.length > 0) {
-        lines.push('', ...formatTodoSection(todos));
-      }
-
-      return { output: lines.join('\n') };
+      return {
+        output: `Execution: ${executionId}\nStatus: completed\n(No metadata available - use /executions/${executionId}/conversation to view messages)`,
+      };
     }
 
     const cfg =
@@ -394,19 +392,7 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
       lines.push(`Parent: ${meta.parentExecutionId}`);
     }
 
-    const progressLine = formatProgressLine(executionId);
-    if (progressLine) lines.push(progressLine);
-
-    if (children.length > 0) {
-      lines.push('', `Children (${children.length}):`);
-      for (const child of children) {
-        const childInfo = getExecutionStatusInfo(child.id);
-        const ts = child.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
-        lines.push(
-          `  ${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(childInfo)}]`,
-        );
-      }
-    }
+    this.appendChildren(lines, children);
 
     if (todos.length > 0) {
       lines.push('', ...formatTodoSection(todos));
@@ -417,6 +403,19 @@ Use action: "kill" with /executions/{id} to terminate a running execution.`,
     }
 
     return { output: lines.join('\n') };
+  }
+
+  /** Append formatted child entries to output lines. */
+  private appendChildren(lines: string[], children: ChildRecord[]): void {
+    if (children.length === 0) return;
+    lines.push('', `Children (${children.length}):`);
+    for (const child of children) {
+      const childInfo = getExecutionStatusInfo(child.id);
+      const ts = child.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
+      lines.push(
+        `  ${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(childInfo)}]`,
+      );
+    }
   }
 
   private handleKill(executionId: ExecutionId): ToolResult {

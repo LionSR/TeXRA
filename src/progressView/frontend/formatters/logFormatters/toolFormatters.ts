@@ -53,7 +53,7 @@ import '../../components/ToolTimer';
 /** Default bash tool timeout (matches BASH_TIMEOUT_MS in src/tools/bash.ts). */
 const BASH_DEFAULT_TIMEOUT_MS = 120_000;
 
-/** Default executions tool timeout (matches schema default in ExecutionsTool.ts). */
+/** Default executions tool timeout (matches code default in ExecutionsTool.ts). */
 const EXECUTIONS_DEFAULT_TIMEOUT_MS = 300_000;
 
 /** Known per-tool default timeouts (ms) for display in the running timer. */
@@ -564,7 +564,7 @@ export function formatToolUseTemplate(
   // prettier-ignore
   const timerTemplate = isInProgress ? html`<tool-timer .startTime=${timestamp} .timeoutMs=${toolTimeoutMs ?? 0}></tool-timer>` : undefined;
 
-  // Delegation banner extras: mode badge + setup link (shown in summary row)
+  // Delegation banner extras: setup link (shown in summary row)
   const isDelegation = DELEGATION_TOOLS.has(toolName);
   const proposalId =
     isDelegation && !isInProgress
@@ -572,7 +572,7 @@ export function formatToolUseTemplate(
       : null;
 
   // prettier-ignore
-  const extraContent = html`${timerTemplate ?? nothing}${isDelegation ? html`<span class="proposal-mode-badge proposal-mode-badge--async">async</span>` : nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Restore this proposal configuration"><i class="codicon codicon-reply"></i> Setup</span>` : nothing}`;
+  const extraContent = html`${timerTemplate ?? nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Restore this proposal configuration"><i class="codicon codicon-reply"></i> Setup</span>` : nothing}`;
 
   // prettier-ignore
   return html`<details class=${classMap({
