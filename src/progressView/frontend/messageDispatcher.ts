@@ -209,6 +209,7 @@ function updateStreamInfo(
           runFiles: existing.runFiles,
           runMissingOutputs: existing.runMissingOutputs,
           activeRunId: existing.activeRunId,
+          followupMode: existing.followupMode,
         }),
         ...(preserveUI && { ui: existing.ui }),
         info: stream,

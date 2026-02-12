@@ -324,46 +324,29 @@ export class StreamHeader extends LitElement {
         font-size: var(--font-size-xs, 10px);
       }
 
-      .subagent-badge {
+      .child-badge {
         display: inline-flex;
         align-items: center;
         gap: var(--spacing-tiny);
         padding: 1px var(--spacing-small);
         font-size: var(--font-size-xs, 10px);
         font-weight: 600;
-        color: var(--color-info, var(--vscode-charts-blue));
-        background: color-mix(
-          in srgb,
-          var(--color-info, var(--vscode-charts-blue)) 12%,
-          transparent
-        );
+        color: var(--_badge-color);
+        background: color-mix(in srgb, var(--_badge-color) 12%, transparent);
         border-radius: var(--border-radius-small);
         white-space: nowrap;
       }
 
-      .subagent-badge .codicon {
+      .child-badge .codicon {
         font-size: var(--font-size-xs, 10px);
+      }
+
+      .subagent-badge {
+        --_badge-color: var(--color-info, var(--vscode-charts-blue));
       }
 
       .process-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--spacing-tiny);
-        padding: 1px var(--spacing-small);
-        font-size: var(--font-size-xs, 10px);
-        font-weight: 600;
-        color: var(--color-warning, var(--vscode-charts-orange));
-        background: color-mix(
-          in srgb,
-          var(--color-warning, var(--vscode-charts-orange)) 12%,
-          transparent
-        );
-        border-radius: var(--border-radius-small);
-        white-space: nowrap;
-      }
-
-      .process-badge .codicon {
-        font-size: var(--font-size-xs, 10px);
+        --_badge-color: var(--color-warning, var(--vscode-charts-orange));
       }
 
       @media (max-width: 500px) {
@@ -432,7 +415,7 @@ export class StreamHeader extends LitElement {
             ></span>
             ${activeSubagents.length > 0
               ? html`<span
-                  class="subagent-badge"
+                  class="child-badge subagent-badge"
                   title=${activeSubagents.map((s) => s.agentName).join(', ')}
                 >
                   <i class="codicon codicon-server-process"></i>
@@ -442,7 +425,7 @@ export class StreamHeader extends LitElement {
               : nothing}
             ${activeProcesses.length > 0
               ? html`<span
-                  class="process-badge"
+                  class="child-badge process-badge"
                   title=${activeProcesses.map((p) => p.agentName).join(', ')}
                 >
                   <i class="codicon codicon-terminal"></i>

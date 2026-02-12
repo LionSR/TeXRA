@@ -176,17 +176,15 @@ export function interruptActiveChildren(
   }
 }
 
-/** Get summary of active agent children for a parent stream (for UI display). */
-function getActiveChildrenSummary(
+/** Collect {executionId, agentName} for handles matching a class under a parent stream. */
+function collectChildSummary(
   parentStreamId: StreamTabId,
   handles: Iterable<[string, ExecutionHandle]>,
-): ActiveSubagentInfo[] {
-  const result: ActiveSubagentInfo[] = [];
+  ctor: new (...args: any[]) => ExecutionHandle,
+): ActiveChildInfo[] {
+  const result: ActiveChildInfo[] = [];
   for (const [, handle] of handles) {
-    if (
-      handle.parentStreamId === parentStreamId &&
-      handle instanceof AgentExecutionHandle
-    ) {
+    if (handle.parentStreamId === parentStreamId && handle instanceof ctor) {
       result.push({
         executionId: handle.executionId,
         agentName: handle.agentName,
@@ -196,33 +194,17 @@ function getActiveChildrenSummary(
   return result;
 }
 
-/** Emit the current active children list for a parent to the progress UI. */
+/** Emit the current active subagent list for a parent to the progress UI. */
 export function emitActiveSubagentsUpdate(
   parentStreamId: StreamTabId,
   handles: Iterable<[string, ExecutionHandle]>,
 ): void {
-  const children = getActiveChildrenSummary(parentStreamId, handles);
+  const children = collectChildSummary(
+    parentStreamId,
+    handles,
+    AgentExecutionHandle,
+  );
   bus.emit('updateActiveSubagents', { parentStreamId, children });
-}
-
-/** Get summary of active process children for a parent stream (for UI display). */
-function getActiveProcessesSummary(
-  parentStreamId: StreamTabId,
-  handles: Iterable<[string, ExecutionHandle]>,
-): ActiveProcessInfo[] {
-  const result: ActiveProcessInfo[] = [];
-  for (const [, handle] of handles) {
-    if (
-      handle.parentStreamId === parentStreamId &&
-      handle instanceof ProcessExecutionHandle
-    ) {
-      result.push({
-        executionId: handle.executionId,
-        agentName: handle.agentName,
-      });
-    }
-  }
-  return result;
 }
 
 /** Emit the current active processes list for a parent to the progress UI. */
@@ -230,6 +212,10 @@ export function emitActiveProcessesUpdate(
   parentStreamId: StreamTabId,
   handles: Iterable<[string, ExecutionHandle]>,
 ): void {
-  const processes = getActiveProcessesSummary(parentStreamId, handles);
+  const processes = collectChildSummary(
+    parentStreamId,
+    handles,
+    ProcessExecutionHandle,
+  );
   bus.emit('updateActiveProcesses', { parentStreamId, processes });
 }
