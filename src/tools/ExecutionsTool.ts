@@ -241,13 +241,12 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
 
     const executionId = this.resolveExecutionId(id);
 
-    // Kill action: terminate a running execution
-    if (input.action === 'kill') {
-      return this.handleKill(executionId);
-    }
-
-    // /executions/{id} - execution summary
+    // /executions/{id} - execution summary or actions
     if (!resource) {
+      // Kill action: terminate a running execution (only valid on /executions/{id})
+      if (input.action === 'kill') {
+        return this.handleKill(executionId);
+      }
       if (input.action === 'wait')
         await this.waitForChange(executionId, input.timeout ?? 300);
       return this.showSummary(executionId);
@@ -322,12 +321,19 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
   /** Wait for any active execution to change status, with timeout. */
   private async waitForAnyChange(timeout: number): Promise<void> {
     const activeIds = getActiveExecutionIds();
-    if (activeIds.length > 0) {
-      const ac = new AbortController();
-      const timer = setTimeout(() => ac.abort(), timeout * 1000);
-      await waitForAnyExecutionChange(activeIds, ac.signal);
-      clearTimeout(timer);
+    if (activeIds.length === 0) return;
+
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeout * 1000);
+    // Register callback before re-checking to close the race window
+    const waitPromise = waitForAnyExecutionChange(activeIds, ac.signal);
+    // If all executions completed between getActiveExecutionIds() and callback
+    // registration, abort immediately so we don't block until timeout.
+    if (getActiveExecutionIds().length === 0) {
+      ac.abort();
     }
+    await waitPromise;
+    clearTimeout(timer);
   }
 
   /** Wait for a specific execution to change status, with timeout. */
@@ -336,12 +342,20 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     timeout: number,
   ): Promise<void> {
     const info = getExecutionStatusInfo(executionId);
-    if (ACTIVE_STATUSES.has(info.status)) {
-      const ac = new AbortController();
-      const timer = setTimeout(() => ac.abort(), timeout * 1000);
-      await waitForExecutionChange(executionId, ac.signal);
-      clearTimeout(timer);
+    if (!ACTIVE_STATUSES.has(info.status)) return;
+
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeout * 1000);
+    // Register callback before re-checking to close the race window
+    const waitPromise = waitForExecutionChange(executionId, ac.signal);
+    // If execution completed between status check and callback registration,
+    // abort immediately so we don't block until timeout.
+    const rechecked = getExecutionStatusInfo(executionId);
+    if (!ACTIVE_STATUSES.has(rechecked.status)) {
+      ac.abort();
     }
+    await waitPromise;
+    clearTimeout(timer);
   }
 
   private async listExecutions(): Promise<ToolResult> {

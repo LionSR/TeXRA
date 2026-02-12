@@ -57,6 +57,8 @@ export async function executeCommand(
     onStderr?: (chunk: string) => void;
     /** Called with subprocess PID right after creation, before awaiting. */
     onPid?: (pid: number) => void;
+    /** Set to false to skip buffering stdout/stderr in memory (use with onStdout/onStderr). */
+    buffer?: boolean;
   } = {},
 ): Promise<ExecResult> {
   // Hoisted so the finally block can clear them on both success and error paths.
@@ -87,6 +89,7 @@ export async function executeCommand(
       timeout: options.timeout,
       reject: false,
       input: options.stdin,
+      ...(options.buffer === false ? { buffer: false } : {}),
     };
 
     const logChannel = options.channel ?? CHANNEL;
