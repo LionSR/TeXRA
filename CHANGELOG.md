@@ -12,16 +12,12 @@ All notable changes to this project will be documented in this file.
 - Added **reliability settings** (compaction threshold, retry attempts, retry backoff) to the Multi-Agent tab in settings view.
 - Added **parent agent breadcrumbs** on subagent stream tabs with clickable navigation back to the parent stream.
 - Added **modification timestamps** and column headers to memory tool directory listings.
-- **accept_run_files** now supports workspace storage mode, resolving source files from both run storage and workspace for agents that write directly to the workspace.
-- Suppressed **file lineage** display for non-rewrite agents to avoid misleading diff output.
-
 ### Bug Fixes
 
 - Fixed **Kimi tool-use batching** — reasoning_content now included in batched follow-up messages to prevent API errors on parallel tool calls.
 - Fixed **Anthropic manual compaction** trigger not being honored.
 - Fixed **gzip-only arXiv sources** not decompressing correctly for single-file downloads.
 - Fixed **Overleaf/ShareLaTeX project URLs** — clone dialog now accepts standard project URLs and any domain with `/project/<id>`; auth failures show a "Get Token" button linking to the settings page.
-- Fixed **Kimi usage tracking** — models now correctly report as 'moonshot' instead of falling through to 'unknown'.
 - Fixed **Super YOLO toggle** not syncing state on stream switch or webview reload; disabling now clears all per-stream bypasses.
 - Fixed **parent stream link** persistence across extension restarts.
 - Fixed **stream-switch events** from parent breadcrumb links not reaching the handler in split layout.
@@ -30,8 +26,8 @@ All notable changes to this project will be documented in this file.
 ### Improvements
 
 - Removed **deprecated models** (sonnet45, opus46, kimi25, qwen3max) from the default model list.
-- Large-scale internal refactoring: simplified Lit components, consolidated CSS design tokens, inlined single-use wrappers, and removed dead code across 100+ files.
-- Updated dependencies: @google/genai 1.41.0, OpenAI 6.21.0, markdown-it 14.1.1.
+- Suppressed **file lineage** display for non-rewrite agents to avoid misleading diff output.
+- Updated dependencies.
 
 ## [0.35.10] - 2026-02-10
 
