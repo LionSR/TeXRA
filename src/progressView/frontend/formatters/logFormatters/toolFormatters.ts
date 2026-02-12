@@ -374,6 +374,59 @@ export function formatToolUseTemplate(
     }
     // view and delete: file path section above is sufficient
   }
+  // Handle accept_run_files with file list display
+  else if (
+    toolName === 'accept_run_files' &&
+    typeof input === 'object' &&
+    input !== null
+  ) {
+    const acceptInput = input as {
+      execution_id?: string;
+      files?: Array<{ run_path?: string; workspace_path?: string }>;
+    };
+
+    // Show execution ID
+    if (acceptInput.execution_id) {
+      // prettier-ignore
+      sections.push(buildToolUseSection('Execution:', html`<code class="execution-id">${acceptInput.execution_id}</code>`));
+    }
+
+    // Show file mappings as a list with file links
+    const files = acceptInput.files;
+    if (Array.isArray(files) && files.length > 0) {
+      // Extract per-file edits from output for diff stats
+      const outputData = parsed.output;
+      const edits =
+        outputData && typeof outputData === 'object' && 'edits' in outputData
+          ? (
+              outputData as {
+                edits?: Array<{
+                  path?: string;
+                  lineChanges?: { added: number; removed: number };
+                }>;
+              }
+            ).edits
+          : undefined;
+      const editsByPath = new Map(
+        (edits ?? []).filter((e) => e.path).map((e) => [e.path!, e] as const),
+      );
+
+      // prettier-ignore
+      const fileItems = html`${files.map((f) => {
+        const dest = f.workspace_path ?? f.run_path ?? '';
+        const source = f.run_path ?? '';
+        const isMapped = dest && source && dest !== source;
+        const edit = editsByPath.get(dest);
+        const diffStats = edit?.lineChanges
+          ? html` <span class="file-stats"><span class="added">+${edit.lineChanges.added}</span><span class="removed" style="margin-left:4px">-${edit.lineChanges.removed}</span></span>`
+          : nothing;
+        // prettier-ignore
+        return html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="file-link clickable-link" data-file=${dest}>${dest}</span>${isMapped ? html` <span class="file-source">(from ${source})</span>` : nothing}${diffStats}</li>`;
+      })}`;
+      // prettier-ignore
+      sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
+    }
+  }
   // Default handling for other tools
   else if (input !== undefined && input !== null) {
     const codeLanguage = TOOL_CODE_LANGUAGES.get(toolName);

@@ -53,7 +53,11 @@ import {
   pathToLocation,
   WorkspaceFS,
 } from '@utils/files';
-import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
+import {
+  resolveRunDir,
+  ensureRunDir,
+  getRunDir,
+} from '@utils/files/taskRunStorage';
 import { renderPrompt } from '@utils/prompt/promptUtils';
 import {
   buildFileContextFromTaskState,
@@ -670,8 +674,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       let directoryToReveal: string | undefined;
 
       if (executionId) {
-        await ensureRunDir(executionId);
-        directoryToReveal = getRunDir(executionId);
+        // Check existing locations (primary + legacy) first; create only if neither exists
+        directoryToReveal = await resolveRunDir(executionId);
+        if (!directoryToReveal) {
+          await ensureRunDir(executionId);
+          directoryToReveal = getRunDir(executionId);
+        }
       } else if (runOutputs) {
         directoryToReveal = this.findOutputDirectory(runOutputs);
       }

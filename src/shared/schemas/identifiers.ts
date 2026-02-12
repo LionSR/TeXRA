@@ -3,9 +3,10 @@ import { z } from 'zod';
 export const StreamTabIdSchema = z.string().min(1);
 export type StreamTabId = z.infer<typeof StreamTabIdSchema>;
 
-/** Hex string of any length (16-char current, 6/12-char and UUID legacy). */
+/** Hex string (8-char current, 6/12-char and UUID legacy). */
 export const ExecutionIdSchema = z
   .string()
+  .min(6)
   .regex(/^[0-9a-f][-0-9a-f]*$/i, 'Invalid execution ID: expected hex');
 export type ExecutionId = z.infer<typeof ExecutionIdSchema>;
 
