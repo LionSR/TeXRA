@@ -28,6 +28,20 @@ export {
 const registry = new Map<string, ExecutionHandle>();
 const changeCallbacks = new Map<string, Array<() => void>>();
 
+// Notify waiters when stream status changes (e.g. RUNNING → WAITING).
+// Without this, waitForExecutionChange only resolves on progress/kill/untrack.
+bus.on('updateStreamStatus', ({ streamId }) => {
+  for (const [executionId, handle] of registry) {
+    if (
+      handle instanceof AgentExecutionHandle &&
+      handle.childStreamId === streamId
+    ) {
+      notifyWaiters(executionId);
+      break;
+    }
+  }
+});
+
 // ============================================================================
 // Core registry operations
 // ============================================================================
@@ -111,9 +125,8 @@ export function updateExecutionProgress(
 // ============================================================================
 
 /**
- * Wait for a progress update or execution completion.
- * Resolves when `updateExecutionProgress` or `untrackExecution` is called.
- * Pass an AbortSignal to clean up the callback if the caller times out.
+ * Wait for any change on an execution: status transition, progress update,
+ * kill, or completion (untrack). Pass an AbortSignal for timeout cleanup.
  */
 export function waitForExecutionChange(
   executionId: string,
