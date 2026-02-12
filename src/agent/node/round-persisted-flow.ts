@@ -150,22 +150,21 @@ export class RoundPersistedFlow<
         currentShared = await this.executeRoundSteps(currentShared);
       }
 
-      // Notify final round completion
-      await this.callbacks.onRoundCompleted?.(
-        currentShared.currentRound,
-        currentShared,
-      );
-
       // Determine final status
+      const interrupted =
+        this.callbacks.checkInterruption?.() || !currentShared.continueRounds;
       const completedAllRounds = isRoundAtOrBeyondLimit(
         currentShared.currentRound + 1,
         currentShared.totalRounds,
       );
-      if (
-        !completedAllRounds &&
-        (this.callbacks.checkInterruption?.() || !currentShared.continueRounds)
-      ) {
+      if (!completedAllRounds && interrupted) {
         status = EXECUTION_STATUS.INTERRUPTED;
+      } else {
+        // Only notify round completion if the round actually finished
+        await this.callbacks.onRoundCompleted?.(
+          currentShared.currentRound,
+          currentShared,
+        );
       }
     } catch (error) {
       status = EXECUTION_STATUS.ERROR;
