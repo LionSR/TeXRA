@@ -12,6 +12,9 @@ All notable changes to this project will be documented in this file.
 - Added **reliability settings** (compaction threshold, retry attempts, retry backoff) to the Multi-Agent tab in settings view.
 - Added **parent agent breadcrumbs** on subagent stream tabs with clickable navigation back to the parent stream.
 - Added **modification timestamps** and column headers to memory tool directory listings.
+- Added **execution management** — orchestrator agents can now wait for, inspect, and terminate subagent runs with live round progress tracking.
+- Added **active process badges** and structured delegation display in the progress view for better multi-agent visibility.
+
 ### Bug Fixes
 
 - Fixed **Kimi tool-use batching** — reasoning_content now included in batched follow-up messages to prevent API errors on parallel tool calls.
