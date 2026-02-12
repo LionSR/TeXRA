@@ -9,6 +9,7 @@
 
 // Local imports - shared utilities
 import { isPlainObject } from '@shared/utils/string';
+import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 
 // Local imports - Lit template utilities
@@ -68,6 +69,14 @@ const TOOL_DEFAULT_TIMEOUTS: Record<string, number> = {
 const TIMEOUT_IN_SECONDS = new Set(['executions']);
 
 /**
+ * Tools where the timeout only applies to a specific action value.
+ * For these tools, only show the timer limit when that action is used.
+ */
+const TIMEOUT_GATED_BY_ACTION: Record<string, string> = {
+  executions: 'wait',
+};
+
+/**
  * Extract the effective timeout for a tool call from its input.
  * Returns undefined for tools without a configurable timeout.
  */
@@ -77,6 +86,17 @@ function getToolTimeoutMs(
 ): number | undefined {
   const defaultTimeout = TOOL_DEFAULT_TIMEOUTS[toolName];
   if (defaultTimeout === undefined) return undefined;
+
+  // Some tools only have a meaningful timeout for a specific action
+  const requiredAction = TIMEOUT_GATED_BY_ACTION[toolName];
+  if (
+    requiredAction &&
+    isPlainObject(input) &&
+    input.action !== requiredAction
+  ) {
+    return undefined;
+  }
+
   if (isPlainObject(input) && typeof input.timeout === 'number') {
     return TIMEOUT_IN_SECONDS.has(toolName)
       ? input.timeout * 1000
@@ -382,7 +402,7 @@ export function formatToolUseTemplate(
   ) {
     const acceptInput = input as {
       execution_id?: string;
-      files?: Array<{ run_path?: string; workspace_path?: string }>;
+      files?: Array<{ path?: string; original?: string }>;
     };
 
     // Show execution ID
@@ -413,8 +433,8 @@ export function formatToolUseTemplate(
 
       // prettier-ignore
       const fileItems = html`${files.map((f) => {
-        const dest = f.workspace_path ?? f.run_path ?? '';
-        const source = f.run_path ?? '';
+        const dest = f.original ?? f.path ?? '';
+        const source = f.path ?? '';
         const isMapped = dest && source && dest !== source;
         const edit = editsByPath.get(dest);
         const diffStats = edit?.lineChanges
@@ -433,56 +453,33 @@ export function formatToolUseTemplate(
     typeof input === 'object' &&
     input !== null
   ) {
-    const delegateInput = input as {
-      agent?: string;
-      model?: string;
-      instruction?: string;
-      inputFile?: string | null;
-      inputFiles?: string[];
-      referenceFile?: string | null;
-      referenceFiles?: string[];
-      auxiliaryFile?: string | null;
-      auxiliaryFiles?: string[];
-      mediaFile?: string | null;
-      mediaFiles?: string[];
-      outputFiles?: string[];
-    };
+    const delegateInput = input as Record<string, unknown>;
 
     // Agent and model on one line
-    if (delegateInput.agent || delegateInput.model) {
-      const agentPart = delegateInput.agent ?? 'unknown';
-      const modelPart = delegateInput.model
-        ? html` <span class="file-source">(${delegateInput.model})</span>`
+    const agent = delegateInput.agent as string | undefined;
+    const model = delegateInput.model as string | undefined;
+    if (agent || model) {
+      const agentPart = agent ?? 'unknown';
+      const modelPart = model
+        ? html` <span class="file-source">(${model})</span>`
         : nothing;
       // prettier-ignore
       sections.push(buildToolUseSection('Agent:', html`<code class="execution-id">${agentPart}</code>${modelPart}`));
     }
 
     // Instruction as readable text
-    if (delegateInput.instruction) {
+    const instruction = delegateInput.instruction as string | undefined;
+    if (instruction) {
       sections.push(
-        buildToolUseSection(
-          'Instruction:',
-          wrapInPre(delegateInput.instruction),
-        ),
+        buildToolUseSection('Instruction:', wrapInPre(instruction)),
       );
     }
 
     // Workflow file fields (delegate_workflow / propose_workflow)
-    // Merge singular + plural fields (same pattern as RequestPanels.renderProposalFiles)
-    const combine = (single: string | null | undefined, arr: string[] = []) =>
-      [single, ...arr].filter((f): f is string => Boolean(f));
-    const fileGroups = [
-      { label: 'Input', files: combine(delegateInput.inputFile, delegateInput.inputFiles) },
-      { label: 'Reference', files: combine(delegateInput.referenceFile, delegateInput.referenceFiles) },
-      { label: 'Auxiliary', files: combine(delegateInput.auxiliaryFile, delegateInput.auxiliaryFiles) },
-      { label: 'Media', files: combine(delegateInput.mediaFile, delegateInput.mediaFiles) },
-      { label: 'Output', files: delegateInput.outputFiles ?? [] },
-    ];
-    const nonEmptyGroups = fileGroups.filter((g) => g.files.length > 0);
-    if (nonEmptyGroups.length > 0) {
+    const fileGroups = getProposalFileGroups(delegateInput);
+    if (fileGroups.length > 0) {
       // prettier-ignore
-      const fileItems = html`${nonEmptyGroups.flatMap((g) => g.files.map((f) => html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="file-link clickable-link" data-file=${f}>${f}</span> <span class="file-source">(${g.label})</span></li>`))}`;
+      const fileItems = html`${fileGroups.flatMap((g) => g.files.map((f) => html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="file-link clickable-link" data-file=${f}>${f}</span> <span class="file-source">(${g.label})</span></li>`))}`;
       // prettier-ignore
       sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
     }
