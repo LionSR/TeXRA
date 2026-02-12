@@ -9,6 +9,7 @@ import { formatZodError } from '@common/errors';
 import { AgentHistoryManager } from '@common/history/AgentHistoryManager';
 import * as logger from '@logger/logUtils';
 import { generateExecutionId } from '@utils/core/executionId';
+import { getExecutionStore } from '@agent/storage';
 import type { ExecutionId } from '@shared/schemas';
 
 const CHANNEL = 'ExecuteCommand';
@@ -50,6 +51,9 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
 
     if (!isResume) {
       await AgentHistoryManager.addToHistory(executionId, config);
+      const store = getExecutionStore(executionId);
+      void store.write('config', config);
+      void store.write('meta', { timestamp: new Date().toISOString() });
     }
     await executeAgent(config, executionId);
   } catch (error) {
