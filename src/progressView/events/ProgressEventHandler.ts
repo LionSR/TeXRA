@@ -435,8 +435,7 @@ export class ProgressEventHandler {
       this.getStreamCategory(stream) === AgentCategory.ToolUse &&
       messages[0]?.messageType !== 'userMessage'
     ) {
-      const instructionText =
-        runInstructions[activeRunId]?.text?.trim();
+      const instructionText = runInstructions[activeRunId]?.text?.trim();
       if (instructionText) {
         messages = [
           {

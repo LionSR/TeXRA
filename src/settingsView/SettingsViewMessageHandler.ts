@@ -48,6 +48,7 @@ import {
   readConfig,
 } from '@agent/storage';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
+import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
 import {
   GlobalStateKey,
   WorkspaceStateKey,
@@ -476,11 +477,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   public async sendHistoryData(webview: vscode.Webview): Promise<void> {
     const entries = await listExecutions();
-    const historyItems = entries.map((entry) => ({
-      id: entry.id,
-      timestamp: entry.timestamp,
-      agentConfig: entry.agentConfig,
-    }));
+    const historyItems = entries
+      .filter((entry) => entry.agentConfig !== null)
+      .map((entry) => ({
+        id: entry.id,
+        timestamp: entry.timestamp,
+        agentConfig: entry.agentConfig!,
+      }));
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY,
       historyItems,
@@ -821,7 +824,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleClearHistory(): Promise<void> {
     const view = this.getActiveView();
     try {
-      await deleteAllExecutions();
+      await deleteAllExecutions(new Set(getActiveExecutionIds()));
       await vscode.window.showInformationMessage('Agent history cleared');
       await view?.webview.postMessage({
         command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
