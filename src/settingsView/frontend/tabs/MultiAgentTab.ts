@@ -145,6 +145,11 @@ export class MultiAgentTab extends LitElement {
       <div class="multi-agent-container">
         <h3>Agent Delegation</h3>
 
+        <p class="text-secondary setting-description">
+          Models and agents enabled in the Models and Agents tabs are displayed
+          to the orchestrator agent as available options for delegation.
+        </p>
+
         <div class="setting-block">
           <vscode-checkbox
             ?checked=${this.superYoloEnabled}
