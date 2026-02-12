@@ -476,7 +476,13 @@ class ToolUseProcessNode<C> extends BaseNode<
 }
 
 /** Tools that may take a while and benefit from showing in-progress state. */
-const SLOW_TOOLS = new Set(['bash', 'wolfram', 'web_fetch', 'web_search']);
+const SLOW_TOOLS = new Set([
+  'bash',
+  'wolfram',
+  'web_fetch',
+  'web_search',
+  'executions',
+]);
 
 /** Tools that defer in-progress logging until after approval. */
 const DEFERRED_LOG_TOOLS = new Set(['bash']);
