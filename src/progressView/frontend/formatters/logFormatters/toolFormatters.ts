@@ -11,6 +11,12 @@
 import { isPlainObject } from '@shared/utils/string';
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import type { MemoryToolInput } from '@tools/memory/MemoryTool';
+import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
+import type {
+  DelegateAgentInput,
+  WorkflowAgentInput,
+} from '@tools/WorkflowTool';
+import type { AcceptRunFilesInput } from '@tools/AcceptRunFilesTool';
 
 // Local imports - Lit template utilities
 import {
@@ -30,6 +36,7 @@ import {
   buildFileLinkWithLines,
   buildEditDiffSection,
   buildMemoryPathDisplay,
+  buildExecutionsPathDisplay,
   buildCodeBlock,
   buildDetailsSummary,
 } from '../htmlBuilders';
@@ -394,16 +401,58 @@ export function formatToolUseTemplate(
     }
     // view and delete: file path section above is sufficient
   }
+  // Handle executions tool with specialized formatting based on action
+  else if (
+    toolName === 'executions' &&
+    typeof input === 'object' &&
+    input !== null
+  ) {
+    const execInput = input as ExecutionsToolInput;
+    const execPath = execInput.path ?? '';
+    const action = execInput.action ?? 'view';
+
+    // Show the virtual path being accessed
+    if (execPath) {
+      sections.push(
+        buildToolUseSection('Path:', buildExecutionsPathDisplay(execPath)),
+      );
+    }
+
+    if (action === 'wait') {
+      // wait: show timeout info
+      const timeout = execInput.timeout ?? 300;
+      sections.push(
+        buildToolUseSection(
+          'Action:',
+          wrapInPre(`wait (timeout: ${timeout}s)`),
+        ),
+      );
+    } else if (action === 'kill') {
+      // kill: show action
+      sections.push(
+        buildToolUseSection('Action:', wrapInPre('kill')),
+      );
+    }
+    // view: path section above is sufficient
+
+    // Show view_range if specified
+    if (execInput.view_range) {
+      const [start, end] = execInput.view_range;
+      sections.push(
+        buildToolUseSection(
+          'Range:',
+          wrapInPre(`lines ${start}–${end}`),
+        ),
+      );
+    }
+  }
   // Handle accept_run_files with file list display
   else if (
     toolName === 'accept_run_files' &&
     typeof input === 'object' &&
     input !== null
   ) {
-    const acceptInput = input as {
-      execution_id?: string;
-      files?: Array<{ path?: string; original?: string }>;
-    };
+    const acceptInput = input as AcceptRunFilesInput;
 
     // Show execution ID
     if (acceptInput.execution_id) {
@@ -453,11 +502,11 @@ export function formatToolUseTemplate(
     typeof input === 'object' &&
     input !== null
   ) {
-    const delegateInput = input as Record<string, unknown>;
+    const delegateInput = input as DelegateAgentInput | WorkflowAgentInput;
 
     // Agent and model on one line
-    const agent = delegateInput.agent as string | undefined;
-    const model = delegateInput.model as string | undefined;
+    const agent = delegateInput.agent;
+    const model = delegateInput.model;
     if (agent || model) {
       const agentPart = agent ?? 'unknown';
       const modelPart = model
@@ -468,7 +517,7 @@ export function formatToolUseTemplate(
     }
 
     // Instruction as readable text
-    const instruction = delegateInput.instruction as string | undefined;
+    const instruction = delegateInput.instruction;
     if (instruction) {
       sections.push(
         buildToolUseSection('Instruction:', wrapInPre(instruction)),
@@ -476,7 +525,10 @@ export function formatToolUseTemplate(
     }
 
     // Workflow file fields (delegate_workflow / propose_workflow)
-    const fileGroups = getProposalFileGroups(delegateInput);
+    const fileGroups =
+      'inputFile' in delegateInput
+        ? getProposalFileGroups(delegateInput)
+        : [];
     if (fileGroups.length > 0) {
       // prettier-ignore
       const fileItems = html`${fileGroups.flatMap((g) => g.files.map((f) => html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="file-link clickable-link" data-file=${f}>${f}</span> <span class="file-source">(${g.label})</span></li>`))}`;

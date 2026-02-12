@@ -113,6 +113,21 @@ export async function readChildren(
   return entries.filter((e): e is ChildRecord => e !== null);
 }
 
+/**
+ * Persist a terminal status on an existing execution's metadata.
+ * Reads the current meta, merges `terminalStatus`, and writes back.
+ * Designed for fire-and-forget use — callers should not await.
+ */
+export async function writeTerminalStatus(
+  executionId: ExecutionId,
+  status: string,
+): Promise<void> {
+  const store = getExecutionStore(executionId);
+  const existing = await store.read<ExecutionMeta>('meta');
+  if (!existing) return;
+  await store.write('meta', { ...existing, terminalStatus: status });
+}
+
 // ============================================================================
 // Registration (write path)
 // ============================================================================
