@@ -190,16 +190,26 @@ function updateStreamInfo(
     const backendState = backendStates?.[stream.name];
     if (backendState) {
       const existing = nextStates.get(stream.name);
-      // Preserve frontend-owned properties:
+      // Preserve frontend-owned properties that backend _streamStates never populates:
       // - 'ui': frontend UI state (follow-up text, polish state, etc.)
       // - 'logs': managed by APPEND_LOG/UPDATE_LOGS, not UPDATE_STREAMS
       // - 'taskGroups': managed by ADD_TASK_GROUP/UPDATE_TASK_GROUP
-      // Backend's _streamStates never populates logs/taskGroups (always [])
+      // - Workflow run-scoped fields: managed by UPDATE_INSTRUCTION, UPDATE_RUN_USAGE,
+      //   UPDATE_FILES, UPDATE_MISSING_OUTPUTS, and UPDATE_LOGS (not UPDATE_STREAMS)
       const preserveUI = existing && existing.kind === backendState.kind;
+      const preserveWorkflow =
+        existing && isWorkflowState(existing) && isWorkflowState(backendState);
       nextStates.set(stream.name, {
         ...backendState,
         logs: existing?.logs ?? backendState.logs,
         taskGroups: existing?.taskGroups ?? backendState.taskGroups,
+        ...(preserveWorkflow && {
+          runInstructions: existing.runInstructions,
+          runUsage: existing.runUsage,
+          runFiles: existing.runFiles,
+          runMissingOutputs: existing.runMissingOutputs,
+          activeRunId: existing.activeRunId,
+        }),
         ...(preserveUI && { ui: existing.ui }),
         info: stream,
       } as StreamState);
