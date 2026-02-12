@@ -128,9 +128,7 @@ Call:
     const prepared = await Promise.all(
       files.map(async (mapping) => {
         if (getPathSegments(mapping.path).includes('..')) {
-          throw new ToolError(
-            `path must not contain '..': ${mapping.path}`,
-          );
+          throw new ToolError(`path must not contain '..': ${mapping.path}`);
         }
 
         const { sourceAbsolute, sourceLocation } = await this.resolveSourceFile(
@@ -216,7 +214,7 @@ Call:
     // Single rejection → return rejection result
     if (rejected === files.length) {
       return buildApprovalRejectedResult(
-        prepared[0].workspacePath,
+        prepared[0].original,
         'accept_run_files',
         rejectionMessages.join('\n'),
       );

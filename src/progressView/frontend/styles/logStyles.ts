@@ -9,7 +9,6 @@ import katexStyles from 'katex/dist/katex.min.css?inline';
 // Shared styles
 import { animationStyles } from '@shared/styles/litStyles';
 import { commonViewStyles } from '@shared/styles/commonViewStyles';
-import { proposalModeBadgeStyles } from '@shared/styles/badgeStyles';
 
 // Import and re-export individual style modules
 import { logEntryStyles } from './logEntryStyles';
@@ -70,6 +69,5 @@ export const logStyles = [
   groupStyles,
   codeBlockStyles,
   toolUseStyles,
-  proposalModeBadgeStyles,
   markdownStyles,
 ];

@@ -166,8 +166,8 @@ export class BashTool extends defineTool({
       onStderr: appendToOutput,
     });
 
-    const kill = (): void => {
-      if (!pid) return;
+    const kill = (): boolean => {
+      if (!pid) return false;
       // Try process-group kill first; fall back to direct PID on Windows or if already exited
       try {
         process.kill(-pid, 'SIGTERM');
@@ -175,18 +175,11 @@ export class BashTool extends defineTool({
         try {
           process.kill(pid, 'SIGTERM');
         } catch {
-          /* already exited */
+          return false; // already exited
         }
       }
+      return true;
     };
-
-    const handle = new ProcessExecutionHandle(
-      executionId,
-      parentStreamId,
-      preview,
-      kill,
-    );
-    trackExecution(handle);
 
     const syntheticConfig = AgentConfigSchema.parse({
       agent: 'bash',
@@ -198,6 +191,14 @@ export class BashTool extends defineTool({
       'bash',
       parentExecutionId,
     );
+
+    const handle = new ProcessExecutionHandle(
+      executionId,
+      parentStreamId,
+      preview,
+      kill,
+    );
+    trackExecution(handle);
 
     void promise
       .then(async (result) => {
@@ -238,8 +239,8 @@ export class BashTool extends defineTool({
       output: [
         `Command launched in background.`,
         `Execution ID: ${executionId}`,
-        `Output: executions path=/executions/${executionId}/output`,
-        `Status: executions path=/executions/${executionId} block=true`,
+        `To read output: executions tool with path=/executions/${executionId}/output`,
+        `To wait for completion: executions tool with path=/executions/${executionId} action=wait`,
         'Result will be delivered as a follow-up message when complete.',
       ].join('\n'),
     };

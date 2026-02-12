@@ -1,8 +1,8 @@
 /**
  * Formatting utilities for subagent results.
  *
- * Format helpers convert AgentFlowResult into structured XML strings,
- * used by sync mode tool results and async mode FollowUpQueue delivery.
+ * Format helpers convert AgentFlowResult into structured XML strings
+ * for FollowUpQueue delivery to the orchestrator.
  */
 
 import type {
@@ -53,7 +53,7 @@ function formatWorkflowOutputs(outputs: OutputFileSummary[]): string[] {
 }
 
 /**
- * Format an AgentFlowResult as a delivery message for async mode.
+ * Format an AgentFlowResult as a delivery message.
  * Injected into the orchestrator's FollowUpQueue as a user-role message.
  */
 export function formatSubagentDelivery(
@@ -75,7 +75,7 @@ export function formatSubagentDelivery(
 }
 
 /**
- * Format an error as a delivery message for async mode.
+ * Format an error as a delivery message.
  */
 export function formatSubagentError(
   executionId: string,
