@@ -83,7 +83,9 @@ export function getHandle(executionId: string): ExecutionHandle | undefined {
 export function killExecution(executionId: string): boolean {
   const handle = registry.get(executionId);
   if (!handle) return false;
-  return handle.terminate();
+  const result = handle.terminate();
+  if (result) notifyWaiters(executionId);
+  return result;
 }
 
 /** All currently tracked (active) execution IDs. */

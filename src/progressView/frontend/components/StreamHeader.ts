@@ -389,7 +389,11 @@ export class StreamHeader extends LitElement {
     const toolbarButtons =
       TOOLBAR_BUTTONS[agentCategory] ?? TOOLBAR_BUTTONS.workflow;
     const activeSubagents = this.streamState?.activeSubagents ?? [];
+    const finishedSubagentCount = this.streamState?.finishedSubagentCount ?? 0;
     const activeProcesses = this.streamState?.activeProcesses ?? [];
+    const finishedProcessCount = this.streamState?.finishedProcessCount ?? 0;
+    const totalSubagents = activeSubagents.length + finishedSubagentCount;
+    const totalProcesses = activeProcesses.length + finishedProcessCount;
 
     return html`
       <div class="log-header">
@@ -413,24 +417,34 @@ export class StreamHeader extends LitElement {
               })}
               data-status=${statusLabel}
             ></span>
-            ${activeSubagents.length > 0
+            ${totalSubagents > 0
               ? html`<span
                   class="child-badge subagent-badge"
                   title=${activeSubagents.map((s) => s.agentName).join(', ')}
                 >
                   <i class="codicon codicon-server-process"></i>
-                  ${activeSubagents.length}
-                  subagent${activeSubagents.length > 1 ? 's' : ''}
+                  ${activeSubagents.length > 0
+                    ? html`${activeSubagents.length} running`
+                    : nothing}${activeSubagents.length > 0 && finishedSubagentCount > 0
+                    ? html`, `
+                    : nothing}${finishedSubagentCount > 0
+                    ? html`${finishedSubagentCount} done`
+                    : nothing}
                 </span>`
               : nothing}
-            ${activeProcesses.length > 0
+            ${totalProcesses > 0
               ? html`<span
                   class="child-badge process-badge"
                   title=${activeProcesses.map((p) => p.agentName).join(', ')}
                 >
                   <i class="codicon codicon-terminal"></i>
-                  ${activeProcesses.length}
-                  process${activeProcesses.length > 1 ? 'es' : ''}
+                  ${activeProcesses.length > 0
+                    ? html`${activeProcesses.length} running`
+                    : nothing}${activeProcesses.length > 0 && finishedProcessCount > 0
+                    ? html`, `
+                    : nothing}${finishedProcessCount > 0
+                    ? html`${finishedProcessCount} done`
+                    : nothing}
                 </span>`
               : nothing}
           </div>

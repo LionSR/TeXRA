@@ -303,6 +303,19 @@ export function buildMemoryPathDisplay(memoryPath: string): TemplateResult {
 }
 
 // ============================================================================
+// Executions Path Display (non-clickable, virtual paths)
+// ============================================================================
+
+/** Build an executions path display with history icon. Execution paths are virtual (/executions/...) and not directly openable in the editor. */
+export function buildExecutionsPathDisplay(
+  execPath: string,
+): TemplateResult {
+  if (!execPath) return html``;
+  // prettier-ignore
+  return html`<span class="memory-path"><i class="codicon codicon-history"></i> ${execPath}</span>`;
+}
+
+// ============================================================================
 // Edit Diff Display (Inline Word-Level Diff)
 // ============================================================================
 

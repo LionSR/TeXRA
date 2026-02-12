@@ -47,8 +47,12 @@ const BaseStreamStateSchema = z.object({
   contextState: ContextStateSchema.optional(),
   /** Active subagents running under this stream (ephemeral, not persisted). */
   activeSubagents: z.array(ActiveChildInfoSchema).prefault([]),
+  /** Cumulative count of subagents that have finished (ephemeral, not persisted). */
+  finishedSubagentCount: z.number().prefault(0),
   /** Active background processes running under this stream (ephemeral, not persisted). */
   activeProcesses: z.array(ActiveChildInfoSchema).prefault([]),
+  /** Cumulative count of processes that have finished (ephemeral, not persisted). */
+  finishedProcessCount: z.number().prefault(0),
 });
 
 // Tool-Use UI State (frontend-only, preserved during backend updates)
