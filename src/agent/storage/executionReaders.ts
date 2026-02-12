@@ -119,13 +119,14 @@ export async function readChildren(
   const childKeys = await store.listKeys('child-');
 
   if (childKeys.length > 0) {
-    const children: ChildRecord[] = [];
-    for (const key of childKeys) {
-      const id = key.replace('child-', '') as ExecutionId;
-      const meta = await store.read<{ agent: string; timestamp: string }>(key);
-      if (meta) children.push({ id, agent: meta.agent, timestamp: meta.timestamp });
-    }
-    return children;
+    const entries = await Promise.all(
+      childKeys.map(async (key) => {
+        const id = key.replace('child-', '') as ExecutionId;
+        const data = await store.read<{ agent: string; timestamp: string }>(key);
+        return data ? { id, agent: data.agent, timestamp: data.timestamp } : null;
+      }),
+    );
+    return entries.filter((e): e is ChildRecord => e !== null);
   }
 
   // Fallback: history filter
