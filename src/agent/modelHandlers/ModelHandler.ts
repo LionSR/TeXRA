@@ -303,9 +303,9 @@ export abstract class ModelHandler<
     // Prime caches before using sync methods. This ensures that after reload/continue,
     // the tier config and access status are fetched before shouldUseServerSideKeys() is called.
     // Without this, sync methods return false due to empty caches, causing incorrect tier errors.
-    if (useIncludedAccess) {
-      await serverSideKeyService.canUseServerSideKeys();
-    }
+    const hasServerAccess = useIncludedAccess
+      ? await serverSideKeyService.canUseServerSideKeys()
+      : false;
 
     // Use centralized check to ensure consistency with getBaseUrl()
     if (this.shouldUseServerSideKeys()) {
@@ -335,9 +335,11 @@ export abstract class ModelHandler<
       }
     }
 
-    if (useIncludedAccess) {
-      // User selected "Use Included Access" but model is not available for their tier
-      // Don't fall back to personal API keys - throw an error to match dropdown behavior
+    if (useIncludedAccess && hasServerAccess) {
+      // User is authenticated with "Use Included Access" but model is not available for their tier.
+      // Don't fall back to personal API keys - throw an error to match dropdown behavior.
+      // Note: We check hasServerAccess to avoid blocking unauthenticated users who have the
+      // default useIncludedAccess=true setting but should fall through to personal API keys.
       this.logger.debug(
         `Model "${this.config.name}" not available for tier, useIncludedAccess=true`,
       );
