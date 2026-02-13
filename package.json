@@ -1444,7 +1444,7 @@
     "deepmerge": "^4.3.1",
     "delay": "^7.0.0",
     "diff-match-patch": "^1.0.5",
-    "dotenv": "^17.2.4",
+    "dotenv": "^17.3.1",
     "execa": "^9.6.1",
     "fast-json-stable-stringify": "^2.1.0",
     "fast-xml-parser": "^5.3.5",
