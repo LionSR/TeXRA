@@ -86,12 +86,9 @@ prompts:
       <beamer_presentation>
       \documentclass{beamer}
 
-      \usetheme{Madrid}
-      \usecolortheme{dolphin}
+      \usetheme{metropolis}
 
-      \setbeamertemplate{footline}[page number]
       \setbeamertemplate{navigation symbols}{}
-      \setbeamertemplate{frametitle}[default][center]
 
       \AtBeginSection[]
       {
