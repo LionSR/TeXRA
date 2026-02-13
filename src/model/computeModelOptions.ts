@@ -116,8 +116,11 @@ async function isModelAvailable(
     return true;
   }
 
-  // Fall back to personal API keys (only when not in "Use Included Access" mode)
-  if (!ctx.useIncludedAccess) {
+  // Fall back to personal API keys when:
+  // - User explicitly chose "Use My Own Keys", OR
+  // - User has default "Use Included Access" but isn't actually authenticated with server access
+  //   (avoids showing all models as disabled for unauthenticated users)
+  if (!ctx.useIncludedAccess || !ctx.hasServerAccess) {
     return hasPersonalKeyForModel(config, ctx.hasOpenRouter);
   }
 
