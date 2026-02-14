@@ -220,6 +220,7 @@ export const ToolCategorySchema = z.enum([
   'computation',
   'lean',
   'workflow',
+  'system',
 ]);
 export type ToolCategory = z.infer<typeof ToolCategorySchema>;
 
