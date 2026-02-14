@@ -3,14 +3,9 @@
  */
 import * as path from 'path';
 
-import { MEMORY_DISPLAY_ROOT, MEMORY_STORAGE_ROOT } from './constants';
+import { normalizeFilePath } from '@shared/utils/path';
 
-/**
- * Normalize path separators to forward slashes for display.
- */
-function toForwardSlashes(p: string): string {
-  return p.split(path.sep).join('/');
-}
+import { MEMORY_DISPLAY_ROOT, MEMORY_STORAGE_ROOT } from './constants';
 
 /**
  * Build a storage path from a relative path within the memory root.
@@ -30,7 +25,7 @@ export function relativeToDisplayPath(relativePath: string): string {
   if (!relativePath || relativePath === '') {
     return MEMORY_DISPLAY_ROOT;
   }
-  return `${MEMORY_DISPLAY_ROOT}/${toForwardSlashes(relativePath)}`;
+  return `${MEMORY_DISPLAY_ROOT}/${normalizeFilePath(relativePath)}`;
 }
 
 /**
