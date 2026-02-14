@@ -197,106 +197,111 @@ export class ArxivSourceProcessor {
 
     // Create project directory for the arXiv paper (sanitize ID to avoid path issues)
     const paperDirRelative = id.replaceAll('/', '_');
+    const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
 
-    // Skip download if source already exists (directory has files beyond the staging dir)
+    // Check if source was already downloaded successfully.
+    // A completed download has content files and no leftover 'download' staging dir.
+    // A leftover staging dir indicates a previous incomplete download that should be retried.
+    let needsDownload = true;
     if (await WorkspaceFS.exists(paperDirRelative)) {
       const entries = await WorkspaceFS.readDir(paperDirRelative);
       const hasContent = entries.some(([name]) => name !== 'download');
-      if (hasContent) {
-        const existingPath = WorkspaceFS.fullPath(paperDirRelative);
+      const hasStaging = entries.some(([name]) => name === 'download');
+      if (hasContent && !hasStaging) {
+        needsDownload = false;
         logger.info(
           this.channel,
-          `arXiv source already exists at: ${existingPath}`,
+          `arXiv source already exists at: ${paperDirFull}`,
         );
-        return existingPath;
       }
     }
 
-    await WorkspaceFS.ensureDir(paperDirRelative);
+    if (needsDownload) {
+      await WorkspaceFS.ensureDir(paperDirRelative);
 
-    // Create temporary download subdirectory for staging the archive
-    const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
-    const downloadDirRelative = path.join(paperDirRelative, 'download');
-    await WorkspaceFS.ensureDir(downloadDirRelative);
+      // Create temporary download subdirectory for staging the archive
+      const downloadDirRelative = path.join(paperDirRelative, 'download');
+      await WorkspaceFS.ensureDir(downloadDirRelative);
 
-    const downloadDirFull = path.join(paperDirFull, 'download');
-    const downloadBasePath = path.join(downloadDirFull, 'source');
+      const downloadDirFull = path.join(paperDirFull, 'download');
+      const downloadBasePath = path.join(downloadDirFull, 'source');
 
-    if (progressCallback) {
-      progressCallback(`Downloading arXiv source for ${id}...`, 20);
-    }
-
-    const downloadUrl = `https://arxiv.org/src/${id}`;
-    const downloadedPath = await this.downloadFile(
-      downloadUrl,
-      downloadBasePath,
-    );
-
-    const isArchive =
-      downloadedPath.endsWith('.tar') ||
-      downloadedPath.endsWith('.tar.gz') ||
-      downloadedPath.endsWith('.tgz');
-
-    // Detect gzip-compressed single files (.gz but not .tar.gz/.tgz)
-    const isGzipOnly = !isArchive && downloadedPath.endsWith('.gz');
-
-    if (isArchive) {
       if (progressCallback) {
-        progressCallback('Extracting source files...', 60);
+        progressCallback(`Downloading arXiv source for ${id}...`, 20);
       }
 
-      const extractResult = await this.extractTarFile(
-        downloadedPath,
-        paperDirFull,
-        { timeout: 30000 },
+      const downloadUrl = `https://arxiv.org/src/${id}`;
+      const downloadedPath = await this.downloadFile(
+        downloadUrl,
+        downloadBasePath,
       );
 
-      if (!extractResult.success) {
-        throw new Error(
-          `Failed to extract arXiv source: ${extractResult.error}`,
-        );
-      }
+      const isArchive =
+        downloadedPath.endsWith('.tar') ||
+        downloadedPath.endsWith('.tar.gz') ||
+        downloadedPath.endsWith('.tgz');
 
-      if (progressCallback) {
-        progressCallback('Cleaning up...', 80);
-      }
+      // Detect gzip-compressed single files (.gz but not .tar.gz/.tgz)
+      const isGzipOnly = !isArchive && downloadedPath.endsWith('.gz');
 
-      // Remove the downloaded archive file
-      await AbsoluteFS.delete(downloadedPath);
-    } else {
-      // For gzip-compressed single files, decompress first
-      let sourceFilePath = downloadedPath;
-      if (isGzipOnly) {
+      if (isArchive) {
         if (progressCallback) {
-          progressCallback('Decompressing source file...', 60);
+          progressCallback('Extracting source files...', 60);
         }
-        const decompressedPath = downloadedPath.replace(/\.gz$/, '');
-        await pipeline(
-          AbsoluteFS.createReadStream(downloadedPath),
-          createGunzip(),
-          AbsoluteFS.createWriteStream(decompressedPath),
+
+        const extractResult = await this.extractTarFile(
+          downloadedPath,
+          paperDirFull,
+          { timeout: 30000 },
         );
+
+        if (!extractResult.success) {
+          throw new Error(
+            `Failed to extract arXiv source: ${extractResult.error}`,
+          );
+        }
+
+        if (progressCallback) {
+          progressCallback('Cleaning up...', 80);
+        }
+
+        // Remove the downloaded archive file
         await AbsoluteFS.delete(downloadedPath);
-        sourceFilePath = decompressedPath;
+      } else {
+        // For gzip-compressed single files, decompress first
+        let sourceFilePath = downloadedPath;
+        if (isGzipOnly) {
+          if (progressCallback) {
+            progressCallback('Decompressing source file...', 60);
+          }
+          const decompressedPath = downloadedPath.replace(/\.gz$/, '');
+          await pipeline(
+            AbsoluteFS.createReadStream(downloadedPath),
+            createGunzip(),
+            AbsoluteFS.createWriteStream(decompressedPath),
+          );
+          await AbsoluteFS.delete(downloadedPath);
+          sourceFilePath = decompressedPath;
+        }
+
+        // Rename to main.tex and move to paper root
+        const downloadedRel = WorkspaceFS.relativePath(sourceFilePath);
+        // Use forward slashes to match WorkspaceFS.relativePath() convention
+        const targetRel = [paperDirRelative, 'main.tex'].join('/');
+        if (downloadedRel !== targetRel) {
+          await WorkspaceFS.rename(downloadedRel, targetRel);
+        }
       }
 
-      // Rename to main.tex and move to paper root
-      const downloadedRel = WorkspaceFS.relativePath(sourceFilePath);
-      // Use forward slashes to match WorkspaceFS.relativePath() convention
-      const targetRel = [paperDirRelative, 'main.tex'].join('/');
-      if (downloadedRel !== targetRel) {
-        await WorkspaceFS.rename(downloadedRel, targetRel);
+      // Remove the temporary download directory (files are now in paper root)
+      try {
+        await AbsoluteFS.delete(downloadDirFull, { recursive: true });
+      } catch (err) {
+        logger.debug(
+          this.channel,
+          `Could not remove download directory: ${toErrorMessage(err)}`,
+        );
       }
-    }
-
-    // Remove the temporary download directory (files are now in paper root)
-    try {
-      await AbsoluteFS.delete(downloadDirFull, { recursive: true });
-    } catch (err) {
-      logger.debug(
-        this.channel,
-        `Could not remove download directory: ${toErrorMessage(err)}`,
-      );
     }
 
     if (autoIndent) {
