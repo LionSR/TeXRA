@@ -10,6 +10,7 @@ import { isLatexFile } from '@common/files/fileTypeUtils';
 
 // Local imports - utilities
 import * as logger from '@logger/logUtils';
+import { getConfig } from '@utils/config';
 import { AbsoluteFS, pathToLocation } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import {
@@ -78,16 +79,45 @@ async function openAndBuildLatex(
   } else {
     // Outside workspace — LaTeX Workshop cannot resolve project-local
     // packages, so compile internally with TEXINPUTS set.
-    const outDir = path.join(path.dirname(uri.fsPath), 'build');
+    const outDir = resolveLatexOutDir(uri.fsPath);
     const ok = await compileLatex2Pdf(pathToLocation(uri.fsPath), {
+      compiler: 'latexmk',
       outputDirectory: outDir,
     });
     if (!ok) {
-      logger.warn(CHANNEL, `Internal LaTeX compilation failed for ${uri.fsPath}`);
+      logger.warn(
+        CHANNEL,
+        `Internal LaTeX compilation failed for ${uri.fsPath}`,
+      );
     }
   }
 
   scheduleViewerDisplay();
+}
+
+/**
+ * Resolves LaTeX Workshop output directory for a given source file path.
+ *
+ * Mirrors the extension's default (`%DIR%/build/`) while respecting user
+ * overrides, so internal compilation and LaTeX Workshop viewer target the
+ * same output location.
+ */
+function resolveLatexOutDir(latexFilePath: string): string {
+  const fileDir = path.dirname(latexFilePath);
+  const configuredOutDir = getConfig<string>(
+    'latex-workshop.latex.outDir',
+    '%DIR%/build/',
+  );
+
+  const normalizedOutDir = configuredOutDir.trim();
+  if (!normalizedOutDir) {
+    return path.join(fileDir, 'build');
+  }
+
+  const expandedOutDir = normalizedOutDir.replaceAll('%DIR%', fileDir);
+  return path.isAbsolute(expandedOutDir)
+    ? expandedOutDir
+    : path.resolve(fileDir, expandedOutDir);
 }
 
 /**
