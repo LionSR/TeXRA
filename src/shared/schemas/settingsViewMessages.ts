@@ -339,6 +339,12 @@ const SetAgentEnabledMessageSchema = z.object({
   enabled: z.boolean(),
 });
 
+const SetAllAgentsEnabledMessageSchema = z.object({
+  command: z.literal(CMD.SET_ALL_AGENTS_ENABLED),
+  category: AgentCategorySchema,
+  enabled: z.boolean(),
+});
+
 const OpenAgentFolderMessageSchema = z.object({
   command: z.literal(CMD.OPEN_AGENT_FOLDER),
   folderType: z.enum(['custom', 'builtInWorkflow', 'builtInToolUse']),
@@ -439,6 +445,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     GetAgentSelectionMessageSchema,
     OpenAgentYamlMessageSchema,
     SetAgentEnabledMessageSchema,
+    SetAllAgentsEnabledMessageSchema,
     OpenAgentFolderMessageSchema,
     CreateAgentMessageSchema,
     // Auto-show remote agents messages
