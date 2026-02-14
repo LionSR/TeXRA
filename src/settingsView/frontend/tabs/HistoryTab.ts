@@ -78,24 +78,26 @@ export class HistoryTab extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <history-search-bar
-        .matchCount=${this.matchCount}
-        .searchTerm=${this.searchTerm}
-        @history-search-change=${this.handleSearchChange}
-        @history-search-next=${() => this.handleSearchNavigate('next')}
-        @history-search-prev=${() => this.handleSearchNavigate('prev')}
-      ></history-search-bar>
+      <div class="tab-content-container">
+        <history-search-bar
+          .matchCount=${this.matchCount}
+          .searchTerm=${this.searchTerm}
+          @history-search-change=${this.handleSearchChange}
+          @history-search-next=${() => this.handleSearchNavigate('next')}
+          @history-search-prev=${() => this.handleSearchNavigate('prev')}
+        ></history-search-bar>
 
-      <history-list
-        .items=${this.items}
-        .state=${this.stateStore}
-        .searchTerm=${this.searchTerm}
-        .searchAction=${this.searchAction}
-        .clearSearchTrigger=${this.clearSearchTrigger}
-        @history-match-count=${this.handleMatchCount}
-        @search-navigate-complete=${this.handleSearchNavigateComplete}
-        @search-clear-complete=${this.handleSearchClearComplete}
-      ></history-list>
+        <history-list
+          .items=${this.items}
+          .state=${this.stateStore}
+          .searchTerm=${this.searchTerm}
+          .searchAction=${this.searchAction}
+          .clearSearchTrigger=${this.clearSearchTrigger}
+          @history-match-count=${this.handleMatchCount}
+          @search-navigate-complete=${this.handleSearchNavigateComplete}
+          @search-clear-complete=${this.handleSearchClearComplete}
+        ></history-list>
+      </div>
     `;
   }
 }

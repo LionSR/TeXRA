@@ -66,10 +66,7 @@ export class ToolsTab extends LitElement {
         display: block;
       }
 
-      .tools-container {
-        max-width: 1000px;
-        margin: 0 auto;
-      }
+      /* max-width and centering provided by .tab-content-container */
 
       .tools-header {
         display: flex;
@@ -82,7 +79,7 @@ export class ToolsTab extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--spacing-small);
-        font-size: var(--font-size-lg, 14px);
+        font-size: var(--font-size-lg);
         font-weight: 500;
         color: var(--vscode-foreground);
       }
@@ -97,7 +94,7 @@ export class ToolsTab extends LitElement {
       .tools-summary-stat {
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: var(--spacing-small);
       }
 
       .tools-summary-stat .codicon {
@@ -112,27 +109,7 @@ export class ToolsTab extends LitElement {
         color: var(--vscode-testing-iconFailed, #f48771);
       }
 
-      .tools-recheck-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--spacing-tiny) var(--spacing-small);
-        font-size: var(--font-size-xs);
-        font-family: inherit;
-        color: var(--color-text-secondary);
-        background: none;
-        border: var(--border-thin) solid var(--color-border);
-        border-radius: var(--border-radius);
-        cursor: pointer;
-        transition:
-          color 0.1s ease,
-          border-color 0.1s ease;
-      }
-
-      .tools-recheck-btn:hover {
-        color: var(--vscode-foreground);
-        border-color: var(--vscode-focusBorder);
-      }
+      /* Base recheck-btn styles provided by .tab-action-btn in commonViewStyles */
 
       .category-section {
         margin-bottom: var(--spacing-large);
@@ -254,7 +231,7 @@ export class ToolsTab extends LitElement {
 
     if (!this.loaded) {
       return html`
-        <div class="tools-container">
+        <div class="tools-container tab-content-container">
           <div class="tools-empty">
             <span class="codicon codicon-loading codicon-modifier-spin"></span>
             Loading tool information...
@@ -264,7 +241,7 @@ export class ToolsTab extends LitElement {
     }
 
     return html`
-      <div class="tools-container">
+      <div class="tools-container tab-content-container">
         <div class="tools-header">
           <div class="tools-title">
             <span class="codicon codicon-tools"></span>
@@ -273,7 +250,7 @@ export class ToolsTab extends LitElement {
           <div class="tools-header-actions">
             ${this.renderSummary()}
             <button
-              class="tools-recheck-btn"
+              class="tab-action-btn"
               @click=${this.handleRecheck}
               title="Re-check tool availability"
             >
