@@ -51,7 +51,8 @@ export class EditFileTool extends defineTool({
 
     if (old_str.length === 0) {
       throw new ToolError(
-        `old_str must not be empty for ${targetPath}. Provide the exact text to replace from read_file output after the line-number prefix.`,
+        `old_str must not be empty for ${targetPath}. ` +
+          `Provide the exact text to replace, copied from read_file output (excluding the line-number prefix).`,
       );
     }
 
@@ -66,13 +67,19 @@ export class EditFileTool extends defineTool({
 
     if (occurrences === 0) {
       throw new ToolError(
-        `The provided old_str was not found in ${targetPath}. Ensure it matches the read_file output exactly after the line-number prefix.`,
+        `old_str not found in ${targetPath}.\n` +
+          `To fix:\n` +
+          `- Re-read the file — content may have changed since last read\n` +
+          `- Copy text exactly from read_file output, excluding the line-number prefix (e.g. "  42\t"); whitespace must match`,
       );
     }
 
     if (!replace_all && occurrences > 1) {
       throw new ToolError(
-        `old_str is not unique within ${targetPath}. Include more surrounding context or set replace_all to true.`,
+        `old_str matches ${occurrences} locations in ${targetPath}.\n` +
+          `To fix, either:\n` +
+          `- Include more surrounding context to make old_str unique\n` +
+          `- Set replace_all to true to replace every occurrence: { "replace_all": true }`,
       );
     }
 
