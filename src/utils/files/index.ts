@@ -1,11 +1,7 @@
 // Core filesystem abstractions
 export { WorkspaceRoot, type ResolvedPath } from './workspaceRoot';
 export { WorkspaceFS } from './workspaceFS';
-export {
-  ScopedWorkspaceFS,
-  ScopedWorkspace,
-  createScopedWorkspace,
-} from './scopedWorkspaceFS';
+export { ScopedWorkspace } from './scopedWorkspace';
 export { AbsoluteFS } from './absoluteFS';
 export { StorageFS, GlobalStorageFS } from './storageFS';
 export { RelativeFS } from './relativeFS';
