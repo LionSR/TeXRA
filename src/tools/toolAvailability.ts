@@ -63,10 +63,12 @@ export async function runExternalToolChecks(): Promise<
     ),
   );
 
-  // Update cache — last writer wins, which is fine since fresher data is always better
+  // Update cache — only exclude tools whose check definitively failed.
+  // 'unknown' (check threw) is not treated as missing: the tool may still
+  // work fine and will produce a clear error at call time if it doesn't.
   const unavailable = new Set<string>();
   for (const r of results) {
-    if (r.status !== 'available') {
+    if (r.status === 'not-found') {
       r.tools.forEach((t) => unavailable.add(t));
     }
   }
