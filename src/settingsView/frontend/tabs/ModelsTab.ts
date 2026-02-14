@@ -32,10 +32,7 @@ export class ModelsTab extends LitElement {
         display: block;
       }
 
-      .models-container {
-        max-width: 1000px;
-        margin: 0 auto;
-      }
+      /* max-width and centering provided by .tab-content-container */
     `,
   ];
 
@@ -57,7 +54,7 @@ export class ModelsTab extends LitElement {
       : nothing;
 
     return html`
-      <div class="models-container">
+      <div class="models-container tab-content-container">
         ${apiAccessSection}
         <model-selection-list
           .models=${this.modelSelectionItems}
