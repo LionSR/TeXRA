@@ -25,7 +25,7 @@ import { toErrorMessage } from '@common/errors';
 // Internal imports
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
-import { extendEnvPath } from '@utils/system/platformPaths';
+import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'execUtils';
 logger.initialize(CHANNEL);
@@ -47,7 +47,7 @@ export function signalProcessGroup(
   pid: number,
   signal: NodeJS.Signals,
 ): boolean {
-  if (process.platform === 'win32') {
+  if (IS_WINDOWS) {
     try {
       process.kill(pid, signal);
       return true;
@@ -157,11 +157,10 @@ export async function executeCommand(
       // bash tool (all other callers use array-form commands which skip this
       // path).  Acceptable because the alternative is `await` hanging forever.
       const { timeout: _shellTimeout, ...execaNoTimeout } = execaOptions;
-      const isWindows = process.platform === 'win32';
       // Only use detached when we have a timeout and need process-group killing.
       // On POSIX, detached creates a process group we can kill as a unit.
       // On Windows, detached opens a new console window so we always skip it.
-      const useDetached = !!_shellTimeout && !isWindows;
+      const useDetached = !!_shellTimeout && !IS_WINDOWS;
       subprocess = execa(command, {
         ...execaNoTimeout,
         shell: true,
