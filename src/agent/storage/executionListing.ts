@@ -113,11 +113,11 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
       try {
         const store = getExecutionStore(id);
         const [meta, cfg] = await Promise.all([
-          store.read<ExecutionMeta>('meta'),
-          store.read<AgentConfig>('config'),
+          store.readMeta(),
+          store.readConfig(),
         ]);
 
-        if (!meta?.timestamp) return null;
+        if (!meta) return null;
 
         return {
           id,
