@@ -21,6 +21,7 @@ import {
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -211,10 +212,9 @@ export class TextEditorTool extends defineTool({
       }
 
       // Expand tabs to 4 spaces for consistent display
-      let fileContent = (await WorkspaceFS.read(filePath)).replaceAll(
-        '\t',
-        '    ',
-      );
+      let fileContent = normalizeLineEndings(
+        await WorkspaceFS.read(filePath),
+      ).replaceAll('\t', '    ');
       let initLine = 1;
 
       if (viewRange) {
@@ -228,7 +228,7 @@ export class TextEditorTool extends defineTool({
           );
         }
 
-        const fileLines = fileContent.split(/\r?\n/);
+        const fileLines = fileContent.split('\n');
         const numLines = fileLines.length;
         const [startLine, endLine] = viewRange;
 
@@ -343,7 +343,7 @@ export class TextEditorTool extends defineTool({
       if (readGate) {
         return readGate;
       }
-      const fileContent = await WorkspaceFS.read(filePath);
+      const fileContent = normalizeLineEndings(await WorkspaceFS.read(filePath));
 
       // Expand tabs to 4 spaces for consistent display
       const expandedFileContent = fileContent.replaceAll('\t', '    ');
@@ -359,7 +359,7 @@ export class TextEditorTool extends defineTool({
       }
 
       if (occurrences > 1) {
-        const lines = expandedFileContent.split(/\r?\n/);
+        const lines = expandedFileContent.split('\n');
         const lineNumbers = lines
           .map((line, index) =>
             line.includes(expandedOldStr) ? index + 1 : -1,
@@ -455,13 +455,13 @@ export class TextEditorTool extends defineTool({
       if (readGate) {
         return readGate;
       }
-      const fileContent = await WorkspaceFS.read(filePath);
+      const fileContent = normalizeLineEndings(await WorkspaceFS.read(filePath));
 
       // Expand tabs to 4 spaces for consistent display
       const expandedFileContent = fileContent.replaceAll('\t', '    ');
       const expandedNewStr = newStr.replaceAll('\t', '    ');
 
-      const fileLines = expandedFileContent.split(/\r?\n/);
+      const fileLines = expandedFileContent.split('\n');
       const numLines = fileLines.length;
 
       if (insertLine < 1 || insertLine > numLines + 1) {
@@ -470,7 +470,7 @@ export class TextEditorTool extends defineTool({
         );
       }
 
-      const newStrLines = expandedNewStr.split(/\r?\n/);
+      const newStrLines = expandedNewStr.split('\n');
       const newFileLines = [
         ...fileLines.slice(0, insertLine - 1),
         ...newStrLines,

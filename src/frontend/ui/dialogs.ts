@@ -24,7 +24,7 @@ function computeDefaultUri(options: FileDialogOptions): vscode.Uri | null {
   if (options.defaultUri !== undefined) {
     return options.defaultUri;
   }
-  const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) {
     return null;
   }
