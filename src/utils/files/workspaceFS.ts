@@ -20,7 +20,7 @@ export type { ResolvedPath };
  * from {@link RelativeFS}.
  *
  * For scoped file operations against an arbitrary root, use
- * {@link createScopedWorkspaceFS} instead.
+ * {@link ScopedWorkspace} instead.
  */
 export class WorkspaceFS extends RelativeFS {
   protected static override getBasePath(): string {
@@ -46,12 +46,10 @@ export class WorkspaceFS extends RelativeFS {
 
   /**
    * Convert an absolute path to a workspace-relative path.
-   * Uses VS Code's asRelativePath which properly handles symlinks.
+   * Uses VS Code's `asRelativePath` which properly handles symlinks.
    * Returns the original path if no workspace is open.
    *
    * Always returns forward slashes for cross-platform consistency.
-   * On Windows, vscode.workspace.asRelativePath() returns backslashes;
-   * normalizing here ensures all downstream consumers get a consistent format.
    */
   public static relativePath(filePath: string): string {
     if (!this.getPath()) {
@@ -67,42 +65,41 @@ export class WorkspaceFS extends RelativeFS {
    * If already absolute, returns unchanged. Otherwise resolves relative to workspace.
    */
   public static toAbsolute(filePath: string): string {
-    const wsRoot = this.getWorkspaceRoot();
-    if (!wsRoot) {
-      throw new Error('Workspace path is not available.');
-    }
-    return wsRoot.toAbsolute(filePath);
+    return path.isAbsolute(filePath) ? filePath : this.fullPath(filePath);
   }
 
   /**
    * Resolve a path (absolute or relative) against the workspace root.
    *
-   * This is the single resolution primitive for workspace path handling.
    * Returns a discriminated union — callers apply their own policy
    * (throw on external, create ExternalFileLocation, etc.).
    *
-   * Relative paths are normalized to forward slashes. Paths that escape
-   * via `..` are treated as external.
+   * Absolute paths use VS Code's `asRelativePath` for symlink-aware
+   * resolution. Relative paths delegate to {@link WorkspaceRoot} (pure
+   * `path` logic). No-workspace case treats everything as external.
    */
   public static locatePath(inputPath: string): ResolvedPath {
     const workspaceRoot = this.getPath();
 
+    // No workspace — everything is external
     if (!workspaceRoot) {
-      // No workspace — everything is external
       if (!inputPath) {
         return { kind: 'external', absolutePath: '' };
       }
       return { kind: 'external', absolutePath: path.resolve(inputPath) };
     }
 
-    const wsRoot = new WorkspaceRoot(workspaceRoot);
-
+    // Empty input → workspace root itself
     if (!inputPath) {
-      return wsRoot.locatePath(inputPath);
+      return {
+        kind: 'workspace',
+        absolutePath: workspaceRoot,
+        relativePath: '',
+      };
     }
 
+    // Absolute paths: use VS Code's asRelativePath for symlink handling
     if (path.isAbsolute(inputPath)) {
-      // Use VS Code's asRelativePath for symlink handling on absolute paths
       const relative = this.relativePath(inputPath);
       if (!path.isAbsolute(relative) && !relative.startsWith('..')) {
         return {
@@ -114,7 +111,7 @@ export class WorkspaceFS extends RelativeFS {
       return { kind: 'external', absolutePath: inputPath };
     }
 
-    // Relative paths delegate entirely to WorkspaceRoot
-    return wsRoot.locatePath(inputPath);
+    // Relative paths: delegate to WorkspaceRoot (pure path logic)
+    return new WorkspaceRoot(workspaceRoot).locatePath(inputPath);
   }
 }
