@@ -4,11 +4,7 @@ import { z } from 'zod';
 // Local imports - latex utilities
 import { ToolError, type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
-import {
-  formatTeXCountStats,
-  getTeXCount,
-  type TexcountMode,
-} from '@latex/texcount';
+import { getTeXCount, type TexcountMode } from '@latex/texcount';
 
 // Local imports - tool core
 
@@ -29,7 +25,7 @@ function toFileArray(files: TexcountInput['files']): string[] {
 
 function formatOutput(output: string, format: TexcountInput['format']): string {
   if (format === 'stats') {
-    return formatTeXCountStats(output);
+    return `TeX Count Statistics:<texcount>\n${output}\n</texcount>\n\n`;
   }
   return output;
 }
