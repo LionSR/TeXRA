@@ -4,7 +4,7 @@
  * Groups permissions by kind and renders section headers with
  * individual panel components. Manages global keyboard shortcuts
  * (y=approve, n=reject, d=diff, r=retry, s=setup, Esc=dismiss)
- * by delegating to the first visible panel.
+ * by delegating to the panel matching the newest permission in the queue.
  */
 
 // Third-party imports
@@ -197,7 +197,7 @@ export class RequestPanels extends LitElement {
   /**
    * Handle global keyboard shortcuts for permission actions.
    * Only active when permissions are visible and no text input is focused.
-   * Delegates to the first visible sub-panel's handleKeyboardShortcut().
+   * Delegates to the panel matching the newest permission (permissions[0]).
    */
   private handleGlobalKeydown = (event: KeyboardEvent): void => {
     if (isTextInput(document.activeElement)) return;
@@ -205,7 +205,7 @@ export class RequestPanels extends LitElement {
     if (this.permissions.length === 0) return;
 
     const key = event.key.toLowerCase();
-    const panel = this.getFirstPanel();
+    const panel = this.getNewestPanel();
     if (!panel) return;
 
     if (panel.handleKeyboardShortcut(key)) {
@@ -213,9 +213,22 @@ export class RequestPanels extends LitElement {
     }
   };
 
-  /** Find the first rendered sub-panel element in shadow DOM */
-  private getFirstPanel(): BaseRequestPanel | null {
-    return this.renderRoot.querySelector<BaseRequestPanel>(PANEL_SELECTOR);
+  /**
+   * Find the panel for the newest permission (first in the queue).
+   *
+   * Permissions are prepended so index 0 is always the latest request.
+   * We match by reference rather than querying DOM order, which follows
+   * fixed section ordering (approval → bash → retry → proposal) and
+   * would target the wrong panel when mixed kinds are pending.
+   */
+  private getNewestPanel(): BaseRequestPanel | null {
+    const newest = this.permissions[0];
+    const panels =
+      this.renderRoot.querySelectorAll<BaseRequestPanel>(PANEL_SELECTOR);
+    for (const panel of panels) {
+      if (panel.permission === newest) return panel;
+    }
+    return null;
   }
 
   // ===========================================================================
