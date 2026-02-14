@@ -232,11 +232,34 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-count {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
         padding: var(--spacing-small) var(--spacing-medium);
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
         border-top: var(--border-thin) solid var(--color-border);
         background: var(--vscode-editor-background);
+      }
+
+      .agent-count-actions {
+        display: flex;
+        gap: var(--spacing-small);
+      }
+
+      .agent-count-link {
+        font-size: var(--font-size-xs);
+        font-family: inherit;
+        color: var(--vscode-textLink-foreground);
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+        text-decoration: none;
+      }
+
+      .agent-count-link:hover {
+        text-decoration: underline;
       }
 
       .agent-empty-message {
@@ -353,6 +376,15 @@ export class AgentSelectionPanel extends LitElement {
         agentSource: agent.source,
         category: this.category,
         enabled: !agent.enabled,
+      }),
+    );
+  }
+
+  private handleSetAllEnabled(enabled: boolean): void {
+    this.dispatchEvent(
+      AgentSelectionEvents.setAllEnabled({
+        category: this.category,
+        enabled,
       }),
     );
   }
@@ -534,8 +566,30 @@ export class AgentSelectionPanel extends LitElement {
         ${this.renderList()} ${this.renderDetail()}
       </div>
       <div class="agent-count">
-        ${enabledCount}/${this.agents.length}
-        agent${this.agents.length !== 1 ? 's' : ''} visible
+        <span>
+          ${enabledCount}/${this.agents.length}
+          agent${this.agents.length !== 1 ? 's' : ''} visible
+        </span>
+        <span class="agent-count-actions">
+          ${enabledCount < this.agents.length
+            ? html`<button
+                class="agent-count-link"
+                @click=${() => this.handleSetAllEnabled(true)}
+                title="Show all agents in dropdowns"
+              >
+                Select All
+              </button>`
+            : nothing}
+          ${enabledCount > 0
+            ? html`<button
+                class="agent-count-link"
+                @click=${() => this.handleSetAllEnabled(false)}
+                title="Hide all agents from dropdowns"
+              >
+                Unselect All
+              </button>`
+            : nothing}
+        </span>
       </div>
     `;
   }
