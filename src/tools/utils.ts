@@ -75,6 +75,21 @@ export function createGlobMatcher(pattern: string): (value: string) => boolean {
   return (value: string) => matcher.match(value.replaceAll('\\', '/'));
 }
 
+/**
+ * Count non-overlapping occurrences of `needle` in `haystack`.
+ * Returns 0 for empty needles.
+ */
+export function countOccurrences(haystack: string, needle: string): number {
+  if (needle.length === 0) return 0;
+  let count = 0;
+  let index = haystack.indexOf(needle);
+  while (index !== -1) {
+    count++;
+    index = haystack.indexOf(needle, index + needle.length);
+  }
+  return count;
+}
+
 /** Default width for line number padding */
 const LINE_NUMBER_WIDTH = 6;
 
