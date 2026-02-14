@@ -297,7 +297,16 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     }
 
     throw new ToolError(
-      `Unknown path: ${input.path}. Valid: /executions/{id}, /executions/{id}/config, /executions/{id}/conversation, /executions/{id}/todos, /executions/{id}/report, /executions/{id}/children, /executions/{id}/output, /executions/{id}/files`,
+      `Unknown path: ${input.path}.\n` +
+        `Valid paths:\n` +
+        `- /executions/{id}              - Summary (status, agent, model)\n` +
+        `- /executions/{id}/config       - Agent configuration\n` +
+        `- /executions/{id}/report       - Result report\n` +
+        `- /executions/{id}/conversation - Message history (subagents)\n` +
+        `- /executions/{id}/todos        - Task list (tool-use subagents)\n` +
+        `- /executions/{id}/children     - Child executions\n` +
+        `- /executions/{id}/output       - stdout/stderr (background processes)\n` +
+        `- /executions/{id}/files        - Generated files (workflows)`,
     );
   }
 
