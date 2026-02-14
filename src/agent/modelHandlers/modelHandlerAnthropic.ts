@@ -71,9 +71,7 @@ import {
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
-import {
-  computeCachePercentage,
-} from './utils/usageNormalization';
+import { computeCachePercentage } from './utils/usageNormalization';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';

@@ -120,10 +120,9 @@ export const GetProfileDataMessageSchema = commandOnly(
   PROFILE_VIEW_COMMANDS.GET_PROFILE_DATA,
 );
 
-export const SelectAgentInboundMessageSchema =
-  SelectAgentMessageSchema.extend({
-    command: z.literal(PROFILE_VIEW_COMMANDS.SELECT_AGENT),
-  });
+export const SelectAgentInboundMessageSchema = SelectAgentMessageSchema.extend({
+  command: z.literal(PROFILE_VIEW_COMMANDS.SELECT_AGENT),
+});
 
 export const SignInMessageSchema = commandOnly(PROFILE_VIEW_COMMANDS.SIGN_IN);
 

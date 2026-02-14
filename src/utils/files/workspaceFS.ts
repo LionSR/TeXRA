@@ -51,7 +51,11 @@ export class WorkspaceFS extends RelativeFS {
     if (path.isAbsolute(inputPath)) {
       const relative = this.relativePath(inputPath);
       if (!path.isAbsolute(relative) && !relative.startsWith('..')) {
-        return { kind: 'workspace', absolutePath: inputPath, relativePath: relative };
+        return {
+          kind: 'workspace',
+          absolutePath: inputPath,
+          relativePath: relative,
+        };
       }
       return { kind: 'external', absolutePath: inputPath };
     }

@@ -45,9 +45,7 @@ import type { FileLocation } from '@utils/files';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 import { flexibleFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
-import {
-  computeCachePercentage,
-} from './utils/usageNormalization';
+import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
 // Local file imports

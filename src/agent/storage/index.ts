@@ -15,10 +15,7 @@ export {
   detectWaitingStreams,
   hasPersistedFlowRecord,
 } from './detectWaitingStreams';
-export {
-  registerExecution,
-  writeTerminalStatus,
-} from './executionLifecycle';
+export { registerExecution, writeTerminalStatus } from './executionLifecycle';
 export {
   type ExecutionListingEntry,
   listExecutions,

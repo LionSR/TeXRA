@@ -18,8 +18,7 @@ export const warningBannerStyles: CSSResult = css`
     margin-bottom: var(--spacing-large);
     background-color: var(--vscode-inputValidation-warningBackground);
     color: var(--vscode-inputValidation-warningForeground);
-    border: var(--border-thin) solid
-      var(--vscode-inputValidation-warningBorder);
+    border: var(--border-thin) solid var(--vscode-inputValidation-warningBorder);
     display: flex;
     justify-content: space-between;
     align-items: center;

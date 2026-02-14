@@ -94,7 +94,9 @@ export async function extractFigurePathsFromLatex(
     /\\begin\{overpic\}(?:\[.*?\])?\{(.+?)\}/g,
   ];
 
-  const content = normalizeLineEndings(await flexibleFS.read(latexFileLocation));
+  const content = normalizeLineEndings(
+    await flexibleFS.read(latexFileLocation),
+  );
 
   // Parse graphicspaths
   const paths = parseGraphicspath(content);

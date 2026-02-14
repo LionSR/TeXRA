@@ -80,9 +80,7 @@ const SECTION_CONFIGS: Record<string, SectionConfig> = {
     icon: 'rocket',
     title: 'Agent proposal',
     renderPanel: (p) =>
-      html`<proposal-request-panel
-        .permission=${p}
-      ></proposal-request-panel>`,
+      html`<proposal-request-panel .permission=${p}></proposal-request-panel>`,
   },
 };
 

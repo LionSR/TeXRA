@@ -12,7 +12,11 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
 // Local file imports
-import { IS_WINDOWS, extendEnvPath, findToolInCommonPaths } from './platformPaths';
+import {
+  IS_WINDOWS,
+  extendEnvPath,
+  findToolInCommonPaths,
+} from './platformPaths';
 import { executeCommand } from './execUtils';
 
 const CHANNEL = 'toolUtils';
@@ -30,20 +34,69 @@ function installInstructions(...steps: string[]): string {
   return 'Installation instructions:\n' + steps.map((s) => `- ${s}`).join('\n');
 }
 
-const MIKTEX_OR_TEXLIVE = 'Windows: Install through MiKTeX or TeX Live package manager';
+const MIKTEX_OR_TEXLIVE =
+  'Windows: Install through MiKTeX or TeX Live package manager';
 
-const LATEXDIFF_INSTRUCTIONS = installInstructions('Mac: brew install latexdiff', 'Ubuntu: sudo apt-get install latexdiff', MIKTEX_OR_TEXLIVE);
-const LATEXINDENT_INSTRUCTIONS = installInstructions('Mac: brew install latexindent', 'Ubuntu: sudo apt-get install texlive-extra-utils', MIKTEX_OR_TEXLIVE);
-const TEXFMT_INSTRUCTIONS = installInstructions('Cargo: cargo install tex-fmt', 'Mac: brew install tex-fmt', 'Debian: apt install tex-fmt');
-const TEXCOUNT_INSTRUCTIONS = installInstructions('Mac: brew install texcount', 'Ubuntu: sudo apt-get install texlive-extra-utils', MIKTEX_OR_TEXLIVE);
-const PERL_INSTRUCTIONS = installInstructions('Mac: brew install perl', 'Ubuntu: sudo apt-get install perl', 'Windows: Download from https://strawberryperl.com/');
-const GHOSTSCRIPT_INSTRUCTIONS = installInstructions('Mac: brew install ghostscript', 'Ubuntu: sudo apt-get install ghostscript', 'Windows: Download from https://ghostscript.com/releases/gsdnld.html');
-const GM_INSTRUCTIONS = installInstructions('Mac: brew install graphicsmagick', 'Ubuntu: sudo apt-get install graphicsmagick', 'Windows: Download from http://www.graphicsmagick.org/download.html');
-const MAGICK_INSTRUCTIONS = installInstructions('Mac: brew install imagemagick', 'Ubuntu: sudo apt-get install imagemagick', 'Windows: Download from https://imagemagick.org/script/download.php');
-const WOLFRAM_INSTRUCTIONS = installInstructions('Mac: brew install wolfram-engine', 'Ubuntu: sudo apt-get install wolfram-engine', 'Windows: Download from https://www.wolfram.com/engine/');
-const PANDOC_INSTRUCTIONS = installInstructions('Mac: brew install pandoc', 'Ubuntu: sudo apt-get install pandoc', 'Windows: Download from https://pandoc.org/installing.html');
-const PDFLATEX_INSTRUCTIONS = installInstructions('Mac: brew install texlive', 'Ubuntu: sudo apt-get install texlive-full', MIKTEX_OR_TEXLIVE);
-const LATEXMK_INSTRUCTIONS = installInstructions('Mac: brew install latexmk', 'Ubuntu: sudo apt-get install latexmk', MIKTEX_OR_TEXLIVE);
+const LATEXDIFF_INSTRUCTIONS = installInstructions(
+  'Mac: brew install latexdiff',
+  'Ubuntu: sudo apt-get install latexdiff',
+  MIKTEX_OR_TEXLIVE,
+);
+const LATEXINDENT_INSTRUCTIONS = installInstructions(
+  'Mac: brew install latexindent',
+  'Ubuntu: sudo apt-get install texlive-extra-utils',
+  MIKTEX_OR_TEXLIVE,
+);
+const TEXFMT_INSTRUCTIONS = installInstructions(
+  'Cargo: cargo install tex-fmt',
+  'Mac: brew install tex-fmt',
+  'Debian: apt install tex-fmt',
+);
+const TEXCOUNT_INSTRUCTIONS = installInstructions(
+  'Mac: brew install texcount',
+  'Ubuntu: sudo apt-get install texlive-extra-utils',
+  MIKTEX_OR_TEXLIVE,
+);
+const PERL_INSTRUCTIONS = installInstructions(
+  'Mac: brew install perl',
+  'Ubuntu: sudo apt-get install perl',
+  'Windows: Download from https://strawberryperl.com/',
+);
+const GHOSTSCRIPT_INSTRUCTIONS = installInstructions(
+  'Mac: brew install ghostscript',
+  'Ubuntu: sudo apt-get install ghostscript',
+  'Windows: Download from https://ghostscript.com/releases/gsdnld.html',
+);
+const GM_INSTRUCTIONS = installInstructions(
+  'Mac: brew install graphicsmagick',
+  'Ubuntu: sudo apt-get install graphicsmagick',
+  'Windows: Download from http://www.graphicsmagick.org/download.html',
+);
+const MAGICK_INSTRUCTIONS = installInstructions(
+  'Mac: brew install imagemagick',
+  'Ubuntu: sudo apt-get install imagemagick',
+  'Windows: Download from https://imagemagick.org/script/download.php',
+);
+const WOLFRAM_INSTRUCTIONS = installInstructions(
+  'Mac: brew install wolfram-engine',
+  'Ubuntu: sudo apt-get install wolfram-engine',
+  'Windows: Download from https://www.wolfram.com/engine/',
+);
+const PANDOC_INSTRUCTIONS = installInstructions(
+  'Mac: brew install pandoc',
+  'Ubuntu: sudo apt-get install pandoc',
+  'Windows: Download from https://pandoc.org/installing.html',
+);
+const PDFLATEX_INSTRUCTIONS = installInstructions(
+  'Mac: brew install texlive',
+  'Ubuntu: sudo apt-get install texlive-full',
+  MIKTEX_OR_TEXLIVE,
+);
+const LATEXMK_INSTRUCTIONS = installInstructions(
+  'Mac: brew install latexmk',
+  'Ubuntu: sudo apt-get install latexmk',
+  MIKTEX_OR_TEXLIVE,
+);
 
 // All tool configurations in one place
 const TOOL_CONFIGS: Record<string, ToolConfig> = {
@@ -72,10 +125,9 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
     openDocsCommand: 'texra.openDoc,installation',
   },
   gs: {
-    command:
-      IS_WINDOWS
-        ? ['gswin64c --version', 'gswin32c --version', 'gs --version']
-        : 'gs --version',
+    command: IS_WINDOWS
+      ? ['gswin64c --version', 'gswin32c --version', 'gs --version']
+      : 'gs --version',
     errorMessage:
       'Ghostscript is not installed. Please install Ghostscript to use PDF to PNG conversion.\n' +
       GHOSTSCRIPT_INSTRUCTIONS,

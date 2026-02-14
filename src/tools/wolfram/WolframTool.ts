@@ -13,7 +13,8 @@ import {
 
 const WolframInputSchema = z.strictObject({
   code: z.string(),
-  timeout: z.int()
+  timeout: z
+    .int()
     .min(1000)
     .max(600_000)
     .nullish()
