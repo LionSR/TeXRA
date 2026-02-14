@@ -29,9 +29,7 @@ import { K_SLICE, getConfig } from '@utils/config';
 import { delay } from '@utils/core';
 import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
-import {
-  computeCachePercentage,
-} from './utils/usageNormalization';
+import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
 // Local file imports

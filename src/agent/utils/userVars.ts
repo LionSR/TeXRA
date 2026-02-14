@@ -3,10 +3,7 @@ import * as path from 'path';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import {
-  getVisibleAgents,
-  type AgentEntry,
-} from '@agent/index/agentRegistry';
+import { getVisibleAgents, type AgentEntry } from '@agent/index/agentRegistry';
 // Internal imports
 import {
   AgentSetting,

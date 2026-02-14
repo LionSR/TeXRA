@@ -73,7 +73,6 @@ export interface ExecutionKVStore {
   readTodos(): Promise<TodoEntry[]>;
   readConversation(): Promise<unknown[] | null>;
   readChildren(): Promise<ChildRecord[]>;
-
 }
 
 /**
@@ -232,12 +231,13 @@ class StorageFSKVStore implements ExecutionKVStore {
       childKeys.map(async (key) => {
         const id = key.replace('child-', '') as ExecutionId;
         const data = await this.read<{ agent: string; timestamp: string }>(key);
-        return data ? { id, agent: data.agent, timestamp: data.timestamp } : null;
+        return data
+          ? { id, agent: data.agent, timestamp: data.timestamp }
+          : null;
       }),
     );
     return entries.filter((e): e is ChildRecord => e !== null);
   }
-
 }
 
 // ============================================================================
