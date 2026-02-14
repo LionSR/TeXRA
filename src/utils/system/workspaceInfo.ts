@@ -60,7 +60,7 @@ let wslDetected: boolean | null = null;
  * Checks /proc/version for the "microsoft" or "WSL" marker strings that
  * Microsoft's WSL kernel injects.  Result is cached after the first call.
  */
-function isWSL(): boolean {
+export function isWSL(): boolean {
   if (wslDetected !== null) return wslDetected;
   if (process.platform !== 'linux') {
     wslDetected = false;
