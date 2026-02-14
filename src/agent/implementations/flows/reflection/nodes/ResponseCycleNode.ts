@@ -28,10 +28,10 @@ interface CyclePrepInput {
   round: ConversationRoundStateSnapshot;
 }
 
-type CycleOutcome =
-  | { outcome: 'completed'; endTurn: boolean }
-  | { outcome: 'cancelled' }
-  | { outcome: 'failed'; error: Error; retryable?: boolean };
+/** Result from exec: either the cycle's mutable shared state, or a prefill-only completion. */
+type CycleExecResult =
+  | { kind: 'prefill'; endTurn: true }
+  | { kind: 'ran'; cycleShared: ResponseCycleShared };
 
 export class ResponseCycleNode<C = unknown> extends Node<
   ReflectionFlowShared,
@@ -62,7 +62,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
     };
   }
 
-  async exec(prepRes: CyclePrepInput): Promise<CycleOutcome> {
+  async exec(prepRes: CyclePrepInput): Promise<CycleExecResult> {
     const { shared } = prepRes;
     const context = shared.context!; // Validated in prep()
 
@@ -77,94 +77,99 @@ export class ResponseCycleNode<C = unknown> extends Node<
       );
 
     if (prefillEndsTurn) {
-      return { outcome: 'completed', endTurn: true };
+      return { kind: 'prefill', endTurn: true };
     }
 
+    const cycleShared: ResponseCycleShared = {
+      messages: initializedMessages,
+      outputLocation: prepRes.outputLocation,
+      endTurn: false,
+      shouldStop: false,
+      outputExists: false,
+      systemPrompt: undefined,
+      responseObject: undefined,
+      responseTimeMs: undefined,
+      stopReason: undefined,
+      processedResponse: undefined,
+      lastError: undefined,
+    };
+
+    const flow = createResponseCycleFlow<C>();
+    flow.setServices(
+      await buildCycleServices(this.services, {
+        round: prepRes.round,
+        run: prepRes.run,
+        workspace: prepRes.workspace,
+      }),
+    );
+
     try {
-      const cycleShared: ResponseCycleShared = {
-        messages: initializedMessages,
-        outputLocation: prepRes.outputLocation,
-        endTurn: false,
-        shouldStop: false,
-        outputExists: false,
-        systemPrompt: undefined,
-        responseObject: undefined,
-        responseTimeMs: undefined,
-        stopReason: undefined,
-        processedResponse: undefined,
-        lastError: undefined,
-      };
-
-      const flow = createResponseCycleFlow<C>();
-      flow.setServices(
-        await buildCycleServices(this.services, {
-          round: prepRes.round,
-          run: prepRes.run,
-          workspace: prepRes.workspace,
-        }),
-      );
       await flow.run(cycleShared);
-
-      if (cycleShared.lastError) {
-        return {
-          outcome: 'failed',
-          error: new Error(cycleShared.lastError.message),
-          retryable: cycleShared.lastError.retryable,
-        };
-      }
-      if (cycleShared.shouldStop && !cycleShared.endTurn) {
-        return { outcome: 'cancelled' };
-      }
-      return { outcome: 'completed', endTurn: cycleShared.endTurn };
     } catch (error) {
       recordRound(prepRes.run, prepRes.round);
       if (this.services.onRoundFinalized) {
         await this.services.onRoundFinalized(prepRes.run);
       }
-      const formatted = formatProviderHttpError(error);
-      return {
-        outcome: 'failed',
-        error: error instanceof Error ? error : new Error(String(error)),
-        retryable: formatted.retryable,
-      };
+      throw error;
     }
+
+    return { kind: 'ran', cycleShared };
   }
 
   async execFallback(
-    _prepRes: CyclePrepInput,
+    prepRes: CyclePrepInput,
     error: Error,
-  ): Promise<CycleOutcome> {
+  ): Promise<CycleExecResult> {
+    // Wrap as a cycle shared with the error recorded, so post() handles uniformly
     const formatted = formatProviderHttpError(error);
-    return { outcome: 'failed', error, retryable: formatted.retryable };
+    const cycleShared: ResponseCycleShared = {
+      messages: [],
+      outputLocation: prepRes.outputLocation,
+      endTurn: false,
+      shouldStop: true,
+      outputExists: false,
+      lastError: { message: error.message, retryable: formatted.retryable },
+    };
+    return { kind: 'ran', cycleShared };
   }
 
   async post(
     shared: ReflectionFlowShared,
     prepRes: CyclePrepInput,
-    execRes: CycleOutcome,
+    execRes: CycleExecResult,
   ): Promise<string | undefined> {
     const { logger } = this.services;
 
     shared.outputLocation = prepRes.outputLocation;
 
-    if (execRes.outcome === 'failed') {
-      logger.error(`Response cycle failed: ${execRes.error.message}`);
-      shared.lastError = {
-        message: execRes.error.message,
-        retryable: execRes.retryable ?? false,
-      };
-      throw execRes.error;
+    // Determine endTurn from cycle result
+    const endTurn =
+      execRes.kind === 'prefill' ? true : execRes.cycleShared.endTurn;
+
+    // For ran cycles: check error / cancellation before committing state
+    if (execRes.kind === 'ran') {
+      const { cycleShared } = execRes;
+
+      if (cycleShared.lastError) {
+        logger.error(`Response cycle failed: ${cycleShared.lastError.message}`);
+        shared.lastError = {
+          message: cycleShared.lastError.message,
+          retryable: cycleShared.lastError.retryable ?? false,
+        };
+        throw new Error(cycleShared.lastError.message);
+      }
+
+      if (cycleShared.shouldStop && !cycleShared.endTurn) {
+        logger.debug('Response cycle cancelled by user');
+        shared.endTurn = false;
+        shared.continueRounds = false;
+        shared.lastError = undefined;
+        return FlowTransition.DEFAULT;
+      }
     }
 
-    shared.endTurn = execRes.outcome === 'completed' ? execRes.endTurn : false;
-
-    if (execRes.outcome === 'cancelled') {
-      logger.debug('Response cycle cancelled by user');
-      shared.continueRounds = false;
-      shared.lastError = undefined;
-      return FlowTransition.DEFAULT;
-    }
-
+    // Completed (either prefill or normal cycle)
+    shared.endTurn = endTurn;
     shared.lastError = undefined;
     shared.runStateSnapshot = prepRes.run;
     shared.workspaceSnapshot = prepRes.workspace.toSnapshot();
