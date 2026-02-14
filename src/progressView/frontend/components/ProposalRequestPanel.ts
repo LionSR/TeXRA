@@ -211,10 +211,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   // Override emitAction to include model override for approve
   // ===========================================================================
 
-  protected override emitAction(
-    action: string,
-    feedback?: string,
-  ): void {
+  protected override emitAction(action: string, feedback?: string): void {
     const modelOverride =
       action === 'approve' ? this.getModelOverride() : undefined;
     super.emitAction(action, feedback, modelOverride);

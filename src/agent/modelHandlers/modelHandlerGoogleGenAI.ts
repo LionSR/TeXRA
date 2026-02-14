@@ -48,7 +48,6 @@ import {
 } from '@common/errors/sdkErrorUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 
-
 // Internal imports
 import replacementEngine from '@replacement/engine';
 
@@ -61,9 +60,7 @@ import type { FileLocation } from '@utils/files';
 // Local constant
 import { K_SLICE } from '@utils/config';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
-import {
-  computeCachePercentage,
-} from './utils/usageNormalization';
+import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 import { TOOL_USE_SAFETY_BUFFER } from './contextManagementConstants';
 

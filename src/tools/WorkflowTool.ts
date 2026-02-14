@@ -21,10 +21,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { getExecutionStore, registerExecution } from '@agent/storage';
-import {
-  getAgent,
-  getVisibleAgents,
-} from '@agent/index/agentRegistry';
+import { getAgent, getVisibleAgents } from '@agent/index/agentRegistry';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,

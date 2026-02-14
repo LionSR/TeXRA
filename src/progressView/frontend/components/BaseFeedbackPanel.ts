@@ -60,8 +60,9 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
     if (!this.showFeedback) {
       this.showFeedback = true;
       this.updateComplete.then(() => {
-        const input =
-          this.renderRoot.querySelector<HTMLElement>('[data-feedback-input]');
+        const input = this.renderRoot.querySelector<HTMLElement>(
+          '[data-feedback-input]',
+        );
         input?.focus();
       });
       return;
