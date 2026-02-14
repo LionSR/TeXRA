@@ -18,7 +18,30 @@ import {
   SETTINGS_VIEW_COMMANDS,
 } from '@common/webview/commands';
 import { AgentCategorySchema, AgentSourceSchema } from './agent';
-import { NumberVscodeSettingSchema } from './profileViewMessages';
+import {
+  DeleteMemoryMessageSchema,
+  GetMemoryDataMessageSchema,
+  GetMemoryEnabledMessageSchema,
+  OpenMemoryFileMessageSchema,
+  OpenMemoryFolderMessageSchema,
+  SetMemoryEnabledMessageSchema,
+} from './memoryViewMessages';
+import {
+  ClearHistoryMessageSchema,
+  DeleteAgentMessageSchema,
+  GetHistoryDataMessageSchema,
+  RerunAgentMessageSchema,
+  RestoreAgentMessageSchema,
+} from './historyViewMessages';
+import { commandOnly } from './messageFactories';
+import {
+  GetProfileDataMessageSchema,
+  NumberVscodeSettingSchema,
+  SelectAgentInboundMessageSchema,
+  SetApiAccessModeInboundMessageSchema,
+  SignInMessageSchema,
+  SignOutMessageSchema,
+} from './profileViewMessages';
 export { SETTINGS_VIEW_CMD };
 
 /** Tab name order - single source of truth for tab indices */
@@ -183,82 +206,11 @@ export type UpdateSuperYoloEnabledMessage = z.infer<
 // Inbound message schemas (frontend → backend)
 // ============================================================
 
-// Memory inbound messages
-const GetMemoryDataMessageSchema = z.object({
-  command: z.literal(CMD.GET_MEMORY_DATA),
-});
+// Memory, History, and Profile inbound schemas are imported from their
+// respective modules (memoryViewMessages, historyViewMessages, profileViewMessages)
+// to avoid duplicating definitions. The command literal strings are identical.
 
-const OpenMemoryFileMessageSchema = z.object({
-  command: z.literal(CMD.OPEN_MEMORY_FILE),
-  storagePath: z.string().min(1),
-});
-
-const OpenMemoryFolderMessageSchema = z.object({
-  command: z.literal(CMD.OPEN_MEMORY_FOLDER),
-});
-
-const DeleteMemoryMessageSchema = z.object({
-  command: z.literal(CMD.DELETE_MEMORY),
-  storagePath: z.string().min(1),
-  displayPath: z.string().min(1),
-});
-
-const GetMemoryEnabledMessageSchema = z.object({
-  command: z.literal(CMD.GET_MEMORY_ENABLED),
-});
-
-const SetMemoryEnabledMessageSchema = z.object({
-  command: z.literal(CMD.SET_MEMORY_ENABLED),
-  enabled: z.boolean(),
-});
-
-// History inbound messages
-const GetHistoryDataMessageSchema = z.object({
-  command: z.literal(CMD.GET_HISTORY_DATA),
-});
-
-const RerunAgentMessageSchema = z.object({
-  command: z.literal(CMD.RERUN_AGENT),
-  historyId: z.string().min(1),
-});
-
-const RestoreAgentMessageSchema = z.object({
-  command: z.literal(CMD.RESTORE_AGENT),
-  historyId: z.string().min(1),
-});
-
-const DeleteAgentMessageSchema = z.object({
-  command: z.literal(CMD.DELETE_AGENT),
-  historyId: z.string().min(1),
-});
-
-const ClearHistoryMessageSchema = z.object({
-  command: z.literal(CMD.CLEAR_HISTORY),
-});
-
-// Profile inbound messages
-const GetProfileDataMessageSchema = z.object({
-  command: z.literal(CMD.GET_PROFILE_DATA),
-});
-
-const SelectAgentInboundMessageSchema = z.object({
-  command: z.literal(CMD.SELECT_AGENT),
-  agentName: z.string().min(1),
-});
-
-const SignInMessageSchema = z.object({
-  command: z.literal(CMD.SIGN_IN),
-});
-
-const SignOutMessageSchema = z.object({
-  command: z.literal(CMD.SIGN_OUT),
-});
-
-const SetApiAccessModeInboundMessageSchema = z.object({
-  command: z.literal(CMD.SET_API_ACCESS_MODE),
-  mode: z.enum(['included', 'personal']),
-});
-
+// Provider key inbound messages (settings-only)
 const SetProviderKeyMessageSchema = z.object({
   command: z.literal(CMD.SET_PROVIDER_KEY),
   provider: z.string().min(1),
@@ -303,9 +255,7 @@ const OpenExternalUrlMessageSchema = z.object({
 });
 
 // Model selection inbound messages
-const GetModelSelectionMessageSchema = z.object({
-  command: z.literal(CMD.GET_MODEL_SELECTION),
-});
+const GetModelSelectionMessageSchema = commandOnly(CMD.GET_MODEL_SELECTION);
 
 const SetModelEnabledMessageSchema = z.object({
   command: z.literal(CMD.SET_MODEL_ENABLED),
@@ -319,9 +269,7 @@ const SetPolishModelMessageSchema = z.object({
 });
 
 // Agent selection inbound messages
-const GetAgentSelectionMessageSchema = z.object({
-  command: z.literal(CMD.GET_AGENT_SELECTION),
-});
+const GetAgentSelectionMessageSchema = commandOnly(CMD.GET_AGENT_SELECTION);
 
 const OpenAgentYamlMessageSchema = z.object({
   command: z.literal(CMD.OPEN_AGENT_YAML),
@@ -349,9 +297,7 @@ const CreateAgentMessageSchema = z.object({
 });
 
 // Auto-show remote agents inbound messages
-const GetAutoShowRemoteMessageSchema = z.object({
-  command: z.literal(CMD.GET_AUTO_SHOW_REMOTE),
-});
+const GetAutoShowRemoteMessageSchema = commandOnly(CMD.GET_AUTO_SHOW_REMOTE);
 
 const SetAutoShowRemoteMessageSchema = z.object({
   command: z.literal(CMD.SET_AUTO_SHOW_REMOTE),
@@ -359,22 +305,16 @@ const SetAutoShowRemoteMessageSchema = z.object({
 });
 
 // Custom agent directory inbound messages
-const GetCustomAgentDirMessageSchema = z.object({
-  command: z.literal(CMD.GET_CUSTOM_AGENT_DIR),
-});
-
-const SetCustomAgentDirMessageSchema = z.object({
-  command: z.literal(CMD.SET_CUSTOM_AGENT_DIR),
-});
-
-const ResetCustomAgentDirMessageSchema = z.object({
-  command: z.literal(CMD.RESET_CUSTOM_AGENT_DIR),
-});
+const GetCustomAgentDirMessageSchema = commandOnly(CMD.GET_CUSTOM_AGENT_DIR);
+const SetCustomAgentDirMessageSchema = commandOnly(CMD.SET_CUSTOM_AGENT_DIR);
+const ResetCustomAgentDirMessageSchema = commandOnly(
+  CMD.RESET_CUSTOM_AGENT_DIR,
+);
 
 // Super YOLO inbound messages
-const GetSuperYoloEnabledMessageSchema = z.object({
-  command: z.literal(CMD.GET_SUPER_YOLO_ENABLED),
-});
+const GetSuperYoloEnabledMessageSchema = commandOnly(
+  CMD.GET_SUPER_YOLO_ENABLED,
+);
 
 const SetSuperYoloEnabledMessageSchema = z.object({
   command: z.literal(CMD.SET_SUPER_YOLO_ENABLED),
@@ -382,9 +322,7 @@ const SetSuperYoloEnabledMessageSchema = z.object({
 });
 
 // Navigation inbound messages
-const OpenVscodeSettingsMessageSchema = z.object({
-  command: z.literal(CMD.OPEN_VSCODE_SETTINGS),
-});
+const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);
 
 // ============================================================
 // Discriminated union of all inbound messages
