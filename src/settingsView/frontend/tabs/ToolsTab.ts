@@ -165,10 +165,17 @@ export class ToolsTab extends LitElement {
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
       }
+
+      .tools-header-actions {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-medium);
+      }
     `,
   ];
 
   @property({ attribute: false }) items: ToolDashboardItem[] = [];
+  @property({ type: Boolean }) loaded = false;
 
   private handleOpenUrl(event: CustomEvent<{ url: string }>): void {
     this.dispatchEvent(
@@ -257,7 +264,7 @@ export class ToolsTab extends LitElement {
   override render(): TemplateResult {
     const groups = this.groupByCategory();
 
-    if (this.items.length === 0) {
+    if (!this.loaded) {
       return html`
         <div class="tools-container">
           <div class="tools-empty">
@@ -275,7 +282,7 @@ export class ToolsTab extends LitElement {
             <span class="codicon codicon-tools"></span>
             Tool Dashboard
           </div>
-          <div style="display:flex;align-items:center;gap:var(--spacing-medium)">
+          <div class="tools-header-actions">
             ${this.renderSummary()}
             <button
               class="tools-recheck-btn"
