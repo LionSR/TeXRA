@@ -20,7 +20,10 @@ import { toPosixPath } from '@utils/core/pathCore';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { tryResolveVirtualPath } from './virtualPath';
+import {
+  tryResolveVirtualPath,
+  type VirtualPathResolution,
+} from './virtualPath';
 
 const GlobInputSchema = z.strictObject({
   pattern: z.string().min(1, 'pattern is required'),
@@ -45,8 +48,8 @@ export class GlobTool extends defineTool({
     const inputPath = input.path ?? undefined;
 
     const virtual = inputPath ? tryResolveVirtualPath(inputPath) : null;
-    if (virtual) {
-      return this.executeVirtual(input, inputPath!, virtual);
+    if (inputPath && virtual) {
+      return this.executeVirtual(input, inputPath, virtual);
     }
 
     return this.executeWorkspace(input, inputPath);
@@ -110,10 +113,7 @@ export class GlobTool extends defineTool({
   private async executeVirtual(
     input: GlobInput,
     virtualPath: string,
-    resolved: {
-      absolutePath: string;
-      namespace: { display: string; storage: string };
-    },
+    resolved: VirtualPathResolution,
   ): Promise<ToolResult> {
     const { absolutePath, namespace } = resolved;
 
@@ -158,7 +158,7 @@ export class GlobTool extends defineTool({
     display: string,
     decorated: GlobMatchInfo[],
   ): ToolResult {
-    const sorted = decorated.sort((a, b) => {
+    const sorted = decorated.toSorted((a, b) => {
       if (b.mtime !== a.mtime) {
         return b.mtime - a.mtime;
       }

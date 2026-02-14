@@ -9,14 +9,13 @@
 import * as path from 'path';
 
 // Local imports
+import { EXECUTIONS_DIR } from '@agent/storage/ExecutionKVStore';
 import { StorageFS } from '@utils/files';
 
 // Local file imports
 import { ToolError } from './result';
 import { MEMORY_DISPLAY_ROOT, MEMORY_STORAGE_ROOT } from './memory/constants';
 
-/** Storage directory for execution data (canonical source: ExecutionKVStore). */
-const EXECUTIONS_STORAGE_ROOT = 'executions';
 const EXECUTIONS_DISPLAY_ROOT = '/executions';
 
 /** A virtual namespace mapping display prefix to storage directory. */
@@ -28,7 +27,7 @@ export interface VirtualNamespace {
 /** All supported virtual namespaces. */
 const VIRTUAL_NAMESPACES: readonly VirtualNamespace[] = [
   { display: MEMORY_DISPLAY_ROOT, storage: MEMORY_STORAGE_ROOT },
-  { display: EXECUTIONS_DISPLAY_ROOT, storage: EXECUTIONS_STORAGE_ROOT },
+  { display: EXECUTIONS_DISPLAY_ROOT, storage: EXECUTIONS_DIR },
 ];
 
 /** Result of resolving a virtual path. */
@@ -83,11 +82,10 @@ export function tryResolveVirtualPath(
 
 /**
  * Translate a physical absolute path back to a virtual display path.
- * Only translates the path prefix; content after the path is preserved.
  *
- * For rg output lines like `/abs/path/memories/file.md:10:content`,
- * replaces only the leading path portion up to the first `:` (or the
- * entire line for files_with_matches mode).
+ * Replaces the leading `absoluteBase` prefix with the namespace's virtual
+ * display prefix. Everything after the base path (colons, line numbers,
+ * matched content) is preserved as-is.
  */
 export function translateOutputLine(
   line: string,

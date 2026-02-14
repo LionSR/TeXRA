@@ -11,7 +11,11 @@ import { executeCommand } from '@utils/system/execUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { tryResolveVirtualPath, translateOutputLine } from './virtualPath';
+import {
+  tryResolveVirtualPath,
+  translateOutputLine,
+  type VirtualPathResolution,
+} from './virtualPath';
 
 const OUTPUT_MODES = ['content', 'files_with_matches', 'count'] as const;
 
@@ -118,8 +122,8 @@ export class GrepTool extends defineTool({
 
     // Route virtual storage paths through StorageFS instead of workspace
     const virtual = inputPath ? tryResolveVirtualPath(inputPath) : null;
-    if (virtual) {
-      return this.executeVirtual(input, inputPath!, outputMode, virtual);
+    if (inputPath && virtual) {
+      return this.executeVirtual(input, inputPath, outputMode, virtual);
     }
 
     return this.executeWorkspace(input, inputPath, outputMode);
@@ -160,10 +164,7 @@ export class GrepTool extends defineTool({
     input: GrepInput,
     virtualPath: string,
     outputMode: OutputMode,
-    resolved: {
-      absolutePath: string;
-      namespace: { display: string; storage: string };
-    },
+    resolved: VirtualPathResolution,
   ): Promise<ToolResult> {
     const { absolutePath, namespace } = resolved;
 
