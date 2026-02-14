@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports - shared constants
-import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 // Local imports - agent
 import { createModelHandler } from '@agent/runtime/ModelFactory';
@@ -205,19 +205,19 @@ ${text}`;
       }
     } else {
       const configuredModel = globalSM.get<string>(
-        GlobalStateKey.POLISH_MODEL,
-        DEFAULT_POLISH_MODEL,
+        GlobalStateKey.HELPER_MODEL,
+        DEFAULT_HELPER_MODEL,
       );
       const modelName = isNonEmptyString(configuredModel)
         ? configuredModel.trim()
-        : DEFAULT_POLISH_MODEL;
+        : DEFAULT_HELPER_MODEL;
       const modelConfig = MODEL_CONFIGS[modelName];
 
       if (!modelConfig) {
         return {
           success: false,
           text,
-          error: `Unsupported instruction polishing model "${modelName}". Update the polish model in Settings > Models to match a valid model name.`,
+          error: `Unsupported helper model "${modelName}". Update the helper model in Settings > Models to match a valid model name.`,
         };
       }
 
