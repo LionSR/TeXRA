@@ -13,6 +13,7 @@ import axios from 'axios';
 
 // Local imports
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
+import type { RegisteredToolName } from '@tools/registry';
 import { getZoteroPort } from '@tools/zotero/bbtClient';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
@@ -24,8 +25,8 @@ import { checkToolInstalled } from '@utils/system/toolUtils';
 export interface ExternalToolCheck {
   /** Unique group identifier (matches ToolDashboardItem.id). */
   readonly id: string;
-  /** Tool names belonging to this group. */
-  readonly tools: readonly string[];
+  /** Tool names belonging to this group — must match registry keys. */
+  readonly tools: readonly RegisteredToolName[];
   /** Human-readable display name. */
   readonly name: string;
   /** Returns true if the external dependency is available. */
