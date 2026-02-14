@@ -457,6 +457,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
 
   public async sendAllData(webview: vscode.Webview): Promise<void> {
+    // Tool dashboard involves network I/O (Zotero probe, etc.) — fire async
+    // so it doesn't block the initial render. The frontend shows a loading
+    // spinner until data arrives.
+    void this.sendToolDashboardData(webview);
+
     await Promise.all([
       this.sendMemoryData(webview),
       this.sendMemoryEnabled(webview),
@@ -467,7 +472,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendAutoShowRemote(webview),
       this.sendCustomAgentDir(webview),
       this.sendSuperYoloEnabled(webview),
-      this.sendToolDashboardData(webview),
     ]);
   }
 
