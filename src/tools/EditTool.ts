@@ -70,8 +70,7 @@ export class EditFileTool extends defineTool({
         `old_str not found in ${targetPath}.\n` +
           `To fix:\n` +
           `- Re-read the file — content may have changed since last read\n` +
-          `- Copy text exactly from read_file output, excluding the line-number prefix (e.g. "  42\t")\n` +
-          `- Ensure whitespace matches exactly (tabs vs spaces, trailing spaces)`,
+          `- Copy text exactly from read_file output, excluding the line-number prefix (e.g. "  42\t"); whitespace must match`,
       );
     }
 
