@@ -154,17 +154,35 @@ function getExecutionStatusInfo(
 }
 
 /**
- * Check if an execution is a subagent that has already entered WAITING.
- * A subagent in WAITING has completed its job and delivered results via
- * onBeforeWaiting — blocking on it would cause unnecessary delay.
- * This is distinct from a non-subagent in WAITING, which is waiting for
- * human input and should still be treated as active.
+ * Single-pass check: should the wait endpoint skip blocking on this execution?
+ *
+ * Returns true when:
+ * - The handle is gone (execution already untracked / completed), OR
+ * - The stream left all ACTIVE_STATUSES, OR
+ * - The execution is a *subagent* in WAITING (job done, result already
+ *   delivered via onBeforeWaiting — distinct from a non-subagent WAITING
+ *   for human input, which should still block).
+ *
+ * One getHandle + one getStatus per call — no redundant lookups.
  */
-function isSubagentDoneWaiting(executionId: string): boolean {
+function shouldSkipWait(executionId: string): boolean {
   const handle = getHandle(executionId);
-  if (!(handle instanceof AgentExecutionHandle)) return false;
-  if (handle.parentStreamId === handle.childStreamId) return false;
-  return handle.getStatus().status === STREAM_STATUS.WAITING;
+  if (!handle) return true;
+
+  const { status } = handle.getStatus();
+  if (!ACTIVE_STATUSES.has(status)) return true;
+
+  // Subagent in WAITING = job delivered, don't block.
+  // Non-subagent WAITING = human input needed, keep blocking.
+  if (
+    status === STREAM_STATUS.WAITING &&
+    handle instanceof AgentExecutionHandle &&
+    handle.parentStreamId !== handle.childStreamId
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /** Format round progress as a display line, or empty string if unavailable. */
@@ -344,24 +362,17 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     const activeIds = getActiveExecutionIds();
     if (activeIds.length === 0) return;
 
-    // Exclude subagents that have already finished (WAITING status) —
-    // they delivered their result and won't change further.
-    const pendingIds = activeIds.filter((id) => !isSubagentDoneWaiting(id));
+    // Exclude executions that are already effectively done
+    // (completed, inactive, or subagent-WAITING with result delivered).
+    const pendingIds = activeIds.filter((id) => !shouldSkipWait(id));
     if (pendingIds.length === 0) return;
 
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeout * 1000);
     // Register callback before re-checking to close the race window
     const waitPromise = waitForAnyExecutionChange(pendingIds, ac.signal);
-    // If all watched executions completed or entered subagent-WAITING
-    // between filtering and callback registration, abort immediately.
-    if (
-      pendingIds.every(
-        (id) => !getHandle(id) || isSubagentDoneWaiting(id),
-      )
-    ) {
-      ac.abort();
-    }
+    // Re-check after registration: if all resolved in the gap, abort.
+    if (pendingIds.every(shouldSkipWait)) ac.abort();
     await waitPromise;
     clearTimeout(timer);
   }
@@ -371,28 +382,14 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     executionId: ExecutionId,
     timeout: number,
   ): Promise<void> {
-    const info = getExecutionStatusInfo(executionId);
-    if (!ACTIVE_STATUSES.has(info.status)) return;
-
-    // A subagent in WAITING has already finished and delivered its result
-    // via onBeforeWaiting — don't block waiting for a follow-up that the
-    // caller won't send. This is distinct from a non-subagent WAITING for
-    // human input, which should still be treated as active.
-    if (isSubagentDoneWaiting(executionId)) return;
+    if (shouldSkipWait(executionId)) return;
 
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeout * 1000);
     // Register callback before re-checking to close the race window
     const waitPromise = waitForExecutionChange(executionId, ac.signal);
-    // If execution completed or entered subagent-WAITING between status
-    // check and callback registration, abort immediately.
-    const rechecked = getExecutionStatusInfo(executionId);
-    if (
-      !ACTIVE_STATUSES.has(rechecked.status) ||
-      isSubagentDoneWaiting(executionId)
-    ) {
-      ac.abort();
-    }
+    // Re-check after registration: if state changed in the gap, abort.
+    if (shouldSkipWait(executionId)) ac.abort();
     await waitPromise;
     clearTimeout(timer);
   }
