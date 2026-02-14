@@ -6,7 +6,7 @@ import * as path from 'path';
 import { execa } from 'execa';
 
 // Local imports
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, WorkspaceRoot } from '@utils/files';
 
 /** Timeout for git commands in milliseconds. */
 const GIT_TIMEOUT_MS = 3000;
@@ -108,9 +108,14 @@ async function getGitInfo(workspacePath: string): Promise<GitInfo | null> {
 
 /**
  * Gather workspace environment information.
+ *
+ * @param wsRoot - Optional workspace root. When omitted, falls back to the
+ *   current VS Code workspace. Pass a specific root for git worktrees.
  */
-async function gatherWorkspaceInfo(): Promise<WorkspaceInfo> {
-  const workspacePath = WorkspaceFS.getPath();
+async function gatherWorkspaceInfo(
+  wsRoot?: WorkspaceRoot,
+): Promise<WorkspaceInfo> {
+  const workspacePath = wsRoot?.root ?? WorkspaceFS.getPath();
 
   return {
     workspacePath,
@@ -134,9 +139,14 @@ function escapeXml(value: string): string {
  *
  * Returns a `<workspace_info>` XML block with key environment details
  * that help the LLM understand the user's workspace context.
+ *
+ * @param wsRoot - Optional workspace root. When omitted, uses the VS Code
+ *   workspace. Pass a specific root for git worktrees.
  */
-export async function buildWorkspaceInfoBlock(): Promise<string> {
-  const info = await gatherWorkspaceInfo();
+export async function buildWorkspaceInfoBlock(
+  wsRoot?: WorkspaceRoot,
+): Promise<string> {
+  const info = await gatherWorkspaceInfo(wsRoot);
 
   const lines: string[] = [];
 

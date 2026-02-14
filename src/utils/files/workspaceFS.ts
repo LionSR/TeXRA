@@ -6,16 +6,22 @@ import * as vscode from 'vscode';
 
 // Local imports - filesystem
 import { RelativeFS } from './relativeFS';
+import { WorkspaceRoot, type ResolvedPath } from './workspaceRoot';
+
+export type { ResolvedPath };
 
 /**
- * Result of resolving a path against the workspace.
- * 'workspace' paths have both absolute and forward-slash relative forms.
- * 'external' paths are outside the workspace (or no workspace is open).
+ * Static filesystem helper rooted at the VS Code workspace folder.
+ *
+ * Path resolution is delegated to {@link WorkspaceRoot} — a pure value object
+ * that can also be instantiated independently (e.g. for git worktrees).
+ * This class adds VS Code integration (reading workspaceFolders, using
+ * `asRelativePath` for symlink-aware resolution) and inherits file I/O
+ * from {@link RelativeFS}.
+ *
+ * For scoped file operations against an arbitrary root, use
+ * {@link createScopedWorkspaceFS} instead.
  */
-export type ResolvedPath =
-  | { kind: 'workspace'; absolutePath: string; relativePath: string }
-  | { kind: 'external'; absolutePath: string };
-
 export class WorkspaceFS extends RelativeFS {
   protected static override getBasePath(): string {
     const folder = vscode.workspace.workspaceFolders?.[0];
@@ -27,6 +33,15 @@ export class WorkspaceFS extends RelativeFS {
 
   public static getPath(): string | undefined {
     return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  }
+
+  /**
+   * Get a {@link WorkspaceRoot} instance for the current VS Code workspace.
+   * Returns `undefined` if no workspace folder is open.
+   */
+  public static getWorkspaceRoot(): WorkspaceRoot | undefined {
+    const root = this.getPath();
+    return root ? new WorkspaceRoot(root) : undefined;
   }
 
   /**
@@ -52,7 +67,11 @@ export class WorkspaceFS extends RelativeFS {
    * If already absolute, returns unchanged. Otherwise resolves relative to workspace.
    */
   public static toAbsolute(filePath: string): string {
-    return path.isAbsolute(filePath) ? filePath : this.fullPath(filePath);
+    const wsRoot = this.getWorkspaceRoot();
+    if (!wsRoot) {
+      throw new Error('Workspace path is not available.');
+    }
+    return wsRoot.toAbsolute(filePath);
   }
 
   /**
@@ -68,21 +87,22 @@ export class WorkspaceFS extends RelativeFS {
   public static locatePath(inputPath: string): ResolvedPath {
     const workspaceRoot = this.getPath();
 
-    if (!inputPath) {
-      if (!workspaceRoot) {
+    if (!workspaceRoot) {
+      // No workspace — everything is external
+      if (!inputPath) {
         return { kind: 'external', absolutePath: '' };
       }
-      return {
-        kind: 'workspace',
-        absolutePath: workspaceRoot,
-        relativePath: '',
-      };
+      return { kind: 'external', absolutePath: path.resolve(inputPath) };
+    }
+
+    const wsRoot = new WorkspaceRoot(workspaceRoot);
+
+    if (!inputPath) {
+      return wsRoot.locatePath(inputPath);
     }
 
     if (path.isAbsolute(inputPath)) {
-      if (!workspaceRoot) {
-        return { kind: 'external', absolutePath: inputPath };
-      }
+      // Use VS Code's asRelativePath for symlink handling on absolute paths
       const relative = this.relativePath(inputPath);
       if (!path.isAbsolute(relative) && !relative.startsWith('..')) {
         return {
@@ -94,25 +114,7 @@ export class WorkspaceFS extends RelativeFS {
       return { kind: 'external', absolutePath: inputPath };
     }
 
-    // Relative path — convert backslashes to forward slashes BEFORE normalizing
-    // so that path.posix.normalize() can properly collapse '..' segments.
-    // On POSIX, backslashes are valid filename characters, so path.normalize()
-    // would preserve them; the subsequent replaceAll would then create new
-    // path separators that could form '..' traversals bypassing the check below.
-    if (!workspaceRoot) {
-      return { kind: 'external', absolutePath: path.resolve(inputPath) };
-    }
-    const relative = path.posix.normalize(inputPath.replaceAll('\\', '/'));
-    if (relative.startsWith('..')) {
-      return {
-        kind: 'external',
-        absolutePath: path.resolve(workspaceRoot, inputPath),
-      };
-    }
-    return {
-      kind: 'workspace',
-      absolutePath: path.join(workspaceRoot, relative),
-      relativePath: relative,
-    };
+    // Relative paths delegate entirely to WorkspaceRoot
+    return wsRoot.locatePath(inputPath);
   }
 }
