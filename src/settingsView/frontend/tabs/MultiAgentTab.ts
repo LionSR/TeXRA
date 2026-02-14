@@ -80,7 +80,7 @@ export class MultiAgentTab extends LitElement {
 
       .reliability-description {
         color: var(--color-text-secondary);
-        font-size: var(--font-size-xs, 11px);
+        font-size: var(--font-size-xs);
         margin: 0;
         padding-left: calc(140px + var(--spacing-medium));
       }
@@ -142,7 +142,7 @@ export class MultiAgentTab extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <div class="multi-agent-container">
+      <div class="multi-agent-container tab-content-container">
         <h3>Agent Delegation</h3>
 
         <p class="text-secondary setting-description">
