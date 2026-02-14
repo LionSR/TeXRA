@@ -19,9 +19,8 @@ import { consumePendingState } from '@common/state';
 // Local imports - frontend
 import { agentDirectories } from '@frontend/agents';
 import { computeModelOptionsData } from '@model/computeModelOptions';
-import { watchConfig, getConfig, DEBOUNCE_OPTIONS_MS } from '@utils/config';
+import { watchConfig, DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { debounce } from '@utils/core';
-import { checkCoreDependencies } from '@utils/system/toolUtils';
 
 // Local file imports
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
@@ -196,22 +195,6 @@ export class MainViewProvider
     super.resolveWebviewViewInternal(webviewView);
 
     this.setupInitialState(webviewView);
-
-    // Check for missing core dependencies and display banner if needed
-    const showDependencyReminders = getConfig<boolean>(
-      'texra.ui.showDependencyReminders',
-      true,
-    );
-    if (showDependencyReminders) {
-      checkCoreDependencies(false).then((missingTools) => {
-        if (missingTools.length > 0) {
-          webviewView.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
-            missingTools,
-          });
-        }
-      });
-    }
   }
 
   private async setupInitialState(webviewView: vscode.WebviewView) {
