@@ -10,6 +10,7 @@ import {
   UsageLogService,
   type AgentLogger,
   type AgentUsageReporter,
+  type UsageLogRound,
 } from '@logger/index';
 import type { ModelCapabilities, ModelConfig } from 'llm-zoo';
 import type {
@@ -81,6 +82,15 @@ export class UsageMonitor {
    * rather than the parent stage.
    */
   private activeGroupId: string | undefined;
+
+  /**
+   * Accumulated per-round usage snapshots.
+   * Instead of logging each round to the backend individually, we collect
+   * snapshots and flush once when the agent execution completes.
+   * This reduces N database rows per tool-use run down to 1.
+   */
+  private accumulatedRounds: UsageLogRound[] = [];
+  private accumulatedResponseTimeMs = 0;
 
   constructor(
     private readonly modelInfo: UsageMonitorModelInfo,
@@ -159,18 +169,56 @@ export class UsageMonitor {
         this.activeGroupId,
       );
 
-      // Log to backend for analytics (non-blocking, fire-and-forget)
-      this.logToBackend(stateGlobal.totalResponseTimeMs, {
+      // Accumulate per-round snapshot (flushed once at end of agent execution)
+      this.accumulatedRounds.push({
         inputTokens: roundInputTokens,
         outputTokens: roundOutputTokens,
         cachedInputTokens: roundCacheReadTokens,
         cacheCreationInputTokens: roundCacheCreationTokens,
         reasoningTokens: roundReasoningTokens,
         cost: roundCost,
+        responseTimeMs: stateGlobal.totalResponseTimeMs,
       });
+      this.accumulatedResponseTimeMs = stateGlobal.totalResponseTimeMs;
     } catch (error) {
       logger.error(`Error printing ${runKind} statistics: ${error}`);
     }
+  }
+
+  /**
+   * Flush accumulated usage to backend as a single aggregated record.
+   * Call this once after the agent flow completes (not per-round).
+   * Produces one DB row with summed totals and a `rounds` JSONB array
+   * preserving per-cycle granularity.
+   */
+  flushToBackend(): void {
+    if (this.accumulatedRounds.length === 0) return;
+
+    const rounds = this.accumulatedRounds;
+    this.accumulatedRounds = [];
+
+    const totals = {
+      inputTokens: 0,
+      outputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      reasoningTokens: 0,
+      cost: 0,
+    };
+
+    for (const r of rounds) {
+      totals.inputTokens += r.inputTokens;
+      totals.outputTokens += r.outputTokens;
+      totals.cachedInputTokens += r.cachedInputTokens ?? 0;
+      totals.cacheCreationInputTokens += r.cacheCreationInputTokens ?? 0;
+      totals.reasoningTokens += r.reasoningTokens ?? 0;
+      totals.cost += r.cost;
+    }
+
+    this.logToBackend(this.accumulatedResponseTimeMs, totals, {
+      roundCount: rounds.length,
+      rounds,
+    });
   }
 
   /**
@@ -205,6 +253,10 @@ export class UsageMonitor {
       reasoningTokens?: number;
       cost: number;
     },
+    aggregation?: {
+      roundCount: number;
+      rounds: UsageLogRound[];
+    },
   ): void {
     try {
       const { config } = this.modelInfo;
@@ -231,6 +283,8 @@ export class UsageMonitor {
           config.name,
         ),
         streamId: this.context.streamId,
+        roundCount: aggregation?.roundCount,
+        rounds: aggregation?.rounds,
       });
     } catch (error) {
       this.context.logger.debug(`Backend usage logging failed: ${error}`);

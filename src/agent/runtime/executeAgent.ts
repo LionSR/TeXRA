@@ -598,6 +598,7 @@ export async function executeAgent(
             onFollowUpConsumed: () =>
               bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
           });
+          ctx.usageMonitor.flushToBackend();
           return {
             category: 'toolUse' as const,
             status: result.status,
@@ -616,6 +617,7 @@ export async function executeAgent(
           parentStage: ctx.parentStage,
           onRoundCompleted: createRoundProgressCallback(ctx.executionId),
         });
+        ctx.usageMonitor.flushToBackend();
         return {
           category: 'workflow' as const,
           status: result.status,
@@ -672,6 +674,7 @@ export async function executeMergeAgent(
         parentStage: ctx.parentStage,
         onRoundCompleted: createRoundProgressCallback(ctx.executionId),
       });
+      ctx.usageMonitor.flushToBackend();
       return {
         category: 'workflow' as const,
         status: result.status,
@@ -721,6 +724,7 @@ export async function resumeToolUseFromSnapshot(
         undefined,
         setupSession ? (context) => setupSession(context.session) : undefined,
       );
+      ctx.usageMonitor.flushToBackend();
       return {
         category: 'toolUse' as const,
         status: result.status,

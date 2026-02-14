@@ -21,7 +21,7 @@ import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 // Constants
 // =============================================================================
 
-const LOG_USAGE_VERSION = '1.0.2';
+const LOG_USAGE_VERSION = '1.1.0';
 
 // =============================================================================
 // Types
@@ -43,6 +43,8 @@ interface UsageLogEntry {
   usedRelay?: boolean;
   streamId?: string;
   extensionVersion?: string;
+  roundCount?: number;
+  rounds?: Record<string, unknown>[];
 }
 
 // =============================================================================
@@ -123,6 +125,11 @@ function validateEntry(entry: unknown): UsageLogEntry | null {
     streamId: typeof e.streamId === 'string' ? e.streamId : undefined,
     extensionVersion:
       typeof e.extensionVersion === 'string' ? e.extensionVersion : undefined,
+    roundCount:
+      typeof e.roundCount === 'number' && e.roundCount >= 0
+        ? e.roundCount
+        : undefined,
+    rounds: Array.isArray(e.rounds) ? e.rounds : undefined,
   };
 }
 
@@ -265,6 +272,8 @@ Deno.serve(async (req: Request) => {
       stream_id: entry.streamId,
       extension_version: entry.extensionVersion,
       batch_id: batch.batchId,
+      round_count: entry.roundCount,
+      rounds: entry.rounds,
     }));
 
     const { error: insertError } = await adminClient

@@ -8,3 +8,4 @@ export {
   type TaskState,
 } from './TaskState';
 export { UsageLogService } from './UsageLogService';
+export type { UsageLogRound } from './UsageLogTypes';

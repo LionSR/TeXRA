@@ -27,11 +27,17 @@ export const UsageLogStatsSchema = z.object({
 
 export type UsageLogStats = z.infer<typeof UsageLogStatsSchema>;
 
+export const UsageLogRoundSchema = UsageLogStatsSchema;
+
+export type UsageLogRound = z.infer<typeof UsageLogRoundSchema>;
+
 export const UsageLogEntrySchema = UsageLogMetadataSchema.extend(
   UsageLogStatsSchema.shape,
 ).extend({
   timestamp: z.iso.datetime(),
   extensionVersion: z.string().optional(),
+  roundCount: z.int().nonnegative().optional(),
+  rounds: z.array(UsageLogRoundSchema).optional(),
 });
 
 export type UsageLogEntry = z.infer<typeof UsageLogEntrySchema>;
