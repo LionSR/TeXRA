@@ -19,7 +19,11 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { codiconStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas and events
-import { AGENT_SOURCE, type AgentCategory } from '@shared/schemas/agent';
+import {
+  AGENT_SOURCE,
+  type AgentCategory,
+  type AgentSourceType,
+} from '@shared/schemas/agent';
 import { AgentSelectionEvents } from './events';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
 
@@ -283,7 +287,7 @@ export class AgentSelectionPanel extends LitElement {
 
   @state() private selectedKey: string | null = null;
 
-  @state() private groupedSources: Map<string, AgentSelectionItem[]> =
+  @state() private groupedSources: Map<AgentSourceType, AgentSelectionItem[]> =
     new Map();
 
   /** Flat list in visual display order, for keyboard navigation */
@@ -298,7 +302,7 @@ export class AgentSelectionPanel extends LitElement {
 
   protected override willUpdate(changed: PropertyValues): void {
     if (changed.has('agents')) {
-      const groups = new Map<string, AgentSelectionItem[]>();
+      const groups = new Map<AgentSourceType, AgentSelectionItem[]>();
       for (const agent of this.agents) {
         const list = groups.get(agent.source) ?? [];
         list.push(agent);
@@ -389,7 +393,7 @@ export class AgentSelectionPanel extends LitElement {
     );
   }
 
-  private handleSetAllEnabled(source: string, enabled: boolean): void {
+  private handleSetAllEnabled(source: AgentSourceType, enabled: boolean): void {
     this.dispatchEvent(
       AgentSelectionEvents.setAllEnabled({
         category: this.category,
