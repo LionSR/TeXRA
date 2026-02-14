@@ -10,7 +10,6 @@ import {
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 
-import * as vscode from 'vscode';
 import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
 
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
@@ -20,10 +19,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
 import { getDefaultToolRegistry } from '@tools/registry';
-import {
-  getUnavailableToolNames,
-  getExcludedToolLabels,
-} from '@tools/toolAvailability';
+import { getUnavailableToolNames } from '@tools/toolAvailability';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
@@ -76,7 +72,6 @@ async function resolveTools(
   options?: { isSubagent?: boolean },
 ): Promise<ToolDefinition[]> {
   const unavailable = await getUnavailableToolNames();
-  const excluded = new Set<string>();
 
   const toolConfigs = Array.isArray(tools) ? tools : [];
   const resolved = toolConfigs
@@ -84,7 +79,6 @@ async function resolveTools(
     .filter((def) => {
       if (options?.isSubagent && DELEGATION_TOOLS.has(def.name)) return false;
       if (unavailable.has(def.name)) {
-        excluded.add(def.name);
         logger.warn(
           `Tool "${def.name}" excluded: external dependency not installed`,
         );
@@ -96,21 +90,6 @@ async function resolveTools(
       }
       return true;
     });
-
-  // Notify the user about excluded external tools
-  if (excluded.size > 0) {
-    const labels = getExcludedToolLabels(excluded);
-    if (labels.length > 0) {
-      const msg = `Some tools were excluded because their dependencies are not installed: ${labels.join(', ')}.`;
-      void vscode.window
-        .showWarningMessage(msg, 'Open Tool Dashboard')
-        .then((action) => {
-          if (action === 'Open Tool Dashboard') {
-            void vscode.commands.executeCommand('texra.showTools');
-          }
-        });
-    }
-  }
 
   if (getToolUseMemoryEnabled() && !resolved.some((d) => d.name === 'memory')) {
     const memoryTool = registry.get('memory');
