@@ -17,7 +17,7 @@ import {
 import { AgentLogger } from '@logger/AgentLogger';
 import { getXmlFormatFromFiles, getListOfFiles } from '@utils/prompt';
 import { getConfig } from '@utils/config';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, type WorkspaceRoot } from '@utils/files';
 import { setVarFromFile } from '@utils/files/varsUtils';
 import type { FileListEntry } from '@shared/schemas';
 
@@ -56,6 +56,10 @@ type FileVarsResult = {
 
 /**
  * Build all user variables needed for prompt rendering.
+ *
+ * @param wsRoot - Optional workspace root override. When provided, the CWD
+ *   variable is set to this root instead of the VS Code workspace. Use this
+ *   for git worktree support where agents target different checkout directories.
  */
 export async function buildUserVars(
   agentConfig: AgentConfig,
@@ -64,6 +68,7 @@ export async function buildUserVars(
   agentPath: string,
   providerFlags: ModelProviderFlags,
   logger: AgentLogger,
+  wsRoot?: WorkspaceRoot,
 ): Promise<UserVars> {
   const allLoadedFiles: LoadedFileEntry[] = [];
 
@@ -77,7 +82,7 @@ export async function buildUserVars(
 
   // Merge all variable sources using spread operator
   const userVars: UserVars = {
-    ...getBasicVars(agentConfig, providerFlags),
+    ...getBasicVars(agentConfig, providerFlags, wsRoot),
     ...(await getFileVars(agentConfig, agentSetting, logger)),
     ...requiredVars,
     ...patternVars,
@@ -96,6 +101,7 @@ export async function buildUserVars(
 function getBasicVars(
   agentConfig: AgentConfig,
   providerFlags: ModelProviderFlags,
+  wsRoot?: WorkspaceRoot,
 ): UserVars {
   // Build agent lists for template use
   const formatAgentList = (agents: { name: string; description?: string }[]) =>
@@ -128,7 +134,7 @@ function getBasicVars(
     IS_GOOGLE_MODEL: providerFlags.isGoogle,
     WORKFLOW_AGENTS: workflowAgentsList,
     TOOL_USE_AGENTS: toolUseAgentsList,
-    CWD: WorkspaceFS.getPath() ?? '.',
+    CWD: wsRoot?.root ?? WorkspaceFS.getPath() ?? '.',
     DEFAULT_BIB_PATH: defaultBibPath,
   };
 }
