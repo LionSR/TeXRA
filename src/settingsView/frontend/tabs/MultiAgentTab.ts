@@ -59,18 +59,6 @@ export class MultiAgentTab extends LitElement {
 
       .reliability-input {
         width: 80px;
-        padding: var(--spacing-small) var(--spacing-medium);
-        background: var(--vscode-input-background);
-        color: var(--vscode-input-foreground);
-        border: var(--border-thin) solid var(--color-border);
-        border-radius: var(--border-radius);
-        font-size: var(--font-size-sm);
-        font-family: var(--vscode-editor-font-family);
-      }
-
-      .reliability-input:focus {
-        outline: none;
-        border-color: var(--vscode-focusBorder);
       }
 
       .reliability-unit {
@@ -123,7 +111,7 @@ export class MultiAgentTab extends LitElement {
     return html`
       <div class="reliability-row">
         <label>${setting.label}</label>
-        <input
+        <vscode-textfield
           class="reliability-input"
           type="number"
           .value=${String(setting.value)}
@@ -131,7 +119,7 @@ export class MultiAgentTab extends LitElement {
           max=${setting.max ?? nothing}
           @change=${(e: Event) =>
             this.handleReliabilityChange(setting, e.target as HTMLInputElement)}
-        />
+        ></vscode-textfield>
         ${setting.unit
           ? html`<span class="reliability-unit">${setting.unit}</span>`
           : nothing}
