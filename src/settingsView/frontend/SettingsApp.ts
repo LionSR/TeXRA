@@ -419,6 +419,10 @@ export class SettingsApp extends BaseWebviewApp {
     SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
   );
 
+  private handleSetAllAgentsEnabled = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED,
+  );
+
   private handleOpenAgentFolder = forwardDetail(
     SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER,
   );
@@ -577,6 +581,7 @@ export class SettingsApp extends BaseWebviewApp {
               .initialSubTab=${this.agentSubTab}
               @agent-open-yaml=${this.handleOpenAgentYaml}
               @agent-enabled-set=${this.handleSetAgentEnabled}
+              @agent-all-enabled-set=${this.handleSetAllAgentsEnabled}
               @agent-open-folder=${this.handleOpenAgentFolder}
               @agent-auto-show-remote=${this.handleSetAutoShowRemote}
               @agent-create=${this.handleCreateAgent}
