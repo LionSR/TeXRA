@@ -13,7 +13,11 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 // Local imports - tool core
 import { defineTool } from '../core/define';
 import { ToolError, type ToolResult } from '../result';
-import { formatLinesWithNumbers, requireField } from '../utils';
+import {
+  countOccurrences,
+  formatLinesWithNumbers,
+  requireField,
+} from '../utils';
 
 // Local imports - shared memory constants and utilities
 import {
@@ -45,6 +49,7 @@ const MemoryToolInputSchema = z.strictObject({
     .nullish(),
   old_str: z.string().nullish(),
   new_str: z.string().nullish(),
+  replace_all: z.boolean().nullish(),
   insert_line: z.int().min(0).nullish(),
   insert_text: z.string().nullish(),
   old_path: z.string().nullish(),
@@ -81,6 +86,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
           requireField(input.path, 'path', input.command),
           requireField(input.old_str, 'old_str', input.command),
           requireField(input.new_str, 'new_str', input.command),
+          input.replace_all ?? false,
         );
       case 'insert':
         return this.insert(
@@ -121,7 +127,9 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const exists = await StorageFS.exists(resolvedPath);
     const isDir = exists && (await StorageFS.isDir(resolvedPath));
     if (!exists || isDir) {
-      throw new ToolError(`Error: The path ${inputPath} does not exist`);
+      throw new ToolError(
+        `The path ${inputPath} does not exist or is a directory.`,
+      );
     }
   }
 
@@ -192,7 +200,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const resolvedPath = this.resolveMemoryPath(inputPath);
     const exists = await StorageFS.exists(resolvedPath);
     if (exists) {
-      throw new ToolError(`Error: File ${inputPath} already exists`);
+      throw new ToolError(`File ${inputPath} already exists.`);
     }
 
     await StorageFS.ensureDir(MEMORY_STORAGE_ROOT);
@@ -209,7 +217,14 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     inputPath: string,
     oldStr: string,
     newStr: string,
+    replaceAll: boolean,
   ): Promise<ToolResult> {
+    if (oldStr.length === 0) {
+      throw new ToolError(
+        `old_str must not be empty for ${inputPath}. Provide the exact text to replace.`,
+      );
+    }
+
     const resolvedPath = this.resolveMemoryPath(inputPath);
     await this.requireEditableFile(resolvedPath, inputPath);
 
@@ -217,30 +232,38 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const occurrences = content.split(oldStr).length - 1;
     if (occurrences === 0) {
       throw new ToolError(
-        `No replacement was performed, old_str did not appear verbatim in ${inputPath}.`,
+        `The provided old_str was not found in ${inputPath}. Ensure it matches the file content exactly.`,
       );
     }
 
-    if (occurrences > 1) {
+    if (!replaceAll && occurrences > 1) {
       const lines = content.split('\n');
       const lineNumbers = lines
         .map((line, index) => (line.includes(oldStr) ? index + 1 : -1))
         .filter((n) => n !== -1);
       throw new ToolError(
-        `No replacement was performed. Multiple occurrences of old_str in lines: ${lineNumbers.join(
-          ', ',
-        )}. Please ensure it is unique`,
+        `old_str is not unique within ${inputPath}. Include more surrounding context or set replace_all to true.`,
       );
     }
 
-    const updated = content.replace(oldStr, newStr);
+    // Use split/join for literal replacement
+    // (String.replace has special patterns like $$, $&, $' that corrupt content)
+    let updated: string;
+    if (replaceAll) {
+      updated = content.split(oldStr).join(newStr);
+    } else {
+      const idx = content.indexOf(oldStr);
+      updated =
+        content.slice(0, idx) + newStr + content.slice(idx + oldStr.length);
+    }
     await StorageFS.write(resolvedPath, updated);
 
     const updatedLines = updated.split('\n');
     const numbered = formatLinesWithNumbers(updatedLines);
 
+    const count = replaceAll ? occurrences : 1;
     return {
-      summary: `Replaced text in: ${inputPath}`,
+      summary: `Replaced ${count} occurrence${count !== 1 ? 's' : ''} in: ${inputPath}`,
       output: `The memory file has been edited.\nHere's the content of ${inputPath} with line numbers:\n${numbered.join('\n')}`,
     };
   }
@@ -258,7 +281,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const totalLines = lines.length;
     if (insertLine < 0 || insertLine > totalLines) {
       throw new ToolError(
-        `Error: Invalid \`insert_line\` parameter: ${insertLine}. It should be within the range of lines of the file: [0, ${totalLines}]`,
+        `Invalid \`insert_line\` parameter: ${insertLine}. It should be within the range of lines of the file: [0, ${totalLines}].`,
       );
     }
 
@@ -281,7 +304,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const resolvedPath = this.resolveMemoryPath(inputPath);
     const exists = await StorageFS.exists(resolvedPath);
     if (!exists) {
-      throw new ToolError(`Error: The path ${inputPath} does not exist`);
+      throw new ToolError(`The path ${inputPath} does not exist.`);
     }
 
     await StorageFS.delete(resolvedPath, { recursive: true });
@@ -300,13 +323,13 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
 
     const oldExists = await StorageFS.exists(resolvedOldPath);
     if (!oldExists) {
-      throw new ToolError(`Error: The path ${oldPathInput} does not exist`);
+      throw new ToolError(`The path ${oldPathInput} does not exist.`);
     }
 
     const newExists = await StorageFS.exists(resolvedNewPath);
     if (newExists) {
       throw new ToolError(
-        `Error: The destination ${newPathInput} already exists`,
+        `The destination ${newPathInput} already exists.`,
       );
     }
 
