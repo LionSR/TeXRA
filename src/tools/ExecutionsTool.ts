@@ -31,6 +31,7 @@ import {
   type ExecutionHandle,
   type ExecutionStatusInfo,
   ACTIVE_STATUSES,
+  AgentExecutionHandle,
   getHandle,
   getActiveExecutionIds,
   waitForExecutionChange,
@@ -43,6 +44,7 @@ import { ProcessExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { StorageFS } from '@utils/files';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
+import { STREAM_STATUS } from '@shared/schemas';
 import { ToolError, type ToolResult } from './result';
 import { defineTool } from './core/define';
 
@@ -149,6 +151,42 @@ function getExecutionStatusInfo(
     status: terminalStatus ?? EXECUTION_STATUS.COMPLETED,
     elapsed: null,
   };
+}
+
+/**
+ * Single-pass check: should the wait endpoint skip blocking on this execution?
+ *
+ * Returns true when:
+ * - The handle is gone (execution already untracked / completed), OR
+ * - The stream left all ACTIVE_STATUSES, OR
+ * - The execution is a *tool-use subagent* in WAITING (job done, result
+ *   already delivered via onBeforeWaiting). Workflow subagents in WAITING
+ *   may still be awaiting retry/user action and should keep blocking.
+ *
+ * One getHandle + one getStatus per call — no redundant lookups.
+ */
+function shouldSkipWait(executionId: string): boolean {
+  const handle = getHandle(executionId);
+  if (!handle) return true;
+
+  const { status } = handle.getStatus();
+  if (!ACTIVE_STATUSES.has(status)) return true;
+
+  // Tool-use subagent in WAITING = job delivered via onBeforeWaiting, don't block.
+  // Workflow subagent in WAITING = may be waiting for retry/user action. Blocking
+  // isn't very useful (only the user can unblock it), but the subagent is still
+  // technically active so we don't skip — avoids misreporting it as done.
+  // Non-subagent WAITING = human input needed, keep blocking.
+  if (
+    status === STREAM_STATUS.WAITING &&
+    handle instanceof AgentExecutionHandle &&
+    handle.category === 'toolUse' &&
+    handle.parentStreamId !== handle.childStreamId
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /** Format round progress as a display line, or empty string if unavailable. */
@@ -328,17 +366,17 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     const activeIds = getActiveExecutionIds();
     if (activeIds.length === 0) return;
 
+    // Exclude executions that are already effectively done
+    // (completed, inactive, or tool-use subagent WAITING with result delivered).
+    const pendingIds = activeIds.filter((id) => !shouldSkipWait(id));
+    if (pendingIds.length === 0) return;
+
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeout * 1000);
     // Register callback before re-checking to close the race window
-    const waitPromise = waitForAnyExecutionChange(activeIds, ac.signal);
-    // If all originally watched executions completed between
-    // getActiveExecutionIds() and callback registration, abort immediately
-    // so we don't block until timeout. Check the original IDs, not the
-    // global set (new executions starting shouldn't prevent abort).
-    if (activeIds.every((id) => !getHandle(id))) {
-      ac.abort();
-    }
+    const waitPromise = waitForAnyExecutionChange(pendingIds, ac.signal);
+    // Re-check after registration: if all resolved in the gap, abort.
+    if (pendingIds.every(shouldSkipWait)) ac.abort();
     await waitPromise;
     clearTimeout(timer);
   }
@@ -348,19 +386,14 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     executionId: ExecutionId,
     timeout: number,
   ): Promise<void> {
-    const info = getExecutionStatusInfo(executionId);
-    if (!ACTIVE_STATUSES.has(info.status)) return;
+    if (shouldSkipWait(executionId)) return;
 
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeout * 1000);
     // Register callback before re-checking to close the race window
     const waitPromise = waitForExecutionChange(executionId, ac.signal);
-    // If execution completed between status check and callback registration,
-    // abort immediately so we don't block until timeout.
-    const rechecked = getExecutionStatusInfo(executionId);
-    if (!ACTIVE_STATUSES.has(rechecked.status)) {
-      ac.abort();
-    }
+    // Re-check after registration: if state changed in the gap, abort.
+    if (shouldSkipWait(executionId)) ac.abort();
     await waitPromise;
     clearTimeout(timer);
   }
