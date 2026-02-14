@@ -128,8 +128,7 @@ async function checkZoteroRunning(port: number): Promise<void> {
   } catch {
     throw new ToolError(
       `Zotero is not reachable on port ${port}. ` +
-        `Ask the user to start the Zotero desktop app. ` +
-        `If Zotero is already running, the port may be wrong (setting: texra.bib.zoteroPort).`,
+        `Ask the user to start Zotero or verify the port (setting: texra.bib.zoteroPort).`,
     );
   }
 }
@@ -164,8 +163,7 @@ async function callZoteroConnector(
         status: 'error',
         message:
           `Zotero Connector request timed out after ${ZOTERO_CONNECTOR_TIMEOUT_MS / 1000}s. ` +
-          `Zotero may be busy indexing or processing. Retry the request. ` +
-          `If it persists, ask the user to check that Zotero is responsive.`,
+          `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
       };
     }
     const message =

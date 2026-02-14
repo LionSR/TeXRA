@@ -181,15 +181,13 @@ export async function callBetterBibTeX<T = unknown>(
       if (isTimeoutErrorCode(error.code)) {
         throw new ToolError(
           `Zotero API request timed out after ${timeout / 1000}s. ` +
-            `Zotero may be busy indexing or processing. Retry the request. ` +
-            `If it persists, ask the user to check that Zotero is responsive.`,
+            `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
         );
       }
       if (error.code === 'ECONNREFUSED') {
         throw new ToolError(
           `Zotero is not reachable on port ${port}. ` +
-            `Ask the user to start the Zotero desktop app. ` +
-            `If Zotero is already running, the port may be wrong (setting: texra.bib.zoteroPort).`,
+            `Ask the user to start Zotero or verify the port (setting: texra.bib.zoteroPort).`,
         );
       }
       if (error.response?.status === 404) {
