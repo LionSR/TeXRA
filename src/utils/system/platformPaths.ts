@@ -9,6 +9,9 @@ import { execaSync } from 'execa';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 
+/** Whether the current platform is Windows (cached at module load). */
+export const IS_WINDOWS = process.platform === 'win32';
+
 // Common LaTeX tool names used across the system
 const TEX_TOOLS = ['latexdiff', 'latexindent', 'latexmk'] as const;
 
@@ -207,7 +210,7 @@ export function findToolInCommonPaths(tool: string): string | null {
   if (!tool.toLowerCase().endsWith('.pl')) {
     candidates.push(`${tool}.pl`);
   }
-  if (process.platform === 'win32') {
+  if (IS_WINDOWS) {
     // Special handling for Ghostscript on Windows
     if (tool === 'gs') {
       candidates.push('gswin64c', 'gswin32c');
@@ -232,7 +235,7 @@ export function findToolInCommonPaths(tool: string): string | null {
   };
 
   // Try locating tools using external commands
-  const locateCmd = process.platform === 'win32' ? 'where' : 'which';
+  const locateCmd = IS_WINDOWS ? 'where' : 'which';
   const locateCommands = [
     { cmd: 'kpsewhich', extractPath: (stdout: string) => stdout.trim() },
     {
