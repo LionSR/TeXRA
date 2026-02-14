@@ -9,8 +9,8 @@ import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { agentDirectories, validateYamlAndPromptAdd } from '@frontend/agents';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
-import { hasExtension } from '@utils/core/pathCore';
 import { AbsoluteFS } from '@utils/files';
+import { hasExtension } from '@utils/core/pathCore';
 
 // Local file imports
 import { FileItem } from './FileItem';

@@ -2,6 +2,12 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent
+import {
+  DEFAULT_MODEL_CAPABILITIES,
+  type ModelCapabilities,
+  type ModelConfig,
+  ModelProvider,
+} from 'llm-zoo';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
 
@@ -9,12 +15,6 @@ import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropi
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - model config
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelCapabilities,
-  type ModelConfig,
-  ModelProvider,
-} from 'llm-zoo';
 import * as configModule from '@utils/config';
 import { pathToLocation } from '@utils/files';
 

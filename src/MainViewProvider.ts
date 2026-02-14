@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { MainViewPersistedStateSchema } from '@shared/schemas';
 
 // Local imports - agent
+import { getServerSideKeyService } from '@auth/serverKeys';
 import { refresh, computeAgentOptionsData } from '@agent/index';
 
 // Local imports - common
@@ -21,7 +22,6 @@ import { computeModelOptionsData } from '@model/computeModelOptions';
 import { watchConfig, getConfig, DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { debounce } from '@utils/core';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
-import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local file imports
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
