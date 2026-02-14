@@ -1,4 +1,5 @@
 // Standard library imports
+import * as os from 'os';
 import * as path from 'path';
 
 // Third-party imports
@@ -23,6 +24,19 @@ let cachedExtraDirs: string[] | null = null;
 
 const DEFAULT_MSYS_ROOTS = ['C:\\msys64', 'C:\\msys32'];
 const MSYS_SUBDIRS = ['usr\\bin', 'mingw64\\bin', 'mingw32\\bin'];
+
+/**
+ * Safe wrapper around `os.homedir()` that returns `null` instead of throwing.
+ * `os.homedir()` can throw a SystemError (UV_ENOENT) in environments where the
+ * home directory cannot be determined (containers, CI/CD, some remote setups).
+ */
+export function safeHomedir(): string | null {
+  try {
+    return os.homedir() || null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Return common tool directories based on the current platform.
