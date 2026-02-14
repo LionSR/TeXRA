@@ -33,7 +33,6 @@ import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import {
   computeCachePercentage,
-  nonZeroOrUndefined,
 } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
@@ -1664,11 +1663,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       cost: this.computePrice(rawUsage),
       responseTimeMs,
       provider: 'openai-response',
-      cachedInputTokens: nonZeroOrUndefined(cachedTokens),
+      cachedInputTokens: cachedTokens || undefined,
       percentageCached: computeCachePercentage(cachedTokens, inputTokens),
-      reasoningTokens: nonZeroOrUndefined(
-        rawUsage.output_tokens_details?.reasoning_tokens,
-      ),
+      reasoningTokens:
+        rawUsage.output_tokens_details?.reasoning_tokens || undefined,
       _native: rawUsage,
     };
   }

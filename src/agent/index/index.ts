@@ -29,8 +29,7 @@ export {
   // Source helpers
   isRemoteAgent,
   // Visible agents (for dropdowns and tools)
-  getVisibleWorkflowAgents,
-  getVisibleToolUseAgents,
+  getVisibleAgents,
   // Description update (for remote agent loading)
   updateAgentDescription,
 } from './agentRegistry';
