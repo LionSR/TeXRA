@@ -2,8 +2,8 @@
  * Tool dashboard data builder.
  *
  * Enriches tool groups with runtime availability and per-tool descriptions
- * from the registry. External tool UI metadata lives in
- * {@link @tools/toolAvailability EXTERNAL_TOOL_CHECKS} — no parallel map here.
+ * from the registry. External tool definitions (SSOT) live in
+ * {@link @tools/externalToolDefs}.
  */
 
 // Local imports
@@ -11,10 +11,8 @@ import type {
   ToolDashboardItem,
   ToolInfo,
 } from '@shared/schemas/settingsViewMessages';
-import {
-  EXTERNAL_TOOL_CHECKS,
-  runExternalToolChecks,
-} from '@tools/toolAvailability';
+import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
+import { runExternalToolChecks } from '@tools/toolAvailability';
 import {
   getDefaultToolRegistry,
   type RegisteredToolName,
@@ -151,10 +149,10 @@ export async function buildToolDashboardItems(): Promise<ToolDashboardItem[]> {
   // Run fresh checks — also updates the availability cache
   const results = await runExternalToolChecks();
 
-  // Merge check results with UI metadata from EXTERNAL_TOOL_CHECKS
+  // Merge check results with UI metadata from EXTERNAL_TOOL_DEFS
   const externalItems: ToolDashboardItem[] = [];
   for (const { id, tools, status } of results) {
-    const def = EXTERNAL_TOOL_CHECKS.find((c) => c.id === id);
+    const def = EXTERNAL_TOOL_DEFS.find((c) => c.id === id);
     if (!def) continue;
     externalItems.push({
       id: def.id,
