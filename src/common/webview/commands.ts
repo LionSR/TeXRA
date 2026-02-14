@@ -334,6 +334,7 @@ export const SETTINGS_VIEW_CMD = {
   GET_AGENT_SELECTION: 'getAgentSelection',
   OPEN_AGENT_YAML: 'openAgentYaml',
   SET_AGENT_ENABLED: 'setAgentEnabled',
+  SET_ALL_AGENTS_ENABLED: 'setAllAgentsEnabled',
   OPEN_AGENT_FOLDER: 'openAgentFolder',
   CREATE_AGENT: 'createAgent',
   // Remote agent auto-show
