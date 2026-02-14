@@ -181,12 +181,8 @@ export class ToolsTab extends LitElement {
   private renderSummary(): TemplateResult | typeof nothing {
     if (this.items.length === 0) return nothing;
 
-    const available = this.items.filter(
-      (i) => i.status === 'available',
-    ).length;
-    const missing = this.items.filter(
-      (i) => i.status === 'not-found',
-    ).length;
+    const available = this.items.filter((i) => i.status === 'available').length;
+    const missing = this.items.filter((i) => i.status === 'not-found').length;
 
     return html`
       <div class="tools-summary">
