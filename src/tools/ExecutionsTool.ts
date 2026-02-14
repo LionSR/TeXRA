@@ -159,9 +159,9 @@ function getExecutionStatusInfo(
  * Returns true when:
  * - The handle is gone (execution already untracked / completed), OR
  * - The stream left all ACTIVE_STATUSES, OR
- * - The execution is a *subagent* in WAITING (job done, result already
- *   delivered via onBeforeWaiting — distinct from a non-subagent WAITING
- *   for human input, which should still block).
+ * - The execution is a *tool-use subagent* in WAITING (job done, result
+ *   already delivered via onBeforeWaiting). Workflow subagents in WAITING
+ *   may still be awaiting retry/user action and should keep blocking.
  *
  * One getHandle + one getStatus per call — no redundant lookups.
  */
@@ -172,11 +172,13 @@ function shouldSkipWait(executionId: string): boolean {
   const { status } = handle.getStatus();
   if (!ACTIVE_STATUSES.has(status)) return true;
 
-  // Subagent in WAITING = job delivered, don't block.
+  // Tool-use subagent in WAITING = job delivered via onBeforeWaiting, don't block.
+  // Workflow subagent in WAITING = may be waiting for retry/user action, keep blocking.
   // Non-subagent WAITING = human input needed, keep blocking.
   if (
     status === STREAM_STATUS.WAITING &&
     handle instanceof AgentExecutionHandle &&
+    handle.category === 'toolUse' &&
     handle.parentStreamId !== handle.childStreamId
   ) {
     return true;
