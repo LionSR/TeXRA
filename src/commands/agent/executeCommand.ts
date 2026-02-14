@@ -5,7 +5,7 @@ import { ZodError } from 'zod';
 // Local imports
 import { AgentConfigSchema } from '@agent/core';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { getExecutionStore } from '@agent/storage';
+import { registerExecution } from '@agent/storage';
 import { formatZodError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { generateExecutionId } from '@utils/core/executionId';
@@ -49,7 +49,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     const isResume = wrapped?.executionId !== undefined;
 
     if (!isResume) {
-      await getExecutionStore(executionId).register(config, config.agent);
+      await registerExecution(executionId, config, config.agent);
     }
     await executeAgent(config, executionId);
   } catch (error) {
