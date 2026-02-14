@@ -63,7 +63,7 @@ export class ArxivDownloadTool extends defineTool({
       listingOutput = `Failed to list directory: ${toErrorMessage(err)}`;
     }
 
-    const summary = `Downloaded arXiv source to ${displayPath}`;
+    const summary = `arXiv source available at ${displayPath}`;
     const output = [
       summary,
       '',
