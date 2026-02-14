@@ -27,7 +27,7 @@ export function buildPreview(content: string): {
   preview: string;
   lineCount: number;
 } {
-  const lines = content.split(/\r?\n/);
+  const lines = content.split('\n');
   if (lines.length > 0 && lines.at(-1) === '') {
     lines.pop();
   }

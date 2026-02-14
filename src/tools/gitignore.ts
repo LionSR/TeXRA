@@ -56,7 +56,7 @@ function expandGitignorePattern(
 
 function parseGitignore(content: string): GitignoreRule[] {
   const rules: GitignoreRule[] = [];
-  const lines = content.split(/\r?\n/);
+  const lines = content.split('\n');
 
   for (const rawLine of lines) {
     let line = rawLine.trim();
