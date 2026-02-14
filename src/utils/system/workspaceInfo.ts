@@ -1,4 +1,5 @@
 // Standard library imports
+import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
@@ -51,6 +52,29 @@ function detectShell(): string | undefined {
   return path.basename(shell); // "bash", "zsh", "fish", etc.
 }
 
+/** Cached WSL detection result (null = not yet checked). */
+let wslDetected: boolean | null = null;
+
+/**
+ * Detect whether we are running inside Windows Subsystem for Linux (WSL).
+ * Checks /proc/version for the "microsoft" or "WSL" marker strings that
+ * Microsoft's WSL kernel injects.  Result is cached after the first call.
+ */
+function isWSL(): boolean {
+  if (wslDetected !== null) return wslDetected;
+  if (process.platform !== 'linux') {
+    wslDetected = false;
+    return false;
+  }
+  try {
+    const version = fs.readFileSync('/proc/version', 'utf-8');
+    wslDetected = /microsoft|wsl/i.test(version);
+  } catch {
+    wslDetected = false;
+  }
+  return wslDetected;
+}
+
 /**
  * Get a human-readable platform name.
  */
@@ -61,7 +85,9 @@ function getPlatformLabel(): string {
     case 'win32':
       return `Windows (${os.arch()})`;
     case 'linux':
-      return `Linux (${os.arch()})`;
+      return isWSL()
+        ? `Linux/WSL (${os.arch()})`
+        : `Linux (${os.arch()})`;
     default:
       return `${process.platform} (${os.arch()})`;
   }

@@ -101,7 +101,12 @@ export async function startRecording(
 
     subprocess
       .then((result) => {
-        if (result.signal === 'SIGTERM') {
+        // On Windows, kill('SIGTERM') acts as force-kill and result.signal
+        // may be 'SIGTERM' or null depending on Node version.  Also treat
+        // SIGKILL as intentional since it can come from the force-kill path.
+        const intentional =
+          result.signal === 'SIGTERM' || result.signal === 'SIGKILL';
+        if (intentional) {
           logger.info(CHANNEL, `Recording stopped intentionally`);
         } else if (result.exitCode !== 0) {
           logger.error(
