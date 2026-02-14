@@ -173,7 +173,8 @@ export async function activate(context: vscode.ExtensionContext) {
           typeof context.extension.packageJSON?.version === 'string'
             ? context.extension.packageJSON.version
             : undefined;
-        UsageLogService.initialize({}, extensionVersion);
+        const editorType = vscode.env.appName || undefined;
+        UsageLogService.initialize({}, extensionVersion, editorType);
         // Add safety net disposable in case deactivate() isn't called
         context.subscriptions.push({
           dispose: () => void UsageLogService.dispose(),
