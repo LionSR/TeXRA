@@ -159,7 +159,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     }
 
     const content = await StorageFS.read(resolvedPath);
-    const lines = content.split(/\r?\n/);
+    const lines = content.split('\n');
     if (lines.length > 0 && lines.at(-1) === '') {
       lines.pop();
     }
@@ -221,7 +221,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     }
 
     if (occurrences > 1) {
-      const lines = content.split(/\r?\n/);
+      const lines = content.split('\n');
       const lineNumbers = lines
         .map((line, index) => (line.includes(oldStr) ? index + 1 : -1))
         .filter((n) => n !== -1);
@@ -235,7 +235,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const updated = content.replace(oldStr, newStr);
     await StorageFS.write(resolvedPath, updated);
 
-    const updatedLines = updated.split(/\r?\n/);
+    const updatedLines = updated.split('\n');
     const numbered = formatLinesWithNumbers(updatedLines);
 
     return {
@@ -253,7 +253,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     await this.requireEditableFile(resolvedPath, inputPath);
 
     const content = await StorageFS.read(resolvedPath);
-    const lines = content.split(/\r?\n/);
+    const lines = content.split('\n');
     const totalLines = lines.length;
     if (insertLine < 0 || insertLine > totalLines) {
       throw new ToolError(
@@ -261,7 +261,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
       );
     }
 
-    const insertLines = insertText.split(/\r?\n/);
+    const insertLines = insertText.split('\n');
     const updatedLines = [
       ...lines.slice(0, insertLine),
       ...insertLines,

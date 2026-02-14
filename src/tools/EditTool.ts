@@ -61,12 +61,7 @@ export class EditFileTool extends defineTool({
       return readGate;
     }
 
-    // Normalize CRLF→LF so model-provided old_str (always LF) matches file content.
-    // read_file already presents LF-only content to the model.
-    const currentContent = (await WorkspaceFS.read(targetPath)).replaceAll(
-      '\r\n',
-      '\n',
-    );
+    const currentContent = await WorkspaceFS.read(targetPath);
     const occurrences = countOccurrences(currentContent, old_str);
 
     if (occurrences === 0) {
