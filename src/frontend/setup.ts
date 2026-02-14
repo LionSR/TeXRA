@@ -191,10 +191,17 @@ export async function configureLatexSettings(): Promise<void> {
   // find latexmk, pdflatex, and other TeX binaries.  When VS Code is launched
   // from the macOS Finder or Windows Start Menu it often inherits a minimal
   // PATH that excludes TeX directories, causing "spawn latexmk ENOENT" errors.
-  const extendedPath = extendEnvPath(process.env.PATH);
-  if (extendedPath !== process.env.PATH) {
-    process.env.PATH = extendedPath;
-    logger.info('extension', 'Extended process PATH with TeX directories');
+  try {
+    const extendedPath = extendEnvPath(process.env.PATH);
+    if (extendedPath !== process.env.PATH) {
+      process.env.PATH = extendedPath;
+      logger.info('extension', 'Extended process PATH with TeX directories');
+    }
+  } catch (err) {
+    logger.warn(
+      'extension',
+      `Failed to extend PATH with TeX directories: ${toErrorMessage(err)}`,
+    );
   }
 
   try {
