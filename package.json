@@ -799,13 +799,15 @@
       },
       {
         "command": "texra.cleanOutput",
-        "title": "Clean All LLM Output Files",
+        "title": "Clean All LLM Output Files (Workspace-wide)",
+        "shortTitle": "Clean LLM Outputs",
         "category": "TeXRA",
         "icon": "$(trash)"
       },
       {
         "command": "texra.cleanBuild",
-        "title": "Clean All Build Files",
+        "title": "Clean All Build Files (Workspace-wide)",
+        "shortTitle": "Clean Build Files",
         "category": "TeXRA",
         "icon": "$(remove)"
       },
@@ -929,13 +931,17 @@
       },
       {
         "command": "texra.pack",
-        "title": "Pack Files",
-        "category": "TeXRA"
+        "title": "Pack Output into History Folder",
+        "shortTitle": "Pack Output",
+        "category": "TeXRA",
+        "icon": "$(archive)"
       },
       {
         "command": "texra.clean",
-        "title": "Clean Files",
-        "category": "TeXRA"
+        "title": "Clean Agent Output Files",
+        "shortTitle": "Clean Output",
+        "category": "TeXRA",
+        "icon": "$(trash)"
       },
       {
         "command": "texra.createAgentWithAI",
@@ -1143,6 +1149,21 @@
               "image": "resources/walkthroughs/media/vscode-compare.png",
               "altText": "Screenshot of the VS Code diff view"
             }
+          },
+          {
+            "id": "texra.gettingStarted.housekeeping",
+            "title": "Pack and clean up",
+            "description": "After reviewing, use **Pack** $(archive) to archive outputs into a timestamped `History/` folder, or **Clean** $(trash) to delete generated files.\n\nFind these actions in:\n- The **ProgressBoard toolbar** on each completed run\n- The **editor title menu** (overflow `...`) when editing a `.tex` file\n- The **right-click context menu** on `.tex` files\n- The **Command Palette**: search `TeXRA: Pack` or `TeXRA: Clean`\n\nOr try the workspace-wide commands: [Clean all LLM outputs](command:texra.cleanOutput) | [Clean all build files](command:texra.cleanBuild)",
+            "media": {
+              "image": "resources/walkthroughs/media/texra-progressboard.png",
+              "altText": "Screenshot showing pack and clean buttons in the ProgressBoard toolbar"
+            },
+            "completionEvents": [
+              "onCommand:texra.cleanOutput",
+              "onCommand:texra.cleanBuild",
+              "onCommand:texra.pack",
+              "onCommand:texra.clean"
+            ]
           }
         ]
       }
@@ -1198,6 +1219,16 @@
           "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
           "command": "texra.getTeXCount",
           "group": "navigation"
+        },
+        {
+          "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "texra.cleanOutput",
+          "group": "2_texra_housekeeping@1"
+        },
+        {
+          "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "texra.cleanBuild",
+          "group": "2_texra_housekeeping@2"
         }
       ],
       "view/title": [
@@ -1236,6 +1267,62 @@
           "when": "view == texra.mainView",
           "group": "navigation@1"
         }
+      ],
+      "editor/context": [
+        {
+          "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "texra.cleanOutput",
+          "group": "z_texra@1"
+        },
+        {
+          "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "texra.cleanBuild",
+          "group": "z_texra@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "when": "resourceLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "texra.cleanOutput",
+          "group": "z_texra@1"
+        },
+        {
+          "when": "resourceLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "texra.cleanBuild",
+          "group": "z_texra@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "texra.folderExplorer.newFile",
+          "when": "view == texra.folderExplorer && viewItem == folder",
+          "group": "1_modification"
+        },
+        {
+          "command": "texra.folderExplorer.newFolder",
+          "when": "view == texra.folderExplorer && viewItem == folder",
+          "group": "1_modification"
+        },
+        {
+          "command": "texra.folderExplorer.rename",
+          "when": "view == texra.folderExplorer && viewItem != editing",
+          "group": "2_modification"
+        },
+        {
+          "command": "texra.folderExplorer.delete",
+          "when": "view == texra.folderExplorer && viewItem != editing",
+          "group": "3_modification"
+        },
+        {
+          "command": "texra.folderExplorer.addToList",
+          "when": "view == texra.folderExplorer && viewItem == file",
+          "group": "4_modification"
+        },
+        {
+          "command": "texra.folderExplorer.revealInOS",
+          "when": "view == texra.folderExplorer && viewItem == folder",
+          "group": "5_modification"
+        }
       ]
     },
     "keybindings": [
@@ -1248,6 +1335,16 @@
         "command": "texra.showProgressView",
         "key": "ctrl+alt+p",
         "mac": "cmd+option+p"
+      },
+      {
+        "command": "texra.cleanOutput",
+        "key": "ctrl+alt+shift+c",
+        "mac": "cmd+option+shift+c"
+      },
+      {
+        "command": "texra.cleanBuild",
+        "key": "ctrl+alt+shift+b",
+        "mac": "cmd+option+shift+b"
       }
     ]
   },
