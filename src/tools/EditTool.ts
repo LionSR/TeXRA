@@ -68,14 +68,19 @@ export class EditFileTool extends defineTool({
     if (occurrences === 0) {
       throw new ToolError(
         `old_str not found in ${targetPath}.\n` +
-          `Copy the text exactly as shown by read_file, but do NOT include the line-number prefix (e.g. "  42\t").\n` +
-          `Common causes: wrong whitespace, stale content (re-read the file), or the text was already changed.`,
+          `To fix:\n` +
+          `- Re-read the file — content may have changed since last read\n` +
+          `- Copy text exactly from read_file output, excluding the line-number prefix (e.g. "  42\t")\n` +
+          `- Ensure whitespace matches exactly (tabs vs spaces, trailing spaces)`,
       );
     }
 
     if (!replace_all && occurrences > 1) {
       throw new ToolError(
-        `old_str is not unique within ${targetPath}. Include more surrounding context or set replace_all to true.`,
+        `old_str matches ${occurrences} locations in ${targetPath}.\n` +
+          `To fix, either:\n` +
+          `- Include more surrounding context to make old_str unique\n` +
+          `- Set replace_all to true to replace every occurrence: { "replace_all": true }`,
       );
     }
 

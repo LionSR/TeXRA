@@ -91,7 +91,7 @@ export class WebFetchTool extends defineTool({
         if (isTimeoutErrorCode(error.code)) {
           throw new ToolError(
             `Request to ${url} timed out after ${WEB_FETCH_TIMEOUT_MS / 1000}s. ` +
-              `The server may be slow or unreachable. Try again, or use a different URL.`,
+              `The remote server did not respond in time. Retry the request, or try a different URL.`,
           );
         }
 
