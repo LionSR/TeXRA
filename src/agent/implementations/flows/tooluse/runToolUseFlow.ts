@@ -60,6 +60,7 @@ export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
 const DELEGATION_TOOLS = new Set([
   'delegate_workflow',
   'delegate_agent',
+  'resume_subagent',
   'propose_workflow',
   'propose_agent',
 ]);

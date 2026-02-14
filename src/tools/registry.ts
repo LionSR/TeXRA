@@ -43,6 +43,7 @@ import {
 import { WorkflowAgentTool, DelegateAgentTool } from './WorkflowTool';
 import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
+import { ResumeSubagentTool } from './ResumeSubagentTool';
 
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
@@ -89,6 +90,7 @@ export function getDefaultToolRegistry(): IToolRegistry {
       lean_loogle: new LeanLoogleTool(),
       delegate_workflow: new WorkflowAgentTool(),
       delegate_agent: new DelegateAgentTool(),
+      resume_subagent: new ResumeSubagentTool(),
       executions: new ExecutionsTool(),
       accept_run_files: new AcceptRunFilesTool(),
       // Legacy aliases — old agent configs may reference these names
