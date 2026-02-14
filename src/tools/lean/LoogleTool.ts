@@ -182,7 +182,8 @@ Useful for finding the right lemma when you know roughly what type it should hav
             summary: 'Timeout',
             output:
               `Loogle API request timed out after ${LOOGLE_TIMEOUT_MS / 1000}s. ` +
-              `The Loogle server may be overloaded. Try again, or simplify the query.`,
+              `The Loogle server may be overloaded. Retry the request. ` +
+              `If it persists, try a simpler type signature or search by name instead.`,
             isError: true,
           },
         };

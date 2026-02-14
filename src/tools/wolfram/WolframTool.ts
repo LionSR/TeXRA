@@ -50,8 +50,8 @@ export class WolframTool extends defineTool({
       const timeoutSec = effectiveTimeout / 1000;
       const maxSec = 600_000 / 1000;
       parts.push(
-        `Execution timed out after ${timeoutSec}s. ` +
-          `Increase the timeout parameter (up to ${maxSec}s / ${600_000}ms): { "timeout": ${600_000} }`,
+        `Execution timed out after ${timeoutSec}s.\n` +
+          `To fix: increase the timeout parameter up to ${maxSec}s (${600_000}ms): { "timeout": ${600_000} }`,
       );
     }
     if (result.exitCode !== null && result.exitCode !== 0) {
