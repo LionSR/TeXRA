@@ -396,6 +396,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleOpenAgentYaml(data),
       [SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED]: (data) =>
         this.handleSetAgentEnabled(data),
+      [SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED]: (data) =>
+        this.handleSetAllAgentsEnabled(data),
       [SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER]: (data) =>
         this.handleOpenAgentFolder(data),
       [SETTINGS_VIEW_COMMANDS.CREATE_AGENT]: (data) =>
@@ -1141,6 +1143,41 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         updated = current.filter(
           (entry) => entry !== key && entry !== data.agentName,
         );
+      }
+
+      await workspaceSM.update(stateKey, updated);
+
+      void vscode.commands.executeCommand('texra.refreshAllOptions');
+      await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to update agent visibility',
+        error,
+      );
+    }
+  }
+
+  private async handleSetAllAgentsEnabled(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_ALL_AGENTS_ENABLED>,
+  ): Promise<void> {
+    try {
+      const stateKey =
+        data.category === 'workflow'
+          ? WorkspaceStateKey.ENABLED_AGENTS
+          : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS;
+
+      let updated: string[];
+      if (data.enabled) {
+        // Enable all: store all agent keys
+        const allAgents =
+          data.category === 'workflow'
+            ? getWorkflowAgents()
+            : getToolUseAgents();
+        updated = allAgents.map((e) => createKey(e.source, e.name));
+      } else {
+        // Disable all: empty array means "nothing enabled"
+        updated = [];
       }
 
       await workspaceSM.update(stateKey, updated);
