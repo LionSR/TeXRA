@@ -4,8 +4,7 @@ import * as path from 'path';
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
-  getVisibleWorkflowAgents,
-  getVisibleToolUseAgents,
+  getVisibleAgents,
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 // Internal imports
@@ -114,8 +113,8 @@ function getBasicVars(
       })
       .join('\n');
 
-  const workflowAgentsList = formatAgentList(getVisibleWorkflowAgents());
-  const toolUseAgentsList = formatToolUseAgentList(getVisibleToolUseAgents());
+  const workflowAgentsList = formatAgentList(getVisibleAgents('workflow'));
+  const toolUseAgentsList = formatToolUseAgentList(getVisibleAgents('toolUse'));
 
   // Get default bib path from settings (empty string if not configured)
   const defaultBibPath = getConfig<string>('texra.bib.defaultPath', '');
