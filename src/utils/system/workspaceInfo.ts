@@ -85,9 +85,7 @@ function getPlatformLabel(): string {
     case 'win32':
       return `Windows (${os.arch()})`;
     case 'linux':
-      return isWSL()
-        ? `Linux/WSL (${os.arch()})`
-        : `Linux (${os.arch()})`;
+      return isWSL() ? `Linux/WSL (${os.arch()})` : `Linux (${os.arch()})`;
     default:
       return `${process.platform} (${os.arch()})`;
   }

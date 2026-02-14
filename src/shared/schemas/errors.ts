@@ -46,7 +46,7 @@ export type ErrorContext = z.infer<typeof ErrorContextSchema>;
 
 /** Complete error log data - combines provider error with context */
 export const ErrorLogDataSchema = ProviderErrorSchema.extend(
-  ErrorContextSchema.shape
+  ErrorContextSchema.shape,
 ).extend({
   rawMessage: z.string().optional(),
 });

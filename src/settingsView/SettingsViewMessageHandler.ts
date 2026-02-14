@@ -835,7 +835,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     action: (config: AgentConfig) => Promise<void>,
   ): Promise<void> {
     try {
-      const raw = await getExecutionStore(historyId as ExecutionId).readConfig();
+      const raw = await getExecutionStore(
+        historyId as ExecutionId,
+      ).readConfig();
       if (!raw) {
         await vscode.window.showErrorMessage('History item not found');
         return;
