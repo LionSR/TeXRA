@@ -47,6 +47,17 @@ export interface ITool {
    * @returns Promise resolving to a ToolResult
    */
   call(rawInput: unknown): Promise<ToolResultType>;
+
+  /**
+   * Optional check for whether this tool's external dependencies are available.
+   *
+   * When implemented, tools returning false will be filtered out before being
+   * sent to the model, avoiding wasted context on tools that cannot execute.
+   * A friendly notification is shown to help the user install missing dependencies.
+   *
+   * Tools that don't implement this are assumed to always be available.
+   */
+  isAvailable?(): boolean | Promise<boolean>;
 }
 
 /**

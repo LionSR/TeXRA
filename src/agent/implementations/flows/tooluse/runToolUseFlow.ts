@@ -98,6 +98,7 @@ function resolveTools(
       logger.warn('Memory tool not found in registry');
     }
   }
+
   return resolved;
 }
 
