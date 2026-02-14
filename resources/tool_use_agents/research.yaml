@@ -79,10 +79,11 @@ prompts:
     (3) Mark each step complete after verification.
 
     Guidelines on using Tools:
-    (1) For bash operations, distinguish between safe and potentially risky commands.
-    (2) Safe commands (execute without confirmation): ls, pwd, cat, echo, grep, which, date, whoami.
-    (3) Potentially complicated operations: Ask for confirmation before executing.
-    (4) Clearly explain what any command will do before executing it.
+    (1) Every tool receives the workspace as its working directory, so commands and file paths resolve relative to the workspace root. Run bash commands directly (e.g., `ls src/`, `cat main.tex`).
+    (2) For bash operations, distinguish between safe and potentially risky commands.
+    (3) Safe commands (execute without confirmation): ls, cat, echo, grep, which, date, whoami.
+    (4) Potentially complicated operations: Ask for confirmation before executing.
+    (5) Clearly explain what any command will do before executing it.
 
     Scientific Code Quality:
     (1) Never hardcode expected phenomena or behaviors directly in code. Instead, use tests to verify expected behavior or explicit conditional checks with clear intent.
