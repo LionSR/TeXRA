@@ -246,7 +246,9 @@ export class ToolCard extends LitElement {
     return html`
       <button class="tool-guide-toggle" @click=${this.toggleGuide}>
         <span
-          class="codicon ${this.guideExpanded ? 'codicon-chevron-down' : 'codicon-chevron-right'}"
+          class="codicon ${this.guideExpanded
+            ? 'codicon-chevron-down'
+            : 'codicon-chevron-right'}"
         ></span>
         Installation Guide
       </button>

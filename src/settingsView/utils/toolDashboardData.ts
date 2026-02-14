@@ -69,7 +69,11 @@ const BUILTIN_TOOLS: (Omit<ToolDashboardItem, 'status' | 'tools'> & {
     category: 'latex',
     description:
       'Extract figures, TikZ diagrams, and bibliography entries from LaTeX documents.',
-    toolNames: ['extract_figures', 'extract_tikz_figures', 'extract_bib_entries'],
+    toolNames: [
+      'extract_figures',
+      'extract_tikz_figures',
+      'extract_bib_entries',
+    ],
     requiresSetup: false,
   },
   {
