@@ -100,6 +100,19 @@ const DEFAULT_TOOLS = {
 export type RegisteredToolName = keyof typeof DEFAULT_TOOLS;
 
 /**
+ * Tools that delegate work to sub-agents. Shared between:
+ *   - runToolUseFlow (filters these out for subagents to prevent nesting)
+ *   - progressView formatters (renders delegation-specific UI)
+ * Includes legacy aliases for historical log entries.
+ */
+export const DELEGATION_TOOLS: ReadonlySet<string> = new Set<RegisteredToolName>([
+  'delegate_workflow',
+  'delegate_agent',
+  'propose_workflow',
+  'propose_agent',
+]);
+
+/**
  * Get the default tool registry as an IToolRegistry.
  * Uses lazy initialization and singleton pattern.
  */
