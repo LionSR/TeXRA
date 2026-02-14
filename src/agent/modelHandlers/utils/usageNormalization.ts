@@ -21,16 +21,3 @@ export function computeCachePercentage(
   if (totalInputTokens <= 0 || cachedTokens <= 0) return undefined;
   return (cachedTokens / totalInputTokens) * 100;
 }
-
-/**
- * Convert a numeric value to undefined if zero/falsy.
- * Used to avoid storing 0 values in optional fields.
- *
- * @param value - Numeric value to convert
- * @returns The value if truthy, undefined otherwise
- */
-export function nonZeroOrUndefined(
-  value: number | undefined,
-): number | undefined {
-  return value || undefined;
-}
