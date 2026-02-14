@@ -14,7 +14,7 @@ type PromptBuilderSetting = Pick<AgentWorkflowSetting, 'prefills'>;
 
 /** Instructions appended to tool-use agent prompts */
 const TOOL_USE_INSTRUCTIONS = `<tool_use_instructions>
-IMPORTANT — Working directory: The bash tool already executes every command from {{ CWD }}. NEVER prepend \`cd {{ CWD }} &&\` or \`cd {{ CWD }};\` to commands — the shell is already there. Use relative paths (e.g., \`ls src/\`, \`find . -name "*.tex"\`). Searching from the filesystem root (e.g., \`find / ...\`) is extremely slow; scope commands to \`.\` or a subdirectory, or use the glob/grep tools instead.
+IMPORTANT — Working directory: The bash tool already executes every command from {{ CWD }}. You are already in the workspace, so run commands directly with relative paths (e.g., \`ls src/\`, \`find . -name "*.tex"\`, \`cat README.md\`). Scope file searches to \`.\` or a subdirectory, or use the glob/grep tools.
 
 When using a tool, follow the JSON schema exactly and include all required properties.
 Always produce valid JSON when calling a tool.
