@@ -43,6 +43,7 @@ interface UsageLogEntry {
   usedRelay?: boolean;
   streamId?: string;
   extensionVersion?: string;
+  editorType?: string;
 }
 
 // =============================================================================
@@ -123,6 +124,8 @@ function validateEntry(entry: unknown): UsageLogEntry | null {
     streamId: typeof e.streamId === 'string' ? e.streamId : undefined,
     extensionVersion:
       typeof e.extensionVersion === 'string' ? e.extensionVersion : undefined,
+    editorType:
+      typeof e.editorType === 'string' ? e.editorType : undefined,
   };
 }
 
@@ -264,6 +267,7 @@ Deno.serve(async (req: Request) => {
       used_relay: entry.usedRelay,
       stream_id: entry.streamId,
       extension_version: entry.extensionVersion,
+      editor_type: entry.editorType,
       batch_id: batch.batchId,
     }));
 
