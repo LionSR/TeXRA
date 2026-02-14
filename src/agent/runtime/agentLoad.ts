@@ -20,9 +20,9 @@ import {
   type AgentSetting,
   type AgentPrompt,
 } from '@agent/core/AgentDataclass';
+import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
-import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import { resolveToolDefinitions } from '@tools/registry';
 
 // Internal imports

@@ -3,9 +3,9 @@ import * as os from 'os';
 import * as path from 'path';
 
 // Local imports - utils
-import { toPosixPath } from '@utils/core/pathCore';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+import { toPosixPath } from '@utils/core/pathCore';
 
 // Local file imports
 import { createGlobMatcher } from './utils';

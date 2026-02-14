@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - filesystem utilities
+import { formatRelativeTime } from '@shared/utils/string';
 import { StorageFS } from '@utils/files';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
@@ -23,7 +24,6 @@ import {
   shouldSkipEntry,
 } from './constants';
 import { toDisplayPath, formatSize, displayToStoragePath } from './memoryUtils';
-import { formatRelativeTime } from '@shared/utils/string';
 
 const MemoryToolInputSchema = z.strictObject({
   command: z.enum([

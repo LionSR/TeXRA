@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - common webview
+import { type SettingsTab } from '@shared/schemas/settingsViewMessages';
 import { BaseWebviewProvider, SETTINGS_VIEW_COMMANDS } from '@common/webview';
 
 // Local imports - settings view components
@@ -9,7 +10,6 @@ import { SettingsViewContentProvider } from './SettingsViewContentProvider';
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';
 
 // Local imports - shared schemas
-import { type SettingsTab } from '@shared/schemas/settingsViewMessages';
 import type { AgentCategory } from '@shared/schemas/agent';
 
 export class SettingsViewProvider
