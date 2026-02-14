@@ -15,7 +15,10 @@ import {
   EXTERNAL_TOOL_CHECKS,
   runExternalToolChecks,
 } from '@tools/toolAvailability';
-import { getDefaultToolRegistry } from '@tools/registry';
+import {
+  getDefaultToolRegistry,
+  type RegisteredToolName,
+} from '@tools/registry';
 
 // ============================================================
 // Tool description enrichment
@@ -42,7 +45,7 @@ function enrichTools(toolNames: readonly string[]): ToolInfo[] {
 
 /** Tool groups that are always available (built-in, no external deps). */
 const BUILTIN_TOOLS: (Omit<ToolDashboardItem, 'status' | 'tools'> & {
-  toolNames: readonly string[];
+  toolNames: readonly RegisteredToolName[];
 })[] = [
   {
     id: 'file-ops',
