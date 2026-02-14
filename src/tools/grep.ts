@@ -149,7 +149,12 @@ export class GrepTool extends defineTool({
     if (totalCount === 0) {
       return {
         summary: `No matches for "${input.pattern}" in ${display}`,
-        output: `No matches found. Try: broader pattern, -i for case-insensitive, or check path.`,
+        output:
+          `No matches found for "${input.pattern}" in ${display}.\n` +
+          `To fix, try:\n` +
+          `- Broaden the pattern or use a substring\n` +
+          `- Set case-insensitive search: { "-i": true }\n` +
+          `- Search a wider directory (e.g. the workspace root)`,
       };
     }
 
