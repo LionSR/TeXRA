@@ -365,7 +365,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     if (activeIds.length === 0) return;
 
     // Exclude executions that are already effectively done
-    // (completed, inactive, or subagent-WAITING with result delivered).
+    // (completed, inactive, or tool-use subagent WAITING with result delivered).
     const pendingIds = activeIds.filter((id) => !shouldSkipWait(id));
     if (pendingIds.length === 0) return;
 
