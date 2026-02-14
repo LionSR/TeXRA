@@ -182,14 +182,24 @@ export class BashTool extends defineTool({
 
     const kill = (): boolean => {
       if (!pid) return false;
-      // Try process-group kill first; fall back to direct PID on Windows or if already exited
-      try {
-        process.kill(-pid, 'SIGTERM');
-      } catch {
+      // On Windows, negative-PID signaling is not supported — kill the
+      // direct process only.  On POSIX, kill the process group first so
+      // piped children are also terminated.
+      if (process.platform === 'win32') {
         try {
           process.kill(pid, 'SIGTERM');
         } catch {
           return false; // already exited
+        }
+      } else {
+        try {
+          process.kill(-pid, 'SIGTERM');
+        } catch {
+          try {
+            process.kill(pid, 'SIGTERM');
+          } catch {
+            return false; // already exited
+          }
         }
       }
       return true;
