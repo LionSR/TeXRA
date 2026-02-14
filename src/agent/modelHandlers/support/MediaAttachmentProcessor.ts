@@ -17,15 +17,15 @@ import {
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Type imports
-import type { ModelCapabilities } from 'llm-zoo';
-
-// Internal imports
 import {
   AbsoluteFS,
   getMimeType,
   getShortDisplayPath,
   type FileLocation,
 } from '@utils/files';
+import type { ModelCapabilities } from 'llm-zoo';
+
+// Internal imports
 
 /**
  * Result of loading a media file.

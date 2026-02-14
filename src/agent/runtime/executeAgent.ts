@@ -20,6 +20,7 @@ import {
   getAgent,
   type ResolvedAgent,
 } from '@agent/index';
+import { writeTerminalStatus } from '@agent/storage';
 import type { IModelHandler } from '@agent/modelHandlers/types/IModelHandler';
 import { createMergeOutputFileLocationGetter } from '@agent/utils/outputFileUtils';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
@@ -67,7 +68,6 @@ import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
 
-import { writeTerminalStatus } from '@agent/storage';
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
 import { createInterruptCallbacks } from './InterruptManager';

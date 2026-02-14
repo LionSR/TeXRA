@@ -12,8 +12,8 @@ import {
   pluralize,
 } from '@tools/utils';
 import { getGitignoreMatcher } from '@tools/gitignore';
-import { toPosixPath } from '@utils/core/pathCore';
 import { WorkspaceFS } from '@utils/files';
+import { toPosixPath } from '@utils/core/pathCore';
 
 // Local file imports
 import { defineTool } from './core/define';

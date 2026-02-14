@@ -23,11 +23,11 @@ import { z } from 'zod';
 
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
-import { CROSSREF_CONSTANTS, crossrefClient } from '@tools/citation/constants';
-import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { ToolError } from '@tools/result';
 import { isTimeoutErrorCode } from '@tools/timeouts';
 import { pluralize } from '@tools/utils';
+import { waitForRateLimit } from '@tools/citation/rateLimiter';
+import { CROSSREF_CONSTANTS, crossrefClient } from '@tools/citation/constants';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - zotero

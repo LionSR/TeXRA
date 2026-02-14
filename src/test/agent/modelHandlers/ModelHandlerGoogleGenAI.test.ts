@@ -10,6 +10,12 @@ import {
 
 // Local imports - agent
 import {
+  DEFAULT_MODEL_CAPABILITIES,
+  type ModelCapabilities,
+  type ModelConfig,
+  ModelProvider,
+} from 'llm-zoo';
+import {
   ModelHandlerGoogleGenAI,
   validateGoogleMessageHistory,
 } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
@@ -19,12 +25,6 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - model config
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelCapabilities,
-  type ModelConfig,
-  ModelProvider,
-} from 'llm-zoo';
 import { pathToLocation, type FileLocation } from '@utils/files';
 
 // Type imports

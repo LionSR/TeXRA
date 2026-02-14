@@ -3,8 +3,8 @@ import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 
-import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
 import { findLastAssistantText } from './types';
+import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
 import type { ToolUseRunShared, WaitExecResult } from './types';
 
 interface WaitPrepResult {
