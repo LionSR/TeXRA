@@ -11,6 +11,7 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands';
+import { commandOnly } from './messageFactories';
 
 // ============================================================
 // Data schemas
@@ -115,23 +116,20 @@ export type SetApiAccessModeMessage = z.infer<
 >;
 
 // Inbound messages with command literals
-const GetProfileDataMessageSchema = z.object({
-  command: z.literal(PROFILE_VIEW_COMMANDS.GET_PROFILE_DATA),
-});
+export const GetProfileDataMessageSchema = commandOnly(
+  PROFILE_VIEW_COMMANDS.GET_PROFILE_DATA,
+);
 
-const SelectAgentInboundMessageSchema = SelectAgentMessageSchema.extend({
-  command: z.literal(PROFILE_VIEW_COMMANDS.SELECT_AGENT),
-});
+export const SelectAgentInboundMessageSchema =
+  SelectAgentMessageSchema.extend({
+    command: z.literal(PROFILE_VIEW_COMMANDS.SELECT_AGENT),
+  });
 
-const SignInMessageSchema = z.object({
-  command: z.literal(PROFILE_VIEW_COMMANDS.SIGN_IN),
-});
+export const SignInMessageSchema = commandOnly(PROFILE_VIEW_COMMANDS.SIGN_IN);
 
-const SignOutMessageSchema = z.object({
-  command: z.literal(PROFILE_VIEW_COMMANDS.SIGN_OUT),
-});
+export const SignOutMessageSchema = commandOnly(PROFILE_VIEW_COMMANDS.SIGN_OUT);
 
-const SetApiAccessModeInboundMessageSchema =
+export const SetApiAccessModeInboundMessageSchema =
   SetApiAccessModeMessageSchema.extend({
     command: z.literal(PROFILE_VIEW_COMMANDS.SET_API_ACCESS_MODE),
   });

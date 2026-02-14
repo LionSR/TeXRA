@@ -11,6 +11,7 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
+import { commandOnly } from './messageFactories';
 
 import { AgentCategorySchema } from './agent';
 
@@ -67,28 +68,28 @@ export const HistoryIdMessageSchema = z.object({
 });
 export type HistoryIdMessage = z.infer<typeof HistoryIdMessageSchema>;
 
-const GetHistoryDataMessageSchema = z.object({
-  command: z.literal(HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA),
-});
+export const GetHistoryDataMessageSchema = commandOnly(
+  HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA,
+);
 
-const RerunAgentMessageSchema = z.object({
+export const RerunAgentMessageSchema = z.object({
   command: z.literal(HISTORY_VIEW_COMMANDS.RERUN_AGENT),
   historyId: z.string().min(1),
 });
 
-const RestoreAgentMessageSchema = z.object({
+export const RestoreAgentMessageSchema = z.object({
   command: z.literal(HISTORY_VIEW_COMMANDS.RESTORE_AGENT),
   historyId: z.string().min(1),
 });
 
-const DeleteAgentMessageSchema = z.object({
+export const DeleteAgentMessageSchema = z.object({
   command: z.literal(HISTORY_VIEW_COMMANDS.DELETE_AGENT),
   historyId: z.string().min(1),
 });
 
-const ClearHistoryMessageSchema = z.object({
-  command: z.literal(HISTORY_VIEW_COMMANDS.CLEAR_HISTORY),
-});
+export const ClearHistoryMessageSchema = commandOnly(
+  HISTORY_VIEW_COMMANDS.CLEAR_HISTORY,
+);
 
 // ============================================================
 // Discriminated union of all inbound messages
