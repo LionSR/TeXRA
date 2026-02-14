@@ -41,7 +41,10 @@ function getExtraDirs(): string[] {
       '/Library/TeX/texbin',
       '/usr/texbin',
     );
-    // MiKTeX on macOS: default symlink target for executables
+    // MiKTeX on macOS: app bundle and default symlink targets
+    dirs.push(
+      '/Applications/MiKTeX Console.app/Contents/bin',
+    );
     const macHome = process.env.HOME;
     if (macHome) {
       dirs.push(path.join(macHome, 'bin'));
@@ -120,6 +123,7 @@ function getExtraDirs(): string[] {
     dirs.push(
       '/usr/local/bin',
       '/usr/bin',
+      '/opt/miktex/bin', // MiKTeX installed via APT/AUR
       '/snap/bin', // Ubuntu snap packages
       '/home/linuxbrew/.linuxbrew/bin',
     );
