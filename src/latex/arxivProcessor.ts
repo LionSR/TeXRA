@@ -200,14 +200,13 @@ export class ArxivSourceProcessor {
     const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
 
     // Check if source was already downloaded successfully.
-    // A completed download has content files and no leftover 'download' staging dir.
-    // A leftover staging dir indicates a previous incomplete download that should be retried.
+    // A .tex file in the paper directory is a reliable signal that extraction completed,
+    // regardless of whether the staging 'download' dir was cleaned up afterwards.
     let needsDownload = true;
     if (await WorkspaceFS.exists(paperDirRelative)) {
       const entries = await WorkspaceFS.readDir(paperDirRelative);
-      const hasContent = entries.some(([name]) => name !== 'download');
-      const hasStaging = entries.some(([name]) => name === 'download');
-      if (hasContent && !hasStaging) {
+      const hasTexFiles = entries.some(([name]) => name.endsWith('.tex'));
+      if (hasTexFiles) {
         needsDownload = false;
         logger.info(
           this.channel,
