@@ -40,6 +40,8 @@ export const HistoryItemSchema = z.object({
   id: z.string(),
   timestamp: z.string(),
   agentConfig: AgentConfigSummarySchema,
+  /** AI-generated summary of what the session aimed to accomplish. */
+  description: z.string().optional(),
 });
 export type HistoryItem = z.infer<typeof HistoryItemSchema>;
 

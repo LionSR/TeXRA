@@ -504,6 +504,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         id: entry.id,
         timestamp: entry.timestamp,
         agentConfig: entry.agentConfig!,
+        description: entry.description,
       }));
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY,
