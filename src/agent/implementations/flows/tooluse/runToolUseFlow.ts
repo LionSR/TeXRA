@@ -181,10 +181,14 @@ export async function runToolUseFlow<C = unknown>(
     }
     await Promise.all(writes);
 
-    const execStatus = input.checkInterruption()
-      ? EXECUTION_STATUS.INTERRUPTED
-      : EXECUTION_STATUS.COMPLETED;
-    status = executionToEndStatus(execStatus) as EndGroupStatus;
+    if (shared.lastError) {
+      status = END_GROUP_STATUS.ERROR;
+    } else {
+      const execStatus = input.checkInterruption()
+        ? EXECUTION_STATUS.INTERRUPTED
+        : EXECUTION_STATUS.COMPLETED;
+      status = executionToEndStatus(execStatus) as EndGroupStatus;
+    }
   } catch (error) {
     status = END_GROUP_STATUS.ERROR;
     throw error;
