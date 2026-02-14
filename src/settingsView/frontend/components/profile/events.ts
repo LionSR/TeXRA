@@ -10,8 +10,8 @@ export const ProfileViewEvents = {
 export const ModelSelectionEvents = {
   setModelEnabled: (detail: { modelName: string; enabled: boolean }) =>
     createEvent('model-enabled-set', detail),
-  setPolishModel: (detail: { modelName: string }) =>
-    createEvent('polish-model-set', detail),
+  setHelperModel: (detail: { modelName: string }) =>
+    createEvent('helper-model-set', detail),
 } as const;
 
 export const ProviderKeyEvents = {

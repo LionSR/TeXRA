@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports - agent runtime
-import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { getBaseName, getMultipleName } from '@agent/index';
 import {
   AgentWorkflowSettingSchema,
@@ -346,14 +346,14 @@ async function tryAIGeneration(
   vars: Record<string, string>,
 ): Promise<string | undefined> {
   try {
-    // Resolve model (reuse the polish model setting)
+    // Resolve model (reuse the helper model setting)
     const configuredModel = globalSM.get<string>(
-      GlobalStateKey.POLISH_MODEL,
-      DEFAULT_POLISH_MODEL,
+      GlobalStateKey.HELPER_MODEL,
+      DEFAULT_HELPER_MODEL,
     );
     const modelName = isNonEmptyString(configuredModel)
       ? configuredModel.trim()
-      : DEFAULT_POLISH_MODEL;
+      : DEFAULT_HELPER_MODEL;
     const modelConfig = MODEL_CONFIGS[modelName];
     if (!modelConfig) {
       logger.error(CHANNEL, `Unknown model "${modelName}" for agent creation`);

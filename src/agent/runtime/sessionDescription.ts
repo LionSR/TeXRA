@@ -9,7 +9,7 @@
 
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { getAgent } from '@agent/index';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
@@ -43,7 +43,7 @@ function buildUserPrompt(
 /**
  * Generate and persist a session description for a completed execution.
  *
- * Runs fire-and-forget — never throws. Uses the configured polish model
+ * Runs fire-and-forget — never throws. Uses the configured helper model
  * for a one-shot, non-streaming call.
  */
 export async function generateSessionDescription(
@@ -58,12 +58,12 @@ export async function generateSessionDescription(
     const agentDescription = agentEntry?.description;
 
     const configuredModel = globalSM.get<string>(
-      GlobalStateKey.POLISH_MODEL,
-      DEFAULT_POLISH_MODEL,
+      GlobalStateKey.HELPER_MODEL,
+      DEFAULT_HELPER_MODEL,
     );
     const modelName = isNonEmptyString(configuredModel)
       ? configuredModel.trim()
-      : DEFAULT_POLISH_MODEL;
+      : DEFAULT_HELPER_MODEL;
     const modelConfig = MODEL_CONFIGS[modelName];
     if (!modelConfig) {
       logger.warn(
