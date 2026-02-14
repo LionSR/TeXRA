@@ -63,7 +63,7 @@ import { defineTool } from '@tools/core/define';
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 import { generateExecutionId } from '@utils/core/executionId';
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionStore, registerExecution } from '@agent/storage';
 
 // ============================================================================
 // Shared utilities
@@ -119,7 +119,8 @@ async function executeSubagent(
   const ctx = getCurrentToolFileInteractionContext();
   const parentExecutionId = ctx?.executionId;
   const syntheticConfig = AgentConfigSchema.parse(configPayload);
-  await getExecutionStore(executionId).register(
+  await registerExecution(
+    executionId,
     syntheticConfig,
     agentName,
     parentExecutionId,

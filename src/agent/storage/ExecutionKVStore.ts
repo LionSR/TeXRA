@@ -16,8 +16,6 @@ import { hasExtension } from '@utils/core/pathCore';
 import { StorageFS } from '@utils/files';
 import type { ExecutionId } from '@shared/schemas';
 
-import { invalidateListingCache } from './executionListing';
-
 // ============================================================================
 // Domain types
 // ============================================================================
@@ -76,26 +74,6 @@ export interface ExecutionKVStore {
   readConversation(): Promise<unknown[] | null>;
   readChildren(): Promise<ChildRecord[]>;
 
-  // -- Typed writers --------------------------------------------------------
-
-  /**
-   * Persist a terminal status on an existing execution's metadata.
-   * Reads the current meta, merges `terminalStatus`, and writes back.
-   * Never throws — storage failures are swallowed so callers' lifecycle
-   * logic (untrackExecution, follow-up delivery) always runs.
-   */
-  writeTerminalStatus(status: string): Promise<void>;
-
-  /**
-   * Register a new execution: persist config, metadata, and parent linkage.
-   * Awaits all writes before returning, then invalidates the listing cache.
-   */
-  register(
-    config: AgentConfig,
-    agentName: string,
-    parentExecutionId?: ExecutionId,
-    category?: string,
-  ): Promise<void>;
 }
 
 /**
@@ -260,47 +238,6 @@ class StorageFSKVStore implements ExecutionKVStore {
     return entries.filter((e): e is ChildRecord => e !== null);
   }
 
-  // -- Typed writers --------------------------------------------------------
-
-  async writeTerminalStatus(status: string): Promise<void> {
-    try {
-      const existing = await this.read<ExecutionMeta>('meta');
-      if (!existing) return;
-      await this.write('meta', { ...existing, terminalStatus: status });
-      invalidateListingCache();
-    } catch {
-      // Non-critical bookkeeping — don't let I/O errors disrupt execution lifecycle.
-    }
-  }
-
-  async register(
-    config: AgentConfig,
-    agentName: string,
-    parentExecutionId?: ExecutionId,
-    category?: string,
-  ): Promise<void> {
-    const timestamp = new Date().toISOString();
-
-    const meta: ExecutionMeta = { timestamp, parentExecutionId };
-    if (category) meta.category = category;
-
-    const writes: Promise<void>[] = [
-      this.write('config', config),
-      this.write('meta', meta),
-    ];
-
-    if (parentExecutionId) {
-      writes.push(
-        getExecutionStore(parentExecutionId).write(`child-${this.executionId}`, {
-          agent: agentName,
-          timestamp,
-        }),
-      );
-    }
-
-    await Promise.all(writes);
-    invalidateListingCache();
-  }
 }
 
 // ============================================================================
