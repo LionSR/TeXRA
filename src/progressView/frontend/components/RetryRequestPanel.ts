@@ -4,12 +4,12 @@
  * Renders a single retry permission with error details,
  * retry/dismiss buttons, and stream diagnostics.
  *
- * Exposes `handleKeyboardShortcut(key)` for container-driven keyboard support.
+ * Extends BaseRequestPanel for shared permission/emit/keyboard contract.
  */
 
 // Third-party imports
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { html, nothing, type TemplateResult } from 'lit';
+import { customElement } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { when } from 'lit/directives/when.js';
 
@@ -22,16 +22,13 @@ import {
 } from '@shared/styles';
 
 // Local imports - shared schemas
-import { ProgressEvents } from '../events';
 import type { ProviderErrorPartial, RetryPermission } from '@shared/schemas';
 
-// Local imports - progress view events
-
-// Local imports - progress view component types
-import type { PermissionState } from './PermissionCard';
+// Local imports - base class
+import { BaseRequestPanel } from './BaseRequestPanel';
 
 @customElement('retry-request-panel')
-export class RetryRequestPanel extends LitElement {
+export class RetryRequestPanel extends BaseRequestPanel {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -39,10 +36,7 @@ export class RetryRequestPanel extends LitElement {
     requestPanelStyles,
   ];
 
-  @property({ attribute: false }) permission!: PermissionState;
-
-  /** Handle keyboard shortcut from container. Returns true if handled. */
-  handleKeyboardShortcut(key: string): boolean {
+  override handleKeyboardShortcut(key: string): boolean {
     switch (key) {
       case 'r':
         this.emitAction('retry');
@@ -122,15 +116,6 @@ export class RetryRequestPanel extends LitElement {
   // ===========================================================================
   // Utilities
   // ===========================================================================
-
-  private emitAction(action: string): void {
-    this.dispatchEvent(
-      ProgressEvents.permissionAction({
-        permission: this.permission,
-        action,
-      }),
-    );
-  }
 
   private formatRetryDetails(
     details: ProviderErrorPartial | undefined,
