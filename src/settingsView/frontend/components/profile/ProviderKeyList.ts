@@ -98,22 +98,20 @@ export class ProviderKeyList extends LitElement {
     const streamingToggle = hasStreaming
       ? html`
           <div class="provider-setting">
-            <label>
-              <input
-                type="checkbox"
-                .checked=${entry.streaming}
-                @change=${(e: Event) => {
-                  const checked = (e.target as HTMLInputElement).checked;
-                  this.dispatchEvent(
-                    ProviderKeyEvents.setStreaming({
-                      provider: entry.provider,
-                      enabled: checked,
-                    }),
-                  );
-                }}
-              />
+            <vscode-checkbox
+              ?checked=${entry.streaming}
+              @change=${(e: Event) => {
+                const checked = (e.target as HTMLInputElement).checked;
+                this.dispatchEvent(
+                  ProviderKeyEvents.setStreaming({
+                    provider: entry.provider,
+                    enabled: checked,
+                  }),
+                );
+              }}
+            >
               Streaming
-            </label>
+            </vscode-checkbox>
           </div>
         `
       : nothing;
@@ -122,8 +120,7 @@ export class ProviderKeyList extends LitElement {
       ? html`
           <div class="provider-setting">
             <label>Custom endpoint</label>
-            <input
-              type="text"
+            <vscode-textfield
               class="endpoint-input"
               .value=${entry.customEndpoint}
               placeholder="Leave blank for default"
@@ -136,7 +133,7 @@ export class ProviderKeyList extends LitElement {
                   }),
                 );
               }}
-            />
+            ></vscode-textfield>
           </div>
         `
       : nothing;
@@ -175,22 +172,20 @@ export class ProviderKeyList extends LitElement {
 
     return html`
       <div class="provider-setting provider-setting--block">
-        <label>
-          <input
-            type="checkbox"
-            .checked=${setting.value}
-            @change=${(e: Event) => {
-              const checked = (e.target as HTMLInputElement).checked;
-              this.dispatchEvent(
-                ProviderKeyEvents.setVscodeSetting({
-                  key: setting.key,
-                  value: checked,
-                }),
-              );
-            }}
-          />
+        <vscode-checkbox
+          ?checked=${setting.value}
+          @change=${(e: Event) => {
+            const checked = (e.target as HTMLInputElement).checked;
+            this.dispatchEvent(
+              ProviderKeyEvents.setVscodeSetting({
+                key: setting.key,
+                value: checked,
+              }),
+            );
+          }}
+        >
           ${setting.label}
-        </label>
+        </vscode-checkbox>
         <span class="provider-setting-description">${setting.description}</span>
         ${warning}
       </div>
@@ -239,19 +234,17 @@ export class ProviderKeyList extends LitElement {
   private renderGlobalStreamingToggle(): TemplateResult {
     return html`
       <div class="global-streaming-toggle">
-        <label>
-          <input
-            type="checkbox"
-            .checked=${this.globalStreamingDefault}
-            @change=${(e: Event) => {
-              const checked = (e.target as HTMLInputElement).checked;
-              this.dispatchEvent(
-                ProviderKeyEvents.setGlobalStreaming({ enabled: checked }),
-              );
-            }}
-          />
+        <vscode-checkbox
+          ?checked=${this.globalStreamingDefault}
+          @change=${(e: Event) => {
+            const checked = (e.target as HTMLInputElement).checked;
+            this.dispatchEvent(
+              ProviderKeyEvents.setGlobalStreaming({ enabled: checked }),
+            );
+          }}
+        >
           Enable streaming
-        </label>
+        </vscode-checkbox>
         <span class="global-streaming-description"
           >Global default for all providers</span
         >
