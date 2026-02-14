@@ -125,14 +125,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
       // Stream management
       [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (data) =>
-        this.handleSwitchStream(data),
+        this.provider.setActiveStream(data.stream),
       [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: (data) =>
         this.handleDeleteStream(data),
       [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
-      [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: (data) =>
-        this.handleStopStream(data),
-      [PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE]: (data) =>
-        this.handleCompactResponse(data),
+      [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: async (data) =>
+        vscode.commands.executeCommand('texra.stopAgent', data.stream),
+      [PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE]: async (data) =>
+        vscode.commands.executeCommand('texra.compactResponse', data.stream),
 
       // Actions
       [PROGRESS_VIEW_COMMANDS.RESUME]: (data) => this.handleResume(data),
@@ -226,14 +226,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS]: (data) =>
         this.handleGetFollowupOptions(data),
       [PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP]: (data) =>
-        this.handleSetupFollowup(data),
+        this.processFollowup(data, false),
       [PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP]: (data) =>
-        this.handleRunFollowup(data),
+        this.processFollowup(data, true),
 
       // File operations
-      [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: (data) => this.handleOpenFile(data),
-      [PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE]: (data) =>
-        this.handleOpenFileCompile(data),
+      [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: async (data) =>
+        vscode.commands.executeCommand('texra.openFile', data.file, data.line),
+      [PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE]: async (data) =>
+        vscode.commands.executeCommand('texra.openFileCompile', data.file),
       [PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL]: (data) =>
         this.handleCompareOriginal(data),
       [PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS]: (data) =>
@@ -243,7 +244,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.MERGE_FILE]: (data) => this.handleMergeFile(data),
       [PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE]: (data) =>
         this.handleLatexdiffFile(data),
-      [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: (data) => this.handleOpenLabel(data),
+      [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: async (data) =>
+        vscode.commands.executeCommand('texra.openLabel', data.label),
     };
   }
 
@@ -300,12 +302,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   // Stream management handlers
   // ============================================================
 
-  private handleSwitchStream(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.SWITCH_STREAM>,
-  ): void {
-    this.provider.setActiveStream(data.stream);
-  }
-
   private async handleDeleteStream(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.DELETE_STREAM>,
   ): Promise<void> {
@@ -351,18 +347,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     await this.provider.state.clearAll();
     // Force rebuild since we deleted all streams
     this.provider.updateWebview({ forceRebuild: true });
-  }
-
-  private async handleStopStream(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.STOP_STREAM>,
-  ): Promise<void> {
-    await vscode.commands.executeCommand('texra.stopAgent', data.stream);
-  }
-
-  private async handleCompactResponse(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE>,
-  ): Promise<void> {
-    await vscode.commands.executeCommand('texra.compactResponse', data.stream);
   }
 
   // ============================================================
@@ -717,22 +701,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   // File operation handlers
   // ============================================================
 
-  private async handleOpenFile(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.OPEN_FILE>,
-  ): Promise<void> {
-    await vscode.commands.executeCommand(
-      'texra.openFile',
-      data.file,
-      data.line,
-    );
-  }
-
-  private async handleOpenFileCompile(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE>,
-  ): Promise<void> {
-    await vscode.commands.executeCommand('texra.openFileCompile', data.file);
-  }
-
   private async handleCompareOriginal(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL>,
   ): Promise<void> {
@@ -897,12 +865,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
-  private async handleOpenLabel(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.OPEN_LABEL>,
-  ): Promise<void> {
-    await vscode.commands.executeCommand('texra.openLabel', data.label);
-  }
-
   // ============================================================
   // Followup task handlers
   // ============================================================
@@ -931,18 +893,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         `Failed to get followup options: ${toErrorMessage(error)}`,
       );
     }
-  }
-
-  private async handleSetupFollowup(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP>,
-  ): Promise<void> {
-    await this.processFollowup(data, false);
-  }
-
-  private async handleRunFollowup(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP>,
-  ): Promise<void> {
-    await this.processFollowup(data, true);
   }
 
   // ============================================================

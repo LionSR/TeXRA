@@ -63,7 +63,6 @@ import { K_SLICE } from '@utils/config';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import {
   computeCachePercentage,
-  nonZeroOrUndefined,
 } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 import { TOOL_USE_SAFETY_BUFFER } from './contextManagementConstants';
@@ -987,10 +986,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       cost: this.computePrice(rawUsage),
       responseTimeMs,
       provider: 'google',
-      cachedInputTokens: nonZeroOrUndefined(cachedTokens),
+      cachedInputTokens: cachedTokens || undefined,
       percentageCached: computeCachePercentage(cachedTokens, inputTokens),
-      reasoningTokens: nonZeroOrUndefined(reasoningTokens),
-      toolUsePromptTokens: nonZeroOrUndefined(rawUsage.toolUsePromptTokenCount),
+      reasoningTokens: reasoningTokens || undefined,
+      toolUsePromptTokens: rawUsage.toolUsePromptTokenCount || undefined,
       _native: rawUsage,
     };
   }
