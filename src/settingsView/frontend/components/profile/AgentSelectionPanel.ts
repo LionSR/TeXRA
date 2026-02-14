@@ -393,6 +393,8 @@ export class AgentSelectionPanel extends LitElement {
         this.selectedKey =
           this.displayOrder.length > 0 ? agentKey(this.displayOrder[0]) : null;
       }
+      // Clear stale delete confirmation when agent list changes
+      this.pendingDeleteKey = null;
     }
   }
 
@@ -611,7 +613,6 @@ export class AgentSelectionPanel extends LitElement {
       `;
     }
 
-    const sourceName = SOURCE_DISPLAY_NAMES[agent.source] ?? agent.source;
     const builtIn = isBuiltIn(agent.source);
     const isCustom = agent.source === AGENT_SOURCE.CUSTOM;
     const showDeleteConfirm =
@@ -648,9 +649,6 @@ export class AgentSelectionPanel extends LitElement {
           : nothing}
 
         <div class="agent-detail-meta">
-          <span class="agent-detail-meta-label">Source</span>
-          <span class="agent-detail-meta-value">${sourceName}</span>
-
           <span class="agent-detail-meta-label">Visible</span>
           <span class="agent-detail-meta-value">
             ${agent.enabled ? 'Yes' : 'No'}
