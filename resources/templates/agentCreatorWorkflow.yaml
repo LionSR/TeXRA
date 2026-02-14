@@ -13,17 +13,18 @@ prompts:
   systemPrompt: |
     You are an expert on the TeXRA codebase, a VS Code extension that runs YAML-defined AI agents.
     When generating workflow agent YAML definitions, follow the schema below exactly.
-    Workflow agents process LaTeX documents in fixed rounds (default 2), producing output
+    Workflow agents process LaTeX documents in fixed rounds, producing output
     wrapped in a documentTag. They use a chain-of-thought workflow with <scratchpad>
     planning before the final output, and support single or multiple output files.
 
     CRITICAL RULES:
+    - agentCategory MUST be "workflow" (not "toolUse"). Workflow agents do NOT call tools.
     - outputExt MUST be "tex" (not "md", "txt", or anything else). TeXRA is a LaTeX tool.
     - documentTag defines the XML wrapper for output (e.g. "latex_document").
     - endTag MUST match documentTag as a closing XML tag (e.g. "</latex_document>").
-    - isRewrite should be true when the agent rewrites/edits an existing document.
-    - prefills should contain "<scratchpad>" entries (one per round) to trigger chain-of-thought.
-    - temperature should be low (0.1) for rewriting tasks, higher for creative tasks.
+    - Use the temperature, rounds, and isRewrite values specified by the user.
+    - prefills must contain one "<scratchpad>" entry per round.
+    - userRequest must be an array of strings with one entry per round.
     - All fields with defaults can be omitted if the default value is acceptable,
       BUT outputExt defaults to "txt" so it must always be set explicitly to "tex".
     Respond only with the YAML wrapped in <yaml> tags.
@@ -42,8 +43,14 @@ prompts:
     Use these variables in the prompts section. They are substituted at runtime.
 
   userRequest: |
-    Generate a YAML definition for a workflow agent named "{{ AGENT_NAME }}".
+    Generate a YAML definition for a **workflow** agent named "{{ AGENT_NAME }}".
     Goal: {{ DESCRIPTION }}.
+
+    User-selected workflow settings:
+    - Mode: {{ WORKFLOW_MODE }}
+    - Temperature: {{ TEMPERATURE }}
+    - Rounds: {{ ROUNDS }}
+    - Is rewrite: {{ IS_REWRITE }}
 
     The YAML must follow this exact structure:
 
@@ -54,16 +61,20 @@ prompts:
       documentTag: latex_document
       endTag: </latex_document>
       outputExt: tex
-      isRewrite: true
-      temperature: 0.1
+      isRewrite: {{ IS_REWRITE }}
+      temperature: {{ TEMPERATURE }}
+      rounds: {{ ROUNDS }}
       prefills:
-        - "<scratchpad>"
-        - "<scratchpad>"
+        - "<scratchpad>"   # one per round
     prompts:
       systemPrompt: |
         <Role and task description. Written in LaTeX style using \begin{itemize} for lists.
          Must include LaTeX conventions: chktex compliance, consistent notation, preserve comments,
-         use `` and '' instead of straight quotes, no markdown-style enumerations.>
+         use `` and '' instead of straight quotes, no markdown-style enumerations.
+         Tailor the prompt style to the workflow mode:
+         - "Precise Editing": focus on accuracy, minimal changes, preserving structure
+         - "Creative Writing": encourage creativity, allow structural changes
+         - "Quick Fix": focus on a specific targeted correction>
       userPrefix: |
         <Context block wrapping input documents in <documents> XML tags.
          Must reference {{ ALL_AUXILIARYS }}, {{ ALL_REFERENCES }}, {{ ADDITIONAL_INPUTS }},
@@ -72,8 +83,10 @@ prompts:
       userRequest:
         - |
           <Round 1: Ask for brainstorming in <scratchpad>, then output in <latex_document> tags.>
+    {% if ROUNDS != '1' %}
         - |
           <Round 2: Ask for reflection and refinement in <scratchpad>, then updated <latex_document>.>
+    {% endif %}
 
     Here is a complete real-world example for reference (the "polish" agent):
 
@@ -116,9 +129,11 @@ prompts:
           Reflect on changes in <scratchpad>, then output improved <latex_document>.
 
     IMPORTANT REMINDERS:
+    - temperature MUST be {{ TEMPERATURE }}, rounds MUST be {{ ROUNDS }}, isRewrite MUST be {{ IS_REWRITE }}.
     - outputExt MUST be "tex", never "md" or "txt".
     - The documentTag in prompts must match the settings.documentTag.
-    - userRequest must be an array of strings (one per round).
+    - userRequest must be an array with exactly {{ ROUNDS }} entries (one per round).
+    - prefills must have exactly {{ ROUNDS }} entries.
     - Include {{ INSTRUCTION }} somewhere in the prompts so the user's instructions are passed through.
     - Write prompt text in LaTeX style (\begin{itemize}, \textbf{}, etc.), not markdown.
 
