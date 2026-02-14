@@ -4,7 +4,6 @@ import * as path from 'path';
 
 // Third-party imports
 import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
-import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -22,7 +21,6 @@ import {
 } from '@common/errors/sdkErrorUtils';
 
 // Type imports
-import type { ModelConfig } from 'llm-zoo';
 import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 
@@ -63,6 +61,8 @@ import {
   isOpenAIWebSearchCall,
   type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
+import type { ModelConfig } from 'llm-zoo';
+import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';

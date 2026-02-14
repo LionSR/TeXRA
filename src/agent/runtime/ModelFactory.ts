@@ -1,3 +1,4 @@
+import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
@@ -14,7 +15,6 @@ import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpe
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import * as logger from '@logger/logUtils';
-import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { getConfig } from '@utils/config';
 
 const CHANNEL = 'ModelFactory';

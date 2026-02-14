@@ -7,6 +7,12 @@ import dotenv from 'dotenv';
 
 // Local imports - core
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
+import { initializeServerSideKeyAccess } from '@auth/serverKeys';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { SupabaseAuthProvider } from '@auth/SupabaseAuthProvider';
+import { SupabaseUriHandler } from '@auth/UriHandler';
+import { isSupabaseConfigured, setRuntimeExtensionId } from '@auth/config';
+import { loadAgents } from '@agent/index';
 import { toErrorMessage } from '@common/errors';
 import { initializeStateManagers } from '@common/state';
 import { isTerminalStatus } from '@common/constants/streamStatus';
@@ -27,12 +33,6 @@ import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
-import { initializeServerSideKeyAccess } from '@auth/serverKeys';
-import { SupabaseClient } from '@auth/SupabaseClient';
-import { SupabaseAuthProvider } from '@auth/SupabaseAuthProvider';
-import { SupabaseUriHandler } from '@auth/UriHandler';
-import { isSupabaseConfigured, setRuntimeExtensionId } from '@auth/config';
-import { loadAgents } from '@agent/index';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
