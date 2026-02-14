@@ -42,7 +42,7 @@ export interface ExternalToolCheck {
 /** Result of running a single external tool check. */
 export interface ExternalToolCheckResult {
   readonly id: string;
-  readonly tools: readonly string[];
+  readonly tools: readonly RegisteredToolName[];
   readonly name: string;
   readonly status: 'available' | 'not-found' | 'unknown';
 }

@@ -18,7 +18,7 @@ import type { BaseFlowContextInit } from '@agent/implementations/flows/common/Ba
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
-import { getDefaultToolRegistry } from '@tools/registry';
+import { DELEGATION_TOOLS, getDefaultToolRegistry } from '@tools/registry';
 import { getUnavailableToolNamesCached } from '@tools/toolAvailability';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
@@ -57,13 +57,6 @@ export interface ToolUseFlowContext {
 }
 
 export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
-
-const DELEGATION_TOOLS = new Set([
-  'delegate_workflow',
-  'delegate_agent',
-  'propose_workflow',
-  'propose_agent',
-]);
 
 function resolveTools(
   tools: AgentToolUseSetting['tools'],
