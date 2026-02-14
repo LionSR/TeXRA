@@ -51,7 +51,8 @@ export class EditFileTool extends defineTool({
 
     if (old_str.length === 0) {
       throw new ToolError(
-        `old_str must not be empty for ${targetPath}. Provide the exact text to replace from read_file output after the line-number prefix.`,
+        `old_str must not be empty for ${targetPath}. ` +
+          `Provide the exact text to replace, copied from read_file output (excluding the line-number prefix).`,
       );
     }
 
@@ -66,7 +67,9 @@ export class EditFileTool extends defineTool({
 
     if (occurrences === 0) {
       throw new ToolError(
-        `The provided old_str was not found in ${targetPath}. Ensure it matches the read_file output exactly after the line-number prefix.`,
+        `old_str not found in ${targetPath}.\n` +
+          `Copy the text exactly as shown by read_file, but do NOT include the line-number prefix (e.g. "  42\t").\n` +
+          `Common causes: wrong whitespace, stale content (re-read the file), or the text was already changed.`,
       );
     }
 

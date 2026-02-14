@@ -79,8 +79,10 @@ export class LsTool extends defineTool({
     } catch (err) {
       const message = toErrorMessage(err);
       throw new ToolError(
-        `Path not found: ${display} (${message}). ` +
-          `Try: Use glob to search for files, or ls on parent directory.`,
+        `Path not found: ${display} (${message}).\n` +
+          `To fix, either:\n` +
+          `- Use the glob tool to find matching files: { "pattern": "**/<filename>" }\n` +
+          `- List the parent directory to see what exists: { "path": "<parent>" }`,
       );
     }
 

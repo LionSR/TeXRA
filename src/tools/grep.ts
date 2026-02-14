@@ -135,8 +135,10 @@ export class GrepTool extends defineTool({
     const exitCode = result.exitCode ?? (result.success ? 0 : 1);
     if (exitCode >= 2) {
       throw new ToolError(
-        `Regex error: ${result.stderr || `exit code ${exitCode}`}. ` +
-          `Check pattern syntax or use literal: true for exact string matching.`,
+        `Regex error: ${result.stderr || `exit code ${exitCode}`}.\n` +
+          `To fix, either:\n` +
+          `- Escape special regex characters in the pattern (e.g. \\., \\(, \\{)\n` +
+          `- Set literal: true for exact string matching: { "literal": true }`,
       );
     }
 
