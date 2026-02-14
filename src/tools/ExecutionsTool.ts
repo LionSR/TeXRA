@@ -173,7 +173,9 @@ function shouldSkipWait(executionId: string): boolean {
   if (!ACTIVE_STATUSES.has(status)) return true;
 
   // Tool-use subagent in WAITING = job delivered via onBeforeWaiting, don't block.
-  // Workflow subagent in WAITING = may be waiting for retry/user action, keep blocking.
+  // Workflow subagent in WAITING = may be waiting for retry/user action. Blocking
+  // isn't very useful (only the user can unblock it), but the subagent is still
+  // technically active so we don't skip — avoids misreporting it as done.
   // Non-subagent WAITING = human input needed, keep blocking.
   if (
     status === STREAM_STATUS.WAITING &&
