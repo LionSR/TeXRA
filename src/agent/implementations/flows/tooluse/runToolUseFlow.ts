@@ -18,7 +18,9 @@ import type { BaseFlowContextInit } from '@agent/implementations/flows/common/Ba
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
+import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
+import { getUnavailableToolNamesCached } from '@tools/toolAvailability';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
@@ -57,30 +59,32 @@ export interface ToolUseFlowContext {
 
 export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
 
-const DELEGATION_TOOLS = new Set([
-  'delegate_workflow',
-  'delegate_agent',
-  'propose_workflow',
-  'propose_agent',
-]);
-
 function resolveTools(
   tools: AgentToolUseSetting['tools'],
   registry: IToolRegistry,
   logger: { warn: (msg: string) => void },
   options?: { isSubagent?: boolean },
 ): ToolDefinition[] {
+  const unavailable = getUnavailableToolNamesCached();
+
   const toolConfigs = Array.isArray(tools) ? tools : [];
   const resolved = toolConfigs
     .map((config) => (typeof config === 'string' ? { name: config } : config))
     .filter((def) => {
       if (options?.isSubagent && DELEGATION_TOOLS.has(def.name)) return false;
+      if (unavailable.has(def.name)) {
+        logger.warn(
+          `Tool "${def.name}" excluded: external dependency not installed`,
+        );
+        return false;
+      }
       if (!registry.has(def.name)) {
         logger.warn(`Tool "${def.name}" not found in registry`);
         return false;
       }
       return true;
     });
+
   if (getToolUseMemoryEnabled() && !resolved.some((d) => d.name === 'memory')) {
     const memoryTool = registry.get('memory');
     if (memoryTool) {

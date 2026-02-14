@@ -1059,6 +1059,12 @@
         "icon": "$(symbol-method)"
       },
       {
+        "command": "texra.showTools",
+        "title": "Show Tool Dashboard",
+        "category": "TeXRA",
+        "icon": "$(tools)"
+      },
+      {
         "command": "texra.openSettings",
         "title": "Open TeXRA Settings",
         "category": "TeXRA",
