@@ -24,7 +24,6 @@ import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager
 
 // Local imports - tools
 import { ToolError, type ToolResult } from '@tools/result';
-import { buildTimeoutMessage } from '@tools/timeouts';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
@@ -110,13 +109,17 @@ export class BashTool extends defineTool({
     });
 
     if (result.timedOut) {
+      const timeoutSec = timeoutMs / 1000;
+      const maxTimeoutSec = 600_000 / 1000;
       const parts: string[] = [
-        buildTimeoutMessage('Command execution', timeoutMs),
+        `Foreground command timed out after ${timeoutSec}s.`,
       ];
       if (result.stdout) parts.push(`<stdout>${result.stdout}</stdout>`);
       if (result.stderr) parts.push(`<stderr>${result.stderr}</stderr>`);
       parts.push(
-        `Increase the timeout parameter (max ${600_000}ms) if the command needs more time, or set run_in_background: true to run asynchronously without blocking.`,
+        `To fix, either:\n` +
+          `- Increase the timeout parameter up to ${maxTimeoutSec}s (${600_000}ms): { "timeout": ${600_000} }\n` +
+          `- Set run_in_background: true to execute asynchronously: { "run_in_background": true }`,
       );
       throw new ToolError(parts.join('\n'));
     }
