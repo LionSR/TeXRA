@@ -197,6 +197,21 @@ export class ArxivSourceProcessor {
 
     // Create project directory for the arXiv paper (sanitize ID to avoid path issues)
     const paperDirRelative = id.replaceAll('/', '_');
+
+    // Skip download if source already exists (directory has files beyond the staging dir)
+    if (await WorkspaceFS.exists(paperDirRelative)) {
+      const entries = await WorkspaceFS.readDir(paperDirRelative);
+      const hasContent = entries.some(([name]) => name !== 'download');
+      if (hasContent) {
+        const existingPath = WorkspaceFS.fullPath(paperDirRelative);
+        logger.info(
+          this.channel,
+          `arXiv source already exists at: ${existingPath}`,
+        );
+        return existingPath;
+      }
+    }
+
     await WorkspaceFS.ensureDir(paperDirRelative);
 
     // Create temporary download subdirectory for staging the archive
