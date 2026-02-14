@@ -6,6 +6,7 @@ import * as logger from '@logger/logUtils';
 import { flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { joinLatexPath } from '@utils/core/pathCore';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -93,11 +94,7 @@ export async function extractFigurePathsFromLatex(
     /\\begin\{overpic\}(?:\[.*?\])?\{(.+?)\}/g,
   ];
 
-  // Read file content and normalize line endings for Windows compatibility
-  const content = (await flexibleFS.read(latexFileLocation)).replaceAll(
-    '\r\n',
-    '\n',
-  );
+  const content = normalizeLineEndings(await flexibleFS.read(latexFileLocation));
 
   // Parse graphicspaths
   const paths = parseGraphicspath(content);
