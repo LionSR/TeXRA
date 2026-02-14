@@ -309,7 +309,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       // Memory handlers
       [SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA]: () =>
-        this.handleGetMemoryData(),
+        this.withActiveWebview((w) => this.sendMemoryData(w)),
       [SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE]: (data) =>
         this.handleOpenMemoryFile(data),
       [SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER]: () =>
@@ -317,13 +317,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.DELETE_MEMORY]: (data) =>
         this.handleDeleteMemory(data),
       [SETTINGS_VIEW_COMMANDS.GET_MEMORY_ENABLED]: () =>
-        this.handleGetMemoryEnabled(),
+        this.withActiveWebview((w) => this.sendMemoryEnabled(w)),
       [SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED]: (data) =>
         this.handleSetMemoryEnabled(data),
 
       // History handlers
       [SETTINGS_VIEW_COMMANDS.GET_HISTORY_DATA]: () =>
-        this.handleGetHistoryData(),
+        this.withActiveWebview((w) => this.sendHistoryData(w)),
       [SETTINGS_VIEW_COMMANDS.RERUN_AGENT]: (data) =>
         this.handleRerunAgent(data),
       [SETTINGS_VIEW_COMMANDS.RESTORE_AGENT]: (data) =>
@@ -334,11 +334,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       // Profile handlers
       [SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA]: () =>
-        this.handleGetProfileData(),
+        this.withActiveWebview((w) => this.sendProfileData(w)),
       [SETTINGS_VIEW_COMMANDS.SELECT_AGENT]: (data) =>
         this.handleSelectAgent(data),
-      [SETTINGS_VIEW_COMMANDS.SIGN_IN]: () => this.handleSignIn(),
-      [SETTINGS_VIEW_COMMANDS.SIGN_OUT]: () => this.handleSignOut(),
+      [SETTINGS_VIEW_COMMANDS.SIGN_IN]: async () =>
+        vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN),
+      [SETTINGS_VIEW_COMMANDS.SIGN_OUT]: async () =>
+        vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_OUT),
       [SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE]: (data) =>
         this.handleSetApiAccessMode(data),
       [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY]: (data) =>
@@ -360,7 +362,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       // Model selection handlers
       [SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION]: () =>
-        this.handleGetModelSelection(),
+        this.withActiveWebview((w) => this.sendModelSelectionData(w)),
       [SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED]: (data) =>
         this.handleSetModelEnabled(data),
       [SETTINGS_VIEW_COMMANDS.SET_POLISH_MODEL]: (data) =>
@@ -368,13 +370,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       // Auto-show remote agents handlers
       [SETTINGS_VIEW_COMMANDS.GET_AUTO_SHOW_REMOTE]: () =>
-        this.handleGetAutoShowRemote(),
+        this.withActiveWebview((w) => this.sendAutoShowRemote(w)),
       [SETTINGS_VIEW_COMMANDS.SET_AUTO_SHOW_REMOTE]: (data) =>
         this.handleSetAutoShowRemote(data),
 
       // Custom agent directory handlers
       [SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR]: () =>
-        this.handleGetCustomAgentDir(),
+        this.withActiveWebview((w) => this.sendCustomAgentDir(w)),
       [SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR]: () =>
         this.handleSetCustomAgentDir(),
       [SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR]: () =>
@@ -382,13 +384,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       // Super YOLO handlers
       [SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED]: () =>
-        this.handleGetSuperYoloEnabled(),
+        this.withActiveWebview((w) => this.sendSuperYoloEnabled(w)),
       [SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED]: (data) =>
         this.handleSetSuperYoloEnabled(data),
 
       // Agent selection handlers
       [SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION]: () =>
-        this.handleGetAgentSelection(),
+        this.withActiveWebview((w) => this.sendAgentSelectionData(w)),
       [SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML]: (data) =>
         this.handleOpenAgentYaml(data),
       [SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED]: (data) =>
@@ -617,10 +619,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  private async handleGetAutoShowRemote(): Promise<void> {
-    await this.withActiveWebview((w) => this.sendAutoShowRemote(w));
-  }
-
   private async handleSetAutoShowRemote(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_AUTO_SHOW_REMOTE>,
   ): Promise<void> {
@@ -642,10 +640,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       enabled,
       reliabilitySettings: getReliabilitySettings(),
     });
-  }
-
-  private async handleGetSuperYoloEnabled(): Promise<void> {
-    await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
   }
 
   private async handleSetSuperYoloEnabled(
@@ -684,10 +678,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
   // Memory handler implementations
   // ============================================================
-
-  private async handleGetMemoryData(): Promise<void> {
-    await this.withActiveWebview((w) => this.sendMemoryData(w));
-  }
 
   private async handleOpenMemoryFile(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_MEMORY_FILE>,
@@ -754,10 +744,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     }
   }
 
-  private async handleGetMemoryEnabled(): Promise<void> {
-    await this.withActiveWebview((w) => this.sendMemoryEnabled(w));
-  }
-
   private async handleSetMemoryEnabled(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MEMORY_ENABLED>,
   ): Promise<void> {
@@ -768,10 +754,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
   // History handler implementations
   // ============================================================
-
-  private async handleGetHistoryData(): Promise<void> {
-    await this.withActiveWebview((w) => this.sendHistoryData(w));
-  }
 
   private async handleRerunAgent(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.RERUN_AGENT>,
@@ -869,10 +851,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // Profile handler implementations
   // ============================================================
 
-  private async handleGetProfileData(): Promise<void> {
-    await this.withActiveWebview((w) => this.sendProfileData(w));
-  }
-
   private async handleSelectAgent(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SELECT_AGENT>,
   ): Promise<void> {
@@ -880,14 +858,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       showSuccessMessage: true,
       copyToClipboardOnFailure: false,
     });
-  }
-
-  private async handleSignIn(): Promise<void> {
-    await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
-  }
-
-  private async handleSignOut(): Promise<void> {
-    await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_OUT);
   }
 
   private async handleSetApiAccessMode(
@@ -1039,10 +1009,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // Model selection handler implementations
   // ============================================================
 
-  private async handleGetModelSelection(): Promise<void> {
-    await this.withActiveWebview((w) => this.sendModelSelectionData(w));
-  }
-
   private async handleSetModelEnabled(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MODEL_ENABLED>,
   ): Promise<void> {
@@ -1088,10 +1054,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
   // Agent selection handler implementations
   // ============================================================
-
-  private async handleGetAgentSelection(): Promise<void> {
-    await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
-  }
 
   private async handleOpenAgentYaml(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_YAML>,
@@ -1216,10 +1178,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
   // Custom agent directory handler implementations
   // ============================================================
-
-  private async handleGetCustomAgentDir(): Promise<void> {
-    await this.withActiveWebview((w) => this.sendCustomAgentDir(w));
-  }
 
   /** Refresh agent dir + selection after a directory change. */
   private async refreshAgentDirUI(): Promise<void> {
