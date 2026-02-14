@@ -631,33 +631,29 @@ export async function writeApprovedContent(
   }
 
   const currentContent = await WorkspaceFS.read(path);
-  // Normalize CRLF for comparison — tools pass LF-only content but the file
-  // on disk may still have CRLF (Windows).  Without this the equality checks
-  // would always fail and fall through to the patch path unnecessarily.
-  const normalizedCurrent = currentContent.replaceAll('\r\n', '\n');
-  if (normalizedCurrent === finalContent) {
-    return { appliedContent: finalContent, baseContent: normalizedCurrent };
+  if (currentContent === finalContent) {
+    return { appliedContent: finalContent, baseContent: currentContent };
   }
 
-  if (normalizedCurrent === originalContent) {
+  if (currentContent === originalContent) {
     await WorkspaceFS.write(path, finalContent);
-    return { appliedContent: finalContent, baseContent: normalizedCurrent };
+    return { appliedContent: finalContent, baseContent: currentContent };
   }
 
   const dmp = new diff_match_patch();
   const patches = dmp.patch_make(originalContent, finalContent);
   const [patchedContent, results] = dmp.patch_apply(
     patches,
-    normalizedCurrent,
+    currentContent,
   );
 
   if (results.every(Boolean)) {
     await WorkspaceFS.write(path, patchedContent);
-    return { appliedContent: patchedContent, baseContent: normalizedCurrent };
+    return { appliedContent: patchedContent, baseContent: currentContent };
   }
 
   await WorkspaceFS.write(path, finalContent);
-  return { appliedContent: finalContent, baseContent: normalizedCurrent };
+  return { appliedContent: finalContent, baseContent: currentContent };
 }
 
 export async function handleProgressViewToolEditApprovalAction(

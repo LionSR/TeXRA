@@ -228,7 +228,7 @@ export class TextEditorTool extends defineTool({
           );
         }
 
-        const fileLines = fileContent.split(/\r?\n/);
+        const fileLines = fileContent.split('\n');
         const numLines = fileLines.length;
         const [startLine, endLine] = viewRange;
 
@@ -343,12 +343,7 @@ export class TextEditorTool extends defineTool({
       if (readGate) {
         return readGate;
       }
-      // Normalize CRLF→LF so model-provided old_str (always LF) matches file content.
-      // view() already presents LF-only content to the model.
-      const fileContent = (await WorkspaceFS.read(filePath)).replaceAll(
-        '\r\n',
-        '\n',
-      );
+      const fileContent = await WorkspaceFS.read(filePath);
 
       // Expand tabs to 4 spaces for consistent display
       const expandedFileContent = fileContent.replaceAll('\t', '    ');
@@ -460,11 +455,7 @@ export class TextEditorTool extends defineTool({
       if (readGate) {
         return readGate;
       }
-      // Normalize CRLF→LF for consistent line handling on Windows.
-      const fileContent = (await WorkspaceFS.read(filePath)).replaceAll(
-        '\r\n',
-        '\n',
-      );
+      const fileContent = await WorkspaceFS.read(filePath);
 
       // Expand tabs to 4 spaces for consistent display
       const expandedFileContent = fileContent.replaceAll('\t', '    ');
@@ -570,10 +561,7 @@ export class TextEditorTool extends defineTool({
       }
 
       const previousContent = history.at(-1)!;
-      const currentContent = (await WorkspaceFS.read(filePath)).replaceAll(
-        '\r\n',
-        '\n',
-      );
+      const currentContent = await WorkspaceFS.read(filePath);
 
       const approval = await requestToolEditApproval({
         path: filePath,
