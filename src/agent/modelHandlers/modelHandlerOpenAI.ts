@@ -47,7 +47,6 @@ import { flexibleFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import {
   computeCachePercentage,
-  nonZeroOrUndefined,
 } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
@@ -979,11 +978,10 @@ export class ModelHandlerOpenAI<
       cost: this.computePrice(rawUsage),
       responseTimeMs,
       provider: this.usageProvider,
-      cachedInputTokens: nonZeroOrUndefined(cachedTokens),
+      cachedInputTokens: cachedTokens || undefined,
       percentageCached: computeCachePercentage(cachedTokens, inputTokens),
-      reasoningTokens: nonZeroOrUndefined(
-        rawUsage.completion_tokens_details?.reasoning_tokens,
-      ),
+      reasoningTokens:
+        rawUsage.completion_tokens_details?.reasoning_tokens || undefined,
       _native: rawUsage,
     };
   }

@@ -54,7 +54,6 @@ export { ArxivSourceProcessor, arxivProcessor } from './arxivProcessor';
 
 export { compileLatex2Pdf } from './texTools';
 export {
-  formatTeXCountStats,
   getTeXCount,
   getTeXCountStats,
   type TexcountMode,

@@ -73,7 +73,6 @@ import {
 } from './utils/toolAttachmentUtils';
 import {
   computeCachePercentage,
-  nonZeroOrUndefined,
 } from './utils/usageNormalization';
 
 // Type imports
@@ -1719,15 +1718,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
       cost: this.computePrice(rawUsage),
       responseTimeMs,
       provider: 'anthropic',
-      cachedInputTokens: nonZeroOrUndefined(usageTotals.cacheReadTokens),
-      cacheCreationTokens: nonZeroOrUndefined(usageTotals.cacheCreationTokens),
+      cachedInputTokens: usageTotals.cacheReadTokens || undefined,
+      cacheCreationTokens: usageTotals.cacheCreationTokens || undefined,
       percentageCached: computeCachePercentage(
         usageTotals.cacheReadTokens + usageTotals.cacheCreationTokens,
         totalInput,
       ),
-      serverToolRequests: nonZeroOrUndefined(
-        rawUsage.server_tool_use?.web_search_requests,
-      ),
+      serverToolRequests:
+        rawUsage.server_tool_use?.web_search_requests || undefined,
       _native: rawUsage,
     };
   }
