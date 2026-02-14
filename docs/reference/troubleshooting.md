@@ -56,8 +56,8 @@ Even the best research assistants (human or AI) have off days. This guide helps 
   2. `/usr/local/bin` (Intel Homebrew and general tools)
   3. `/Library/TeX/texbin` (MacTeX symlink)
   4. `/usr/texbin` (legacy MacTeX location)
-  5. `~/bin` (MiKTeX default symlink target)
-  6. `~/.miktex/texmf/bin` (MiKTeX per-user binaries)
+  5. `/Applications/MiKTeX Console.app/Contents/bin` (MiKTeX app bundle)
+  6. `~/bin` (MiKTeX default symlink target)
   7. Versioned TeX Live directories (e.g., `/usr/local/texlive/2024/bin/universal-darwin`)
   8. User-specific installations in `~/texlive/*/bin/*` and `~/TinyTeX/bin/*`
 
@@ -75,10 +75,10 @@ Even the best research assistants (human or AI) have off days. This guide helps 
   **Linux:**
   1. `/usr/local/bin`
   2. `/usr/bin`
-  3. `/usr/texbin`
-  4. `/home/linuxbrew/.linuxbrew/bin` (Linuxbrew)
-  5. `~/bin` (MiKTeX default symlink target)
-  6. `~/.miktex/texmf/bin` (MiKTeX per-user binaries)
+  3. `/opt/miktex/bin` (MiKTeX installed via APT/AUR)
+  4. `/snap/bin` (Ubuntu snap packages)
+  5. `/home/linuxbrew/.linuxbrew/bin` (Linuxbrew)
+  6. `~/bin` (MiKTeX default symlink target)
   7. Versioned TeX Live directories
   8. User-specific installations
 
