@@ -107,7 +107,7 @@ export const EXTERNAL_TOOL_CHECKS: readonly ExternalToolCheck[] = [
     check: async () => {
       try {
         const port = getZoteroPort();
-        await axios.get(`http://localhost:${port}/better-bibtex/json-rpc`, {
+        await axios.get(`http://127.0.0.1:${port}/better-bibtex/json-rpc`, {
           timeout: 2000,
         });
         return true;
@@ -211,6 +211,19 @@ export async function runExternalToolChecks(): Promise<
   cached = unavailable;
 
   return results;
+}
+
+/**
+ * Non-blocking cache read — returns cached unavailable tool names if
+ * checks have already completed, or an empty set if the cache isn't
+ * populated yet. Never triggers I/O.
+ *
+ * Used by the agent tool resolver to avoid blocking the first tool-use
+ * flow on network probes. External tools that are actually missing will
+ * fail at call time with a clear error — same as pre-dashboard behavior.
+ */
+export function getUnavailableToolNamesCached(): ReadonlySet<string> {
+  return cached ?? new Set();
 }
 
 /**
