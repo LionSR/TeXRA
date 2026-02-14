@@ -6,21 +6,14 @@ import * as vscode from 'vscode';
 
 // Local imports - filesystem
 import { RelativeFS } from './relativeFS';
-import { WorkspaceRoot, type ResolvedPath } from './workspaceRoot';
-
-export type { ResolvedPath };
+import { locatePathInRoot, type ResolvedPath } from './workspaceRoot';
 
 /**
  * Static filesystem helper rooted at the VS Code workspace folder.
  *
- * Path resolution is delegated to {@link WorkspaceRoot} — a pure value object
- * that can also be instantiated independently (e.g. for git worktrees).
- * This class adds VS Code integration (reading workspaceFolders, using
- * `asRelativePath` for symlink-aware resolution) and inherits file I/O
- * from {@link RelativeFS}.
- *
- * For scoped file operations against an arbitrary root, use
- * {@link ScopedWorkspace} instead.
+ * Inherits file I/O from {@link RelativeFS}. Path resolution uses VS Code's
+ * `asRelativePath` for symlink-aware handling of absolute paths, and
+ * {@link locatePathInRoot} for relative paths.
  */
 export class WorkspaceFS extends RelativeFS {
   protected static override getBasePath(): string {
@@ -33,15 +26,6 @@ export class WorkspaceFS extends RelativeFS {
 
   public static getPath(): string | undefined {
     return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  }
-
-  /**
-   * Get a {@link WorkspaceRoot} instance for the current VS Code workspace.
-   * Returns `undefined` if no workspace folder is open.
-   */
-  public static getWorkspaceRoot(): WorkspaceRoot | undefined {
-    const root = this.getPath();
-    return root ? new WorkspaceRoot(root) : undefined;
   }
 
   /**
@@ -75,8 +59,8 @@ export class WorkspaceFS extends RelativeFS {
    * (throw on external, create ExternalFileLocation, etc.).
    *
    * Absolute paths use VS Code's `asRelativePath` for symlink-aware
-   * resolution. Relative paths delegate to {@link WorkspaceRoot} (pure
-   * `path` logic). No-workspace case treats everything as external.
+   * resolution. Relative paths use {@link locatePathInRoot} (pure `path`
+   * logic). No-workspace case treats everything as external.
    */
   public static locatePath(inputPath: string): ResolvedPath {
     const workspaceRoot = this.getPath();
@@ -111,7 +95,7 @@ export class WorkspaceFS extends RelativeFS {
       return { kind: 'external', absolutePath: inputPath };
     }
 
-    // Relative paths: delegate to WorkspaceRoot (pure path logic)
-    return new WorkspaceRoot(workspaceRoot).locatePath(inputPath);
+    // Relative paths: pure path logic, no VS Code dependency
+    return locatePathInRoot(workspaceRoot, inputPath);
   }
 }
