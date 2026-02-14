@@ -10,6 +10,12 @@ import { MAX_TIER } from '@auth/config';
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - agent
+import {
+  type ModelConfig,
+  ModelProvider,
+  type ModelCapabilities,
+  ReasoningEffort,
+} from 'llm-zoo';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory, type AgentSetting } from '@agent/core/AgentDataclass';
 import type {
@@ -27,23 +33,17 @@ import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - model
-import {
-  type ModelConfig,
-  ModelProvider,
-  type ModelCapabilities,
-  ReasoningEffort,
-} from 'llm-zoo';
 
 // Local imports - tools
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
 import { K_SLICE } from '@utils/config';
+import type { FileLocation } from '@utils/files';
 import {
   getProviderStreaming,
   getGlobalStreaming,
 } from '@utils/config/constants';
-import type { FileLocation } from '@utils/files';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {
   resolveBaseUrl,

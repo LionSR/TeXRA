@@ -21,17 +21,17 @@ import {
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import * as logger from '@logger/logUtils';
-import { AbsoluteFS } from '@utils/files';
-import type { AgentOptionData } from '@shared/schemas';
-
 import {
   GlobalStateKey,
   WorkspaceStateKey,
   globalSM,
   workspaceSM,
 } from '@common/state';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import * as logger from '@logger/logUtils';
+import { AbsoluteFS } from '@utils/files';
+import type { AgentOptionData } from '@shared/schemas';
+
 
 const CHANNEL = 'agentRegistry';
 logger.initialize(CHANNEL);
