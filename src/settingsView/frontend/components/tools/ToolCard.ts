@@ -266,10 +266,12 @@ export class ToolCard extends LitElement {
                   `
                 : nothing}
             </div>
+            ${this.item.configNotes
+              ? html`<div class="tool-config-note">
+                  ${this.item.configNotes}
+                </div>`
+              : nothing}
           `
-        : nothing}
-      ${this.item.configNotes
-        ? html`<div class="tool-config-note">${this.item.configNotes}</div>`
         : nothing}
     `;
   }
@@ -286,7 +288,12 @@ export class ToolCard extends LitElement {
         <div class="tool-description">${this.item.description}</div>
         <div class="tool-ids">
           ${this.item.tools.map(
-            (tool) => html`<span class="tool-id-tag">${tool}</span>`,
+            (tool) =>
+              html`<span
+                class="tool-id-tag"
+                title=${tool.description ?? tool.name}
+                >${tool.name}</span
+              >`,
           )}
         </div>
         ${this.renderGuide()}
