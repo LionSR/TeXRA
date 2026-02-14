@@ -42,25 +42,6 @@ export class BashRequestPanel extends BaseFeedbackPanel {
     requestPanelStyles,
   ];
 
-  override handleKeyboardShortcut(key: string): boolean {
-    switch (key) {
-      case 'y':
-        this.emitAction('approve');
-        return true;
-      case 'n':
-        this.handleRejectAction();
-        return true;
-      case 'escape':
-        if (this.showFeedback) {
-          this.showFeedback = false;
-          return true;
-        }
-        return false;
-      default:
-        return false;
-    }
-  }
-
   override render(): TemplateResult {
     const data = this.permission.data as BashPermission;
 

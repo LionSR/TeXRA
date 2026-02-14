@@ -48,26 +48,12 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
     super.disconnectedCallback();
   }
 
-  override handleKeyboardShortcut(key: string): boolean {
-    switch (key) {
-      case 'y':
-        this.emitAction('approve');
-        return true;
-      case 'n':
-        this.handleRejectAction();
-        return true;
-      case 'd':
-        this.emitAction('openDiff');
-        return true;
-      case 'escape':
-        if (this.showFeedback) {
-          this.showFeedback = false;
-          return true;
-        }
-        return false;
-      default:
-        return false;
+  protected override handleExtraKey(key: string): boolean {
+    if (key === 'd') {
+      this.emitAction('openDiff');
+      return true;
     }
+    return false;
   }
 
   override render(): TemplateResult {

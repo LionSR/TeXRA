@@ -18,12 +18,10 @@ import { when } from 'lit/directives/when.js';
 // Local imports - shared styles
 import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
 
-// Local imports - shared schemas
-
 // Local imports - shared banner styles
 import { warningBannerStyles } from '../styles/warningBannerStyles';
 
-// Local imports - main view events
+// Local imports - main view events and schemas
 import { MainViewEvents } from '../events';
 import type { DependencyBannerState } from '@shared/schemas';
 

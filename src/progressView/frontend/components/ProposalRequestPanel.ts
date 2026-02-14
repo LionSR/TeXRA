@@ -57,26 +57,12 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
 
   @state() private selectedModel: string | null = null;
 
-  override handleKeyboardShortcut(key: string): boolean {
-    switch (key) {
-      case 'y':
-        this.emitAction('approve');
-        return true;
-      case 'n':
-        this.handleRejectAction();
-        return true;
-      case 's':
-        this.emitAction('setup');
-        return true;
-      case 'escape':
-        if (this.showFeedback) {
-          this.showFeedback = false;
-          return true;
-        }
-        return false;
-      default:
-        return false;
+  protected override handleExtraKey(key: string): boolean {
+    if (key === 's') {
+      this.emitAction('setup');
+      return true;
     }
+    return false;
   }
 
   override render(): TemplateResult {

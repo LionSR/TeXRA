@@ -24,8 +24,38 @@ export abstract class BaseFeedbackPanel extends LitElement {
 
   @state() protected showFeedback = false;
 
-  /** Subclasses must implement keyboard shortcut handling. */
-  abstract handleKeyboardShortcut(key: string): boolean;
+  // ===========================================================================
+  // Keyboard shortcuts (common y/n/escape, subclasses add type-specific keys)
+  // ===========================================================================
+
+  /**
+   * Handle keyboard shortcut from container. Returns true if handled.
+   * Common keys (y=approve, n=reject, escape=close feedback) are handled here.
+   * Subclasses override `handleExtraKey()` to add type-specific keys (d, s, etc).
+   */
+  handleKeyboardShortcut(key: string): boolean {
+    switch (key) {
+      case 'y':
+        this.emitAction('approve');
+        return true;
+      case 'n':
+        this.handleRejectAction();
+        return true;
+      case 'escape':
+        if (this.showFeedback) {
+          this.showFeedback = false;
+          return true;
+        }
+        return false;
+      default:
+        return this.handleExtraKey(key);
+    }
+  }
+
+  /** Override in subclasses to handle type-specific keys. */
+  protected handleExtraKey(_key: string): boolean {
+    return false;
+  }
 
   // ===========================================================================
   // Feedback handling (shared across ToolEdit, Bash, Proposal)
