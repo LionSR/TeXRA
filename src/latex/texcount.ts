@@ -293,20 +293,12 @@ export async function getTeXCount(
   }
 }
 
-/**
- * Run texcount on LaTeX files and return formatted statistics with XML-style tags
- * @param filePaths Single file path or array of file paths
- * @param channel The channel to use for logging
- * @returns Promise<string | null> String containing formatted texcount statistics with XML tags, or null if an error occurred
- */
-export function formatTeXCountStats(texcountOutput: string): string {
-  return `TeX Count Statistics:<texcount>\n${texcountOutput}\n</texcount>\n\n`;
-}
-
 export async function getTeXCountStats(
   filePaths: string | string[],
   channel: string = CHANNEL,
 ): Promise<string | null> {
   const { output } = await getTeXCount(filePaths, { channel });
-  return output ? formatTeXCountStats(output) : null;
+  return output
+    ? `TeX Count Statistics:<texcount>\n${output}\n</texcount>\n\n`
+    : null;
 }

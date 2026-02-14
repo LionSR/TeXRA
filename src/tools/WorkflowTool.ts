@@ -22,8 +22,7 @@ import {
 } from '@shared/schemas';
 import {
   getAgent,
-  getVisibleWorkflowAgents,
-  getVisibleToolUseAgents,
+  getVisibleAgents,
 } from '@agent/index/agentRegistry';
 import {
   AgentConfigSchema,
@@ -339,7 +338,7 @@ export class WorkflowAgentTool extends defineTool({
     () => `Delegate a task to a workflow agent for document processing.
 
 Available agents:
-${formatAgentList(getVisibleWorkflowAgents())}
+${formatAgentList(getVisibleAgents('workflow'))}
 
 Available models: ${getVisibleModels().join(', ')}
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
@@ -351,7 +350,7 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
     // Validate agent exists and is a workflow agent
     const agentEntry = getAgent(input.agent);
     if (!agentEntry) {
-      const available = getVisibleWorkflowAgents()
+      const available = getVisibleAgents('workflow')
         .map((a) => a.name)
         .join(', ');
       throw new Error(
@@ -462,7 +461,7 @@ export class DelegateAgentTool extends defineTool({
     () => `Delegate a task to a tool-use agent for exploration or research.
 
 Available agents:
-${formatAgentList(getVisibleToolUseAgents())}
+${formatAgentList(getVisibleAgents('toolUse'))}
 
 Available models: ${getVisibleModels().join(', ')}
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
@@ -474,7 +473,7 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
     // Validate agent exists and is a tool-use agent
     const agentEntry = getAgent(input.agent);
     if (!agentEntry) {
-      const available = getVisibleToolUseAgents()
+      const available = getVisibleAgents('toolUse')
         .map((a) => a.name)
         .join(', ');
       throw new Error(
