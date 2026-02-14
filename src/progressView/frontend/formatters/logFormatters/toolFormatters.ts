@@ -10,7 +10,7 @@
 // Local imports - shared utilities
 import { isPlainObject } from '@shared/utils/string';
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
-import { DELEGATION_TOOLS } from '@tools/registry';
+import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
 import type { EditInput } from '@tools/EditTool';
