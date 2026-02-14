@@ -42,6 +42,8 @@ export interface ExecutionListingEntry {
   agentConfig: AgentConfig | null;
   category?: string;
   terminalStatus?: string;
+  /** AI-generated summary of what the session aimed to accomplish. */
+  description?: string;
 }
 
 // ============================================================================
@@ -128,6 +130,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
           agentConfig: cfg ?? null,
           category: meta.category ?? cfg?.agentCategory,
           terminalStatus: meta.terminalStatus,
+          description: meta.description,
         };
       } catch (error) {
         logger.warn(CHANNEL, `Skipping corrupt execution ${id}`, {

@@ -218,6 +218,7 @@ export class HistoryItem extends LitElement {
     const instructionText = config.instruction?.trim()
       ? config.instruction
       : null;
+    const descriptionText = this.item.description?.trim() || null;
 
     const extraDetails: Array<TemplateResult> = [];
 
@@ -277,6 +278,9 @@ export class HistoryItem extends LitElement {
             ></vscode-toolbar-button>
           </vscode-toolbar-container>
         </div>
+        ${descriptionText
+          ? html`<div class="history-description">${descriptionText}</div>`
+          : nothing}
         <div class="history-details basic-details">
           <span class="history-label">Category:</span>
           <span class="history-value">
