@@ -10,6 +10,7 @@ import {
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 
+import * as vscode from 'vscode';
 import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
 
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
@@ -19,6 +20,10 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
 import { getDefaultToolRegistry } from '@tools/registry';
+import {
+  getUnavailableToolNames,
+  getExcludedToolLabels,
+} from '@tools/toolAvailability';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
@@ -64,23 +69,49 @@ const DELEGATION_TOOLS = new Set([
   'propose_agent',
 ]);
 
-function resolveTools(
+async function resolveTools(
   tools: AgentToolUseSetting['tools'],
   registry: IToolRegistry,
   logger: { warn: (msg: string) => void },
   options?: { isSubagent?: boolean },
-): ToolDefinition[] {
+): Promise<ToolDefinition[]> {
+  const unavailable = await getUnavailableToolNames();
+  const excluded = new Set<string>();
+
   const toolConfigs = Array.isArray(tools) ? tools : [];
   const resolved = toolConfigs
     .map((config) => (typeof config === 'string' ? { name: config } : config))
     .filter((def) => {
       if (options?.isSubagent && DELEGATION_TOOLS.has(def.name)) return false;
+      if (unavailable.has(def.name)) {
+        excluded.add(def.name);
+        logger.warn(
+          `Tool "${def.name}" excluded: external dependency not installed`,
+        );
+        return false;
+      }
       if (!registry.has(def.name)) {
         logger.warn(`Tool "${def.name}" not found in registry`);
         return false;
       }
       return true;
     });
+
+  // Notify the user about excluded external tools
+  if (excluded.size > 0) {
+    const labels = getExcludedToolLabels(excluded);
+    if (labels.length > 0) {
+      const msg = `Some tools were excluded because their dependencies are not installed: ${labels.join(', ')}.`;
+      void vscode.window
+        .showWarningMessage(msg, 'Open Tool Dashboard')
+        .then((action) => {
+          if (action === 'Open Tool Dashboard') {
+            void vscode.commands.executeCommand('texra.showTools');
+          }
+        });
+    }
+  }
+
   if (getToolUseMemoryEnabled() && !resolved.some((d) => d.name === 'memory')) {
     const memoryTool = registry.get('memory');
     if (memoryTool) {
@@ -100,7 +131,7 @@ export async function runToolUseFlow<C = unknown>(
   const { logger, streamId, executionId, setting, onInterrupt } = input;
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const registry = toolRegistry ?? getDefaultToolRegistry();
-  const resolvedTools = resolveTools(setting.tools, registry, logger, {
+  const resolvedTools = await resolveTools(setting.tools, registry, logger, {
     isSubagent: input.isSubagent,
   });
 
