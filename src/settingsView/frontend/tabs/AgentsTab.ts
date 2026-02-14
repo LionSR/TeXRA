@@ -153,21 +153,8 @@ export class AgentsTab extends LitElement {
       }
 
       .agents-toggle-row {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-small);
         margin-bottom: var(--spacing-medium);
         font-size: var(--font-size-sm);
-        color: var(--vscode-foreground);
-      }
-
-      .agents-toggle-row input[type='checkbox'] {
-        accent-color: var(--vscode-focusBorder);
-        cursor: pointer;
-      }
-
-      .agents-toggle-row label {
-        cursor: pointer;
       }
     `,
   ];
@@ -312,15 +299,12 @@ export class AgentsTab extends LitElement {
         </div>
 
         <div class="agents-toggle-row">
-          <input
-            type="checkbox"
-            id="auto-show-remote"
-            .checked=${this.autoShowRemote}
+          <vscode-checkbox
+            ?checked=${this.autoShowRemote}
             @change=${this.handleToggleAutoShowRemote}
-          />
-          <label for="auto-show-remote"
-            >Auto-show remote agents in dropdowns</label
           >
+            Auto-show remote agents in dropdowns
+          </vscode-checkbox>
         </div>
 
         <agent-selection-panel
