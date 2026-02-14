@@ -12,6 +12,7 @@ export function recordToolFileRead(path: string): void {
 export function requireFileReadForEdit(
   path: string,
   exists: boolean,
+  errorMessage?: string,
 ): ToolResult | null {
   const context = getCurrentToolFileInteractionContext();
   if (!context || !exists || context.tracker.hasRead(path)) {
@@ -20,6 +21,7 @@ export function requireFileReadForEdit(
   return {
     summary: `Read ${path} before editing`,
     output:
+      errorMessage ??
       'Edits to existing files require a prior read in this session. Please call read_file first.',
     isError: true,
     diagnostics: { reason: 'unread-file', path },
