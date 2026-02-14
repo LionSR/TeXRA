@@ -19,7 +19,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
 import { getDefaultToolRegistry } from '@tools/registry';
-import { getUnavailableToolNames } from '@tools/toolAvailability';
+import { getUnavailableToolNamesCached } from '@tools/toolAvailability';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
@@ -65,13 +65,13 @@ const DELEGATION_TOOLS = new Set([
   'propose_agent',
 ]);
 
-async function resolveTools(
+function resolveTools(
   tools: AgentToolUseSetting['tools'],
   registry: IToolRegistry,
   logger: { warn: (msg: string) => void },
   options?: { isSubagent?: boolean },
-): Promise<ToolDefinition[]> {
-  const unavailable = await getUnavailableToolNames();
+): ToolDefinition[] {
+  const unavailable = getUnavailableToolNamesCached();
 
   const toolConfigs = Array.isArray(tools) ? tools : [];
   const resolved = toolConfigs
@@ -110,7 +110,7 @@ export async function runToolUseFlow<C = unknown>(
   const { logger, streamId, executionId, setting, onInterrupt } = input;
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const registry = toolRegistry ?? getDefaultToolRegistry();
-  const resolvedTools = await resolveTools(setting.tools, registry, logger, {
+  const resolvedTools = resolveTools(setting.tools, registry, logger, {
     isSubagent: input.isSubagent,
   });
 
