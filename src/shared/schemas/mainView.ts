@@ -12,6 +12,12 @@ import {
 } from '@shared/utils/dispatcher';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { UIFileFieldsSchema } from './fileFields';
+import {
+  commandOnly,
+  withFilesArray,
+  withNotifyWhenEmpty,
+  withOptionalFilePath,
+} from './messageFactories';
 import { ToolConfigFieldsSchema } from './toolConfig';
 
 // ============================================================
@@ -659,20 +665,7 @@ export type LatexdiffvcOperationMessage = z.infer<
 // Inbound Message Schemas (frontend -> backend)
 // ============================================================
 
-const commandOnly = <T extends string>(command: T) =>
-  z.object({ command: z.literal(command) });
-
-const withOptionalFilePath = <T extends string>(command: T) =>
-  z.object({ command: z.literal(command), filePath: z.string().optional() });
-
-const withFilesArray = <T extends string>(command: T) =>
-  z.object({ command: z.literal(command), files: z.array(z.string()) });
-
-const withNotifyWhenEmpty = <T extends string>(command: T) =>
-  z.object({
-    command: z.literal(command),
-    notifyWhenEmpty: z.boolean().nullish(),
-  });
+// Factory functions imported from ./messageFactories
 
 const CommonMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.WEBVIEW_READY),
