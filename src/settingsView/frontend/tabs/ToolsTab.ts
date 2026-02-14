@@ -40,6 +40,7 @@ const CATEGORY_META: Record<ToolCategory, CategoryMeta> = {
   computation: { label: 'Computation', icon: 'codicon-symbol-operator' },
   lean: { label: 'Lean 4', icon: 'codicon-beaker' },
   workflow: { label: 'Memory & Workflow', icon: 'codicon-type-hierarchy' },
+  system: { label: 'System Dependencies', icon: 'codicon-gear' },
 };
 
 /** Canonical category display order. */
@@ -51,6 +52,7 @@ const CATEGORY_ORDER: ToolCategory[] = [
   'computation',
   'lean',
   'workflow',
+  'system',
 ];
 
 @customElement('tools-tab')
