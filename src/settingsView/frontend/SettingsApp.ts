@@ -431,6 +431,14 @@ export class SettingsApp extends BaseWebviewApp {
     SETTINGS_VIEW_COMMANDS.CREATE_AGENT,
   );
 
+  private handleCustomizeAgent = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT,
+  );
+
+  private handleDeleteCustomAgent = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT,
+  );
+
   private handleSetCustomAgentDir(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR);
   }
@@ -585,6 +593,8 @@ export class SettingsApp extends BaseWebviewApp {
               @agent-open-folder=${this.handleOpenAgentFolder}
               @agent-auto-show-remote=${this.handleSetAutoShowRemote}
               @agent-create=${this.handleCreateAgent}
+              @agent-customize=${this.handleCustomizeAgent}
+              @agent-delete-custom=${this.handleDeleteCustomAgent}
               @agent-set-custom-dir=${this.handleSetCustomAgentDir}
               @agent-reset-custom-dir=${this.handleResetCustomAgentDir}
             ></agents-tab>
