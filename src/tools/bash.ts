@@ -116,7 +116,7 @@ export class BashTool extends defineTool({
       if (result.stdout) parts.push(`<stdout>${result.stdout}</stdout>`);
       if (result.stderr) parts.push(`<stderr>${result.stderr}</stderr>`);
       parts.push(
-        'Increase the timeout parameter (in milliseconds) if the command needs more time.',
+        'Increase the timeout parameter (in milliseconds) if the command needs more time, or use run_in_background for long-running commands.',
       );
       throw new ToolError(parts.join('\n'));
     }
