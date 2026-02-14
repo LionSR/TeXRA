@@ -29,7 +29,7 @@ import {
   requestBashApproval,
 } from '@tools/approval/bashApproval';
 import { formatBashDelivery, formatBashError } from '@tools/subagentResults';
-import { executeCommand } from '@utils/system/execUtils';
+import { executeCommand, signalProcessGroup } from '@utils/system/execUtils';
 
 // Local imports - utils
 import { generateExecutionId } from '@utils/core/executionId';
@@ -183,17 +183,7 @@ export class BashTool extends defineTool({
 
     const kill = (): boolean => {
       if (!pid) return false;
-      // Try process-group kill first; fall back to direct PID on Windows or if already exited
-      try {
-        process.kill(-pid, 'SIGTERM');
-      } catch {
-        try {
-          process.kill(pid, 'SIGTERM');
-        } catch {
-          return false; // already exited
-        }
-      }
-      return true;
+      return signalProcessGroup(pid, 'SIGTERM');
     };
 
     const syntheticConfig = AgentConfigSchema.parse({
