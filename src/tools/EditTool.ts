@@ -7,7 +7,7 @@ import {
   recordToolFileRead,
   requireFileReadForEdit,
 } from '@tools/fileInteractions';
-import { pluralize } from '@tools/utils';
+import { countOccurrences, pluralize } from '@tools/utils';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -28,17 +28,6 @@ const EditInputSchema = z.strictObject({
 });
 
 export type EditInput = z.infer<typeof EditInputSchema>;
-
-function countOccurrences(haystack: string, needle: string): number {
-  if (needle.length === 0) return 0;
-  let count = 0;
-  let index = haystack.indexOf(needle);
-  while (index !== -1) {
-    count++;
-    index = haystack.indexOf(needle, index + needle.length);
-  }
-  return count;
-}
 
 export class EditFileTool extends defineTool({
   name: 'edit_file',
