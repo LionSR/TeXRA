@@ -78,6 +78,7 @@ import {
   AgentExecutionHandle,
 } from './executionRegistry';
 import type { AgentFlowResult, OutputFileSummary } from './AgentFlowResult';
+import { generateSessionDescription } from './sessionDescription';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -342,6 +343,12 @@ async function runFlowWithLifecycle(
     const result = await runner();
     options?.onCompleted?.(result);
     await writeTerminalStatus(ctx.executionId, result.status).catch(() => {});
+
+    // Fire-and-forget: generate AI session description for completed tool-use sessions
+    if (category === 'toolUse' && result.status !== 'error') {
+      generateSessionDescription(ctx.executionId, ctx.config).catch(() => {});
+    }
+
     untrackExecution(ctx.executionId);
     ctx.parentStage.end(result.status);
 
