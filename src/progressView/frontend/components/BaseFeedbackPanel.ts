@@ -1,39 +1,29 @@
 /**
  * Base class for request panels that support rejection feedback.
  *
- * Provides shared feedback state management, reject/feedback rendering,
- * and action emission. ToolEdit, Bash, and Proposal panels extend this.
- * RetryRequestPanel does NOT extend this (no feedback support).
+ * Adds feedback state, reject/feedback rendering, and common keyboard
+ * shortcuts (y/n/escape) on top of BaseRequestPanel.
+ * ToolEdit, Bash, and Proposal panels extend this.
  */
 
 // Third-party imports
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
-import { property, state } from 'lit/decorators.js';
+import { html, nothing, type TemplateResult } from 'lit';
+import { state } from 'lit/decorators.js';
 
 // Local imports - shared utilities
 import { FEEDBACK_ELIGIBLE_KINDS } from '@shared/utils/uiConstants';
 
-// Local imports - progress view events
-import { ProgressEvents } from '../events';
+// Local imports - base class
+import { BaseRequestPanel } from './BaseRequestPanel';
 
-// Local imports - progress view component types
-import type { PermissionState } from './PermissionCard';
-
-export abstract class BaseFeedbackPanel extends LitElement {
-  @property({ attribute: false }) permission!: PermissionState;
-
+export abstract class BaseFeedbackPanel extends BaseRequestPanel {
   @state() protected showFeedback = false;
 
   // ===========================================================================
   // Keyboard shortcuts (common y/n/escape, subclasses add type-specific keys)
   // ===========================================================================
 
-  /**
-   * Handle keyboard shortcut from container. Returns true if handled.
-   * Common keys (y=approve, n=reject, escape=close feedback) are handled here.
-   * Subclasses override `handleExtraKey()` to add type-specific keys (d, s, etc).
-   */
-  handleKeyboardShortcut(key: string): boolean {
+  override handleKeyboardShortcut(key: string): boolean {
     switch (key) {
       case 'y':
         this.emitAction('approve');
@@ -52,13 +42,13 @@ export abstract class BaseFeedbackPanel extends LitElement {
     }
   }
 
-  /** Override in subclasses to handle type-specific keys. */
+  /** Override in subclasses to handle type-specific keys (d, s, etc). */
   protected handleExtraKey(_key: string): boolean {
     return false;
   }
 
   // ===========================================================================
-  // Feedback handling (shared across ToolEdit, Bash, Proposal)
+  // Feedback handling
   // ===========================================================================
 
   protected handleRejectAction(): void {
@@ -116,25 +106,6 @@ export abstract class BaseFeedbackPanel extends LitElement {
         ></vscode-textarea>
       </div>
     `;
-  }
-
-  // ===========================================================================
-  // Action emission
-  // ===========================================================================
-
-  protected emitAction(
-    action: string,
-    feedback?: string,
-    modelOverride?: string,
-  ): void {
-    this.dispatchEvent(
-      ProgressEvents.permissionAction({
-        permission: this.permission,
-        action,
-        feedback,
-        modelOverride,
-      }),
-    );
   }
 
   // ===========================================================================
