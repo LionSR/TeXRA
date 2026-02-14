@@ -34,21 +34,20 @@ import {
   getToolUseAgents,
   loadAgents,
 } from '@agent/index';
-import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import {
-  BaseViewMessageHandler,
-  SETTINGS_VIEW_COMMANDS,
-} from '@common/webview';
-import { showLoggedErrorMessage } from '@common/errors';
 import {
   listExecutions,
   deleteExecution,
   deleteAllExecutions,
   readConfig,
 } from '@agent/storage';
+import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
+import {
+  BaseViewMessageHandler,
+  SETTINGS_VIEW_COMMANDS,
+} from '@common/webview';
+import { showLoggedErrorMessage } from '@common/errors';
 import {
   GlobalStateKey,
   WorkspaceStateKey,
@@ -56,11 +55,16 @@ import {
   workspaceSM,
 } from '@common/state';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import {
   DEFAULT_MODELS,
   formatContext,
   formatCost,
 } from '@model/computeModelOptions';
+import {
+  _disableAllProposalBypasses,
+  setToolEditApprovalSessionBypass,
+} from '@tools/approval';
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
@@ -78,10 +82,6 @@ import {
 } from '@utils/config/constants';
 import { getConfig } from '@utils/config/configUtils';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
-import {
-  _disableAllProposalBypasses,
-  setToolEditApprovalSessionBypass,
-} from '@tools/approval';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import type {

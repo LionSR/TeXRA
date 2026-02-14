@@ -12,7 +12,6 @@ import {
 } from '@common/errors';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import * as logger from '@logger/logUtils';
-import { hasExtension } from '@utils/core/pathCore';
 import { RoundKeySchema } from '@progressView/persistence/schemaUtils';
 import { getConfig } from '@utils/config';
 import {
@@ -23,6 +22,7 @@ import {
   type FileLocation,
 } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
+import { hasExtension } from '@utils/core/pathCore';
 import { LaTeXdiffService, type LaTeXdiffResult } from '@latex/latexdiff';
 import {
   DEFAULT_MATH_MARKUP,

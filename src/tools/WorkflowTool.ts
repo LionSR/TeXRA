@@ -20,6 +20,7 @@ import {
   type ToolUseAgentProposal,
   type StreamTabId,
 } from '@shared/schemas';
+import { getExecutionStore, registerExecution } from '@agent/storage';
 import {
   getAgent,
   getVisibleWorkflowAgents,
@@ -63,7 +64,6 @@ import { defineTool } from '@tools/core/define';
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 import { generateExecutionId } from '@utils/core/executionId';
-import { getExecutionStore, registerExecution } from '@agent/storage';
 
 // ============================================================================
 // Shared utilities

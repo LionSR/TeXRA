@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports - agent runtime
+import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
 import { getBaseName, getMultipleName } from '@agent/index';
 import {
   AgentWorkflowSettingSchema,
@@ -20,7 +21,6 @@ import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { globalSM, GlobalStateKey } from '@common/state';
 import { agentDirectories, promptToAddAgentToConfig } from '@frontend/agents';
-import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core/stringCore';

@@ -29,6 +29,7 @@ import {
 } from '@google/genai';
 
 // Local imports - agent
+import { ReasoningEffort } from 'llm-zoo';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
@@ -47,7 +48,6 @@ import {
 } from '@common/errors/sdkErrorUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 
-import { ReasoningEffort } from 'llm-zoo';
 
 // Internal imports
 import replacementEngine from '@replacement/engine';
