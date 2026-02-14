@@ -38,10 +38,7 @@ export class AgentsTab extends LitElement {
         display: block;
       }
 
-      .agents-container {
-        max-width: 1000px;
-        margin: 0 auto;
-      }
+      /* max-width and centering provided by .tab-content-container */
 
       /* Row 1: sub-tabs + New Agent button */
       .agents-header {
@@ -85,32 +82,12 @@ export class AgentsTab extends LitElement {
       }
 
       .agents-sub-tab-count {
-        font-size: var(--font-size-xs, 11px);
+        font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
         opacity: var(--opacity-normal);
       }
 
-      .agents-folder-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--spacing-tiny) var(--spacing-small);
-        font-size: var(--font-size-xs);
-        font-family: inherit;
-        color: var(--color-text-secondary);
-        background: none;
-        border: var(--border-thin) solid var(--color-border);
-        border-radius: var(--border-radius);
-        cursor: pointer;
-        transition:
-          color 0.1s ease,
-          border-color 0.1s ease;
-      }
-
-      .agents-folder-btn:hover {
-        color: var(--vscode-foreground);
-        border-color: var(--vscode-focusBorder);
-      }
+      /* Base styles provided by .tab-action-btn in commonViewStyles */
 
       .agents-create-btn {
         color: var(--vscode-foreground);
@@ -125,7 +102,7 @@ export class AgentsTab extends LitElement {
         gap: var(--spacing-small);
         padding: var(--spacing-small) var(--spacing-medium);
         margin-bottom: var(--spacing-medium);
-        font-size: var(--font-size-xs, 11px);
+        font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
         background: var(--vscode-sideBar-background, rgba(128, 128, 128, 0.04));
         border: var(--border-thin) solid var(--color-border);
@@ -176,21 +153,8 @@ export class AgentsTab extends LitElement {
       }
 
       .agents-toggle-row {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-small);
         margin-bottom: var(--spacing-medium);
         font-size: var(--font-size-sm);
-        color: var(--vscode-foreground);
-      }
-
-      .agents-toggle-row input[type='checkbox'] {
-        accent-color: var(--vscode-focusBorder);
-        cursor: pointer;
-      }
-
-      .agents-toggle-row label {
-        cursor: pointer;
       }
     `,
   ];
@@ -243,7 +207,7 @@ export class AgentsTab extends LitElement {
         : this.toolUseAgents;
 
     return html`
-      <div class="agents-container">
+      <div class="agents-container tab-content-container">
         <!-- Row 1: Sub-tabs + New Agent -->
         <div class="agents-header">
           <div class="agents-sub-tabs">
@@ -273,7 +237,7 @@ export class AgentsTab extends LitElement {
             </button>
           </div>
           <button
-            class="agents-folder-btn agents-create-btn"
+            class="tab-action-btn agents-create-btn"
             @click=${this.handleCreateAgent}
             title="Create a new agent with AI"
           >
@@ -294,7 +258,7 @@ export class AgentsTab extends LitElement {
             : nothing}
           <div class="agents-dir-actions">
             <button
-              class="agents-folder-btn"
+              class="tab-action-btn"
               @click=${this.handleChangeCustomDir}
               title="Change custom agents directory"
             >
@@ -302,7 +266,7 @@ export class AgentsTab extends LitElement {
             </button>
             ${!this.customAgentDirIsDefault
               ? html`<button
-                  class="agents-folder-btn"
+                  class="tab-action-btn"
                   @click=${this.handleResetCustomDir}
                   title="Reset to default directory"
                 >
@@ -311,21 +275,21 @@ export class AgentsTab extends LitElement {
               : nothing}
             <span class="agents-dir-separator"></span>
             <button
-              class="agents-folder-btn"
+              class="tab-action-btn"
               @click=${() => this.handleOpenFolder('custom')}
               title="Open custom agents folder"
             >
               Open
             </button>
             <button
-              class="agents-folder-btn"
+              class="tab-action-btn"
               @click=${() => this.handleOpenFolder('builtInWorkflow')}
               title="Open built-in agents folder"
             >
               Built-in
             </button>
             <button
-              class="agents-folder-btn"
+              class="tab-action-btn"
               @click=${() => this.handleOpenFolder('builtInToolUse')}
               title="Open tool-use agents folder"
             >
@@ -335,15 +299,12 @@ export class AgentsTab extends LitElement {
         </div>
 
         <div class="agents-toggle-row">
-          <input
-            type="checkbox"
-            id="auto-show-remote"
-            .checked=${this.autoShowRemote}
+          <vscode-checkbox
+            ?checked=${this.autoShowRemote}
             @change=${this.handleToggleAutoShowRemote}
-          />
-          <label for="auto-show-remote"
-            >Auto-show remote agents in dropdowns</label
           >
+            Auto-show remote agents in dropdowns
+          </vscode-checkbox>
         </div>
 
         <agent-selection-panel

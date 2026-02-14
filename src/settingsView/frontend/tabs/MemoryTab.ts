@@ -47,7 +47,7 @@ export class MemoryTab extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <div class="memory-view-container">
+      <div class="memory-view-container tab-content-container">
         <memory-toolbar></memory-toolbar>
 
         <memory-toggle

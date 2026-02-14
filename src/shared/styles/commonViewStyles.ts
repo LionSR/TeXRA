@@ -163,4 +163,33 @@ export const commonViewStyles: CSSResult = css`
   .btn-secondary:hover {
     opacity: var(--opacity-full);
   }
+
+  /* Shared tab content container — consistent max-width and centering for all settings tabs */
+  .tab-content-container {
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  /* Shared small action button — outlined style used in tab toolbars */
+  .tab-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    padding: var(--spacing-tiny) var(--spacing-small);
+    font-size: var(--font-size-xs);
+    font-family: inherit;
+    color: var(--color-text-secondary);
+    background: none;
+    border: var(--border-thin) solid var(--color-border);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition:
+      color 0.1s ease,
+      border-color 0.1s ease;
+  }
+
+  .tab-action-btn:hover {
+    color: var(--vscode-foreground);
+    border-color: var(--vscode-focusBorder);
+  }
 `;
