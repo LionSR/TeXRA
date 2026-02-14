@@ -155,6 +155,7 @@ export class SettingsApp extends BaseWebviewApp {
 
   // Tool dashboard state
   @state() private toolDashboardItems: ToolDashboardItem[] = [];
+  @state() private toolDashboardLoaded = false;
 
   protected get readyCommand(): string | null {
     return null;
@@ -290,6 +291,7 @@ export class SettingsApp extends BaseWebviewApp {
         const data = this.parseMessage(raw, UpdateToolDashboardMessageSchema);
         if (!data) return;
         this.toolDashboardItems = data.items;
+        this.toolDashboardLoaded = true;
         return;
       }
 
@@ -596,6 +598,7 @@ export class SettingsApp extends BaseWebviewApp {
           <vscode-tab-panel>
             <tools-tab
               .items=${this.toolDashboardItems}
+              .loaded=${this.toolDashboardLoaded}
               @tool-open-url=${this.handleToolOpenUrl}
               @tool-recheck=${this.handleToolRecheck}
             ></tools-tab>
