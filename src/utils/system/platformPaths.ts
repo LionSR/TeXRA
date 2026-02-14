@@ -45,9 +45,7 @@ function getExtraDirs(): string[] {
       '/usr/texbin',
     );
     // MiKTeX on macOS: app bundle and default symlink targets
-    dirs.push(
-      '/Applications/MiKTeX Console.app/Contents/bin',
-    );
+    dirs.push('/Applications/MiKTeX Console.app/Contents/bin');
     const macHome = process.env.HOME;
     if (macHome) {
       dirs.push(path.join(macHome, 'bin'));
@@ -78,7 +76,14 @@ function getExtraDirs(): string[] {
         path.join(localAppData, 'Programs', 'MiKTeX', 'miktex', 'bin', 'x64'),
         path.join(localAppData, 'Programs', 'MiKTeX', 'miktex', 'bin'),
         // Legacy MiKTeX 2.9 per-user install
-        path.join(localAppData, 'Programs', 'MiKTeX 2.9', 'miktex', 'bin', 'x64'),
+        path.join(
+          localAppData,
+          'Programs',
+          'MiKTeX 2.9',
+          'miktex',
+          'bin',
+          'x64',
+        ),
         path.join(localAppData, 'Programs', 'MiKTeX 2.9', 'miktex', 'bin'),
         // MiKTeX installed directly under LOCALAPPDATA (without Programs)
         path.join(localAppData, 'MiKTeX', 'miktex', 'bin', 'x64'),

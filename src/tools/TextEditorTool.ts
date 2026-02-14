@@ -343,7 +343,9 @@ export class TextEditorTool extends defineTool({
       if (readGate) {
         return readGate;
       }
-      const fileContent = normalizeLineEndings(await WorkspaceFS.read(filePath));
+      const fileContent = normalizeLineEndings(
+        await WorkspaceFS.read(filePath),
+      );
 
       // Expand tabs to 4 spaces for consistent display
       const expandedFileContent = fileContent.replaceAll('\t', '    ');
@@ -455,7 +457,9 @@ export class TextEditorTool extends defineTool({
       if (readGate) {
         return readGate;
       }
-      const fileContent = normalizeLineEndings(await WorkspaceFS.read(filePath));
+      const fileContent = normalizeLineEndings(
+        await WorkspaceFS.read(filePath),
+      );
 
       // Expand tabs to 4 spaces for consistent display
       const expandedFileContent = fileContent.replaceAll('\t', '    ');

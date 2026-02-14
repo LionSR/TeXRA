@@ -32,7 +32,6 @@ import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 import type { AgentOptionData } from '@shared/schemas';
 
-
 const CHANNEL = 'agentRegistry';
 logger.initialize(CHANNEL);
 
@@ -644,7 +643,9 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
  * Get visible agents for a category (filtered and deduplicated).
  * No default → undefined means "never configured" (show all).
  */
-export function getVisibleAgents(category: 'workflow' | 'toolUse'): AgentEntry[] {
+export function getVisibleAgents(
+  category: 'workflow' | 'toolUse',
+): AgentEntry[] {
   const isToolUse = category === 'toolUse';
   const entries = isToolUse ? getToolUseAgents() : getWorkflowAgents();
   const stateKey = isToolUse
@@ -653,7 +654,6 @@ export function getVisibleAgents(category: 'workflow' | 'toolUse'): AgentEntry[]
   const raw = workspaceSM?.get<string[]>(stateKey);
   return deduplicateByName(filterVisible(entries, raw));
 }
-
 
 /**
  * Deduplicate agents by name, keeping only the highest priority source.
