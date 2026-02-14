@@ -298,7 +298,11 @@ export async function runReflectionFlow<C = unknown>(
       );
     }
 
-    status = executionToEndStatus(flowStatus) as EndGroupStatus;
+    if (shared?.lastError) {
+      status = END_GROUP_STATUS.ERROR;
+    } else {
+      status = executionToEndStatus(flowStatus) as EndGroupStatus;
+    }
   } catch (error) {
     status = END_GROUP_STATUS.ERROR;
     throw error;
