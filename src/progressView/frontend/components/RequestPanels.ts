@@ -31,25 +31,13 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 // Local imports - progress view component types
 import type { PermissionState } from './PermissionCard';
+import type { BaseRequestPanel } from './BaseRequestPanel';
 
 // Side-effect imports to register sub-panel custom elements
 import './ToolEditRequestPanel';
 import './BashRequestPanel';
 import './RetryRequestPanel';
 import './ProposalRequestPanel';
-
-// Import sub-panel types for keyboard delegation
-import type { ToolEditRequestPanel } from './ToolEditRequestPanel';
-import type { BashRequestPanel } from './BashRequestPanel';
-import type { RetryRequestPanel } from './RetryRequestPanel';
-import type { ProposalRequestPanel } from './ProposalRequestPanel';
-
-/** Common interface for sub-panels that support keyboard shortcuts */
-type KeyboardPanel =
-  | ToolEditRequestPanel
-  | BashRequestPanel
-  | RetryRequestPanel
-  | ProposalRequestPanel;
 
 /** Selector to find any sub-panel in shadow DOM */
 const PANEL_SELECTOR =
@@ -60,7 +48,7 @@ interface SectionConfig {
   cssClass: string;
   icon: string;
   title: string;
-  panelTag: string;
+  renderPanel: (p: PermissionState) => TemplateResult;
 }
 
 const SECTION_CONFIGS: Record<string, SectionConfig> = {
@@ -68,25 +56,33 @@ const SECTION_CONFIGS: Record<string, SectionConfig> = {
     cssClass: 'approval-requests',
     icon: 'diff',
     title: 'Tool edit approval',
-    panelTag: 'tool-edit-request-panel',
+    renderPanel: (p) =>
+      html`<tool-edit-request-panel
+        .permission=${p}
+      ></tool-edit-request-panel>`,
   },
   bash: {
     cssClass: 'bash-approval-requests',
     icon: 'terminal',
     title: 'Command approval',
-    panelTag: 'bash-request-panel',
+    renderPanel: (p) =>
+      html`<bash-request-panel .permission=${p}></bash-request-panel>`,
   },
   retry: {
     cssClass: 'retry-requests',
     icon: 'refresh',
     title: 'Retry request',
-    panelTag: 'retry-request-panel',
+    renderPanel: (p) =>
+      html`<retry-request-panel .permission=${p}></retry-request-panel>`,
   },
   proposal: {
     cssClass: 'workflow-proposals',
     icon: 'rocket',
     title: 'Agent proposal',
-    panelTag: 'proposal-request-panel',
+    renderPanel: (p) =>
+      html`<proposal-request-panel
+        .permission=${p}
+      ></proposal-request-panel>`,
   },
 };
 
@@ -187,38 +183,11 @@ export class RequestPanels extends LitElement {
           ${repeat(
             permissions,
             (p) => this.getPermissionKey(p),
-            (p) =>
-              this.renderPanel(config.panelTag, p),
+            (p) => config.renderPanel(p),
           )}
         </div>
       </section>
     `;
-  }
-
-  private renderPanel(
-    tag: string,
-    permission: PermissionState,
-  ): TemplateResult {
-    switch (tag) {
-      case 'tool-edit-request-panel':
-        return html`<tool-edit-request-panel
-          .permission=${permission}
-        ></tool-edit-request-panel>`;
-      case 'bash-request-panel':
-        return html`<bash-request-panel
-          .permission=${permission}
-        ></bash-request-panel>`;
-      case 'retry-request-panel':
-        return html`<retry-request-panel
-          .permission=${permission}
-        ></retry-request-panel>`;
-      case 'proposal-request-panel':
-        return html`<proposal-request-panel
-          .permission=${permission}
-        ></proposal-request-panel>`;
-      default:
-        return html``;
-    }
   }
 
   // ===========================================================================
@@ -245,8 +214,8 @@ export class RequestPanels extends LitElement {
   };
 
   /** Find the first rendered sub-panel element in shadow DOM */
-  private getFirstPanel(): KeyboardPanel | null {
-    return this.renderRoot.querySelector<KeyboardPanel>(PANEL_SELECTOR);
+  private getFirstPanel(): BaseRequestPanel | null {
+    return this.renderRoot.querySelector<BaseRequestPanel>(PANEL_SELECTOR);
   }
 
   // ===========================================================================
