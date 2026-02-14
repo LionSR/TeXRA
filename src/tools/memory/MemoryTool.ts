@@ -17,7 +17,11 @@ import {
   recordToolFileRead,
   requireFileReadForEdit,
 } from '../fileInteractions';
-import { formatLinesWithNumbers, requireField } from '../utils';
+import {
+  countOccurrences,
+  formatLinesWithNumbers,
+  requireField,
+} from '../utils';
 
 // Local imports - shared memory constants and utilities
 import {
@@ -228,13 +232,17 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     await this.requireEditableFile(resolvedPath, inputPath);
 
     // Gate: require view before edit (matches edit_file behavior)
-    const readGate = requireFileReadForEdit(inputPath, true);
+    const readGate = requireFileReadForEdit(
+      inputPath,
+      true,
+      'Edits to memory files require viewing the file first. Please use the view command before editing.',
+    );
     if (readGate) {
       return readGate;
     }
 
     const content = normalizeLineEndings(await StorageFS.read(resolvedPath));
-    const occurrences = content.split(oldStr).length - 1;
+    const occurrences = countOccurrences(content, oldStr);
     if (occurrences === 0) {
       throw new ToolError(
         `The provided old_str was not found in ${inputPath}. Ensure it matches the file content exactly.`,
@@ -247,7 +255,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
         .map((line, index) => (line.includes(oldStr) ? index + 1 : -1))
         .filter((n) => n !== -1);
       throw new ToolError(
-        `old_str is not unique within ${inputPath}. Include more surrounding context to make it unique.`,
+        `old_str is not unique within ${inputPath} (found in lines ${lineNumbers.join(', ')}). Include more surrounding context to make it unique.`,
       );
     }
 
@@ -277,7 +285,11 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     await this.requireEditableFile(resolvedPath, inputPath);
 
     // Gate: require view before edit (matches edit_file behavior)
-    const readGate = requireFileReadForEdit(inputPath, true);
+    const readGate = requireFileReadForEdit(
+      inputPath,
+      true,
+      'Edits to memory files require viewing the file first. Please use the view command before editing.',
+    );
     if (readGate) {
       return readGate;
     }
