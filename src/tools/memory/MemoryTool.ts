@@ -347,9 +347,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
 
     const newExists = await StorageFS.exists(resolvedNewPath);
     if (newExists) {
-      throw new ToolError(
-        `The destination ${newPathInput} already exists.`,
-      );
+      throw new ToolError(`The destination ${newPathInput} already exists.`);
     }
 
     await StorageFS.rename(resolvedOldPath, resolvedNewPath);
