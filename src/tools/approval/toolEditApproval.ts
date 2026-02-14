@@ -16,7 +16,7 @@ import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { type LineChanges, type ToolResult } from '@tools/result';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
-import { countLines } from '@utils/text/stringUtils';
+import { countLines, normalizeLineEndings } from '@utils/text/stringUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 
 import { rejectPendingEntries } from './bashApproval';
@@ -631,18 +631,33 @@ export async function writeApprovedContent(
   }
 
   const currentContent = await WorkspaceFS.read(path);
+  const normalizedCurrent = normalizeLineEndings(currentContent);
+  const normalizedOriginal = normalizeLineEndings(originalContent);
+  const normalizedFinal = normalizeLineEndings(finalContent);
+
+  if (normalizedCurrent === normalizedFinal) {
+    return { appliedContent: currentContent, baseContent: currentContent };
+  }
+
+  if (normalizedOriginal === normalizedFinal) {
+    return { appliedContent: currentContent, baseContent: currentContent };
+  }
+
   if (currentContent === finalContent) {
     return { appliedContent: finalContent, baseContent: currentContent };
   }
 
-  if (currentContent === originalContent) {
+  if (
+    currentContent === originalContent ||
+    normalizedCurrent === normalizedOriginal
+  ) {
     await WorkspaceFS.write(path, finalContent);
     return { appliedContent: finalContent, baseContent: currentContent };
   }
 
   const dmp = new diff_match_patch();
-  const patches = dmp.patch_make(originalContent, finalContent);
-  const [patchedContent, results] = dmp.patch_apply(patches, currentContent);
+  const patches = dmp.patch_make(normalizedOriginal, normalizedFinal);
+  const [patchedContent, results] = dmp.patch_apply(patches, normalizedCurrent);
 
   if (results.every(Boolean)) {
     await WorkspaceFS.write(path, patchedContent);

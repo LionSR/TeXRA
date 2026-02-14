@@ -12,7 +12,7 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
 // Local file imports
-import { extendEnvPath, findToolInCommonPaths } from './platformPaths';
+import { IS_WINDOWS, extendEnvPath, findToolInCommonPaths } from './platformPaths';
 import { executeCommand } from './execUtils';
 
 const CHANNEL = 'toolUtils';
@@ -26,77 +26,24 @@ interface ToolConfig {
 }
 
 // Installation instructions for LaTeX tools
-const LATEXDIFF_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Mac: brew install latexdiff\n' +
-  '- Ubuntu: sudo apt-get install latexdiff\n' +
-  '- Windows: Install through MiKTeX or TeX Live package manager';
+function installInstructions(...steps: string[]): string {
+  return 'Installation instructions:\n' + steps.map((s) => `- ${s}`).join('\n');
+}
 
-const LATEXINDENT_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Mac: brew install latexindent\n' +
-  '- Ubuntu: sudo apt-get install texlive-extra-utils\n' +
-  '- Windows: Install through MiKTeX or TeX Live package manager';
+const MIKTEX_OR_TEXLIVE = 'Windows: Install through MiKTeX or TeX Live package manager';
 
-const TEXFMT_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Cargo: cargo install tex-fmt\n' +
-  '- Mac: brew install tex-fmt\n' +
-  '- Debian: apt install tex-fmt';
-
-const TEXCOUNT_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Mac: brew install texcount\n' +
-  '- Ubuntu: sudo apt-get install texlive-extra-utils\n' +
-  '- Windows: Install through MiKTeX or TeX Live package manager';
-
-const PERL_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Mac: brew install perl\n' +
-  '- Ubuntu: sudo apt-get install perl\n' +
-  '- Windows: Download from https://strawberryperl.com/';
-
-const GHOSTSCRIPT_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Mac: brew install ghostscript\n' +
-  '- Ubuntu: sudo apt-get install ghostscript\n' +
-  '- Windows: Download from https://ghostscript.com/releases/gsdnld.html';
-
-const GM_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Mac: brew install graphicsmagick\n' +
-  '- Ubuntu: sudo apt-get install graphicsmagick\n' +
-  '- Windows: Download from http://www.graphicsmagick.org/download.html';
-
-const MAGICK_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Mac: brew install imagemagick\n' +
-  '- Ubuntu: sudo apt-get install imagemagick\n' +
-  '- Windows: Download from https://imagemagick.org/script/download.php';
-
-const WOLFRAM_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Mac: brew install wolfram-engine\n' +
-  '- Ubuntu: sudo apt-get install wolfram-engine\n' +
-  '- Windows: Download from https://www.wolfram.com/engine/';
-
-const PANDOC_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Mac: brew install pandoc\n' +
-  '- Ubuntu: sudo apt-get install pandoc\n' +
-  '- Windows: Download from https://pandoc.org/installing.html';
-
-const PDFLATEX_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Mac: brew install texlive\n' +
-  '- Ubuntu: sudo apt-get install texlive-full\n' +
-  '- Windows: Install through MiKTeX or TeX Live package manager';
-
-const LATEXMK_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Mac: brew install latexmk\n' +
-  '- Ubuntu: sudo apt-get install latexmk\n' +
-  '- Windows: Install through MiKTeX or TeX Live package manager';
+const LATEXDIFF_INSTRUCTIONS = installInstructions('Mac: brew install latexdiff', 'Ubuntu: sudo apt-get install latexdiff', MIKTEX_OR_TEXLIVE);
+const LATEXINDENT_INSTRUCTIONS = installInstructions('Mac: brew install latexindent', 'Ubuntu: sudo apt-get install texlive-extra-utils', MIKTEX_OR_TEXLIVE);
+const TEXFMT_INSTRUCTIONS = installInstructions('Cargo: cargo install tex-fmt', 'Mac: brew install tex-fmt', 'Debian: apt install tex-fmt');
+const TEXCOUNT_INSTRUCTIONS = installInstructions('Mac: brew install texcount', 'Ubuntu: sudo apt-get install texlive-extra-utils', MIKTEX_OR_TEXLIVE);
+const PERL_INSTRUCTIONS = installInstructions('Mac: brew install perl', 'Ubuntu: sudo apt-get install perl', 'Windows: Download from https://strawberryperl.com/');
+const GHOSTSCRIPT_INSTRUCTIONS = installInstructions('Mac: brew install ghostscript', 'Ubuntu: sudo apt-get install ghostscript', 'Windows: Download from https://ghostscript.com/releases/gsdnld.html');
+const GM_INSTRUCTIONS = installInstructions('Mac: brew install graphicsmagick', 'Ubuntu: sudo apt-get install graphicsmagick', 'Windows: Download from http://www.graphicsmagick.org/download.html');
+const MAGICK_INSTRUCTIONS = installInstructions('Mac: brew install imagemagick', 'Ubuntu: sudo apt-get install imagemagick', 'Windows: Download from https://imagemagick.org/script/download.php');
+const WOLFRAM_INSTRUCTIONS = installInstructions('Mac: brew install wolfram-engine', 'Ubuntu: sudo apt-get install wolfram-engine', 'Windows: Download from https://www.wolfram.com/engine/');
+const PANDOC_INSTRUCTIONS = installInstructions('Mac: brew install pandoc', 'Ubuntu: sudo apt-get install pandoc', 'Windows: Download from https://pandoc.org/installing.html');
+const PDFLATEX_INSTRUCTIONS = installInstructions('Mac: brew install texlive', 'Ubuntu: sudo apt-get install texlive-full', MIKTEX_OR_TEXLIVE);
+const LATEXMK_INSTRUCTIONS = installInstructions('Mac: brew install latexmk', 'Ubuntu: sudo apt-get install latexmk', MIKTEX_OR_TEXLIVE);
 
 // All tool configurations in one place
 const TOOL_CONFIGS: Record<string, ToolConfig> = {
@@ -126,7 +73,7 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
   },
   gs: {
     command:
-      process.platform === 'win32'
+      IS_WINDOWS
         ? ['gswin64c --version', 'gswin32c --version', 'gs --version']
         : 'gs --version',
     errorMessage:
@@ -286,7 +233,7 @@ export async function checkToolInstalled(
       if (fallback) {
         const needsPerl =
           fallback.toLowerCase().endsWith('.pl') ||
-          (process.platform === 'win32' && path.extname(fallback) === '');
+          (IS_WINDOWS && path.extname(fallback) === '');
         logger.debug(
           CHANNEL,
           `Running fallback '${fallback}' (needsPerl=${needsPerl})`,
