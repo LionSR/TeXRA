@@ -20,12 +20,6 @@ import {
   type ChildRecord,
   type TodoEntry,
   listExecutions,
-  readTodos,
-  readConversation,
-  readReport,
-  readMeta,
-  readConfig,
-  readChildren,
 } from '@agent/storage';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
@@ -392,9 +386,10 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
 
     if (handle) {
       // Running execution: agent/status from handle, only fetch live data from KV
+      const store = getExecutionStore(executionId);
       const [children, todos] = await Promise.all([
-        readChildren(executionId),
-        readTodos(executionId),
+        store.readChildren(),
+        store.readTodos(),
       ]);
 
       const info = handle.getStatus();
@@ -425,12 +420,13 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     }
 
     // Completed execution: full KV fetch
+    const store = getExecutionStore(executionId);
     const [meta, config, children, todos, report] = await Promise.all([
-      readMeta(executionId),
-      readConfig(executionId),
-      readChildren(executionId),
-      readTodos(executionId),
-      readReport(executionId),
+      store.readMeta(),
+      store.readConfig(),
+      store.readChildren(),
+      store.readTodos(),
+      store.readReport(),
     ]);
 
     if (!meta && !config) {
@@ -538,7 +534,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
   }
 
   private async showTodos(executionId: ExecutionId): Promise<ToolResult> {
-    const todos = await readTodos(executionId);
+    const todos = await getExecutionStore(executionId).readTodos();
 
     if (todos.length === 0) {
       return { output: `No task list found for execution ${executionId}.` };
@@ -551,7 +547,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
   }
 
   private async showReport(executionId: ExecutionId): Promise<ToolResult> {
-    const report = await readReport(executionId);
+    const report = await getExecutionStore(executionId).readReport();
     if (!report) {
       return {
         output: `No report found for execution ${executionId}. Reports are persisted when subagents or background processes complete.`,
@@ -561,7 +557,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
   }
 
   private async showChildren(executionId: ExecutionId): Promise<ToolResult> {
-    const children = await readChildren(executionId);
+    const children = await getExecutionStore(executionId).readChildren();
     if (children.length === 0) {
       return {
         output: `No child executions found for ${executionId}.`,
@@ -580,7 +576,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
   }
 
   private async showConfig(executionId: ExecutionId): Promise<ToolResult> {
-    const config = await readConfig(executionId);
+    const config = await getExecutionStore(executionId).readConfig();
 
     if (!config) {
       throw new ToolError(`Config not found for execution: ${executionId}.`);
@@ -608,12 +604,12 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     executionId: ExecutionId,
     viewRange?: number[],
   ): Promise<ToolResult> {
-    const conversation = await readConversation(executionId);
+    const store = getExecutionStore(executionId);
+    const conversation = await store.readConversation();
 
     if (!conversation) {
       // readConversation already checked the flow blob; use lightweight
       // exists checks to distinguish "no execution" from "no messages yet"
-      const store = getExecutionStore(executionId);
       const exists =
         (await store.exists('meta')) ||
         (await store.exists(`flow:${executionId}`));
