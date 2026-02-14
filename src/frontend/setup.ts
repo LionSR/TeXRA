@@ -16,6 +16,7 @@ import * as logger from '@logger/logUtils';
 import { DEFAULT_MODELS } from '@model/computeModelOptions';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
 import { isConfigExplicitlySet, updateConfig } from '@utils/config';
+import { extendEnvPath } from '@utils/system/platformPaths';
 
 /**
  * Version number for the default model list.
@@ -185,6 +186,24 @@ const GLOBAL_IF_UNSET = {
  * Configure LaTeX-related workspace settings if LaTeX Workshop extension is installed
  */
 export async function configureLatexSettings(): Promise<void> {
+  // Extend process.env.PATH with common TeX installation directories so that
+  // child processes spawned by other extensions (e.g., LaTeX Workshop) can
+  // find latexmk, pdflatex, and other TeX binaries.  When VS Code is launched
+  // from the macOS Finder or Windows Start Menu it often inherits a minimal
+  // PATH that excludes TeX directories, causing "spawn latexmk ENOENT" errors.
+  try {
+    const extendedPath = extendEnvPath(process.env.PATH);
+    if (extendedPath !== process.env.PATH) {
+      process.env.PATH = extendedPath;
+      logger.info('extension', 'Extended process PATH with TeX directories');
+    }
+  } catch (err) {
+    logger.warn(
+      'extension',
+      `Failed to extend PATH with TeX directories: ${toErrorMessage(err)}`,
+    );
+  }
+
   try {
     const latexWorkshop = vscode.extensions.getExtension(
       'James-Yu.latex-workshop',
