@@ -134,16 +134,20 @@ async function getGitInfo(workspacePath: string): Promise<GitInfo | null> {
 
 /**
  * Gather workspace environment information.
+ *
+ * @param workspacePath - Workspace root path override. Defaults to VS Code workspace.
  */
-async function gatherWorkspaceInfo(): Promise<WorkspaceInfo> {
-  const workspacePath = WorkspaceFS.getPath();
+async function gatherWorkspaceInfo(
+  workspacePath?: string,
+): Promise<WorkspaceInfo> {
+  const wsPath = workspacePath ?? WorkspaceFS.getPath();
 
   return {
-    workspacePath,
+    workspacePath: wsPath,
     platform: getPlatformLabel(),
     shell: detectShell(),
     date: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
-    git: workspacePath ? await getGitInfo(workspacePath) : null,
+    git: wsPath ? await getGitInfo(wsPath) : null,
   };
 }
 
@@ -160,9 +164,13 @@ function escapeXml(value: string): string {
  *
  * Returns a `<workspace_info>` XML block with key environment details
  * that help the LLM understand the user's workspace context.
+ *
+ * @param workspacePath - Workspace root path override. Defaults to VS Code workspace.
  */
-export async function buildWorkspaceInfoBlock(): Promise<string> {
-  const info = await gatherWorkspaceInfo();
+export async function buildWorkspaceInfoBlock(
+  workspacePath?: string,
+): Promise<string> {
+  const info = await gatherWorkspaceInfo(workspacePath);
 
   const lines: string[] = [];
 
