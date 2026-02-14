@@ -56,24 +56,31 @@ Even the best research assistants (human or AI) have off days. This guide helps 
   2. `/usr/local/bin` (Intel Homebrew and general tools)
   3. `/Library/TeX/texbin` (MacTeX symlink)
   4. `/usr/texbin` (legacy MacTeX location)
-  5. Versioned TeX Live directories (e.g., `/usr/local/texlive/2024/bin/universal-darwin`)
-  6. User-specific installations in `~/texlive/*/bin/*` and `~/TinyTeX/bin/*`
+  5. `/Applications/MiKTeX Console.app/Contents/bin` (MiKTeX app bundle)
+  6. `~/bin` (MiKTeX default symlink target)
+  7. Versioned TeX Live directories (e.g., `/usr/local/texlive/2024/bin/universal-darwin`)
+  8. User-specific installations in `~/texlive/*/bin/*` and `~/TinyTeX/bin/*`
 
   **Windows:**
   1. `C:\Program Files\MiKTeX\miktex\bin\x64` (64-bit MiKTeX)
   2. `C:\Program Files\MiKTeX\miktex\bin` (32-bit MiKTeX)
   3. `C:\Program Files (x86)\MiKTeX\miktex\bin` (32-bit on 64-bit Windows)
   4. `%LOCALAPPDATA%\Programs\MiKTeX\miktex\bin\x64` (user MiKTeX installation)
-  5. Versioned TeX Live directories (e.g., `C:\texlive\2024\bin\windows`)
-  6. User-specific installations in `%USERPROFILE%\texlive\*\bin\*` and `%USERPROFILE%\TinyTeX\bin\*`
+  5. `%LOCALAPPDATA%\Programs\MiKTeX\miktex\bin` (user MiKTeX, 32-bit)
+  6. `%LOCALAPPDATA%\Programs\MiKTeX 2.9\miktex\bin\x64` (legacy user MiKTeX 2.9)
+  7. `%LOCALAPPDATA%\MiKTeX\miktex\bin\x64` (user MiKTeX without Programs subfolder)
+  8. Versioned TeX Live directories (e.g., `C:\texlive\2024\bin\windows`)
+  9. User-specific installations in `%USERPROFILE%\texlive\*\bin\*` and `%USERPROFILE%\TinyTeX\bin\*`
 
   **Linux:**
   1. `/usr/local/bin`
   2. `/usr/bin`
-  3. `/usr/texbin`
-  4. `/home/linuxbrew/.linuxbrew/bin` (Linuxbrew)
-  5. Versioned TeX Live directories
-  6. User-specific installations
+  3. `/opt/miktex/bin` (MiKTeX installed via APT/AUR)
+  4. `/snap/bin` (Ubuntu snap packages)
+  5. `/home/linuxbrew/.linuxbrew/bin` (Linuxbrew)
+  6. `~/bin` (MiKTeX default symlink target)
+  7. Versioned TeX Live directories
+  8. User-specific installations
 
   **Fallback mechanisms:**
   - If tools aren't found in standard paths, TeXRA searches `texmf-dist/scripts` directories
