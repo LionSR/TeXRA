@@ -342,6 +342,7 @@ const SetAgentEnabledMessageSchema = z.object({
 const SetAllAgentsEnabledMessageSchema = z.object({
   command: z.literal(CMD.SET_ALL_AGENTS_ENABLED),
   category: AgentCategorySchema,
+  source: AgentSourceSchema,
   enabled: z.boolean(),
 });
 
