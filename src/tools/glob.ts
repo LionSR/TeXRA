@@ -1,3 +1,6 @@
+// Standard library imports
+import * as path from 'path';
+
 // Third-party imports
 import { glob } from 'glob';
 import { z } from 'zod';
@@ -12,11 +15,12 @@ import {
   pluralize,
 } from '@tools/utils';
 import { getGitignoreMatcher } from '@tools/gitignore';
-import { WorkspaceFS } from '@utils/files';
+import { StorageFS, WorkspaceFS } from '@utils/files';
 import { toPosixPath } from '@utils/core/pathCore';
 
 // Local file imports
 import { defineTool } from './core/define';
+import { tryResolveVirtualPath } from './virtualPath';
 
 const GlobInputSchema = z.strictObject({
   pattern: z.string().min(1, 'pattern is required'),
@@ -33,17 +37,33 @@ interface GlobMatchInfo {
 export class GlobTool extends defineTool({
   name: 'glob',
   description:
-    'Find files matching glob patterns (e.g., "**/*.tex", "src/**/*.ts"). Returns paths sorted by modification time.',
+    'Find files matching glob patterns (e.g., "**/*.tex", "src/**/*.ts"). Returns paths sorted by modification time. ' +
+    'Also supports virtual storage paths: use "/memories" to search memory files, "/executions" to search execution data.',
   schema: GlobInputSchema,
 }) {
   protected async execute(input: GlobInput): Promise<ToolResult> {
-    const { path, display } = resolveAndFormat(input.path ?? undefined);
+    const inputPath = input.path ?? undefined;
+
+    const virtual = inputPath ? tryResolveVirtualPath(inputPath) : null;
+    if (virtual) {
+      return this.executeVirtual(input, inputPath!, virtual);
+    }
+
+    return this.executeWorkspace(input, inputPath);
+  }
+
+  /** Glob workspace files (original behavior). */
+  private async executeWorkspace(
+    input: GlobInput,
+    inputPath: string | undefined,
+  ): Promise<ToolResult> {
+    const { path: resolvedPath, display } = resolveAndFormat(inputPath);
     const gitignore = await getGitignoreMatcher();
 
     let matches: string[];
     try {
       matches = await glob(input.pattern, {
-        cwd: path.absolute,
+        cwd: resolvedPath.absolute,
         dot: true,
         nodir: false,
         absolute: false,
@@ -56,12 +76,11 @@ export class GlobTool extends defineTool({
       );
     }
 
-    // Process matches in parallel for better performance
     const statPromises = matches.map(
       async (match): Promise<GlobMatchInfo | null> => {
         let resolved;
         try {
-          resolved = joinWorkspaceRelativePath(path.relative, match);
+          resolved = joinWorkspaceRelativePath(resolvedPath.relative, match);
         } catch (err) {
           throw new ToolError(
             `Match resolved outside the workspace: ${match} (${toErrorMessage(err)})`,
@@ -84,6 +103,61 @@ export class GlobTool extends defineTool({
       (item): item is GlobMatchInfo => item !== null,
     );
 
+    return this.formatMatches(input, display, decorated);
+  }
+
+  /** Glob virtual storage paths (/memories, /executions). */
+  private async executeVirtual(
+    input: GlobInput,
+    virtualPath: string,
+    resolved: {
+      absolutePath: string;
+      namespace: { display: string; storage: string };
+    },
+  ): Promise<ToolResult> {
+    const { absolutePath, namespace } = resolved;
+
+    const exists = await StorageFS.exists(namespace.storage);
+    if (!exists) {
+      return {
+        summary: `No data found at ${virtualPath}`,
+        output: `The ${namespace.display} directory does not exist yet.`,
+      };
+    }
+
+    let matches: string[];
+    try {
+      matches = await glob(input.pattern, {
+        cwd: absolutePath,
+        dot: true,
+        nodir: false,
+        absolute: false,
+        follow: false,
+      });
+    } catch (err) {
+      throw new ToolError(
+        `Glob pattern error: ${toErrorMessage(err)}. ` +
+          `Check syntax: use ** for recursive, * for single level. Example: "**/*.json"`,
+      );
+    }
+
+    const statPromises = matches.map(async (match): Promise<GlobMatchInfo> => {
+      const storagePath = path.join(namespace.storage, match);
+      const stat = await StorageFS.stat(storagePath).catch(() => null);
+      const displayPath = `${namespace.display}/${toPosixPath(match)}`;
+      return { relativePath: displayPath, mtime: stat?.mtime ?? 0 };
+    });
+
+    const decorated = await Promise.all(statPromises);
+    return this.formatMatches(input, virtualPath, decorated);
+  }
+
+  /** Shared formatting for glob matches. */
+  private formatMatches(
+    input: GlobInput,
+    display: string,
+    decorated: GlobMatchInfo[],
+  ): ToolResult {
     const sorted = decorated.sort((a, b) => {
       if (b.mtime !== a.mtime) {
         return b.mtime - a.mtime;
