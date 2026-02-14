@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 import { toErrorMessage } from '@common/errors';
 import { ToolResult } from '@tools/result';
-import { isTimeoutErrorCode, buildTimeoutMessage } from '@tools/timeouts';
+import { isTimeoutErrorCode } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 
 const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
@@ -180,10 +180,9 @@ Useful for finding the right lemma when you know roughly what type it should hav
           query,
           result: {
             summary: 'Timeout',
-            output: buildTimeoutMessage(
-              'Loogle API request',
-              LOOGLE_TIMEOUT_MS,
-            ),
+            output:
+              `Loogle API request timed out after ${LOOGLE_TIMEOUT_MS / 1000}s. ` +
+              `The Loogle server may be overloaded. Try again, or simplify the query.`,
             isError: true,
           },
         };
