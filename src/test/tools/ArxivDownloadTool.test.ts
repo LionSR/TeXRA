@@ -93,7 +93,7 @@ describe('ArxivDownloadTool', () => {
     assert.strictEqual(validateCalls, 1);
     assert.strictEqual(receivedId, '2401.12345v2');
     assert.strictEqual(receivedAutoIndent, false);
-    assert.strictEqual(result.summary, 'Downloaded arXiv source to sample');
+    assert.strictEqual(result.summary, 'arXiv source available at sample');
     assert.ok(result.output?.includes('Listing for sample'));
     assert.ok(result.output?.includes('file main.tex'));
   });
