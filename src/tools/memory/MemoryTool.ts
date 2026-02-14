@@ -14,10 +14,10 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { defineTool } from '../core/define';
 import { ToolError, type ToolResult } from '../result';
 import {
-  countOccurrences,
-  formatLinesWithNumbers,
-  requireField,
-} from '../utils';
+  recordToolFileRead,
+  requireFileReadForEdit,
+} from '../fileInteractions';
+import { formatLinesWithNumbers, requireField } from '../utils';
 
 // Local imports - shared memory constants and utilities
 import {
@@ -166,6 +166,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     }
 
     const content = normalizeLineEndings(await StorageFS.read(resolvedPath));
+    recordToolFileRead(inputPath);
     const lines = content.split('\n');
     if (lines.length > 0 && lines.at(-1) === '') {
       lines.pop();
@@ -204,6 +205,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     await StorageFS.ensureDir(MEMORY_STORAGE_ROOT);
     await StorageFS.ensureDir(path.dirname(resolvedPath));
     await StorageFS.write(resolvedPath, fileText);
+    recordToolFileRead(inputPath);
 
     return {
       summary: `Created memory file: ${inputPath}`,
@@ -224,6 +226,12 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
 
     const resolvedPath = this.resolveMemoryPath(inputPath);
     await this.requireEditableFile(resolvedPath, inputPath);
+
+    // Gate: require view before edit (matches edit_file behavior)
+    const readGate = requireFileReadForEdit(inputPath, true);
+    if (readGate) {
+      return readGate;
+    }
 
     const content = normalizeLineEndings(await StorageFS.read(resolvedPath));
     const occurrences = content.split(oldStr).length - 1;
@@ -249,6 +257,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const updated =
       content.slice(0, idx) + newStr + content.slice(idx + oldStr.length);
     await StorageFS.write(resolvedPath, updated);
+    recordToolFileRead(inputPath);
 
     const updatedLines = updated.split('\n');
     const numbered = formatLinesWithNumbers(updatedLines);
@@ -267,6 +276,12 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const resolvedPath = this.resolveMemoryPath(inputPath);
     await this.requireEditableFile(resolvedPath, inputPath);
 
+    // Gate: require view before edit (matches edit_file behavior)
+    const readGate = requireFileReadForEdit(inputPath, true);
+    if (readGate) {
+      return readGate;
+    }
+
     const content = normalizeLineEndings(await StorageFS.read(resolvedPath));
     const lines = content.split('\n');
     const totalLines = lines.length;
@@ -284,6 +299,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     ];
 
     await StorageFS.write(resolvedPath, updatedLines.join('\n'));
+    recordToolFileRead(inputPath);
 
     return {
       summary: `Inserted text at line ${insertLine} in: ${inputPath}`,
