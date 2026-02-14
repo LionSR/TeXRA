@@ -1,19 +1,13 @@
 /**
  * Tool dashboard data builder.
  *
- * Defines static metadata for all tool groups and performs runtime
- * availability checks for tools that depend on external binaries,
- * applications, or VS Code extensions.
+ * Defines static UI metadata for all tool groups and delegates runtime
+ * availability checks to {@link @tools/toolAvailability}.
  */
-
-// Third-party imports
-import * as vscode from 'vscode';
-import axios from 'axios';
 
 // Local imports
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
-import { getZoteroPort } from '@tools/zotero/bbtClient';
-import { checkToolInstalled } from '@utils/system/toolUtils';
+import { runExternalToolChecks } from '@tools/toolAvailability';
 
 // ============================================================
 // Static tool metadata
@@ -102,17 +96,20 @@ const BUILTIN_TOOLS: Omit<ToolDashboardItem, 'status'>[] = [
   },
 ];
 
-/** Tool groups that require external dependencies. */
-const EXTERNAL_TOOLS: (Omit<ToolDashboardItem, 'status'> & {
-  check: () => Promise<boolean>;
-})[] = [
-  {
+/**
+ * UI-only metadata for external tool groups.
+ * Keyed by group ID (must match {@link EXTERNAL_TOOL_CHECKS} entries).
+ */
+const EXTERNAL_TOOL_UI: Record<
+  string,
+  Omit<ToolDashboardItem, 'status' | 'tools'>
+> = {
+  texcount: {
     id: 'texcount',
     name: 'TeXcount',
     category: 'latex',
     description:
       'Count words, headers, figures, and other elements in LaTeX documents.',
-    tools: ['texcount'],
     requiresSetup: true,
     installGuide:
       'TeXcount is a Perl script for counting words in LaTeX files.\n\n' +
@@ -122,15 +119,13 @@ const EXTERNAL_TOOLS: (Omit<ToolDashboardItem, 'status'> & {
       '  Windows: Install via MiKTeX or TeX Live package manager',
     installUrl: 'https://app.uio.no/ifi/texcount/',
     configNotes: 'Part of most TeX Live distributions.',
-    check: () => checkToolInstalled('texcount', false),
   },
-  {
+  wolfram: {
     id: 'wolfram',
     name: 'Wolfram Language',
     category: 'computation',
     description:
       'Execute Wolfram Language code for symbolic math, computation, and data analysis.',
-    tools: ['wolfram'],
     requiresSetup: true,
     installGuide:
       'Requires WolframScript or the Wolfram Engine.\n\n' +
@@ -142,15 +137,13 @@ const EXTERNAL_TOOLS: (Omit<ToolDashboardItem, 'status'> & {
     installUrl: 'https://www.wolfram.com/engine/',
     configNotes:
       'Requires a free Wolfram Engine license or Mathematica installation.',
-    check: () => checkToolInstalled('wolframscript', false),
   },
-  {
+  zotero: {
     id: 'zotero',
     name: 'Zotero Integration',
     category: 'academic',
     description:
       'Search, add items to, and export citations from your Zotero library. Requires Better BibTeX plugin.',
-    tools: ['zotero_search', 'zotero_add', 'zotero_export'],
     requiresSetup: true,
     installGuide:
       'Requires Zotero with the Better BibTeX plugin installed.\n\n' +
@@ -165,33 +158,13 @@ const EXTERNAL_TOOLS: (Omit<ToolDashboardItem, 'status'> & {
     installUrl: 'https://retorque.re/zotero-better-bibtex/installation/',
     configNotes:
       'Zotero must be running with Better BibTeX installed. Port configurable via texra.bib.zoteroPort.',
-    check: async () => {
-      try {
-        const port = getZoteroPort();
-        await axios.get(`http://localhost:${port}/better-bibtex/json-rpc`, {
-          timeout: 2000,
-        });
-        return true;
-      } catch {
-        // 405 Method Not Allowed means the server is running but expects POST
-        // Any response from the server means Zotero + BBT is available
-        return false;
-      }
-    },
   },
-  {
+  lean4: {
     id: 'lean4',
     name: 'Lean 4 Proof Assistant',
     category: 'lean',
     description:
       'Interact with Lean 4 projects: check diagnostics, inspect terms, search Loogle, and manage files.',
-    tools: [
-      'lean_diagnostics',
-      'lean_file',
-      'lean_project',
-      'lean_inspect',
-      'lean_loogle',
-    ],
     requiresSetup: true,
     installGuide:
       'Requires the Lean 4 VS Code extension (leanprover.lean4).\n\n' +
@@ -204,12 +177,8 @@ const EXTERNAL_TOOLS: (Omit<ToolDashboardItem, 'status'> & {
     installUrl:
       'https://marketplace.visualstudio.com/items?itemName=leanprover.lean4',
     configNotes: 'Lean 4 VS Code extension must be installed and active.',
-    check: async () => {
-      const lean4Ext = vscode.extensions.getExtension('leanprover.lean4');
-      return lean4Ext !== undefined;
-    },
   },
-];
+};
 
 // ============================================================
 // Public API
@@ -217,6 +186,9 @@ const EXTERNAL_TOOLS: (Omit<ToolDashboardItem, 'status'> & {
 
 /**
  * Build the complete tool dashboard items list with runtime availability checks.
+ *
+ * Always runs fresh external checks (and updates the availability cache
+ * in {@link @tools/toolAvailability} as a side effect).
  */
 export async function buildToolDashboardItems(): Promise<ToolDashboardItem[]> {
   // Built-in tools are always available
@@ -225,20 +197,16 @@ export async function buildToolDashboardItems(): Promise<ToolDashboardItem[]> {
     status: 'available' as const,
   }));
 
-  // Check external tools in parallel
-  const externalChecks = await Promise.all(
-    EXTERNAL_TOOLS.map(async ({ check, ...tool }) => {
-      try {
-        const available = await check();
-        return {
-          ...tool,
-          status: available ? ('available' as const) : ('not-found' as const),
-        };
-      } catch {
-        return { ...tool, status: 'unknown' as const };
-      }
-    }),
-  );
+  // Run fresh checks — also updates the availability cache
+  const results = await runExternalToolChecks();
 
-  return [...builtinItems, ...externalChecks];
+  // Merge check results with UI metadata
+  const externalItems: ToolDashboardItem[] = [];
+  for (const { id, tools, status } of results) {
+    const ui = EXTERNAL_TOOL_UI[id];
+    if (!ui) continue;
+    externalItems.push({ ...ui, tools: [...tools], status });
+  }
+
+  return [...builtinItems, ...externalItems];
 }
