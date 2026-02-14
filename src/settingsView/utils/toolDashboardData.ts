@@ -1,27 +1,56 @@
 /**
  * Tool dashboard data builder.
  *
- * Defines static UI metadata for all tool groups and delegates runtime
- * availability checks to {@link @tools/toolAvailability}.
+ * Enriches tool groups with runtime availability and per-tool descriptions
+ * from the registry. External tool UI metadata lives in
+ * {@link @tools/toolAvailability EXTERNAL_TOOL_CHECKS} — no parallel map here.
  */
 
 // Local imports
-import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
-import { runExternalToolChecks } from '@tools/toolAvailability';
+import type {
+  ToolDashboardItem,
+  ToolInfo,
+} from '@shared/schemas/settingsViewMessages';
+import {
+  EXTERNAL_TOOL_CHECKS,
+  runExternalToolChecks,
+} from '@tools/toolAvailability';
+import { getDefaultToolRegistry } from '@tools/registry';
+
+// ============================================================
+// Tool description enrichment
+// ============================================================
+
+/**
+ * Look up per-tool descriptions from the registry.
+ * Falls back to name-only when a tool isn't registered.
+ */
+function enrichTools(toolNames: readonly string[]): ToolInfo[] {
+  const registry = getDefaultToolRegistry();
+  return toolNames.map((name) => {
+    const tool = registry.get(name);
+    return {
+      name,
+      description: tool?.definition.description,
+    };
+  });
+}
 
 // ============================================================
 // Static tool metadata
 // ============================================================
 
 /** Tool groups that are always available (built-in, no external deps). */
-const BUILTIN_TOOLS: Omit<ToolDashboardItem, 'status'>[] = [
+const BUILTIN_TOOLS: (Omit<ToolDashboardItem, 'status' | 'tools'> & {
+  toolNames: readonly string[];
+})[] = [
   {
     id: 'file-ops',
     name: 'File & Shell Operations',
     category: 'file',
     description:
       'Read, write, edit files and run shell commands. Includes glob/grep search and directory listing.',
-    tools: [
+    toolNames: [
       'bash',
       'read_file',
       'write_file',
@@ -39,7 +68,7 @@ const BUILTIN_TOOLS: Omit<ToolDashboardItem, 'status'>[] = [
     category: 'latex',
     description:
       'Extract figures, TikZ diagrams, and bibliography entries from LaTeX documents.',
-    tools: ['extract_figures', 'extract_tikz_figures', 'extract_bib_entries'],
+    toolNames: ['extract_figures', 'extract_tikz_figures', 'extract_bib_entries'],
     requiresSetup: false,
   },
   {
@@ -48,7 +77,7 @@ const BUILTIN_TOOLS: Omit<ToolDashboardItem, 'status'>[] = [
     category: 'latex',
     description:
       'Report LaTeX compilation errors and warnings from the VS Code Problems panel.',
-    tools: ['diagnostics'],
+    toolNames: ['diagnostics'],
     requiresSetup: false,
   },
   {
@@ -57,7 +86,7 @@ const BUILTIN_TOOLS: Omit<ToolDashboardItem, 'status'>[] = [
     category: 'academic',
     description:
       'Search arXiv papers, retrieve metadata, and download LaTeX source packages.',
-    tools: ['arxiv_search', 'arxiv_metadata', 'download_arxiv_source'],
+    toolNames: ['arxiv_search', 'arxiv_metadata', 'download_arxiv_source'],
     requiresSetup: false,
   },
   {
@@ -66,7 +95,7 @@ const BUILTIN_TOOLS: Omit<ToolDashboardItem, 'status'>[] = [
     category: 'academic',
     description:
       'Search Crossref for academic publications by query or resolve DOIs to full metadata.',
-    tools: ['crossref_doi', 'crossref_search'],
+    toolNames: ['crossref_doi', 'crossref_search'],
     requiresSetup: false,
   },
   {
@@ -75,7 +104,7 @@ const BUILTIN_TOOLS: Omit<ToolDashboardItem, 'status'>[] = [
     category: 'web',
     description:
       'Search the web via DuckDuckGo Instant Answers and fetch/extract content from URLs.',
-    tools: ['web_search', 'web_fetch'],
+    toolNames: ['web_search', 'web_fetch'],
     requiresSetup: false,
   },
   {
@@ -84,7 +113,7 @@ const BUILTIN_TOOLS: Omit<ToolDashboardItem, 'status'>[] = [
     category: 'workflow',
     description:
       'Persistent memory across sessions, task tracking with to-do lists, and delegate work to sub-agents.',
-    tools: [
+    toolNames: [
       'memory',
       'todo_write',
       'delegate_workflow',
@@ -95,90 +124,6 @@ const BUILTIN_TOOLS: Omit<ToolDashboardItem, 'status'>[] = [
     requiresSetup: false,
   },
 ];
-
-/**
- * UI-only metadata for external tool groups.
- * Keyed by group ID (must match {@link EXTERNAL_TOOL_CHECKS} entries).
- */
-const EXTERNAL_TOOL_UI: Record<
-  string,
-  Omit<ToolDashboardItem, 'status' | 'tools'>
-> = {
-  texcount: {
-    id: 'texcount',
-    name: 'TeXcount',
-    category: 'latex',
-    description:
-      'Count words, headers, figures, and other elements in LaTeX documents.',
-    requiresSetup: true,
-    installGuide:
-      'TeXcount is a Perl script for counting words in LaTeX files.\n\n' +
-      'Installation:\n' +
-      '  Mac:     brew install texcount\n' +
-      '  Ubuntu:  sudo apt-get install texlive-extra-utils\n' +
-      '  Windows: Install via MiKTeX or TeX Live package manager',
-    installUrl: 'https://app.uio.no/ifi/texcount/',
-    configNotes: 'Part of most TeX Live distributions.',
-  },
-  wolfram: {
-    id: 'wolfram',
-    name: 'Wolfram Language',
-    category: 'computation',
-    description:
-      'Execute Wolfram Language code for symbolic math, computation, and data analysis.',
-    requiresSetup: true,
-    installGuide:
-      'Requires WolframScript or the Wolfram Engine.\n\n' +
-      'Installation:\n' +
-      '  Mac:     brew install wolfram-engine\n' +
-      '  Ubuntu:  sudo apt-get install wolfram-engine\n' +
-      '  Windows: Download from wolfram.com/engine\n\n' +
-      'Free Wolfram Engine licenses are available for development use.',
-    installUrl: 'https://www.wolfram.com/engine/',
-    configNotes:
-      'Requires a free Wolfram Engine license or Mathematica installation.',
-  },
-  zotero: {
-    id: 'zotero',
-    name: 'Zotero Integration',
-    category: 'academic',
-    description:
-      'Search, add items to, and export citations from your Zotero library. Requires Better BibTeX plugin.',
-    requiresSetup: true,
-    installGuide:
-      'Requires Zotero with the Better BibTeX plugin installed.\n\n' +
-      'Setup:\n' +
-      '  1. Install Zotero (zotero.org)\n' +
-      '  2. Install Better BibTeX plugin:\n' +
-      '     - Download from retorque.re/zotero-better-bibtex\n' +
-      '     - In Zotero: Tools > Add-ons > Install from File\n' +
-      '  3. Keep Zotero running while using TeXRA\n\n' +
-      'Better BibTeX exposes a JSON-RPC API on localhost:23119\n' +
-      'that TeXRA uses to communicate with your library.',
-    installUrl: 'https://retorque.re/zotero-better-bibtex/installation/',
-    configNotes:
-      'Zotero must be running with Better BibTeX installed. Port configurable via texra.bib.zoteroPort.',
-  },
-  lean4: {
-    id: 'lean4',
-    name: 'Lean 4 Proof Assistant',
-    category: 'lean',
-    description:
-      'Interact with Lean 4 projects: check diagnostics, inspect terms, search Loogle, and manage files.',
-    requiresSetup: true,
-    installGuide:
-      'Requires the Lean 4 VS Code extension (leanprover.lean4).\n\n' +
-      'Setup:\n' +
-      '  1. Install the "lean4" extension from VS Code Marketplace\n' +
-      '  2. Open a Lean 4 project (with lakefile.lean)\n' +
-      '  3. The extension will auto-install elan and Lean toolchain\n\n' +
-      'The Lean tools communicate via the Lean Language Server\n' +
-      'provided by the VS Code extension.',
-    installUrl:
-      'https://marketplace.visualstudio.com/items?itemName=leanprover.lean4',
-    configNotes: 'Lean 4 VS Code extension must be installed and active.',
-  },
-};
 
 // ============================================================
 // Public API
@@ -192,20 +137,34 @@ const EXTERNAL_TOOL_UI: Record<
  */
 export async function buildToolDashboardItems(): Promise<ToolDashboardItem[]> {
   // Built-in tools are always available
-  const builtinItems: ToolDashboardItem[] = BUILTIN_TOOLS.map((tool) => ({
-    ...tool,
-    status: 'available' as const,
-  }));
+  const builtinItems: ToolDashboardItem[] = BUILTIN_TOOLS.map(
+    ({ toolNames, ...rest }) => ({
+      ...rest,
+      tools: enrichTools(toolNames),
+      status: 'available' as const,
+    }),
+  );
 
   // Run fresh checks — also updates the availability cache
   const results = await runExternalToolChecks();
 
-  // Merge check results with UI metadata
+  // Merge check results with UI metadata from EXTERNAL_TOOL_CHECKS
   const externalItems: ToolDashboardItem[] = [];
   for (const { id, tools, status } of results) {
-    const ui = EXTERNAL_TOOL_UI[id];
-    if (!ui) continue;
-    externalItems.push({ ...ui, tools: [...tools], status });
+    const def = EXTERNAL_TOOL_CHECKS.find((c) => c.id === id);
+    if (!def) continue;
+    externalItems.push({
+      id: def.id,
+      name: def.name,
+      category: def.category,
+      description: def.description,
+      tools: enrichTools(tools),
+      status,
+      requiresSetup: true,
+      installGuide: def.installGuide,
+      installUrl: def.installUrl,
+      configNotes: def.configNotes,
+    });
   }
 
   return [...builtinItems, ...externalItems];
