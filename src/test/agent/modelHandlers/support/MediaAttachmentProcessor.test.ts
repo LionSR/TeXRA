@@ -9,6 +9,7 @@ import { strict as assert } from 'assert';
 import { PDFDocument, StandardFonts } from '@cantoo/pdf-lib';
 
 // Local imports - agent
+import { DEFAULT_MODEL_CAPABILITIES, type ModelCapabilities } from 'llm-zoo';
 import {
   MediaAttachmentProcessor,
   type MediaFileResult,
@@ -18,7 +19,6 @@ import {
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // Internal imports
-import { DEFAULT_MODEL_CAPABILITIES, type ModelCapabilities } from 'llm-zoo';
 import { AbsoluteFS, pathToLocation, getShortDisplayPath } from '@utils/files';
 
 interface LoggerStub extends Partial<AgentLogger> {

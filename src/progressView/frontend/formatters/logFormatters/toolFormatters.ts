@@ -10,7 +10,6 @@
 // Local imports - shared utilities
 import { isPlainObject } from '@shared/utils/string';
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
-import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
 import type { EditInput } from '@tools/EditTool';
 import type { TextEditorInput } from '@tools/TextEditorTool';
@@ -21,6 +20,7 @@ import type {
   WorkflowAgentInput,
 } from '@tools/WorkflowTool';
 import type { AcceptRunFilesInput } from '@tools/AcceptRunFilesTool';
+import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 
 // Local imports - Lit template utilities
 import {
