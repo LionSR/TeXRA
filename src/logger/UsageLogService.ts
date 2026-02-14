@@ -36,13 +36,16 @@ class UsageLogServiceImpl {
   private isFlushing = false;
   private config: UsageLogConfig = DEFAULT_CONFIG;
   private extensionVersion: string | undefined;
+  private editorType: string | undefined;
 
   initialize(
     config?: Partial<UsageLogConfig>,
     extensionVersion?: string,
+    editorType?: string,
   ): void {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.extensionVersion = extensionVersion;
+    this.editorType = editorType;
     this.startFlushTimer();
 
     logger.debug(
@@ -63,6 +66,7 @@ class UsageLogServiceImpl {
       ...entry,
       timestamp: new Date().toISOString(),
       extensionVersion: this.extensionVersion,
+      editorType: this.editorType,
     });
     logger.debug(
       CHANNEL,
