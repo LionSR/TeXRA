@@ -1,19 +1,11 @@
-// Standard library imports
 import * as path from 'path';
-
-// Third-party imports
 import * as vscode from 'vscode';
-
-// Local imports - filesystem
 import { RelativeFS } from './relativeFS';
 import { locatePathInRoot, type ResolvedPath } from './workspaceRoot';
 
 /**
- * Static filesystem helper rooted at the VS Code workspace folder.
- *
- * Inherits file I/O from {@link RelativeFS}. Path resolution uses VS Code's
- * `asRelativePath` for symlink-aware handling of absolute paths, and
- * {@link locatePathInRoot} for relative paths.
+ * Static filesystem rooted at the VS Code workspace folder.
+ * File I/O from {@link RelativeFS}; path resolution via VS Code + {@link locatePathInRoot}.
  */
 export class WorkspaceFS extends RelativeFS {
   protected static override getBasePath(): string {
@@ -28,13 +20,7 @@ export class WorkspaceFS extends RelativeFS {
     return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   }
 
-  /**
-   * Convert an absolute path to a workspace-relative path.
-   * Uses VS Code's `asRelativePath` which properly handles symlinks.
-   * Returns the original path if no workspace is open.
-   *
-   * Always returns forward slashes for cross-platform consistency.
-   */
+  /** Workspace-relative path via VS Code's symlink-aware asRelativePath. */
   public static relativePath(filePath: string): string {
     if (!this.getPath()) {
       return filePath;
@@ -44,58 +30,33 @@ export class WorkspaceFS extends RelativeFS {
       .replaceAll('\\', '/');
   }
 
-  /**
-   * Convert a file path to an absolute path.
-   * If already absolute, returns unchanged. Otherwise resolves relative to workspace.
-   */
+  /** Absolute path from relative. Already-absolute paths pass through. */
   public static toAbsolute(filePath: string): string {
     return path.isAbsolute(filePath) ? filePath : this.fullPath(filePath);
   }
 
   /**
-   * Resolve a path (absolute or relative) against the workspace root.
-   *
-   * Returns a discriminated union — callers apply their own policy
-   * (throw on external, create ExternalFileLocation, etc.).
-   *
-   * Absolute paths use VS Code's `asRelativePath` for symlink-aware
-   * resolution. Relative paths use {@link locatePathInRoot} (pure `path`
-   * logic). No-workspace case treats everything as external.
+   * Resolve a path against the workspace root.
+   * Returns 'workspace' or 'external' — callers apply their own policy.
    */
   public static locatePath(inputPath: string): ResolvedPath {
-    const workspaceRoot = this.getPath();
+    const root = this.getPath();
 
-    // No workspace — everything is external
-    if (!workspaceRoot) {
-      if (!inputPath) {
-        return { kind: 'external', absolutePath: '' };
-      }
+    if (!root) {
+      if (!inputPath) return { kind: 'external', absolutePath: '' };
       return { kind: 'external', absolutePath: path.resolve(inputPath) };
     }
 
-    // Empty input → workspace root itself
-    if (!inputPath) {
-      return {
-        kind: 'workspace',
-        absolutePath: workspaceRoot,
-        relativePath: '',
-      };
-    }
-
-    // Absolute paths: use VS Code's asRelativePath for symlink handling
+    // Absolute paths: VS Code's asRelativePath for symlink handling
     if (path.isAbsolute(inputPath)) {
       const relative = this.relativePath(inputPath);
       if (!path.isAbsolute(relative) && !relative.startsWith('..')) {
-        return {
-          kind: 'workspace',
-          absolutePath: inputPath,
-          relativePath: relative,
-        };
+        return { kind: 'workspace', absolutePath: inputPath, relativePath: relative };
       }
       return { kind: 'external', absolutePath: inputPath };
     }
 
-    // Relative paths: pure path logic, no VS Code dependency
-    return locatePathInRoot(workspaceRoot, inputPath);
+    // Empty + relative paths: pure path logic
+    return locatePathInRoot(root, inputPath);
   }
 }
