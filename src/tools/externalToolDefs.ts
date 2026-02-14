@@ -149,4 +149,67 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       return lean4Ext !== undefined;
     },
   },
+
+  // ── System dependencies (no agent tools gated) ───────────────
+  {
+    id: 'latex-format',
+    tools: [],
+    name: 'LaTeX Formatting (latexindent)',
+    category: 'system',
+    description:
+      'Format and indent LaTeX documents. Requires latexindent and Perl.',
+    installGuide:
+      'latexindent is a Perl script for formatting LaTeX files.\n\n' +
+      'Installation:\n' +
+      '  Mac:     brew install latexindent\n' +
+      '  Ubuntu:  sudo apt-get install texlive-extra-utils\n' +
+      '  Windows: Install via MiKTeX or TeX Live package manager\n\n' +
+      'Perl is also required:\n' +
+      '  Mac:     brew install perl\n' +
+      '  Ubuntu:  sudo apt-get install perl\n' +
+      '  Windows: Download from strawberryperl.com',
+    installUrl: 'https://github.com/cmhughes/latexindent.pl',
+    configNotes: 'Part of most TeX Live distributions. Requires Perl runtime.',
+    check: async () => {
+      const [hasLatexindent, hasPerl] = await Promise.all([
+        checkToolInstalled('latexindent', false),
+        checkToolInstalled('perl', false),
+      ]);
+      return hasLatexindent && hasPerl;
+    },
+  },
+  {
+    id: 'image-processing',
+    tools: [],
+    name: 'Image Processing (Ghostscript + GM/IM)',
+    category: 'system',
+    description:
+      'Convert PDF pages to PNG images for preview. Requires Ghostscript and either GraphicsMagick or ImageMagick.',
+    installGuide:
+      'Ghostscript converts PDF to raster images; GraphicsMagick or\n' +
+      'ImageMagick handles the final PNG output.\n\n' +
+      'Ghostscript:\n' +
+      '  Mac:     brew install ghostscript\n' +
+      '  Ubuntu:  sudo apt-get install ghostscript\n' +
+      '  Windows: Download from ghostscript.com\n\n' +
+      'GraphicsMagick (recommended):\n' +
+      '  Mac:     brew install graphicsmagick\n' +
+      '  Ubuntu:  sudo apt-get install graphicsmagick\n' +
+      '  Windows: Download from graphicsmagick.org\n\n' +
+      'OR ImageMagick:\n' +
+      '  Mac:     brew install imagemagick\n' +
+      '  Ubuntu:  sudo apt-get install imagemagick\n' +
+      '  Windows: Download from imagemagick.org',
+    installUrl: 'https://ghostscript.com/releases/gsdnld.html',
+    configNotes:
+      'Needs Ghostscript plus either GraphicsMagick or ImageMagick.',
+    check: async () => {
+      const [hasGs, hasGm, hasMagick] = await Promise.all([
+        checkToolInstalled('gs', false),
+        checkToolInstalled('gm', false),
+        checkToolInstalled('magick', false),
+      ]);
+      return hasGs && (hasGm || hasMagick);
+    },
+  },
 ];
