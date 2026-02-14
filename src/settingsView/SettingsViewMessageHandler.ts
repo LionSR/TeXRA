@@ -84,6 +84,7 @@ import { getConfig } from '@utils/config/configUtils';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import { loadMemoryItems } from './utils/memoryFileSystem';
+import { buildToolDashboardItems } from './utils/toolDashboardData';
 import type {
   RemoteAgent,
   ProviderKeyStatus,
@@ -399,6 +400,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleOpenAgentFolder(data),
       [SETTINGS_VIEW_COMMANDS.CREATE_AGENT]: (data) =>
         this.handleCreateAgent(data),
+
+      // Tool dashboard handlers
+      [SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA]: () =>
+        this.handleGetToolDashboardData(),
+      [SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL]: (data) =>
+        this.handleOpenToolInstallUrl(data),
+      [SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS]: () =>
+        this.handleRecheckToolStatus(),
     };
   }
 
@@ -448,6 +457,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
 
   public async sendAllData(webview: vscode.Webview): Promise<void> {
+    // Tool dashboard involves network I/O (Zotero probe, etc.) — fire async
+    // so it doesn't block the initial render. The frontend shows a loading
+    // spinner until data arrives.
+    void this.sendToolDashboardData(webview);
+
     await Promise.all([
       this.sendMemoryData(webview),
       this.sendMemoryEnabled(webview),
@@ -1219,5 +1233,31 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         error,
       );
     }
+  }
+
+  // ============================================================
+  // Tool dashboard handler implementations
+  // ============================================================
+
+  public async sendToolDashboardData(webview: vscode.Webview): Promise<void> {
+    const items = await buildToolDashboardItems();
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+      items,
+    });
+  }
+
+  private async handleGetToolDashboardData(): Promise<void> {
+    await this.withActiveWebview((w) => this.sendToolDashboardData(w));
+  }
+
+  private async handleOpenToolInstallUrl(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_TOOL_INSTALL_URL>,
+  ): Promise<void> {
+    await vscode.env.openExternal(vscode.Uri.parse(data.url));
+  }
+
+  private async handleRecheckToolStatus(): Promise<void> {
+    await this.withActiveWebview((w) => this.sendToolDashboardData(w));
   }
 }

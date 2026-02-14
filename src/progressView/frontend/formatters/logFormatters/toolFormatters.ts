@@ -10,6 +10,8 @@
 // Local imports - shared utilities
 import { isPlainObject } from '@shared/utils/string';
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
+import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
 import type { EditInput } from '@tools/EditTool';
 import type { TextEditorInput } from '@tools/TextEditorTool';
@@ -20,7 +22,6 @@ import type {
   WorkflowAgentInput,
 } from '@tools/WorkflowTool';
 import type { AcceptRunFilesInput } from '@tools/AcceptRunFilesTool';
-import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 
 // Local imports - Lit template utilities
 import {
@@ -143,14 +144,6 @@ const STATUS_ICONS: Record<string, string> = {
   failed: 'codicon codicon-error',
   in_progress: 'codicon codicon-sync spin',
 };
-
-/** Tools that represent agent delegation (have restorable config). Includes legacy names for historical log entries. */
-const DELEGATION_TOOLS = new Set([
-  'delegate_agent',
-  'delegate_workflow',
-  'propose_agent',
-  'propose_workflow',
-]);
 
 type ToolSectionOptions = {
   toolName?: string;
