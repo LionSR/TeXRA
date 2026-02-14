@@ -87,6 +87,9 @@ const TIMEOUT_GATED_BY_ACTION: Record<string, string> = {
   executions: 'wait',
 };
 
+/** Default action for the executions tool when the model omits it. */
+const EXECUTIONS_DEFAULT_ACTION = 'view';
+
 /**
  * Extract the effective timeout for a tool call from its input.
  * Returns undefined for tools without a configurable timeout.
@@ -253,7 +256,7 @@ export function formatToolUseTemplate(
   const headerSummary =
     normalizedToolLog.headerSummary ||
     (toolName === 'executions' && isPlainObject(input)
-      ? [input.action, input.path].filter(Boolean).join(' ')
+      ? `${input.action ?? EXECUTIONS_DEFAULT_ACTION} ${input.path ?? ''}`.trim()
       : '');
   const titleText = headerSummary
     ? `${titleBase} — ${headerSummary}`
@@ -402,7 +405,7 @@ export function formatToolUseTemplate(
   ) {
     const execInput = input as ExecutionsToolInput;
     const execPath = execInput.path ?? '';
-    const action = execInput.action ?? 'view';
+    const action = execInput.action ?? EXECUTIONS_DEFAULT_ACTION;
 
     // Show the virtual path being accessed
     if (execPath) {
