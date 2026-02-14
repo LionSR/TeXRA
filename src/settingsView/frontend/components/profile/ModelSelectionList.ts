@@ -107,20 +107,18 @@ export class ModelSelectionList extends LitElement {
 
     return html`
       <div class="model-row${unavailableClass}">
-        <label>
-          <input
-            type="checkbox"
-            .checked=${model.enabled}
-            @change=${(e: Event) => {
-              const checked = (e.target as HTMLInputElement).checked;
-              this.dispatchEvent(
-                ModelSelectionEvents.setModelEnabled({
-                  modelName: model.name,
-                  enabled: checked,
-                }),
-              );
-            }}
-          />
+        <vscode-checkbox
+          ?checked=${model.enabled}
+          @change=${(e: Event) => {
+            const checked = (e.target as HTMLInputElement).checked;
+            this.dispatchEvent(
+              ModelSelectionEvents.setModelEnabled({
+                modelName: model.name,
+                enabled: checked,
+              }),
+            );
+          }}
+        >
           <span class="model-name">${model.name}</span>
           ${!available
             ? html`<span
@@ -128,7 +126,7 @@ export class ModelSelectionList extends LitElement {
                 title="Requires personal API key"
               ></span>`
             : nothing}
-        </label>
+        </vscode-checkbox>
         <span class="model-metadata">
           ${model.contextWindow
             ? html`<span>${model.contextWindow}</span>`
@@ -199,21 +197,21 @@ export class ModelSelectionList extends LitElement {
     return html`
       <div class="polish-model-row">
         <label>Polish model:</label>
-        <select
+        <vscode-single-select
           class="polish-model-select"
           .value=${this.polishModel}
           @change=${this.handlePolishModelChange}
         >
           ${enabledModels.map(
             (m) =>
-              html`<option
+              html`<vscode-option
                 value=${m.name}
                 ?selected=${m.name === this.polishModel}
               >
                 ${m.name}
-              </option>`,
+              </vscode-option>`,
           )}
-        </select>
+        </vscode-single-select>
       </div>
     `;
   }

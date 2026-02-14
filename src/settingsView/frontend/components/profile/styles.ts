@@ -248,17 +248,8 @@ export const profileViewStyles: CSSResult = css`
     border-radius: var(--border-radius);
   }
 
-  .global-streaming-toggle label {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-small);
-    cursor: pointer;
-    color: var(--vscode-foreground);
+  .global-streaming-toggle vscode-checkbox {
     font-weight: 500;
-  }
-
-  .global-streaming-toggle input[type='checkbox'] {
-    accent-color: var(--vscode-focusBorder);
   }
 
   .global-streaming-description {
@@ -317,17 +308,14 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .provider-setting label {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-small);
-    cursor: pointer;
-    color: var(--vscode-foreground);
     font-size: var(--font-size-sm);
+    color: var(--vscode-foreground);
     min-width: 120px;
   }
 
-  .provider-setting input[type='checkbox'] {
-    accent-color: var(--vscode-focusBorder);
+  .provider-setting vscode-checkbox {
+    font-size: var(--font-size-sm);
+    min-width: 120px;
   }
 
   .provider-setting--block {
@@ -372,23 +360,6 @@ export const profileViewStyles: CSSResult = css`
   .endpoint-input {
     flex: 1;
     max-width: 400px;
-    padding: var(--spacing-small) var(--spacing-medium);
-    background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
-    border: var(--border-thin) solid var(--color-border);
-    border-radius: var(--border-radius);
-    font-size: var(--font-size-sm);
-    font-family: var(--vscode-editor-font-family);
-  }
-
-  .endpoint-input:focus {
-    outline: none;
-    border-color: var(--vscode-focusBorder);
-  }
-
-  .endpoint-input::placeholder {
-    color: var(--color-text-secondary);
-    opacity: var(--opacity-subtle);
   }
 
   /* ============================================
@@ -424,18 +395,6 @@ export const profileViewStyles: CSSResult = css`
   .polish-model-select {
     flex: 1;
     max-width: 300px;
-    padding: var(--spacing-small) var(--spacing-medium);
-    background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
-    border: var(--border-thin) solid var(--color-border);
-    border-radius: var(--border-radius);
-    font-size: var(--font-size-sm);
-    font-family: var(--vscode-editor-font-family);
-  }
-
-  .polish-model-select:focus {
-    outline: none;
-    border-color: var(--vscode-focusBorder);
   }
 
   .provider-group {
@@ -505,19 +464,10 @@ export const profileViewStyles: CSSResult = css`
     background: var(--vscode-list-hoverBackground);
   }
 
-  .model-row label {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-small);
-    cursor: pointer;
+  .model-row vscode-checkbox {
     flex: 1;
     min-width: 0;
-    color: var(--vscode-foreground);
     font-size: var(--font-size-sm);
-  }
-
-  .model-row input[type='checkbox'] {
-    accent-color: var(--vscode-focusBorder);
   }
 
   .model-name {
@@ -529,7 +479,7 @@ export const profileViewStyles: CSSResult = css`
     display: flex;
     gap: var(--spacing-medium);
     color: var(--color-text-secondary);
-    font-size: var(--font-size-xs, 11px);
+    font-size: var(--font-size-xs);
     white-space: nowrap;
     margin-left: auto;
   }
@@ -565,8 +515,8 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .model-key-icon {
-    font-size: var(--font-size-xs, 11px);
+    font-size: var(--font-size-xs);
     color: var(--color-text-secondary);
-    margin-left: var(--spacing-tiny, 2px);
+    margin-left: var(--spacing-tiny);
   }
 `;
