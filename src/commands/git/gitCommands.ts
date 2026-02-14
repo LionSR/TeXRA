@@ -47,8 +47,14 @@ export function registerGitCommands(context: vscode.ExtensionContext): void {
   );
 }
 
-function isGitRepository(): boolean {
-  const workspacePath = WorkspaceFS.getPath();
+/**
+ * Check if the workspace (or a given path) is inside a git repository.
+ *
+ * @param rootPath - Optional root path override. Defaults to VS Code workspace.
+ *   Pass a worktree path to check a specific checkout.
+ */
+function isGitRepository(rootPath?: string): boolean {
+  const workspacePath = rootPath ?? WorkspaceFS.getPath();
   if (!workspacePath) {
     return false;
   }
@@ -59,9 +65,9 @@ function isGitRepository(): boolean {
   return result.exitCode === 0;
 }
 
-function getRecentCommits(): string[] | null {
-  const workspacePath = WorkspaceFS.getPath();
-  if (!workspacePath || !isGitRepository()) {
+function getRecentCommits(rootPath?: string): string[] | null {
+  const workspacePath = rootPath ?? WorkspaceFS.getPath();
+  if (!workspacePath || !isGitRepository(workspacePath)) {
     return null;
   }
 
@@ -95,7 +101,10 @@ function getRecentCommits(): string[] | null {
     .map((line) => line.trim());
 }
 
-function findCommitInHistory(commitHash: string): string | null {
+function findCommitInHistory(
+  commitHash: string,
+  rootPath?: string,
+): string | null {
   if (typeof commitHash !== 'string') {
     return null;
   }
@@ -105,7 +114,7 @@ function findCommitInHistory(commitHash: string): string | null {
     return null;
   }
 
-  const workspacePath = WorkspaceFS.getPath();
+  const workspacePath = rootPath ?? WorkspaceFS.getPath();
   if (!workspacePath) {
     return null;
   }
