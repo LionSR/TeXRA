@@ -35,10 +35,10 @@ import {
   loadAgents,
 } from '@agent/index';
 import {
+  getExecutionStore,
   listExecutions,
   deleteExecution,
   deleteAllExecutions,
-  readConfig,
 } from '@agent/storage';
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
@@ -835,7 +835,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     action: (config: AgentConfig) => Promise<void>,
   ): Promise<void> {
     try {
-      const raw = await readConfig(historyId as ExecutionId);
+      const raw = await getExecutionStore(historyId as ExecutionId).readConfig();
       if (!raw) {
         await vscode.window.showErrorMessage('History item not found');
         return;
