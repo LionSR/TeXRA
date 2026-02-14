@@ -11,6 +11,7 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 import { MEMORY_VIEW_COMMANDS } from '@common/webview/commands';
+import { commandOnly } from './messageFactories';
 
 // ============================================================
 // Data schemas
@@ -76,30 +77,30 @@ export const MemoryEnabledMessageSchema = z.object({
 export type MemoryEnabledMessage = z.infer<typeof MemoryEnabledMessageSchema>;
 
 // Inbound messages with command literals
-const GetMemoryDataMessageSchema = z.object({
-  command: z.literal(MEMORY_VIEW_COMMANDS.GET_MEMORY_DATA),
-});
+export const GetMemoryDataMessageSchema = commandOnly(
+  MEMORY_VIEW_COMMANDS.GET_MEMORY_DATA,
+);
 
-const OpenMemoryFileMessageSchema = z.object({
+export const OpenMemoryFileMessageSchema = z.object({
   command: z.literal(MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FILE),
   storagePath: z.string().min(1),
 });
 
-const OpenMemoryFolderMessageSchema = z.object({
-  command: z.literal(MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FOLDER),
-});
+export const OpenMemoryFolderMessageSchema = commandOnly(
+  MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,
+);
 
-const DeleteMemoryMessageSchema = z.object({
+export const DeleteMemoryMessageSchema = z.object({
   command: z.literal(MEMORY_VIEW_COMMANDS.DELETE_MEMORY),
   storagePath: z.string().min(1),
   displayPath: z.string().min(1),
 });
 
-const GetMemoryEnabledMessageSchema = z.object({
-  command: z.literal(MEMORY_VIEW_COMMANDS.GET_MEMORY_ENABLED),
-});
+export const GetMemoryEnabledMessageSchema = commandOnly(
+  MEMORY_VIEW_COMMANDS.GET_MEMORY_ENABLED,
+);
 
-const SetMemoryEnabledMessageSchema = z.object({
+export const SetMemoryEnabledMessageSchema = z.object({
   command: z.literal(MEMORY_VIEW_COMMANDS.SET_MEMORY_ENABLED),
   enabled: z.boolean(),
 });
