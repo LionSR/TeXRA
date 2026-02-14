@@ -48,7 +48,6 @@ function getExtraDirs(): string[] {
     const macHome = process.env.HOME;
     if (macHome) {
       dirs.push(path.join(macHome, 'bin'));
-      dirs.push(path.join(macHome, '.miktex', 'texmf', 'bin'));
     }
   } else if (platform === 'win32') {
     dirs.push(
@@ -127,11 +126,10 @@ function getExtraDirs(): string[] {
       '/snap/bin', // Ubuntu snap packages
       '/home/linuxbrew/.linuxbrew/bin',
     );
-    // MiKTeX on Linux: per-user binary and symlink directories
+    // MiKTeX on Linux: per-user symlink directory for private installs
     const linuxHome = process.env.HOME;
     if (linuxHome) {
       dirs.push(path.join(linuxHome, 'bin'));
-      dirs.push(path.join(linuxHome, '.miktex', 'texmf', 'bin'));
     }
   }
 
