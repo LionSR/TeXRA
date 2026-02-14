@@ -31,7 +31,7 @@ export type StreamConfig = z.infer<typeof StreamConfigSchema>;
 export const LaTeXCompileOptionsSchema = z.object({
   channel: z.string().optional(),
   outputDirectory: z.string().optional(),
-  compiler: z.enum(['pdflatex', 'latexmk']).prefault('pdflatex'),
+  compiler: z.enum(['pdflatex', 'latexmk']).prefault('latexmk'),
 });
 
 /** Input type - compiler optional with default applied by schema.parse() */

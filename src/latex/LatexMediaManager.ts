@@ -99,7 +99,6 @@ export class LatexMediaManager {
           await flexibleFS.ensureDir(pathToLocation(buildDir));
           const compiled = await compileLatex2Pdf(file, {
             outputDirectory: buildDir,
-            compiler: 'latexmk',
           });
           if (!compiled) {
             return undefined;

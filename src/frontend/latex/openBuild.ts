@@ -81,7 +81,6 @@ async function openAndBuildLatex(
     const outDir = path.join(path.dirname(uri.fsPath), 'build');
     const ok = await compileLatex2Pdf(pathToLocation(uri.fsPath), {
       outputDirectory: outDir,
-      compiler: 'latexmk',
     });
     if (!ok) {
       logger.warn(CHANNEL, `Internal LaTeX compilation failed for ${uri.fsPath}`);
