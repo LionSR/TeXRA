@@ -174,6 +174,9 @@ export async function buildWorkspaceInfoBlock(
 
   if (info.workspacePath) {
     lines.push(`Workspace: ${escapeXml(info.workspacePath)}`);
+    lines.push(
+      `Bash cwd: already set to the workspace path above — do not cd into it`,
+    );
   }
 
   lines.push(`Platform: ${escapeXml(info.platform)}`);
