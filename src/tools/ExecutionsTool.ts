@@ -72,8 +72,9 @@ const WORKFLOW_ONLY_FIELDS = new Set([
 const TOOL_USE_ONLY_FIELDS = new Set(['toolConfig']);
 
 /** Return paths available for a given agent category. */
-function getAvailablePaths(category?: string): string[] {
-  const common = ['config', 'report', 'children'];
+function getAvailablePaths(category?: string, hasChildren?: boolean): string[] {
+  const common = ['config', 'report'];
+  if (hasChildren) common.push('children');
   switch (category) {
     case 'toolUse':
       return [...common, 'conversation', 'todos'];
@@ -453,7 +454,10 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
         lines.push('', ...formatTodoSection(todos));
       }
 
-      const runningPaths = getAvailablePaths(handle.category);
+      const runningPaths = getAvailablePaths(
+        handle.category,
+        children.length > 0,
+      );
       lines.push(
         '',
         `Available paths: ${runningPaths.map((p) => `/executions/${executionId}/${p}`).join(', ')}`,
@@ -512,7 +516,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       lines.push('', 'Result:', report);
     }
 
-    const completedPaths = getAvailablePaths(category);
+    const completedPaths = getAvailablePaths(category, children.length > 0);
     lines.push(
       '',
       `Available paths: ${completedPaths.map((p) => `/executions/${executionId}/${p}`).join(', ')}`,
