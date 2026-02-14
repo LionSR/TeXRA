@@ -1269,6 +1269,18 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       const customDir = await agentDirectories.custom();
       const targetPath = path.join(customDir, path.basename(entry.path));
       await AbsoluteFS.ensureDir(customDir);
+
+      // Avoid overwriting an existing custom copy with user edits
+      if (await AbsoluteFS.exists(targetPath)) {
+        const overwrite = 'Overwrite';
+        const choice = await vscode.window.showWarningMessage(
+          `A custom copy already exists: ${path.basename(targetPath)}`,
+          { modal: true },
+          overwrite,
+        );
+        if (choice !== overwrite) return;
+      }
+
       await AbsoluteFS.copy(entry.path, targetPath);
 
       const doc = await vscode.workspace.openTextDocument(
