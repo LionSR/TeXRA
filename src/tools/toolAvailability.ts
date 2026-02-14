@@ -95,15 +95,27 @@ export const EXTERNAL_TOOL_CHECKS: readonly ExternalToolCheck[] = [
 // Check execution + cache
 // ============================================================
 
+/** Fail-closed fallback — if checks cannot run, all external tools are unavailable. */
+const ALL_EXTERNAL_TOOLS: ReadonlySet<string> = new Set(
+  EXTERNAL_TOOL_CHECKS.flatMap((c) => [...c.tools]),
+);
+
 /** Cached set of unavailable tool names. */
 let cached: ReadonlySet<string> | null = null;
 
-/** In-flight check promise — prevents duplicate concurrent checks. */
+/**
+ * In-flight dedup promise, owned exclusively by `getUnavailableToolNames()`.
+ * `runExternalToolChecks()` never touches this — so a direct dashboard call
+ * cannot break the dedup for concurrent agent callers.
+ */
 let inflight: Promise<ExternalToolCheckResult[]> | null = null;
 
 /**
  * Run all external tool checks in parallel.
- * Always performs fresh checks and updates the internal cache.
+ * Always performs fresh checks and updates the availability cache.
+ *
+ * Called directly by the tool dashboard (needs per-group results)
+ * and indirectly by `getUnavailableToolNames()` (needs the cache side-effect).
  *
  * @returns Per-group results with `available` / `not-found` / `unknown` status.
  */
@@ -128,7 +140,7 @@ export async function runExternalToolChecks(): Promise<
     ),
   );
 
-  // Update cache as a side effect
+  // Update cache — last writer wins, which is fine since fresher data is always better
   const unavailable = new Set<string>();
   for (const r of results) {
     if (r.status !== 'available') {
@@ -136,7 +148,6 @@ export async function runExternalToolChecks(): Promise<
     }
   }
   cached = unavailable;
-  inflight = null;
 
   return results;
 }
@@ -146,18 +157,20 @@ export async function runExternalToolChecks(): Promise<
  *
  * Returns cached results when available. Concurrent callers share a
  * single in-flight check (promise dedup) to avoid duplicate work.
+ * Fails closed — if checks cannot complete, all external tools are
+ * treated as unavailable rather than silently enabled.
  */
 export async function getUnavailableToolNames(): Promise<ReadonlySet<string>> {
   if (cached) return cached;
   if (!inflight) {
-    inflight = runExternalToolChecks();
+    inflight = runExternalToolChecks().finally(() => {
+      inflight = null;
+    });
   }
-  await inflight;
-  return cached ?? new Set();
-}
-
-/** Clear the cached availability data. Next access will re-check. */
-export function invalidateToolAvailability(): void {
-  cached = null;
-  inflight = null;
+  try {
+    await inflight;
+  } catch {
+    return ALL_EXTERNAL_TOOLS;
+  }
+  return cached ?? ALL_EXTERNAL_TOOLS;
 }
