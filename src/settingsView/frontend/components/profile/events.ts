@@ -55,6 +55,12 @@ export const AgentSelectionEvents = {
   }) => createEvent('agent-open-folder', detail),
   createAgent: (detail: { category: 'workflow' | 'toolUse' }) =>
     createEvent('agent-create', detail),
+  customizeAgent: (detail: {
+    agentName: string;
+    agentSource: AgentSourceType;
+  }) => createEvent('agent-customize', detail),
+  deleteCustomAgent: (detail: { agentName: string }) =>
+    createEvent('agent-delete-custom', detail),
   setCustomDir: () => createEvent('agent-set-custom-dir', undefined),
   resetCustomDir: () => createEvent('agent-reset-custom-dir', undefined),
   setAutoShowRemote: (detail: { enabled: boolean }) =>

@@ -4,6 +4,7 @@
  * Combines handlers from MemoryView, HistoryView, and ProfileView
  * into a single unified message handler.
  */
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { MODELS, MODEL_CONFIGS } from 'llm-zoo';
 
@@ -67,7 +68,7 @@ import {
 } from '@tools/approval';
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
-import { StorageFS } from '@utils/files';
+import { AbsoluteFS, StorageFS } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
 import {
   getToolUseMemoryEnabled,
@@ -264,6 +265,7 @@ function entryToSelectionItem(
     category: entry.category,
     description: entry.description,
     hasPath: Boolean(entry.path),
+    filePath: entry.path || undefined,
     tools: entry.tools,
     hasMultiple: entry.isMultiple ?? Boolean(entry.multiplePath),
     hasMultiplePath: Boolean(entry.multiplePath),
@@ -402,6 +404,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleOpenAgentFolder(data),
       [SETTINGS_VIEW_COMMANDS.CREATE_AGENT]: (data) =>
         this.handleCreateAgent(data),
+      [SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT]: (data) =>
+        this.handleCustomizeAgent(data),
+      [SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT]: (data) =>
+        this.handleDeleteCustomAgent(data),
 
       // Tool dashboard handlers
       [SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA]: () =>
@@ -1245,6 +1251,85 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     );
 
     await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
+  }
+
+  private async handleCustomizeAgent(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.CUSTOMIZE_AGENT>,
+  ): Promise<void> {
+    try {
+      const key = createKey(data.agentSource, data.agentName);
+      const entry = getAgent(key);
+      if (!entry?.path) {
+        await vscode.window.showErrorMessage(
+          `Agent not found or has no file: ${data.agentName}`,
+        );
+        return;
+      }
+
+      const customDir = await agentDirectories.custom();
+      const targetPath = path.join(customDir, path.basename(entry.path));
+      await AbsoluteFS.ensureDir(customDir);
+      await AbsoluteFS.copy(entry.path, targetPath);
+
+      const doc = await vscode.workspace.openTextDocument(
+        vscode.Uri.file(targetPath),
+      );
+      await vscode.window.showTextDocument(doc, { preview: false });
+
+      void vscode.window.showInformationMessage(
+        `Created custom copy: ${path.basename(targetPath)}`,
+      );
+
+      await loadAgents();
+      await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
+      void vscode.commands.executeCommand('texra.refreshAllOptions');
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to create custom agent copy',
+        error,
+      );
+    }
+  }
+
+  private async handleDeleteCustomAgent(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.DELETE_CUSTOM_AGENT>,
+  ): Promise<void> {
+    try {
+      const key = createKey('custom', data.agentName);
+      const entry = getAgent(key);
+      if (!entry?.path) {
+        await vscode.window.showErrorMessage(
+          `Custom agent not found: ${data.agentName}`,
+        );
+        return;
+      }
+
+      await AbsoluteFS.delete(entry.path, { recursive: false });
+
+      // Also delete the _multiple variant if it exists
+      if (entry.multiplePath) {
+        try {
+          await AbsoluteFS.delete(entry.multiplePath, { recursive: false });
+        } catch {
+          // Ignore if _multiple file doesn't exist
+        }
+      }
+
+      void vscode.window.showInformationMessage(
+        `Deleted custom agent: ${data.agentName}`,
+      );
+
+      await loadAgents();
+      await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
+      void vscode.commands.executeCommand('texra.refreshAllOptions');
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to delete custom agent',
+        error,
+      );
+    }
   }
 
   // ============================================================

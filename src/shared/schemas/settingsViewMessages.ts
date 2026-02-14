@@ -121,6 +121,7 @@ export const AgentSelectionItemSchema = z.object({
   category: AgentCategorySchema,
   description: z.string().optional(),
   hasPath: z.boolean(),
+  filePath: z.string().optional(),
   tools: z.array(z.string()).optional(),
   hasMultiple: z.boolean(), // supports multiple outputs (informational)
   hasMultiplePath: z.boolean(), // has openable _multiple YAML file
@@ -356,6 +357,17 @@ const CreateAgentMessageSchema = z.object({
   category: AgentCategorySchema,
 });
 
+const CustomizeAgentMessageSchema = z.object({
+  command: z.literal(CMD.CUSTOMIZE_AGENT),
+  agentName: z.string().min(1),
+  agentSource: AgentSourceSchema,
+});
+
+const DeleteCustomAgentMessageSchema = z.object({
+  command: z.literal(CMD.DELETE_CUSTOM_AGENT),
+  agentName: z.string().min(1),
+});
+
 // Auto-show remote agents inbound messages
 const GetAutoShowRemoteMessageSchema = commandOnly(CMD.GET_AUTO_SHOW_REMOTE);
 
@@ -449,6 +461,8 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetAllAgentsEnabledMessageSchema,
     OpenAgentFolderMessageSchema,
     CreateAgentMessageSchema,
+    CustomizeAgentMessageSchema,
+    DeleteCustomAgentMessageSchema,
     // Auto-show remote agents messages
     GetAutoShowRemoteMessageSchema,
     SetAutoShowRemoteMessageSchema,
