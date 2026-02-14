@@ -201,8 +201,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       '  Ubuntu:  sudo apt-get install imagemagick\n' +
       '  Windows: Download from imagemagick.org',
     installUrl: 'https://ghostscript.com/releases/gsdnld.html',
-    configNotes:
-      'Needs Ghostscript plus either GraphicsMagick or ImageMagick.',
+    configNotes: 'Needs Ghostscript plus either GraphicsMagick or ImageMagick.',
     check: async () => {
       const [hasGs, hasGm, hasMagick] = await Promise.all([
         checkToolInstalled('gs', false),
