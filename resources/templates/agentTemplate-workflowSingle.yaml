@@ -6,14 +6,19 @@ description: {{ DESCRIPTION }}
 # --- Agent Settings ---
 settings:
   agentCategory: workflow
-  temperature: 0.1
-  isRewrite: true
+  temperature: {{ TEMPERATURE }}
+  isRewrite: {{ IS_REWRITE }}
   documentTag: latex_document
   endTag: </latex_document>
   outputExt: tex
+  rounds: {{ ROUNDS }}
   prefills:
+{% if ROUNDS == '1' %}
+    - '<scratchpad>'
+{% else %}
     - '<scratchpad>'
     - '<scratchpad>'
+{% endif %}
 
 # --- Agent Prompts ---
 prompts:
@@ -62,8 +67,14 @@ prompts:
     {% raw %}{% endif %}{% endraw %}
 
   userRequest:
+{% if ROUNDS == '1' %}
+    - |
+      Brainstorm your plan in <scratchpad> with bullet points.
+      Then output the revised \LaTeX wrapped in <latex_document> tags.
+{% else %}
     - |
       Brainstorm your plan in <scratchpad> with bullet points.
       Then output the revised \LaTeX wrapped in <latex_document> tags.
     - |
       Reflect on your previous revision and describe the most impactful follow-up edits in <scratchpad> before producing the updated <latex_document> output.
+{% endif %}
