@@ -20,29 +20,29 @@ import type {
 // Local imports - tool card component (side-effect: register)
 import '../components/tools/ToolCard';
 
-/** Display labels for each tool category */
-const CATEGORY_LABELS: Record<ToolCategory, string> = {
-  file: 'File & Shell',
-  latex: 'LaTeX',
-  academic: 'Academic Research',
-  web: 'Web',
-  computation: 'Computation',
-  lean: 'Lean 4',
-  workflow: 'Memory & Workflow',
+/** Per-category display metadata. */
+interface CategoryMeta {
+  readonly label: string;
+  readonly icon: string;
+}
+
+/**
+ * Single definition for category display metadata.
+ * Record<ToolCategory, ...> ensures every category has an entry —
+ * adding a new variant to ToolCategorySchema without an entry here
+ * is a compile error.
+ */
+const CATEGORY_META: Record<ToolCategory, CategoryMeta> = {
+  file: { label: 'File & Shell', icon: 'codicon-files' },
+  latex: { label: 'LaTeX', icon: 'codicon-file-code' },
+  academic: { label: 'Academic Research', icon: 'codicon-mortar-board' },
+  web: { label: 'Web', icon: 'codicon-globe' },
+  computation: { label: 'Computation', icon: 'codicon-symbol-operator' },
+  lean: { label: 'Lean 4', icon: 'codicon-beaker' },
+  workflow: { label: 'Memory & Workflow', icon: 'codicon-type-hierarchy' },
 };
 
-/** Icons for each tool category */
-const CATEGORY_ICONS: Record<ToolCategory, string> = {
-  file: 'codicon-files',
-  latex: 'codicon-file-code',
-  academic: 'codicon-mortar-board',
-  web: 'codicon-globe',
-  computation: 'codicon-symbol-operator',
-  lean: 'codicon-beaker',
-  workflow: 'codicon-type-hierarchy',
-};
-
-/** Canonical category display order */
+/** Canonical category display order. */
 const CATEGORY_ORDER: ToolCategory[] = [
   'file',
   'latex',
@@ -234,8 +234,8 @@ export class ToolsTab extends LitElement {
     return html`
       <div class="category-section">
         <div class="category-header">
-          <span class="codicon ${CATEGORY_ICONS[category]}"></span>
-          ${CATEGORY_LABELS[category]}
+          <span class="codicon ${CATEGORY_META[category].icon}"></span>
+          ${CATEGORY_META[category].label}
           <span class="category-count">(${items.length})</span>
         </div>
         ${repeat(
