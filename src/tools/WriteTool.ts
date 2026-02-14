@@ -41,7 +41,10 @@ export class WriteFileTool extends defineTool({
       return readGate;
     }
 
-    const originalContent = exists ? await WorkspaceFS.read(input.path) : '';
+    // Normalize CRLF→LF so diffs and comparisons are consistent on Windows.
+    const originalContent = exists
+      ? (await WorkspaceFS.read(input.path)).replaceAll('\r\n', '\n')
+      : '';
 
     const proposedContent = isTexFile(input.path)
       ? replacementEngine.applyAll(input.content)

@@ -343,7 +343,12 @@ export class TextEditorTool extends defineTool({
       if (readGate) {
         return readGate;
       }
-      const fileContent = await WorkspaceFS.read(filePath);
+      // Normalize CRLF→LF so model-provided old_str (always LF) matches file content.
+      // view() already presents LF-only content to the model.
+      const fileContent = (await WorkspaceFS.read(filePath)).replaceAll(
+        '\r\n',
+        '\n',
+      );
 
       // Expand tabs to 4 spaces for consistent display
       const expandedFileContent = fileContent.replaceAll('\t', '    ');
@@ -359,7 +364,7 @@ export class TextEditorTool extends defineTool({
       }
 
       if (occurrences > 1) {
-        const lines = expandedFileContent.split(/\r?\n/);
+        const lines = expandedFileContent.split('\n');
         const lineNumbers = lines
           .map((line, index) =>
             line.includes(expandedOldStr) ? index + 1 : -1,
@@ -455,13 +460,17 @@ export class TextEditorTool extends defineTool({
       if (readGate) {
         return readGate;
       }
-      const fileContent = await WorkspaceFS.read(filePath);
+      // Normalize CRLF→LF for consistent line handling on Windows.
+      const fileContent = (await WorkspaceFS.read(filePath)).replaceAll(
+        '\r\n',
+        '\n',
+      );
 
       // Expand tabs to 4 spaces for consistent display
       const expandedFileContent = fileContent.replaceAll('\t', '    ');
       const expandedNewStr = newStr.replaceAll('\t', '    ');
 
-      const fileLines = expandedFileContent.split(/\r?\n/);
+      const fileLines = expandedFileContent.split('\n');
       const numLines = fileLines.length;
 
       if (insertLine < 1 || insertLine > numLines + 1) {
@@ -470,7 +479,7 @@ export class TextEditorTool extends defineTool({
         );
       }
 
-      const newStrLines = expandedNewStr.split(/\r?\n/);
+      const newStrLines = expandedNewStr.split('\n');
       const newFileLines = [
         ...fileLines.slice(0, insertLine - 1),
         ...newStrLines,
@@ -561,7 +570,10 @@ export class TextEditorTool extends defineTool({
       }
 
       const previousContent = history.at(-1)!;
-      const currentContent = await WorkspaceFS.read(filePath);
+      const currentContent = (await WorkspaceFS.read(filePath)).replaceAll(
+        '\r\n',
+        '\n',
+      );
 
       const approval = await requestToolEditApproval({
         path: filePath,
