@@ -20,7 +20,7 @@ import {
 import {
   PROVIDER_DISPLAY_NAMES,
   MODEL_PROVIDERS_ORDER,
-  DEFAULT_POLISH_MODEL,
+  DEFAULT_HELPER_MODEL,
 } from '@shared/constants/providers';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, MAX_TIER } from '@auth/config';
@@ -368,8 +368,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.withActiveWebview((w) => this.sendModelSelectionData(w)),
       [SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED]: (data) =>
         this.handleSetModelEnabled(data),
-      [SETTINGS_VIEW_COMMANDS.SET_POLISH_MODEL]: (data) =>
-        this.handleSetPolishModel(data),
+      [SETTINGS_VIEW_COMMANDS.SET_HELPER_MODEL]: (data) =>
+        this.handleSetHelperModel(data),
 
       // Custom agent directory handlers
       [SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR]: () =>
@@ -589,14 +589,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   public async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
     const models = buildModelSelectionItems();
-    const polishModel = globalSM.get<string>(
-      GlobalStateKey.POLISH_MODEL,
-      DEFAULT_POLISH_MODEL,
+    const helperModel = globalSM.get<string>(
+      GlobalStateKey.HELPER_MODEL,
+      DEFAULT_HELPER_MODEL,
     );
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       models,
-      polishModel,
+      helperModel,
     });
   }
 
@@ -1032,15 +1032,15 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     await globalSM.update(GlobalStateKey.ENABLED_MODELS, updated);
 
-    // Auto-reset polish model if it was just disabled
+    // Auto-reset helper model if it was just disabled
     if (!data.enabled) {
-      const polishModel = globalSM.get<string>(
-        GlobalStateKey.POLISH_MODEL,
-        DEFAULT_POLISH_MODEL,
+      const helperModel = globalSM.get<string>(
+        GlobalStateKey.HELPER_MODEL,
+        DEFAULT_HELPER_MODEL,
       );
-      if (polishModel === data.modelName) {
-        const newPolish = updated[0] ?? DEFAULT_POLISH_MODEL;
-        await globalSM.update(GlobalStateKey.POLISH_MODEL, newPolish);
+      if (helperModel === data.modelName) {
+        const newHelper = updated[0] ?? DEFAULT_HELPER_MODEL;
+        await globalSM.update(GlobalStateKey.HELPER_MODEL, newHelper);
       }
     }
 
@@ -1048,10 +1048,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
-  private async handleSetPolishModel(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_POLISH_MODEL>,
+  private async handleSetHelperModel(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_HELPER_MODEL>,
   ): Promise<void> {
-    await globalSM.update(GlobalStateKey.POLISH_MODEL, data.modelName);
+    await globalSM.update(GlobalStateKey.HELPER_MODEL, data.modelName);
     await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 

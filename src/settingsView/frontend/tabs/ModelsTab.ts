@@ -44,7 +44,7 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) globalStreamingDefault = true;
   @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
     [];
-  @property({ attribute: false }) polishModel = '';
+  @property({ attribute: false }) helperModel = '';
 
   override render(): TemplateResult {
     const apiAccessSection = this.authenticated
@@ -58,7 +58,7 @@ export class ModelsTab extends LitElement {
         ${apiAccessSection}
         <model-selection-list
           .models=${this.modelSelectionItems}
-          .polishModel=${this.polishModel}
+          .helperModel=${this.helperModel}
           .authenticated=${this.authenticated}
           .apiAccessMode=${this.apiAccessMode}
           .allowedModels=${this.allowedModels}
