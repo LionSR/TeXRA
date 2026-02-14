@@ -346,6 +346,10 @@ export const SETTINGS_VIEW_CMD = {
   // Multi-Agent commands
   GET_SUPER_YOLO_ENABLED: 'getSuperYoloEnabled',
   SET_SUPER_YOLO_ENABLED: 'setSuperYoloEnabled',
+  // Tool dashboard commands
+  GET_TOOL_DASHBOARD_DATA: 'getToolDashboardData',
+  OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',
+  RECHECK_TOOL_STATUS: 'recheckToolStatus',
 } as const;
 
 // Settings view specific commands (combines Memory, History, and Profile views)
@@ -364,4 +368,5 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_AUTO_SHOW_REMOTE: 'updateAutoShowRemote',
   UPDATE_CUSTOM_AGENT_DIR: 'updateCustomAgentDir',
   UPDATE_SUPER_YOLO_ENABLED: 'updateSuperYoloEnabled',
+  UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
 } as const;
