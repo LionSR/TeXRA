@@ -49,7 +49,6 @@ const MemoryToolInputSchema = z.strictObject({
     .nullish(),
   old_str: z.string().nullish(),
   new_str: z.string().nullish(),
-  replace_all: z.boolean().nullish(),
   insert_line: z.int().min(0).nullish(),
   insert_text: z.string().nullish(),
   old_path: z.string().nullish(),
@@ -86,7 +85,6 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
           requireField(input.path, 'path', input.command),
           requireField(input.old_str, 'old_str', input.command),
           requireField(input.new_str, 'new_str', input.command),
-          input.replace_all ?? false,
         );
       case 'insert':
         return this.insert(
@@ -217,7 +215,6 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     inputPath: string,
     oldStr: string,
     newStr: string,
-    replaceAll: boolean,
   ): Promise<ToolResult> {
     if (oldStr.length === 0) {
       throw new ToolError(
@@ -236,34 +233,28 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
       );
     }
 
-    if (!replaceAll && occurrences > 1) {
+    if (occurrences > 1) {
       const lines = content.split('\n');
       const lineNumbers = lines
         .map((line, index) => (line.includes(oldStr) ? index + 1 : -1))
         .filter((n) => n !== -1);
       throw new ToolError(
-        `old_str is not unique within ${inputPath}. Include more surrounding context or set replace_all to true.`,
+        `old_str is not unique within ${inputPath}. Include more surrounding context to make it unique.`,
       );
     }
 
-    // Use split/join for literal replacement
+    // Use indexOf/slice for literal replacement
     // (String.replace has special patterns like $$, $&, $' that corrupt content)
-    let updated: string;
-    if (replaceAll) {
-      updated = content.split(oldStr).join(newStr);
-    } else {
-      const idx = content.indexOf(oldStr);
-      updated =
-        content.slice(0, idx) + newStr + content.slice(idx + oldStr.length);
-    }
+    const idx = content.indexOf(oldStr);
+    const updated =
+      content.slice(0, idx) + newStr + content.slice(idx + oldStr.length);
     await StorageFS.write(resolvedPath, updated);
 
     const updatedLines = updated.split('\n');
     const numbered = formatLinesWithNumbers(updatedLines);
 
-    const count = replaceAll ? occurrences : 1;
     return {
-      summary: `Replaced ${count} occurrence${count !== 1 ? 's' : ''} in: ${inputPath}`,
+      summary: `Replaced text in: ${inputPath}`,
       output: `The memory file has been edited.\nHere's the content of ${inputPath} with line numbers:\n${numbered.join('\n')}`,
     };
   }
