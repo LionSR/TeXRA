@@ -13,7 +13,7 @@ import axios from 'axios';
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
-import { isTimeoutErrorCode, buildTimeoutMessage } from '@tools/timeouts';
+import { isTimeoutErrorCode } from '@tools/timeouts';
 import { getConfig } from '@utils/config';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
@@ -179,17 +179,23 @@ export async function callBetterBibTeX<T = unknown>(
   } catch (error) {
     if (axios.isAxiosError(error)) {
       if (isTimeoutErrorCode(error.code)) {
-        throw new ToolError(buildTimeoutMessage('Zotero API request', timeout));
+        throw new ToolError(
+          `Zotero API request timed out after ${timeout / 1000}s. ` +
+            `Zotero may be busy indexing or processing. Retry the request. ` +
+            `If it persists, ask the user to check that Zotero is responsive.`,
+        );
       }
       if (error.code === 'ECONNREFUSED') {
         throw new ToolError(
-          'Please start Zotero desktop app. The Connector API is not responding.',
+          `Zotero is not reachable on port ${port}. ` +
+            `Ask the user to start the Zotero desktop app. ` +
+            `If Zotero is already running, the port may be wrong (setting: texra.bib.zoteroPort).`,
         );
       }
       if (error.response?.status === 404) {
         throw new ToolError(
-          'Better BibTeX plugin is not installed. ' +
-            'Install it from https://retorque.re/zotero-better-bibtex/',
+          'Better BibTeX plugin is not installed in Zotero. ' +
+            'Ask the user to install it from https://retorque.re/zotero-better-bibtex/',
         );
       }
     }
