@@ -9,6 +9,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - progress view constants
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
+import { formatDuration } from '@utils/core';
 import { STREAM_STATUS } from '../constants';
 
 // Local imports - progress view styles
@@ -19,7 +20,6 @@ import {
   getDateTimeFormatter,
   getTimeFormatter,
 } from '../formatters/timestampUtils';
-import { formatDuration } from '@utils/core';
 
 // Local imports - shared schemas
 import type { TaskGroup } from '@shared/schemas';

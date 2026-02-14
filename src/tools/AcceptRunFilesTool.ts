@@ -18,6 +18,7 @@ import { z } from 'zod';
 import { ExecutionIdSchema } from '@shared/schemas';
 
 // Local imports - tools
+import { getExecutionStore } from '@agent/storage';
 import { ToolError, type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 import {
@@ -39,7 +40,6 @@ import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 
 // Local imports - storage
-import { getExecutionStore } from '@agent/storage';
 
 import type { ExecutionId, FileLocation } from '@shared/schemas';
 

@@ -7,9 +7,9 @@ import * as vscode from 'vscode';
 // Local imports - log
 import { showLoggedErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { hasExtension } from '@utils/core/pathCore';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import { hasExtension } from '@utils/core/pathCore';
 import { runLatexFormatter } from '@latex/texFormatter';
 
 // Local imports - housekeeping

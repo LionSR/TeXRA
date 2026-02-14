@@ -5,10 +5,10 @@ import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - frontend
+import { GlobalStateKey, globalSM } from '@common/state';
 import { ApiProvider, SecretManager } from '@frontend/secretManager';
 
 // Local imports - state
-import { GlobalStateKey, globalSM } from '@common/state';
 
 // Local imports - shared schemas
 import type { ModelOptionData } from '@shared/schemas';

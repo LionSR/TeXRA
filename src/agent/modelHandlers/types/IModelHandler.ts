@@ -13,10 +13,10 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { ToolResultPayload } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import type { AgentLogger } from '@logger/AgentLogger';
-import type { ModelConfig, ModelCapabilities } from 'llm-zoo';
 import type { ToolDefinition } from '@model';
 import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
+import type { ModelConfig, ModelCapabilities } from 'llm-zoo';
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
 import type {
