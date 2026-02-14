@@ -4,8 +4,8 @@ import { ZodError } from 'zod';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core';
-import { executeAgent } from '@agent/runtime/executeAgent';
 import { registerExecution } from '@agent/storage';
+import { executeAgent } from '@agent/runtime/executeAgent';
 import { formatZodError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { generateExecutionId } from '@utils/core/executionId';

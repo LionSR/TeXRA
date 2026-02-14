@@ -11,11 +11,11 @@ import { themeContext } from '@shared/contexts/themeContext';
 
 // Local imports - webview commands
 import { postMessage } from '@shared/vscode';
+import { installToolbarTooltips } from '@shared/controllers';
 import { COMMON_COMMANDS } from '@common/webview/commands';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 
 // Local imports - shared controllers
-import { installToolbarTooltips } from '@shared/controllers';
 
 /**
  * Base class for Lit-powered webview apps.

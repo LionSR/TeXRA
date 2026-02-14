@@ -12,8 +12,8 @@ import { ToolError, type ToolFileAttachment } from '@tools/result';
 
 // Local imports - core utilities
 import { isNonEmptyString } from '@utils/core';
-import { toPosixPath } from '@utils/core/pathCore';
 import { WorkspaceFS, getMimeType } from '@utils/files';
+import { toPosixPath } from '@utils/core/pathCore';
 
 export interface WorkspacePathResolution {
   relative: string;

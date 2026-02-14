@@ -15,6 +15,11 @@ import { z } from 'zod';
 
 // Local imports - agent
 import {
+  EXECUTION_STATUS,
+  ExecutionIdSchema,
+  type ExecutionId,
+} from '@shared/schemas';
+import {
   getExecutionStore,
   type ExecutionListingEntry,
   type ChildRecord,
@@ -46,11 +51,6 @@ import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 import { ToolError, type ToolResult } from './result';
 import { defineTool } from './core/define';
-import {
-  EXECUTION_STATUS,
-  ExecutionIdSchema,
-  type ExecutionId,
-} from '@shared/schemas';
 
 // ============================================================================
 // Category-aware field filtering

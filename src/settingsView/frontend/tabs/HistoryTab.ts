@@ -16,10 +16,10 @@ import {
 } from '@shared/styles';
 
 // Local imports - shared schemas
+import { HistoryViewState } from '../components/history/state';
 import type { HistoryItem } from '@shared/schemas';
 
 // Local imports - settings view components
-import { HistoryViewState } from '../components/history/state';
 import '../components/history/SearchBar';
 import '../components/history/HistoryList';
 import type { SearchAction } from '../components/history/HistoryList';

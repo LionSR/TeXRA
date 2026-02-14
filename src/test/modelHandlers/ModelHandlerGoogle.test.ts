@@ -9,10 +9,10 @@ import {
 } from '@google/genai';
 
 // Local imports - agent
+import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 import type { AgentSetting } from '@agent/core/AgentDataclass';
 // Internal imports
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
-import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 
 // Type imports
 import type { Content } from '@google/genai';

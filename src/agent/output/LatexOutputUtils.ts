@@ -1,8 +1,8 @@
 import * as path from 'path';
 
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import { hasExtension } from '@utils/core/pathCore';
 import { WorkspaceFS, type FileLocation } from '@utils/files';
+import { hasExtension } from '@utils/core/pathCore';
 import { runLatexFormatter } from '@latex/texFormatter';
 
 interface Logger {

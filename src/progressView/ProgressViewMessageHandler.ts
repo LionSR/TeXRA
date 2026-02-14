@@ -6,7 +6,6 @@ import {
   type ProgressViewInboundHandlerRegistry,
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
-import type { AgentProposal } from '@shared/schemas/prompts';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getAgent } from '@agent/index/agentRegistry';
@@ -63,6 +62,7 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
+import type { AgentProposal } from '@shared/schemas/prompts';
 import type { OutputFileInfo, StorageKey, StreamTabId } from '@shared/schemas';
 
 import type { ProgressViewProvider } from './ProgressViewProvider';

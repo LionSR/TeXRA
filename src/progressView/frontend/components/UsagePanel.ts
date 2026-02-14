@@ -8,13 +8,13 @@ import { designTokens } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared schemas
-import type { TokenUsageStats } from '@shared/schemas';
 
 // Local imports - progress view formatters
 import { formatTokens } from '../formatters/timestampUtils';
 
 // Local imports - progress view constants and types
 import { ELEMENT_IDS } from '../constants';
+import type { TokenUsageStats } from '@shared/schemas';
 import type { ContextState } from '../store';
 
 @customElement('usage-panel')
