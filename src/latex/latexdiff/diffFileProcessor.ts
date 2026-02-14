@@ -3,6 +3,7 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
 import { flexibleFS, type FileLocation } from '@utils/files';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 /** LaTeX starred math environments that need label removal during diff processing. */
 const STAR_ENVIRONMENTS = [
@@ -75,9 +76,7 @@ export class DiffFileProcessor {
     let skippingPreambleBlock = false;
     let documentStarted = false;
 
-    // Normalize line endings (handle both \r\n and \n)
-    const processedLines = content
-      .replaceAll('\r\n', '\n')
+    const processedLines = normalizeLineEndings(content)
       .split('\n')
       .flatMap((line) => {
         if (TEX_ROOT_COMMENT.test(line)) {
