@@ -95,8 +95,11 @@ export const EXTERNAL_TOOL_CHECKS: readonly ExternalToolCheck[] = [
 // Check execution + cache
 // ============================================================
 
-/** Cached unavailable tool names and their group labels. */
-let cache: { unavailable: Set<string>; labels: string[] } | null = null;
+/** Cached set of unavailable tool names. */
+let cached: ReadonlySet<string> | null = null;
+
+/** In-flight check promise — prevents duplicate concurrent checks. */
+let inflight: Promise<ExternalToolCheckResult[]> | null = null;
 
 /**
  * Run all external tool checks in parallel.
@@ -127,14 +130,13 @@ export async function runExternalToolChecks(): Promise<
 
   // Update cache as a side effect
   const unavailable = new Set<string>();
-  const labels: string[] = [];
   for (const r of results) {
     if (r.status !== 'available') {
       r.tools.forEach((t) => unavailable.add(t));
-      labels.push(r.label);
     }
   }
-  cache = { unavailable, labels };
+  cached = unavailable;
+  inflight = null;
 
   return results;
 }
@@ -142,30 +144,20 @@ export async function runExternalToolChecks(): Promise<
 /**
  * Get the set of external tool names that are currently unavailable.
  *
- * Uses the cached result from the most recent `runExternalToolChecks()` call.
- * If no cached data exists, runs a fresh check first.
+ * Returns cached results when available. Concurrent callers share a
+ * single in-flight check (promise dedup) to avoid duplicate work.
  */
 export async function getUnavailableToolNames(): Promise<ReadonlySet<string>> {
-  if (cache) return cache.unavailable;
-  await runExternalToolChecks();
-  return cache!.unavailable;
-}
-
-/**
- * Get the human-readable labels of unavailable tool groups that were
- * actually requested by an agent. Used for user-facing notifications.
- *
- * @param excludedToolNames - Tool names that were excluded during resolution.
- */
-export function getExcludedToolLabels(
-  excludedToolNames: ReadonlySet<string>,
-): string[] {
-  return EXTERNAL_TOOL_CHECKS.filter((c) =>
-    c.tools.some((t) => excludedToolNames.has(t)),
-  ).map((c) => c.label);
+  if (cached) return cached;
+  if (!inflight) {
+    inflight = runExternalToolChecks();
+  }
+  await inflight;
+  return cached ?? new Set();
 }
 
 /** Clear the cached availability data. Next access will re-check. */
 export function invalidateToolAvailability(): void {
-  cache = null;
+  cached = null;
+  inflight = null;
 }
