@@ -255,6 +255,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /** Tracks PDF page counts for files uploaded to the Anthropic Files API. */
   private uploadedPdfPageCounts = new Map<string, number>();
 
+  /** Sum of all tracked PDF page counts for uploaded files. */
+  private getTrackedPdfPageCount(): number {
+    let total = 0;
+    for (const count of this.uploadedPdfPageCounts.values()) {
+      total += count;
+    }
+    return total;
+  }
+
   private isClaudeOpus46(): boolean {
     return this.config.fullName === OPUS_46_FULLNAME;
   }
@@ -1160,9 +1169,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
   ): Promise<{
     uploaded: UploadedAnthropicAttachment[];
     unsupported: ToolFileAttachment[];
+    pageLimitExceeded: ToolFileAttachment[];
   }> {
     const uploaded: UploadedAnthropicAttachment[] = [];
     const unsupported: ToolFileAttachment[] = [];
+    const pageLimitExceeded: ToolFileAttachment[] = [];
 
     for (const attachment of attachments) {
       const mimeType = attachment.mimeType ?? 'application/octet-stream';
@@ -1186,6 +1197,25 @@ export class ModelHandlerAnthropic extends ModelHandler<
         continue;
       }
 
+      // Check cumulative PDF page limit before uploading
+      let pdfPageCount = 0;
+      if (isPdf) {
+        pdfPageCount = await this.countPdfPagesFromBuffer(buffer);
+        const currentTotal = this.getTrackedPdfPageCount();
+        if (currentTotal + pdfPageCount > ANTHROPIC_MAX_PDF_PAGES) {
+          this.logger.warn(
+            `PDF page limit reached: ${attachment.path ?? 'attachment.pdf'} has ${pdfPageCount} pages, ` +
+              `but conversation already has ${currentTotal}/${ANTHROPIC_MAX_PDF_PAGES} pages`,
+          );
+          pageLimitExceeded.push(attachment);
+          if (buffer) {
+            buffer.fill(0);
+            buffer = undefined;
+          }
+          continue;
+        }
+      }
+
       try {
         const filename = this.sanitizeFilename(
           attachment.path ??
@@ -1199,6 +1229,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
           file: await toFile(buffer!, filename, { type: mimeType }),
           betas: [FILES_API_BETA],
         });
+
+        if (isPdf && pdfPageCount > 0) {
+          this.uploadedPdfPageCounts.set(uploadedFile.id, pdfPageCount);
+        }
 
         uploaded.push({
           attachment,
@@ -1217,7 +1251,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
     }
 
-    return { uploaded, unsupported };
+    return { uploaded, unsupported, pageLimitExceeded };
   }
 
   private sanitizeFilename(filename: string): string {
@@ -2121,6 +2155,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     let uploadedAttachments: UploadedAnthropicAttachment[] = [];
     const unsupportedAttachments: ToolFileAttachment[] = [];
+    const pageLimitAttachments: ToolFileAttachment[] = [];
 
     if (canUploadFiles && attachments.length > 0 && client) {
       const uploadResult = await this.uploadToolAttachments(
@@ -2129,6 +2164,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       );
       uploadedAttachments = uploadResult.uploaded;
       unsupportedAttachments.push(...uploadResult.unsupported);
+      pageLimitAttachments.push(...uploadResult.pageLimitExceeded);
 
       if (uploadedAttachments.length > 0) {
         // Store uploaded file info with fileId (Anthropic-specific extension)
@@ -2200,6 +2236,20 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     if (unsupportedAttachments.length > 0) {
       unsupportedNotes.push(...describeAttachments(unsupportedAttachments));
+    }
+
+    if (pageLimitAttachments.length > 0) {
+      const currentTotal = this.getTrackedPdfPageCount();
+      const names = pageLimitAttachments
+        .map((a) => a.path ?? 'attachment.pdf')
+        .join(', ');
+      toolResultContent.unshift({
+        type: 'text',
+        text:
+          `PDF page limit reached: cannot include ${names}. ` +
+          `The conversation already contains ${currentTotal} of the maximum ${ANTHROPIC_MAX_PDF_PAGES} PDF pages allowed per request. ` +
+          `Inform the user and suggest reducing PDF attachments or starting a new conversation.`,
+      });
     }
 
     if (unsupportedNotes.length > 0) {
