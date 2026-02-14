@@ -6,6 +6,7 @@ import {
   createToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
 import { buildCycleServices } from '@agent/core/flows/CycleServices';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { formatProviderHttpError } from '@common/errors';
 import { bus } from '@eventBus/ProgressEventBus';
 
@@ -16,7 +17,6 @@ import {
 } from './types';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
 import type { TodoItem } from '@shared/schemas';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 type ToolUseCycleOutcome =
   | { outcome: 'completed'; messages: ProviderMessage[] }

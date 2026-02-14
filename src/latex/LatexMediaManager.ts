@@ -12,13 +12,13 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 import { toErrorMessage } from '@common/errors';
 import { AgentLogger } from '@logger/AgentLogger';
-import { hasExtension } from '@utils/core/pathCore';
 import {
   TaskRunFileService,
   flexibleFS,
   pathToLocation,
   type FileLocation,
 } from '@utils/files';
+import { hasExtension } from '@utils/core/pathCore';
 
 // Local file imports
 import { extractFigurePathsFromLatex } from './extractFigure';

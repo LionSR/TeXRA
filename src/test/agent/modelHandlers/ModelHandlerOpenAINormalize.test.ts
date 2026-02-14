@@ -4,6 +4,11 @@ import { strict as assert } from 'assert';
 // (none needed)
 
 // Local imports - agent
+import {
+  DEFAULT_MODEL_CAPABILITIES,
+  type ModelConfig,
+  ModelProvider,
+} from 'llm-zoo';
 import { ModelHandlerDashScope } from '@agent/modelHandlers/modelHandlerDashScope';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
 import { ModelHandlerKimi } from '@agent/modelHandlers/modelHandlerKimi';
@@ -12,11 +17,6 @@ import { ModelHandlerKimi } from '@agent/modelHandlers/modelHandlerKimi';
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - model config
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-} from 'llm-zoo';
 
 type LoggerStub = Partial<AgentLogger> & {
   streamId: string;

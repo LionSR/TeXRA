@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getConfig } from '@utils/config';
+import { showSettingsView } from '@commands/settings';
 import { SupabaseClient } from './SupabaseClient';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';
 import { type OAuthProvider, getExternalAuthCallbackUri } from './config';
 import { AUTH_PROVIDER_ID, AUTH_COMMANDS } from './constants';
-import { showSettingsView } from '@commands/settings';
 
 // Re-export for backwards compatibility
 export { AUTH_COMMANDS } from './constants';

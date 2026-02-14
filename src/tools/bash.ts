@@ -7,28 +7,27 @@ import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports - agent
-import type { StreamTabId, ExecutionId } from '@shared/schemas';
+import {
+  getExecutionStore,
+  registerExecution,
+  writeTerminalStatus,
+} from '@agent/storage';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
   trackExecution,
   untrackExecution,
   ProcessExecutionHandle,
 } from '@agent/runtime/executionRegistry';
-import {
-  getExecutionStore,
-  registerExecution,
-  writeTerminalStatus,
-} from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
 // Local imports - tools
 import { ToolError, type ToolResult } from '@tools/result';
+import { formatBashDelivery, formatBashError } from '@tools/subagentResults';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
 } from '@tools/approval/bashApproval';
-import { formatBashDelivery, formatBashError } from '@tools/subagentResults';
 import { executeCommand, signalProcessGroup } from '@utils/system/execUtils';
 
 // Local imports - utils
@@ -37,6 +36,7 @@ import { ensureRunDir } from '@utils/files/taskRunStorage';
 
 // Local file imports
 import { defineTool } from './core/define';
+import type { StreamTabId, ExecutionId } from '@shared/schemas';
 
 const BASH_TIMEOUT_MS = 120_000; // 120 s
 

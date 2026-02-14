@@ -10,8 +10,8 @@ import * as vscode from 'vscode';
 import { AgentCategory, type AgentWorkflowSetting } from '@agent/core';
 import { getBaseName, getMultipleName } from '@agent/index';
 import { isValidAgentYaml } from '@agent/runtime/agentLoad';
-import * as logger from '@logger/logUtils';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'AgentRegister';
 logger.initialize(CHANNEL);

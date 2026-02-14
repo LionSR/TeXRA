@@ -2,6 +2,11 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent core
+import {
+  DEFAULT_MODEL_CAPABILITIES,
+  type ModelConfig,
+  ModelProvider,
+} from 'llm-zoo';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import { createRunState } from '@agent/core/AgentState';
@@ -22,11 +27,6 @@ import type { ExecResult } from '@agent/types/ResultTypes';
 // Internal imports
 import { MapToolRegistry } from '@agent/core/ToolTypes';
 import { AgentLogger } from '@logger/AgentLogger';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-} from 'llm-zoo';
 import { BashTool } from '@tools/bash';
 import * as execUtils from '@utils/system/execUtils';
 import type { StreamTabId } from '@shared/schemas';
