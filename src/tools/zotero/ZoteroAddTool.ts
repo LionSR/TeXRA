@@ -26,7 +26,7 @@ import { toErrorMessage } from '@common/errors';
 import { CROSSREF_CONSTANTS, crossrefClient } from '@tools/citation/constants';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { ToolError } from '@tools/result';
-import { isTimeoutErrorCode, buildTimeoutMessage } from '@tools/timeouts';
+import { isTimeoutErrorCode } from '@tools/timeouts';
 import { pluralize } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
@@ -127,7 +127,8 @@ async function checkZoteroRunning(port: number): Promise<void> {
     }
   } catch {
     throw new ToolError(
-      `Please start Zotero desktop app. The Connector API is not responding on port ${port}.`,
+      `Zotero is not reachable on port ${port}. ` +
+        `Ask the user to start Zotero or verify the port (setting: texra.bib.zoteroPort).`,
     );
   }
 }
@@ -160,10 +161,9 @@ async function callZoteroConnector(
     if (error instanceof AxiosError && isTimeoutErrorCode(error.code)) {
       return {
         status: 'error',
-        message: buildTimeoutMessage(
-          'Zotero Connector request',
-          ZOTERO_CONNECTOR_TIMEOUT_MS,
-        ),
+        message:
+          `Zotero Connector request timed out after ${ZOTERO_CONNECTOR_TIMEOUT_MS / 1000}s. ` +
+          `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
       };
     }
     const message =
