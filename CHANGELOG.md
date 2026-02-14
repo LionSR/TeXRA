@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.36.1] - 2026-02-13
+
+### Bug Fixes
+
+- Fixed model dropdown availability.
+
 ## [0.36.0] - 2026-02-12
 
 ### Features

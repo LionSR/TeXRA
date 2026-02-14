@@ -299,7 +299,7 @@ const SetProviderVscodeSettingMessageSchema = z.object({
 
 const OpenExternalUrlMessageSchema = z.object({
   command: z.literal(CMD.OPEN_EXTERNAL_URL),
-  url: z.string().url(),
+  url: z.url(),
 });
 
 // Model selection inbound messages
