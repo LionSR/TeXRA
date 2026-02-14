@@ -51,6 +51,7 @@ export const SETTINGS_TAB_ORDER = [
   'MODELS',
   'AGENTS',
   'MULTI_AGENT',
+  'TOOLS',
 ] as const;
 
 export type SettingsTabName = (typeof SETTINGS_TAB_ORDER)[number];
@@ -203,6 +204,50 @@ export type UpdateSuperYoloEnabledMessage = z.infer<
 >;
 
 // ============================================================
+// Tool dashboard data schemas
+// ============================================================
+
+/** Status of a tool dependency */
+export const ToolStatusSchema = z.enum(['available', 'not-found', 'unknown']);
+export type ToolStatus = z.infer<typeof ToolStatusSchema>;
+
+/** Category for grouping tools in the dashboard */
+export const ToolCategorySchema = z.enum([
+  'file',
+  'latex',
+  'academic',
+  'web',
+  'computation',
+  'lean',
+  'workflow',
+]);
+export type ToolCategory = z.infer<typeof ToolCategorySchema>;
+
+/** Single tool entry in the dashboard */
+export const ToolDashboardItemSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  category: ToolCategorySchema,
+  description: z.string(),
+  tools: z.array(z.string()),
+  status: ToolStatusSchema,
+  requiresSetup: z.boolean(),
+  installGuide: z.string().optional(),
+  installUrl: z.string().optional(),
+  configNotes: z.string().optional(),
+});
+export type ToolDashboardItem = z.infer<typeof ToolDashboardItemSchema>;
+
+/** Outbound: backend → frontend tool dashboard data */
+export const UpdateToolDashboardMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD),
+  items: z.array(ToolDashboardItemSchema),
+});
+export type UpdateToolDashboardMessage = z.infer<
+  typeof UpdateToolDashboardMessageSchema
+>;
+
+// ============================================================
 // Inbound message schemas (frontend → backend)
 // ============================================================
 
@@ -321,6 +366,20 @@ const SetSuperYoloEnabledMessageSchema = z.object({
   enabled: z.boolean(),
 });
 
+// Tool dashboard inbound messages
+const GetToolDashboardDataMessageSchema = z.object({
+  command: z.literal(CMD.GET_TOOL_DASHBOARD_DATA),
+});
+
+const OpenToolInstallUrlMessageSchema = z.object({
+  command: z.literal(CMD.OPEN_TOOL_INSTALL_URL),
+  url: z.string().url(),
+});
+
+const RecheckToolStatusMessageSchema = z.object({
+  command: z.literal(CMD.RECHECK_TOOL_STATUS),
+});
+
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);
 
@@ -333,6 +392,10 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
   [
     // Navigation messages
     OpenVscodeSettingsMessageSchema,
+    // Tool dashboard messages
+    GetToolDashboardDataMessageSchema,
+    OpenToolInstallUrlMessageSchema,
+    RecheckToolStatusMessageSchema,
     // Memory messages
     GetMemoryDataMessageSchema,
     OpenMemoryFileMessageSchema,
