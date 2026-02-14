@@ -38,8 +38,10 @@ import {
   UpdateAutoShowRemoteMessageSchema,
   UpdateCustomAgentDirMessageSchema,
   UpdateSuperYoloEnabledMessageSchema,
+  UpdateToolDashboardMessageSchema,
   type AgentSelectionItem,
   type NumberVscodeSetting,
+  type ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
 import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
 
@@ -59,6 +61,7 @@ import './tabs/HistoryTab';
 import './tabs/ModelsTab';
 import './tabs/AgentsTab';
 import './tabs/MultiAgentTab';
+import './tabs/ToolsTab';
 import type { HistoryTab } from './tabs/HistoryTab';
 
 const HISTORY_ACTION_COMMANDS: Record<string, string> = {
@@ -150,6 +153,9 @@ export class SettingsApp extends BaseWebviewApp {
   @state() private superYoloToggleDisabled = true;
   @state() private reliabilitySettings: NumberVscodeSetting[] = [];
 
+  // Tool dashboard state
+  @state() private toolDashboardItems: ToolDashboardItem[] = [];
+
   protected get readyCommand(): string | null {
     return null;
   }
@@ -166,6 +172,7 @@ export class SettingsApp extends BaseWebviewApp {
     postMessage(SETTINGS_VIEW_COMMANDS.GET_AUTO_SHOW_REMOTE);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED);
+    postMessage(SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA);
   }
 
   private parseMessage<T>(
@@ -276,6 +283,13 @@ export class SettingsApp extends BaseWebviewApp {
         this.superYoloEnabled = data.enabled;
         this.superYoloToggleDisabled = false;
         this.reliabilitySettings = data.reliabilitySettings;
+        return;
+      }
+
+      case SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD: {
+        const data = this.parseMessage(raw, UpdateToolDashboardMessageSchema);
+        if (!data) return;
+        this.toolDashboardItems = data.items;
         return;
       }
 
@@ -427,6 +441,15 @@ export class SettingsApp extends BaseWebviewApp {
     SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED,
   );
 
+  // Tool dashboard event handlers
+  private handleToolOpenUrl = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL,
+  );
+
+  private handleToolRecheck(): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS);
+  }
+
   private handleOpenVscodeSettings(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS);
   }
@@ -495,6 +518,7 @@ export class SettingsApp extends BaseWebviewApp {
           <vscode-tab-header slot="header">Models</vscode-tab-header>
           <vscode-tab-header slot="header">Agents</vscode-tab-header>
           <vscode-tab-header slot="header">Multi-Agent</vscode-tab-header>
+          <vscode-tab-header slot="header">Tools</vscode-tab-header>
 
           <vscode-tab-panel>
             <memory-tab
@@ -567,6 +591,14 @@ export class SettingsApp extends BaseWebviewApp {
               @super-yolo-toggle=${this.handleSuperYoloToggle}
               @reliability-setting-change=${this.handleSetProviderVscodeSetting}
             ></multi-agent-tab>
+          </vscode-tab-panel>
+
+          <vscode-tab-panel>
+            <tools-tab
+              .items=${this.toolDashboardItems}
+              @tool-open-url=${this.handleToolOpenUrl}
+              @tool-recheck=${this.handleToolRecheck}
+            ></tools-tab>
           </vscode-tab-panel>
         </vscode-tabs>
       </div>
