@@ -249,7 +249,12 @@ export function formatToolUseTemplate(
   const isNormalToolUse = !isUserFeedback && !showAsError && !isInProgress;
   const titleBase = buildTitleBase(toolName, titlePrefix, isNormalToolUse);
 
-  const headerSummary = normalizedToolLog.headerSummary ?? '';
+  // Surface action + path for executions tool so it's visible without expanding
+  const headerSummary =
+    normalizedToolLog.headerSummary ||
+    (toolName === 'executions' && isPlainObject(input)
+      ? [input.action, input.path].filter(Boolean).join(' ')
+      : '');
   const titleText = headerSummary
     ? `${titleBase} — ${headerSummary}`
     : titleBase;
