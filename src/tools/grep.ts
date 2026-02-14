@@ -1,3 +1,6 @@
+// Standard library imports
+import * as path from 'path';
+
 // Third-party imports
 import { z } from 'zod';
 
@@ -5,10 +8,12 @@ import { z } from 'zod';
 import { ToolError, ToolResult } from '@tools/result';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { resolveAndFormat } from '@tools/utils';
+import { StorageFS } from '@utils/files';
 import { executeCommand } from '@utils/system/execUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
+import { MEMORY_DISPLAY_ROOT, MEMORY_STORAGE_ROOT } from './memory/constants';
 
 const OUTPUT_MODES = ['content', 'files_with_matches', 'count'] as const;
 
@@ -66,6 +71,63 @@ export type GrepInput = z.infer<typeof GrepInputSchema>;
 
 const CHANNEL = 'GrepTool';
 
+// ============================================================================
+// Virtual storage path support (/memories, /executions)
+// ============================================================================
+
+const EXECUTIONS_STORAGE_ROOT = 'executions';
+const EXECUTIONS_DISPLAY_ROOT = '/executions';
+
+/** Supported virtual namespace definitions. */
+const VIRTUAL_NAMESPACES = [
+  { display: MEMORY_DISPLAY_ROOT, storage: MEMORY_STORAGE_ROOT },
+  { display: EXECUTIONS_DISPLAY_ROOT, storage: EXECUTIONS_STORAGE_ROOT },
+] as const;
+
+type VirtualNamespace = (typeof VIRTUAL_NAMESPACES)[number];
+
+/** Result of resolving a virtual path to a physical storage path. */
+interface VirtualPathResolution {
+  absolutePath: string;
+  namespace: VirtualNamespace;
+}
+
+/**
+ * Check if a path is a virtual storage path (/memories or /executions).
+ */
+function isVirtualPath(inputPath: string): boolean {
+  return VIRTUAL_NAMESPACES.some(
+    (ns) => inputPath === ns.display || inputPath.startsWith(`${ns.display}/`),
+  );
+}
+
+/**
+ * Resolve a virtual display path to a physical absolute path.
+ * @throws ToolError if path doesn't match any known virtual namespace
+ */
+function resolveVirtualPath(displayPath: string): VirtualPathResolution {
+  for (const ns of VIRTUAL_NAMESPACES) {
+    if (
+      displayPath === ns.display ||
+      displayPath.startsWith(`${ns.display}/`)
+    ) {
+      const suffix =
+        displayPath === ns.display
+          ? ''
+          : displayPath.slice(`${ns.display}/`.length);
+      const storagePath = suffix ? path.join(ns.storage, suffix) : ns.storage;
+      return {
+        absolutePath: StorageFS.fullPath(storagePath),
+        namespace: ns,
+      };
+    }
+  }
+
+  throw new ToolError(
+    `Virtual path must start with /memories or /executions. Got: "${displayPath}".`,
+  );
+}
+
 export function buildArguments(
   input: GrepInput,
   outputMode: OutputMode,
@@ -105,12 +167,29 @@ export function buildArguments(
 export class GrepTool extends defineTool({
   name: 'grep',
   description:
-    'Search file contents using regex patterns. output_mode must be "content", "files_with_matches", or "count" (NOT "context"). To show surrounding lines, use -C with output_mode "content".',
+    'Search file contents using regex patterns. output_mode must be "content", "files_with_matches", or "count" (NOT "context"). To show surrounding lines, use -C with output_mode "content". ' +
+    'Also supports virtual storage paths: use "/memories" to search memory files, "/executions" to search execution history (conversations, configs, reports).',
   schema: GrepInputSchema,
 }) {
   protected async execute(input: GrepInput): Promise<ToolResult> {
     const { output_mode: outputMode } = input;
-    const { path, display } = resolveAndFormat(input.path ?? undefined);
+    const inputPath = input.path ?? undefined;
+
+    // Route virtual storage paths through StorageFS instead of workspace
+    if (inputPath && isVirtualPath(inputPath)) {
+      return this.executeVirtual(input, inputPath, outputMode);
+    }
+
+    return this.executeWorkspace(input, inputPath, outputMode);
+  }
+
+  /** Search workspace files (original behavior). */
+  private async executeWorkspace(
+    input: GrepInput,
+    inputPath: string | undefined,
+    outputMode: OutputMode,
+  ): Promise<ToolResult> {
+    const { path: resolvedPath, display } = resolveAndFormat(inputPath);
     const gitignore = await getGitignoreMatcher();
     const args = buildArguments(input, outputMode);
     const ignoreArgs = gitignore.ignoreFiles.flatMap((ignoreFile) => [
@@ -123,7 +202,7 @@ export class GrepTool extends defineTool({
       ...args,
       ...ignoreArgs,
       input.pattern,
-      path.relative,
+      resolvedPath.relative,
     ];
 
     const result = await executeCommand(command, {
@@ -131,6 +210,54 @@ export class GrepTool extends defineTool({
       truncate: false,
     });
 
+    return this.formatResult(result, input, display);
+  }
+
+  /** Search virtual storage paths (/memories, /executions). */
+  private async executeVirtual(
+    input: GrepInput,
+    virtualPath: string,
+    outputMode: OutputMode,
+  ): Promise<ToolResult> {
+    const { absolutePath, namespace } = resolveVirtualPath(virtualPath);
+
+    // Check if storage directory exists
+    const exists = await StorageFS.exists(namespace.storage);
+    if (!exists) {
+      return {
+        summary: `No data found at ${virtualPath}`,
+        output: `The ${namespace.display} directory does not exist yet. No data to search.`,
+      };
+    }
+
+    const args = buildArguments(input, outputMode);
+    // No gitignore for storage paths — these are internal data files
+    const command = ['rg', ...args, input.pattern, absolutePath];
+
+    const result = await executeCommand(command, {
+      channel: CHANNEL,
+      truncate: false,
+    });
+
+    // Translate physical paths back to virtual display paths in output
+    if (result.stdout) {
+      result.stdout = result.stdout.replaceAll(absolutePath, namespace.display);
+    }
+
+    return this.formatResult(result, input, virtualPath);
+  }
+
+  /** Shared formatting for rg results (workspace and virtual). */
+  private formatResult(
+    result: {
+      exitCode?: number;
+      success?: boolean;
+      stdout?: string | null;
+      stderr?: string | null;
+    },
+    input: GrepInput,
+    display: string,
+  ): ToolResult {
     // ripgrep exit codes: 0 = matches found, 1 = no matches, 2+ = error
     const exitCode = result.exitCode ?? (result.success ? 0 : 1);
     if (exitCode >= 2) {
