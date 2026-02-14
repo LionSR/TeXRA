@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 // Local imports - filesystem utilities
 import { StorageFS } from '@utils/files';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 // Local imports - tool core
 import { defineTool } from '../core/define';
@@ -158,7 +159,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
       };
     }
 
-    const content = await StorageFS.read(resolvedPath);
+    const content = normalizeLineEndings(await StorageFS.read(resolvedPath));
     const lines = content.split('\n');
     if (lines.length > 0 && lines.at(-1) === '') {
       lines.pop();
@@ -212,7 +213,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const resolvedPath = this.resolveMemoryPath(inputPath);
     await this.requireEditableFile(resolvedPath, inputPath);
 
-    const content = await StorageFS.read(resolvedPath);
+    const content = normalizeLineEndings(await StorageFS.read(resolvedPath));
     const occurrences = content.split(oldStr).length - 1;
     if (occurrences === 0) {
       throw new ToolError(
@@ -252,7 +253,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const resolvedPath = this.resolveMemoryPath(inputPath);
     await this.requireEditableFile(resolvedPath, inputPath);
 
-    const content = await StorageFS.read(resolvedPath);
+    const content = normalizeLineEndings(await StorageFS.read(resolvedPath));
     const lines = content.split('\n');
     const totalLines = lines.length;
     if (insertLine < 0 || insertLine > totalLines) {
