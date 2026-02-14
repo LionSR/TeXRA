@@ -1,3 +1,8 @@
+/** Normalize CRLF line endings to LF. */
+export function normalizeLineEndings(text: string): string {
+  return text.replaceAll('\r\n', '\n');
+}
+
 export function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
@@ -28,7 +33,7 @@ export function objectToLogString(
  */
 export function countLines(text: string): number {
   if (!text) return 0;
-  const normalized = text.replaceAll('\r\n', '\n');
+  const normalized = normalizeLineEndings(text);
   const lines = normalized.split('\n');
   return normalized.endsWith('\n')
     ? Math.max(lines.length - 1, 0)

@@ -25,7 +25,7 @@ import { toErrorMessage } from '@common/errors';
 // Internal imports
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
-import { extendEnvPath } from '@utils/system/platformPaths';
+import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'execUtils';
 logger.initialize(CHANNEL);
@@ -35,6 +35,37 @@ const FORCE_KILL_DELAY_MS = 5_000;
 
 function normalizeOutput(text: string | null | undefined): string | null {
   return text?.trim() || null;
+}
+
+/**
+ * Send a signal to a process group (POSIX) or directly to the process (Windows).
+ * On POSIX, sends to the process group first (negative PID); falls back to
+ * the direct PID if the group signal fails (e.g. process is not a group leader).
+ * Returns true if the signal was delivered, false if the process already exited.
+ */
+export function signalProcessGroup(
+  pid: number,
+  signal: NodeJS.Signals,
+): boolean {
+  if (IS_WINDOWS) {
+    try {
+      process.kill(pid, signal);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  try {
+    process.kill(-pid, signal);
+    return true;
+  } catch {
+    try {
+      process.kill(pid, signal);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
 /**
@@ -126,11 +157,10 @@ export async function executeCommand(
       // bash tool (all other callers use array-form commands which skip this
       // path).  Acceptable because the alternative is `await` hanging forever.
       const { timeout: _shellTimeout, ...execaNoTimeout } = execaOptions;
-      const isWindows = process.platform === 'win32';
       // Only use detached when we have a timeout and need process-group killing.
       // On POSIX, detached creates a process group we can kill as a unit.
       // On Windows, detached opens a new console window so we always skip it.
-      const useDetached = !!_shellTimeout && !isWindows;
+      const useDetached = !!_shellTimeout && !IS_WINDOWS;
       subprocess = execa(command, {
         ...execaNoTimeout,
         shell: true,
@@ -144,28 +174,12 @@ export async function executeCommand(
           const pid = subprocess.pid;
           if (!pid) return;
 
-          if (isWindows) {
-            subprocess.kill('SIGTERM');
-          } else {
-            try {
-              process.kill(-pid, 'SIGTERM');
-            } catch {
-              /* already exited */
-            }
-          }
+          signalProcessGroup(pid, 'SIGTERM');
 
           // Force-kill after FORCE_KILL_DELAY_MS if SIGTERM didn't work,
           // and destroy streams as a last resort to unblock `await subprocess`.
           forceKillTimeoutId = setTimeout(() => {
-            if (isWindows) {
-              subprocess.kill('SIGKILL');
-            } else {
-              try {
-                process.kill(-pid, 'SIGKILL');
-              } catch {
-                /* already exited */
-              }
-            }
+            signalProcessGroup(pid, 'SIGKILL');
             subprocess.stdout?.destroy();
             subprocess.stderr?.destroy();
           }, FORCE_KILL_DELAY_MS);
