@@ -43,9 +43,7 @@ const BASH_TIMEOUT_MS = 120_000; // 120 s
 
 const BashInputSchema = z.strictObject({
   command: z.string(),
-  timeout: z
-    .number()
-    .int()
+  timeout: z.int()
     .min(1000)
     .max(600_000)
     .nullish()
