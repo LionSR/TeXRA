@@ -1,5 +1,5 @@
 // Local imports - core types
-import type { IToolRegistry } from '@agent/core/ToolTypes';
+import type { ITool, IToolRegistry } from '@agent/core/ToolTypes';
 import { MapToolRegistry } from '@agent/core/ToolTypes';
 
 // Local imports - model types
@@ -48,54 +48,64 @@ import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 let defaultRegistryInstance: IToolRegistry | null = null;
 
 /**
+ * Canonical tool map — single source of truth for all registered tools.
+ * `RegisteredToolName` is derived from these keys, so adding/renaming
+ * a tool here automatically propagates to the dashboard and availability
+ * checks at compile time.
+ */
+const DEFAULT_TOOLS = {
+  str_replace_editor: new TextEditorTool(),
+  diagnostics: new DiagnosticsTool(),
+  bash: new BashTool(),
+  read_file: new ReadFileTool(),
+  write_file: new WriteFileTool(),
+  edit_file: new EditFileTool(),
+  apply_path: new ApplyPathTool(),
+  glob: new GlobTool(),
+  grep: new GrepTool(),
+  ls: new LsTool(),
+  download_arxiv_source: new ArxivDownloadTool(),
+  arxiv_metadata: new ArxivMetadataTool(),
+  arxiv_search: new ArxivSearchTool(),
+  extract_figures: new ExtractLatexFiguresTool(),
+  extract_bib_entries: new ExtractBibliographyTool(),
+  extract_tikz_figures: new ExtractTikzFiguresTool(),
+  crossref_doi: new CrossrefDoiTool(),
+  crossref_search: new CrossrefSearchTool(),
+  zotero_add: new ZoteroAddTool(),
+  zotero_search: new ZoteroSearchTool(),
+  zotero_export: new ZoteroExportTool(),
+  wolfram: new WolframTool(),
+  texcount: new TexcountTool(),
+  web_fetch: new WebFetchTool(),
+  web_search: new WebSearchTool(),
+  todo_write: new TodoWriteTool(),
+  memory: new MemoryTool(),
+  lean_diagnostics: new LeanDiagnosticsTool(),
+  lean_file: new LeanFileTool(),
+  lean_project: new LeanProjectTool(),
+  lean_inspect: new LeanInspectTool(),
+  lean_loogle: new LeanLoogleTool(),
+  delegate_workflow: new WorkflowAgentTool(),
+  delegate_agent: new DelegateAgentTool(),
+  executions: new ExecutionsTool(),
+  accept_run_files: new AcceptRunFilesTool(),
+  // Legacy aliases — old agent configs may reference these names
+  propose_workflow: new WorkflowAgentTool(),
+  propose_agent: new DelegateAgentTool(),
+  runs: new ExecutionsTool(),
+} satisfies Record<string, ITool>;
+
+/** Union of all tool names registered in the default registry. */
+export type RegisteredToolName = keyof typeof DEFAULT_TOOLS;
+
+/**
  * Get the default tool registry as an IToolRegistry.
  * Uses lazy initialization and singleton pattern.
  */
 export function getDefaultToolRegistry(): IToolRegistry {
   if (!defaultRegistryInstance) {
-    defaultRegistryInstance = new MapToolRegistry({
-      str_replace_editor: new TextEditorTool(),
-      diagnostics: new DiagnosticsTool(),
-      bash: new BashTool(),
-      read_file: new ReadFileTool(),
-      write_file: new WriteFileTool(),
-      edit_file: new EditFileTool(),
-      apply_path: new ApplyPathTool(),
-      glob: new GlobTool(),
-      grep: new GrepTool(),
-      ls: new LsTool(),
-      download_arxiv_source: new ArxivDownloadTool(),
-      arxiv_metadata: new ArxivMetadataTool(),
-      arxiv_search: new ArxivSearchTool(),
-      extract_figures: new ExtractLatexFiguresTool(),
-      extract_bib_entries: new ExtractBibliographyTool(),
-      extract_tikz_figures: new ExtractTikzFiguresTool(),
-      crossref_doi: new CrossrefDoiTool(),
-      crossref_search: new CrossrefSearchTool(),
-      zotero_add: new ZoteroAddTool(),
-      zotero_search: new ZoteroSearchTool(),
-      zotero_export: new ZoteroExportTool(),
-      wolfram: new WolframTool(),
-      texcount: new TexcountTool(),
-      web_fetch: new WebFetchTool(),
-      web_search: new WebSearchTool(),
-      todo_write: new TodoWriteTool(),
-      memory: new MemoryTool(),
-      // Lean 4 tools (uses VS Code extension)
-      lean_diagnostics: new LeanDiagnosticsTool(),
-      lean_file: new LeanFileTool(),
-      lean_project: new LeanProjectTool(),
-      lean_inspect: new LeanInspectTool(),
-      lean_loogle: new LeanLoogleTool(),
-      delegate_workflow: new WorkflowAgentTool(),
-      delegate_agent: new DelegateAgentTool(),
-      executions: new ExecutionsTool(),
-      accept_run_files: new AcceptRunFilesTool(),
-      // Legacy aliases — old agent configs may reference these names
-      propose_workflow: new WorkflowAgentTool(),
-      propose_agent: new DelegateAgentTool(),
-      runs: new ExecutionsTool(),
-    });
+    defaultRegistryInstance = new MapToolRegistry(DEFAULT_TOOLS);
   }
   return defaultRegistryInstance;
 }
