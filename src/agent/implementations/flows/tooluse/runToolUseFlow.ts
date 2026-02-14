@@ -18,7 +18,8 @@ import type { BaseFlowContextInit } from '@agent/implementations/flows/common/Ba
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
-import { DELEGATION_TOOLS, getDefaultToolRegistry } from '@tools/registry';
+import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { getDefaultToolRegistry } from '@tools/registry';
 import { getUnavailableToolNamesCached } from '@tools/toolAvailability';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
