@@ -41,10 +41,20 @@ function getExtraDirs(): string[] {
       '/Library/TeX/texbin',
       '/usr/texbin',
     );
+    // MiKTeX on macOS: app bundle and default symlink targets
+    dirs.push(
+      '/Applications/MiKTeX Console.app/Contents/bin',
+    );
+    const macHome = process.env.HOME;
+    if (macHome) {
+      dirs.push(path.join(macHome, 'bin'));
+    }
   } else if (platform === 'win32') {
     dirs.push(
       'C:\\Program Files\\MiKTeX\\miktex\\bin\\x64',
       'C:\\Program Files\\MiKTeX\\miktex\\bin',
+      'C:\\Program Files\\MiKTeX 2.9\\miktex\\bin\\x64',
+      'C:\\Program Files\\MiKTeX 2.9\\miktex\\bin',
       'C:\\Program Files (x86)\\MiKTeX\\miktex\\bin',
       'C:\\Program Files (x86)\\MiKTeX 2.9\\miktex\\bin',
       'C:\\Program Files\\gs\\gs9.56.1\\bin',
@@ -54,10 +64,22 @@ function getExtraDirs(): string[] {
       'C:\\Program Files (x86)\\gs\\gs9.55.0\\bin',
       'C:\\Program Files (x86)\\gs\\gs9.54.0\\bin',
     );
-    const localAppData = process.env.LOCALAPPDATA;
+    const localAppData =
+      process.env.LOCALAPPDATA ||
+      (process.env.USERPROFILE
+        ? path.join(process.env.USERPROFILE, 'AppData', 'Local')
+        : null);
     if (localAppData) {
       dirs.push(
+        // Modern MiKTeX per-user install
         path.join(localAppData, 'Programs', 'MiKTeX', 'miktex', 'bin', 'x64'),
+        path.join(localAppData, 'Programs', 'MiKTeX', 'miktex', 'bin'),
+        // Legacy MiKTeX 2.9 per-user install
+        path.join(localAppData, 'Programs', 'MiKTeX 2.9', 'miktex', 'bin', 'x64'),
+        path.join(localAppData, 'Programs', 'MiKTeX 2.9', 'miktex', 'bin'),
+        // MiKTeX installed directly under LOCALAPPDATA (without Programs)
+        path.join(localAppData, 'MiKTeX', 'miktex', 'bin', 'x64'),
+        path.join(localAppData, 'MiKTeX', 'miktex', 'bin'),
       );
     }
 
@@ -100,9 +122,15 @@ function getExtraDirs(): string[] {
     dirs.push(
       '/usr/local/bin',
       '/usr/bin',
+      '/opt/miktex/bin', // MiKTeX installed via APT/AUR
       '/snap/bin', // Ubuntu snap packages
       '/home/linuxbrew/.linuxbrew/bin',
     );
+    // MiKTeX on Linux: per-user symlink directory for private installs
+    const linuxHome = process.env.HOME;
+    if (linuxHome) {
+      dirs.push(path.join(linuxHome, 'bin'));
+    }
   }
 
   const texDistPatterns =
