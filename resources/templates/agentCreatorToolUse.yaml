@@ -15,11 +15,13 @@ prompts:
 
     CRITICAL RULES:
     - agentCategory MUST be "toolUse" (not "workflow").
-    - Pick only the tools relevant to the agent's purpose from the available list.
+    - ONLY include tools explicitly listed by the user — do NOT add extras.
     - userRequest MUST be a single string (not an array), and MUST contain {{ INSTRUCTION }}
       so the user's free-text instruction is passed through at runtime.
-    - temperature should be 0.7 for exploratory tasks, lower for precise tasks.
+    - Use the temperature specified by the user.
     - All fields with defaults can be omitted if the default value is acceptable.
+    - The systemPrompt should describe the agent's role and explain how to use the selected tools.
+    - Do NOT invent tools that are not in the selected list.
     Respond only with the YAML wrapped in <yaml> tags.
 
     TEMPLATE VARIABLES available in prompts (Nunjucks double-brace syntax):
@@ -34,32 +36,33 @@ prompts:
     Generate a YAML definition for a **tool-use** agent named "{{ AGENT_NAME }}".
     Goal: {{ DESCRIPTION }}.
 
+    The user selected these tools: {{ SELECTED_TOOLS }}
+    Tool groups selected: {{ SELECTED_GROUPS }}
+    Temperature: {{ TEMPERATURE }}
+
     The YAML must follow this exact structure:
 
     name: {{ AGENT_NAME }}
     description: <one-line description>
     settings:
       agentCategory: toolUse
-      temperature: 0.7
+      temperature: {{ TEMPERATURE }}
       tools:
         - <tool1>
         - <tool2>
     prompts:
       systemPrompt: |
-        <Role and task description. Explain what the agent does and how it should use tools.>
+        <Role and task description. Explain what the agent does and how it should
+         use the selected tools. Tailor the instructions to the specific tool groups
+         the user chose ({{ SELECTED_GROUPS }}).>
       userPrefix: |
         <Context block with input documents. Use {{ ALL_AUXILIARYS }}, {{ ALL_REFERENCES }},
          {{ ADDITIONAL_INPUTS }}, and wrap {{ INPUT_CONTENT }} in <document> tags.>
       userRequest: |
         {{ INSTRUCTION }}
 
-    Available tools (pick only what is relevant):
-      File I/O: bash, read_file, write_file, edit_file, glob, grep, ls
-      Web: web_search, web_fetch
-      Academic: arxiv_search, arxiv_metadata, download_arxiv_source, crossref_search, crossref_doi
-      LaTeX: extract_figures, extract_bib_entries, texcount
-      Other: memory, wolfram, todo_write, diagnostics
-
     IMPORTANT REMINDERS:
     - userRequest must be a single string containing {{ INSTRUCTION }} (not an array).
-    - Only include tools that the agent actually needs.
+    - Only include the tools listed above: {{ SELECTED_TOOLS }}.
+    - temperature must be {{ TEMPERATURE }}.
+    - The systemPrompt should guide the agent on how to use its specific tools effectively.
