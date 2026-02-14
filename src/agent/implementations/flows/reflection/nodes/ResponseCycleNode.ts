@@ -153,7 +153,8 @@ export class ResponseCycleNode<C = unknown> extends Node<
         message: execRes.error.message,
         retryable: execRes.retryable ?? false,
       };
-      throw execRes.error;
+      shared.continueRounds = false;
+      return FlowTransition.FINALIZE;
     }
 
     shared.endTurn = execRes.outcome === 'completed' ? execRes.endTurn : false;
