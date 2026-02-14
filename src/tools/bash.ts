@@ -14,11 +14,7 @@ import {
   untrackExecution,
   ProcessExecutionHandle,
 } from '@agent/runtime/executionRegistry';
-import {
-  getExecutionStore,
-  registerExecution,
-  writeTerminalStatus,
-} from '@agent/storage';
+import { getExecutionStore } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
@@ -210,9 +206,9 @@ export class BashTool extends defineTool({
     );
     handle.outputPaths = { stdout: stdoutPath, stderr: stderrPath };
 
+    const store = getExecutionStore(executionId);
     try {
-      await registerExecution(
-        executionId,
+      await store.register(
         syntheticConfig,
         'bash',
         parentExecutionId,
@@ -258,7 +254,7 @@ export class BashTool extends defineTool({
         ]);
 
         const terminalStatus = result.success ? 'completed' : 'error';
-        await writeTerminalStatus(executionId, terminalStatus).catch(() => {});
+        await store.writeTerminalStatus(terminalStatus).catch(() => {});
         untrackExecution(executionId);
 
         const msg = formatBashDelivery(
@@ -273,11 +269,11 @@ export class BashTool extends defineTool({
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
       })
       .catch(async (err: unknown) => {
-        await writeTerminalStatus(executionId, 'error').catch(() => {});
+        await store.writeTerminalStatus('error').catch(() => {});
         untrackExecution(executionId);
 
         const msg = formatBashError(executionId, command, err);
-        await getExecutionStore(executionId).write('report', msg);
+        await store.write('report', msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
       })
       .finally(cleanupTempFiles);

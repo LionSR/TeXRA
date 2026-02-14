@@ -67,7 +67,7 @@ import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
 
-import { writeTerminalStatus } from '@agent/storage';
+import { getExecutionStore } from '@agent/storage';
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
 import { createInterruptCallbacks } from './InterruptManager';
@@ -341,7 +341,7 @@ async function runFlowWithLifecycle(
   try {
     const result = await runner();
     options?.onCompleted?.(result);
-    await writeTerminalStatus(ctx.executionId, result.status).catch(() => {});
+    await getExecutionStore(ctx.executionId).writeTerminalStatus(result.status).catch(() => {});
     untrackExecution(ctx.executionId);
     ctx.parentStage.end(result.status);
 
@@ -353,7 +353,7 @@ async function runFlowWithLifecycle(
     logger.debug(`Task completed with status: ${result.status}`);
     return result;
   } catch (err) {
-    await writeTerminalStatus(ctx.executionId, 'error').catch(() => {});
+    await getExecutionStore(ctx.executionId).writeTerminalStatus('error').catch(() => {});
     untrackExecution(ctx.executionId);
     const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
