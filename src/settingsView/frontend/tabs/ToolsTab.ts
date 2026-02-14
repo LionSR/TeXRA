@@ -177,16 +177,6 @@ export class ToolsTab extends LitElement {
   @property({ attribute: false }) items: ToolDashboardItem[] = [];
   @property({ type: Boolean }) loaded = false;
 
-  private handleOpenUrl(event: CustomEvent<{ url: string }>): void {
-    this.dispatchEvent(
-      new CustomEvent('tool-open-url', {
-        detail: event.detail,
-        bubbles: true,
-        composed: true,
-      }),
-    );
-  }
-
   private handleRecheck(): void {
     this.dispatchEvent(
       new CustomEvent('tool-recheck', {
@@ -251,11 +241,7 @@ export class ToolsTab extends LitElement {
         ${repeat(
           items,
           (item) => item.id,
-          (item) =>
-            html`<tool-card
-              .item=${item}
-              @tool-open-url=${this.handleOpenUrl}
-            ></tool-card>`,
+          (item) => html`<tool-card .item=${item}></tool-card>`,
         )}
       </div>
     `;
