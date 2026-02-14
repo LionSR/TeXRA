@@ -5,6 +5,7 @@ import * as path from 'path';
 // Local imports - utils
 import { toPosixPath } from '@utils/core/pathCore';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 // Local file imports
 import { createGlobMatcher } from './utils';
@@ -56,7 +57,7 @@ function expandGitignorePattern(
 
 function parseGitignore(content: string): GitignoreRule[] {
   const rules: GitignoreRule[] = [];
-  const lines = content.split(/\r?\n/);
+  const lines = normalizeLineEndings(content).split('\n');
 
   for (const rawLine of lines) {
     let line = rawLine.trim();

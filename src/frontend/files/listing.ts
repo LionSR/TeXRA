@@ -5,12 +5,8 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
+import { normalizeFilePath } from '@shared/utils/path';
 import { WorkspaceFS } from '@utils/files';
-
-/** Normalize path to forward slashes for cross-platform consistency */
-function toForwardSlashes(str: string): string {
-  return str.replaceAll('\\', '/');
-}
 
 /** Normalize and clean directory paths for filtering */
 function sanitizeDirectories(directories: string[]): string[] {
@@ -62,7 +58,7 @@ function getRelativePathPreservingSymlinks(
 
   // If outside workspace, relativePath returns the absolute path (still absolute)
   if (path.isAbsolute(wsRelative)) {
-    return toForwardSlashes(path.relative(root, absolutePath));
+    return normalizeFilePath(path.relative(root, absolutePath));
   }
 
   // If root is the workspace root, the workspace-relative path is the answer
@@ -74,7 +70,7 @@ function getRelativePathPreservingSymlinks(
   // root is a subdirectory — get its workspace-relative path too
   const rootRelative = WorkspaceFS.relativePath(root);
   if (path.isAbsolute(rootRelative)) {
-    return toForwardSlashes(path.relative(root, absolutePath));
+    return normalizeFilePath(path.relative(root, absolutePath));
   }
 
   // Both paths are workspace-relative and forward-slash normalized
@@ -82,7 +78,7 @@ function getRelativePathPreservingSymlinks(
     return wsRelative.slice(rootRelative.length + 1);
   }
 
-  return toForwardSlashes(path.relative(root, absolutePath));
+  return normalizeFilePath(path.relative(root, absolutePath));
 }
 
 /** Check if path contains an excluded directory segment */
