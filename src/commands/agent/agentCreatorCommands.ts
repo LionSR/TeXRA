@@ -46,6 +46,125 @@ interface CreatorConfig {
   };
 }
 
+// ============================================================
+// Tool presets for tool-use agents
+// ============================================================
+
+interface ToolGroup {
+  description: string;
+  tools: string[];
+}
+
+/** Categorized tool groups for guided tool-use agent creation. */
+const TOOL_GROUPS: Record<string, ToolGroup> = {
+  'File Operations': {
+    description: 'Read, write, edit, search files and run shell commands',
+    tools: [
+      'bash',
+      'read_file',
+      'write_file',
+      'edit_file',
+      'glob',
+      'grep',
+      'ls',
+    ],
+  },
+  'Web & Search': {
+    description: 'Search the web and fetch page content',
+    tools: ['web_search', 'web_fetch'],
+  },
+  'Academic Research': {
+    description: 'Search arXiv, CrossRef, and download papers',
+    tools: [
+      'arxiv_search',
+      'arxiv_metadata',
+      'download_arxiv_source',
+      'crossref_search',
+      'crossref_doi',
+    ],
+  },
+  'LaTeX Processing': {
+    description: 'Extract figures, bibliography, TikZ, and count words',
+    tools: [
+      'extract_figures',
+      'extract_bib_entries',
+      'extract_tikz_figures',
+      'texcount',
+    ],
+  },
+  'Citation Management': {
+    description: 'Manage references with Zotero',
+    tools: ['zotero_add', 'zotero_search', 'zotero_export'],
+  },
+  Computation: {
+    description: 'Mathematical computation with Wolfram Alpha',
+    tools: ['wolfram'],
+  },
+  'Agent Delegation': {
+    description: 'Delegate tasks to other agents and manage executions',
+    tools: [
+      'delegate_workflow',
+      'delegate_agent',
+      'executions',
+      'accept_run_files',
+    ],
+  },
+  'Lean 4': {
+    description: 'Lean 4 proof assistant integration',
+    tools: [
+      'lean_diagnostics',
+      'lean_file',
+      'lean_project',
+      'lean_inspect',
+      'lean_loogle',
+    ],
+  },
+  Utility: {
+    description: 'Memory, todo tracking, and diagnostics',
+    tools: ['memory', 'todo_write', 'diagnostics'],
+  },
+};
+
+// ============================================================
+// Workflow mode presets
+// ============================================================
+
+interface WorkflowMode {
+  label: string;
+  description: string;
+  detail: string;
+  temperature: number;
+  rounds: number;
+  isRewrite: boolean;
+}
+
+const WORKFLOW_MODES: WorkflowMode[] = [
+  {
+    label: 'Precise Editing',
+    description: 'For fixing, correcting, and refining existing documents',
+    detail: 'temperature: 0.1 | rounds: 2 | isRewrite: true',
+    temperature: 0.1,
+    rounds: 2,
+    isRewrite: true,
+  },
+  {
+    label: 'Creative Writing',
+    description: 'For drafting and generating new content',
+    detail: 'temperature: 0.8 | rounds: 2 | isRewrite: false',
+    temperature: 0.8,
+    rounds: 2,
+    isRewrite: false,
+  },
+  {
+    label: 'Quick Fix',
+    description: 'Single-pass correction for simple changes',
+    detail: 'temperature: 0.1 | rounds: 1 | isRewrite: true',
+    temperature: 0.1,
+    rounds: 1,
+    isRewrite: true,
+  },
+];
+
 const nunjucksEnv = nunjucks.configure({ autoescape: false });
 
 /** Runtime variables that must pass through Nunjucks unchanged in fallback templates. */
@@ -193,8 +312,10 @@ async function handleCreateAgentWithAI(
 ) {
   try {
     const config = await loadCreatorConfig(context);
+    const categoryLabel = category === 'toolUse' ? 'Tool Use' : 'Workflow';
 
     const agentName = await vscode.window.showInputBox({
+      title: `New ${categoryLabel} Agent`,
       prompt: 'Enter a name for the new agent (without .yaml)',
       validateInput: (value) =>
         !value || /[^a-zA-Z0-9_-]/.test(value)
@@ -206,6 +327,7 @@ async function handleCreateAgentWithAI(
     }
 
     const description = await vscode.window.showInputBox({
+      title: `New ${categoryLabel} Agent: ${agentName}`,
       prompt: 'Briefly describe what this agent should do',
     });
     if (!description) {
@@ -222,25 +344,56 @@ async function handleCreateAgentWithAI(
   }
 }
 
+// ============================================================
+// Workflow agent creation
+// ============================================================
+
 async function createWorkflowAgent(
   config: CreatorConfig,
   agentName: string,
   description: string,
 ) {
-  const outputChoice = await vscode.window.showQuickPick(
-    ['Single output file', 'Multiple output files'],
-    { placeHolder: 'Choose the agent output style' },
-  );
+  // Step 1: Pick workflow mode
+  const modeItems: vscode.QuickPickItem[] = WORKFLOW_MODES.map((m) => ({
+    label: m.label,
+    description: m.description,
+    detail: m.detail,
+  }));
+  const selectedMode = await vscode.window.showQuickPick(modeItems, {
+    title: `Workflow Agent: ${agentName}`,
+    placeHolder: 'Select a workflow mode',
+  });
+  if (!selectedMode) {
+    return;
+  }
+  const mode = WORKFLOW_MODES.find((m) => m.label === selectedMode.label)!;
+
+  // Step 2: Single vs multiple output
+  const outputItems: vscode.QuickPickItem[] = [
+    {
+      label: 'Single output file',
+      description: 'Agent produces one document',
+    },
+    {
+      label: 'Multiple output files',
+      description: 'Agent produces several documents at once',
+    },
+  ];
+  const outputChoice = await vscode.window.showQuickPick(outputItems, {
+    title: `Workflow Agent: ${agentName}`,
+    placeHolder: 'Choose the agent output style',
+  });
   if (!outputChoice) {
     return;
   }
 
-  const isMultipleOutput = outputChoice === 'Multiple output files';
+  const isMultipleOutput = outputChoice.label === 'Multiple output files';
 
   let outputFilesYaml = '';
   let outputFilesNote = '';
   if (isMultipleOutput) {
     const filesInput = await vscode.window.showInputBox({
+      title: `Workflow Agent: ${agentName}`,
       prompt: 'Enter default output filenames (comma separated)',
     });
     if (!filesInput) {
@@ -256,6 +409,10 @@ async function createWorkflowAgent(
 
   const targetDir = await agentDirectories.custom();
   const filePath = vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`));
+  const prefillsYaml = Array.from({ length: mode.rounds }, () => '<scratchpad>')
+    .map((p) => `"${p}"`)
+    .join(', ');
+
   const multipleNote = isMultipleOutput
     ? [
         'IMPORTANT: This agent must handle MULTIPLE output files. Adjust the structure above:',
@@ -268,9 +425,15 @@ async function createWorkflowAgent(
         outputFilesNote,
       ].join('\n')
     : '';
+
   const vars = {
     AGENT_NAME: agentName,
     DESCRIPTION: description,
+    WORKFLOW_MODE: mode.label,
+    TEMPERATURE: String(mode.temperature),
+    ROUNDS: String(mode.rounds),
+    IS_REWRITE: String(mode.isRewrite),
+    PREFILLS: prefillsYaml,
     MULTIPLE_OUTPUT_NOTE: multipleNote,
   };
   let yamlContent = await tryAIGeneration(config, 'workflow', vars);
@@ -283,6 +446,9 @@ async function createWorkflowAgent(
       AGENT_NAME: agentName,
       DESCRIPTION: description,
       OUTPUT_FILES: outputFilesYaml,
+      TEMPERATURE: String(mode.temperature),
+      ROUNDS: String(mode.rounds),
+      IS_REWRITE: String(mode.isRewrite),
     });
   }
 
@@ -299,20 +465,106 @@ async function createWorkflowAgent(
   await writeAndRegisterAgent(filePath, yamlContent, agentName, configOptions);
 }
 
+// ============================================================
+// Tool-use agent creation
+// ============================================================
+
+/** Present multi-select quick pick for tool groups, return flat list of selected tool names. */
+async function pickToolGroups(
+  agentName: string,
+): Promise<string[] | undefined> {
+  const items: vscode.QuickPickItem[] = Object.entries(TOOL_GROUPS).map(
+    ([label, group]) => ({
+      label,
+      description: group.description,
+      detail: group.tools.join(', '),
+      picked: label === 'File Operations',
+    }),
+  );
+
+  const selected = await vscode.window.showQuickPick(items, {
+    title: `Tool Use Agent: ${agentName}`,
+    placeHolder: 'Select tool groups for this agent',
+    canPickMany: true,
+  });
+  if (!selected || selected.length === 0) {
+    return undefined;
+  }
+
+  const tools: string[] = [];
+  for (const item of selected) {
+    const group = TOOL_GROUPS[item.label];
+    if (group) {
+      tools.push(...group.tools);
+    }
+  }
+  return tools;
+}
+
 async function createToolUseAgent(
   config: CreatorConfig,
   agentName: string,
   description: string,
 ) {
+  // Step 1: Pick tool groups
+  const selectedTools = await pickToolGroups(agentName);
+  if (!selectedTools) {
+    return;
+  }
+
+  // Step 2: Pick temperature
+  const tempItems: vscode.QuickPickItem[] = [
+    {
+      label: 'Precise (0.3)',
+      description: 'Deterministic, focused tool calls',
+      detail: 'Best for file editing, code generation, structured tasks',
+    },
+    {
+      label: 'Balanced (0.7)',
+      description: 'Good mix of creativity and reliability',
+      detail: 'Best for research, exploration, general-purpose tasks',
+    },
+    {
+      label: 'Creative (1.0)',
+      description: 'More varied and exploratory responses',
+      detail: 'Best for brainstorming, open-ended research',
+    },
+  ];
+  const tempChoice = await vscode.window.showQuickPick(tempItems, {
+    title: `Tool Use Agent: ${agentName}`,
+    placeHolder: 'Select the agent temperature',
+  });
+  if (!tempChoice) {
+    return;
+  }
+  const temperature = tempChoice.label.includes('0.3')
+    ? '0.3'
+    : tempChoice.label.includes('0.7')
+      ? '0.7'
+      : '1.0';
+
+  const toolsYaml = selectedTools.map((t) => `    - ${t}`).join('\n');
+  const selectedGroupNames = Object.entries(TOOL_GROUPS)
+    .filter(([, group]) => group.tools.some((t) => selectedTools.includes(t)))
+    .map(([name]) => name);
+
   const targetDir = await agentDirectories.custom();
   const filePath = vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`));
-  const vars = { AGENT_NAME: agentName, DESCRIPTION: description };
+  const vars = {
+    AGENT_NAME: agentName,
+    DESCRIPTION: description,
+    SELECTED_TOOLS: selectedTools.join(', '),
+    SELECTED_GROUPS: selectedGroupNames.join(', '),
+    TEMPERATURE: temperature,
+  };
   let yamlContent = await tryAIGeneration(config, 'toolUse', vars);
 
   if (!yamlContent) {
     yamlContent = renderFallbackTemplate(config.templates.toolUse, {
       AGENT_NAME: agentName,
       DESCRIPTION: description,
+      TOOLS_YAML: toolsYaml,
+      TEMPERATURE: temperature,
     });
   }
 

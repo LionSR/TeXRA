@@ -4,17 +4,9 @@ description: {{ DESCRIPTION }}
 # --- Agent Settings ---
 settings:
   agentCategory: toolUse
-  temperature: 0.7
+  temperature: {{ TEMPERATURE }}
   tools:
-    - bash
-    - read_file
-    - write_file
-    - edit_file
-    - glob
-    - grep
-    - ls
-    - web_search
-    - web_fetch
+{{ TOOLS_YAML }}
 
 # --- Agent Prompts ---
 prompts:
