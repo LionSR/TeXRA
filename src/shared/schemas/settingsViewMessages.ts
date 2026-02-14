@@ -223,13 +223,20 @@ export const ToolCategorySchema = z.enum([
 ]);
 export type ToolCategory = z.infer<typeof ToolCategorySchema>;
 
+/** Individual tool within a group — carries an optional description for tooltips. */
+export const ToolInfoSchema = z.object({
+  name: z.string(),
+  description: z.string().optional(),
+});
+export type ToolInfo = z.infer<typeof ToolInfoSchema>;
+
 /** Single tool entry in the dashboard */
 export const ToolDashboardItemSchema = z.object({
   id: z.string(),
   name: z.string(),
   category: ToolCategorySchema,
   description: z.string(),
-  tools: z.array(z.string()),
+  tools: z.array(ToolInfoSchema),
   status: ToolStatusSchema,
   requiresSetup: z.boolean(),
   installGuide: z.string().optional(),
