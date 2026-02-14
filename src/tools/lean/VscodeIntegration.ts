@@ -158,13 +158,6 @@ export async function promptLean4ExtensionInstall(): Promise<void> {
 }
 
 /**
- * Check if Lean 4 extension is installed.
- */
-export function isLean4ExtensionInstalled(): boolean {
-  return vscode.extensions.getExtension(LEAN4_EXTENSION_ID) !== undefined;
-}
-
-/**
  * Get the Lean 4 extension's client provider.
  * Returns null if the extension is not installed or not ready.
  * Prompts user to install the extension if not found.

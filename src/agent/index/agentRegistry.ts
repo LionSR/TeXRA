@@ -644,7 +644,7 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
  * Get visible agents for a category (filtered and deduplicated).
  * No default → undefined means "never configured" (show all).
  */
-function getVisibleAgents(category: 'workflow' | 'toolUse'): AgentEntry[] {
+export function getVisibleAgents(category: 'workflow' | 'toolUse'): AgentEntry[] {
   const isToolUse = category === 'toolUse';
   const entries = isToolUse ? getToolUseAgents() : getWorkflowAgents();
   const stateKey = isToolUse
@@ -654,15 +654,6 @@ function getVisibleAgents(category: 'workflow' | 'toolUse'): AgentEntry[] {
   return deduplicateByName(filterVisible(entries, raw));
 }
 
-/** Get visible workflow agents for the main webview dropdown. */
-export function getVisibleWorkflowAgents(): AgentEntry[] {
-  return getVisibleAgents('workflow');
-}
-
-/** Get visible tool-use agents for the main webview dropdown. */
-export function getVisibleToolUseAgents(): AgentEntry[] {
-  return getVisibleAgents('toolUse');
-}
 
 /**
  * Deduplicate agents by name, keeping only the highest priority source.
@@ -767,11 +758,11 @@ export async function computeAgentOptionsData(): Promise<AgentOptionsDataPayload
 
   return {
     workflow: sortAgentEntries(
-      getVisibleWorkflowAgents(),
+      getVisibleAgents('workflow'),
       DEFAULT_WORKFLOW_AGENT,
     ).map(entryToOptionData),
     toolUse: sortAgentEntries(
-      getVisibleToolUseAgents(),
+      getVisibleAgents('toolUse'),
       DEFAULT_TOOL_USE_AGENT,
     ).map(entryToOptionData),
   };
