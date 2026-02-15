@@ -4,6 +4,7 @@
  * Combines handlers from MemoryView, HistoryView, and ProfileView
  * into a single unified message handler.
  */
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { MODELS, MODEL_CONFIGS } from 'llm-zoo';
 
@@ -67,7 +68,7 @@ import {
 } from '@tools/approval';
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
-import { StorageFS } from '@utils/files';
+import { AbsoluteFS, StorageFS } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
 import {
   getToolUseMemoryEnabled,
@@ -264,6 +265,7 @@ function entryToSelectionItem(
     category: entry.category,
     description: entry.description,
     hasPath: Boolean(entry.path),
+    filePath: entry.path || undefined,
     tools: entry.tools,
     hasMultiple: entry.isMultiple ?? Boolean(entry.multiplePath),
     hasMultiplePath: Boolean(entry.multiplePath),
@@ -369,12 +371,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.SET_POLISH_MODEL]: (data) =>
         this.handleSetPolishModel(data),
 
-      // Auto-show remote agents handlers
-      [SETTINGS_VIEW_COMMANDS.GET_AUTO_SHOW_REMOTE]: () =>
-        this.withActiveWebview((w) => this.sendAutoShowRemote(w)),
-      [SETTINGS_VIEW_COMMANDS.SET_AUTO_SHOW_REMOTE]: (data) =>
-        this.handleSetAutoShowRemote(data),
-
       // Custom agent directory handlers
       [SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR]: () =>
         this.withActiveWebview((w) => this.sendCustomAgentDir(w)),
@@ -402,6 +398,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleOpenAgentFolder(data),
       [SETTINGS_VIEW_COMMANDS.CREATE_AGENT]: (data) =>
         this.handleCreateAgent(data),
+      [SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT]: (data) =>
+        this.handleCustomizeAgent(data),
+      [SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT]: (data) =>
+        this.handleDeleteCustomAgent(data),
+      [SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE]: (data) =>
+        this.handleRevealAgentFile(data),
 
       // Tool dashboard handlers
       [SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA]: () =>
@@ -471,7 +473,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendProfileData(webview),
       this.sendModelSelectionData(webview),
       this.sendAgentSelectionData(webview),
-      this.sendAutoShowRemote(webview),
       this.sendCustomAgentDir(webview),
       this.sendSuperYoloEnabled(webview),
     ]);
@@ -619,28 +620,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       path: resolvedPath,
       isDefault,
     });
-  }
-
-  // ============================================================
-  // Auto-show remote agents handler implementations
-  // ============================================================
-
-  public async sendAutoShowRemote(webview: vscode.Webview): Promise<void> {
-    const enabled =
-      globalSM.get<boolean>(GlobalStateKey.AUTO_SHOW_REMOTE_AGENTS, true) ??
-      true;
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_AUTO_SHOW_REMOTE,
-      enabled,
-    });
-  }
-
-  private async handleSetAutoShowRemote(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_AUTO_SHOW_REMOTE>,
-  ): Promise<void> {
-    await globalSM.update(GlobalStateKey.AUTO_SHOW_REMOTE_AGENTS, data.enabled);
-    void vscode.commands.executeCommand('texra.refreshAllOptions');
-    await this.withActiveWebview((w) => this.sendAutoShowRemote(w));
   }
 
   // ============================================================
@@ -960,6 +939,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     void vscode.commands.executeCommand('texra.refreshAllOptions');
   }
 
+  /** Refresh settings-view agent list and main-view dropdown after agent mutations. */
+  private async refreshAfterAgentMutation(): Promise<void> {
+    await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
+    void vscode.commands.executeCommand('texra.refreshAllOptions');
+  }
+
   private async handleOpenProviderKeyUrl(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_PROVIDER_KEY_URL>,
   ): Promise<void> {
@@ -1147,8 +1132,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       await workspaceSM.update(stateKey, updated);
 
-      void vscode.commands.executeCommand('texra.refreshAllOptions');
-      await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
+      await this.refreshAfterAgentMutation();
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
@@ -1201,8 +1185,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       await workspaceSM.update(stateKey, updated);
 
-      void vscode.commands.executeCommand('texra.refreshAllOptions');
-      await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
+      await this.refreshAfterAgentMutation();
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
@@ -1236,15 +1219,262 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     }
   }
 
+  private async handleRevealAgentFile(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.REVEAL_AGENT_FILE>,
+  ): Promise<void> {
+    try {
+      const key = createKey(data.agentSource, data.agentName);
+      const entry = getAgent(key);
+      if (!entry?.path) {
+        await vscode.window.showErrorMessage(
+          `Agent not found or has no file: ${data.agentName}`,
+        );
+        return;
+      }
+      await vscode.commands.executeCommand(
+        'revealFileInOS',
+        vscode.Uri.file(entry.path),
+      );
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to reveal agent file',
+        error,
+      );
+    }
+  }
+
   private async handleCreateAgent(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.CREATE_AGENT>,
   ): Promise<void> {
-    await vscode.commands.executeCommand(
-      'texra.createAgentWithAI',
-      data.category,
-    );
+    if (data.mode === 'template') {
+      await this.createAgentFromTemplate();
+    } else {
+      await vscode.commands.executeCommand(
+        'texra.createAgentWithAI',
+        data.category,
+      );
+    }
 
-    await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
+    await this.refreshAfterAgentMutation();
+  }
+
+  private async createAgentFromTemplate(): Promise<void> {
+    try {
+      const name = await vscode.window.showInputBox({
+        prompt: 'Enter a name for the new agent (without .yaml extension)',
+        placeHolder: 'my_agent',
+        validateInput: (value) => {
+          if (!value) return 'Name cannot be empty';
+          if (value.includes('/') || value.includes('\\'))
+            return 'Name cannot contain path separators';
+          if (value.includes(' ')) return 'Use underscores instead of spaces';
+          if (/[:#\[\]{}|>&*!%@`]/.test(value))
+            return 'Name cannot contain YAML-special characters';
+          return null;
+        },
+      });
+      if (!name) return;
+
+      const customDir = await agentDirectories.custom();
+      await AbsoluteFS.ensureDir(customDir);
+
+      const fileName = name.endsWith('.yaml') ? name : `${name}.yaml`;
+      const filePath = path.join(customDir, fileName);
+
+      if (await AbsoluteFS.exists(filePath)) {
+        await vscode.window.showWarningMessage(
+          `A file named "${fileName}" already exists in the custom agents folder.`,
+        );
+        return;
+      }
+
+      const baseName = name.replace(/\.yaml$/, '');
+      const template = `# --- Agent Inheritance (Optional) ---
+# inherits: base
+
+name: ${baseName}
+
+# --- Agent Settings ---
+settings:
+  temperature: 0.1
+  isRewrite: true
+  documentTag: document
+  endTag: '</document>'
+  outputExt: tex
+  prefills:
+    - "<document>"
+
+# --- Agent Prompts ---
+prompts:
+  systemPrompt: |
+    [Define the AI's role and core instructions]
+
+  userPrefix: |
+    [Provide context using variables like {{ INPUT_CONTENT }}]
+
+  userRequest:
+    - |
+        [Define the initial task prompt]
+    - |
+        [Optional reflection prompt — remove this item if you only need one round]
+`;
+
+      await AbsoluteFS.write(filePath, template);
+      const doc = await vscode.workspace.openTextDocument(
+        vscode.Uri.file(filePath),
+      );
+      await vscode.window.showTextDocument(doc);
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to create agent from template',
+        error,
+      );
+    }
+  }
+
+  private async handleCustomizeAgent(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.CUSTOMIZE_AGENT>,
+  ): Promise<void> {
+    try {
+      const key = createKey(data.agentSource, data.agentName);
+      const entry = getAgent(key);
+      if (!entry?.path) {
+        await vscode.window.showErrorMessage(
+          `Agent not found or has no file: ${data.agentName}`,
+        );
+        return;
+      }
+
+      const customDir = await agentDirectories.custom();
+      const normalizedCustomDir = path.resolve(customDir);
+      const sourceDir = await agentDirectories.getDirectory(data.agentSource);
+      const relativePath = sourceDir
+        ? path.relative(sourceDir, entry.path)
+        : path.basename(entry.path);
+      const targetPath = path.join(customDir, relativePath);
+
+      // Guard: only write files under the custom agent directory
+      if (
+        !path.resolve(targetPath).startsWith(normalizedCustomDir + path.sep)
+      ) {
+        await vscode.window.showErrorMessage(
+          `Refusing to copy: target path escapes the custom agents directory.`,
+        );
+        return;
+      }
+
+      await AbsoluteFS.ensureDir(path.dirname(targetPath));
+
+      // Avoid overwriting an existing custom copy with user edits
+      if (await AbsoluteFS.exists(targetPath)) {
+        const overwrite = 'Overwrite';
+        const choice = await vscode.window.showWarningMessage(
+          `A custom copy already exists: ${path.basename(targetPath)}`,
+          { modal: true },
+          overwrite,
+        );
+        if (choice !== overwrite) return;
+      }
+
+      await AbsoluteFS.copy(entry.path, targetPath, { overwrite: true });
+
+      // Also copy the _multiple variant if it stays inside the custom directory
+      if (entry.multiplePath) {
+        const multipleRelative = sourceDir
+          ? path.relative(sourceDir, entry.multiplePath)
+          : path.basename(entry.multiplePath);
+        const multipleTarget = path.join(customDir, multipleRelative);
+        if (
+          path.resolve(multipleTarget).startsWith(normalizedCustomDir + path.sep)
+        ) {
+          await AbsoluteFS.ensureDir(path.dirname(multipleTarget));
+          try {
+            await AbsoluteFS.copy(entry.multiplePath, multipleTarget, {
+              overwrite: true,
+            });
+          } catch {
+            // _multiple variant may not exist on disk even if registered
+          }
+        }
+      }
+
+      const doc = await vscode.workspace.openTextDocument(
+        vscode.Uri.file(targetPath),
+      );
+      await vscode.window.showTextDocument(doc, { preview: false });
+
+      void vscode.window.showInformationMessage(
+        `Created custom copy: ${path.basename(targetPath)}`,
+      );
+
+      await this.refreshAfterAgentMutation();
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to create custom agent copy',
+        error,
+      );
+    }
+  }
+
+  private async handleDeleteCustomAgent(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.DELETE_CUSTOM_AGENT>,
+  ): Promise<void> {
+    try {
+      const key = createKey('custom', data.agentName);
+      const entry = getAgent(key);
+      if (!entry?.path) {
+        await vscode.window.showErrorMessage(
+          `Custom agent not found: ${data.agentName}`,
+        );
+        return;
+      }
+
+      // Guard: only delete files under the custom agent directory
+      const customDir = await agentDirectories.custom();
+      const normalizedPath = path.resolve(entry.path);
+      const normalizedCustomDir = path.resolve(customDir);
+      if (!normalizedPath.startsWith(normalizedCustomDir + path.sep)) {
+        await vscode.window.showErrorMessage(
+          `Refusing to delete: file is not inside the custom agents directory.`,
+        );
+        return;
+      }
+
+      await AbsoluteFS.delete(entry.path, { recursive: false });
+
+      // Also delete the _multiple variant if it is inside the custom directory
+      if (entry.multiplePath) {
+        const normalizedMultiple = path.resolve(entry.multiplePath);
+        if (normalizedMultiple.startsWith(normalizedCustomDir + path.sep)) {
+          try {
+            await AbsoluteFS.delete(entry.multiplePath, { recursive: false });
+          } catch (err) {
+            // Only ignore FileNotFound; surface other errors
+            if (
+              !(err instanceof vscode.FileSystemError) ||
+              err.code !== 'FileNotFound'
+            ) {
+              throw err;
+            }
+          }
+        }
+      }
+
+      void vscode.window.showInformationMessage(
+        `Deleted custom agent: ${data.agentName}`,
+      );
+
+      await this.refreshAfterAgentMutation();
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to delete custom agent',
+        error,
+      );
+    }
   }
 
   // ============================================================
@@ -1254,7 +1484,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   /** Refresh agent dir + selection after a directory change. */
   private async refreshAgentDirUI(): Promise<void> {
     await agentDirectories.refreshAfterDirChange();
-    await loadAgents();
     await this.withActiveWebview(async (w) => {
       await Promise.all([
         this.sendCustomAgentDir(w),
