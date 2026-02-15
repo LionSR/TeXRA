@@ -693,13 +693,10 @@ function filterVisible(
   if (configured === undefined) return entries;
   const configuredSet = new Set(configured);
 
-  const autoShowRemote =
-    globalSM?.get<boolean>(GlobalStateKey.AUTO_SHOW_REMOTE_AGENTS, true) ??
-    true;
-
+  // Remote agents always auto-show; users disable individual ones via the Agents tab
   return entries.filter(
     (entry) =>
-      (entry.source === 'remote' && autoShowRemote) ||
+      entry.source === 'remote' ||
       configuredSet.has(createKey(entry.source, entry.name)) ||
       configuredSet.has(entry.name),
   );

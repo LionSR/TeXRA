@@ -35,7 +35,6 @@ import {
 } from '@shared/schemas';
 import {
   UpdateAgentSelectionMessageSchema,
-  UpdateAutoShowRemoteMessageSchema,
   UpdateCustomAgentDirMessageSchema,
   UpdateSuperYoloEnabledMessageSchema,
   UpdateToolDashboardMessageSchema,
@@ -145,7 +144,6 @@ export class SettingsApp extends BaseWebviewApp {
   @state() private toolUseAgents: AgentSelectionItem[] = [];
   @state() private customAgentDir = '';
   @state() private customAgentDirIsDefault = true;
-  @state() private autoShowRemote = true;
   @state() private agentSubTab: AgentCategory | undefined;
 
   // Super YOLO / reliability state
@@ -170,7 +168,6 @@ export class SettingsApp extends BaseWebviewApp {
     postMessage(SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION);
-    postMessage(SETTINGS_VIEW_COMMANDS.GET_AUTO_SHOW_REMOTE);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA);
@@ -257,13 +254,6 @@ export class SettingsApp extends BaseWebviewApp {
         if (!data) return;
         this.workflowAgents = data.workflow;
         this.toolUseAgents = data.toolUse;
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.UPDATE_AUTO_SHOW_REMOTE: {
-        const data = this.parseMessage(raw, UpdateAutoShowRemoteMessageSchema);
-        if (!data) return;
-        this.autoShowRemote = data.enabled;
         return;
       }
 
@@ -447,8 +437,8 @@ export class SettingsApp extends BaseWebviewApp {
     postMessage(SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR);
   }
 
-  private handleSetAutoShowRemote = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_AUTO_SHOW_REMOTE,
+  private handleRevealAgentFile = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE,
   );
 
   private handleSuperYoloToggle = forwardDetail(
@@ -585,13 +575,12 @@ export class SettingsApp extends BaseWebviewApp {
               .toolUseAgents=${this.toolUseAgents}
               .customAgentDir=${this.customAgentDir}
               .customAgentDirIsDefault=${this.customAgentDirIsDefault}
-              .autoShowRemote=${this.autoShowRemote}
               .initialSubTab=${this.agentSubTab}
               @agent-open-yaml=${this.handleOpenAgentYaml}
               @agent-enabled-set=${this.handleSetAgentEnabled}
               @agent-all-enabled-set=${this.handleSetAllAgentsEnabled}
               @agent-open-folder=${this.handleOpenAgentFolder}
-              @agent-auto-show-remote=${this.handleSetAutoShowRemote}
+              @agent-reveal-file=${this.handleRevealAgentFile}
               @agent-create=${this.handleCreateAgent}
               @agent-customize=${this.handleCustomizeAgent}
               @agent-delete-custom=${this.handleDeleteCustomAgent}
