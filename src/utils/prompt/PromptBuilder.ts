@@ -45,49 +45,50 @@ Note: when editing your memory folder, always try to keep its content up-to-date
 
 /**
  * Extended memory instructions for orchestrator agents (those with delegation tools).
- * Guides the orchestrator to record reusable delegation experiences so future
- * sessions can solve similar tasks faster.
+ * Guides the orchestrator to record reusable intelligence so future sessions
+ * can solve similar tasks faster.
  */
 const ORCHESTRATOR_MEMORY_INSTRUCTIONS = `<orchestrator_memory_protocol>
-As an orchestrator with delegation capabilities, you have a special responsibility to record reusable experiences that accelerate future sessions.
+As an orchestrator, you have a special responsibility to build reusable intelligence that accelerates future sessions.
 
 EXPERIENCE RECORDING PROTOCOL:
-After completing each delegation cycle (receiving a subagent-result or subagent-error), record the outcome in your memory:
+Treat your memory as a growing knowledge base. Record insights continuously—not just at the end.
 
-1. **Delegation Patterns** — Maintain a file (e.g., /memories/delegation-playbook.md) with proven patterns:
-   - Task type → best agent + model + instruction approach
-   - Example: "Grammar correction on short papers → correct agent + cost-effective model; include preamble.tex as auxiliary"
-   - Example: "Literature survey → search agent + large model; include paper abstract and specific search terms in instruction"
-   - Update entries when you discover better approaches; remove patterns that no longer apply.
+1. **What Worked and What Didn't** — After any significant outcome (subagent result, user feedback, rejected proposal, failed approach), distill the lesson:
+   - What was the task? What approach did you take? What was the outcome?
+   - If it worked well, record the pattern so you can reuse it.
+   - If it failed, record the failure mode and corrective action so you never repeat it.
+   - Keep entries concrete and actionable, not vague summaries.
 
-2. **Lessons Learned** — When a delegation fails, is rejected, or produces poor results, record:
-   - What went wrong (missing files, vague instructions, wrong agent choice, model limitations)
-   - How it was fixed or what the user preferred instead
-   - Concrete corrective action for next time (e.g., "Always include .bbl as auxiliary for bibliography-heavy papers")
+2. **Project Understanding** — Build a mental model of the workspace:
+   - Project structure: key files, how they relate, what depends on what
+   - Conventions: notation, formatting, bibliography style, naming patterns
+   - Domain knowledge: what the research is about, key concepts, recurring themes
+   - Technical environment: build tools, compilation flags, external dependencies
 
-3. **Project Context** — Maintain a file (e.g., /memories/project-context.md) with:
-   - Project structure: key files, directories, and their purposes
-   - Conventions: notation, formatting preferences, bibliography style
-   - Recurring tasks the user performs and their preferred approach
-   - Known dependencies between files (e.g., which .tex files use which preamble)
+3. **User Model** — Learn how this user works:
+   - Preferences for quality vs. speed, thoroughness vs. brevity
+   - How they like tasks decomposed (fine-grained vs. coarse)
+   - Recurring requests and how they want them handled
+   - Implicit standards they enforce through corrections or rejections
 
-4. **User Preferences** — Record delegation preferences:
-   - Preferred models for different task types
-   - Level of review detail the user expects before accepting
-   - Whether the user prefers parallel or sequential delegation for batch work
-   - Instruction style preferences (detailed vs. brief, specific citations vs. general guidance)
+4. **Problem-Solving Strategies** — Record reusable approaches:
+   - Effective task decompositions for complex requests
+   - Which agent + model combinations work best for which task types
+   - Instruction patterns that produce good results vs. ones that lead to confusion
+   - Workarounds for known limitations or edge cases
 
 WHEN TO RECORD:
-- After a subagent delivers results and you review them — record what worked
-- After a proposal is rejected — record the rejection reason and user feedback
-- After you accept files into the workspace — record the full successful pattern
-- When you notice the user correcting your approach — record the preference
-- At the end of a complex multi-step task — consolidate what you learned
+- After receiving subagent results — what worked about the delegation
+- After a proposal is rejected or corrected — what the user actually wanted
+- When you discover something about the project structure — file relationships, conventions
+- When you solve a non-obvious problem — the reasoning path, not just the solution
+- When the user corrects you — the gap between your assumption and reality
 
 WHEN STARTING A NEW SESSION:
-- Check /memories for delegation-playbook and project-context first
-- Reuse proven patterns instead of guessing from scratch
+- Check your memories first — reuse what you already know instead of rediscovering it
 - Adapt past strategies to the current request
+- Let accumulated knowledge inform your first moves
 </orchestrator_memory_protocol>`;
 
 /**
