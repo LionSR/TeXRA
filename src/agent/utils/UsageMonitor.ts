@@ -170,6 +170,9 @@ export class UsageMonitor {
       );
 
       // Accumulate per-round snapshot (flushed once at end of agent execution)
+      // Store per-round delta time, not cumulative total
+      const roundResponseTimeMs =
+        stateGlobal.totalResponseTimeMs - this.accumulatedResponseTimeMs;
       this.accumulatedRounds.push({
         inputTokens: roundInputTokens,
         outputTokens: roundOutputTokens,
@@ -177,7 +180,7 @@ export class UsageMonitor {
         cacheCreationInputTokens: roundCacheCreationTokens,
         reasoningTokens: roundReasoningTokens,
         cost: roundCost,
-        responseTimeMs: stateGlobal.totalResponseTimeMs,
+        responseTimeMs: roundResponseTimeMs,
       });
       this.accumulatedResponseTimeMs = stateGlobal.totalResponseTimeMs;
     } catch (error) {
