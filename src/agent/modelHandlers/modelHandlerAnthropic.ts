@@ -255,15 +255,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /** Tracks PDF page counts for files uploaded to the Anthropic Files API. */
   private uploadedPdfPageCounts = new Map<string, number>();
 
-  /** Sum of all tracked PDF page counts for uploaded files. */
-  private getTrackedPdfPageCount(): number {
-    let total = 0;
-    for (const count of this.uploadedPdfPageCounts.values()) {
-      total += count;
-    }
-    return total;
-  }
-
   private isClaudeOpus46(): boolean {
     return this.config.fullName === OPUS_46_FULLNAME;
   }
@@ -520,9 +511,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const documentAnalysis = this.analyzeDocumentSources(messages);
     let hasFileReference = documentAnalysis.hasFileSource;
 
-    // Validate PDF page limit before expensive token counting and uploads
+    // Strip old PDF blocks if the conversation exceeds the page limit
     if (documentAnalysis.hasBase64Pdf || documentAnalysis.hasFileSource) {
-      await this.validatePdfPageLimit(messages);
+      await this.enforcePdfPageLimit(messages);
     }
 
     // Phase 1: BUILD - Construct provider-specific request parameters
@@ -978,7 +969,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
             file_id: uploadedFile.id,
           } as BetaRequestDocumentBlock['source'];
 
-          // Track page count so validatePdfPageLimit can account for
+          // Track page count so enforcePdfPageLimit can account for
           // this file reference in subsequent rounds
           if (pageCount > 0) {
             this.uploadedPdfPageCounts.set(uploadedFile.id, pageCount);
@@ -1088,56 +1079,146 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * Only messages at or after the last compaction block are counted, because
    * the Anthropic API drops pre-compaction messages server-side.
    */
-  private async validatePdfPageLimit(messages: MessageParam[]): Promise<void> {
+  /**
+   * Enforces the PDF page limit by stripping the oldest PDF document blocks
+   * from the conversation until the total is within ANTHROPIC_MAX_PDF_PAGES.
+   *
+   * Stripped blocks are replaced with text placeholders so the model knows
+   * content was removed. This avoids throwing errors or crashing the agent —
+   * old PDFs are simply evicted to make room for new ones.
+   *
+   * Only messages at or after the last compaction block are counted, because
+   * the Anthropic API drops pre-compaction messages server-side.
+   */
+  private async enforcePdfPageLimit(messages: MessageParam[]): Promise<void> {
     const startIndex = this.findLastCompactionMessageIndex(messages);
+
+    // Collect every PDF block location with its page count (oldest first)
+    interface PdfLocation {
+      /** The array containing the document block (top-level or tool_result content) */
+      container: unknown[];
+      /** Index of the document block within that container */
+      index: number;
+      pageCount: number;
+      title: string;
+      fileId?: string;
+    }
+
+    const locations: PdfLocation[] = [];
     let totalPages = 0;
 
     for (let i = startIndex; i < messages.length; i++) {
-      const message = messages[i];
-      const contentBlocks = message.content;
-      if (!Array.isArray(contentBlocks)) {
-        continue;
-      }
+      const contentBlocks = messages[i].content;
+      if (!Array.isArray(contentBlocks)) continue;
 
-      for (const block of this.extractDocumentBlocks(contentBlocks)) {
-        // Cast to beta source type: upload code stores BetaFileDocumentSource
-        // entries (via Files API) into non-beta message arrays.
-        const source = block.source as BetaRequestDocumentBlock['source'];
+      for (let j = 0; j < contentBlocks.length; j++) {
+        const block = contentBlocks[j];
 
-        if (source.type === 'file') {
-          // PDF previously uploaded to the Files API — use tracked page count
-          const fileId = source.file_id;
-          const tracked = this.uploadedPdfPageCounts.get(fileId);
-          if (tracked !== undefined) {
-            totalPages += tracked;
+        if (block.type === 'document' && (block as DocumentBlockParam).source) {
+          const loc = await this.pdfLocationFromBlock(
+            block as DocumentBlockParam,
+            contentBlocks,
+            j,
+          );
+          if (loc) {
+            locations.push(loc);
+            totalPages += loc.pageCount;
           }
         } else if (
-          source.type === 'base64' &&
-          source.media_type === 'application/pdf' &&
-          source.data
+          block.type === 'tool_result' &&
+          Array.isArray((block as { content?: unknown }).content)
         ) {
-          // Inline base64 PDF — decode and count pages
-          const buffer = Buffer.from(source.data, 'base64');
-          try {
-            totalPages += await this.countPdfPagesFromBuffer(buffer);
-          } finally {
-            buffer.fill(0);
+          const nested = (block as { content: unknown[] }).content;
+          for (let k = 0; k < nested.length; k++) {
+            const n = nested[k] as { type: string; source?: unknown };
+            if (n.type === 'document' && n.source) {
+              const loc = await this.pdfLocationFromBlock(
+                n as DocumentBlockParam,
+                nested,
+                k,
+              );
+              if (loc) {
+                locations.push(loc);
+                totalPages += loc.pageCount;
+              }
+            }
           }
-        }
-
-        if (totalPages > ANTHROPIC_MAX_PDF_PAGES) {
-          const err = new Error(
-            `PDF page limit reached: the conversation contains ${totalPages}+ PDF pages, ` +
-              `but the API allows a maximum of ${ANTHROPIC_MAX_PDF_PAGES} pages per request. ` +
-              `Please compact the conversation, reduce the number of PDF attachments, or start a new conversation.`,
-          );
-          // Attach status 400 so formatProviderHttpError classifies this as
-          // non-retryable (same as the raw API error it replaces).
-          (err as Error & { status: number }).status = 400;
-          throw err;
         }
       }
     }
+
+    if (totalPages <= ANTHROPIC_MAX_PDF_PAGES) return;
+
+    // Strip oldest PDFs until we fit within the limit
+    let pagesToRemove = totalPages - ANTHROPIC_MAX_PDF_PAGES;
+    let strippedCount = 0;
+
+    for (const loc of locations) {
+      if (pagesToRemove <= 0) break;
+
+      loc.container[loc.index] = {
+        type: 'text',
+        text: `[PDF removed: ${loc.title} (${loc.pageCount} page${loc.pageCount === 1 ? '' : 's'}) — exceeded ${ANTHROPIC_MAX_PDF_PAGES}-page conversation limit]`,
+      };
+
+      if (loc.fileId) {
+        this.uploadedPdfPageCounts.delete(loc.fileId);
+      }
+
+      pagesToRemove -= loc.pageCount;
+      strippedCount++;
+    }
+
+    this.logger.warn(
+      `Stripped ${strippedCount} PDF document(s) from conversation to stay within ` +
+        `${ANTHROPIC_MAX_PDF_PAGES}-page limit (was ${totalPages} pages)`,
+    );
+  }
+
+  /**
+   * Extracts page count, title, and file ID from a PDF document block.
+   * Returns null for non-PDF documents or on parse failure.
+   */
+  private async pdfLocationFromBlock(
+    block: DocumentBlockParam,
+    container: unknown[],
+    index: number,
+  ): Promise<{
+    container: unknown[];
+    index: number;
+    pageCount: number;
+    title: string;
+    fileId?: string;
+  } | null> {
+    const source = block.source as BetaRequestDocumentBlock['source'];
+    const title =
+      (block as { title?: string }).title ?? 'document.pdf';
+
+    if (source.type === 'file') {
+      const fileId = source.file_id;
+      const tracked = this.uploadedPdfPageCounts.get(fileId);
+      if (tracked !== undefined) {
+        return { container, index, pageCount: tracked, title, fileId };
+      }
+      // Untracked file reference — can't determine page count, keep it
+      return null;
+    }
+
+    if (
+      source.type === 'base64' &&
+      source.media_type === 'application/pdf' &&
+      source.data
+    ) {
+      const buffer = Buffer.from(source.data, 'base64');
+      try {
+        const pageCount = await this.countPdfPagesFromBuffer(buffer);
+        return { container, index, pageCount, title };
+      } finally {
+        buffer.fill(0);
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -1169,11 +1250,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
   ): Promise<{
     uploaded: UploadedAnthropicAttachment[];
     unsupported: ToolFileAttachment[];
-    pageLimitExceeded: ToolFileAttachment[];
   }> {
     const uploaded: UploadedAnthropicAttachment[] = [];
     const unsupported: ToolFileAttachment[] = [];
-    const pageLimitExceeded: ToolFileAttachment[] = [];
 
     for (const attachment of attachments) {
       const mimeType = attachment.mimeType ?? 'application/octet-stream';
@@ -1197,25 +1276,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         continue;
       }
 
-      // Check cumulative PDF page limit before uploading
-      let pdfPageCount = 0;
-      if (isPdf) {
-        pdfPageCount = await this.countPdfPagesFromBuffer(buffer);
-        const currentTotal = this.getTrackedPdfPageCount();
-        if (currentTotal + pdfPageCount > ANTHROPIC_MAX_PDF_PAGES) {
-          this.logger.warn(
-            `PDF page limit reached: ${attachment.path ?? 'attachment.pdf'} has ${pdfPageCount} pages, ` +
-              `but conversation already has ${currentTotal}/${ANTHROPIC_MAX_PDF_PAGES} pages`,
-          );
-          pageLimitExceeded.push(attachment);
-          if (buffer) {
-            buffer.fill(0);
-            buffer = undefined;
-          }
-          continue;
-        }
-      }
-
       try {
         const filename = this.sanitizeFilename(
           attachment.path ??
@@ -1223,6 +1283,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
               ? 'document.pdf'
               : `image.${normalized.split('/').pop() ?? 'png'}`),
         );
+
+        // Count PDF pages before upload so enforcePdfPageLimit can track them
+        let pdfPageCount = 0;
+        if (isPdf) {
+          pdfPageCount = await this.countPdfPagesFromBuffer(buffer);
+        }
 
         const base64Data = buffer.toString('base64');
         const uploadedFile = await client.beta.files.upload({
@@ -1251,7 +1317,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
     }
 
-    return { uploaded, unsupported, pageLimitExceeded };
+    return { uploaded, unsupported };
   }
 
   private sanitizeFilename(filename: string): string {
@@ -2155,7 +2221,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     let uploadedAttachments: UploadedAnthropicAttachment[] = [];
     const unsupportedAttachments: ToolFileAttachment[] = [];
-    const pageLimitAttachments: ToolFileAttachment[] = [];
 
     if (canUploadFiles && attachments.length > 0 && client) {
       const uploadResult = await this.uploadToolAttachments(
@@ -2164,7 +2229,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       );
       uploadedAttachments = uploadResult.uploaded;
       unsupportedAttachments.push(...uploadResult.unsupported);
-      pageLimitAttachments.push(...uploadResult.pageLimitExceeded);
 
       if (uploadedAttachments.length > 0) {
         // Store uploaded file info with fileId (Anthropic-specific extension)
@@ -2236,20 +2300,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     if (unsupportedAttachments.length > 0) {
       unsupportedNotes.push(...describeAttachments(unsupportedAttachments));
-    }
-
-    if (pageLimitAttachments.length > 0) {
-      const currentTotal = this.getTrackedPdfPageCount();
-      const names = pageLimitAttachments
-        .map((a) => a.path ?? 'attachment.pdf')
-        .join(', ');
-      toolResultContent.unshift({
-        type: 'text',
-        text:
-          `PDF page limit reached: cannot include ${names}. ` +
-          `The conversation already contains ${currentTotal} of the maximum ${ANTHROPIC_MAX_PDF_PAGES} PDF pages allowed per request. ` +
-          `Inform the user and suggest compacting the conversation, reducing PDF attachments, or starting a new conversation.`,
-      });
     }
 
     if (unsupportedNotes.length > 0) {
