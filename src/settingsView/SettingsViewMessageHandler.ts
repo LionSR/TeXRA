@@ -1348,11 +1348,23 @@ prompts:
       }
 
       const customDir = await agentDirectories.custom();
+      const normalizedCustomDir = path.resolve(customDir);
       const sourceDir = await agentDirectories.getDirectory(data.agentSource);
       const relativePath = sourceDir
         ? path.relative(sourceDir, entry.path)
         : path.basename(entry.path);
       const targetPath = path.join(customDir, relativePath);
+
+      // Guard: only write files under the custom agent directory
+      if (
+        !path.resolve(targetPath).startsWith(normalizedCustomDir + path.sep)
+      ) {
+        await vscode.window.showErrorMessage(
+          `Refusing to copy: target path escapes the custom agents directory.`,
+        );
+        return;
+      }
+
       await AbsoluteFS.ensureDir(path.dirname(targetPath));
 
       // Avoid overwriting an existing custom copy with user edits
@@ -1368,19 +1380,23 @@ prompts:
 
       await AbsoluteFS.copy(entry.path, targetPath, { overwrite: true });
 
-      // Also copy the _multiple variant if it exists
+      // Also copy the _multiple variant if it stays inside the custom directory
       if (entry.multiplePath) {
         const multipleRelative = sourceDir
           ? path.relative(sourceDir, entry.multiplePath)
           : path.basename(entry.multiplePath);
         const multipleTarget = path.join(customDir, multipleRelative);
-        await AbsoluteFS.ensureDir(path.dirname(multipleTarget));
-        try {
-          await AbsoluteFS.copy(entry.multiplePath, multipleTarget, {
-            overwrite: true,
-          });
-        } catch {
-          // _multiple variant may not exist on disk even if registered
+        if (
+          path.resolve(multipleTarget).startsWith(normalizedCustomDir + path.sep)
+        ) {
+          await AbsoluteFS.ensureDir(path.dirname(multipleTarget));
+          try {
+            await AbsoluteFS.copy(entry.multiplePath, multipleTarget, {
+              overwrite: true,
+            });
+          } catch {
+            // _multiple variant may not exist on disk even if registered
+          }
         }
       }
 
