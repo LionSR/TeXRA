@@ -1243,12 +1243,89 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleCreateAgent(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.CREATE_AGENT>,
   ): Promise<void> {
-    await vscode.commands.executeCommand(
-      'texra.createAgentWithAI',
-      data.category,
-    );
+    if (data.mode === 'template') {
+      await this.createAgentFromTemplate();
+    } else {
+      await vscode.commands.executeCommand(
+        'texra.createAgentWithAI',
+        data.category,
+      );
+    }
 
     await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
+  }
+
+  private async createAgentFromTemplate(): Promise<void> {
+    try {
+      const name = await vscode.window.showInputBox({
+        prompt: 'Enter a name for the new agent (without .yaml extension)',
+        placeHolder: 'my_agent',
+        validateInput: (value) => {
+          if (!value) return 'Name cannot be empty';
+          if (value.includes('/') || value.includes('\\'))
+            return 'Name cannot contain path separators';
+          if (value.includes(' ')) return 'Use underscores instead of spaces';
+          return null;
+        },
+      });
+      if (!name) return;
+
+      const customDir = await agentDirectories.custom();
+      await AbsoluteFS.ensureDir(customDir);
+
+      const fileName = name.endsWith('.yaml') ? name : `${name}.yaml`;
+      const filePath = path.join(customDir, fileName);
+
+      if (await AbsoluteFS.exists(filePath)) {
+        await vscode.window.showWarningMessage(
+          `A file named "${fileName}" already exists in the custom agents folder.`,
+        );
+        return;
+      }
+
+      const baseName = name.replace(/\.yaml$/, '');
+      const template = `# --- Agent Inheritance (Optional) ---
+# inherits: base
+
+name: ${baseName}
+
+# --- Agent Settings ---
+settings:
+  temperature: 0.1
+  isRewrite: true
+  documentTag: document
+  endTag: '</document>'
+  outputExt: tex
+  prefills:
+    - "<document>"
+
+# --- Agent Prompts ---
+prompts:
+  systemPrompt: |
+    [Define the AI's role and core instructions]
+
+  userPrefix: |
+    [Provide context using variables like {{ INPUT_CONTENT }}]
+
+  userRequest:
+    - |
+        [Define the initial task prompt]
+    - |
+        [Optional reflection prompt — remove this item if you only need one round]
+`;
+
+      await AbsoluteFS.write(filePath, template);
+      const doc = await vscode.workspace.openTextDocument(
+        vscode.Uri.file(filePath),
+      );
+      await vscode.window.showTextDocument(doc);
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to create agent from template',
+        error,
+      );
+    }
   }
 
   private async handleCustomizeAgent(
