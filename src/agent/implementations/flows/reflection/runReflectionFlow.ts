@@ -212,6 +212,9 @@ export async function runReflectionFlow<C = unknown>(
 
     if (validated?.success) {
       shared = validated.data as ReflectionFlowShared;
+      // Always sync totalRounds from the current agent config so that changes
+      // to the YAML (e.g. rounds: 2 → 1) take effect on resume.
+      shared.totalRounds = totalRounds;
       logger.debug(
         `Resuming reflection flow from round ${shared.currentRound}/${shared.totalRounds}`,
       );
@@ -285,6 +288,9 @@ export async function runReflectionFlow<C = unknown>(
 
     if (isResume) {
       logger.debug('Resuming reflection flow from persistence');
+      // Persist the synced totalRounds into the flow record so that
+      // stepWithResult() picks up the current config, not the stale one.
+      await pf.setShared(shared);
     }
 
     const flowStatus = await pf.run(shared);
