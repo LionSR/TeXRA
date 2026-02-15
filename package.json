@@ -938,42 +938,6 @@
         "category": "TeXRA"
       },
       {
-        "command": "texra.folderExplorer.newFile",
-        "title": "New File",
-        "category": "TeXRA",
-        "icon": "$(new-file)"
-      },
-      {
-        "command": "texra.folderExplorer.newFolder",
-        "title": "New Folder",
-        "category": "TeXRA",
-        "icon": "$(new-folder)"
-      },
-      {
-        "command": "texra.folderExplorer.rename",
-        "title": "Rename",
-        "category": "TeXRA",
-        "icon": "$(edit)"
-      },
-      {
-        "command": "texra.folderExplorer.delete",
-        "title": "Delete",
-        "category": "TeXRA",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "texra.folderExplorer.addToList",
-        "title": "Add Agent to List",
-        "category": "TeXRA",
-        "icon": "$(diff-added)"
-      },
-      {
-        "command": "texra.folderExplorer.revealInOS",
-        "title": "Reveal in OS",
-        "category": "TeXRA",
-        "icon": "$(folder-opened)"
-      },
-      {
         "command": "texra.createAgentWithAI",
         "title": "Create AI Agent",
         "category": "TeXRA",
@@ -1206,11 +1170,6 @@
           "id": "texra.mainView",
           "name": "TeXRA",
           "contextualTitle": "TeXRA"
-        },
-        {
-          "id": "texra.folderExplorer",
-          "name": "TeX Agents",
-          "when": "workbenchState != empty"
         }
       ],
       "texra-panel": [
@@ -1268,16 +1227,6 @@
           "group": "navigation@7"
         },
         {
-          "command": "texra.folderExplorer.newFile",
-          "when": "view == texra.folderExplorer",
-          "group": "navigation"
-        },
-        {
-          "command": "texra.folderExplorer.newFolder",
-          "when": "view == texra.folderExplorer",
-          "group": "navigation"
-        },
-        {
           "command": "texra.mainView.reset",
           "when": "view == texra.mainView",
           "group": "navigation@0"
@@ -1286,38 +1235,6 @@
           "command": "texra.showDashboard",
           "when": "view == texra.mainView",
           "group": "navigation@1"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "texra.folderExplorer.newFile",
-          "when": "view == texra.folderExplorer && viewItem == folder",
-          "group": "1_modification"
-        },
-        {
-          "command": "texra.folderExplorer.newFolder",
-          "when": "view == texra.folderExplorer && viewItem == folder",
-          "group": "1_modification"
-        },
-        {
-          "command": "texra.folderExplorer.rename",
-          "when": "view == texra.folderExplorer && viewItem != editing",
-          "group": "2_modification"
-        },
-        {
-          "command": "texra.folderExplorer.delete",
-          "when": "view == texra.folderExplorer && viewItem != editing",
-          "group": "3_modification"
-        },
-        {
-          "command": "texra.folderExplorer.addToList",
-          "when": "view == texra.folderExplorer && viewItem == file",
-          "group": "4_modification"
-        },
-        {
-          "command": "texra.folderExplorer.revealInOS",
-          "when": "view == texra.folderExplorer && viewItem == folder",
-          "group": "5_modification"
         }
       ]
     },
