@@ -1172,11 +1172,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           ? getWorkflowAgents()
           : getToolUseAgents();
 
+      const sourceAgents = allAgents.filter((e) => e.source === data.source);
       const targetKeys = new Set(
-        allAgents
-          .filter((e) => e.source === data.source)
-          .map((e) => createKey(e.source, e.name)),
+        sourceAgents.map((e) => createKey(e.source, e.name)),
       );
+      // Legacy entries may use plain agent names without source prefix
+      const targetLegacyNames = new Set(sourceAgents.map((e) => e.name));
 
       // Resolve current state: undefined means "all enabled" (never configured)
       const raw = workspaceSM.get<string[]>(stateKey);
@@ -1192,8 +1193,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           ...[...targetKeys].filter((k) => !currentSet.has(k)),
         ];
       } else {
-        // Remove all keys from the target source
-        updated = current.filter((k) => !targetKeys.has(k));
+        // Remove both source:name and legacy plain-name entries for this source
+        updated = current.filter(
+          (k) => !targetKeys.has(k) && !targetLegacyNames.has(k),
+        );
       }
 
       await workspaceSM.update(stateKey, updated);
