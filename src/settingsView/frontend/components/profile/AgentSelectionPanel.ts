@@ -653,7 +653,7 @@ export class AgentSelectionPanel extends LitElement {
           : nothing}
         ${agent.filePath
           ? html`<div class="agent-detail-path" title=${agent.filePath}>
-              ${agent.filePath.split('/').pop() ?? agent.filePath}
+              ${agent.filePath.split(/[/\\]/).pop() ?? agent.filePath}
             </div>`
           : nothing}
 
