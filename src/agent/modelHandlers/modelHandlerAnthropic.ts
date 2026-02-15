@@ -2148,12 +2148,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     if (pageLimitExceeded.length > 0) {
+      const remaining =
+        ANTHROPIC_MAX_PDF_PAGES - this.getTrackedPdfPageCount();
       const names = pageLimitExceeded
         .map((a) => a.path ?? 'attachment.pdf')
         .join(', ');
       toolResultContent.unshift({
         type: 'text',
-        text: `PDF page limit reached — could not include: ${names}. The conversation has reached the maximum of ${ANTHROPIC_MAX_PDF_PAGES} PDF pages. Tell the user.`,
+        text: `PDF page limit reached — could not include: ${names}. ${remaining} of ${ANTHROPIC_MAX_PDF_PAGES} PDF pages remaining in this conversation. Tell the user.`,
       });
     }
 
