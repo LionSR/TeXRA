@@ -137,14 +137,6 @@ export class AgentsTab extends LitElement {
         border-radius: var(--border-radius);
       }
 
-      .agents-dir-separator {
-        flex-shrink: 0;
-        width: var(--border-thin);
-        height: var(--font-size);
-        background: var(--color-border);
-        margin: 0 var(--spacing-tiny);
-      }
-
       .agents-dir-actions {
         display: flex;
         gap: var(--spacing-small);
@@ -152,9 +144,21 @@ export class AgentsTab extends LitElement {
         margin-left: auto;
       }
 
-      .agents-toggle-row {
-        margin-bottom: var(--spacing-medium);
-        font-size: var(--font-size-sm);
+      .agents-dir-icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-tiny);
+        color: var(--color-text-secondary);
+        background: none;
+        border: none;
+        border-radius: var(--border-radius);
+        cursor: pointer;
+        transition: color 0.1s ease;
+      }
+
+      .agents-dir-icon-btn:hover {
+        color: var(--vscode-foreground);
       }
     `,
   ];
@@ -163,7 +167,6 @@ export class AgentsTab extends LitElement {
   @property({ attribute: false }) toolUseAgents: AgentSelectionItem[] = [];
   @property({ attribute: false }) customAgentDir = '';
   @property({ attribute: false }) customAgentDirIsDefault = true;
-  @property({ attribute: false }) autoShowRemote = true;
   @property({ attribute: false }) initialSubTab?: AgentCategory;
 
   @state() private activeSubTab: AgentCategory = 'workflow';
@@ -174,10 +177,10 @@ export class AgentsTab extends LitElement {
     }
   }
 
-  private handleOpenFolder(
-    folderType: 'custom' | 'builtInWorkflow' | 'builtInToolUse',
-  ): void {
-    this.dispatchEvent(AgentSelectionEvents.openFolder({ folderType }));
+  private handleOpenFolder(): void {
+    this.dispatchEvent(
+      AgentSelectionEvents.openFolder({ folderType: 'custom' }),
+    );
   }
 
   private handleCreateAgent(): void {
@@ -192,12 +195,6 @@ export class AgentsTab extends LitElement {
 
   private handleResetCustomDir(): void {
     this.dispatchEvent(AgentSelectionEvents.resetCustomDir());
-  }
-
-  private handleToggleAutoShowRemote(): void {
-    this.dispatchEvent(
-      AgentSelectionEvents.setAutoShowRemote({ enabled: !this.autoShowRemote }),
-    );
   }
 
   override render(): TemplateResult {
@@ -258,6 +255,13 @@ export class AgentsTab extends LitElement {
             : nothing}
           <div class="agents-dir-actions">
             <button
+              class="agents-dir-icon-btn"
+              @click=${this.handleOpenFolder}
+              title="Open folder in file explorer"
+            >
+              <span class="codicon codicon-folder-opened"></span>
+            </button>
+            <button
               class="tab-action-btn"
               @click=${this.handleChangeCustomDir}
               title="Change custom agents directory"
@@ -273,39 +277,9 @@ export class AgentsTab extends LitElement {
                   Reset
                 </button>`
               : nothing}
-            <span class="agents-dir-separator"></span>
-            <button
-              class="tab-action-btn"
-              @click=${() => this.handleOpenFolder('custom')}
-              title="Open custom agents folder"
-            >
-              Open
-            </button>
-            <button
-              class="tab-action-btn"
-              @click=${() => this.handleOpenFolder('builtInWorkflow')}
-              title="Open built-in agents folder"
-            >
-              Built-in
-            </button>
-            <button
-              class="tab-action-btn"
-              @click=${() => this.handleOpenFolder('builtInToolUse')}
-              title="Open tool-use agents folder"
-            >
-              Tool Use
-            </button>
           </div>
         </div>
 
-        <div class="agents-toggle-row">
-          <vscode-checkbox
-            ?checked=${this.autoShowRemote}
-            @change=${this.handleToggleAutoShowRemote}
-          >
-            Auto-show remote agents in dropdowns
-          </vscode-checkbox>
-        </div>
 
         <agent-selection-panel
           .agents=${activeAgents}

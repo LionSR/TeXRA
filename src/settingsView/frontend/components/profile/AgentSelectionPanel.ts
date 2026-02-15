@@ -484,6 +484,15 @@ export class AgentSelectionPanel extends LitElement {
     this.pendingDeleteKey = null;
   }
 
+  private handleRevealAgentFile(agent: AgentSelectionItem): void {
+    this.dispatchEvent(
+      AgentSelectionEvents.revealAgentFile({
+        agentName: agent.name,
+        agentSource: agent.source,
+      }),
+    );
+  }
+
   private handleToggleEnabled(agent: AgentSelectionItem): void {
     this.dispatchEvent(
       AgentSelectionEvents.setEnabled({
@@ -532,7 +541,7 @@ export class AgentSelectionPanel extends LitElement {
             e.stopPropagation();
             this.handleToggleEnabled(agent);
           }}
-          title=${agent.enabled ? 'Hide from dropdowns' : 'Show in dropdowns'}
+          title=${agent.enabled ? 'Exclude from agent dropdown' : 'Include in agent dropdown'}
         />
         <span class="agent-list-item-name">${agent.name}</span>
         <span class="agent-list-item-badges">
@@ -644,19 +653,21 @@ export class AgentSelectionPanel extends LitElement {
           : nothing}
         ${agent.filePath
           ? html`<div class="agent-detail-path" title=${agent.filePath}>
-              ${agent.filePath}
+              ${agent.filePath.split('/').pop() ?? agent.filePath}
             </div>`
           : nothing}
 
         <div class="agent-detail-meta">
-          <span class="agent-detail-meta-label">Visible</span>
+          <span class="agent-detail-meta-label">In dropdown</span>
           <span class="agent-detail-meta-value">
             ${agent.enabled ? 'Yes' : 'No'}
           </span>
 
           <span class="agent-detail-meta-label">Multi-output</span>
           <span class="agent-detail-meta-value">
-            ${agent.hasMultiple ? 'Yes ⧉' : 'No'}
+            ${agent.hasMultiple
+              ? 'Yes — generates multiple alternatives per run'
+              : 'No — produces a single output'}
           </span>
 
           ${agent.tools && agent.tools.length > 0
@@ -691,10 +702,22 @@ export class AgentSelectionPanel extends LitElement {
                 <button
                   class="agent-action-btn"
                   @click=${() => this.handleOpenYaml(agent, 'multiple')}
-                  title="Open _multiple variant YAML definition"
+                  title="Open the multi-output prompts — alternate instructions used when generating multiple alternatives"
                 >
                   <span class="codicon codicon-files"></span>
-                  Open Multiple YAML
+                  Multi-Output Prompts
+                </button>
+              `
+            : nothing}
+          ${agent.hasPath
+            ? html`
+                <button
+                  class="agent-action-btn"
+                  @click=${() => this.handleRevealAgentFile(agent)}
+                  title="Show this file in your system file explorer"
+                >
+                  <span class="codicon codicon-folder-opened"></span>
+                  Reveal in File Explorer
                 </button>
               `
             : nothing}
@@ -767,32 +790,8 @@ export class AgentSelectionPanel extends LitElement {
         ${this.renderList()} ${this.renderDetail()}
       </div>
       <div class="agent-count">
-        <span>
-          ${enabledCount}/${this.agents.length}
-          agent${this.agents.length !== 1 ? 's' : ''} visible
-        </span>
-        ${singleSource
-          ? html`<span class="agent-count-actions">
-              ${enabledCount < this.agents.length
-                ? html`<button
-                    class="agent-count-link"
-                    @click=${() => this.handleSetAllEnabled(singleSource, true)}
-                    title="Show all agents"
-                  >
-                    All
-                  </button>`
-                : nothing}
-              ${enabledCount > 0
-                ? html`<button
-                    class="agent-count-link"
-                    @click=${() => this.handleSetAllEnabled(singleSource, false)}
-                    title="Hide all agents"
-                  >
-                    None
-                  </button>`
-                : nothing}
-            </span>`
-          : nothing}
+        ${enabledCount}/${this.agents.length}
+        agent${this.agents.length !== 1 ? 's' : ''} in dropdown
       </div>
     `;
   }
