@@ -21,15 +21,16 @@ import { codiconStyles, designTokens } from '@shared/styles';
 // Local imports - shared schemas and events
 import {
   AGENT_SOURCE,
+  agentKey as agentKeyFromSourceName,
   type AgentCategory,
   type AgentSourceType,
 } from '@shared/schemas/agent';
 import { AgentSelectionEvents } from './events';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
 
-/** Unique key for an agent: disambiguates agents with same name across sources */
+/** Shorthand: derive the canonical key from an AgentSelectionItem. */
 function agentKey(agent: AgentSelectionItem): string {
-  return `${agent.source}:${agent.name}`;
+  return agentKeyFromSourceName(agent.source, agent.name);
 }
 
 /** Source display names for agent origins */
@@ -39,6 +40,13 @@ const SOURCE_DISPLAY_NAMES: Record<string, string> = {
   [AGENT_SOURCE.CUSTOM]: 'Custom',
   [AGENT_SOURCE.REMOTE]: 'Remote',
 };
+
+function isBuiltIn(source: string): boolean {
+  return (
+    source === AGENT_SOURCE.BUILT_IN_WORKFLOW ||
+    source === AGENT_SOURCE.BUILT_IN_TOOL_USE
+  );
+}
 
 @customElement('agent-selection-panel')
 export class AgentSelectionPanel extends LitElement {
@@ -279,6 +287,69 @@ export class AgentSelectionPanel extends LitElement {
         color: var(--color-text-secondary);
         font-style: italic;
       }
+
+      .agent-source-badge {
+        display: inline-block;
+        padding: var(--border-thin) var(--spacing-small);
+        font-size: var(--font-size-xs);
+        font-weight: 500;
+        border-radius: var(--border-radius);
+        background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
+        color: var(--color-text-secondary);
+      }
+
+      .agent-detail-path {
+        font-size: var(--font-size-xs);
+        font-family: var(--vscode-editor-font-family, monospace);
+        color: var(--color-text-secondary);
+        margin-bottom: var(--spacing-large);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .agent-action-btn--danger {
+        color: var(--vscode-errorForeground, #f44);
+        border-color: var(--vscode-errorForeground, #f44);
+      }
+
+      .agent-action-btn--danger:hover {
+        background: var(--vscode-inputValidation-errorBackground, rgba(255, 0, 0, 0.1));
+        border-color: var(--vscode-errorForeground, #f44);
+      }
+
+      .agent-action-btn--primary {
+        color: var(--vscode-button-foreground, #fff);
+        background: var(--vscode-button-background);
+        border-color: var(--vscode-button-background);
+      }
+
+      .agent-action-btn--primary:hover {
+        background: var(--vscode-button-hoverBackground);
+        border-color: var(--vscode-button-hoverBackground);
+      }
+
+      .agent-delete-confirm {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-medium);
+        padding: var(--spacing-small) var(--spacing-medium);
+        background: var(--vscode-inputValidation-errorBackground, rgba(255, 0, 0, 0.05));
+        border: var(--border-thin) solid var(--vscode-errorForeground, #f44);
+        border-radius: var(--border-radius);
+        font-size: var(--font-size-sm);
+        color: var(--vscode-foreground);
+      }
+
+      .agent-delete-confirm-text {
+        flex: 1;
+      }
+
+      .agent-delete-confirm-actions {
+        display: flex;
+        gap: var(--spacing-small);
+        flex-shrink: 0;
+      }
     `,
   ];
 
@@ -289,6 +360,9 @@ export class AgentSelectionPanel extends LitElement {
 
   @state() private groupedSources: Map<AgentSourceType, AgentSelectionItem[]> =
     new Map();
+
+  /** Key of agent pending delete confirmation, or null */
+  @state() private pendingDeleteKey: string | null = null;
 
   /** Flat list in visual display order, for keyboard navigation */
   private displayOrder: AgentSelectionItem[] = [];
@@ -320,6 +394,8 @@ export class AgentSelectionPanel extends LitElement {
         this.selectedKey =
           this.displayOrder.length > 0 ? agentKey(this.displayOrder[0]) : null;
       }
+      // Clear stale delete confirmation when agent list changes
+      this.pendingDeleteKey = null;
     }
   }
 
@@ -329,6 +405,7 @@ export class AgentSelectionPanel extends LitElement {
 
   private selectAgent(agent: AgentSelectionItem): void {
     this.selectedKey = agentKey(agent);
+    this.pendingDeleteKey = null;
   }
 
   private handleListKeydown(event: KeyboardEvent): void {
@@ -382,6 +459,42 @@ export class AgentSelectionPanel extends LitElement {
     );
   }
 
+  private handleCustomizeAgent(agent: AgentSelectionItem): void {
+    this.dispatchEvent(
+      AgentSelectionEvents.customizeAgent({
+        agentName: agent.name,
+        agentSource: agent.source,
+      }),
+    );
+  }
+
+  private handleDeleteCustomAgent(agent: AgentSelectionItem): void {
+    const key = agentKey(agent);
+    if (this.pendingDeleteKey === key) {
+      // Confirmed — dispatch the delete event
+      this.pendingDeleteKey = null;
+      this.dispatchEvent(
+        AgentSelectionEvents.deleteCustomAgent({ agentName: agent.name }),
+      );
+    } else {
+      // First click — show confirmation
+      this.pendingDeleteKey = key;
+    }
+  }
+
+  private cancelDelete(): void {
+    this.pendingDeleteKey = null;
+  }
+
+  private handleRevealAgentFile(agent: AgentSelectionItem): void {
+    this.dispatchEvent(
+      AgentSelectionEvents.revealAgentFile({
+        agentName: agent.name,
+        agentSource: agent.source,
+      }),
+    );
+  }
+
   private handleToggleEnabled(agent: AgentSelectionItem): void {
     this.dispatchEvent(
       AgentSelectionEvents.setEnabled({
@@ -430,7 +543,7 @@ export class AgentSelectionPanel extends LitElement {
             e.stopPropagation();
             this.handleToggleEnabled(agent);
           }}
-          title=${agent.enabled ? 'Hide from dropdowns' : 'Show in dropdowns'}
+          title=${agent.enabled ? 'Exclude from agent dropdown' : 'Include in agent dropdown'}
         />
         <span class="agent-list-item-name">${agent.name}</span>
         <span class="agent-list-item-badges">
@@ -511,17 +624,27 @@ export class AgentSelectionPanel extends LitElement {
       `;
     }
 
-    const sourceName = SOURCE_DISPLAY_NAMES[agent.source] ?? agent.source;
+    const builtIn = isBuiltIn(agent.source);
+    const isCustom = agent.source === AGENT_SOURCE.CUSTOM;
+    const showDeleteConfirm =
+      isCustom && this.pendingDeleteKey === agentKey(agent);
 
     return html`
       <div class="agent-detail-pane">
         <div class="agent-detail-header">
           <span class="agent-detail-name">${agent.name}</span>
-          ${agent.source === AGENT_SOURCE.CUSTOM
-            ? html`<span title="Custom agent">★</span>`
+          ${builtIn
+            ? html`<span class="agent-source-badge">Built-in</span>`
+            : nothing}
+          ${isCustom
+            ? html`<span class="agent-source-badge" title="Custom agent"
+                >★ Custom</span
+              >`
             : nothing}
           ${agent.source === AGENT_SOURCE.REMOTE
-            ? html`<span title="Remote agent">☁</span>`
+            ? html`<span class="agent-source-badge" title="Remote agent"
+                >☁ Remote</span
+              >`
             : nothing}
         </div>
 
@@ -530,19 +653,23 @@ export class AgentSelectionPanel extends LitElement {
               ${agent.description}
             </div>`
           : nothing}
+        ${agent.filePath
+          ? html`<div class="agent-detail-path" title=${agent.filePath}>
+              ${agent.filePath.split(/[/\\]/).pop() ?? agent.filePath}
+            </div>`
+          : nothing}
 
         <div class="agent-detail-meta">
-          <span class="agent-detail-meta-label">Source</span>
-          <span class="agent-detail-meta-value">${sourceName}</span>
-
-          <span class="agent-detail-meta-label">Visible</span>
+          <span class="agent-detail-meta-label">In dropdown</span>
           <span class="agent-detail-meta-value">
             ${agent.enabled ? 'Yes' : 'No'}
           </span>
 
           <span class="agent-detail-meta-label">Multi-output</span>
           <span class="agent-detail-meta-value">
-            ${agent.hasMultiple ? 'Yes ⧉' : 'No'}
+            ${agent.hasMultiple
+              ? 'Yes — generates multiple alternatives per run'
+              : 'No — produces a single output'}
           </span>
 
           ${agent.tools && agent.tools.length > 0
@@ -577,14 +704,74 @@ export class AgentSelectionPanel extends LitElement {
                 <button
                   class="agent-action-btn"
                   @click=${() => this.handleOpenYaml(agent, 'multiple')}
-                  title="Open _multiple variant YAML definition"
+                  title="Open the multi-output prompts — alternate instructions used when generating multiple alternatives"
                 >
                   <span class="codicon codicon-files"></span>
-                  Open Multiple YAML
+                  Multi-Output Prompts
+                </button>
+              `
+            : nothing}
+          ${agent.hasPath
+            ? html`
+                <button
+                  class="agent-action-btn"
+                  @click=${() => this.handleRevealAgentFile(agent)}
+                  title="Show this file in your system file explorer"
+                >
+                  <span class="codicon codicon-folder-opened"></span>
+                  Reveal in File Explorer
+                </button>
+              `
+            : nothing}
+          ${builtIn
+            ? html`
+                <button
+                  class="agent-action-btn agent-action-btn--primary"
+                  @click=${() => this.handleCustomizeAgent(agent)}
+                  title="Create an editable copy in your custom agents folder"
+                >
+                  <span class="codicon codicon-copy"></span>
+                  Customize
+                </button>
+              `
+            : nothing}
+          ${isCustom
+            ? html`
+                <button
+                  class="agent-action-btn agent-action-btn--danger"
+                  @click=${() => this.handleDeleteCustomAgent(agent)}
+                  title="Delete this custom agent"
+                >
+                  <span class="codicon codicon-trash"></span>
+                  Delete
                 </button>
               `
             : nothing}
         </div>
+
+        ${showDeleteConfirm
+          ? html`
+              <div class="agent-delete-confirm">
+                <span class="agent-delete-confirm-text">
+                  Delete custom agent "${agent.name}"? This cannot be undone.
+                </span>
+                <div class="agent-delete-confirm-actions">
+                  <button
+                    class="agent-action-btn agent-action-btn--danger"
+                    @click=${() => this.handleDeleteCustomAgent(agent)}
+                  >
+                    Delete
+                  </button>
+                  <button
+                    class="agent-action-btn"
+                    @click=${() => this.cancelDelete()}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            `
+          : nothing}
       </div>
     `;
   }
@@ -595,42 +782,14 @@ export class AgentSelectionPanel extends LitElement {
     }
 
     const enabledCount = this.agents.filter((a) => a.enabled).length;
-    const singleSource =
-      this.groupedSources.size === 1
-        ? [...this.groupedSources.keys()][0]
-        : null;
 
     return html`
       <div class="agent-split-panel">
         ${this.renderList()} ${this.renderDetail()}
       </div>
       <div class="agent-count">
-        <span>
-          ${enabledCount}/${this.agents.length}
-          agent${this.agents.length !== 1 ? 's' : ''} visible
-        </span>
-        ${singleSource
-          ? html`<span class="agent-count-actions">
-              ${enabledCount < this.agents.length
-                ? html`<button
-                    class="agent-count-link"
-                    @click=${() => this.handleSetAllEnabled(singleSource, true)}
-                    title="Show all agents"
-                  >
-                    All
-                  </button>`
-                : nothing}
-              ${enabledCount > 0
-                ? html`<button
-                    class="agent-count-link"
-                    @click=${() => this.handleSetAllEnabled(singleSource, false)}
-                    title="Hide all agents"
-                  >
-                    None
-                  </button>`
-                : nothing}
-            </span>`
-          : nothing}
+        ${enabledCount}/${this.agents.length}
+        agent${this.agents.length !== 1 ? 's' : ''} in dropdown
       </div>
     `;
   }

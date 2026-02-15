@@ -121,6 +121,7 @@ export const AgentSelectionItemSchema = z.object({
   category: AgentCategorySchema,
   description: z.string().optional(),
   hasPath: z.boolean(),
+  filePath: z.string().optional(),
   tools: z.array(z.string()).optional(),
   hasMultiple: z.boolean(), // supports multiple outputs (informational)
   hasMultiplePath: z.boolean(), // has openable _multiple YAML file
@@ -160,19 +161,6 @@ export const UpdateModelSelectionMessageSchema = z.object({
 });
 export type UpdateModelSelectionMessage = z.infer<
   typeof UpdateModelSelectionMessageSchema
->;
-
-// ============================================================
-// Auto-show remote agents data schema
-// ============================================================
-
-/** Outbound: backend → frontend auto-show remote agents toggle */
-export const UpdateAutoShowRemoteMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AUTO_SHOW_REMOTE),
-  enabled: z.boolean(),
-});
-export type UpdateAutoShowRemoteMessage = z.infer<
-  typeof UpdateAutoShowRemoteMessageSchema
 >;
 
 // ============================================================
@@ -348,20 +336,30 @@ const SetAllAgentsEnabledMessageSchema = z.object({
 
 const OpenAgentFolderMessageSchema = z.object({
   command: z.literal(CMD.OPEN_AGENT_FOLDER),
-  folderType: z.enum(['custom', 'builtInWorkflow', 'builtInToolUse']),
+  folderType: z.literal('custom'),
 });
 
 const CreateAgentMessageSchema = z.object({
   command: z.literal(CMD.CREATE_AGENT),
   category: AgentCategorySchema,
+  mode: z.enum(['ai', 'template']).default('ai'),
 });
 
-// Auto-show remote agents inbound messages
-const GetAutoShowRemoteMessageSchema = commandOnly(CMD.GET_AUTO_SHOW_REMOTE);
+const CustomizeAgentMessageSchema = z.object({
+  command: z.literal(CMD.CUSTOMIZE_AGENT),
+  agentName: z.string().min(1),
+  agentSource: AgentSourceSchema,
+});
 
-const SetAutoShowRemoteMessageSchema = z.object({
-  command: z.literal(CMD.SET_AUTO_SHOW_REMOTE),
-  enabled: z.boolean(),
+const DeleteCustomAgentMessageSchema = z.object({
+  command: z.literal(CMD.DELETE_CUSTOM_AGENT),
+  agentName: z.string().min(1),
+});
+
+const RevealAgentFileMessageSchema = z.object({
+  command: z.literal(CMD.REVEAL_AGENT_FILE),
+  agentName: z.string().min(1),
+  agentSource: AgentSourceSchema,
 });
 
 // Custom agent directory inbound messages
@@ -449,9 +447,9 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetAllAgentsEnabledMessageSchema,
     OpenAgentFolderMessageSchema,
     CreateAgentMessageSchema,
-    // Auto-show remote agents messages
-    GetAutoShowRemoteMessageSchema,
-    SetAutoShowRemoteMessageSchema,
+    CustomizeAgentMessageSchema,
+    DeleteCustomAgentMessageSchema,
+    RevealAgentFileMessageSchema,
     // Custom agent directory messages
     GetCustomAgentDirMessageSchema,
     SetCustomAgentDirMessageSchema,
