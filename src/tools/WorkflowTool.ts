@@ -1,8 +1,8 @@
 /**
  * Tools for delegating agent executions from tool-use agents.
  * Two separate tools for clean separation of concerns:
- * - delegate_workflow: For workflow agents (full-document transformation with file I/O)
- * - delegate_agent: For tool-use agents (targeted edits, research, interactive work)
+ * - delegate_workflow: For workflow agents (structured file I/O, fixed-round full-document rewrite)
+ * - delegate_agent: For tool-use agents (interactive, versatile — edits, creation, research)
  *
  * All subagents execute asynchronously — result delivered via follow-up queue.
  */
@@ -332,7 +332,7 @@ export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 export class WorkflowAgentTool extends defineTool({
   name: 'delegate_workflow',
   description:
-    () => `Delegate a task to a workflow agent for full-document transformation. The agent rewrites the entire input file from start to finish, preserving its structure and section order. Best for uniform operations across a whole document (grammar correction, style polishing, figure generation, document merging, creating presentations from papers). NOT suitable for targeted edits to specific parts of a document—use delegate_agent for that.
+    () => `Delegate a task to a workflow agent. Workflow agents receive structured file parameters (input, reference, auxiliary, media, output) and rewrite the entire input file from start to finish in fixed rounds. Best for uniform whole-document operations: grammar correction, style polishing, figure generation, document merging. NOT suitable for tasks requiring interactive tool use, exploration, or selective edits—use delegate_agent for those.
 
 Available agents:
 ${formatAgentList(getVisibleAgents('workflow'))}
@@ -455,7 +455,7 @@ export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
 export class DelegateAgentTool extends defineTool({
   name: 'delegate_agent',
   description:
-    () => `Delegate a task to a tool-use agent. The agent has its own tools (file reading, editing, search, bash) and works interactively—use it for targeted edits, fixing specific issues in a document, research, exploration, multi-step investigations, or any task that benefits from reading files and making selective changes. Prefer this over delegate_workflow when you need to edit specific parts of a document rather than rewrite it entirely.
+    () => `Delegate a task to a tool-use agent. The agent has its own tools (file reading, editing, search, bash) and works interactively. Tool-use agents are versatile—they can create entire documents (e.g., presentations, posters), make targeted edits, perform research, explore codebases, or run multi-step investigations. Choose the agent whose specialization matches the task.
 
 Available agents:
 ${formatAgentList(getVisibleAgents('toolUse'))}
