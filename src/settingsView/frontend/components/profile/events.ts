@@ -50,13 +50,22 @@ export const AgentSelectionEvents = {
     source: AgentSourceType;
     enabled: boolean;
   }) => createEvent('agent-all-enabled-set', detail),
-  openFolder: (detail: {
-    folderType: 'custom' | 'builtInWorkflow' | 'builtInToolUse';
-  }) => createEvent('agent-open-folder', detail),
-  createAgent: (detail: { category: 'workflow' | 'toolUse' }) =>
-    createEvent('agent-create', detail),
+  openFolder: (detail: { folderType: 'custom' }) =>
+    createEvent('agent-open-folder', detail),
+  createAgent: (detail: {
+    category: 'workflow' | 'toolUse';
+    mode?: 'ai' | 'template';
+  }) => createEvent('agent-create', detail),
+  customizeAgent: (detail: {
+    agentName: string;
+    agentSource: AgentSourceType;
+  }) => createEvent('agent-customize', detail),
+  deleteCustomAgent: (detail: { agentName: string }) =>
+    createEvent('agent-delete-custom', detail),
   setCustomDir: () => createEvent('agent-set-custom-dir', undefined),
   resetCustomDir: () => createEvent('agent-reset-custom-dir', undefined),
-  setAutoShowRemote: (detail: { enabled: boolean }) =>
-    createEvent('agent-auto-show-remote', detail),
+  revealAgentFile: (detail: {
+    agentName: string;
+    agentSource: AgentSourceType;
+  }) => createEvent('agent-reveal-file', detail),
 } as const;

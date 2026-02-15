@@ -337,9 +337,9 @@ export const SETTINGS_VIEW_CMD = {
   SET_ALL_AGENTS_ENABLED: 'setAllAgentsEnabled',
   OPEN_AGENT_FOLDER: 'openAgentFolder',
   CREATE_AGENT: 'createAgent',
-  // Remote agent auto-show
-  GET_AUTO_SHOW_REMOTE: 'getAutoShowRemote',
-  SET_AUTO_SHOW_REMOTE: 'setAutoShowRemote',
+  CUSTOMIZE_AGENT: 'customizeAgent',
+  DELETE_CUSTOM_AGENT: 'deleteCustomAgent',
+  REVEAL_AGENT_FILE: 'revealAgentFile',
   // Custom agent directory commands
   GET_CUSTOM_AGENT_DIR: 'getCustomAgentDir',
   SET_CUSTOM_AGENT_DIR: 'setCustomAgentDir',
@@ -366,7 +366,6 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_PROFILE: 'updateProfile',
   UPDATE_MODEL_SELECTION: 'updateModelSelection',
   UPDATE_AGENT_SELECTION: 'updateAgentSelection',
-  UPDATE_AUTO_SHOW_REMOTE: 'updateAutoShowRemote',
   UPDATE_CUSTOM_AGENT_DIR: 'updateCustomAgentDir',
   UPDATE_SUPER_YOLO_ENABLED: 'updateSuperYoloEnabled',
   UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
