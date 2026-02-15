@@ -64,10 +64,14 @@ export type MemoryToolInput = z.infer<typeof MemoryToolInputSchema>;
 
 /**
  * Memory tool for managing persistent context files under /memories.
+ *
+ * Memory is shared across the orchestrator and all subagents in the session.
+ * Any agent can read files written by another, enabling coordination — e.g.,
+ * a search agent records findings that the orchestrator later reads.
  */
 export class MemoryTool extends defineTool({
   name: 'memory',
-  description: `Manage persistent memory files under /memories (view, create, str_replace, insert, delete, rename).
+  description: `Manage persistent memory files under /memories (view, create, str_replace, insert, delete, rename). Memory is shared across the orchestrator and all subagents—any agent can read files written by another.
 
 Paths must start with /memories. Use /memories to list files, /memories/file.md for specific files. "/" alone is invalid.`,
   schema: MemoryToolInputSchema,
