@@ -188,6 +188,9 @@ export async function runToolUseFlow<C = unknown>(
 
     if (shared.lastError) {
       status = END_GROUP_STATUS.ERROR;
+      // Re-throw after state persistence so runFlowWithLifecycle logs
+      // the error and shows the user notification.
+      throw new Error(shared.lastError.message);
     } else {
       const execStatus = input.checkInterruption()
         ? EXECUTION_STATUS.INTERRUPTED
