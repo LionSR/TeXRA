@@ -264,6 +264,34 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return total;
   }
 
+  /**
+   * Removes entries from uploadedPdfPageCounts whose file IDs are no longer
+   * referenced in the current messages. This keeps the tracked total accurate
+   * after server-side compaction drops old messages.
+   */
+  private pruneTrackedPdfPages(messages: MessageParam[]): void {
+    const liveFileIds = new Set<string>();
+    for (const message of messages) {
+      const contentBlocks = message.content;
+      if (!Array.isArray(contentBlocks)) continue;
+
+      for (const block of this.extractDocumentBlocks(contentBlocks)) {
+        const source = (block as DocumentBlockParam).source as
+          | { type: string; file_id?: string }
+          | undefined;
+        if (source?.type === 'file' && source.file_id) {
+          liveFileIds.add(source.file_id);
+        }
+      }
+    }
+
+    for (const fileId of this.uploadedPdfPageCounts.keys()) {
+      if (!liveFileIds.has(fileId)) {
+        this.uploadedPdfPageCounts.delete(fileId);
+      }
+    }
+  }
+
   private isClaudeOpus46(): boolean {
     return this.config.fullName === OPUS_46_FULLNAME;
   }
@@ -519,6 +547,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     const documentAnalysis = this.analyzeDocumentSources(messages);
     let hasFileReference = documentAnalysis.hasFileSource;
+
+    // Prune tracked PDF page counts for file IDs no longer in messages
+    // (e.g. after server-side compaction drops old messages)
+    if (this.uploadedPdfPageCounts.size > 0) {
+      this.pruneTrackedPdfPages(messages);
+    }
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const options: MessageCreateParams = {
