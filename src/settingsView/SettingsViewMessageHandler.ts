@@ -1429,17 +1429,20 @@ prompts:
 
       await AbsoluteFS.delete(entry.path, { recursive: false });
 
-      // Also delete the _multiple variant if it exists
+      // Also delete the _multiple variant if it is inside the custom directory
       if (entry.multiplePath) {
-        try {
-          await AbsoluteFS.delete(entry.multiplePath, { recursive: false });
-        } catch (err) {
-          // Only ignore FileNotFound; surface other errors
-          if (
-            !(err instanceof vscode.FileSystemError) ||
-            err.code !== 'FileNotFound'
-          ) {
-            throw err;
+        const normalizedMultiple = path.resolve(entry.multiplePath);
+        if (normalizedMultiple.startsWith(normalizedCustomDir + path.sep)) {
+          try {
+            await AbsoluteFS.delete(entry.multiplePath, { recursive: false });
+          } catch (err) {
+            // Only ignore FileNotFound; surface other errors
+            if (
+              !(err instanceof vscode.FileSystemError) ||
+              err.code !== 'FileNotFound'
+            ) {
+              throw err;
+            }
           }
         }
       }

@@ -782,10 +782,6 @@ export class AgentSelectionPanel extends LitElement {
     }
 
     const enabledCount = this.agents.filter((a) => a.enabled).length;
-    const singleSource =
-      this.groupedSources.size === 1
-        ? [...this.groupedSources.keys()][0]
-        : null;
 
     return html`
       <div class="agent-split-panel">
