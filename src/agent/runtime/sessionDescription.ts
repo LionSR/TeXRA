@@ -7,14 +7,10 @@
  * understand what each session did.
  */
 
-import { MODEL_CONFIGS } from 'llm-zoo';
-
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
-import type { AgentConfig } from '@agent/core/AgentConfig';
 import { getAgent } from '@agent/index';
-import { createModelHandler } from '@agent/runtime/ModelFactory';
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import { createHelperModelKit } from '@agent/runtime/helperModel';
 import { writeSessionDescription } from '@agent/storage';
-import { GlobalStateKey, globalSM } from '@common/state';
 import * as logger from '@logger/logUtils';
 import { isNonEmptyString } from '@utils/core';
 
@@ -57,27 +53,13 @@ export async function generateSessionDescription(
     const agentEntry = getAgent(config.agent, true);
     const agentDescription = agentEntry?.description;
 
-    const configuredModel = globalSM.get<string>(
-      GlobalStateKey.HELPER_MODEL,
-      DEFAULT_HELPER_MODEL,
-    );
-    const modelName = isNonEmptyString(configuredModel)
-      ? configuredModel.trim()
-      : DEFAULT_HELPER_MODEL;
-    const modelConfig = MODEL_CONFIGS[modelName];
-    if (!modelConfig) {
-      logger.warn(
-        CHANNEL,
-        `Unknown model "${modelName}" for session description`,
-      );
+    const kit = await createHelperModelKit();
+    if (!kit) {
+      logger.warn(CHANNEL, 'Helper model not available for session description');
       return;
     }
 
-    const handler = createModelHandler(modelConfig);
-    handler.setOutputStreaming(false);
-    handler.setProgressViewEnabled(false);
-
-    const client = await handler.getClient();
+    const { handler, client } = kit;
     const userPrompt = buildUserPrompt(
       config.agent,
       agentDescription,
@@ -93,11 +75,13 @@ export async function generateSessionDescription(
       client,
       messages,
       temperature: 0,
+      systemPrompt: SYSTEM_PROMPT,
     });
     const { text } = handler.extractResponse(result.response, '');
 
     if (isNonEmptyString(text)) {
-      const description = text.trim();
+      // Collapse newlines to prevent corrupting line-based tool output.
+      const description = text.trim().replaceAll(/\s*\n\s*/g, ' ');
       await writeSessionDescription(executionId, description);
       logger.info(CHANNEL, `Generated session description for ${executionId}`);
     }
