@@ -342,6 +342,7 @@ const OpenAgentFolderMessageSchema = z.object({
 const CreateAgentMessageSchema = z.object({
   command: z.literal(CMD.CREATE_AGENT),
   category: AgentCategorySchema,
+  mode: z.enum(['ai', 'template']).default('ai'),
 });
 
 const CustomizeAgentMessageSchema = z.object({
