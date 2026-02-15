@@ -44,7 +44,7 @@ export interface RunToolUseFlowInput<
   /** When true, delegation tools are filtered out to prevent nesting. */
   isSubagent?: boolean;
   /** Fires before the subagent enters WAITING, delivering the last response to the orchestrator. */
-  onBeforeWaiting?: (lastResponse: string | undefined) => void;
+  onBeforeWaiting?: (lastResponse: string | undefined) => void | Promise<void>;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
 }
