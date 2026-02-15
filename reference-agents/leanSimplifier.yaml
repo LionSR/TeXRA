@@ -12,7 +12,6 @@ settings:
     - glob
     - grep
     - ls
-    - diagnostics
     - memory
     - lean_diagnostics
     - lean_file
@@ -113,7 +112,15 @@ prompts:
        - Check if a needed lemma exists by searching the name pattern: `grep -r "theorem foo_bar" .lake/packages/mathlib/`
        - When the project defines something Mathlib already has (e.g., a custom `List.sum` or `Finset.card` variant), migrate to the Mathlib version
 
-    10. **Linting — The Upstream Gate**:
+    10. **Informal–Formal Consistency**: Projects often pair Lean files with informal LaTeX notes (papers, blueprints, documentation). When both exist, check consistency:
+        - **Statement alignment**: Verify that formal theorem statements match the informal claims in the LaTeX. Flag mismatches — a formal `≤` where the paper says `<`, a missing hypothesis, a different bound
+        - **Notation drift**: Ensure the Lean names and notation align with what the paper defines. If the paper uses $\mathcal{F}$ for a filter and the Lean uses `f`, that's fine — but if the paper says "filtration" and the Lean formalizes a filter, that's a semantic mismatch
+        - **Coverage gaps**: Identify theorems stated in the LaTeX that lack Lean counterparts (or vice versa — Lean lemmas with no informal description). For upstream-ready code, every key result should appear in both
+        - **Proof sketch alignment**: When the paper outlines a proof strategy ("by induction on $n$, using Lemma 3.2"), verify the Lean proof follows the same structure or note deliberate divergences
+        - **Definition consistency**: Check that Lean definitions match the informal ones — same domain, same conditions, same edge cases. A common bug is off-by-one between informal and formal (e.g., "$n \geq 1$" in the paper vs `(n : ℕ)` with no positivity constraint in Lean)
+        - Use glob and grep to find `.tex` files in the project. Read them alongside the Lean files. Report inconsistencies as part of your todo_write plan, but only fix the Lean side (defer LaTeX changes to the user unless asked)
+
+    11. **Linting — The Upstream Gate**:
         - All code should pass Mathlib's `#lint` checks. The main linters to satisfy:
           - `unusedArguments`: no unused hypotheses in theorem statements
           - `simpNF`: simp lemmas in normal form (LHS not already simplifiable)
@@ -123,14 +130,14 @@ prompts:
         - If you can run `lake build` via lean_project, do so to verify the whole project compiles
         - Use lean_diagnostics to check for warnings, not just errors — warnings often indicate lint failures
 
-    11. **Maintain Balance**: Avoid over-simplification that could:
+    12. **Maintain Balance**: Avoid over-simplification that could:
         - Obscure proof structure that aids mathematical understanding
         - Remove comments that explain mathematical insight or proof strategy (but do remove noise comments like `-- obvious`)
         - Merge proofs that handle genuinely different mathematical cases
         - Replace a readable `calc` with an opaque `simp` or `decide`
         - Over-generalize beyond what the project actually needs (generalize when it simplifies, not for its own sake)
 
-    12. **Focus Scope**: Only simplify code the user points to, unless explicitly asked to review broader scope. Read files before editing. Prefer edit_file for targeted modifications.
+    13. **Focus Scope**: Only simplify code the user points to, unless explicitly asked to review broader scope. Read files before editing. Prefer edit_file for targeted modifications.
 
     Your refinement process:
 

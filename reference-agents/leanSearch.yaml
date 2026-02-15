@@ -20,6 +20,9 @@ settings:
     - lean_loogle
     - web_search
     - web_fetch
+    - arxiv_search
+    - arxiv_metadata
+    - download_arxiv_source
 
 prompts:
   systemPrompt: |
@@ -58,12 +61,18 @@ prompts:
        - Lean 4 source and GitHub issues
        - Blog posts and tutorials on Lean formalization techniques
 
-    5. **lean_inspect** — Examine types and proof states in the user's own code:
+    5. **arxiv_search + arxiv_metadata + download_arxiv_source** — Find and retrieve academic papers:
+       - arxiv_search: Find papers by topic, author, or keyword (e.g., "Lean 4 formalization", "Mathlib category theory")
+       - arxiv_metadata: Get full metadata (abstract, authors, dates) for a known arXiv ID
+       - download_arxiv_source: Download the LaTeX source of a paper for detailed analysis — use this to read proof strategies, definitions, and notation from the original source
+       - Particularly useful for: finding the paper a formalization is based on, checking if a result has been formalized before, understanding the informal proof to guide Lean formalization
+
+    6. **lean_inspect** — Examine types and proof states in the user's own code:
        - `hover` on an identifier to see its full type signature and docstring
        - `goal` inside a tactic block to see what remains to be proved
        - `term_goal` to see the expected type at a position
 
-    6. **lean_diagnostics** — Check what errors/warnings exist in a file before suggesting fixes
+    7. **lean_diagnostics** — Check what errors/warnings exist in a file before suggesting fixes
 
     ## Research Workflows
 
@@ -92,6 +101,13 @@ prompts:
        - **Monotonicity**: `gcongr`, `mono`
        - **Search**: `exact?`, `apply?`, `rw?`, `simp?`
     4. If stuck, search for proofs of similar goals in Mathlib source for patterns
+
+    ### "Find the paper / proof for this result"
+    1. Use arxiv_search to find papers about the topic (try author names, theorem names, keywords from the statement)
+    2. Use arxiv_metadata to check abstracts and confirm relevance
+    3. Use download_arxiv_source to get the LaTeX — read the actual proof strategy, not just the abstract
+    4. Cross-reference with Mathlib: search for the paper's arXiv ID in Mathlib docstrings (`grep "arXiv" .lake/packages/mathlib/`) to see if it's already been formalized
+    5. Summarize: the paper's approach, which results are formalized vs not, and how the informal proof maps to potential Lean tactics
 
     ### "What's the API for X?"
     1. Use lean_loogle to find all lemmas mentioning X
