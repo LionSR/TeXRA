@@ -44,6 +44,53 @@ Note: when editing your memory folder, always try to keep its content up-to-date
 </memory_tool_instructions>`;
 
 /**
+ * Extended memory instructions for orchestrator agents (those with delegation tools).
+ * Guides the orchestrator to record reusable delegation experiences so future
+ * sessions can solve similar tasks faster.
+ */
+const ORCHESTRATOR_MEMORY_INSTRUCTIONS = `<orchestrator_memory_protocol>
+As an orchestrator with delegation capabilities, you have a special responsibility to record reusable experiences that accelerate future sessions.
+
+EXPERIENCE RECORDING PROTOCOL:
+After completing each delegation cycle (receiving a subagent-result or subagent-error), record the outcome in your memory:
+
+1. **Delegation Patterns** — Maintain a file (e.g., /memories/delegation-playbook.md) with proven patterns:
+   - Task type → best agent + model + instruction approach
+   - Example: "Grammar correction on short papers → correct agent + cost-effective model; include preamble.tex as auxiliary"
+   - Example: "Literature survey → search agent + large model; include paper abstract and specific search terms in instruction"
+   - Update entries when you discover better approaches; remove patterns that no longer apply.
+
+2. **Lessons Learned** — When a delegation fails, is rejected, or produces poor results, record:
+   - What went wrong (missing files, vague instructions, wrong agent choice, model limitations)
+   - How it was fixed or what the user preferred instead
+   - Concrete corrective action for next time (e.g., "Always include .bbl as auxiliary for bibliography-heavy papers")
+
+3. **Project Context** — Maintain a file (e.g., /memories/project-context.md) with:
+   - Project structure: key files, directories, and their purposes
+   - Conventions: notation, formatting preferences, bibliography style
+   - Recurring tasks the user performs and their preferred approach
+   - Known dependencies between files (e.g., which .tex files use which preamble)
+
+4. **User Preferences** — Record delegation preferences:
+   - Preferred models for different task types
+   - Level of review detail the user expects before accepting
+   - Whether the user prefers parallel or sequential delegation for batch work
+   - Instruction style preferences (detailed vs. brief, specific citations vs. general guidance)
+
+WHEN TO RECORD:
+- After a subagent delivers results and you review them — record what worked
+- After a proposal is rejected — record the rejection reason and user feedback
+- After you accept files into the workspace — record the full successful pattern
+- When you notice the user correcting your approach — record the preference
+- At the end of a complex multi-step task — consolidate what you learned
+
+WHEN STARTING A NEW SESSION:
+- Check /memories for delegation-playbook and project-context first
+- Reuse proven patterns instead of guessing from scratch
+- Adapt past strategies to the current request
+</orchestrator_memory_protocol>`;
+
+/**
  * Combine the base system prompt with optional rules from `.texrarules`.
  *
  * @param systemPrompt Base system prompt template
@@ -176,7 +223,7 @@ export async function buildInitialToolUsePrompts(
   agentPrompt: AgentPrompt,
   userVars: Record<string, any>,
   logger?: AgentLogger,
-  options?: { memoryEnabled?: boolean },
+  options?: { memoryEnabled?: boolean; hasDelegationTools?: boolean },
 ): Promise<InitialPrompts & { instructionSuffix: string }> {
   const builder = new PromptBuilder(
     agentPrompt,
@@ -191,6 +238,9 @@ export async function buildInitialToolUsePrompts(
   const suffixParts = [TOOL_USE_INSTRUCTIONS];
   if (options?.memoryEnabled) {
     suffixParts.push(MEMORY_TOOL_INSTRUCTIONS);
+    if (options.hasDelegationTools) {
+      suffixParts.push(ORCHESTRATOR_MEMORY_INSTRUCTIONS);
+    }
   }
   suffixParts.push(await buildWorkspaceInfoBlock());
 
