@@ -47,6 +47,7 @@ export const AgentSelectionEvents = {
   }) => createEvent('agent-enabled-set', detail),
   setAllEnabled: (detail: {
     category: 'workflow' | 'toolUse';
+    source: AgentSourceType;
     enabled: boolean;
   }) => createEvent('agent-all-enabled-set', detail),
   openFolder: (detail: {
