@@ -693,10 +693,10 @@ function filterVisible(
   if (configured === undefined) return entries;
   const configuredSet = new Set(configured);
 
-  // Remote agents always auto-show; users disable individual ones via the Agents tab
+  // All agents (including remote) are filtered by the configured visibility set.
+  // Remote agents are visible by default when never configured (handled above).
   return entries.filter(
     (entry) =>
-      entry.source === 'remote' ||
       configuredSet.has(createKey(entry.source, entry.name)) ||
       configuredSet.has(entry.name),
   );

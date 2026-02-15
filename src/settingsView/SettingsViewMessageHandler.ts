@@ -1364,7 +1364,23 @@ prompts:
         if (choice !== overwrite) return;
       }
 
-      await AbsoluteFS.copy(entry.path, targetPath);
+      await AbsoluteFS.copy(entry.path, targetPath, { overwrite: true });
+
+      // Also copy the _multiple variant if it exists
+      if (entry.multiplePath) {
+        const multipleRelative = sourceDir
+          ? path.relative(sourceDir, entry.multiplePath)
+          : path.basename(entry.multiplePath);
+        const multipleTarget = path.join(customDir, multipleRelative);
+        await AbsoluteFS.ensureDir(path.dirname(multipleTarget));
+        try {
+          await AbsoluteFS.copy(entry.multiplePath, multipleTarget, {
+            overwrite: true,
+          });
+        } catch {
+          // _multiple variant may not exist on disk even if registered
+        }
+      }
 
       const doc = await vscode.workspace.openTextDocument(
         vscode.Uri.file(targetPath),
@@ -1400,12 +1416,16 @@ prompts:
         return;
       }
 
-      const confirm = await vscode.window.showWarningMessage(
-        `Delete custom agent "${data.agentName}"?`,
-        { modal: true },
-        'Delete',
-      );
-      if (confirm !== 'Delete') return;
+      // Guard: only delete files under the custom agent directory
+      const customDir = await agentDirectories.custom();
+      const normalizedPath = path.resolve(entry.path);
+      const normalizedCustomDir = path.resolve(customDir);
+      if (!normalizedPath.startsWith(normalizedCustomDir + path.sep)) {
+        await vscode.window.showErrorMessage(
+          `Refusing to delete: file is not inside the custom agents directory.`,
+        );
+        return;
+      }
 
       await AbsoluteFS.delete(entry.path, { recursive: false });
 
@@ -1413,8 +1433,14 @@ prompts:
       if (entry.multiplePath) {
         try {
           await AbsoluteFS.delete(entry.multiplePath, { recursive: false });
-        } catch {
-          // Ignore if _multiple file doesn't exist
+        } catch (err) {
+          // Only ignore FileNotFound; surface other errors
+          if (
+            !(err instanceof vscode.FileSystemError) ||
+            err.code !== 'FileNotFound'
+          ) {
+            throw err;
+          }
         }
       }
 

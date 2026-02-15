@@ -404,6 +404,7 @@ export class AgentSelectionPanel extends LitElement {
 
   private selectAgent(agent: AgentSelectionItem): void {
     this.selectedKey = agentKey(agent);
+    this.pendingDeleteKey = null;
   }
 
   private handleListKeydown(event: KeyboardEvent): void {
