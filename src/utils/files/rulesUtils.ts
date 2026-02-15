@@ -1,8 +1,8 @@
-import * as os from 'os';
 import * as path from 'path';
 
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { safeHomedir } from '@utils/system/platformPaths';
 
 import { AbsoluteFS } from './absoluteFS';
 import { WorkspaceFS } from './workspaceFS';
@@ -28,12 +28,15 @@ export async function loadTexraRules(): Promise<string> {
       }
     }
 
-    const homeFile = path.join(os.homedir(), RULES_FILE);
-    if (await AbsoluteFS.exists(homeFile)) {
-      const content = await AbsoluteFS.read(homeFile);
-      if (content.trim()) {
-        logger.debug(CHANNEL, `Loaded home ${RULES_FILE}`);
-        return content.trim();
+    const homeDir = safeHomedir();
+    if (homeDir) {
+      const homeFile = path.join(homeDir, RULES_FILE);
+      if (await AbsoluteFS.exists(homeFile)) {
+        const content = await AbsoluteFS.read(homeFile);
+        if (content.trim()) {
+          logger.debug(CHANNEL, `Loaded home ${RULES_FILE}`);
+          return content.trim();
+        }
       }
     }
   } catch (err) {
