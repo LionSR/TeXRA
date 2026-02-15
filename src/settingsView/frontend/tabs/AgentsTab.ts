@@ -304,7 +304,6 @@ export class AgentsTab extends LitElement {
           </div>
         </div>
 
-
         <agent-selection-panel
           .agents=${activeAgents}
           .category=${this.activeSubTab}

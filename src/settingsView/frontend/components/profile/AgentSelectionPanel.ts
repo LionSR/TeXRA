@@ -314,7 +314,10 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-action-btn--danger:hover {
-        background: var(--vscode-inputValidation-errorBackground, rgba(255, 0, 0, 0.1));
+        background: var(
+          --vscode-inputValidation-errorBackground,
+          rgba(255, 0, 0, 0.1)
+        );
         border-color: var(--vscode-errorForeground, #f44);
       }
 
@@ -334,7 +337,10 @@ export class AgentSelectionPanel extends LitElement {
         align-items: center;
         gap: var(--spacing-medium);
         padding: var(--spacing-small) var(--spacing-medium);
-        background: var(--vscode-inputValidation-errorBackground, rgba(255, 0, 0, 0.05));
+        background: var(
+          --vscode-inputValidation-errorBackground,
+          rgba(255, 0, 0, 0.05)
+        );
         border: var(--border-thin) solid var(--vscode-errorForeground, #f44);
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
@@ -543,7 +549,9 @@ export class AgentSelectionPanel extends LitElement {
             e.stopPropagation();
             this.handleToggleEnabled(agent);
           }}
-          title=${agent.enabled ? 'Exclude from agent dropdown' : 'Include in agent dropdown'}
+          title=${agent.enabled
+            ? 'Exclude from agent dropdown'
+            : 'Include in agent dropdown'}
         />
         <span class="agent-list-item-name">${agent.name}</span>
         <span class="agent-list-item-badges">
@@ -589,7 +597,8 @@ export class AgentSelectionPanel extends LitElement {
                       ? html`<button
                           class="agent-count-link"
                           @click=${() => this.handleSetAllEnabled(source, true)}
-                          title="Show all ${SOURCE_DISPLAY_NAMES[source] ?? source} agents"
+                          title="Show all ${SOURCE_DISPLAY_NAMES[source] ??
+                          source} agents"
                         >
                           All
                         </button>`
@@ -597,8 +606,10 @@ export class AgentSelectionPanel extends LitElement {
                     ${enabledInGroup > 0
                       ? html`<button
                           class="agent-count-link"
-                          @click=${() => this.handleSetAllEnabled(source, false)}
-                          title="Hide all ${SOURCE_DISPLAY_NAMES[source] ?? source} agents"
+                          @click=${() =>
+                            this.handleSetAllEnabled(source, false)}
+                          title="Hide all ${SOURCE_DISPLAY_NAMES[source] ??
+                          source} agents"
                         >
                           None
                         </button>`

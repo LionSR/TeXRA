@@ -1152,9 +1152,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS;
 
       const allAgents =
-        data.category === 'workflow'
-          ? getWorkflowAgents()
-          : getToolUseAgents();
+        data.category === 'workflow' ? getWorkflowAgents() : getToolUseAgents();
 
       const sourceAgents = allAgents.filter((e) => e.source === data.source);
       const targetKeys = new Set(
@@ -1165,8 +1163,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       // Resolve current state: undefined means "all enabled" (never configured)
       const raw = workspaceSM.get<string[]>(stateKey);
-      const current =
-        raw ?? allAgents.map((e) => createKey(e.source, e.name));
+      const current = raw ?? allAgents.map((e) => createKey(e.source, e.name));
 
       let updated: string[];
       if (data.enabled) {
@@ -1387,7 +1384,9 @@ prompts:
           : path.basename(entry.multiplePath);
         const multipleTarget = path.join(customDir, multipleRelative);
         if (
-          path.resolve(multipleTarget).startsWith(normalizedCustomDir + path.sep)
+          path
+            .resolve(multipleTarget)
+            .startsWith(normalizedCustomDir + path.sep)
         ) {
           await AbsoluteFS.ensureDir(path.dirname(multipleTarget));
           try {
