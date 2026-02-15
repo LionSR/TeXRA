@@ -1129,7 +1129,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           const err = new Error(
             `PDF page limit reached: the conversation contains ${totalPages}+ PDF pages, ` +
               `but the API allows a maximum of ${ANTHROPIC_MAX_PDF_PAGES} pages per request. ` +
-              `Please reduce the number of PDF attachments or start a new conversation.`,
+              `Please compact the conversation, reduce the number of PDF attachments, or start a new conversation.`,
           );
           // Attach status 400 so formatProviderHttpError classifies this as
           // non-retryable (same as the raw API error it replaces).
@@ -2248,7 +2248,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         text:
           `PDF page limit reached: cannot include ${names}. ` +
           `The conversation already contains ${currentTotal} of the maximum ${ANTHROPIC_MAX_PDF_PAGES} PDF pages allowed per request. ` +
-          `Inform the user and suggest reducing PDF attachments or starting a new conversation.`,
+          `Inform the user and suggest compacting the conversation, reducing PDF attachments, or starting a new conversation.`,
       });
     }
 
