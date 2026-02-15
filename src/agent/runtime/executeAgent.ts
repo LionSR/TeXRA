@@ -344,8 +344,9 @@ async function runFlowWithLifecycle(
     options?.onCompleted?.(result);
     await writeTerminalStatus(ctx.executionId, result.status).catch(() => {});
 
-    // Fire-and-forget: generate AI session description for completed tool-use sessions
-    if (category === 'toolUse' && result.status !== 'error') {
+    // Fire-and-forget: generate AI session description for completed tool-use sessions.
+    // Note: 'stopped' means successfully completed; user-cancellation maps to 'error'.
+    if (category === 'toolUse' && result.status === END_GROUP_STATUS.STOPPED) {
       generateSessionDescription(ctx.executionId, ctx.config).catch(() => {});
     }
 
