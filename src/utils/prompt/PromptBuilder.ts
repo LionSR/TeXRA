@@ -40,6 +40,8 @@ MEMORY PROTOCOL:
 
 Your memory persists across conversations, allowing you to continue tasks and remember user preferences over time.
 
+SHARED MEMORY: The /memories directory is shared across all agents in the session, including the main orchestrator and any subagents it launches. When a subagent (e.g., a search agent) writes to /memories, the orchestrator and other subagents can read those files. Use this to coordinate work—for example, a search agent can record literature findings in /memories/search_results.md, and the orchestrator or presenter can read them to incorporate into the final output. Always check /memories first, as it may contain reports or notes left by other agents.
+
 Note: when editing your memory folder, always try to keep its content up-to-date, coherent and organized. You can rename or delete files that are no longer relevant. Do not create new files unless necessary.
 </memory_tool_instructions>`;
 
