@@ -63,6 +63,8 @@ export const AgentSelectionEvents = {
     createEvent('agent-delete-custom', detail),
   setCustomDir: () => createEvent('agent-set-custom-dir', undefined),
   resetCustomDir: () => createEvent('agent-reset-custom-dir', undefined),
-  setAutoShowRemote: (detail: { enabled: boolean }) =>
-    createEvent('agent-auto-show-remote', detail),
+  revealAgentFile: (detail: {
+    agentName: string;
+    agentSource: AgentSourceType;
+  }) => createEvent('agent-reveal-file', detail),
 } as const;

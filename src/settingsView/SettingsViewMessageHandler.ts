@@ -371,12 +371,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.SET_POLISH_MODEL]: (data) =>
         this.handleSetPolishModel(data),
 
-      // Auto-show remote agents handlers
-      [SETTINGS_VIEW_COMMANDS.GET_AUTO_SHOW_REMOTE]: () =>
-        this.withActiveWebview((w) => this.sendAutoShowRemote(w)),
-      [SETTINGS_VIEW_COMMANDS.SET_AUTO_SHOW_REMOTE]: (data) =>
-        this.handleSetAutoShowRemote(data),
-
       // Custom agent directory handlers
       [SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR]: () =>
         this.withActiveWebview((w) => this.sendCustomAgentDir(w)),
@@ -408,6 +402,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleCustomizeAgent(data),
       [SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT]: (data) =>
         this.handleDeleteCustomAgent(data),
+      [SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE]: (data) =>
+        this.handleRevealAgentFile(data),
 
       // Tool dashboard handlers
       [SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA]: () =>
@@ -477,7 +473,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendProfileData(webview),
       this.sendModelSelectionData(webview),
       this.sendAgentSelectionData(webview),
-      this.sendAutoShowRemote(webview),
       this.sendCustomAgentDir(webview),
       this.sendSuperYoloEnabled(webview),
     ]);
@@ -625,28 +620,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       path: resolvedPath,
       isDefault,
     });
-  }
-
-  // ============================================================
-  // Auto-show remote agents handler implementations
-  // ============================================================
-
-  public async sendAutoShowRemote(webview: vscode.Webview): Promise<void> {
-    const enabled =
-      globalSM.get<boolean>(GlobalStateKey.AUTO_SHOW_REMOTE_AGENTS, true) ??
-      true;
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_AUTO_SHOW_REMOTE,
-      enabled,
-    });
-  }
-
-  private async handleSetAutoShowRemote(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_AUTO_SHOW_REMOTE>,
-  ): Promise<void> {
-    await globalSM.update(GlobalStateKey.AUTO_SHOW_REMOTE_AGENTS, data.enabled);
-    void vscode.commands.executeCommand('texra.refreshAllOptions');
-    await this.withActiveWebview((w) => this.sendAutoShowRemote(w));
   }
 
   // ============================================================
@@ -1237,6 +1210,31 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       await showLoggedErrorMessage(
         this.channel,
         'Failed to open agent folder',
+        error,
+      );
+    }
+  }
+
+  private async handleRevealAgentFile(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.REVEAL_AGENT_FILE>,
+  ): Promise<void> {
+    try {
+      const key = createKey(data.agentSource, data.agentName);
+      const entry = getAgent(key);
+      if (!entry?.path) {
+        await vscode.window.showErrorMessage(
+          `Agent not found or has no file: ${data.agentName}`,
+        );
+        return;
+      }
+      await vscode.commands.executeCommand(
+        'revealFileInOS',
+        vscode.Uri.file(entry.path),
+      );
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to reveal agent file',
         error,
       );
     }
