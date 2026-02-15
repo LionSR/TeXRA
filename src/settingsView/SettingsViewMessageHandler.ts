@@ -1167,17 +1167,36 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           ? WorkspaceStateKey.ENABLED_AGENTS
           : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS;
 
+      const allAgents =
+        data.category === 'workflow'
+          ? getWorkflowAgents()
+          : getToolUseAgents();
+
+      const sourceAgents = allAgents.filter((e) => e.source === data.source);
+      const targetKeys = new Set(
+        sourceAgents.map((e) => createKey(e.source, e.name)),
+      );
+      // Legacy entries may use plain agent names without source prefix
+      const targetLegacyNames = new Set(sourceAgents.map((e) => e.name));
+
+      // Resolve current state: undefined means "all enabled" (never configured)
+      const raw = workspaceSM.get<string[]>(stateKey);
+      const current =
+        raw ?? allAgents.map((e) => createKey(e.source, e.name));
+
       let updated: string[];
       if (data.enabled) {
-        // Enable all: store all agent keys
-        const allAgents =
-          data.category === 'workflow'
-            ? getWorkflowAgents()
-            : getToolUseAgents();
-        updated = allAgents.map((e) => createKey(e.source, e.name));
+        // Add all keys from the target source (deduplicated)
+        const currentSet = new Set(current);
+        updated = [
+          ...current,
+          ...[...targetKeys].filter((k) => !currentSet.has(k)),
+        ];
       } else {
-        // Disable all: empty array means "nothing enabled"
-        updated = [];
+        // Remove both source:name and legacy plain-name entries for this source
+        updated = current.filter(
+          (k) => !targetKeys.has(k) && !targetLegacyNames.has(k),
+        );
       }
 
       await workspaceSM.update(stateKey, updated);
