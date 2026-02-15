@@ -939,6 +939,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     void vscode.commands.executeCommand('texra.refreshAllOptions');
   }
 
+  /** Refresh settings-view agent list and main-view dropdown after agent mutations. */
+  private async refreshAfterAgentMutation(): Promise<void> {
+    await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
+    void vscode.commands.executeCommand('texra.refreshAllOptions');
+  }
+
   private async handleOpenProviderKeyUrl(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_PROVIDER_KEY_URL>,
   ): Promise<void> {
@@ -1126,8 +1132,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       await workspaceSM.update(stateKey, updated);
 
-      void vscode.commands.executeCommand('texra.refreshAllOptions');
-      await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
+      await this.refreshAfterAgentMutation();
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
@@ -1180,8 +1185,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       await workspaceSM.update(stateKey, updated);
 
-      void vscode.commands.executeCommand('texra.refreshAllOptions');
-      await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
+      await this.refreshAfterAgentMutation();
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
@@ -1252,9 +1256,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       );
     }
 
-    await loadAgents();
-    await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
-    void vscode.commands.executeCommand('texra.refreshAllOptions');
+    await this.refreshAfterAgentMutation();
   }
 
   private async createAgentFromTemplate(): Promise<void> {
@@ -1391,9 +1393,7 @@ prompts:
         `Created custom copy: ${path.basename(targetPath)}`,
       );
 
-      await loadAgents();
-      await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
-      void vscode.commands.executeCommand('texra.refreshAllOptions');
+      await this.refreshAfterAgentMutation();
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
@@ -1448,9 +1448,7 @@ prompts:
         `Deleted custom agent: ${data.agentName}`,
       );
 
-      await loadAgents();
-      await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
-      void vscode.commands.executeCommand('texra.refreshAllOptions');
+      await this.refreshAfterAgentMutation();
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
@@ -1467,7 +1465,6 @@ prompts:
   /** Refresh agent dir + selection after a directory change. */
   private async refreshAgentDirUI(): Promise<void> {
     await agentDirectories.refreshAfterDirChange();
-    await loadAgents();
     await this.withActiveWebview(async (w) => {
       await Promise.all([
         this.sendCustomAgentDir(w),

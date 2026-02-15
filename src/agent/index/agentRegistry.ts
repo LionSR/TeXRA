@@ -20,6 +20,7 @@ import {
   AgentSource,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
+import { agentKey as createKey } from '@shared/schemas/agent';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import {
   GlobalStateKey,
@@ -574,10 +575,8 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
 // KEY HELPERS
 // =============================================================================
 
-/** Create source:name key. */
-export function createKey(source: AgentSource, name: string): string {
-  return `${source}:${name}`;
-}
+// Re-export for backward compatibility (local binding imported at top of file)
+export { createKey };
 
 /**
  * Resolve an agent identifier to its full source:name key.

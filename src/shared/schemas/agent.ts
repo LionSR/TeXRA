@@ -36,3 +36,8 @@ export type AgentSourceType = z.infer<typeof AgentSourceSchema>;
 // (the standard Zod dual-export pattern used throughout the backend)
 export const AgentSource = AgentSourceSchema;
 export type AgentSource = AgentSourceType;
+
+/** Canonical key format: disambiguates agents with same name across sources. */
+export function agentKey(source: string, name: string): string {
+  return `${source}:${name}`;
+}

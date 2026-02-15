@@ -21,15 +21,16 @@ import { codiconStyles, designTokens } from '@shared/styles';
 // Local imports - shared schemas and events
 import {
   AGENT_SOURCE,
+  agentKey as agentKeyFromSourceName,
   type AgentCategory,
   type AgentSourceType,
 } from '@shared/schemas/agent';
 import { AgentSelectionEvents } from './events';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
 
-/** Unique key for an agent: disambiguates agents with same name across sources */
+/** Shorthand: derive the canonical key from an AgentSelectionItem. */
 function agentKey(agent: AgentSelectionItem): string {
-  return `${agent.source}:${agent.name}`;
+  return agentKeyFromSourceName(agent.source, agent.name);
 }
 
 /** Source display names for agent origins */
