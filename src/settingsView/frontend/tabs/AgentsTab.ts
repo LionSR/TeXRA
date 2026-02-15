@@ -89,6 +89,11 @@ export class AgentsTab extends LitElement {
 
       /* Base styles provided by .tab-action-btn in commonViewStyles */
 
+      .agents-header-actions {
+        display: flex;
+        gap: var(--spacing-small);
+      }
+
       .agents-create-btn {
         color: var(--vscode-foreground);
         border-color: var(--vscode-focusBorder);
@@ -189,6 +194,15 @@ export class AgentsTab extends LitElement {
     );
   }
 
+  private handleCreateFromTemplate(): void {
+    this.dispatchEvent(
+      AgentSelectionEvents.createAgent({
+        category: this.activeSubTab,
+        mode: 'template',
+      }),
+    );
+  }
+
   private handleChangeCustomDir(): void {
     this.dispatchEvent(AgentSelectionEvents.setCustomDir());
   }
@@ -233,14 +247,24 @@ export class AgentsTab extends LitElement {
               >
             </button>
           </div>
-          <button
-            class="tab-action-btn agents-create-btn"
-            @click=${this.handleCreateAgent}
-            title="Create a new agent with AI"
-          >
-            <span class="codicon codicon-add"></span>
-            New Agent
-          </button>
+          <div class="agents-header-actions">
+            <button
+              class="tab-action-btn"
+              @click=${this.handleCreateFromTemplate}
+              title="Create a new agent from a blank YAML template"
+            >
+              <span class="codicon codicon-new-file"></span>
+              From Template
+            </button>
+            <button
+              class="tab-action-btn agents-create-btn"
+              @click=${this.handleCreateAgent}
+              title="Create a new agent with AI"
+            >
+              <span class="codicon codicon-add"></span>
+              New Agent
+            </button>
+          </div>
         </div>
 
         <!-- Row 2: Custom directory info bar -->
