@@ -2,17 +2,13 @@
  * Shared constants for memory tool and memory view.
  * Single source of truth for memory-related paths and limits.
  *
- * The memory directory is shared across all agents in a session (orchestrator
- * and subagents alike). Any agent can read or write files here, making it a
- * coordination channel — e.g., a search subagent writes findings that the
- * orchestrator or presenter reads later.
+ * Memory is shared across all agents in a session (orchestrator and subagents).
  */
 
 /** Virtual path prefix shown to users and models (e.g., /memories/notes.md) */
 export const MEMORY_DISPLAY_ROOT = '/memories';
 
-/** Physical storage path relative to workspace storage (e.g., memories/notes.md).
- *  Resolved identically for all agents, so writes by one agent are visible to others. */
+/** Physical storage path relative to workspace storage (e.g., memories/notes.md) */
 export const MEMORY_STORAGE_ROOT = 'memories';
 
 /** Maximum lines to display in tool view output */
