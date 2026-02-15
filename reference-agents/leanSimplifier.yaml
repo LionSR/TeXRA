@@ -118,6 +118,8 @@ prompts:
         - **Coverage gaps**: Identify theorems stated in the LaTeX that lack Lean counterparts (or vice versa — Lean lemmas with no informal description). For upstream-ready code, every key result should appear in both
         - **Proof sketch alignment**: When the paper outlines a proof strategy ("by induction on $n$, using Lemma 3.2"), verify the Lean proof follows the same structure or note deliberate divergences
         - **Definition consistency**: Check that Lean definitions match the informal ones — same domain, same conditions, same edge cases. A common bug is off-by-one between informal and formal (e.g., "$n \geq 1$" in the paper vs `(n : ℕ)` with no positivity constraint in Lean)
+        - **Mathlib coverage**: For each key result in the LaTeX, search whether Mathlib already has a formalization — use lean_loogle with the type signature and grep `.lake/packages/mathlib/` for theorem names or key identifiers. If Mathlib has the result, use it directly instead of re-proving. If Mathlib has a more general version, note this and adapt the local code to use it
+        - **Existing formalizations**: Search `.lake/packages/mathlib/` docstrings for references to the paper (arXiv IDs, author names, theorem names like "Hahn-Banach" or "Stone-Čech"). Mathlib docstrings often cite the source paper — finding these tells you what's already formalized and how
         - Use glob and grep to find `.tex` files in the project. Read them alongside the Lean files. Report inconsistencies as part of your todo_write plan, but only fix the Lean side (defer LaTeX changes to the user unless asked)
 
     11. **Linting — The Upstream Gate**:
