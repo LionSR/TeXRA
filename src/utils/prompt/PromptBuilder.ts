@@ -156,12 +156,15 @@ export class PromptBuilder {
     const round = Math.max(0, currRound);
     if (round < templates.length) return templates[round];
 
-    // For rounds beyond configured templates, fall back to the second template
-    if (round > 0 && templates.length > 1) {
+    // For rounds beyond configured templates, fall back to the last template.
+    // Multi-template agents reuse templates[1] (reflection prompt) for all
+    // subsequent rounds. Single-template agents reuse templates[0].
+    if (round > 0 && templates.length >= 1) {
+      const fallbackIndex = Math.min(1, templates.length - 1);
       this.logger?.debug(
-        `No prompt configured for round ${currRound}. Falling back to second template (index 1).`,
+        `No prompt configured for round ${currRound}. Reusing template at index ${fallbackIndex}.`,
       );
-      return templates[1];
+      return templates[fallbackIndex];
     }
 
     return undefined;
