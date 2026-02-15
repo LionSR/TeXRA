@@ -6,20 +6,17 @@ import * as vscode from 'vscode';
 import * as nunjucks from 'nunjucks';
 import * as yaml from 'yaml';
 import { z } from 'zod';
-import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports - agent runtime
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { getBaseName, getMultipleName } from '@agent/index';
 import {
   AgentWorkflowSettingSchema,
   AgentToolUseSettingSchema,
   AgentPromptSchema,
 } from '@agent/core/AgentDataclass';
-import { createModelHandler } from '@agent/runtime/ModelFactory';
+import { createHelperModelKit } from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
-import { globalSM, GlobalStateKey } from '@common/state';
 import { agentDirectories, promptToAddAgentToConfig } from '@frontend/agents';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
@@ -346,24 +343,12 @@ async function tryAIGeneration(
   vars: Record<string, string>,
 ): Promise<string | undefined> {
   try {
-    // Resolve model (reuse the helper model setting)
-    const configuredModel = globalSM.get<string>(
-      GlobalStateKey.HELPER_MODEL,
-      DEFAULT_HELPER_MODEL,
-    );
-    const modelName = isNonEmptyString(configuredModel)
-      ? configuredModel.trim()
-      : DEFAULT_HELPER_MODEL;
-    const modelConfig = MODEL_CONFIGS[modelName];
-    if (!modelConfig) {
-      logger.error(CHANNEL, `Unknown model "${modelName}" for agent creation`);
+    const kit = await createHelperModelKit();
+    if (!kit) {
+      logger.error(CHANNEL, 'Helper model not available for agent creation');
       return undefined;
     }
-
-    const handler = createModelHandler(modelConfig);
-    handler.setOutputStreaming(false);
-    handler.setProgressViewEnabled(false);
-    const client = await handler.getClient();
+    const { handler, client } = kit;
 
     // Build prompts – include RUNTIME_PASSTHROUGH so that template variable
     // references like {{ INPUT_FILE }} in the creator prompts survive Nunjucks
@@ -392,6 +377,7 @@ async function tryAIGeneration(
         client,
         messages,
         temperature: 0,
+        systemPrompt,
       });
       const { text } = handler.extractResponse(result.response, '');
 
