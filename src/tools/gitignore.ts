@@ -1,11 +1,11 @@
 // Standard library imports
-import * as os from 'os';
 import * as path from 'path';
 
 // Local imports - utils
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { toPosixPath } from '@utils/core/pathCore';
+import { safeHomedir } from '@utils/system/platformPaths';
 
 // Local file imports
 import { createGlobMatcher } from './utils';
@@ -135,11 +135,11 @@ async function readAbsoluteGitignore(
 }
 
 async function readGlobalGitignore(): Promise<GitignoreSource[]> {
+  const homeDirectory = safeHomedir();
+  if (!homeDirectory) {
+    return [];
+  }
   try {
-    const homeDirectory = os.homedir();
-    if (!homeDirectory) {
-      return [];
-    }
     const source = await readAbsoluteGitignore(
       path.join(homeDirectory, '.gitignore_global'),
     );
