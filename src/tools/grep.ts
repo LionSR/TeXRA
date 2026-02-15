@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { ExecResult } from '@agent/types/ResultTypes';
 import { ToolError, ToolResult } from '@tools/result';
 import { getGitignoreMatcher } from '@tools/gitignore';
-import { resolveAndFormat } from '@tools/utils';
+import { resolveAndFormat, formatToolOutput, pluralize } from '@tools/utils';
 import { StorageFS } from '@utils/files';
 import { executeCommand } from '@utils/system/execUtils';
 
@@ -233,18 +233,17 @@ export class GrepTool extends defineTool({
     const paginatedLines = allLines.slice(offset, end);
     const returnedCount = paginatedLines.length;
 
-    const summary = `Found ${returnedCount} of ${totalCount} matches for "${input.pattern}" in ${display}`;
+    const header = `Found ${totalCount} ${pluralize(totalCount, 'match', 'matches')} for "${input.pattern}" in ${display}`;
+    let output = formatToolOutput(header, paginatedLines);
+
     const hasMore = returnedCount < totalCount;
-
-    const toolResult: ToolResult = {
-      summary,
-      output: paginatedLines.join('\n'),
-    };
-
     if (hasMore) {
-      toolResult.instruction = `Showing ${returnedCount} of ${totalCount} results. Use offset=${offset + returnedCount} to see more.`;
+      output += `\n\n(Showing ${returnedCount} of ${totalCount}. Use offset=${offset + returnedCount} to see more.)`;
     }
 
-    return toolResult;
+    return {
+      summary: `Found ${returnedCount} of ${totalCount} matches for "${input.pattern}" in ${display}`,
+      output,
+    };
   }
 }
