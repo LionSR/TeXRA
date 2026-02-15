@@ -1252,7 +1252,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       );
     }
 
+    await loadAgents();
     await this.withActiveWebview((w) => this.sendAgentSelectionData(w));
+    void vscode.commands.executeCommand('texra.refreshAllOptions');
   }
 
   private async createAgentFromTemplate(): Promise<void> {
@@ -1265,6 +1267,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           if (value.includes('/') || value.includes('\\'))
             return 'Name cannot contain path separators';
           if (value.includes(' ')) return 'Use underscores instead of spaces';
+          if (/[:#\[\]{}|>&*!%@`]/.test(value))
+            return 'Name cannot contain YAML-special characters';
           return null;
         },
       });
@@ -1342,8 +1346,12 @@ prompts:
       }
 
       const customDir = await agentDirectories.custom();
-      const targetPath = path.join(customDir, path.basename(entry.path));
-      await AbsoluteFS.ensureDir(customDir);
+      const sourceDir = await agentDirectories.getDirectory(data.agentSource);
+      const relativePath = sourceDir
+        ? path.relative(sourceDir, entry.path)
+        : path.basename(entry.path);
+      const targetPath = path.join(customDir, relativePath);
+      await AbsoluteFS.ensureDir(path.dirname(targetPath));
 
       // Avoid overwriting an existing custom copy with user edits
       if (await AbsoluteFS.exists(targetPath)) {
@@ -1391,6 +1399,13 @@ prompts:
         );
         return;
       }
+
+      const confirm = await vscode.window.showWarningMessage(
+        `Delete custom agent "${data.agentName}"?`,
+        { modal: true },
+        'Delete',
+      );
+      if (confirm !== 'Delete') return;
 
       await AbsoluteFS.delete(entry.path, { recursive: false });
 
