@@ -2,6 +2,7 @@ import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { createRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { buildInitialToolUsePrompts } from '@utils/prompt';
 
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
@@ -43,13 +44,16 @@ export class ToolUsePrepareNode<C> extends Node<
     const memoryEnabled = this.services.resolvedTools.some(
       (t) => t.name === 'memory',
     );
+    const hasDelegationTools = this.services.resolvedTools.some((t) =>
+      DELEGATION_TOOLS.has(t.name),
+    );
 
     const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
       await buildInitialToolUsePrompts(
         this.services.prompt,
         userVarChannels.transient,
         logger,
-        { memoryEnabled },
+        { memoryEnabled, hasDelegationTools },
       );
 
     if (userRequest) {
