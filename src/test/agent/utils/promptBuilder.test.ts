@@ -47,7 +47,7 @@ describe('PromptBuilder', () => {
     assert.equal(fallback, 'reflect test');
   });
 
-  it('handles single string userRequest without reflections', async () => {
+  it('handles single string userRequest by reusing for subsequent rounds', async () => {
     const prompt: AgentPrompt = {
       systemPrompt: '',
       userPrefix: '',
@@ -58,7 +58,8 @@ describe('PromptBuilder', () => {
     const initial = await builder.buildInitialPrompts();
     assert.equal(initial.userRequest, 'initial only');
 
+    // Single-template agents reuse the template for subsequent rounds
     const reflectPrompt = await builder.buildUserRequest(1);
-    assert.equal(reflectPrompt, '');
+    assert.equal(reflectPrompt, 'initial only');
   });
 });
