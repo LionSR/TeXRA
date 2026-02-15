@@ -1,8 +1,8 @@
 /**
  * Tools for delegating agent executions from tool-use agents.
  * Two separate tools for clean separation of concerns:
- * - delegate_workflow: For workflow agents (document processing with file I/O)
- * - delegate_agent: For tool-use agents (interactive assistants)
+ * - delegate_workflow: For workflow agents (structured file I/O, fixed-round full-document rewrite)
+ * - delegate_agent: For tool-use agents (interactive, versatile — edits, creation, research)
  *
  * All subagents execute asynchronously — result delivered via follow-up queue.
  */
@@ -332,7 +332,7 @@ export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 export class WorkflowAgentTool extends defineTool({
   name: 'delegate_workflow',
   description:
-    () => `Delegate a task to a workflow agent for document processing.
+    () => `Delegate a task to a workflow agent. Workflow agents receive structured file parameters (input, reference, auxiliary, media, output) and rewrite the entire input file from start to finish in fixed rounds. Best for uniform whole-document operations: grammar correction, style polishing, figure generation, document merging. NOT suitable for tasks requiring interactive tool use, exploration, or selective edits—use delegate_agent for those.
 
 Available agents:
 ${formatAgentList(getVisibleAgents('workflow'))}
@@ -455,7 +455,7 @@ export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
 export class DelegateAgentTool extends defineTool({
   name: 'delegate_agent',
   description:
-    () => `Delegate a task to a tool-use agent for exploration or research.
+    () => `Delegate a task to a tool-use agent. The agent has its own tools (file reading, editing, search, bash) and works interactively. Tool-use agents are versatile—they can create entire documents (e.g., presentations, posters), make targeted edits, perform research, explore codebases, or run multi-step investigations. Choose the agent whose specialization matches the task.
 
 Available agents:
 ${formatAgentList(getVisibleAgents('toolUse'))}
@@ -463,7 +463,7 @@ ${formatAgentList(getVisibleAgents('toolUse'))}
 Available models: ${getVisibleModels().join(', ')}
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
-Example: agent=search, instruction="The paper at paper.tex proposes a new attention mechanism called FlashAttention-3 that reduces memory complexity from quadratic to linear. Please search the web for three to five related papers on efficient transformer attention mechanisms, particularly those addressing memory efficiency or linear attention, that we should cite in the related work section."`,
+Example: agent=chat, instruction="The presentation at slides/talk.tex has incorrect citations on slides 3 and 7. Please read the file, fix the \\cite commands to reference the correct BibTeX keys from refs.bib, and ensure the bibliography slide is consistent."`,
   schema: DelegateAgentInputSchema,
 }) {
   protected async execute(input: DelegateAgentInput): Promise<ToolResult> {
