@@ -41,6 +41,9 @@ export interface RoundAwareState {
 
   /** Whether to continue to next round (can be set false by nodes) */
   continueRounds: boolean;
+
+  /** Set by nodes when execution fails. Skips round completion callbacks. */
+  lastError?: { message: string; retryable: boolean } | undefined;
 }
 
 // ============================================================================
@@ -151,20 +154,24 @@ export class RoundPersistedFlow<
       }
 
       // Determine final status
-      const interrupted =
-        this.callbacks.checkInterruption?.() || !currentShared.continueRounds;
-      const completedAllRounds = isRoundAtOrBeyondLimit(
-        currentShared.currentRound + 1,
-        currentShared.totalRounds,
-      );
-      if (!completedAllRounds && interrupted) {
-        status = EXECUTION_STATUS.INTERRUPTED;
+      if (currentShared.lastError) {
+        status = EXECUTION_STATUS.ERROR;
       } else {
-        // Only notify round completion if the round actually finished
-        await this.callbacks.onRoundCompleted?.(
-          currentShared.currentRound,
-          currentShared,
+        const interrupted =
+          this.callbacks.checkInterruption?.() ||
+          !currentShared.continueRounds;
+        const completedAllRounds = isRoundAtOrBeyondLimit(
+          currentShared.currentRound + 1,
+          currentShared.totalRounds,
         );
+        if (!completedAllRounds && interrupted) {
+          status = EXECUTION_STATUS.INTERRUPTED;
+        } else {
+          await this.callbacks.onRoundCompleted?.(
+            currentShared.currentRound,
+            currentShared,
+          );
+        }
       }
     } catch (error) {
       status = EXECUTION_STATUS.ERROR;
