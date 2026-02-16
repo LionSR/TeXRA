@@ -3,7 +3,7 @@ layout: home
 hero:
   name: TeXRA
   text: Multi-Agent AI for Scientific Discovery
-  tagline: Specialized AI agents that read your papers, search literature, generate figures, and polish your LaTeX — orchestrated in reproducible workflows.
+  tagline: An orchestrated team of AI agents that searches literature, drafts and verifies figures, polishes manuscripts, and builds presentations — compressing weeks of research work into hours.
   image:
     src: /logo-1024x1024.svg
     alt: TeXRA Logo
@@ -21,145 +21,149 @@ hero:
 
 <div class="problem-section">
 
-## Researchers waste hours on formatting, not discovery
+## Scientific discovery is bottlenecked by everything *around* the science
 
-You spend your best thinking time wrestling with LaTeX, hunting for references, and manually polishing prose. General-purpose chatbots lose context across files, hallucinate citations, and can't compile your documents. You need AI that understands academic workflows end-to-end.
+The hard part of research isn't having ideas — it's the months spent turning them into publications. Literature reviews that take weeks. Figures redrawn six times. Prose polished across dozens of revision cycles. Presentations rebuilt from scratch. Each step is manual, error-prone, and disconnects you from the thinking that matters.
+
+General-purpose chatbots don't help. They hallucinate citations, lose context across files, and can't compile or verify anything. The research cycle needs AI that operates as a *system* — not a single prompt box.
 
 </div>
 
 <div class="solution-section">
 
-## TeXRA: a team of specialized agents, not a single chatbot
+## An AI research team that works like you do
 
-TeXRA orchestrates **multiple specialized agents** inside VS Code — each designed for a specific part of the research lifecycle. Agents share context, use tools, and produce auditable outputs you can verify with diffs.
+TeXRA orchestrates **multiple specialized agents** inside VS Code — one that searches literature with grounded citations, another that generates and compiles figures, another that polishes prose while preserving every equation. Each agent reasons, uses tools, reflects on its own output, and produces auditable results you can verify with diffs.
+
+The result: you stay in the discovery loop while agents handle the execution.
 
 </div>
 
 <div class="how-it-works">
 
-### How it works
+### From idea to publication, accelerated
 
 <div class="workflow-steps">
   <div class="workflow-step">
     <div class="step-number">1</div>
     <div class="step-content">
-      <h3>Select files & agent</h3>
-      <p>Pick your LaTeX files, references, and figures. Choose a specialized agent for the task.</p>
+      <h3>Explore</h3>
+      <p>Search agents sweep arXiv, Crossref, and your Zotero library — returning grounded citations, not hallucinations.</p>
     </div>
   </div>
   <div class="workflow-arrow">&rarr;</div>
   <div class="workflow-step">
     <div class="step-number">2</div>
     <div class="step-content">
-      <h3>Agents execute</h3>
-      <p>Agents reason, call tools (compile, search, verify math), and iterate through reflection loops.</p>
+      <h3>Create</h3>
+      <p>Agents draft prose, generate TikZ figures, build slide decks — compiling and visually verifying every artifact.</p>
     </div>
   </div>
   <div class="workflow-arrow">&rarr;</div>
   <div class="workflow-step">
     <div class="step-number">3</div>
     <div class="step-content">
-      <h3>Review & verify</h3>
-      <p>Every change is captured in a color-coded diff. Logs, reasoning, and outputs are fully transparent.</p>
+      <h3>Refine</h3>
+      <p>Reflection loops iterate on quality. You review color-coded diffs of every change. Nothing is a black box.</p>
     </div>
   </div>
 </div>
 
 </div>
 
-## The agent team
+## Agents for every phase of research
 
 <div class="agents-grid">
 
   <div class="agent-card">
     <div class="agent-header">
-      <span class="agent-icon">polish</span>
-      <span class="agent-type">Workflow Agent</span>
-    </div>
-    <h3>Polish & Correct</h3>
-    <p>Improves clarity, fixes grammar, repairs LaTeX errors — while preserving all math and technical content. Outputs a reviewable diff.</p>
-  </div>
-
-  <div class="agent-card">
-    <div class="agent-header">
       <span class="agent-icon">search</span>
-      <span class="agent-type">Interactive Agent</span>
+      <span class="agent-type">Literature Discovery</span>
     </div>
     <h3>Literature Search</h3>
-    <p>Searches arXiv, Crossref, and your Zotero library. Returns titles, abstracts, and BibTeX entries — no hallucinated citations.</p>
-  </div>
-
-  <div class="agent-card">
-    <div class="agent-header">
-      <span class="agent-icon">draw</span>
-      <span class="agent-type">Workflow Agent</span>
-    </div>
-    <h3>Figure Generation</h3>
-    <p>Creates TikZ diagrams from natural language descriptions. Compiles and visually verifies every figure before returning it.</p>
-  </div>
-
-  <div class="agent-card">
-    <div class="agent-header">
-      <span class="agent-icon">presenter</span>
-      <span class="agent-type">Interactive Agent</span>
-    </div>
-    <h3>Paper to Slides</h3>
-    <p>Reads your paper, drafts a Beamer slide deck with TikZ diagrams, compiles it, and checks every page visually.</p>
+    <p>Sweeps arXiv, Crossref, and Zotero for relevant work. Returns real titles, abstracts, and BibTeX — grounded in actual databases, not model memory.</p>
   </div>
 
   <div class="agent-card">
     <div class="agent-header">
       <span class="agent-icon">research</span>
-      <span class="agent-type">Interactive Agent</span>
+      <span class="agent-type">Open-ended Research</span>
     </div>
     <h3>Research Assistant</h3>
-    <p>Edits files, runs shell commands, searches the web, and manages references — all in one conversation with tool access.</p>
+    <p>Your general-purpose research partner. Edits files, runs experiments, searches the web, manages references — multi-turn conversation with full tool access.</p>
+  </div>
+
+  <div class="agent-card">
+    <div class="agent-header">
+      <span class="agent-icon">draw</span>
+      <span class="agent-type">Visualization</span>
+    </div>
+    <h3>Figure Generation</h3>
+    <p>Turns natural-language descriptions into publication-ready TikZ diagrams. Compiles every figure and visually verifies the output before returning it.</p>
+  </div>
+
+  <div class="agent-card">
+    <div class="agent-header">
+      <span class="agent-icon">polish</span>
+      <span class="agent-type">Manuscript Refinement</span>
+    </div>
+    <h3>Polish & Correct</h3>
+    <p>Rewrites for clarity, fixes errors, improves flow — preserving every equation and citation. Outputs a reviewable diff so you control what lands.</p>
+  </div>
+
+  <div class="agent-card">
+    <div class="agent-header">
+      <span class="agent-icon">presenter</span>
+      <span class="agent-type">Communication</span>
+    </div>
+    <h3>Paper to Slides</h3>
+    <p>Reads your paper end-to-end, drafts a Beamer slide deck with TikZ diagrams, compiles it, and visually checks every page. Conference-ready in minutes.</p>
   </div>
 
   <div class="agent-card">
     <div class="agent-header">
       <span class="agent-icon">chat</span>
-      <span class="agent-type">Interactive Agent</span>
+      <span class="agent-type">Brainstorming</span>
     </div>
     <h3>General Chat</h3>
-    <p>Open-ended conversation with full tool access. Ask questions, brainstorm ideas, or get help with any part of your project.</p>
+    <p>Open-ended conversation with tool access. Brainstorm hypotheses, debug proofs, discuss methodology, or explore a new direction with your project context loaded.</p>
   </div>
 
 </div>
 
-## Why researchers choose TeXRA
+## Built for how research actually works
 
 <div class="differentiators">
 
   <div class="diff-item">
-    <h3>Reproducible, not magic</h3>
-    <p>Every agent run produces logs, diffs, and versioned output files (<code>*_r0_*</code>, <code>*_r1_*</code>). You and your collaborators can verify every change.</p>
+    <h3>Agents, not autocomplete</h3>
+    <p>Each agent plans, executes, reflects, and iterates — the same loop a skilled collaborator would follow. Search agents verify citations against real databases. Writing agents compile and check their own output.</p>
   </div>
 
   <div class="diff-item">
-    <h3>Multi-agent, not one-shot</h3>
-    <p>Agents use reflection loops, tool calls, and planning — not a single prompt. Workflow agents iterate; interactive agents have persistent context across tool calls.</p>
+    <h3>Auditable by design</h3>
+    <p>Every agent run produces versioned output files, color-coded diffs, and full reasoning logs. Your co-authors and reviewers can trace exactly what changed and why — critical for reproducible science.</p>
   </div>
 
   <div class="diff-item">
-    <h3>Your models, your keys</h3>
-    <p>API calls go directly from your machine to providers (Anthropic, OpenAI, Google, etc.). No TeXRA servers see your content. Keys stay in VS Code's secure storage.</p>
+    <h3>Your data stays yours</h3>
+    <p>API calls go directly from your machine to providers (Anthropic, OpenAI, Google, etc.). No TeXRA servers in the middle. Your unpublished results and API keys never leave your environment.</p>
   </div>
 
   <div class="diff-item">
-    <h3>LaTeX-native</h3>
-    <p>Built for LaTeX from day one. Understands document structure, math environments, citations, BibTeX, TikZ, and multi-file projects.</p>
+    <h3>Understands scientific documents</h3>
+    <p>Built for LaTeX from day one. Agents reason across math environments, citation graphs, BibTeX files, TikZ figures, and multi-file projects — not just plaintext.</p>
   </div>
 
 </div>
 
-## See it in action
+## Researchers using TeXRA
 
-> **Deadline crunch.** A PhD student has 48 hours to polish a 30-page thesis chapter. She selects the chapter, picks the `polish` agent: "Improve clarity and flow for a machine-learning audience. Keep all math intact." Two minutes later she's reviewing a colour-coded diff of every change.
+> **Exploring a new field.** A physicist pivoting into machine learning opens the `search` agent: "Find foundational and recent papers on neural operator methods for PDEs." In seconds she has 15 grounded references with abstracts and BibTeX — a literature map that would have taken a week of manual searching.
 
-> **Literature sweep.** A new collaborator joins the project. She opens the `search` agent: "Find the five most-cited papers on physics-informed neural networks from 2022-2024." In seconds she has titles, abstracts, and BibTeX entries added to her `.bib` file.
+> **From idea to draft.** A postdoc has a new result but no paper. He opens the `research` agent, describes the theorem and proof sketch, and asks it to draft a LaTeX write-up with proper notation. The agent creates the file, structures the sections, and adds placeholder references. He then runs `polish` to tighten the prose. Two hours from idea to reviewable draft.
 
-> **Conference talk.** A postdoc needs slides for next week. He opens the `presenter` agent, points it at his paper, and asks for a 15-slide Beamer deck. The agent reads his paper, drafts slides with TikZ diagrams, compiles them, and visually checks every page.
+> **Communicating results.** A PhD student needs to present at a group meeting tomorrow. She opens `presenter`, points it at her latest paper, and asks for a 12-slide Beamer deck focused on the experimental results. The agent reads the paper, creates slides with TikZ recreations of her figures, compiles the PDF, and visually verifies every page. She spends her evening on the science, not on slide formatting.
 
 <div class="cta-container">
   <a href="/guide/quick-start" class="cta-button">Quick Start Guide</a>
