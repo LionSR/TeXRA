@@ -8,6 +8,7 @@ import {
 } from '@shared/schemas';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import { FlattenedEditRecordSchema } from '@tools/result';
+import type { OverviewProgressUpdate } from '@tools/subagentResults';
 import { pathToLocation } from '@utils/files';
 
 /** Schema for thinking blocks (used by model handlers). */
@@ -81,6 +82,15 @@ export class FileInteractionState {
   /** Record that a tool call was executed. */
   recordToolCall(): void {
     this._toolCallCount += 1;
+  }
+
+  /** Produce an overview progress update from current state. */
+  toOverview(): OverviewProgressUpdate {
+    return {
+      kind: 'overview',
+      toolCallCount: this._toolCallCount,
+      filesChanged: [...this.edits.keys()],
+    };
   }
 
   recordRead(path: string | undefined | null): void {

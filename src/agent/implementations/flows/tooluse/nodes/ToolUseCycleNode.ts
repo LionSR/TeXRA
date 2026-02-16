@@ -130,19 +130,12 @@ export class ToolUseCycleNode<C> extends Node<
     };
 
     // Emit overview progress after each completed cycle.
-    // toolCallCount = actual number of tool invocations (not model cycles).
+    // FileInteractionState.toOverview() is the single source of truth
+    // for tool call count and files changed.
     if (execRes.outcome === 'completed') {
       const { onProgress } = this.services;
       if (onProgress) {
-        const interactions = workspaceSnapshot.interactions;
-        const edits = interactions?.edits ?? [];
-        onProgress({
-          kind: 'overview',
-          toolCallCount: interactions?.toolCallCount ?? 0,
-          filesChanged: edits.map(
-            (e: { path: string }) => e.path,
-          ),
-        });
+        onProgress(prepRes.workspaceState.interactions.toOverview());
       }
     }
 
