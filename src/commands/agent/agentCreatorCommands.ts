@@ -16,7 +16,11 @@ import {
 import { createHelperModelKit } from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
-import { agentDirectories, promptToAddAgentToConfig } from '@frontend/agents';
+import {
+  agentDirectories,
+  promptToAddAgentToConfig,
+  type AgentVariantMetadata,
+} from '@frontend/agents';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core/stringCore';
@@ -32,6 +36,9 @@ export const agentCreatorCommands = {
 // ── Types & constants ───────────────────────────────────────
 
 type AgentCategory = 'workflow' | 'toolUse';
+
+/** Number of PocketFlow retries for AI generation before falling back to template. */
+const AI_GENERATION_RETRIES = 1;
 
 interface AgentPromptPair {
   systemPrompt: string;
@@ -56,7 +63,7 @@ interface AgentBlueprint {
   aiVars: Record<string, string>;
   fallbackTemplate: string;
   fallbackVars: Record<string, string>;
-  registrationMeta: Parameters<typeof promptToAddAgentToConfig>[2];
+  registrationMeta: AgentVariantMetadata;
 }
 
 /** Mutable shared state flowing through the agent creation flow. */
@@ -66,6 +73,7 @@ interface AgentCreatorShared {
   agentName?: string;
   description?: string;
   blueprint?: AgentBlueprint;
+  yamlContent?: string;
 }
 
 /** Tool-use agents only receive the user instruction — they access files via tools. */
@@ -224,6 +232,7 @@ function suggestToolGroups(description: string): Set<string> {
 
 // ── Infrastructure ──────────────────────────────────────────
 
+/* autoescape off: templates contain Nunjucks/YAML syntax, not HTML */
 const nunjucksEnv = nunjucks.configure({ autoescape: false });
 
 function renderFallbackTemplate(
@@ -243,6 +252,7 @@ function renderFallbackTemplate(
   }
 }
 
+/** Lazily built and cached for the extension host lifetime. Schemas are static. */
 let schemaRefCache: Record<AgentCategory, string> | null = null;
 
 function getSchemaReference(category: AgentCategory): string {
@@ -267,6 +277,7 @@ function buildSchemaRef(settingsSchema: z.ZodObject<z.ZodRawShape>): string {
   ].join('\n');
 }
 
+/** Cached after first load. Templates are bundled resources — stable for the session. */
 let creatorConfig: CreatorConfig | null = null;
 
 interface ParsedCreatorYaml {
@@ -371,82 +382,6 @@ async function pickTools(
   return { tools, groups };
 }
 
-async function tryAIGeneration(
-  config: CreatorConfig,
-  category: AgentCategory,
-  vars: Record<string, string>,
-): Promise<string | undefined> {
-  try {
-    const kit = await createHelperModelKit();
-    if (!kit) {
-      logger.error(CHANNEL, 'Helper model not available for agent creation');
-      return undefined;
-    }
-    const { handler, client } = kit;
-
-    const prompts = config[category];
-    const schemaRef = getSchemaReference(category);
-    const renderVars = { ...PASSTHROUGH[category], ...vars };
-    const systemPrompt =
-      nunjucksEnv.renderString(prompts.systemPrompt, renderVars) +
-      '\n' +
-      schemaRef;
-    const baseUserRequest = nunjucksEnv.renderString(
-      prompts.userRequest,
-      renderVars,
-    );
-
-    let userMessage = baseUserRequest;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const messages = await handler.initializeMessages(
-        '',
-        userMessage,
-        undefined,
-        systemPrompt,
-      );
-      const result = await handler.createResponse({
-        client,
-        messages,
-        temperature: 0,
-        systemPrompt,
-      });
-      const { text } = handler.extractResponse(result.response, '');
-
-      if (isNonEmptyString(text)) {
-        const extracted = extractTextFromTag(text, 'yaml');
-        const candidate = (extracted || text).trim();
-        const validationErr = validateAgentYamlString(candidate);
-        if (!validationErr) {
-          logger.info(CHANNEL, `AI generation succeeded for ${category} agent`);
-          return candidate;
-        }
-
-        const options =
-          attempt === 0
-            ? (['Try Again', 'Use Template'] as const)
-            : (['Use Template'] as const);
-        const choice = await vscode.window.showWarningMessage(
-          `Generated YAML was invalid: ${validationErr}`,
-          ...options,
-        );
-        if (choice === 'Try Again' && attempt === 0) {
-          userMessage =
-            baseUserRequest +
-            '\n' +
-            nunjucksEnv.renderString(config.retryPrompts[category], {
-              VALIDATION_ERROR: validationErr,
-            });
-          continue;
-        }
-        break;
-      }
-    }
-  } catch (err) {
-    logger.error(CHANNEL, `AI generation failed: ${toErrorMessage(err)}`);
-  }
-  return undefined;
-}
-
 // ── Nodes ───────────────────────────────────────────────────
 
 /**
@@ -494,14 +429,25 @@ class GatherInputNode extends Node<AgentCreatorShared> {
 }
 
 /**
- * Gather workflow output style. Builds AgentBlueprint in post().
+ * Gather workflow output style and build the AgentBlueprint.
+ * All data assembly and IO (directory resolution) happens in exec().
  */
 class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
   async prep(shared: AgentCreatorShared) {
-    return { agentName: shared.agentName! };
+    return {
+      agentName: shared.agentName!,
+      description: shared.description!,
+      config: shared.config,
+    };
   }
 
-  async exec(prepRes: { agentName: string }) {
+  async exec(prepRes: {
+    agentName: string;
+    description: string;
+    config: CreatorConfig;
+  }): Promise<AgentBlueprint | undefined> {
+    const { agentName, description, config } = prepRes;
+
     const outputChoice = await vscode.window.showQuickPick(
       [
         {
@@ -514,7 +460,7 @@ class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
         },
       ],
       {
-        title: `Workflow Agent: ${prepRes.agentName}`,
+        title: `Workflow Agent: ${agentName}`,
         placeHolder: 'Choose the agent output style',
       },
     );
@@ -525,7 +471,7 @@ class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
     let outputFiles: string[] = [];
     if (isMultiple) {
       const filesInput = await vscode.window.showInputBox({
-        title: `Workflow Agent: ${prepRes.agentName}`,
+        title: `Workflow Agent: ${agentName}`,
         prompt: 'Enter default output filenames (comma separated)',
       });
       if (!filesInput) return undefined;
@@ -535,26 +481,11 @@ class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
         .filter(Boolean);
     }
 
-    return { isMultiple, outputFiles };
-  }
-
-  async post(
-    shared: AgentCreatorShared,
-    _prepRes: unknown,
-    execRes: { isMultiple: boolean; outputFiles: string[] } | undefined,
-  ): Promise<string | undefined> {
-    if (!execRes) return 'cancel';
-
-    const { config } = shared;
-    const agentName = shared.agentName!;
-    const description = shared.description!;
-    const { isMultiple, outputFiles } = execRes;
-
     const outputFilesYaml = outputFiles.map((f) => `- ${f}`).join('\n    ');
     const outputFilesNote = outputFiles.map((f) => `    - ${f}`).join('\n');
     const targetDir = await agentDirectories.custom();
 
-    shared.blueprint = {
+    return {
       category: 'workflow',
       agentName,
       filePath: vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`)),
@@ -584,93 +515,194 @@ class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
             multipleAgentName: getMultipleName(agentName),
           },
     };
+  }
+
+  async post(
+    shared: AgentCreatorShared,
+    _prepRes: unknown,
+    execRes: AgentBlueprint | undefined,
+  ): Promise<string | undefined> {
+    if (!execRes) return 'cancel';
+    shared.blueprint = execRes;
     return FlowTransition.DEFAULT;
   }
 }
 
 /**
- * Gather tool selection via keyword-aware picker. Builds AgentBlueprint in post().
+ * Gather tool selection via keyword-aware picker and build the AgentBlueprint.
+ * All data assembly and IO (directory resolution) happens in exec().
  */
 class ToolUseBlueprintNode extends Node<AgentCreatorShared> {
   async prep(shared: AgentCreatorShared) {
     return {
       agentName: shared.agentName!,
       description: shared.description!,
+      config: shared.config,
     };
   }
 
-  async exec(prepRes: { agentName: string; description: string }) {
-    return pickTools(prepRes.agentName, prepRes.description);
-  }
+  async exec(prepRes: {
+    agentName: string;
+    description: string;
+    config: CreatorConfig;
+  }): Promise<AgentBlueprint | undefined> {
+    const { agentName, description, config } = prepRes;
 
-  async post(
-    shared: AgentCreatorShared,
-    _prepRes: unknown,
-    execRes: { tools: string[]; groups: string[] } | undefined,
-  ): Promise<string | undefined> {
-    if (!execRes) return 'cancel';
+    const picked = await pickTools(agentName, description);
+    if (!picked) return undefined;
 
-    const { config } = shared;
-    const agentName = shared.agentName!;
-    const description = shared.description!;
     const targetDir = await agentDirectories.custom();
 
-    shared.blueprint = {
+    return {
       category: 'toolUse',
       agentName,
       filePath: vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`)),
       aiVars: {
         AGENT_NAME: agentName,
         DESCRIPTION: description,
-        SELECTED_TOOLS: execRes.tools.join(', '),
-        SELECTED_GROUPS: execRes.groups.join(', '),
+        SELECTED_TOOLS: picked.tools.join(', '),
+        SELECTED_GROUPS: picked.groups.join(', '),
       },
       fallbackTemplate: config.templates.toolUse,
       fallbackVars: {
         AGENT_NAME: agentName,
         DESCRIPTION: description,
-        TOOLS_YAML: execRes.tools.map((t) => `    - ${t}`).join('\n'),
+        TOOLS_YAML: picked.tools.map((t) => `    - ${t}`).join('\n'),
       },
       registrationMeta: {},
     };
+  }
+
+  async post(
+    shared: AgentCreatorShared,
+    _prepRes: unknown,
+    execRes: AgentBlueprint | undefined,
+  ): Promise<string | undefined> {
+    if (!execRes) return 'cancel';
+    shared.blueprint = execRes;
+    return FlowTransition.DEFAULT;
+  }
+}
+
+interface GeneratePrepResult {
+  config: CreatorConfig;
+  blueprint: AgentBlueprint;
+}
+
+/**
+ * Generate agent YAML via AI. Uses PocketFlow retry (maxRetries) for validation
+ * failures and execFallback for template-based fallback when retries are exhausted.
+ */
+class GenerateNode extends Node<AgentCreatorShared> {
+  private lastValidationError?: string;
+
+  constructor() {
+    super(AI_GENERATION_RETRIES);
+  }
+
+  async prep(shared: AgentCreatorShared): Promise<GeneratePrepResult> {
+    return { config: shared.config, blueprint: shared.blueprint! };
+  }
+
+  async exec(prepRes: GeneratePrepResult): Promise<string> {
+    const { config, blueprint } = prepRes;
+    const kit = await createHelperModelKit();
+    if (!kit) {
+      throw new Error('Helper model not available for agent creation');
+    }
+    const { handler, client } = kit;
+
+    const prompts = config[blueprint.category];
+    const schemaRef = getSchemaReference(blueprint.category);
+    const renderVars = {
+      ...PASSTHROUGH[blueprint.category],
+      ...blueprint.aiVars,
+    };
+    const systemPrompt =
+      nunjucksEnv.renderString(prompts.systemPrompt, renderVars) +
+      '\n' +
+      schemaRef;
+
+    let userMessage = nunjucksEnv.renderString(
+      prompts.userRequest,
+      renderVars,
+    );
+    if (this.lastValidationError) {
+      userMessage +=
+        '\n' +
+        nunjucksEnv.renderString(config.retryPrompts[blueprint.category], {
+          VALIDATION_ERROR: this.lastValidationError,
+        });
+    }
+
+    const messages = await handler.initializeMessages(
+      '',
+      userMessage,
+      undefined,
+      systemPrompt,
+    );
+    const result = await handler.createResponse({
+      client,
+      messages,
+      temperature: 0,
+    });
+    const { text } = handler.extractResponse(result.response, '');
+
+    if (!isNonEmptyString(text)) {
+      throw new Error('Model returned no text');
+    }
+
+    const extracted = extractTextFromTag(text, 'yaml');
+    const candidate = (extracted || text).trim();
+    const validationErr = validateAgentYamlString(candidate);
+    if (validationErr) {
+      this.lastValidationError = validationErr;
+      throw new Error(`Generated YAML was invalid: ${validationErr}`);
+    }
+
+    logger.info(
+      CHANNEL,
+      `AI generation succeeded for ${blueprint.category} agent`,
+    );
+    return candidate;
+  }
+
+  async execFallback(
+    prepRes: GeneratePrepResult,
+    error: Error,
+  ): Promise<string> {
+    logger.warn(
+      CHANNEL,
+      `AI generation failed, using template: ${error.message}`,
+    );
+    const { blueprint } = prepRes;
+    return renderFallbackTemplate(
+      blueprint.category,
+      blueprint.fallbackTemplate,
+      blueprint.fallbackVars,
+    );
+  }
+
+  async post(
+    shared: AgentCreatorShared,
+    _prepRes: unknown,
+    yamlContent: string,
+  ): Promise<string | undefined> {
+    shared.yamlContent = yamlContent;
     return FlowTransition.DEFAULT;
   }
 }
 
 /**
- * Generate agent YAML via AI (with fallback), write to disk, register.
+ * Write generated YAML to disk, register the agent, and open the file.
  */
-class GenerateAndRegisterNode extends Node<AgentCreatorShared> {
+class RegisterNode extends Node<AgentCreatorShared> {
   async prep(shared: AgentCreatorShared) {
-    return {
-      config: shared.config,
-      blueprint: shared.blueprint!,
-    };
+    return { blueprint: shared.blueprint!, yamlContent: shared.yamlContent! };
   }
 
-  async exec(prepRes: { config: CreatorConfig; blueprint: AgentBlueprint }) {
-    const { config, blueprint } = prepRes;
-    let yamlContent = await tryAIGeneration(
-      config,
-      blueprint.category,
-      blueprint.aiVars,
-    );
-    if (!yamlContent) {
-      yamlContent = renderFallbackTemplate(
-        blueprint.category,
-        blueprint.fallbackTemplate,
-        blueprint.fallbackVars,
-      );
-    }
-    return yamlContent;
-  }
-
-  async post(
-    _shared: AgentCreatorShared,
-    prepRes: { config: CreatorConfig; blueprint: AgentBlueprint },
-    yamlContent: string,
-  ): Promise<string | undefined> {
-    const { blueprint } = prepRes;
+  async exec(prepRes: { blueprint: AgentBlueprint; yamlContent: string }) {
+    const { blueprint, yamlContent } = prepRes;
     await AbsoluteFS.write(blueprint.filePath.fsPath, yamlContent);
     vscode.window.showInformationMessage(
       `Created agent at ${blueprint.filePath.fsPath}`,
@@ -683,6 +715,9 @@ class GenerateAndRegisterNode extends Node<AgentCreatorShared> {
     );
     const doc = await vscode.workspace.openTextDocument(blueprint.filePath);
     await vscode.window.showTextDocument(doc);
+  }
+
+  async post(): Promise<string | undefined> {
     return FlowTransition.DEFAULT;
   }
 }
@@ -693,13 +728,15 @@ function createAgentCreatorFlow(): Flow<AgentCreatorShared> {
   const gatherInput = new GatherInputNode();
   const workflowBlueprint = new WorkflowBlueprintNode();
   const toolUseBlueprint = new ToolUseBlueprintNode();
-  const generateAndRegister = new GenerateAndRegisterNode();
+  const generate = new GenerateNode();
+  const register = new RegisterNode();
 
   gatherInput.on('workflow', workflowBlueprint);
   gatherInput.on('toolUse', toolUseBlueprint);
 
-  workflowBlueprint.next(generateAndRegister);
-  toolUseBlueprint.next(generateAndRegister);
+  workflowBlueprint.next(generate);
+  toolUseBlueprint.next(generate);
+  generate.next(register);
 
   return new Flow<AgentCreatorShared>(gatherInput);
 }
