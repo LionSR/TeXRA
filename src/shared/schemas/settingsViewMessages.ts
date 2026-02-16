@@ -192,6 +192,21 @@ export type UpdateSuperYoloEnabledMessage = z.infer<
 >;
 
 // ============================================================
+// Agent mode presets data schema
+// ============================================================
+
+import { AgentModePresetSchema } from './agentPresets';
+
+/** Outbound: backend → frontend agent mode presets (built-in + custom) */
+export const UpdateAgentModePresetsMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS),
+  customPresets: z.array(AgentModePresetSchema),
+});
+export type UpdateAgentModePresetsMessage = z.infer<
+  typeof UpdateAgentModePresetsMessageSchema
+>;
+
+// ============================================================
 // Tool dashboard data schemas
 // ============================================================
 
@@ -380,8 +395,21 @@ const SetSuperYoloEnabledMessageSchema = z.object({
 });
 
 // Agent mode preset inbound messages
+const GetAgentModePresetsMessageSchema = commandOnly(
+  CMD.GET_AGENT_MODE_PRESETS,
+);
+
 const ApplyAgentModePresetMessageSchema = z.object({
   command: z.literal(CMD.APPLY_AGENT_MODE_PRESET),
+  presetId: z.string().min(1),
+});
+
+const SaveAgentModePresetMessageSchema = commandOnly(
+  CMD.SAVE_AGENT_MODE_PRESET,
+);
+
+const DeleteAgentModePresetMessageSchema = z.object({
+  command: z.literal(CMD.DELETE_AGENT_MODE_PRESET),
   presetId: z.string().min(1),
 });
 
@@ -464,7 +492,10 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     GetSuperYoloEnabledMessageSchema,
     SetSuperYoloEnabledMessageSchema,
     // Agent mode preset messages
+    GetAgentModePresetsMessageSchema,
     ApplyAgentModePresetMessageSchema,
+    SaveAgentModePresetMessageSchema,
+    DeleteAgentModePresetMessageSchema,
   ],
 );
 
