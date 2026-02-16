@@ -157,7 +157,7 @@ export type ModelSelectionItem = z.infer<typeof ModelSelectionItemSchema>;
 export const UpdateModelSelectionMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION),
   models: z.array(ModelSelectionItemSchema),
-  polishModel: z.string(),
+  helperModel: z.string(),
 });
 export type UpdateModelSelectionMessage = z.infer<
   typeof UpdateModelSelectionMessageSchema
@@ -304,8 +304,8 @@ const SetModelEnabledMessageSchema = z.object({
   enabled: z.boolean(),
 });
 
-const SetPolishModelMessageSchema = z.object({
-  command: z.literal(CMD.SET_POLISH_MODEL),
+const SetHelperModelMessageSchema = z.object({
+  command: z.literal(CMD.SET_HELPER_MODEL),
   modelName: z.string().min(1),
 });
 
@@ -439,7 +439,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     // Model selection messages
     GetModelSelectionMessageSchema,
     SetModelEnabledMessageSchema,
-    SetPolishModelMessageSchema,
+    SetHelperModelMessageSchema,
     // Agent selection messages
     GetAgentSelectionMessageSchema,
     OpenAgentYamlMessageSchema,

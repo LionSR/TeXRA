@@ -42,7 +42,7 @@ import {
   type NumberVscodeSetting,
   type ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
-import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 // Local imports - settings view commands
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -137,7 +137,7 @@ export class SettingsApp extends BaseWebviewApp {
 
   // Model selection state
   @state() private modelSelectionItems: ModelSelectionItem[] = [];
-  @state() private polishModel = DEFAULT_POLISH_MODEL;
+  @state() private helperModel = DEFAULT_HELPER_MODEL;
 
   // Agent selection state
   @state() private workflowAgents: AgentSelectionItem[] = [];
@@ -245,7 +245,7 @@ export class SettingsApp extends BaseWebviewApp {
         const data = this.parseMessage(raw, UpdateModelSelectionMessageSchema);
         if (!data) return;
         this.modelSelectionItems = data.models;
-        this.polishModel = data.polishModel;
+        this.helperModel = data.helperModel;
         return;
       }
 
@@ -396,8 +396,8 @@ export class SettingsApp extends BaseWebviewApp {
     SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED,
   );
 
-  private handleSetPolishModel = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_POLISH_MODEL,
+  private handleSetHelperModel = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_HELPER_MODEL,
   );
 
   // Agent selection event handlers
@@ -553,7 +553,7 @@ export class SettingsApp extends BaseWebviewApp {
               .providerKeyStatuses=${this.providerKeyStatuses}
               .globalStreamingDefault=${this.globalStreamingDefault}
               .modelSelectionItems=${this.modelSelectionItems}
-              .polishModel=${this.polishModel}
+              .helperModel=${this.helperModel}
               @profile-api-access-mode=${this.handleApiAccessMode}
               @provider-key-set=${this.handleSetProviderKey}
               @provider-key-remove=${this.handleRemoveProviderKey}
@@ -565,7 +565,7 @@ export class SettingsApp extends BaseWebviewApp {
                 .handleSetProviderVscodeSetting}
               @provider-open-url=${this.handleOpenUrl}
               @model-enabled-set=${this.handleSetModelEnabled}
-              @polish-model-set=${this.handleSetPolishModel}
+              @helper-model-set=${this.handleSetHelperModel}
             ></models-tab>
           </vscode-tab-panel>
 
