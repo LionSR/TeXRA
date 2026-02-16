@@ -411,8 +411,8 @@ Common configuration issues include:
 Now that you understand how to configure TeXRA, you may want to learn about:
 
 - [Custom Agents](/guide/custom-agents) - Learn how to create your own specialized agents
-- [Best Practices](/reference/best-practices) - Discover recommended settings for different workflows
-- [Troubleshooting](/reference/troubleshooting) - Resolve common configuration issues
+- [Best Practices](/guide/best-practices) - Discover recommended settings for different workflows
+- [Troubleshooting](/guide/troubleshooting) - Resolve common configuration issues
 
 ## Agent Execution Settings (Webview Interface)
 

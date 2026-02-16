@@ -47,7 +47,7 @@ Find solutions to common problems and issues:
 - Performance optimization
 - Compatibility fixes
 
-[View Troubleshooting Guide →](/reference/troubleshooting)
+[View Troubleshooting Guide →](/guide/troubleshooting)
 
 ## Best Practices
 
@@ -70,7 +70,7 @@ Definitions of technical terms used throughout the documentation:
 - TeXRA-specific vocabulary
 - Academic publishing terms
 
-[View Glossary →](/reference/glossary)
+[View Glossary →](/guide/glossary)
 
 ## Additional Resources
 
