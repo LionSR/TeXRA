@@ -26,7 +26,10 @@ prompts:
       - isRewrite: true when the agent edits/revises/corrects existing documents, false when it creates new content.
       - temperature: low (0.1) for editing/correction tasks, higher (0.5-0.8) for creative/generation tasks.
       - rounds: 1 for simple single-pass tasks, 2 for tasks that benefit from reflection.
-    - prefills should contain one "<scratchpad>" entry per round to trigger chain-of-thought.
+    - The number of prefills entries, userRequest entries, and rounds MUST all match:
+      - For rounds: 1 → exactly 1 prefill entry and 1 userRequest entry.
+      - For rounds: 2 → exactly 2 prefill entries and 2 userRequest entries.
+      If rounds is omitted (default 2), provide 2 entries for both.
     - All fields with defaults can be omitted if the default value is acceptable,
       BUT outputExt defaults to "txt" so it must always be set explicitly to "tex".
     Respond only with the YAML wrapped in <yaml> tags.
@@ -63,8 +66,8 @@ prompts:
       isRewrite: <true if editing existing docs, false if creating new>
       temperature: <0.1 for precise editing, 0.5-0.8 for creative>
       prefills:
-        - "<scratchpad>"
-        - "<scratchpad>"
+        - "<scratchpad>"          # one entry per round
+        # - "<scratchpad>"        # add second entry only if rounds: 2
     prompts:
       systemPrompt: |
         <Role and task description. Written in LaTeX style using \begin{itemize} for lists.
@@ -78,8 +81,9 @@ prompts:
       userRequest:
         - |
           <Round 1: Ask for brainstorming in <scratchpad>, then output in <latex_document> tags.>
-        - |
-          <Round 2: Ask for reflection and refinement in <scratchpad>, then updated <latex_document>.>
+        # For 2-round agents, add a second entry:
+        # - |
+        #   <Round 2: Ask for reflection and refinement in <scratchpad>, then updated <latex_document>.>
 
     Here is a complete real-world example for reference (the "polish" agent):
 
@@ -124,7 +128,8 @@ prompts:
     IMPORTANT REMINDERS:
     - outputExt MUST be "tex", never "md" or "txt".
     - The documentTag in prompts must match the settings.documentTag.
-    - userRequest must be an array of strings (one per round).
+    - userRequest must be an array with exactly as many entries as rounds (1 or 2).
+    - prefills must have the same number of entries as userRequest.
     - Include {{ INSTRUCTION }} somewhere in the prompts so the user's instructions are passed through.
     - Write prompt text in LaTeX style (\begin{itemize}, \textbf{}, etc.), not markdown.
 
