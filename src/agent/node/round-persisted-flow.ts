@@ -16,7 +16,11 @@
  * ```
  */
 
-import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  type ExecutionStatus,
+  type RetryErrorInfo,
+} from '@shared/schemas';
 import type { ExecutionKVStore } from '@agent/storage';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
@@ -43,7 +47,7 @@ export interface RoundAwareState {
   continueRounds: boolean;
 
   /** Set by nodes when execution fails. Skips round completion callbacks. */
-  lastError?: { message: string; retryable: boolean } | undefined;
+  lastError?: RetryErrorInfo;
 }
 
 // ============================================================================
@@ -200,6 +204,7 @@ export class RoundPersistedFlow<
    */
   private shouldContinueNextRound(shared: S): boolean {
     return (
+      !shared.lastError &&
       !this.callbacks.checkInterruption?.() &&
       shared.continueRounds &&
       !isRoundAtOrBeyondLimit(shared.currentRound + 1, shared.totalRounds)

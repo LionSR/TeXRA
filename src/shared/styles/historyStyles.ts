@@ -98,6 +98,14 @@ export const historyListStyles: CSSResult = css`
     margin-bottom: var(--spacing-small);
   }
 
+  .history-description {
+    font-size: var(--font-size-sm);
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+    margin-top: var(--spacing-small);
+    line-height: 1.4;
+  }
+
   .config-section {
     display: flex;
     flex-direction: column;

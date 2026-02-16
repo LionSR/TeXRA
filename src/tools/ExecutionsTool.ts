@@ -72,8 +72,9 @@ const WORKFLOW_ONLY_FIELDS = new Set([
 const TOOL_USE_ONLY_FIELDS = new Set(['toolConfig']);
 
 /** Return paths available for a given agent category. */
-function getAvailablePaths(category?: string): string[] {
-  const common = ['config', 'report', 'children'];
+function getAvailablePaths(category?: string, hasChildren?: boolean): string[] {
+  const common = ['config', 'report'];
+  if (hasChildren) common.push('children');
   switch (category) {
     case 'toolUse':
       return [...common, 'conversation', 'todos'];
@@ -209,7 +210,8 @@ function formatListingLine(entry: ExecutionListingEntry): string {
   const parentSuffix = entry.parentExecutionId
     ? `  parent=${entry.parentExecutionId}`
     : '';
-  return `${entry.id}  ${ts}  ${entry.agent}${categoryTag}  ${entry.model}  [${formatStatusInfo(info)}]${parentSuffix}`;
+  const descSuffix = entry.description ? `  — ${entry.description}` : '';
+  return `${entry.id}  ${ts}  ${entry.agent}${categoryTag}  ${entry.model}  [${formatStatusInfo(info)}]${parentSuffix}${descSuffix}`;
 }
 
 const TODO_ICON: Record<string, string> = {
@@ -446,13 +448,16 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       const progressLine = formatProgressLine(handle);
       if (progressLine) lines.push(progressLine);
 
-      this.appendChildren(lines, children);
+      await this.appendChildren(lines, children);
 
       if (todos.length > 0) {
         lines.push('', ...formatTodoSection(todos));
       }
 
-      const runningPaths = getAvailablePaths(handle.category);
+      const runningPaths = getAvailablePaths(
+        handle.category,
+        children.length > 0,
+      );
       lines.push(
         '',
         `Available paths: ${runningPaths.map((p) => `/executions/${executionId}/${p}`).join(', ')}`,
@@ -493,11 +498,15 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       `Status: ${formatStatusInfo(info)}`,
     ];
 
+    if (meta?.description) {
+      lines.push(`Description: ${meta.description}`);
+    }
+
     if (meta?.parentExecutionId) {
       lines.push(`Parent: ${meta.parentExecutionId}`);
     }
 
-    this.appendChildren(lines, children);
+    await this.appendChildren(lines, children);
 
     if (todos.length > 0) {
       lines.push('', ...formatTodoSection(todos));
@@ -507,7 +516,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       lines.push('', 'Result:', report);
     }
 
-    const completedPaths = getAvailablePaths(category);
+    const completedPaths = getAvailablePaths(category, children.length > 0);
     lines.push(
       '',
       `Available paths: ${completedPaths.map((p) => `/executions/${executionId}/${p}`).join(', ')}`,
@@ -517,14 +526,26 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
   }
 
   /** Append formatted child entries to output lines. */
-  private appendChildren(lines: string[], children: ChildRecord[]): void {
+  private async appendChildren(
+    lines: string[],
+    children: ChildRecord[],
+  ): Promise<void> {
     if (children.length === 0) return;
     lines.push('', `Children (${children.length}):`);
-    for (const child of children) {
-      const childInfo = getExecutionStatusInfo(child.id);
+    const metas = await Promise.all(
+      children.map((c) => getExecutionStore(c.id).readMeta()),
+    );
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i];
+      const childMeta = metas[i];
+      const childInfo = getExecutionStatusInfo(
+        child.id,
+        childMeta?.terminalStatus,
+      );
       const ts = child.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
+      const desc = childMeta?.description ? `  — ${childMeta.description}` : '';
       lines.push(
-        `  ${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(childInfo)}]`,
+        `  ${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(childInfo)}]${desc}`,
       );
     }
   }
@@ -606,10 +627,15 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       };
     }
 
-    const lines = children.map((child) => {
-      const info = getExecutionStatusInfo(child.id);
+    const metas = await Promise.all(
+      children.map((c) => getExecutionStore(c.id).readMeta()),
+    );
+    const lines = children.map((child, i) => {
+      const childMeta = metas[i];
+      const info = getExecutionStatusInfo(child.id, childMeta?.terminalStatus);
       const ts = child.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
-      return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]`;
+      const desc = childMeta?.description ? `  — ${childMeta.description}` : '';
+      return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;
     });
 
     return {
