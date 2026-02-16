@@ -78,6 +78,7 @@ import {
   AgentExecutionHandle,
 } from './executionRegistry';
 import type { AgentFlowResult, OutputFileSummary } from './AgentFlowResult';
+import type { SubagentProgressUpdate } from '@tools/subagentResults';
 import { generateSessionDescription } from './sessionDescription';
 
 const CHANNEL = 'executeAgent';
@@ -305,12 +306,18 @@ function toOutputSummaries(roundOutputs: RoundOutput[]): OutputFileSummary[] {
   );
 }
 
-/** Create an onRoundCompleted callback that feeds progress into the execution registry. */
+/** Create an onRoundCompleted callback that feeds progress into the execution registry and orchestrator. */
 function createRoundProgressCallback(
   executionId: ExecutionId,
+  onProgress?: (update: SubagentProgressUpdate) => void,
 ): (roundIndex: number, totalRounds: number) => void {
   return (roundIndex, totalRounds) => {
     updateExecutionProgress(executionId, {
+      currentRound: roundIndex,
+      totalRounds,
+    });
+    onProgress?.({
+      kind: 'round',
       currentRound: roundIndex,
       totalRounds,
     });
@@ -560,6 +567,8 @@ export interface ExecuteAgentOptions {
   onStreamResolved?: (streamId: StreamTabId) => void;
   /** Fires before a tool-use subagent enters WAITING, delivering interim result to orchestrator. */
   onBeforeWaiting?: (lastResponse: string | undefined) => void;
+  /** Fires on meaningful progress: todo changes, round completions, tool call milestones. */
+  onProgress?: (update: SubagentProgressUpdate) => void;
   /** Fires after flow completes but BEFORE untrackExecution, so follow-ups are enqueued before waiters resolve. */
   onCompleted?: (result: AgentFlowResult) => void;
 }
@@ -603,6 +612,7 @@ export async function executeAgent(
             setting: ctx.setting as AgentToolUseSetting,
             isSubagent,
             onBeforeWaiting: options?.onBeforeWaiting,
+            onProgress: options?.onProgress,
             onFollowUpConsumed: () =>
               bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
           });
@@ -615,6 +625,10 @@ export async function executeAgent(
           };
         }
 
+        const onRoundCompleted = createRoundProgressCallback(
+          ctx.executionId,
+          options?.onProgress,
+        );
         const result = await runReflectionFlow({
           ...ctx,
           ...interrupts,
@@ -622,7 +636,7 @@ export async function executeAgent(
             ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
           setting: ctx.setting as AgentWorkflowSetting,
           parentStage: ctx.parentStage,
-          onRoundCompleted: createRoundProgressCallback(ctx.executionId),
+          onRoundCompleted,
         });
         return {
           category: 'workflow' as const,
@@ -678,7 +692,7 @@ export async function executeMergeAgent(
           fileService,
         ),
         parentStage: ctx.parentStage,
-        onRoundCompleted: createRoundProgressCallback(ctx.executionId),
+        onRoundCompleted: createRoundProgressCallback(ctx.executionId, undefined),
       });
       return {
         category: 'workflow' as const,
