@@ -68,4 +68,5 @@ export const AgentSelectionEvents = {
     agentName: string;
     agentSource: AgentSourceType;
   }) => createEvent('agent-reveal-file', detail),
+  savePreset: () => createEvent('save-agent-mode-preset', undefined),
 } as const;
