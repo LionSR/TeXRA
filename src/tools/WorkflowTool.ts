@@ -55,7 +55,6 @@ import {
   formatSubagentDelivery,
   formatSubagentError,
   formatSubagentProgress,
-  type SubagentProgressUpdate,
 } from '@tools/subagentResults';
 import { defineTool } from '@tools/core/define';
 
@@ -129,30 +128,15 @@ async function executeSubagent(
   let hasDelivered = false;
   let childStreamId: StreamTabId | undefined;
 
-  // Coalescing progress: buffer the latest update per kind, flush on a timer.
-  // This avoids flooding the orchestrator with many small messages when
-  // multiple tool calls or todo changes happen in quick succession.
-  const PROGRESS_FLUSH_MS = 3000;
-  const pendingProgress = new Map<string, SubagentProgressUpdate>();
-  let progressTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function flushProgress(): void {
-    progressTimer = null;
-    if (hasDelivered || pendingProgress.size === 0) return;
-    for (const update of pendingProgress.values()) {
-      const msg = formatSubagentProgress(executionId, agentName, update);
-      ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
-    }
-    pendingProgress.clear();
-  }
-
   function onProgress(update: SubagentProgressUpdate): void {
     if (hasDelivered) return;
-    // Coalesce by kind: newer update replaces older one of same kind
-    pendingProgress.set(update.kind, update);
-    if (!progressTimer) {
-      progressTimer = setTimeout(flushProgress, PROGRESS_FLUSH_MS);
-    }
+    // Emit directly — no debouncing needed. The orchestrator's
+    // waitAndDrainAll() naturally batches: it blocks until the first
+    // message arrives, then drains everything else that accumulated.
+    // Multiple progress messages arriving during a model call just
+    // queue up and get consumed together.
+    const msg = formatSubagentProgress(executionId, agentName, update);
+    ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
   }
 
   const promise = executeAgent(configPayload, executionId, {
@@ -168,9 +152,6 @@ async function executeSubagent(
     onBeforeWaiting: (lastResponse) => {
       if (hasDelivered || !childStreamId) return;
       hasDelivered = true;
-      // Flush any buffered progress before delivering final result
-      if (progressTimer) clearTimeout(progressTimer);
-      flushProgress();
       const msg = formatSubagentDelivery(agentName, {
         category: 'toolUse' as const,
         status: 'stopped' as const,
@@ -184,9 +165,6 @@ async function executeSubagent(
     onCompleted: (result) => {
       if (hasDelivered) return;
       hasDelivered = true;
-      // Flush any buffered progress before delivering final result
-      if (progressTimer) clearTimeout(progressTimer);
-      flushProgress();
       const msg = formatSubagentDelivery(agentName, result);
       void getExecutionStore(executionId).write('report', msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
