@@ -38,7 +38,6 @@ export interface OverviewProgressUpdate {
   readonly kind: 'overview';
   readonly toolCallCount: number;
   readonly filesChanged: string[];
-  readonly linesChanged?: { readonly added: number; readonly removed: number };
   readonly cost?: number;
 }
 
@@ -178,10 +177,6 @@ export function formatSubagentProgress(
         `tool-calls="${update.toolCallCount}"`,
         `files-changed="${escapeAttr(fileList)}"`,
       ];
-      if (update.linesChanged) {
-        attrs.push(`lines-added="${update.linesChanged.added}"`);
-        attrs.push(`lines-removed="${update.linesChanged.removed}"`);
-      }
       if (update.cost !== undefined) {
         attrs.push(`cost="${update.cost.toFixed(4)}"`);
       }
