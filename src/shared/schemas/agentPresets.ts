@@ -34,23 +34,16 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'Formal proof development with Lean 4, interactive theorem proving, and LaTeX document support.',
     icon: 'codicon-symbol-structure',
-    workflowAgents: ['correct', 'polish', 'draw', 'merge'],
+    workflowAgents: ['correct', 'polish', 'draw'],
     toolUseAgents: ['lean', 'chat', 'review'],
   },
   {
     id: 'computational-physicist',
     name: 'Computational Physicist',
     description:
-      'Numerical computation, Wolfram Language, data analysis, and presentation preparation.',
+      'Numerical computation, Wolfram Language, data analysis, and scientific writing.',
     icon: 'codicon-pulse',
-    workflowAgents: [
-      'correct',
-      'polish',
-      'draw',
-      'merge',
-      'paper2slide',
-      'paper2poster',
-    ],
+    workflowAgents: ['correct', 'polish', 'draw'],
     toolUseAgents: ['research', 'chat', 'review'],
   },
   {
@@ -59,7 +52,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'Symbolic derivations, mathematical verification, literature discussion, and rigorous manuscript review.',
     icon: 'codicon-symbol-operator',
-    workflowAgents: ['correct', 'polish', 'draw', 'merge'],
+    workflowAgents: ['correct', 'polish', 'draw'],
     toolUseAgents: ['research', 'review', 'chat', 'discuss'],
   },
   {
@@ -68,7 +61,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'Formal proofs with Lean 4, symbolic computation, derivation verification, and theorem exploration.',
     icon: 'codicon-symbol-number',
-    workflowAgents: ['correct', 'polish', 'draw', 'merge'],
-    toolUseAgents: ['lean', 'research', 'review', 'chat'],
+    workflowAgents: ['correct', 'polish', 'draw'],
+    toolUseAgents: ['lean', 'leanSearch', 'leanSimplifier', 'research', 'review', 'chat'],
   },
 ];
