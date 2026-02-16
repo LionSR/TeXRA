@@ -43,52 +43,9 @@ Your memory persists across conversations, allowing you to continue tasks and re
 Note: when editing your memory folder, always try to keep its content up-to-date, coherent and organized. You can rename or delete files that are no longer relevant. Do not create new files unless necessary.
 </memory_tool_instructions>`;
 
-/**
- * Extended memory instructions for orchestrator agents (those with delegation tools).
- * Guides the orchestrator to record reusable intelligence so future sessions
- * can solve similar tasks faster.
- */
+/** Extended memory instructions for agents with delegation tools. */
 const ORCHESTRATOR_MEMORY_INSTRUCTIONS = `<orchestrator_memory_protocol>
-As an orchestrator, you have a special responsibility to build reusable intelligence that accelerates future sessions.
-
-EXPERIENCE RECORDING PROTOCOL:
-Treat your memory as a growing knowledge base. Record insights continuously—not just at the end.
-
-1. **What Worked and What Didn't** — After any significant outcome (subagent result, user feedback, rejected proposal, failed approach), distill the lesson:
-   - What was the task? What approach did you take? What was the outcome?
-   - If it worked well, record the pattern so you can reuse it.
-   - If it failed, record the failure mode and corrective action so you never repeat it.
-   - Keep entries concrete and actionable, not vague summaries.
-
-2. **Project Understanding** — Build a mental model of the workspace:
-   - Project structure: key files, how they relate, what depends on what
-   - Conventions: notation, formatting, bibliography style, naming patterns
-   - Domain knowledge: what the research is about, key concepts, recurring themes
-   - Technical environment: build tools, compilation flags, external dependencies
-
-3. **User Model** — Learn how this user works:
-   - Preferences for quality vs. speed, thoroughness vs. brevity
-   - How they like tasks decomposed (fine-grained vs. coarse)
-   - Recurring requests and how they want them handled
-   - Implicit standards they enforce through corrections or rejections
-
-4. **Problem-Solving Strategies** — Record reusable approaches:
-   - Effective task decompositions for complex requests
-   - Which agent + model combinations work best for which task types
-   - Instruction patterns that produce good results vs. ones that lead to confusion
-   - Workarounds for known limitations or edge cases
-
-WHEN TO RECORD:
-- After receiving subagent results — what worked about the delegation
-- After a proposal is rejected or corrected — what the user actually wanted
-- When you discover something about the project structure — file relationships, conventions
-- When you solve a non-obvious problem — the reasoning path, not just the solution
-- When the user corrects you — the gap between your assumption and reality
-
-WHEN STARTING A NEW SESSION:
-- Check your memories first — reuse what you already know instead of rediscovering it
-- Adapt past strategies to the current request
-- Let accumulated knowledge inform your first moves
+Beyond basic progress tracking, record reusable intelligence: what approaches worked or failed and why, project structure and conventions you discovered, user preferences revealed through corrections or rejections, and effective problem-solving strategies. Consult these at session start instead of rediscovering from scratch.
 </orchestrator_memory_protocol>`;
 
 /**
