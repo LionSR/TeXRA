@@ -55,7 +55,10 @@ export async function generateSessionDescription(
 
     const kit = await createHelperModelKit();
     if (!kit) {
-      logger.warn(CHANNEL, 'Helper model not available for session description');
+      logger.warn(
+        CHANNEL,
+        'Helper model not available for session description',
+      );
       return;
     }
 
