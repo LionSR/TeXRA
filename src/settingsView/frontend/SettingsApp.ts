@@ -614,6 +614,7 @@ export class SettingsApp extends BaseWebviewApp {
               @agent-delete-custom=${this.handleDeleteCustomAgent}
               @agent-set-custom-dir=${this.handleSetCustomAgentDir}
               @agent-reset-custom-dir=${this.handleResetCustomAgentDir}
+              @save-agent-mode-preset=${this.handleSaveAgentModePreset}
             ></agents-tab>
           </vscode-tab-panel>
 
@@ -626,7 +627,6 @@ export class SettingsApp extends BaseWebviewApp {
               @super-yolo-toggle=${this.handleSuperYoloToggle}
               @reliability-setting-change=${this.handleSetProviderVscodeSetting}
               @apply-agent-mode-preset=${this.handleApplyAgentModePreset}
-              @save-agent-mode-preset=${this.handleSaveAgentModePreset}
               @delete-agent-mode-preset=${this.handleDeleteAgentModePreset}
             ></multi-agent-tab>
           </vscode-tab-panel>

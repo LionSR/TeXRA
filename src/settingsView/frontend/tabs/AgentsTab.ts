@@ -211,6 +211,10 @@ export class AgentsTab extends LitElement {
     this.dispatchEvent(AgentSelectionEvents.resetCustomDir());
   }
 
+  private handleSavePreset(): void {
+    this.dispatchEvent(AgentSelectionEvents.savePreset());
+  }
+
   override render(): TemplateResult {
     const activeAgents =
       this.activeSubTab === 'workflow'
@@ -248,6 +252,14 @@ export class AgentsTab extends LitElement {
             </button>
           </div>
           <div class="agents-header-actions">
+            <button
+              class="tab-action-btn"
+              @click=${this.handleSavePreset}
+              title="Save current agent configuration as a preset"
+            >
+              <span class="codicon codicon-save"></span>
+              Save Preset
+            </button>
             <button
               class="tab-action-btn"
               @click=${this.handleCreateFromTemplate}
