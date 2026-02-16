@@ -154,6 +154,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
         retryable: execRes.retryable ?? false,
       };
       shared.continueRounds = false;
+      shared.endTurn = false;
       return FlowTransition.FINALIZE;
     }
 
