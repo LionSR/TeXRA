@@ -41,6 +41,9 @@ export interface RoundAwareState {
 
   /** Whether to continue to next round (can be set false by nodes) */
   continueRounds: boolean;
+
+  /** Set by nodes when execution fails. Skips round completion callbacks. */
+  lastError?: { message: string; retryable: boolean } | undefined;
 }
 
 // ============================================================================
@@ -151,16 +154,8 @@ export class RoundPersistedFlow<
       }
 
       // Determine final status
-      const interrupted =
-        this.callbacks.checkInterruption?.() || !currentShared.continueRounds;
-      const completedAllRounds = isRoundAtOrBeyondLimit(
-        currentShared.currentRound + 1,
-        currentShared.totalRounds,
-      );
-      if (!completedAllRounds && interrupted) {
-        status = EXECUTION_STATUS.INTERRUPTED;
-      } else {
-        // Only notify round completion if the round actually finished
+      status = this.resolveTerminalStatus(currentShared);
+      if (status === EXECUTION_STATUS.COMPLETED) {
         await this.callbacks.onRoundCompleted?.(
           currentShared.currentRound,
           currentShared,
@@ -209,6 +204,24 @@ export class RoundPersistedFlow<
       shared.continueRounds &&
       !isRoundAtOrBeyondLimit(shared.currentRound + 1, shared.totalRounds)
     );
+  }
+
+  /**
+   * Derive terminal ExecutionStatus from shared state after the round loop exits.
+   *
+   * Priority:
+   * 1. lastError → ERROR (node-level failure)
+   * 2. interrupted / !continueRounds → INTERRUPTED (early stop)
+   * 3. otherwise → COMPLETED (all rounds finished normally)
+   */
+  private resolveTerminalStatus(shared: S): ExecutionStatus {
+    if (shared.lastError) {
+      return EXECUTION_STATUS.ERROR;
+    }
+    if (this.callbacks.checkInterruption?.() || !shared.continueRounds) {
+      return EXECUTION_STATUS.INTERRUPTED;
+    }
+    return EXECUTION_STATUS.COMPLETED;
   }
 
   /**
