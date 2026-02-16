@@ -33,6 +33,7 @@ import {
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
+import type { SubagentProgressUpdate } from '@tools/subagentResults';
 
 export interface RunToolUseFlowInput<
   C = unknown,
@@ -44,6 +45,8 @@ export interface RunToolUseFlowInput<
   isSubagent?: boolean;
   /** Fires before the subagent enters WAITING, delivering the last response to the orchestrator. */
   onBeforeWaiting?: (lastResponse: string | undefined) => void;
+  /** Fires on meaningful progress: todo changes, tool call milestones. */
+  onProgress?: (update: SubagentProgressUpdate) => void;
 }
 
 export interface RunToolUseFlowResult {
