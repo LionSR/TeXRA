@@ -2,6 +2,7 @@ import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ToolDefinition } from '@model';
+import type { SubagentProgressUpdate } from '@tools/subagentResults';
 import type {
   BaseFlowContextInit,
   FlowParams,
@@ -18,6 +19,7 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly onRoundFinalized: RoundFinalizedCallback;
   readonly onFollowUpConsumed?: () => void;
   readonly onBeforeWaiting?: (lastResponse: string | undefined) => void;
+  readonly onProgress?: (update: SubagentProgressUpdate) => void;
 }
 
 export type { FlowParams as ToolUseFlowParams };
