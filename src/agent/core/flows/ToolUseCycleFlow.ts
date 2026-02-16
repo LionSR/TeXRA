@@ -729,6 +729,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
       onToolOutput,
     );
 
+    tracker.recordToolCall();
     const trackedEdits = tracker.recordEdits(result.edits);
     if (!result.lineChanges && trackedEdits.lineChanges) {
       result.lineChanges = trackedEdits.lineChanges;
