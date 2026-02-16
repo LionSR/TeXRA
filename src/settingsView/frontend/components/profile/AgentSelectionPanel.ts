@@ -263,11 +263,6 @@ export class AgentSelectionPanel extends LitElement {
         background: var(--vscode-editor-background);
       }
 
-      .agent-count-actions {
-        display: flex;
-        gap: var(--spacing-small);
-      }
-
       .agent-count-link {
         font-size: var(--font-size-xs);
         font-family: inherit;
@@ -575,9 +570,6 @@ export class AgentSelectionPanel extends LitElement {
       groups.has(s),
     );
 
-    // If only one source, don't show section headers
-    const showHeaders = orderedSources.length > 1;
-
     return html`
       <div
         class="agent-list-pane"
@@ -589,34 +581,31 @@ export class AgentSelectionPanel extends LitElement {
           const agents = groups.get(source)!;
           const enabledInGroup = agents.filter((a) => a.enabled).length;
           return html`
-            ${showHeaders
-              ? html`<div class="agent-list-section-header">
-                  <span>${SOURCE_DISPLAY_NAMES[source] ?? source}</span>
-                  <span class="agent-list-section-actions">
-                    ${enabledInGroup < agents.length
-                      ? html`<button
-                          class="agent-count-link"
-                          @click=${() => this.handleSetAllEnabled(source, true)}
-                          title="Show all ${SOURCE_DISPLAY_NAMES[source] ??
-                          source} agents"
-                        >
-                          All
-                        </button>`
-                      : nothing}
-                    ${enabledInGroup > 0
-                      ? html`<button
-                          class="agent-count-link"
-                          @click=${() =>
-                            this.handleSetAllEnabled(source, false)}
-                          title="Hide all ${SOURCE_DISPLAY_NAMES[source] ??
-                          source} agents"
-                        >
-                          None
-                        </button>`
-                      : nothing}
-                  </span>
-                </div>`
-              : nothing}
+            <div class="agent-list-section-header">
+              <span>${SOURCE_DISPLAY_NAMES[source] ?? source}</span>
+              <span class="agent-list-section-actions">
+                ${enabledInGroup < agents.length
+                  ? html`<button
+                      class="agent-count-link"
+                      @click=${() => this.handleSetAllEnabled(source, true)}
+                      title="Show all ${SOURCE_DISPLAY_NAMES[source] ??
+                      source} agents"
+                    >
+                      All
+                    </button>`
+                  : nothing}
+                ${enabledInGroup > 0
+                  ? html`<button
+                      class="agent-count-link"
+                      @click=${() => this.handleSetAllEnabled(source, false)}
+                      title="Hide all ${SOURCE_DISPLAY_NAMES[source] ??
+                      source} agents"
+                    >
+                      None
+                    </button>`
+                  : nothing}
+              </span>
+            </div>
             ${agents.map((a) => this.renderListItem(a))}
           `;
         })}
