@@ -47,7 +47,7 @@ Find solutions to common problems and issues:
 - Performance optimization
 - Compatibility fixes
 
-[View Troubleshooting Guide →](/reference/troubleshooting)
+[View Troubleshooting Guide →](/guide/troubleshooting)
 
 ## Best Practices
 
@@ -60,17 +60,6 @@ Recommended approaches for effective use of TeXRA:
 - Collaborative usage patterns
 
 [View Best Practices →](/guide/best-practices)
-
-## Glossary
-
-Definitions of technical terms used throughout the documentation:
-
-- AI terminology
-- LaTeX concepts
-- TeXRA-specific vocabulary
-- Academic publishing terms
-
-[View Glossary →](/reference/glossary)
 
 ## Additional Resources
 
