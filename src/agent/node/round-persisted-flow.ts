@@ -160,11 +160,7 @@ export class RoundPersistedFlow<
         const interrupted =
           this.callbacks.checkInterruption?.() ||
           !currentShared.continueRounds;
-        const completedAllRounds = isRoundAtOrBeyondLimit(
-          currentShared.currentRound + 1,
-          currentShared.totalRounds,
-        );
-        if (!completedAllRounds && interrupted) {
+        if (interrupted) {
           status = EXECUTION_STATUS.INTERRUPTED;
         } else {
           await this.callbacks.onRoundCompleted?.(
