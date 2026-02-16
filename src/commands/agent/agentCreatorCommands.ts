@@ -218,39 +218,10 @@ const TOOL_GROUPS: Record<string, ToolGroup> = {
   },
 };
 
-function suggestToolGroups(description: string): Set<string> {
-  const lower = description.toLowerCase();
-  const suggested = new Set<string>();
-  suggested.add('File Operations');
-  for (const [name, group] of Object.entries(TOOL_GROUPS)) {
-    if (group.keywords.some((kw) => lower.includes(kw))) {
-      suggested.add(name);
-    }
-  }
-  return suggested;
-}
-
 // ── Infrastructure ──────────────────────────────────────────
 
 /* autoescape off: templates contain Nunjucks/YAML syntax, not HTML */
 const nunjucksEnv = nunjucks.configure({ autoescape: false });
-
-function renderFallbackTemplate(
-  category: AgentCategory,
-  template: string,
-  vars: Record<string, string>,
-): string {
-  try {
-    return nunjucksEnv.renderString(template, {
-      ...PASSTHROUGH[category],
-      ...vars,
-    });
-  } catch (err) {
-    throw new Error(
-      `Failed to render fallback template: ${toErrorMessage(err)}`,
-    );
-  }
-}
 
 /** Lazily built and cached for the extension host lifetime. Schemas are static. */
 let schemaRefCache: Record<AgentCategory, string> | null = null;
@@ -326,33 +297,18 @@ async function loadCreatorConfig(
   return creatorConfig;
 }
 
-function validateAgentYamlString(content: string): string | null {
-  try {
-    validateAgentYamlContent(content);
-    return null;
-  } catch (err) {
-    return toErrorMessage(err);
-  }
-}
-
-function buildMultipleOutputNote(outputFilesNote: string): string {
-  return [
-    'IMPORTANT: This agent must handle MULTIPLE output files. Adjust the structure above:',
-    '- Set isMultipleOutput: true',
-    '- Use documentTag: "latex_documents" (plural) and endTag: "</latex_documents>"',
-    '- Add defaultOutputFiles with the file list below',
-    '- In userRequest, instruct the model to wrap each file in <latex_documents> with <document name="..."> blocks',
-    '- Reference {{ OUTPUT_FILES_ORDER }} for the expected output order',
-    'Default output files:',
-    outputFilesNote,
-  ].join('\n');
-}
-
 async function pickTools(
   agentName: string,
   description: string,
 ): Promise<{ tools: string[]; groups: string[] } | undefined> {
-  const suggested = suggestToolGroups(description);
+  // Pre-select tool groups whose keywords appear in the description
+  const lower = description.toLowerCase();
+  const suggested = new Set<string>(['File Operations']);
+  for (const [name, group] of Object.entries(TOOL_GROUPS)) {
+    if (group.keywords.some((kw) => lower.includes(kw))) {
+      suggested.add(name);
+    }
+  }
 
   const selected = await vscode.window.showQuickPick(
     Object.entries(TOOL_GROUPS).map(([label, group]) => ({
@@ -493,7 +449,16 @@ class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
         AGENT_NAME: agentName,
         DESCRIPTION: description,
         MULTIPLE_OUTPUT_NOTE: isMultiple
-          ? buildMultipleOutputNote(outputFilesNote)
+          ? [
+              'IMPORTANT: This agent must handle MULTIPLE output files. Adjust the structure above:',
+              '- Set isMultipleOutput: true',
+              '- Use documentTag: "latex_documents" (plural) and endTag: "</latex_documents>"',
+              '- Add defaultOutputFiles with the file list below',
+              '- In userRequest, instruct the model to wrap each file in <latex_documents> with <document name="..."> blocks',
+              '- Reference {{ OUTPUT_FILES_ORDER }} for the expected output order',
+              'Default output files:',
+              outputFilesNote,
+            ].join('\n')
           : '',
       },
       fallbackTemplate: isMultiple
@@ -654,10 +619,11 @@ class GenerateNode extends Node<AgentCreatorShared> {
 
     const extracted = extractTextFromTag(text, 'yaml');
     const candidate = (extracted || text).trim();
-    const validationErr = validateAgentYamlString(candidate);
-    if (validationErr) {
-      this.lastValidationError = validationErr;
-      throw new Error(`Generated YAML was invalid: ${validationErr}`);
+    try {
+      validateAgentYamlContent(candidate);
+    } catch (err) {
+      this.lastValidationError = toErrorMessage(err);
+      throw new Error(`Generated YAML was invalid: ${this.lastValidationError}`);
     }
 
     logger.info(
@@ -676,11 +642,10 @@ class GenerateNode extends Node<AgentCreatorShared> {
       `AI generation failed, using template: ${error.message}`,
     );
     const { blueprint } = prepRes;
-    return renderFallbackTemplate(
-      blueprint.category,
-      blueprint.fallbackTemplate,
-      blueprint.fallbackVars,
-    );
+    return nunjucksEnv.renderString(blueprint.fallbackTemplate, {
+      ...PASSTHROUGH[blueprint.category],
+      ...blueprint.fallbackVars,
+    });
   }
 
   async post(
