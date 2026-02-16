@@ -558,6 +558,21 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
         isError: true,
       };
     }
+
+    // Scope check: callers can only kill executions whose parentStreamId
+    // matches the caller's own streamId (i.e., only your children).
+    // This prevents subagents from killing siblings or the orchestrator.
+    const callerStreamId = ctx?.streamId;
+    if (callerStreamId) {
+      const target = getHandle(executionId);
+      if (target && target.parentStreamId !== callerStreamId) {
+        return {
+          output: `Cannot kill execution ${executionId}: not a child of this session.`,
+          isError: true,
+        };
+      }
+    }
+
     const success = killExecution(executionId);
     if (success) {
       return { output: `Execution ${executionId} terminated.` };
