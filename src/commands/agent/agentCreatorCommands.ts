@@ -1,13 +1,10 @@
-// Standard library imports
 import * as path from 'path';
 
-// Third-party imports
 import * as vscode from 'vscode';
 import * as nunjucks from 'nunjucks';
 import * as yaml from 'yaml';
 import { z } from 'zod';
 
-// Local imports - agent runtime
 import { getBaseName, getMultipleName } from '@agent/index';
 import { Node, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
@@ -32,9 +29,7 @@ export const agentCreatorCommands = {
   createAgentWithAI: 'texra.createAgentWithAI',
 };
 
-// ============================================================
-// Types
-// ============================================================
+// ── Types & constants ───────────────────────────────────────
 
 type AgentCategory = 'workflow' | 'toolUse';
 
@@ -54,7 +49,6 @@ interface CreatorConfig {
   };
 }
 
-/** Everything needed to generate and register an agent. */
 interface AgentBlueprint {
   category: AgentCategory;
   agentName: string;
@@ -65,7 +59,7 @@ interface AgentBlueprint {
   registrationMeta: Parameters<typeof promptToAddAgentToConfig>[2];
 }
 
-/** Mutable shared state flowing through the agent creation PocketFlow. */
+/** Mutable shared state flowing through the agent creation flow. */
 interface AgentCreatorShared {
   config: CreatorConfig;
   category: AgentCategory;
@@ -73,10 +67,6 @@ interface AgentCreatorShared {
   description?: string;
   blueprint?: AgentBlueprint;
 }
-
-// ============================================================
-// Runtime variable passthrough (protects {{ }} from Nunjucks)
-// ============================================================
 
 /** Tool-use agents only receive the user instruction — they access files via tools. */
 const TOOL_USE_VARS = ['INSTRUCTION'];
@@ -104,18 +94,19 @@ const PASSTHROUGH: Record<AgentCategory, Record<string, string>> = {
   workflow: buildPassthrough(WORKFLOW_VARS),
 };
 
-// ============================================================
-// Tool groups for tool-use agent creation
-// ============================================================
+const DESCRIPTION_PROMPTS: Record<AgentCategory, string> = {
+  toolUse:
+    'What should this agent do? Mention capabilities it needs (e.g., search papers, edit files, browse the web)',
+  workflow:
+    'What should this agent do? Mention whether it rewrites existing documents or creates new ones',
+};
 
 interface ToolGroup {
   description: string;
   tools: string[];
-  /** Keywords in the agent description that suggest this group. */
   keywords: string[];
 }
 
-/** Categorized tool groups shown in the tool picker. */
 const TOOL_GROUPS: Record<string, ToolGroup> = {
   'File Operations': {
     description: 'Read, write, edit, search files and run shell commands',
@@ -219,11 +210,9 @@ const TOOL_GROUPS: Record<string, ToolGroup> = {
   },
 };
 
-/** Match description keywords to suggest tool groups. */
 function suggestToolGroups(description: string): Set<string> {
   const lower = description.toLowerCase();
   const suggested = new Set<string>();
-  // File Operations is always suggested as a baseline
   suggested.add('File Operations');
   for (const [name, group] of Object.entries(TOOL_GROUPS)) {
     if (group.keywords.some((kw) => lower.includes(kw))) {
@@ -233,9 +222,7 @@ function suggestToolGroups(description: string): Set<string> {
   return suggested;
 }
 
-// ============================================================
-// Infrastructure: Nunjucks, schema refs, config loading
-// ============================================================
+// ── Infrastructure ──────────────────────────────────────────
 
 const nunjucksEnv = nunjucks.configure({ autoescape: false });
 
@@ -256,7 +243,6 @@ function renderFallbackTemplate(
   }
 }
 
-/** Cached schema reference, generated once from Zod schemas. */
 let schemaRefCache: Record<AgentCategory, string> | null = null;
 
 function getSchemaReference(category: AgentCategory): string {
@@ -337,17 +323,6 @@ function validateAgentYamlString(content: string): string | null {
     return toErrorMessage(err);
   }
 }
-
-// ============================================================
-// Helpers used by nodes
-// ============================================================
-
-const DESCRIPTION_PROMPTS: Record<AgentCategory, string> = {
-  toolUse:
-    'What should this agent do? Mention capabilities it needs (e.g., search papers, edit files, browse the web)',
-  workflow:
-    'What should this agent do? Mention whether it rewrites existing documents or creates new ones',
-};
 
 function buildMultipleOutputNote(outputFilesNote: string): string {
   return [
@@ -472,14 +447,11 @@ async function tryAIGeneration(
   return undefined;
 }
 
-// ============================================================
-// PocketFlow nodes
-// ============================================================
+// ── Nodes ───────────────────────────────────────────────────
 
 /**
- * Node 1: Gather common input (agent name + description).
- * Returns the category as the transition action to branch the flow.
- * Returns 'cancel' (no successor) if the user dismisses any prompt.
+ * Gather agent name + description. Branches on category ('workflow' | 'toolUse').
+ * Returning 'cancel' (no registered successor) ends the flow.
  */
 class GatherInputNode extends Node<AgentCreatorShared> {
   async prep(shared: AgentCreatorShared) {
@@ -517,30 +489,19 @@ class GatherInputNode extends Node<AgentCreatorShared> {
     if (!execRes) return 'cancel';
     shared.agentName = execRes.agentName;
     shared.description = execRes.description;
-    return shared.category; // 'workflow' or 'toolUse' → branches the flow
+    return shared.category;
   }
 }
 
 /**
- * Node 2a: Gather workflow-specific input → AgentBlueprint.
- * Asks for output style (single vs multiple) and output filenames.
+ * Gather workflow output style. Builds AgentBlueprint in post().
  */
 class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
   async prep(shared: AgentCreatorShared) {
-    return {
-      config: shared.config,
-      agentName: shared.agentName!,
-      description: shared.description!,
-    };
+    return { agentName: shared.agentName! };
   }
 
-  async exec(prepRes: {
-    config: CreatorConfig;
-    agentName: string;
-    description: string;
-  }) {
-    const { config, agentName, description } = prepRes;
-
+  async exec(prepRes: { agentName: string }) {
     const outputChoice = await vscode.window.showQuickPick(
       [
         {
@@ -553,7 +514,7 @@ class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
         },
       ],
       {
-        title: `Workflow Agent: ${agentName}`,
+        title: `Workflow Agent: ${prepRes.agentName}`,
         placeHolder: 'Choose the agent output style',
       },
     );
@@ -561,24 +522,39 @@ class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
 
     const isMultiple = outputChoice.label === 'Multiple output files';
 
-    let outputFilesYaml = '';
-    let outputFilesNote = '';
+    let outputFiles: string[] = [];
     if (isMultiple) {
       const filesInput = await vscode.window.showInputBox({
-        title: `Workflow Agent: ${agentName}`,
+        title: `Workflow Agent: ${prepRes.agentName}`,
         prompt: 'Enter default output filenames (comma separated)',
       });
       if (!filesInput) return undefined;
-      const files = filesInput
+      outputFiles = filesInput
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean);
-      outputFilesYaml = files.map((f) => `- ${f}`).join('\n    ');
-      outputFilesNote = files.map((f) => `    - ${f}`).join('\n');
     }
 
+    return { isMultiple, outputFiles };
+  }
+
+  async post(
+    shared: AgentCreatorShared,
+    _prepRes: unknown,
+    execRes: { isMultiple: boolean; outputFiles: string[] } | undefined,
+  ): Promise<string | undefined> {
+    if (!execRes) return 'cancel';
+
+    const { config } = shared;
+    const agentName = shared.agentName!;
+    const description = shared.description!;
+    const { isMultiple, outputFiles } = execRes;
+
+    const outputFilesYaml = outputFiles.map((f) => `- ${f}`).join('\n    ');
+    const outputFilesNote = outputFiles.map((f) => `    - ${f}`).join('\n');
     const targetDir = await agentDirectories.custom();
-    const blueprint: AgentBlueprint = {
+
+    shared.blueprint = {
       category: 'workflow',
       agentName,
       filePath: vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`)),
@@ -608,81 +584,61 @@ class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
             multipleAgentName: getMultipleName(agentName),
           },
     };
-
-    return blueprint;
-  }
-
-  async post(
-    shared: AgentCreatorShared,
-    _prepRes: unknown,
-    execRes: AgentBlueprint | undefined,
-  ): Promise<string | undefined> {
-    if (!execRes) return 'cancel';
-    shared.blueprint = execRes;
     return FlowTransition.DEFAULT;
   }
 }
 
 /**
- * Node 2b: Gather tool-use-specific input → AgentBlueprint.
- * Shows keyword-aware tool group picker pre-selected from the description.
+ * Gather tool selection via keyword-aware picker. Builds AgentBlueprint in post().
  */
 class ToolUseBlueprintNode extends Node<AgentCreatorShared> {
   async prep(shared: AgentCreatorShared) {
     return {
-      config: shared.config,
       agentName: shared.agentName!,
       description: shared.description!,
     };
   }
 
-  async exec(prepRes: {
-    config: CreatorConfig;
-    agentName: string;
-    description: string;
-  }) {
-    const { config, agentName, description } = prepRes;
+  async exec(prepRes: { agentName: string; description: string }) {
+    return pickTools(prepRes.agentName, prepRes.description);
+  }
 
-    const selection = await pickTools(agentName, description);
-    if (!selection) return undefined;
+  async post(
+    shared: AgentCreatorShared,
+    _prepRes: unknown,
+    execRes: { tools: string[]; groups: string[] } | undefined,
+  ): Promise<string | undefined> {
+    if (!execRes) return 'cancel';
 
+    const { config } = shared;
+    const agentName = shared.agentName!;
+    const description = shared.description!;
     const targetDir = await agentDirectories.custom();
-    const blueprint: AgentBlueprint = {
+
+    shared.blueprint = {
       category: 'toolUse',
       agentName,
       filePath: vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`)),
       aiVars: {
         AGENT_NAME: agentName,
         DESCRIPTION: description,
-        SELECTED_TOOLS: selection.tools.join(', '),
-        SELECTED_GROUPS: selection.groups.join(', '),
+        SELECTED_TOOLS: execRes.tools.join(', '),
+        SELECTED_GROUPS: execRes.groups.join(', '),
       },
       fallbackTemplate: config.templates.toolUse,
       fallbackVars: {
         AGENT_NAME: agentName,
         DESCRIPTION: description,
-        TOOLS_YAML: selection.tools.map((t) => `    - ${t}`).join('\n'),
+        TOOLS_YAML: execRes.tools.map((t) => `    - ${t}`).join('\n'),
       },
       registrationMeta: {},
     };
-
-    return blueprint;
-  }
-
-  async post(
-    shared: AgentCreatorShared,
-    _prepRes: unknown,
-    execRes: AgentBlueprint | undefined,
-  ): Promise<string | undefined> {
-    if (!execRes) return 'cancel';
-    shared.blueprint = execRes;
     return FlowTransition.DEFAULT;
   }
 }
 
 /**
- * Node 3: Generate agent YAML via AI (with fallback) → write file → register.
- * exec() handles AI generation; post() writes the file and registers the agent.
+ * Generate agent YAML via AI (with fallback), write to disk, register.
  */
 class GenerateAndRegisterNode extends Node<AgentCreatorShared> {
   async prep(shared: AgentCreatorShared) {
@@ -731,9 +687,7 @@ class GenerateAndRegisterNode extends Node<AgentCreatorShared> {
   }
 }
 
-// ============================================================
-// Flow factory and entry point
-// ============================================================
+// ── Flow ────────────────────────────────────────────────────
 
 function createAgentCreatorFlow(): Flow<AgentCreatorShared> {
   const gatherInput = new GatherInputNode();
@@ -741,15 +695,12 @@ function createAgentCreatorFlow(): Flow<AgentCreatorShared> {
   const toolUseBlueprint = new ToolUseBlueprintNode();
   const generateAndRegister = new GenerateAndRegisterNode();
 
-  // Branch based on category after gathering input
   gatherInput.on('workflow', workflowBlueprint);
   gatherInput.on('toolUse', toolUseBlueprint);
 
-  // Both blueprint paths converge to generation
   workflowBlueprint.next(generateAndRegister);
   toolUseBlueprint.next(generateAndRegister);
 
-  // 'cancel' has no successor → flow ends silently
   return new Flow<AgentCreatorShared>(gatherInput);
 }
 
