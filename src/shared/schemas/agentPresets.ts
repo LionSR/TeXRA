@@ -32,14 +32,14 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     id: 'lean-project',
     name: 'Lean Project',
     description:
-      'Formal proof development with Lean 4, interactive theorem proving, and LaTeX document support.',
+      'Formal proof development with Lean 4, theorem search, tactic simplification, and LaTeX document support.',
     icon: 'codicon-symbol-structure',
     workflowAgents: ['correct', 'polish', 'draw'],
-    toolUseAgents: ['lean', 'chat', 'review'],
+    toolUseAgents: ['lean', 'leanSearch', 'leanSimplifier', 'chat', 'review'],
   },
   {
-    id: 'computational-physicist',
-    name: 'Computational Physicist',
+    id: 'computational-scientist',
+    name: 'Computational Scientist',
     description:
       'Numerical computation, Wolfram Language, data analysis, and scientific writing.',
     icon: 'codicon-pulse',
@@ -47,13 +47,13 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     toolUseAgents: ['research', 'chat', 'review'],
   },
   {
-    id: 'analytical-theorist',
-    name: 'Analytical Theorist',
+    id: 'theoretical-physicist',
+    name: 'Theoretical Physicist',
     description:
       'Symbolic derivations, mathematical verification, literature discussion, and rigorous manuscript review.',
     icon: 'codicon-symbol-operator',
     workflowAgents: ['correct', 'polish', 'draw'],
-    toolUseAgents: ['research', 'review', 'chat', 'discuss', 'devise', 'criticize'],
+    toolUseAgents: ['research', 'review', 'chat', 'discuss'],
   },
   {
     id: 'mathematician',
