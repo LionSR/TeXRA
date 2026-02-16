@@ -20,16 +20,5 @@ prompts:
     Use the available tools to accomplish the user's request step by step.
     Think carefully before each tool call and explain your reasoning.
 
-  userPrefix: |
-    Project context:
-    <documents>
-    {{ ALL_AUXILIARYS }}
-    {{ ALL_REFERENCES }}
-    {{ ADDITIONAL_INPUTS }}
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
-    </documents>
-
   userRequest: |
     {{ INSTRUCTION }}
