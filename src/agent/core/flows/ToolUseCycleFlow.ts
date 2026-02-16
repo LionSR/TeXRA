@@ -581,8 +581,6 @@ class ToolUseDispatchNode<C> extends BatchNode<
       return null;
     }
 
-    this.services.workspace.interactions.recordToolCall();
-
     // Skip duplicate parallel calls — return a synthetic error result so
     // the model is informed and can retry sequentially if needed.
     if (this._duplicateCallIds.has(call.callId)) {
@@ -604,6 +602,8 @@ class ToolUseDispatchNode<C> extends BatchNode<
         },
       };
     }
+
+    this.services.workspace.interactions.recordToolCall();
 
     const services = this.services;
     const { workspace } = services;
