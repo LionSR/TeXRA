@@ -1,17 +1,11 @@
 // Third-party imports
 import * as vscode from 'vscode';
-import { MODEL_CONFIGS } from 'llm-zoo';
-
-// Local imports - shared constants
-import { DEFAULT_POLISH_MODEL } from '@shared/constants/providers';
 
 // Local imports - agent
-import { createModelHandler } from '@agent/runtime/ModelFactory';
-import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import { createHelperModelKit } from '@agent/runtime/helperModel';
 
 // Local imports - common
 import { getSdkErrorMessage } from '@common/errors';
-import { GlobalStateKey, globalSM } from '@common/state';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
@@ -204,57 +198,32 @@ ${text}`;
         responseText += chunk;
       }
     } else {
-      const configuredModel = globalSM.get<string>(
-        GlobalStateKey.POLISH_MODEL,
-        DEFAULT_POLISH_MODEL,
-      );
-      const modelName = isNonEmptyString(configuredModel)
-        ? configuredModel.trim()
-        : DEFAULT_POLISH_MODEL;
-      const modelConfig = MODEL_CONFIGS[modelName];
-
-      if (!modelConfig) {
-        return {
-          success: false,
-          text,
-          error: `Unsupported instruction polishing model "${modelName}". Update the polish model in Settings > Models to match a valid model name.`,
-        };
-      }
-
-      let handler: ModelHandler;
+      let kit;
       try {
-        handler = createModelHandler(modelConfig);
+        kit = await createHelperModelKit();
       } catch (error) {
         logger.error(
           CHANNEL,
-          `Failed to create model handler: ${getSdkErrorMessage(error)}`,
+          `Failed to initialize helper model: ${getSdkErrorMessage(error)}`,
         );
         return {
           success: false,
           text,
           error:
-            'Unable to initialize the instruction polishing model. Please verify your model settings.',
+            'Unable to initialize the instruction polishing model. Please check your API key and model settings.',
         };
       }
 
-      handler.setOutputStreaming(false);
-      handler.setProgressViewEnabled(false);
-
-      let client: unknown;
-      try {
-        client = await handler.getClient();
-      } catch (error) {
-        logger.error(
-          CHANNEL,
-          `Failed to initialize model client: ${getSdkErrorMessage(error)}`,
-        );
+      if (!kit) {
         return {
           success: false,
           text,
           error:
-            'Unable to initialize the instruction polishing model. Please check your API key and network settings.',
+            'Unsupported helper model. Update the helper model in Settings > Models to match a valid model name.',
         };
       }
+
+      const { handler, client } = kit;
 
       let messages;
       try {

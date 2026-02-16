@@ -379,20 +379,20 @@ export const profileViewStyles: CSSResult = css`
     margin-bottom: var(--spacing-medium);
   }
 
-  .polish-model-row {
+  .helper-model-row {
     display: flex;
     align-items: center;
     gap: var(--spacing-medium);
     margin-bottom: var(--spacing-large);
   }
 
-  .polish-model-row label {
+  .helper-model-row label {
     font-weight: 500;
     color: var(--vscode-foreground);
     white-space: nowrap;
   }
 
-  .polish-model-select {
+  .helper-model-select {
     flex: 1;
     max-width: 300px;
   }

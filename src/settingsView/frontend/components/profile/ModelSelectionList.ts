@@ -1,6 +1,6 @@
 /**
  * ModelSelectionList component - checkbox list of models grouped by provider.
- * Includes deprecated model toggles and a polish model dropdown.
+ * Includes deprecated model toggles and a helper model dropdown.
  */
 
 // Third-party imports
@@ -35,7 +35,7 @@ export class ModelSelectionList extends LitElement {
   static override styles = [designTokens, codiconStyles, profileViewStyles];
 
   @property({ attribute: false }) models: ModelSelectionItem[] = [];
-  @property({ attribute: false }) polishModel = '';
+  @property({ attribute: false }) helperModel = '';
   @property({ attribute: false }) authenticated = false;
   @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
     'personal';
@@ -94,10 +94,10 @@ export class ModelSelectionList extends LitElement {
     return this.allowedModels.includes(modelName);
   }
 
-  private handlePolishModelChange(e: Event): void {
+  private handleHelperModelChange(e: Event): void {
     const value = (e.currentTarget as HTMLSelectElement).value;
     this.dispatchEvent(
-      ModelSelectionEvents.setPolishModel({ modelName: value }),
+      ModelSelectionEvents.setHelperModel({ modelName: value }),
     );
   }
 
@@ -191,22 +191,22 @@ export class ModelSelectionList extends LitElement {
     `;
   }
 
-  private renderPolishModelDropdown(): TemplateResult {
+  private renderHelperModelDropdown(): TemplateResult {
     const enabledModels = this.models.filter((m) => m.enabled);
 
     return html`
-      <div class="polish-model-row">
-        <label>Polish model:</label>
+      <div class="helper-model-row">
+        <label>Helper model:</label>
         <vscode-single-select
-          class="polish-model-select"
-          .value=${this.polishModel}
-          @change=${this.handlePolishModelChange}
+          class="helper-model-select"
+          .value=${this.helperModel}
+          @change=${this.handleHelperModelChange}
         >
           ${enabledModels.map(
             (m) =>
               html`<vscode-option
                 value=${m.name}
-                ?selected=${m.name === this.polishModel}
+                ?selected=${m.name === this.helperModel}
               >
                 ${m.name}
               </vscode-option>`,
@@ -225,7 +225,7 @@ export class ModelSelectionList extends LitElement {
         <p class="model-selection-description">
           Select which models appear in the dropdown.
         </p>
-        ${this.renderPolishModelDropdown()}
+        ${this.renderHelperModelDropdown()}
         ${groups.map((g) => this.renderProviderGroup(g))}
       </div>
     `;
