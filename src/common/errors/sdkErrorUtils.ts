@@ -454,6 +454,7 @@ export function getSdkErrorMessage(err: unknown): string {
 
 const CONTEXT_WINDOW_PATTERNS = [
   'exceeds context window', // TeXRA internal, Anthropic
+  'exceeds the context window', // OpenAI Responses API
   'context length exceeded', // Google
   'maximum context length', // OpenAI
   'token limit exceeded', // Anthropic
