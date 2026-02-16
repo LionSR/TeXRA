@@ -50,17 +50,6 @@ export class MultiAgentTab extends LitElement {
         font-size: var(--font-size-small);
       }
 
-      /* Preset section header */
-      .preset-section-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-
-      .preset-section-header h3 {
-        margin: 0;
-      }
-
       /* Preset cards */
       .preset-grid {
         display: grid;
@@ -297,9 +286,7 @@ export class MultiAgentTab extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="multi-agent-container tab-content-container">
-        <div class="preset-section-header">
-          <h3>Mode Presets</h3>
-        </div>
+        <h3>Mode Presets</h3>
 
         <p class="text-secondary setting-description">
           Apply a preset to quickly configure which agents are enabled for your
