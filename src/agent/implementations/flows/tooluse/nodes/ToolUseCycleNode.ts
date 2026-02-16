@@ -139,7 +139,7 @@ export class ToolUseCycleNode<C> extends Node<
           message: execRes.message,
           retryable: execRes.retryable ?? false,
         };
-        throw new Error(execRes.message);
+        return FlowTransition.FINALIZE;
 
       case 'cancelled':
         shared.userCancelledRetry = true;

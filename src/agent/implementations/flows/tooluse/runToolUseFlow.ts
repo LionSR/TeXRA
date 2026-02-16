@@ -129,7 +129,7 @@ export async function runToolUseFlow<C = unknown>(
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
-  const shared: ToolUseRunShared = {
+  let shared: ToolUseRunShared = {
     messages: [],
     shouldSkipCycle: false,
     stateSlices: null,
@@ -173,6 +173,11 @@ export async function runToolUseFlow<C = unknown>(
     >(prepareNode, kv);
     pf.setServices(services);
     await pf.run(shared);
+    // Re-read shared from the flow record — PersistedFlow deep-clones the
+    // initial shared via structuredClone, so nodes mutate the clone, not the
+    // original object.  Without this, reads of lastError, messages, etc. below
+    // would always see the stale initial values.
+    shared = (await pf.getShared()) ?? shared;
 
     // Persist conversation and todos as direct keys before finally deletes the flow record
     const writes: Promise<void>[] = [];
@@ -185,10 +190,17 @@ export async function runToolUseFlow<C = unknown>(
     }
     await Promise.all(writes);
 
-    const execStatus = input.checkInterruption()
-      ? EXECUTION_STATUS.INTERRUPTED
-      : EXECUTION_STATUS.COMPLETED;
-    status = executionToEndStatus(execStatus) as EndGroupStatus;
+    if (shared.lastError) {
+      status = END_GROUP_STATUS.ERROR;
+      // Re-throw after state persistence so runFlowWithLifecycle logs
+      // the error and shows the user notification.
+      throw new Error(shared.lastError.message);
+    } else {
+      const execStatus = input.checkInterruption()
+        ? EXECUTION_STATUS.INTERRUPTED
+        : EXECUTION_STATUS.COMPLETED;
+      status = executionToEndStatus(execStatus) as EndGroupStatus;
+    }
   } catch (error) {
     status = END_GROUP_STATUS.ERROR;
     throw error;
