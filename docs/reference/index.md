@@ -61,17 +61,6 @@ Recommended approaches for effective use of TeXRA:
 
 [View Best Practices →](/guide/best-practices)
 
-## Glossary
-
-Definitions of technical terms used throughout the documentation:
-
-- AI terminology
-- LaTeX concepts
-- TeXRA-specific vocabulary
-- Academic publishing terms
-
-[View Glossary →](/guide/glossary)
-
 ## Additional Resources
 
 ### Limitations and Known Issues
