@@ -129,16 +129,15 @@ export class ToolUseCycleNode<C> extends Node<
       userChannels: prepRes.userChannels,
     };
 
-    // Emit overview progress after each completed cycle.
-    // FileInteractionState.toOverview() is the single source of truth
-    // for tool calls, files changed, and line changes.
-    // Cost comes from the run state usage accumulator.
-    if (execRes.outcome === 'completed') {
-      const { onProgress } = this.services;
-      if (onProgress) {
-        const cost = prepRes.runState.usageAccumulator.totals.totalCost;
-        onProgress(prepRes.workspaceState.interactions.toOverview(cost));
-      }
+    if (execRes.outcome === 'completed' && this.services.onProgress) {
+      const { interactions } = prepRes.workspaceState;
+      const cost = prepRes.runState.usageAccumulator.totals.totalCost;
+      this.services.onProgress({
+        kind: 'overview',
+        toolCallCount: interactions.toolCallCount,
+        filesChanged: interactions.editedFilePaths,
+        cost: cost > 0 ? cost : undefined,
+      });
     }
 
     switch (execRes.outcome) {
