@@ -692,7 +692,10 @@ export async function executeMergeAgent(
           fileService,
         ),
         parentStage: ctx.parentStage,
-        onRoundCompleted: createRoundProgressCallback(ctx.executionId, undefined),
+        onRoundCompleted: createRoundProgressCallback(
+          ctx.executionId,
+          undefined,
+        ),
       });
       return {
         category: 'workflow' as const,

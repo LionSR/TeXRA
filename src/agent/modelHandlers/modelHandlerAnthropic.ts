@@ -2182,8 +2182,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     if (pageLimitExceeded.length > 0) {
-      const remaining =
-        ANTHROPIC_MAX_PDF_PAGES - this.getTrackedPdfPageCount();
+      const remaining = ANTHROPIC_MAX_PDF_PAGES - this.getTrackedPdfPageCount();
       const names = pageLimitExceeded
         .map((a) => a.path ?? 'attachment.pdf')
         .join(', ');
