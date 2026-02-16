@@ -13,6 +13,7 @@ import { SupabaseAuthProvider } from '@auth/SupabaseAuthProvider';
 import { SupabaseUriHandler } from '@auth/UriHandler';
 import { isSupabaseConfigured, setRuntimeExtensionId } from '@auth/config';
 import { loadAgents } from '@agent/index';
+import { initializePolishModel } from '@agent/runtime/polishModel';
 import { toErrorMessage } from '@common/errors';
 import { initializeStateManagers } from '@common/state';
 import { isTerminalStatus } from '@common/constants/streamStatus';
@@ -98,6 +99,7 @@ export async function activate(context: vscode.ExtensionContext) {
   SecretManager.initialize(context);
   StorageFS.initialize(context);
   agentDirectories.initialize(context);
+  initializePolishModel(context.extensionPath);
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   initializeStateManagers(context);
   FileLister.initialize(context);
