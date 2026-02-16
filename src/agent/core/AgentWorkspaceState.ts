@@ -85,11 +85,19 @@ export class FileInteractionState {
   }
 
   /** Produce an overview progress update from current state. */
-  toOverview(): OverviewProgressUpdate {
+  toOverview(cost?: number): OverviewProgressUpdate {
+    let added = 0;
+    let removed = 0;
+    for (const diff of this.edits.values()) {
+      added += diff.added;
+      removed += diff.removed;
+    }
     return {
       kind: 'overview',
       toolCallCount: this._toolCallCount,
       filesChanged: [...this.edits.keys()],
+      linesChanged: added || removed ? { added, removed } : undefined,
+      cost: cost !== undefined && cost > 0 ? cost : undefined,
     };
   }
 
