@@ -18,6 +18,7 @@ import {
   SETTINGS_VIEW_COMMANDS,
 } from '@common/webview/commands';
 import { AgentCategorySchema, AgentSourceSchema } from './agent';
+import { AgentModePresetSchema } from './agentPresets';
 import {
   DeleteMemoryMessageSchema,
   GetMemoryDataMessageSchema,
@@ -194,8 +195,6 @@ export type UpdateSuperYoloEnabledMessage = z.infer<
 // ============================================================
 // Agent mode presets data schema
 // ============================================================
-
-import { AgentModePresetSchema } from './agentPresets';
 
 /** Outbound: backend → frontend agent mode presets (built-in + custom) */
 export const UpdateAgentModePresetsMessageSchema = z.object({
