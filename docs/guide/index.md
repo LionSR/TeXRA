@@ -1,17 +1,21 @@
 # Introduction
 
-TeXRA is a multi-agent AI system for scientific discovery, built as a VS Code extension. Instead of a single chatbot, TeXRA orchestrates **specialized agents** — each designed for a distinct part of the research lifecycle — and coordinates them through reproducible workflows with full auditability.
+TeXRA is a multi-agent AI system that accelerates scientific discovery. Built as a VS Code extension, it orchestrates **specialized agents** — for literature search, manuscript drafting, figure generation, and result communication — and coordinates them through reproducible workflows where every output is auditable.
 
 <a href="https://marketplace.visualstudio.com/items?itemName=texra-ai.texra" target="_blank" style="display: inline-block; background-color: #007ACC; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 10px 0;">Install from VS Code Marketplace</a>
 
-## The problem
+## Why multi-agent?
 
-General-purpose AI tools fail researchers in specific ways:
+The bottleneck in modern research isn't the science — it's everything around it. Literature reviews that take weeks. Figures redrawn across revision cycles. Prose polished through dozens of passes. Presentations rebuilt from scratch for every talk.
 
-- **Lost context.** Chatbots can't reason across multiple LaTeX files, figures, and bibliographies simultaneously.
-- **Hallucinated citations.** Without grounded search tools, models fabricate references.
+General-purpose AI tools make this worse, not better:
+
+- **Hallucinated citations.** Without grounded search tools, models fabricate references — dangerous in peer-reviewed work.
+- **Lost context.** Chatbots can't reason across LaTeX files, figures, and bibliographies simultaneously.
 - **No verification.** You get text output with no way to diff, compile, or audit what changed.
-- **One-shot responses.** A single prompt-response cycle can't handle multi-step scientific tasks like "polish my paper, then generate a diff, then compile."
+- **One-shot responses.** A single prompt can't handle multi-step research tasks like "survey the field, draft a related-work section, then compile and verify all citations."
+
+A single LLM call isn't enough. Scientific work needs a *system* of agents — each specialized, each grounded in real tools, each producing verifiable output.
 
 ## The multi-agent approach
 
