@@ -229,7 +229,7 @@ Email [contact@texra.ai](mailto:contact@texra.ai) or open an issue on [GitHub](h
   max-width: 900px;
   margin: 0 auto 3rem;
 }
-.how-it-works h3:first-child {
+.how-it-works > h3 {
   text-align: center;
   font-size: 1.3rem;
   margin-bottom: 1.5rem;
