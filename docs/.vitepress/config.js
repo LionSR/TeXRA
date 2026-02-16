@@ -160,18 +160,9 @@ const baseConfig = {
             { text: 'Configuration', link: '/guide/configuration' },
             { text: 'LaTeX Compilation', link: '/guide/latex-compilation.md' },
             { text: 'Best Practices', link: '/guide/best-practices.md' },
-            { text: 'Troubleshooting', link: '/reference/troubleshooting' },
-            { text: 'Glossary', link: '/reference/glossary' },
+            { text: 'Troubleshooting', link: '/guide/troubleshooting' },
+            { text: 'Glossary', link: '/guide/glossary' },
             { text: 'Acknowledgments', link: '/guide/acknowledgments.md' },
-          ],
-        },
-      ],
-      '/reference/': [
-        {
-          text: 'Resources',
-          items: [
-            { text: 'Troubleshooting', link: '/reference/troubleshooting' },
-            { text: 'Glossary', link: '/reference/glossary' },
           ],
         },
       ],
