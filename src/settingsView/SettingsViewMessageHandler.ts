@@ -86,8 +86,10 @@ import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import {
   AGENT_MODE_PRESETS,
+  AgentModePresetSchema,
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
+import { z } from 'zod';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
 import type {
@@ -679,27 +681,44 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // Agent mode preset handler implementations
   // ============================================================
 
+  /** Read and validate custom presets from workspace state. */
+  private getCustomPresets(): AgentModePreset[] {
+    const raw = workspaceSM.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []);
+    const parsed = z.array(AgentModePresetSchema).safeParse(raw);
+    return parsed.success ? parsed.data : [];
+  }
+
+  /**
+   * Resolve enabled agent keys to plain names.
+   * `undefined` enabledKeys means "never configured" → all agents enabled.
+   */
+  private resolveEnabledNames(
+    agents: AgentEntry[],
+    enabledKeys: string[] | undefined,
+  ): string[] {
+    if (enabledKeys === undefined) return agents.map((e) => e.name);
+    return agents
+      .filter(
+        (e) =>
+          enabledKeys.includes(createKey(e.source, e.name)) ||
+          enabledKeys.includes(e.name),
+      )
+      .map((e) => e.name);
+  }
+
   public async sendAgentModePresets(webview: vscode.Webview): Promise<void> {
-    const customPresets = workspaceSM.get<AgentModePreset[]>(
-      WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-      [],
-    );
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
-      customPresets: customPresets ?? [],
+      customPresets: this.getCustomPresets(),
     });
   }
 
   /** Find a preset by id across built-in and custom presets. */
   private findPreset(presetId: string): AgentModePreset | undefined {
-    const builtIn = AGENT_MODE_PRESETS.find((p) => p.id === presetId);
-    if (builtIn) return builtIn;
-    const customPresets =
-      workspaceSM.get<AgentModePreset[]>(
-        WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-        [],
-      ) ?? [];
-    return customPresets.find((p) => p.id === presetId);
+    return (
+      AGENT_MODE_PRESETS.find((p) => p.id === presetId) ??
+      this.getCustomPresets().find((p) => p.id === presetId)
+    );
   }
 
   private async handleApplyAgentModePreset(
@@ -764,37 +783,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       await loadAgents();
 
-      // Snapshot the currently enabled agents as the preset content.
-      const workflowEnabled = workspaceSM.get<string[]>(
-        WorkspaceStateKey.ENABLED_AGENTS,
+      const workflowAgents = this.resolveEnabledNames(
+        getWorkflowAgents(),
+        workspaceSM.get<string[]>(WorkspaceStateKey.ENABLED_AGENTS),
       );
-      const toolUseEnabled = workspaceSM.get<string[]>(
-        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+      const toolUseAgents = this.resolveEnabledNames(
+        getToolUseAgents(),
+        workspaceSM.get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
       );
-
-      // Resolve enabled keys to plain agent names.
-      // undefined = "never configured" → all agents enabled.
-      const workflowAgents =
-        workflowEnabled === undefined
-          ? getWorkflowAgents().map((e) => e.name)
-          : getWorkflowAgents()
-              .filter(
-                (e) =>
-                  workflowEnabled.includes(createKey(e.source, e.name)) ||
-                  workflowEnabled.includes(e.name),
-              )
-              .map((e) => e.name);
-
-      const toolUseAgents =
-        toolUseEnabled === undefined
-          ? getToolUseAgents().map((e) => e.name)
-          : getToolUseAgents()
-              .filter(
-                (e) =>
-                  toolUseEnabled.includes(createKey(e.source, e.name)) ||
-                  toolUseEnabled.includes(e.name),
-              )
-              .map((e) => e.name);
 
       const preset: AgentModePreset = {
         id: `custom-${Date.now()}`,
@@ -805,11 +801,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         toolUseAgents,
       };
 
-      const existing =
-        workspaceSM.get<AgentModePreset[]>(
-          WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-          [],
-        ) ?? [];
+      const existing = this.getCustomPresets();
       await workspaceSM.update(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
         ...existing,
         preset,
@@ -833,20 +825,27 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.DELETE_AGENT_MODE_PRESET>,
   ): Promise<void> {
     try {
-      const existing =
-        workspaceSM.get<AgentModePreset[]>(
-          WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-          [],
-        ) ?? [];
-      const updated = existing.filter((p) => p.id !== data.presetId);
+      const target = this.getCustomPresets().find(
+        (p) => p.id === data.presetId,
+      );
+      if (!target) return;
+
+      const confirm = await vscode.window.showWarningMessage(
+        `Delete preset "${target.name}"?`,
+        { modal: true },
+        'Delete',
+      );
+      if (confirm !== 'Delete') return;
+
+      const updated = this.getCustomPresets().filter(
+        (p) => p.id !== data.presetId,
+      );
       await workspaceSM.update(
         WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
         updated,
       );
 
       await this.withActiveWebview((w) => this.sendAgentModePresets(w));
-
-      void vscode.window.showInformationMessage('Preset deleted');
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
