@@ -125,10 +125,7 @@ export async function polishTextWithAI(
       messages,
       temperature: 0,
     });
-    const { text: responseText } = handler.extractResponse(
-      result.response,
-      '',
-    );
+    const { text: responseText } = handler.extractResponse(result.response, '');
     if (!isNonEmptyString(responseText)) {
       throw new Error('Model returned no text.');
     }

@@ -590,10 +590,7 @@ class GenerateNode extends Node<AgentCreatorShared> {
       '\n' +
       schemaRef;
 
-    let userMessage = nunjucksEnv.renderString(
-      prompts.userRequest,
-      renderVars,
-    );
+    let userMessage = nunjucksEnv.renderString(prompts.userRequest, renderVars);
     if (this.lastValidationError) {
       userMessage +=
         '\n' +
@@ -626,7 +623,9 @@ class GenerateNode extends Node<AgentCreatorShared> {
       validateAgentYamlContent(candidate);
     } catch (err) {
       this.lastValidationError = toErrorMessage(err);
-      throw new Error(`Generated YAML was invalid: ${this.lastValidationError}`);
+      throw new Error(
+        `Generated YAML was invalid: ${this.lastValidationError}`,
+      );
     }
 
     logger.info(
