@@ -347,6 +347,7 @@ export const SETTINGS_VIEW_CMD = {
   // Multi-Agent commands
   GET_SUPER_YOLO_ENABLED: 'getSuperYoloEnabled',
   SET_SUPER_YOLO_ENABLED: 'setSuperYoloEnabled',
+  APPLY_AGENT_MODE_PRESET: 'applyAgentModePreset',
   // Tool dashboard commands
   GET_TOOL_DASHBOARD_DATA: 'getToolDashboardData',
   OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',

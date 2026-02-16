@@ -445,6 +445,10 @@ export class SettingsApp extends BaseWebviewApp {
     SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED,
   );
 
+  private handleApplyAgentModePreset = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
+  );
+
   // Tool dashboard event handlers
   private handleToolOpenUrl = forwardDetail(
     SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL,
@@ -596,6 +600,7 @@ export class SettingsApp extends BaseWebviewApp {
               .reliabilitySettings=${this.reliabilitySettings}
               @super-yolo-toggle=${this.handleSuperYoloToggle}
               @reliability-setting-change=${this.handleSetProviderVscodeSetting}
+              @apply-agent-mode-preset=${this.handleApplyAgentModePreset}
             ></multi-agent-tab>
           </vscode-tab-panel>
 
