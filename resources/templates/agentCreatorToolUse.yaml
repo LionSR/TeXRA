@@ -24,13 +24,15 @@ prompts:
     - All fields with defaults can be omitted if the default value is acceptable.
     Respond only with the YAML wrapped in <yaml> tags.
 
-    TEMPLATE VARIABLES available in prompts (Nunjucks double-brace syntax):
+    TEMPLATE VARIABLES available for tool-use agents (Nunjucks double-brace syntax):
     - {{ INPUT_FILE }}: path of the main input file
     - {{ INPUT_CONTENT }}: full text of the main input file
     - {{ ALL_AUXILIARYS }}: auxiliary files (preamble.tex, commands.tex, etc.)
     - {{ ALL_REFERENCES }}: reference/bibliography files
     - {{ ADDITIONAL_INPUTS }}: extra context files
     - {{ INSTRUCTION }}: the user's free-text instruction for this run
+    Do NOT use workflow-only variables: ALL_INPUTS, REFERENCE_CONTENT,
+    AUXILIARY_CONTENT, OUTPUT_FILES_ORDER. These are not available to tool-use agents.
 
   userRequest: |
     Generate a YAML definition for a **tool-use** agent named "{{ AGENT_NAME }}".
