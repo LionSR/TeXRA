@@ -612,6 +612,7 @@ class GenerateNode extends Node<AgentCreatorShared> {
       client,
       messages,
       temperature: 0,
+      systemPrompt,
     });
     const { text } = handler.extractResponse(result.response, '');
 
