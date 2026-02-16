@@ -1,14 +1,13 @@
-// Standard library imports
 import * as path from 'path';
 
-// Third-party imports
 import * as vscode from 'vscode';
 import * as nunjucks from 'nunjucks';
 import * as yaml from 'yaml';
 import { z } from 'zod';
 
-// Local imports - agent runtime
 import { getBaseName, getMultipleName } from '@agent/index';
+import { Node, Flow } from '@agent/node';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
   AgentWorkflowSettingSchema,
   AgentToolUseSettingSchema,
@@ -17,7 +16,11 @@ import {
 import { createHelperModelKit } from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
-import { agentDirectories, promptToAddAgentToConfig } from '@frontend/agents';
+import {
+  agentDirectories,
+  promptToAddAgentToConfig,
+  type AgentVariantMetadata,
+} from '@frontend/agents';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core/stringCore';
@@ -30,6 +33,13 @@ export const agentCreatorCommands = {
   createAgentWithAI: 'texra.createAgentWithAI',
 };
 
+// ── Types & constants ───────────────────────────────────────
+
+type AgentCategory = 'workflow' | 'toolUse';
+
+/** Total AI generation attempts (1 initial + 1 validation retry) before template fallback. */
+const AI_GENERATION_ATTEMPTS = 2;
+
 interface AgentPromptPair {
   systemPrompt: string;
   userRequest: string;
@@ -38,7 +48,7 @@ interface AgentPromptPair {
 interface CreatorConfig {
   workflow: AgentPromptPair;
   toolUse: AgentPromptPair;
-  retryPrompts: Record<'workflow' | 'toolUse', string>;
+  retryPrompts: Record<AgentCategory, string>;
   templates: {
     workflowSingle: string;
     workflowMultiple: string;
@@ -46,49 +56,186 @@ interface CreatorConfig {
   };
 }
 
-const nunjucksEnv = nunjucks.configure({ autoescape: false });
-
-/** Runtime variables that must pass through Nunjucks unchanged in fallback templates. */
-const RUNTIME_PASSTHROUGH = Object.fromEntries(
-  [
-    'INPUT_CONTENT',
-    'INPUT_FILE',
-    'ALL_INPUTS',
-    'ALL_AUXILIARYS',
-    'ALL_REFERENCES',
-    'ADDITIONAL_INPUTS',
-    'INSTRUCTION',
-    'REFERENCE_CONTENT',
-    'AUXILIARY_CONTENT',
-    'OUTPUT_FILES_ORDER',
-  ].map((v) => [v, `{{ ${v} }}`]),
-);
-
-function renderFallbackTemplate(
-  template: string,
-  vars: Record<string, string>,
-): string {
-  try {
-    return nunjucksEnv.renderString(template, {
-      ...RUNTIME_PASSTHROUGH,
-      ...vars,
-    });
-  } catch (err) {
-    throw new Error(
-      `Failed to render fallback template: ${toErrorMessage(err)}`,
-    );
-  }
+interface AgentBlueprint {
+  category: AgentCategory;
+  agentName: string;
+  filePath: vscode.Uri;
+  aiVars: Record<string, string>;
+  fallbackTemplate: string;
+  fallbackVars: Record<string, string>;
+  registrationMeta: AgentVariantMetadata;
 }
 
-// ============================================================
-// Schema reference generation
-// ============================================================
+/** Mutable shared state flowing through the agent creation flow. */
+interface AgentCreatorShared {
+  config: CreatorConfig;
+  category: AgentCategory;
+  agentName?: string;
+  description?: string;
+  blueprint?: AgentBlueprint;
+  yamlContent?: string;
+}
 
-/** Cached schema reference, generated once from Zod schemas. */
-let schemaRefCache: Record<'workflow' | 'toolUse', string> | null = null;
+/** Tool-use agents only receive the user instruction — they access files via tools. */
+const TOOL_USE_VARS = ['INSTRUCTION'];
 
-/** Build a JSON Schema string for the given agent category's settings + prompts. */
-function getSchemaReference(category: 'workflow' | 'toolUse'): string {
+/** Workflow agents receive pre-loaded file content and document structure variables. */
+const WORKFLOW_VARS = [
+  'INPUT_FILE',
+  'INPUT_CONTENT',
+  'ALL_INPUTS',
+  'ALL_AUXILIARYS',
+  'ALL_REFERENCES',
+  'ADDITIONAL_INPUTS',
+  'INSTRUCTION',
+  'REFERENCE_CONTENT',
+  'AUXILIARY_CONTENT',
+  'OUTPUT_FILES_ORDER',
+];
+
+function buildPassthrough(vars: string[]): Record<string, string> {
+  return Object.fromEntries(vars.map((v) => [v, `{{ ${v} }}`]));
+}
+
+const PASSTHROUGH: Record<AgentCategory, Record<string, string>> = {
+  toolUse: buildPassthrough(TOOL_USE_VARS),
+  workflow: buildPassthrough(WORKFLOW_VARS),
+};
+
+const MULTIPLE_OUTPUT_INSTRUCTIONS = [
+  'IMPORTANT: This agent must handle MULTIPLE output files. Adjust the structure above:',
+  '- Set isMultipleOutput: true',
+  '- Use documentTag: "latex_documents" (plural) and endTag: "</latex_documents>"',
+  '- Add defaultOutputFiles with the file list below',
+  '- In userRequest, instruct the model to wrap each file in <latex_documents> with <document name="..."> blocks',
+  '- Reference {{ OUTPUT_FILES_ORDER }} for the expected output order',
+].join('\n');
+
+const DESCRIPTION_PROMPTS: Record<AgentCategory, string> = {
+  toolUse:
+    'What should this agent do? Mention capabilities it needs (e.g., search papers, edit files, browse the web)',
+  workflow:
+    'What should this agent do? Mention whether it rewrites existing documents or creates new ones',
+};
+
+interface ToolGroup {
+  description: string;
+  tools: string[];
+  keywords: string[];
+}
+
+const TOOL_GROUPS: Record<string, ToolGroup> = {
+  'File Operations': {
+    description: 'Read, write, edit, search files and run shell commands',
+    tools: [
+      'bash',
+      'read_file',
+      'write_file',
+      'edit_file',
+      'glob',
+      'grep',
+      'ls',
+    ],
+    keywords: ['file', 'edit', 'code', 'write', 'read', 'script', 'shell'],
+  },
+  'Web & Search': {
+    description: 'Search the web and fetch page content',
+    tools: ['web_search', 'web_fetch'],
+    keywords: ['web', 'search', 'internet', 'online', 'url', 'fetch', 'browse'],
+  },
+  'Academic Research': {
+    description: 'Search arXiv, CrossRef, and download papers',
+    tools: [
+      'arxiv_search',
+      'arxiv_metadata',
+      'download_arxiv_source',
+      'crossref_search',
+      'crossref_doi',
+    ],
+    keywords: [
+      'arxiv',
+      'paper',
+      'research',
+      'literature',
+      'review',
+      'survey',
+      'cite',
+      'doi',
+      'journal',
+    ],
+  },
+  'LaTeX Processing': {
+    description: 'Extract figures, bibliography, TikZ, and count words',
+    tools: [
+      'extract_figures',
+      'extract_bib_entries',
+      'extract_tikz_figures',
+      'texcount',
+    ],
+    keywords: [
+      'latex',
+      'figure',
+      'tikz',
+      'bibliography',
+      'bib',
+      'word count',
+      'extract',
+    ],
+  },
+  'Citation Management': {
+    description: 'Manage references with Zotero',
+    tools: ['zotero_add', 'zotero_search', 'zotero_export'],
+    keywords: ['zotero', 'citation', 'reference', 'bibliography', 'endnote'],
+  },
+  Computation: {
+    description: 'Mathematical computation with Wolfram Alpha',
+    tools: ['wolfram'],
+    keywords: [
+      'math',
+      'compute',
+      'calculate',
+      'wolfram',
+      'symbolic',
+      'equation',
+    ],
+  },
+  'Agent Delegation': {
+    description: 'Delegate tasks to other agents and manage executions',
+    tools: [
+      'delegate_workflow',
+      'delegate_agent',
+      'executions',
+      'accept_run_files',
+    ],
+    keywords: ['delegate', 'orchestrat', 'pipeline', 'multi-agent', 'chain'],
+  },
+  'Lean 4': {
+    description: 'Lean 4 proof assistant integration',
+    tools: [
+      'lean_diagnostics',
+      'lean_file',
+      'lean_project',
+      'lean_inspect',
+      'lean_loogle',
+    ],
+    keywords: ['lean', 'proof', 'theorem', 'formal', 'verification'],
+  },
+  Utility: {
+    description: 'Memory, todo tracking, and diagnostics',
+    tools: ['memory', 'todo_write', 'diagnostics'],
+    keywords: ['memory', 'todo', 'diagnostic', 'track'],
+  },
+};
+
+// ── Infrastructure ──────────────────────────────────────────
+
+/* autoescape off: templates contain Nunjucks/YAML syntax, not HTML */
+const nunjucksEnv = nunjucks.configure({ autoescape: false });
+
+/** Lazily built and cached for the extension host lifetime. Schemas are static. */
+let schemaRefCache: Record<AgentCategory, string> | null = null;
+
+function getSchemaReference(category: AgentCategory): string {
   if (!schemaRefCache) {
     schemaRefCache = {
       workflow: buildSchemaRef(AgentWorkflowSettingSchema),
@@ -110,11 +257,7 @@ function buildSchemaRef(settingsSchema: z.ZodObject<z.ZodRawShape>): string {
   ].join('\n');
 }
 
-// ============================================================
-// Config loading
-// ============================================================
-
-/** Cached creator config loaded from resources/templates/ */
+/** Cached after first load. Templates are bundled resources — stable for the session. */
 let creatorConfig: CreatorConfig | null = null;
 
 interface ParsedCreatorYaml {
@@ -163,24 +306,414 @@ async function loadCreatorConfig(
   return creatorConfig;
 }
 
-function validateAgentYamlString(content: string): string | null {
-  try {
-    validateAgentYamlContent(content);
-    return null;
-  } catch (err) {
-    return toErrorMessage(err);
+async function pickTools(
+  agentName: string,
+  description: string,
+): Promise<{ tools: string[]; groups: string[] } | undefined> {
+  // Pre-select tool groups whose keywords appear in the description
+  const lower = description.toLowerCase();
+  const suggested = new Set<string>(['File Operations']);
+  for (const [name, group] of Object.entries(TOOL_GROUPS)) {
+    if (group.keywords.some((kw) => lower.includes(kw))) {
+      suggested.add(name);
+    }
+  }
+
+  const selected = await vscode.window.showQuickPick(
+    Object.entries(TOOL_GROUPS).map(([label, group]) => ({
+      label,
+      description: group.description,
+      detail: group.tools.join(', '),
+      picked: suggested.has(label),
+    })),
+    {
+      title: `Tool Use Agent: ${agentName}`,
+      placeHolder:
+        'Select tool groups (pre-selected based on your description)',
+      canPickMany: true,
+    },
+  );
+  if (!selected || selected.length === 0) return undefined;
+
+  const tools: string[] = [];
+  const groups: string[] = [];
+  for (const item of selected) {
+    const group = TOOL_GROUPS[item.label];
+    if (group) {
+      tools.push(...group.tools);
+      groups.push(item.label);
+    }
+  }
+  return { tools, groups };
+}
+
+// ── Nodes ───────────────────────────────────────────────────
+
+/**
+ * Gather agent name + description. Branches on category ('workflow' | 'toolUse').
+ * Returning 'cancel' (no registered successor) ends the flow.
+ */
+class GatherInputNode extends Node<AgentCreatorShared> {
+  async prep(shared: AgentCreatorShared) {
+    return {
+      category: shared.category,
+      categoryLabel: shared.category === 'toolUse' ? 'Tool Use' : 'Workflow',
+    };
+  }
+
+  async exec(prepRes: { category: AgentCategory; categoryLabel: string }) {
+    const agentName = await vscode.window.showInputBox({
+      title: `New ${prepRes.categoryLabel} Agent`,
+      prompt: 'Enter a name for the new agent (without .yaml)',
+      validateInput: (value) =>
+        !value || /[^a-zA-Z0-9_-]/.test(value)
+          ? 'Use letters, numbers, underscore or dash'
+          : null,
+    });
+    if (!agentName) return undefined;
+
+    const description = await vscode.window.showInputBox({
+      title: `New ${prepRes.categoryLabel} Agent: ${agentName}`,
+      prompt: DESCRIPTION_PROMPTS[prepRes.category],
+    });
+    if (!description) return undefined;
+
+    return { agentName, description };
+  }
+
+  async post(
+    shared: AgentCreatorShared,
+    _prepRes: unknown,
+    execRes: { agentName: string; description: string } | undefined,
+  ): Promise<string | undefined> {
+    if (!execRes) return 'cancel';
+    shared.agentName = execRes.agentName;
+    shared.description = execRes.description;
+    return shared.category;
   }
 }
 
-// ============================================================
-// Command registration and handlers
-// ============================================================
+/**
+ * Gather workflow output style and build the AgentBlueprint.
+ * All data assembly and IO (directory resolution) happens in exec().
+ */
+class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
+  async prep(shared: AgentCreatorShared) {
+    return {
+      agentName: shared.agentName!,
+      description: shared.description!,
+      config: shared.config,
+    };
+  }
+
+  async exec(prepRes: {
+    agentName: string;
+    description: string;
+    config: CreatorConfig;
+  }): Promise<AgentBlueprint | undefined> {
+    const { agentName, description, config } = prepRes;
+
+    const outputChoice = await vscode.window.showQuickPick(
+      [
+        {
+          label: 'Single output file',
+          description: 'Agent produces one document',
+        },
+        {
+          label: 'Multiple output files',
+          description: 'Agent produces several documents at once',
+        },
+      ],
+      {
+        title: `Workflow Agent: ${agentName}`,
+        placeHolder: 'Choose the agent output style',
+      },
+    );
+    if (!outputChoice) return undefined;
+
+    const isMultiple = outputChoice.label === 'Multiple output files';
+
+    let outputFiles: string[] = [];
+    if (isMultiple) {
+      const filesInput = await vscode.window.showInputBox({
+        title: `Workflow Agent: ${agentName}`,
+        prompt: 'Enter default output filenames (comma separated)',
+      });
+      if (!filesInput) return undefined;
+      outputFiles = filesInput
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+
+    const outputFilesYaml = outputFiles.map((f) => `- ${f}`).join('\n    ');
+    const outputFilesNote = outputFiles.map((f) => `    - ${f}`).join('\n');
+    const targetDir = await agentDirectories.custom();
+
+    return {
+      category: 'workflow',
+      agentName,
+      filePath: vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`)),
+      aiVars: {
+        AGENT_NAME: agentName,
+        DESCRIPTION: description,
+        MULTIPLE_OUTPUT_NOTE: isMultiple
+          ? MULTIPLE_OUTPUT_INSTRUCTIONS +
+            '\nDefault output files:\n' +
+            outputFilesNote
+          : '',
+      },
+      fallbackTemplate: isMultiple
+        ? config.templates.workflowMultiple
+        : config.templates.workflowSingle,
+      fallbackVars: {
+        AGENT_NAME: agentName,
+        DESCRIPTION: description,
+        OUTPUT_FILES: outputFilesYaml,
+      },
+      registrationMeta: isMultiple
+        ? {
+            isMultipleOutput: true,
+            baseAgentName: getBaseName(agentName),
+            multipleAgentName: agentName,
+          }
+        : {
+            isMultipleOutput: false,
+            multipleAgentName: getMultipleName(agentName),
+          },
+    };
+  }
+
+  async post(
+    shared: AgentCreatorShared,
+    _prepRes: unknown,
+    execRes: AgentBlueprint | undefined,
+  ): Promise<string | undefined> {
+    if (!execRes) return 'cancel';
+    shared.blueprint = execRes;
+    return FlowTransition.DEFAULT;
+  }
+}
+
+/**
+ * Gather tool selection via keyword-aware picker and build the AgentBlueprint.
+ * All data assembly and IO (directory resolution) happens in exec().
+ */
+class ToolUseBlueprintNode extends Node<AgentCreatorShared> {
+  async prep(shared: AgentCreatorShared) {
+    return {
+      agentName: shared.agentName!,
+      description: shared.description!,
+      config: shared.config,
+    };
+  }
+
+  async exec(prepRes: {
+    agentName: string;
+    description: string;
+    config: CreatorConfig;
+  }): Promise<AgentBlueprint | undefined> {
+    const { agentName, description, config } = prepRes;
+
+    const picked = await pickTools(agentName, description);
+    if (!picked) return undefined;
+
+    const targetDir = await agentDirectories.custom();
+
+    return {
+      category: 'toolUse',
+      agentName,
+      filePath: vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`)),
+      aiVars: {
+        AGENT_NAME: agentName,
+        DESCRIPTION: description,
+        SELECTED_TOOLS: picked.tools.join(', '),
+        SELECTED_GROUPS: picked.groups.join(', '),
+      },
+      fallbackTemplate: config.templates.toolUse,
+      fallbackVars: {
+        AGENT_NAME: agentName,
+        DESCRIPTION: description,
+        TOOLS_YAML: picked.tools.map((t) => `    - ${t}`).join('\n'),
+      },
+      registrationMeta: {},
+    };
+  }
+
+  async post(
+    shared: AgentCreatorShared,
+    _prepRes: unknown,
+    execRes: AgentBlueprint | undefined,
+  ): Promise<string | undefined> {
+    if (!execRes) return 'cancel';
+    shared.blueprint = execRes;
+    return FlowTransition.DEFAULT;
+  }
+}
+
+interface GeneratePrepResult {
+  config: CreatorConfig;
+  blueprint: AgentBlueprint;
+}
+
+/**
+ * Generate agent YAML via AI. Uses PocketFlow retry (maxRetries) for validation
+ * failures and execFallback for template-based fallback when retries are exhausted.
+ */
+class GenerateNode extends Node<AgentCreatorShared> {
+  private lastValidationError?: string;
+
+  constructor() {
+    super(AI_GENERATION_ATTEMPTS);
+  }
+
+  async prep(shared: AgentCreatorShared): Promise<GeneratePrepResult> {
+    return { config: shared.config, blueprint: shared.blueprint! };
+  }
+
+  async exec(prepRes: GeneratePrepResult): Promise<string> {
+    const { config, blueprint } = prepRes;
+    const kit = await createHelperModelKit();
+    if (!kit) {
+      throw new Error('Helper model not available for agent creation');
+    }
+    const { handler, client } = kit;
+
+    const prompts = config[blueprint.category];
+    const schemaRef = getSchemaReference(blueprint.category);
+    const renderVars = {
+      ...PASSTHROUGH[blueprint.category],
+      ...blueprint.aiVars,
+    };
+    const systemPrompt =
+      nunjucksEnv.renderString(prompts.systemPrompt, renderVars) +
+      '\n' +
+      schemaRef;
+
+    let userMessage = nunjucksEnv.renderString(
+      prompts.userRequest,
+      renderVars,
+    );
+    if (this.lastValidationError) {
+      userMessage +=
+        '\n' +
+        nunjucksEnv.renderString(config.retryPrompts[blueprint.category], {
+          VALIDATION_ERROR: this.lastValidationError,
+        });
+    }
+
+    const messages = await handler.initializeMessages(
+      '',
+      userMessage,
+      undefined,
+      systemPrompt,
+    );
+    const result = await handler.createResponse({
+      client,
+      messages,
+      temperature: 0,
+      systemPrompt,
+    });
+    const { text } = handler.extractResponse(result.response, '');
+
+    if (!isNonEmptyString(text)) {
+      throw new Error('Model returned no text');
+    }
+
+    const extracted = extractTextFromTag(text, 'yaml');
+    const candidate = (extracted || text).trim();
+    try {
+      validateAgentYamlContent(candidate);
+    } catch (err) {
+      this.lastValidationError = toErrorMessage(err);
+      throw new Error(`Generated YAML was invalid: ${this.lastValidationError}`);
+    }
+
+    logger.info(
+      CHANNEL,
+      `AI generation succeeded for ${blueprint.category} agent`,
+    );
+    return candidate;
+  }
+
+  async execFallback(
+    prepRes: GeneratePrepResult,
+    error: Error,
+  ): Promise<string> {
+    logger.warn(
+      CHANNEL,
+      `AI generation failed, using template: ${error.message}`,
+    );
+    const { blueprint } = prepRes;
+    return nunjucksEnv.renderString(blueprint.fallbackTemplate, {
+      ...PASSTHROUGH[blueprint.category],
+      ...blueprint.fallbackVars,
+    });
+  }
+
+  async post(
+    shared: AgentCreatorShared,
+    _prepRes: unknown,
+    yamlContent: string,
+  ): Promise<string | undefined> {
+    shared.yamlContent = yamlContent;
+    return FlowTransition.DEFAULT;
+  }
+}
+
+/**
+ * Write generated YAML to disk, register the agent, and open the file.
+ */
+class RegisterNode extends Node<AgentCreatorShared> {
+  async prep(shared: AgentCreatorShared) {
+    return { blueprint: shared.blueprint!, yamlContent: shared.yamlContent! };
+  }
+
+  async exec(prepRes: { blueprint: AgentBlueprint; yamlContent: string }) {
+    const { blueprint, yamlContent } = prepRes;
+    await AbsoluteFS.write(blueprint.filePath.fsPath, yamlContent);
+    vscode.window.showInformationMessage(
+      `Created agent at ${blueprint.filePath.fsPath}`,
+    );
+    await promptToAddAgentToConfig(
+      blueprint.agentName,
+      false,
+      blueprint.registrationMeta,
+      blueprint.category,
+    );
+    const doc = await vscode.workspace.openTextDocument(blueprint.filePath);
+    await vscode.window.showTextDocument(doc);
+  }
+
+  async post(): Promise<string | undefined> {
+    return FlowTransition.DEFAULT;
+  }
+}
+
+// ── Flow ────────────────────────────────────────────────────
+
+function createAgentCreatorFlow(): Flow<AgentCreatorShared> {
+  const gatherInput = new GatherInputNode();
+  const workflowBlueprint = new WorkflowBlueprintNode();
+  const toolUseBlueprint = new ToolUseBlueprintNode();
+  const generate = new GenerateNode();
+  const register = new RegisterNode();
+
+  gatherInput.on('workflow', workflowBlueprint);
+  gatherInput.on('toolUse', toolUseBlueprint);
+
+  workflowBlueprint.next(generate);
+  toolUseBlueprint.next(generate);
+  generate.next(register);
+
+  return new Flow<AgentCreatorShared>(gatherInput);
+}
 
 export function registerAgentCreatorCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       agentCreatorCommands.createAgentWithAI,
-      (category?: 'workflow' | 'toolUse') =>
+      (category?: AgentCategory) =>
         handleCreateAgentWithAI(context, category ?? 'workflow'),
     ),
   );
@@ -189,229 +722,14 @@ export function registerAgentCreatorCommands(context: vscode.ExtensionContext) {
 
 async function handleCreateAgentWithAI(
   context: vscode.ExtensionContext,
-  category: 'workflow' | 'toolUse',
+  category: AgentCategory,
 ) {
   try {
     const config = await loadCreatorConfig(context);
-
-    const agentName = await vscode.window.showInputBox({
-      prompt: 'Enter a name for the new agent (without .yaml)',
-      validateInput: (value) =>
-        !value || /[^a-zA-Z0-9_-]/.test(value)
-          ? 'Use letters, numbers, underscore or dash'
-          : null,
-    });
-    if (!agentName) {
-      return;
-    }
-
-    const description = await vscode.window.showInputBox({
-      prompt: 'Briefly describe what this agent should do',
-    });
-    if (!description) {
-      return;
-    }
-
-    if (category === 'toolUse') {
-      await createToolUseAgent(config, agentName, description);
-    } else {
-      await createWorkflowAgent(config, agentName, description);
-    }
+    const shared: AgentCreatorShared = { config, category };
+    const flow = createAgentCreatorFlow();
+    await flow.run(shared);
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Failed to create agent', err);
   }
-}
-
-async function createWorkflowAgent(
-  config: CreatorConfig,
-  agentName: string,
-  description: string,
-) {
-  const outputChoice = await vscode.window.showQuickPick(
-    ['Single output file', 'Multiple output files'],
-    { placeHolder: 'Choose the agent output style' },
-  );
-  if (!outputChoice) {
-    return;
-  }
-
-  const isMultipleOutput = outputChoice === 'Multiple output files';
-
-  let outputFilesYaml = '';
-  let outputFilesNote = '';
-  if (isMultipleOutput) {
-    const filesInput = await vscode.window.showInputBox({
-      prompt: 'Enter default output filenames (comma separated)',
-    });
-    if (!filesInput) {
-      return;
-    }
-    const files = filesInput
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    outputFilesYaml = files.map((f) => `- ${f}`).join('\n    ');
-    outputFilesNote = files.map((f) => `    - ${f}`).join('\n');
-  }
-
-  const targetDir = await agentDirectories.custom();
-  const filePath = vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`));
-  const multipleNote = isMultipleOutput
-    ? [
-        'IMPORTANT: This agent must handle MULTIPLE output files. Adjust the structure above:',
-        '- Set isMultipleOutput: true',
-        '- Use documentTag: "latex_documents" (plural) and endTag: "</latex_documents>"',
-        '- Add defaultOutputFiles with the file list below',
-        '- In userRequest, instruct the model to wrap each file in <latex_documents> with <document name="..."> blocks',
-        '- Reference {{ OUTPUT_FILES_ORDER }} for the expected output order',
-        'Default output files:',
-        outputFilesNote,
-      ].join('\n')
-    : '';
-  const vars = {
-    AGENT_NAME: agentName,
-    DESCRIPTION: description,
-    MULTIPLE_OUTPUT_NOTE: multipleNote,
-  };
-  let yamlContent = await tryAIGeneration(config, 'workflow', vars);
-
-  if (!yamlContent) {
-    const template = isMultipleOutput
-      ? config.templates.workflowMultiple
-      : config.templates.workflowSingle;
-    yamlContent = renderFallbackTemplate(template, {
-      AGENT_NAME: agentName,
-      DESCRIPTION: description,
-      OUTPUT_FILES: outputFilesYaml,
-    });
-  }
-
-  const configOptions = isMultipleOutput
-    ? {
-        isMultipleOutput: true as const,
-        baseAgentName: getBaseName(agentName),
-        multipleAgentName: agentName,
-      }
-    : {
-        isMultipleOutput: false as const,
-        multipleAgentName: getMultipleName(agentName),
-      };
-  await writeAndRegisterAgent(filePath, yamlContent, agentName, configOptions);
-}
-
-async function createToolUseAgent(
-  config: CreatorConfig,
-  agentName: string,
-  description: string,
-) {
-  const targetDir = await agentDirectories.custom();
-  const filePath = vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`));
-  const vars = { AGENT_NAME: agentName, DESCRIPTION: description };
-  let yamlContent = await tryAIGeneration(config, 'toolUse', vars);
-
-  if (!yamlContent) {
-    yamlContent = renderFallbackTemplate(config.templates.toolUse, {
-      AGENT_NAME: agentName,
-      DESCRIPTION: description,
-    });
-  }
-
-  await writeAndRegisterAgent(filePath, yamlContent, agentName, {}, 'toolUse');
-}
-
-async function writeAndRegisterAgent(
-  filePath: vscode.Uri,
-  yamlContent: string,
-  agentName: string,
-  configOptions: Parameters<typeof promptToAddAgentToConfig>[2] = {},
-  category: 'workflow' | 'toolUse' = 'workflow',
-): Promise<void> {
-  await AbsoluteFS.write(filePath.fsPath, yamlContent);
-  vscode.window.showInformationMessage(`Created agent at ${filePath.fsPath}`);
-  await promptToAddAgentToConfig(agentName, false, configOptions, category);
-  const doc = await vscode.workspace.openTextDocument(filePath);
-  await vscode.window.showTextDocument(doc);
-}
-
-// ============================================================
-// AI generation
-// ============================================================
-
-async function tryAIGeneration(
-  config: CreatorConfig,
-  category: 'workflow' | 'toolUse',
-  vars: Record<string, string>,
-): Promise<string | undefined> {
-  try {
-    const kit = await createHelperModelKit();
-    if (!kit) {
-      logger.error(CHANNEL, 'Helper model not available for agent creation');
-      return undefined;
-    }
-    const { handler, client } = kit;
-
-    // Build prompts – include RUNTIME_PASSTHROUGH so that template variable
-    // references like {{ INPUT_FILE }} in the creator prompts survive Nunjucks
-    // rendering as literal text for the AI to see.
-    const prompts = config[category];
-    const schemaRef = getSchemaReference(category);
-    const renderVars = { ...RUNTIME_PASSTHROUGH, ...vars };
-    const systemPrompt =
-      nunjucksEnv.renderString(prompts.systemPrompt, renderVars) +
-      '\n' +
-      schemaRef;
-    const baseUserRequest = nunjucksEnv.renderString(
-      prompts.userRequest,
-      renderVars,
-    );
-
-    let userMessage = baseUserRequest;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const messages = await handler.initializeMessages(
-        '',
-        userMessage,
-        undefined,
-        systemPrompt,
-      );
-      const result = await handler.createResponse({
-        client,
-        messages,
-        temperature: 0,
-        systemPrompt,
-      });
-      const { text } = handler.extractResponse(result.response, '');
-
-      if (isNonEmptyString(text)) {
-        const extracted = extractTextFromTag(text, 'yaml');
-        const candidate = (extracted || text).trim();
-        const validationErr = validateAgentYamlString(candidate);
-        if (!validationErr) {
-          logger.info(CHANNEL, `AI generation succeeded for ${category} agent`);
-          return candidate;
-        }
-
-        const options =
-          attempt === 0
-            ? (['Try Again', 'Use Template'] as const)
-            : (['Use Template'] as const);
-        const choice = await vscode.window.showWarningMessage(
-          `Generated YAML was invalid: ${validationErr}`,
-          ...options,
-        );
-        if (choice === 'Try Again' && attempt === 0) {
-          userMessage =
-            baseUserRequest +
-            '\n' +
-            nunjucksEnv.renderString(config.retryPrompts[category], {
-              VALIDATION_ERROR: validationErr,
-            });
-          continue;
-        }
-        break;
-      }
-    }
-  } catch (err) {
-    logger.error(CHANNEL, `AI generation failed: ${toErrorMessage(err)}`);
-  }
-  return undefined;
 }
