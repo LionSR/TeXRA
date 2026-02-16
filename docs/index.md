@@ -2,8 +2,8 @@
 layout: home
 hero:
   name: TeXRA
-  text: Reliable AI Workflows for Scientific Discovery
-  tagline: Agentic research assistant for AI scientists, physicists, and research engineers
+  text: AI Agents for Rigorous Research
+  tagline: Specialized agents that search literature, generate and compile figures, verify proofs against Mathlib, run symbolic computation, and polish manuscripts — grounded in real tools, auditable at every step.
   image:
     src: /logo-1024x1024.svg
     alt: TeXRA Logo
@@ -17,195 +17,373 @@ hero:
     - theme: alt
       text: Try it on Web
       link: /launch
-    - theme: alt
-      text: View on GitHub
-      link: https://github.com/texra-ai/texra-issues
 ---
 
-<div class="workflow-container">
-  <div class="workflow-steps">
-    <div class="workflow-step">
-      <div class="step-number">1</div>
-      <div class="step-content">
-        <h3>Select Content</h3>
-        <p>Choose your input files, references, figures, and specify output</p>
-        <div class="step-icon">📄</div>
-      </div>
+<div class="problem-section">
+
+## The gap between your results and the published paper
+
+You have the theorem. You have the computation. Now you need a 40-page manuscript where every `\label` resolves, every citation is real, notation is consistent from Definition 2.1 through Appendix C, the commutative diagrams compile, and the bibliography has no phantoms. You need to survey a field where 300 papers appeared this year. You need the Beamer deck that does the proof justice.
+
+This is where general-purpose AI fails researchers. Chatbots hallucinate citations, can't parse multi-file LaTeX projects, don't know that your `\mathcal{O}` in Section 3 contradicts your `\mathscr{O}` in Section 7, and have no way to compile, verify, or diff anything. For work that demands precision — proofs, physical arguments, numerical methods — ungrounded AI is worse than useless.
+
+</div>
+
+<div class="solution-section">
+
+## Agents with real tools, not a text box
+
+TeXRA orchestrates **specialized agents** inside VS Code — each equipped with the tools your discipline actually uses. A search agent queries arXiv and Crossref and returns verified BibTeX. A figure agent generates TikZ — commutative diagrams, Feynman diagrams, phase portraits — and compiles every one. A Lean agent searches Mathlib by type signature and inspects proof states. A writing agent polishes prose, preserves all mathematics, and produces a diff you review line by line.
+
+Every agent reasons, calls tools, reflects on its output, and iterates. Every result is versioned and auditable.
+
+</div>
+
+<div class="how-it-works">
+
+### A system built around verification
+
+<div class="workflow-steps">
+  <div class="workflow-step">
+    <div class="step-number">1</div>
+    <div class="step-content">
+      <h3>Ground</h3>
+      <p>Search agents query arXiv, Crossref, and your Zotero library. Every citation is fetched from a real database — nothing is fabricated from model memory.</p>
     </div>
-    <div class="workflow-arrow">→</div>
-    <div class="workflow-step">
-      <div class="step-number">2</div>
-      <div class="step-content">
-        <h3>Choose Agent/Model</h3>
-        <p>Select a specialized agent and model</p>
-        <div class="step-icon">🤖</div>
-      </div>
+  </div>
+  <div class="workflow-arrow">&rarr;</div>
+  <div class="workflow-step">
+    <div class="step-number">2</div>
+    <div class="step-content">
+      <h3>Build</h3>
+      <p>Agents draft LaTeX, generate TikZ figures, write Lean tactic proofs, run WolframScript computations — and compile every artifact to confirm it works.</p>
     </div>
-    <div class="workflow-arrow">→</div>
-    <div class="workflow-step">
-      <div class="step-number">3</div>
-      <div class="step-content">
-        <h3>Execute</h3>
-        <p>TeXRA handles the rest with powerful language models</p>
-        <div class="step-icon">⚡</div>
-      </div>
-    </div>
-    <div class="workflow-arrow">→</div>
-    <div class="workflow-step">
-      <div class="step-number">4</div>
-      <div class="step-content">
-        <h3>Review Changes</h3>
-        <div class="step-image">
-          <a href="/examples/draft_polish_r1_gemini25p_diff.pdf" target="_blank">
-            <img src="/images/latexdff-v1.png" alt="LaTeX Diff visualization" class="workflow-diff-image">
-            <div class="view-pdf">View full PDF example</div>
-          </a>
-        </div>
-      </div>
+  </div>
+  <div class="workflow-arrow">&rarr;</div>
+  <div class="workflow-step">
+    <div class="step-number">3</div>
+    <div class="step-content">
+      <h3>Verify</h3>
+      <p>Reflection loops check their own output. You review color-coded diffs of every change. Lean diagnostics confirm the proof compiles. Nothing is a black box.</p>
     </div>
   </div>
 </div>
 
-## Why TeXRA?
+</div>
 
-AI scientists need more than a chat window. TeXRA keeps research grounded in reproducible workflows and transparent reasoning:
+## Agents for every phase of research
 
-- **Reliable scientific loops** – every run is captured with logs, diffs, and audit trails so you and your collaborators can verify changes.
-- **Two kinds of agents** – use workflow agents (`polish`, `correct`, `draw`) for structured tasks, or chat with interactive agents (`chat`, `search`, `research`) that can edit files, search literature, and run computations.
-- **Integrated verification tools** – generate visual diffs, count words, verify math with Wolfram, and check compilation directly from the agent run.
-- **Literature at your fingertips** – search arXiv, Crossref, and your Zotero library without leaving VS Code.
+<div class="agents-grid">
 
-### Real-World Examples
-
-> **Deadline crunch.** A PhD student has 48 hours to polish a 30-page thesis chapter. She selects the chapter, picks the `polish` agent, and writes: "Improve clarity and flow for a machine-learning audience. Keep all math intact." Two minutes later she's reviewing a colour-coded diff of every change.
-
-> **Conference talk.** A postdoc needs slides for a workshop next week. He opens the `presenter` agent, points it at his paper, and asks for a 15-slide Beamer deck with TikZ diagrams. The agent reads his codebase, drafts slides, compiles them, and visually checks every page.
-
-> **Literature sweep.** A new collaborator joins the project and needs to get up to speed. She opens the `search` agent and asks: "Find the five most-cited papers on physics-informed neural networks from 2022-2024." In seconds she has titles, abstracts, and BibTeX entries.
-
-## Key Capabilities
-
-<div class="features-grid">
-
-  <div class="feature-item">
-    <h3>📝 Smart Editing & Polishing</h3>
-    <p>Go beyond simple grammar checks. Improve clarity, flow, and style while preserving technical accuracy. Fix subtle LaTeX errors and ensure consistency.</p>
-    <div class="feature-example">
-      <span style="color: var(--vp-c-red); text-decoration: line-through;">The results shows significant increase.</span><br/>
-      <span style="color: var(--vp-c-brand);">The results show a significant increase.</span>
+  <div class="agent-card">
+    <div class="agent-header">
+      <span class="agent-icon">search</span>
+      <span class="agent-type">Literature Discovery</span>
     </div>
+    <h3>Literature Search</h3>
+    <p>Sweeps arXiv, Crossref, and Zotero for relevant work. Returns verified titles, abstracts, and BibTeX entries — grounded in actual databases. You get a structured literature map, not a list of plausible-sounding names.</p>
   </div>
 
-  <div class="feature-item">
-    <h3>🎨 TikZ Figure Generation</h3>
-    <p>Create complex TikZ diagrams from natural language descriptions or enhance existing figures. TeXRA handles the code generation and compilation.</p>
-    <div class="feature-example">
-      <!-- Placeholder for a small TikZ example graphic or code snippet -->
-      <code>"Draw a flowchart for..."</code> &#8594; `\begin{tikzpicture}...`
+  <div class="agent-card">
+    <div class="agent-header">
+      <span class="agent-icon">research</span>
+      <span class="agent-type">Open-ended Research</span>
     </div>
+    <h3>Research Assistant</h3>
+    <p>Multi-turn agent with full tool access. Search Mathlib for a lemma by type signature, run a WolframScript computation, edit your LaTeX source, manage references — all in one conversation with persistent workspace context.</p>
   </div>
 
-  <div class="feature-item">
-    <h3>🔄 Document Transformation</h3>
-    <p>Effortlessly convert papers into slides (<code>paper2slide</code>), posters (<code>paper2poster</code>), or build interactive presentations with the <code>presenter</code> agent.</p>
-    <div class="feature-example">
-      <code>Paper Abstract</code> &#8594; `Beamer Slides Outline`
+  <div class="agent-card">
+    <div class="agent-header">
+      <span class="agent-icon">draw</span>
+      <span class="agent-type">Visualization</span>
     </div>
+    <h3>Figure Generation</h3>
+    <p>Generates publication-quality TikZ: commutative diagrams (<code>tikz-cd</code>), Feynman diagrams (<code>tikz-feynman</code>), phase portraits, lattice structures, numerical plots. Compiles every figure and visually verifies the PDF output.</p>
   </div>
 
-  <div class="feature-item">
-    <h3>📊 LaTeX-Aware Processing</h3>
-    <p>Understands LaTeX structure, math, citations, and environments. Includes integrated `latexdiff` for visualizing changes and `texcount` for analysis.</p>
-    <div class="feature-example">
-      <span style="color: var(--vp-c-red); text-decoration: line-through;">E = mc</span><br/>
-      <span style="color: var(--vp-c-brand);">E = mc^2 \label{eq:einstein}</span> (via `correct` agent)
+  <div class="agent-card">
+    <div class="agent-header">
+      <span class="agent-icon">polish</span>
+      <span class="agent-type">Manuscript Refinement</span>
     </div>
+    <h3>Polish & Correct</h3>
+    <p>Rewrites for clarity and precision — preserving every equation, theorem environment, and cross-reference. Catches notation drift across sections. Outputs a line-by-line diff so you control exactly what changes.</p>
   </div>
 
-  <div class="feature-item">
-    <h3>🧩 Multi-File Projects</h3>
-    <p>Handle books, theses, or papers split across multiple files. Apply changes consistently or target specific sections.</p>
-    <div class="feature-example">
-      <code>[ch1.tex, ch2.tex]</code> &#8594; <code>[ch1_polished.tex, ch2_polished.tex]</code>
+  <div class="agent-card">
+    <div class="agent-header">
+      <span class="agent-icon">presenter</span>
+      <span class="agent-type">Communication</span>
     </div>
+    <h3>Paper to Slides</h3>
+    <p>Reads your paper end-to-end and drafts a Beamer deck that preserves the logical structure — definitions before theorems, diagrams redrawn in TikZ, key equations on their own slides. Compiles and visually checks every page.</p>
   </div>
 
-  <div class="feature-item">
-    <h3>🖼️ Multimodal Understanding</h3>
-    <p>Leverage vision-capable models to analyze images, figures, and PDFs directly within your workflow.</p>
-    <div class="feature-example">
-      <code>&lt;figure.png&gt; + "Write caption"</code> &#8594; <code>\caption{...}</code>
+  <div class="agent-card">
+    <div class="agent-header">
+      <span class="agent-icon">chat</span>
+      <span class="agent-type">Technical Discussion</span>
     </div>
-  </div>
-
-  <div class="feature-item">
-    <h3>💬 Interactive Tool-Use Agents</h3>
-    <p>Chat with AI agents that can read and edit your files, run shell commands, search the web, and manage your Zotero library - all in one conversation.</p>
-    <div class="feature-example">
-      <code>"Find papers on attention mechanisms and add them to my .bib"</code>
-    </div>
-  </div>
-
-  <div class="feature-item">
-    <h3>🔍 Research & Literature Tools</h3>
-    <p>Search arXiv and Crossref, download paper sources, verify computations with Wolfram, and manage references through Zotero - without leaving VS Code.</p>
-    <div class="feature-example">
-      <code>"Search Zotero for Vaswani"</code> &#8594; BibTeX entries exported
-    </div>
+    <h3>Working Session</h3>
+    <p>Open-ended conversation with your full project loaded. Work through a proof strategy, sanity-check a bound, explore whether a construction generalizes, or trace where a sign error propagates — with tool access throughout.</p>
   </div>
 
 </div>
 
-## Get Started Today
+## Built for work that demands precision
 
-Installing TeXRA is simple. Follow our [Installation Guide](/guide/installation) to get set up in minutes.
+<div class="differentiators">
+
+  <div class="diff-item">
+    <h3>Agents, not autocomplete</h3>
+    <p>Each agent plans, executes, reflects, and iterates — the same loop a careful collaborator would follow. Search agents verify every citation against real databases. Writing agents compile and check their own LaTeX output. Nothing ships without verification.</p>
+  </div>
+
+  <div class="diff-item">
+    <h3>Lean 4 and Mathlib integration</h3>
+    <p>Search Mathlib theorems by type signature via Loogle. Inspect tactic proof states, check diagnostics, build projects, and fetch Mathlib cache — all from within your agent workflow. Formal verification as a first-class tool, not an afterthought.</p>
+  </div>
+
+  <div class="diff-item">
+    <h3>Auditable by design</h3>
+    <p>Every agent run produces versioned output files, color-coded diffs, and full reasoning traces. Your co-authors and referees can see exactly what changed and why. No black boxes in your publication pipeline.</p>
+  </div>
+
+  <div class="diff-item">
+    <h3>Symbolic and numerical computation</h3>
+    <p>Agents call WolframScript to evaluate integrals, check identities, simplify expressions, or verify numerical results. The computation runs on your machine — not approximated by a language model.</p>
+  </div>
+
+  <div class="diff-item">
+    <h3>Your data stays yours</h3>
+    <p>API calls go directly from your machine to the model provider you choose (Anthropic, OpenAI, Google, etc.). No TeXRA servers in the middle. Your unpublished results, proofs, and API keys never leave your environment.</p>
+  </div>
+
+  <div class="diff-item">
+    <h3>Native LaTeX comprehension</h3>
+    <p>Agents reason across theorem environments, <code>\label</code>/<code>\ref</code> graphs, BibTeX databases, TikZ source, and multi-file projects with <code>\input</code> and <code>\subfile</code> — not flattened plaintext.</p>
+  </div>
+
+</div>
+
+## How researchers use TeXRA
+
+> **Surveying a field with precision.** A mathematician studying optimal transport needs to understand recent connections to mean-field games. She runs the `search` agent across arXiv and Crossref with structured queries. The agent returns 20 verified references — real titles, real abstracts, real BibTeX — organized by relevance. She reviews the results, discards three that are tangential, and has a grounded related-work section anchored in the actual literature.
+
+> **Maintaining consistency across a long manuscript.** A theoretical physicist is finalizing a 45-page paper on anomalies in 4d gauge theories. Notation has drifted: `\mathcal{A}` and `A_\mu` refer to the same connection in different sections, and two `\label` keys are duplicated. He runs `correct` on the full project. The agent identifies every inconsistency, proposes unified notation, and outputs a diff. He reviews each change before accepting — the content is his, the bookkeeping is handled.
+
+> **Formalizing a result in Lean.** A researcher is writing a Lean 4 formalization of a combinatorial identity. She's stuck on which Mathlib lemma handles the inductive step. The `research` agent searches Loogle for `Finset.sum_bij`, inspects the type signature, and suggests the right import. She checks the proof state at the sticking point — the agent reads the goal and proposes a tactic sequence. The proof compiles.
 
 <div class="cta-container">
-  <a href="/guide/" class="cta-button">Explore the Documentation</a>
-  <a href="/guide/quick-start" class="cta-button cta-button-alt">Quick Start Guide</a>
+  <a href="/guide/quick-start" class="cta-button">Quick Start Guide</a>
+  <a href="/guide/built-in-agents" class="cta-button cta-button-alt">Browse All Agents</a>
 </div>
 
-If you run into a bug, drop us a line at [contact@texra.ai](mailto:contact@texra.ai).
+<div class="faq-section">
+
+## Common questions
+
+**What models does it support?**
+Anthropic Claude, OpenAI GPT, Google Gemini, DeepSeek, xAI Grok, and more via OpenRouter. Bring your own API key.
+
+**Does it work with Overleaf?**
+Yes. TeXRA integrates with Overleaf via git sync. See the [Overleaf guide](/guide/working-with-overleaf).
+
+**Does it work with Lean 4?**
+Yes. TeXRA includes dedicated Lean tools: Loogle search for Mathlib theorems by type signature, LSP-based proof state inspection, diagnostics, project build and cache management. Requires the Lean 4 VS Code extension.
+
+**Is my data private?**
+All API calls go directly from your machine to the model provider. TeXRA does not operate any intermediate servers. Your documents and API keys never leave your machine except to the provider you choose.
+
+**Can I build custom agents?**
+Yes. Agents are configured via YAML files. You can modify built-in agents or create entirely new ones — for your specific subfield, notation conventions, or workflow. See [Custom Agents](/guide/custom-agents).
+
+**Where do I get help?**
+Email [contact@texra.ai](mailto:contact@texra.ai) or open an issue on [GitHub](https://github.com/texra-ai/texra-issues).
+
+</div>
 
 <style>
-.features-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
-  margin-top: 2rem;
+/* Problem / solution sections */
+.problem-section {
+  max-width: 720px;
+  margin: 0 auto 2rem;
+  text-align: center;
 }
-.feature-item {
+.problem-section h2 {
+  color: var(--vp-c-text-1);
+  font-size: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+.problem-section p {
+  color: var(--vp-c-text-2);
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+.solution-section {
+  max-width: 720px;
+  margin: 0 auto 3rem;
+  text-align: center;
+}
+.solution-section h2 {
+  color: var(--vp-c-brand);
+  font-size: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+.solution-section p {
+  color: var(--vp-c-text-2);
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+/* How it works */
+.how-it-works {
+  max-width: 900px;
+  margin: 0 auto 3rem;
+}
+.how-it-works > h3 {
+  text-align: center;
+  font-size: 1.3rem;
+  margin-bottom: 1.5rem;
+}
+.workflow-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.workflow-step {
+  flex: 1;
+  min-width: 200px;
+  max-width: 250px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
   background-color: var(--vp-c-bg-soft);
-  padding: 1.5rem;
+  padding: 1.25rem;
   border-radius: 8px;
   border: 1px solid var(--vp-c-divider);
 }
-.feature-item h3 {
-  margin-top: 0;
-  margin-bottom: 0.75rem;
-  font-size: 1.1rem;
+.step-number {
+  font-size: 1.75rem;
   font-weight: 600;
+  color: var(--vp-c-brand);
+  margin-bottom: 0.5rem;
 }
-.feature-item p {
-  margin-bottom: 0.75rem;
-  line-height: 1.6;
-  font-size: 0.95rem;
+.step-content h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-size: 1.1rem;
+}
+.step-content p {
+  margin: 0;
   color: var(--vp-c-text-2);
-}
-.feature-example {
-  background-color: var(--vp-c-bg-mute);
-  padding: 0.5rem 0.75rem;
-  border-radius: 4px;
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.85rem;
-  border: 1px solid var(--vp-c-divider);
-  margin-top: 1rem;
+  font-size: 0.9rem;
   line-height: 1.4;
 }
+.workflow-arrow {
+  font-size: 1.5rem;
+  color: var(--vp-c-brand);
+  display: flex;
+  align-items: center;
+}
+
+/* Agent cards */
+.agents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+  margin-bottom: 3rem;
+}
+.agent-card {
+  background-color: var(--vp-c-bg-soft);
+  padding: 1.25rem;
+  border-radius: 8px;
+  border: 1px solid var(--vp-c-divider);
+}
+.agent-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.agent-icon {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.85rem;
+  color: var(--vp-c-brand);
+  background-color: var(--vp-c-bg-mute);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid var(--vp-c-divider);
+}
+.agent-type {
+  font-size: 0.75rem;
+  color: var(--vp-c-text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.agent-card h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-size: 1.05rem;
+}
+.agent-card p {
+  margin: 0;
+  color: var(--vp-c-text-2);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* Differentiators */
+.differentiators {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+  margin-bottom: 3rem;
+}
+.diff-item {
+  padding: 1rem 0;
+}
+.diff-item h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-size: 1.05rem;
+  color: var(--vp-c-text-1);
+}
+.diff-item p {
+  margin: 0;
+  color: var(--vp-c-text-2);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+/* FAQ */
+.faq-section {
+  max-width: 720px;
+  margin: 3rem auto;
+}
+.faq-section h2 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+.faq-section p {
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+.faq-section strong {
+  color: var(--vp-c-text-1);
+}
+
+/* CTAs */
 .cta-container {
   display: flex;
   gap: 1rem;
-  margin-top: 3rem; /* Increased margin */
+  margin: 3rem 0;
   justify-content: center;
   flex-wrap: wrap;
 }
@@ -229,105 +407,10 @@ If you run into a bug, drop us a line at [contact@texra.ai](mailto:contact@texra
 }
 .cta-button-alt:hover {
   background-color: var(--vp-c-brand-soft);
-  color: var(--vp-c-brand-dark); /* Ensure text color contrasts */
+  color: var(--vp-c-brand-dark);
 }
-.workflow-container {
-  margin: 2.5rem auto;
-  max-width: 1100px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-.workflow-steps {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  width: 100%;
-  flex-wrap: wrap;
-}
-.workflow-step {
-  flex: 1;
-  min-width: 200px;
-  max-width: 220px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  margin-bottom: 1rem;
-  background-color: var(--vp-c-bg-soft);
-  padding: 1.25rem;
-  border-radius: 8px;
-  border: 1px solid var(--vp-c-divider);
-}
-.step-number {
-  font-size: 1.75rem;
-  font-weight: 600;
-  color: var(--vp-c-brand);
-  margin-bottom: 0.5rem;
-}
-.step-content {
-  margin-bottom: 1rem;
-  width: 100%;
-}
-.step-content h3 {
-  margin-top: 0;
-  margin-bottom: 0.5rem;
-  font-size: 1.1rem;
-}
-.step-content p {
-  margin: 0;
-  color: var(--vp-c-text-2);
-  font-size: 0.9rem;
-  line-height: 1.3;
-}
-.step-icon {
-  font-size: 2rem;
-  color: var(--vp-c-brand);
-  margin-top: 0.5rem;
-}
-.workflow-arrow {
-  font-size: 1.5rem;
-  color: var(--vp-c-brand);
-  display: flex;
-  align-items: center;
-}
-.step-image {
-  margin-top: 0.5rem;
-  max-width: 180px;
-  position: relative;
-}
-.workflow-diff-image {
-  max-width: 100%;
-  height: auto;
-  border-radius: 4px;
-  border: 1px solid var(--vp-c-divider);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  transition: transform 0.2s;
-}
-.step-image a:hover .workflow-diff-image {
-  transform: translateY(-3px);
-}
-.view-pdf {
-  margin-top: 0.5rem;
-  color: var(--vp-c-brand);
-  font-size: 0.85rem;
-  text-align: center;
-  font-weight: 500;
-}
-@media (max-width: 960px) {
-  .workflow-steps {
-    gap: 1rem;
-    justify-content: center;
-  }
-  .workflow-step {
-    min-width: 160px;
-    max-width: 200px;
-  }
-  .workflow-arrow {
-    font-size: 1.25rem;
-  }
-}
+
+/* Responsive */
 @media (max-width: 768px) {
   .workflow-steps {
     flex-direction: column;
@@ -341,10 +424,6 @@ If you run into a bug, drop us a line at [contact@texra.ai](mailto:contact@texra
   .workflow-step {
     width: 100%;
     max-width: 300px;
-    margin-bottom: 0.5rem;
-  }
-  .step-image {
-    max-width: 220px;
   }
 }
 </style>
