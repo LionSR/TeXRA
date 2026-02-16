@@ -28,6 +28,8 @@ export interface ExecutionMeta {
   terminalStatus?: string;
   /** Runtime category override (e.g. 'process' for background bash). */
   category?: string;
+  /** AI-generated summary of what the session aimed to accomplish. */
+  description?: string;
 }
 
 /** Shape of a persisted todo item from tool-use flow state. */

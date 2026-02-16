@@ -68,3 +68,22 @@ export async function writeTerminalStatus(
     // Non-critical bookkeeping — don't let I/O errors disrupt execution lifecycle.
   }
 }
+
+/**
+ * Persist an AI-generated session description on an existing execution's metadata.
+ * Never throws — description is supplementary data.
+ */
+export async function writeSessionDescription(
+  executionId: ExecutionId,
+  description: string,
+): Promise<void> {
+  try {
+    const store = getExecutionStore(executionId);
+    const existing = await store.read<ExecutionMeta>('meta');
+    if (!existing) return;
+    await store.write('meta', { ...existing, description });
+    invalidateListingCache();
+  } catch {
+    // Non-critical bookkeeping — don't let I/O errors disrupt execution lifecycle.
+  }
+}
