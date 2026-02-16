@@ -43,6 +43,11 @@ Your memory persists across conversations, allowing you to continue tasks and re
 Note: when editing your memory folder, always try to keep its content up-to-date, coherent and organized. You can rename or delete files that are no longer relevant. Do not create new files unless necessary.
 </memory_tool_instructions>`;
 
+/** Extended memory instructions for agents with delegation tools. */
+const ORCHESTRATOR_MEMORY_INSTRUCTIONS = `<orchestrator_memory_protocol>
+Beyond basic progress tracking, record reusable intelligence: what approaches worked or failed and why, project structure and conventions you discovered, user preferences revealed through corrections or rejections, and effective problem-solving strategies. Consult these at session start instead of rediscovering from scratch.
+</orchestrator_memory_protocol>`;
+
 /**
  * Combine the base system prompt with optional rules from `.texrarules`.
  *
@@ -176,7 +181,7 @@ export async function buildInitialToolUsePrompts(
   agentPrompt: AgentPrompt,
   userVars: Record<string, any>,
   logger?: AgentLogger,
-  options?: { memoryEnabled?: boolean },
+  options?: { memoryEnabled?: boolean; hasDelegationTools?: boolean },
 ): Promise<InitialPrompts & { instructionSuffix: string }> {
   const builder = new PromptBuilder(
     agentPrompt,
@@ -191,6 +196,9 @@ export async function buildInitialToolUsePrompts(
   const suffixParts = [TOOL_USE_INSTRUCTIONS];
   if (options?.memoryEnabled) {
     suffixParts.push(MEMORY_TOOL_INSTRUCTIONS);
+    if (options.hasDelegationTools) {
+      suffixParts.push(ORCHESTRATOR_MEMORY_INSTRUCTIONS);
+    }
   }
   suffixParts.push(await buildWorkspaceInfoBlock());
 
