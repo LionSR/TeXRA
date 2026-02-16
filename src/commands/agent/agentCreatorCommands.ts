@@ -47,15 +47,17 @@ interface CreatorConfig {
 }
 
 // ============================================================
-// Tool presets for tool-use agents
+// Tool groups for tool-use agent creation
 // ============================================================
 
 interface ToolGroup {
   description: string;
   tools: string[];
+  /** Keywords in the agent description that suggest this group. */
+  keywords: string[];
 }
 
-/** Categorized tool groups for guided tool-use agent creation. */
+/** Categorized tool groups shown in the tool picker. */
 const TOOL_GROUPS: Record<string, ToolGroup> = {
   'File Operations': {
     description: 'Read, write, edit, search files and run shell commands',
@@ -68,10 +70,12 @@ const TOOL_GROUPS: Record<string, ToolGroup> = {
       'grep',
       'ls',
     ],
+    keywords: ['file', 'edit', 'code', 'write', 'read', 'script', 'shell'],
   },
   'Web & Search': {
     description: 'Search the web and fetch page content',
     tools: ['web_search', 'web_fetch'],
+    keywords: ['web', 'search', 'internet', 'online', 'url', 'fetch', 'browse'],
   },
   'Academic Research': {
     description: 'Search arXiv, CrossRef, and download papers',
@@ -82,6 +86,17 @@ const TOOL_GROUPS: Record<string, ToolGroup> = {
       'crossref_search',
       'crossref_doi',
     ],
+    keywords: [
+      'arxiv',
+      'paper',
+      'research',
+      'literature',
+      'review',
+      'survey',
+      'cite',
+      'doi',
+      'journal',
+    ],
   },
   'LaTeX Processing': {
     description: 'Extract figures, bibliography, TikZ, and count words',
@@ -91,14 +106,32 @@ const TOOL_GROUPS: Record<string, ToolGroup> = {
       'extract_tikz_figures',
       'texcount',
     ],
+    keywords: [
+      'latex',
+      'figure',
+      'tikz',
+      'bibliography',
+      'bib',
+      'word count',
+      'extract',
+    ],
   },
   'Citation Management': {
     description: 'Manage references with Zotero',
     tools: ['zotero_add', 'zotero_search', 'zotero_export'],
+    keywords: ['zotero', 'citation', 'reference', 'bibliography', 'endnote'],
   },
   Computation: {
     description: 'Mathematical computation with Wolfram Alpha',
     tools: ['wolfram'],
+    keywords: [
+      'math',
+      'compute',
+      'calculate',
+      'wolfram',
+      'symbolic',
+      'equation',
+    ],
   },
   'Agent Delegation': {
     description: 'Delegate tasks to other agents and manage executions',
@@ -108,6 +141,7 @@ const TOOL_GROUPS: Record<string, ToolGroup> = {
       'executions',
       'accept_run_files',
     ],
+    keywords: ['delegate', 'orchestrat', 'pipeline', 'multi-agent', 'chain'],
   },
   'Lean 4': {
     description: 'Lean 4 proof assistant integration',
@@ -118,52 +152,28 @@ const TOOL_GROUPS: Record<string, ToolGroup> = {
       'lean_inspect',
       'lean_loogle',
     ],
+    keywords: ['lean', 'proof', 'theorem', 'formal', 'verification'],
   },
   Utility: {
     description: 'Memory, todo tracking, and diagnostics',
     tools: ['memory', 'todo_write', 'diagnostics'],
+    keywords: ['memory', 'todo', 'diagnostic', 'track'],
   },
 };
 
-// ============================================================
-// Workflow mode presets
-// ============================================================
-
-interface WorkflowMode {
-  label: string;
-  description: string;
-  detail: string;
-  temperature: number;
-  rounds: number;
-  isRewrite: boolean;
+/** Match description keywords to suggest tool groups. */
+function suggestToolGroups(description: string): Set<string> {
+  const lower = description.toLowerCase();
+  const suggested = new Set<string>();
+  // File Operations is always suggested as a baseline
+  suggested.add('File Operations');
+  for (const [name, group] of Object.entries(TOOL_GROUPS)) {
+    if (group.keywords.some((kw) => lower.includes(kw))) {
+      suggested.add(name);
+    }
+  }
+  return suggested;
 }
-
-const WORKFLOW_MODES: WorkflowMode[] = [
-  {
-    label: 'Precise Editing',
-    description: 'For fixing, correcting, and refining existing documents',
-    detail: 'temperature: 0.1 | rounds: 2 | isRewrite: true',
-    temperature: 0.1,
-    rounds: 2,
-    isRewrite: true,
-  },
-  {
-    label: 'Creative Writing',
-    description: 'For drafting and generating new content',
-    detail: 'temperature: 0.8 | rounds: 2 | isRewrite: false',
-    temperature: 0.8,
-    rounds: 2,
-    isRewrite: false,
-  },
-  {
-    label: 'Quick Fix',
-    description: 'Single-pass correction for simple changes',
-    detail: 'temperature: 0.1 | rounds: 1 | isRewrite: true',
-    temperature: 0.1,
-    rounds: 1,
-    isRewrite: true,
-  },
-];
 
 const nunjucksEnv = nunjucks.configure({ autoescape: false });
 
@@ -326,9 +336,14 @@ async function handleCreateAgentWithAI(
       return;
     }
 
+    const descriptionPrompt =
+      category === 'toolUse'
+        ? 'What should this agent do? Mention capabilities it needs (e.g., search papers, edit files, browse the web)'
+        : 'What should this agent do? Mention whether it rewrites existing documents or creates new ones';
+
     const description = await vscode.window.showInputBox({
       title: `New ${categoryLabel} Agent: ${agentName}`,
-      prompt: 'Briefly describe what this agent should do',
+      prompt: descriptionPrompt,
     });
     if (!description) {
       return;
@@ -353,22 +368,7 @@ async function createWorkflowAgent(
   agentName: string,
   description: string,
 ) {
-  // Step 1: Pick workflow mode
-  const modeItems: vscode.QuickPickItem[] = WORKFLOW_MODES.map((m) => ({
-    label: m.label,
-    description: m.description,
-    detail: m.detail,
-  }));
-  const selectedMode = await vscode.window.showQuickPick(modeItems, {
-    title: `Workflow Agent: ${agentName}`,
-    placeHolder: 'Select a workflow mode',
-  });
-  if (!selectedMode) {
-    return;
-  }
-  const mode = WORKFLOW_MODES.find((m) => m.label === selectedMode.label)!;
-
-  // Step 2: Single vs multiple output
+  // Single vs multiple output (structural requirement)
   const outputItems: vscode.QuickPickItem[] = [
     {
       label: 'Single output file',
@@ -409,10 +409,6 @@ async function createWorkflowAgent(
 
   const targetDir = await agentDirectories.custom();
   const filePath = vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`));
-  const prefillsYaml = Array.from({ length: mode.rounds }, () => '<scratchpad>')
-    .map((p) => `"${p}"`)
-    .join(', ');
-
   const multipleNote = isMultipleOutput
     ? [
         'IMPORTANT: This agent must handle MULTIPLE output files. Adjust the structure above:',
@@ -425,15 +421,9 @@ async function createWorkflowAgent(
         outputFilesNote,
       ].join('\n')
     : '';
-
   const vars = {
     AGENT_NAME: agentName,
     DESCRIPTION: description,
-    WORKFLOW_MODE: mode.label,
-    TEMPERATURE: String(mode.temperature),
-    ROUNDS: String(mode.rounds),
-    IS_REWRITE: String(mode.isRewrite),
-    PREFILLS: prefillsYaml,
     MULTIPLE_OUTPUT_NOTE: multipleNote,
   };
   let yamlContent = await tryAIGeneration(config, 'workflow', vars);
@@ -446,9 +436,6 @@ async function createWorkflowAgent(
       AGENT_NAME: agentName,
       DESCRIPTION: description,
       OUTPUT_FILES: outputFilesYaml,
-      TEMPERATURE: String(mode.temperature),
-      ROUNDS: String(mode.rounds),
-      IS_REWRITE: String(mode.isRewrite),
     });
   }
 
@@ -469,22 +456,28 @@ async function createWorkflowAgent(
 // Tool-use agent creation
 // ============================================================
 
-/** Present multi-select quick pick for tool groups, return flat list of selected tool names. */
-async function pickToolGroups(
+/**
+ * Present a multi-select tool picker with groups pre-checked based on the
+ * agent description. Returns a flat list of selected tool names.
+ */
+async function pickTools(
   agentName: string,
-): Promise<string[] | undefined> {
+  description: string,
+): Promise<{ tools: string[]; groups: string[] } | undefined> {
+  const suggested = suggestToolGroups(description);
+
   const items: vscode.QuickPickItem[] = Object.entries(TOOL_GROUPS).map(
     ([label, group]) => ({
       label,
       description: group.description,
       detail: group.tools.join(', '),
-      picked: label === 'File Operations',
+      picked: suggested.has(label),
     }),
   );
 
   const selected = await vscode.window.showQuickPick(items, {
     title: `Tool Use Agent: ${agentName}`,
-    placeHolder: 'Select tool groups for this agent',
+    placeHolder: 'Select tool groups (pre-selected based on your description)',
     canPickMany: true,
   });
   if (!selected || selected.length === 0) {
@@ -492,13 +485,15 @@ async function pickToolGroups(
   }
 
   const tools: string[] = [];
+  const groups: string[] = [];
   for (const item of selected) {
     const group = TOOL_GROUPS[item.label];
     if (group) {
       tools.push(...group.tools);
+      groups.push(item.label);
     }
   }
-  return tools;
+  return { tools, groups };
 }
 
 async function createToolUseAgent(
@@ -506,56 +501,19 @@ async function createToolUseAgent(
   agentName: string,
   description: string,
 ) {
-  // Step 1: Pick tool groups
-  const selectedTools = await pickToolGroups(agentName);
-  if (!selectedTools) {
+  const selection = await pickTools(agentName, description);
+  if (!selection) {
     return;
   }
 
-  // Step 2: Pick temperature
-  const tempItems: vscode.QuickPickItem[] = [
-    {
-      label: 'Precise (0.3)',
-      description: 'Deterministic, focused tool calls',
-      detail: 'Best for file editing, code generation, structured tasks',
-    },
-    {
-      label: 'Balanced (0.7)',
-      description: 'Good mix of creativity and reliability',
-      detail: 'Best for research, exploration, general-purpose tasks',
-    },
-    {
-      label: 'Creative (1.0)',
-      description: 'More varied and exploratory responses',
-      detail: 'Best for brainstorming, open-ended research',
-    },
-  ];
-  const tempChoice = await vscode.window.showQuickPick(tempItems, {
-    title: `Tool Use Agent: ${agentName}`,
-    placeHolder: 'Select the agent temperature',
-  });
-  if (!tempChoice) {
-    return;
-  }
-  const temperature = tempChoice.label.includes('0.3')
-    ? '0.3'
-    : tempChoice.label.includes('0.7')
-      ? '0.7'
-      : '1.0';
-
-  const toolsYaml = selectedTools.map((t) => `    - ${t}`).join('\n');
-  const selectedGroupNames = Object.entries(TOOL_GROUPS)
-    .filter(([, group]) => group.tools.some((t) => selectedTools.includes(t)))
-    .map(([name]) => name);
-
+  const toolsYaml = selection.tools.map((t) => `    - ${t}`).join('\n');
   const targetDir = await agentDirectories.custom();
   const filePath = vscode.Uri.file(path.join(targetDir, `${agentName}.yaml`));
   const vars = {
     AGENT_NAME: agentName,
     DESCRIPTION: description,
-    SELECTED_TOOLS: selectedTools.join(', '),
-    SELECTED_GROUPS: selectedGroupNames.join(', '),
-    TEMPERATURE: temperature,
+    SELECTED_TOOLS: selection.tools.join(', '),
+    SELECTED_GROUPS: selection.groups.join(', '),
   };
   let yamlContent = await tryAIGeneration(config, 'toolUse', vars);
 
@@ -564,7 +522,6 @@ async function createToolUseAgent(
       AGENT_NAME: agentName,
       DESCRIPTION: description,
       TOOLS_YAML: toolsYaml,
-      TEMPERATURE: temperature,
     });
   }
 

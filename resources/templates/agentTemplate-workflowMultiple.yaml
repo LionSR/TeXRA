@@ -7,21 +7,16 @@ description: {{ DESCRIPTION }}
 settings:
   agentCategory: workflow
   isMultipleOutput: true
-  temperature: {{ TEMPERATURE }}
-  isRewrite: {{ IS_REWRITE }}
+  temperature: 0.1
+  isRewrite: true
   documentTag: latex_documents
   endTag: </latex_documents>
   defaultOutputFiles:
     {{ OUTPUT_FILES }}
   outputExt: tex
-  rounds: {{ ROUNDS }}
   prefills:
-{% if ROUNDS == '1' %}
-    - "<scratchpad>"
-{% else %}
     - "<scratchpad>"
     - "<scratchpad>"
-{% endif %}
 
 # --- Agent Prompts ---
 prompts:
@@ -72,16 +67,9 @@ prompts:
     {% raw %}{% endif %}{% endraw %}
 
   userRequest:
-{% if ROUNDS == '1' %}
-    - |
-        Brainstorm your plan in <scratchpad> with bullet points.
-        Then wrap each output in <latex_documents> with <document name="..."> blocks
-        following the order in OUTPUT_FILES_ORDER.
-{% else %}
     - |
         Brainstorm your plan in <scratchpad> with bullet points.
         Then wrap each output in <latex_documents> with <document name="..."> blocks
         following the order in OUTPUT_FILES_ORDER.
     - |
         Review the draft outputs and note targeted refinements for each document in <scratchpad>. Apply the improvements and emit the updated <latex_documents> content in the same order.
-{% endif %}
