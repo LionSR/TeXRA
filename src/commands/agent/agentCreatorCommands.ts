@@ -75,19 +75,18 @@ interface AgentBlueprint {
 // Runtime variable passthrough (protects {{ }} from Nunjucks)
 // ============================================================
 
-/** Variables available in prompts for BOTH agent types. */
-const SHARED_VARS = [
+/** Tool-use agents only receive the user instruction — they access files via tools. */
+const TOOL_USE_VARS = ['INSTRUCTION'];
+
+/** Workflow agents receive pre-loaded file content and document structure variables. */
+const WORKFLOW_VARS = [
   'INPUT_FILE',
   'INPUT_CONTENT',
+  'ALL_INPUTS',
   'ALL_AUXILIARYS',
   'ALL_REFERENCES',
   'ADDITIONAL_INPUTS',
   'INSTRUCTION',
-];
-
-/** Variables that only apply to workflow agents. */
-const WORKFLOW_ONLY_VARS = [
-  'ALL_INPUTS',
   'REFERENCE_CONTENT',
   'AUXILIARY_CONTENT',
   'OUTPUT_FILES_ORDER',
@@ -98,8 +97,8 @@ function buildPassthrough(vars: string[]): Record<string, string> {
 }
 
 const PASSTHROUGH: Record<AgentCategory, Record<string, string>> = {
-  toolUse: buildPassthrough(SHARED_VARS),
-  workflow: buildPassthrough([...SHARED_VARS, ...WORKFLOW_ONLY_VARS]),
+  toolUse: buildPassthrough(TOOL_USE_VARS),
+  workflow: buildPassthrough(WORKFLOW_VARS),
 };
 
 // ============================================================
