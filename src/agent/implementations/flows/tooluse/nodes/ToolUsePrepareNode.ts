@@ -109,6 +109,11 @@ export class ToolUsePrepareNode<C> extends Node<
       userChannels,
     };
 
+    // Notify orchestrator that initialization is done and model call is about to start.
+    // Without this, long initial prompts produce no progress updates, leaving
+    // the orchestrator unaware that the subagent is working.
+    this.services.onProgress?.({ kind: 'started' });
+
     return FlowTransition.DEFAULT;
   }
 }

@@ -41,10 +41,16 @@ export interface OverviewProgressUpdate {
   readonly cost?: number;
 }
 
+/** Subagent has finished initialization and is about to call the model. */
+export interface StartedProgressUpdate {
+  readonly kind: 'started';
+}
+
 export type SubagentProgressUpdate =
   | TodoProgressUpdate
   | RoundProgressUpdate
-  | OverviewProgressUpdate;
+  | OverviewProgressUpdate
+  | StartedProgressUpdate;
 
 // ============================================================================
 // Formatting helpers
@@ -170,18 +176,21 @@ export function formatSubagentProgress(
     case 'overview': {
       const fileList =
         update.filesChanged.length > 0
-          ? update.filesChanged.map((f) => escapeText(f)).join(', ')
+          ? update.filesChanged.map((f) => escapeAttr(f)).join(', ')
           : 'none';
       const attrs = [
         `type="overview"`,
         `tool-calls="${update.toolCallCount}"`,
-        `files-changed="${escapeAttr(fileList)}"`,
+        `files-changed="${fileList}"`,
       ];
       if (update.cost !== undefined) {
         attrs.push(`cost="${update.cost.toFixed(4)}"`);
       }
       return `<subagent-progress ${idAttr} ${agentAttr} ${attrs.join(' ')} />`;
     }
+
+    case 'started':
+      return `<subagent-progress ${idAttr} ${agentAttr} type="started" />`;
   }
 }
 
