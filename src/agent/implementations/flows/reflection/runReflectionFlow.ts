@@ -298,7 +298,14 @@ export async function runReflectionFlow<C = unknown>(
       );
     }
 
-    status = executionToEndStatus(flowStatus) as EndGroupStatus;
+    if (shared?.lastError) {
+      status = END_GROUP_STATUS.ERROR;
+      // Re-throw after state persistence so runFlowWithLifecycle logs
+      // the error and shows the user notification.
+      throw new Error(shared.lastError.message);
+    } else {
+      status = executionToEndStatus(flowStatus) as EndGroupStatus;
+    }
   } catch (error) {
     status = END_GROUP_STATUS.ERROR;
     throw error;
