@@ -122,21 +122,15 @@ const SDK_ERRORS: SdkErrorEntry[] = [
   { ctor: GoogleGenAIApiError },
 ];
 
-/** 4xx status codes that are retryable (most 4xx are not) */
-const RETRYABLE_4XX_CODES = new Set([
-  StatusCodes.REQUEST_TIMEOUT, // 408
-  StatusCodes.TOO_MANY_REQUESTS, // 429
-]);
-
 function isRetryableStatusCode(statusCode?: number): boolean {
   if (statusCode === undefined) {
     return false;
   }
-  // All 5xx errors are retryable
-  if (statusCode >= StatusCodes.INTERNAL_SERVER_ERROR) {
-    return true;
-  }
-  return RETRYABLE_4XX_CODES.has(statusCode);
+  // All 4xx and 5xx errors are retryable so the user always gets
+  // auto-retries and a manual retry prompt instead of immediate failure.
+  // Errors that need human attention (401, 403) skip auto-retries via
+  // shouldAutoRetry() but still show the manual retry prompt.
+  return statusCode >= 400;
 }
 
 /** Partial result before relay detection (isRelayError/rawErrorBody added later). */
