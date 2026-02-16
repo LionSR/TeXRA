@@ -348,6 +348,9 @@ export const SETTINGS_VIEW_CMD = {
   GET_SUPER_YOLO_ENABLED: 'getSuperYoloEnabled',
   SET_SUPER_YOLO_ENABLED: 'setSuperYoloEnabled',
   APPLY_AGENT_MODE_PRESET: 'applyAgentModePreset',
+  SAVE_AGENT_MODE_PRESET: 'saveAgentModePreset',
+  DELETE_AGENT_MODE_PRESET: 'deleteAgentModePreset',
+  GET_AGENT_MODE_PRESETS: 'getAgentModePresets',
   // Tool dashboard commands
   GET_TOOL_DASHBOARD_DATA: 'getToolDashboardData',
   OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',
@@ -369,5 +372,6 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_AGENT_SELECTION: 'updateAgentSelection',
   UPDATE_CUSTOM_AGENT_DIR: 'updateCustomAgentDir',
   UPDATE_SUPER_YOLO_ENABLED: 'updateSuperYoloEnabled',
+  UPDATE_AGENT_MODE_PRESETS: 'updateAgentModePresets',
   UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
 } as const;
