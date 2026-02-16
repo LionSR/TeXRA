@@ -84,6 +84,7 @@ import {
 import { getConfig } from '@utils/config/configUtils';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
+import { AGENT_MODE_PRESETS } from '@shared/schemas/agentPresets';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
 import type {
@@ -405,6 +406,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE]: (data) =>
         this.handleRevealAgentFile(data),
 
+      // Agent mode preset handlers
+      [SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET]: (data) =>
+        this.handleApplyAgentModePreset(data),
+
       // Tool dashboard handlers
       [SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA]: () =>
         this.handleGetToolDashboardData(),
@@ -658,6 +663,59 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     void vscode.window.showInformationMessage(
       `Super YOLO mode ${data.enabled ? 'enabled' : 'disabled'}`,
     );
+  }
+
+  // ============================================================
+  // Agent mode preset handler implementations
+  // ============================================================
+
+  private async handleApplyAgentModePreset(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.APPLY_AGENT_MODE_PRESET>,
+  ): Promise<void> {
+    try {
+      const preset = AGENT_MODE_PRESETS.find((p) => p.id === data.presetId);
+      if (!preset) {
+        await vscode.window.showErrorMessage(
+          `Unknown preset: ${data.presetId}`,
+        );
+        return;
+      }
+
+      await loadAgents();
+
+      // Build enabled keys by matching preset agent names to registered agents.
+      // For each category, find agents whose name matches the preset list and
+      // collect their source:name keys. Agents not in the preset are excluded
+      // (i.e., disabled).
+      const workflowNames = new Set(preset.workflowAgents);
+      const toolUseNames = new Set(preset.toolUseAgents);
+
+      const workflowKeys = getWorkflowAgents()
+        .filter((e) => workflowNames.has(e.name))
+        .map((e) => createKey(e.source, e.name));
+
+      const toolUseKeys = getToolUseAgents()
+        .filter((e) => toolUseNames.has(e.name))
+        .map((e) => createKey(e.source, e.name));
+
+      await workspaceSM.update(WorkspaceStateKey.ENABLED_AGENTS, workflowKeys);
+      await workspaceSM.update(
+        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+        toolUseKeys,
+      );
+
+      await this.refreshAfterAgentMutation();
+
+      void vscode.window.showInformationMessage(
+        `Applied "${preset.name}" preset`,
+      );
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to apply agent mode preset',
+        error,
+      );
+    }
   }
 
   // ============================================================

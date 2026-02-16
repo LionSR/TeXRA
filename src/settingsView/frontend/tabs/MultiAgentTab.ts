@@ -1,7 +1,7 @@
 /**
  * MultiAgentTab component - multi-agent settings for the settings view.
- * Contains the Super YOLO toggle for auto-approving agent delegation proposals
- * and reliability settings (compaction threshold, retry config).
+ * Contains agent mode presets for quick configuration, the Super YOLO toggle
+ * for auto-approving agent delegation proposals, and reliability settings.
  */
 
 // Third-party imports
@@ -9,18 +9,23 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { designTokens, commonViewStyles } from '@shared/styles';
+import { codiconStyles, designTokens, commonViewStyles } from '@shared/styles';
 
 // Local imports - shared utils
 import { createEvent } from '@shared/utils/events';
 
 // Local imports - shared schemas
 import type { NumberVscodeSetting } from '@shared/schemas/settingsViewMessages';
+import {
+  AGENT_MODE_PRESETS,
+  type AgentModePreset,
+} from '@shared/schemas/agentPresets';
 
 @customElement('multi-agent-tab')
 export class MultiAgentTab extends LitElement {
   static override styles = [
     designTokens,
+    codiconStyles,
     commonViewStyles,
     css`
       :host {
@@ -44,6 +49,77 @@ export class MultiAgentTab extends LitElement {
         font-size: var(--font-size-small);
       }
 
+      /* Preset cards */
+      .preset-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: var(--spacing-medium);
+      }
+
+      .preset-card {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-small);
+        padding: var(--spacing-medium);
+        background-color: var(--vscode-editor-inactiveSelectionBackground);
+        border: var(--border-thin) solid var(--color-border);
+        border-radius: var(--border-radius);
+        cursor: pointer;
+        transition:
+          border-color 0.15s ease,
+          background-color 0.15s ease;
+      }
+
+      .preset-card:hover {
+        border-color: var(--vscode-focusBorder);
+        background-color: var(
+          --vscode-list-hoverBackground,
+          rgba(128, 128, 128, 0.1)
+        );
+      }
+
+      .preset-card-header {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+      }
+
+      .preset-card-icon {
+        font-size: var(--font-size-lg);
+        color: var(--vscode-focusBorder);
+        flex-shrink: 0;
+      }
+
+      .preset-card-name {
+        font-size: var(--font-size-sm);
+        font-weight: 500;
+        color: var(--vscode-foreground);
+      }
+
+      .preset-card-description {
+        font-size: var(--font-size-xs);
+        color: var(--color-text-secondary);
+        line-height: 1.4;
+        margin: 0;
+      }
+
+      .preset-card-agents {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: var(--spacing-tiny);
+      }
+
+      .preset-agent-badge {
+        display: inline-block;
+        padding: 1px 6px;
+        font-size: 10px;
+        color: var(--color-text-secondary);
+        background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
+        border-radius: var(--border-radius);
+      }
+
+      /* Reliability settings */
       .reliability-row {
         display: flex;
         align-items: center;
@@ -87,6 +163,12 @@ export class MultiAgentTab extends LitElement {
     );
   }
 
+  private handlePresetClick(preset: AgentModePreset): void {
+    this.dispatchEvent(
+      createEvent('apply-agent-mode-preset', { presetId: preset.id }),
+    );
+  }
+
   private handleReliabilityChange(
     setting: NumberVscodeSetting,
     input: HTMLInputElement,
@@ -103,6 +185,28 @@ export class MultiAgentTab extends LitElement {
     this.dispatchEvent(
       createEvent('reliability-setting-change', { key: setting.key, value }),
     );
+  }
+
+  private renderPresetCard(preset: AgentModePreset): TemplateResult {
+    const allAgents = [...preset.toolUseAgents, ...preset.workflowAgents];
+    return html`
+      <div
+        class="preset-card"
+        @click=${() => this.handlePresetClick(preset)}
+        title="Apply ${preset.name} preset"
+      >
+        <div class="preset-card-header">
+          <span class="codicon ${preset.icon} preset-card-icon"></span>
+          <span class="preset-card-name">${preset.name}</span>
+        </div>
+        <p class="preset-card-description">${preset.description}</p>
+        <div class="preset-card-agents">
+          ${allAgents.map(
+            (name) => html`<span class="preset-agent-badge">${name}</span>`,
+          )}
+        </div>
+      </div>
+    `;
   }
 
   private renderReliabilitySetting(
@@ -131,6 +235,17 @@ export class MultiAgentTab extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="multi-agent-container tab-content-container">
+        <h3>Mode Presets</h3>
+
+        <p class="text-secondary setting-description">
+          Apply a preset to quickly configure which agents are enabled for your
+          workflow. This updates the Agents tab selection.
+        </p>
+
+        <div class="preset-grid">
+          ${AGENT_MODE_PRESETS.map((p) => this.renderPresetCard(p))}
+        </div>
+
         <h3>Agent Delegation</h3>
 
         <p class="text-secondary setting-description">

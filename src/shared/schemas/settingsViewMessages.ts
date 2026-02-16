@@ -379,6 +379,12 @@ const SetSuperYoloEnabledMessageSchema = z.object({
   enabled: z.boolean(),
 });
 
+// Agent mode preset inbound messages
+const ApplyAgentModePresetMessageSchema = z.object({
+  command: z.literal(CMD.APPLY_AGENT_MODE_PRESET),
+  presetId: z.string().min(1),
+});
+
 // Tool dashboard inbound messages
 const GetToolDashboardDataMessageSchema = z.object({
   command: z.literal(CMD.GET_TOOL_DASHBOARD_DATA),
@@ -457,6 +463,8 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     // Super YOLO messages
     GetSuperYoloEnabledMessageSchema,
     SetSuperYoloEnabledMessageSchema,
+    // Agent mode preset messages
+    ApplyAgentModePresetMessageSchema,
   ],
 );
 
