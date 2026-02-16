@@ -38,6 +38,8 @@ export interface OverviewProgressUpdate {
   readonly kind: 'overview';
   readonly toolCallCount: number;
   readonly filesChanged: string[];
+  readonly linesChanged?: { readonly added: number; readonly removed: number };
+  readonly cost?: number;
 }
 
 export type SubagentProgressUpdate =
@@ -171,7 +173,19 @@ export function formatSubagentProgress(
         update.filesChanged.length > 0
           ? update.filesChanged.map((f) => escapeText(f)).join(', ')
           : 'none';
-      return `<subagent-progress ${idAttr} ${agentAttr} type="overview" tool-calls="${update.toolCallCount}" files-changed="${escapeAttr(fileList)}" />`;
+      const attrs = [
+        `type="overview"`,
+        `tool-calls="${update.toolCallCount}"`,
+        `files-changed="${escapeAttr(fileList)}"`,
+      ];
+      if (update.linesChanged) {
+        attrs.push(`lines-added="${update.linesChanged.added}"`);
+        attrs.push(`lines-removed="${update.linesChanged.removed}"`);
+      }
+      if (update.cost !== undefined) {
+        attrs.push(`cost="${update.cost.toFixed(4)}"`);
+      }
+      return `<subagent-progress ${idAttr} ${agentAttr} ${attrs.join(' ')} />`;
     }
   }
 }
