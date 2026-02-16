@@ -219,10 +219,6 @@ export class MultiAgentTab extends LitElement {
     );
   }
 
-  private handleSavePreset(): void {
-    this.dispatchEvent(createEvent('save-agent-mode-preset', undefined));
-  }
-
   private handleReliabilityChange(
     setting: NumberVscodeSetting,
     input: HTMLInputElement,
@@ -303,14 +299,6 @@ export class MultiAgentTab extends LitElement {
       <div class="multi-agent-container tab-content-container">
         <div class="preset-section-header">
           <h3>Mode Presets</h3>
-          <button
-            class="tab-action-btn"
-            @click=${this.handleSavePreset}
-            title="Save current agent configuration as a preset"
-          >
-            <span class="codicon codicon-save"></span>
-            Save Current
-          </button>
         </div>
 
         <p class="text-secondary setting-description">
