@@ -199,6 +199,13 @@ export abstract class RetryableInvocationNode<
     }
   }
 
+  /** Auth/permission errors (401, 403) skip auto-retries — they need human attention. */
+  shouldAutoRetry(error: Error): boolean {
+    const formatted = formatProviderHttpError(error);
+    const code = formatted.statusCode;
+    return code !== 401 && code !== 403;
+  }
+
   protected isBackgroundModeActive(): boolean {
     return false;
   }

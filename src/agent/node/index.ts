@@ -149,6 +149,16 @@ class Node<
     return false;
   }
   /**
+   * Whether this error should be auto-retried (silent retries with backoff).
+   * Return false to skip auto-retries and go straight to retryPrompt().
+   * Useful for errors that need human attention (e.g., auth errors).
+   *
+   * Default: true (all errors are auto-retried).
+   */
+  shouldAutoRetry(_error: Error): boolean {
+    return true;
+  }
+  /**
    * Override clone to reset execution-specific state.
    * Prevents stale signal/retry state from affecting new executions.
    *
@@ -195,8 +205,9 @@ class Node<
           // This prevents unnecessary retries when the user intentionally cancelled
           const isAborted = this.signal?.aborted;
           const isLastAutoRetry = this.currentRetry === effectiveMaxRetries - 1;
+          const skipAutoRetry = !this.shouldAutoRetry(e as Error);
 
-          if (isLastAutoRetry || isAborted) {
+          if (isLastAutoRetry || isAborted || skipAutoRetry) {
             // Auto-retries exhausted - try manual retry (unless aborted)
             if (!isAborted) {
               const shouldRetry = await this.retryPrompt(prepRes, e as Error);
