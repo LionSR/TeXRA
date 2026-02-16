@@ -129,8 +129,33 @@ async function executeSubagent(
   let hasDelivered = false;
   let childStreamId: StreamTabId | undefined;
 
+  // Coalesce rapid progress updates (especially todos) to avoid flooding
+  // the orchestrator's context. Latest-per-kind with debounce: todo updates
+  // are buffered and flushed after PROGRESS_DEBOUNCE_MS of quiet time;
+  // other kinds (started, overview, round) are delivered immediately since
+  // they fire infrequently.
+  const PROGRESS_DEBOUNCE_MS = 3_000;
+  let pendingTodos: SubagentProgressUpdate | null = null;
+  let todoTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function flushPendingTodos(): void {
+    if (!pendingTodos || hasDelivered) return;
+    const msg = formatSubagentProgress(executionId, agentName, pendingTodos);
+    ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+    pendingTodos = null;
+  }
+
   function onProgress(update: SubagentProgressUpdate): void {
     if (hasDelivered) return;
+    if (update.kind === 'todos') {
+      pendingTodos = update;
+      if (todoTimer) clearTimeout(todoTimer);
+      todoTimer = setTimeout(flushPendingTodos, PROGRESS_DEBOUNCE_MS);
+      return;
+    }
+    // Flush any buffered todos before sending a non-todo update
+    // so the orchestrator sees them in order.
+    flushPendingTodos();
     const msg = formatSubagentProgress(executionId, agentName, update);
     ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
   }
@@ -147,6 +172,8 @@ async function executeSubagent(
     onProgress,
     onBeforeWaiting: (lastResponse) => {
       if (hasDelivered || !childStreamId) return;
+      if (todoTimer) clearTimeout(todoTimer);
+      flushPendingTodos();
       hasDelivered = true;
       const msg = formatSubagentDelivery(agentName, {
         category: 'toolUse' as const,
@@ -160,6 +187,8 @@ async function executeSubagent(
     },
     onCompleted: (result) => {
       if (hasDelivered) return;
+      if (todoTimer) clearTimeout(todoTimer);
+      flushPendingTodos();
       hasDelivered = true;
       const msg = formatSubagentDelivery(agentName, result);
       void getExecutionStore(executionId).write('report', msg);
@@ -167,6 +196,7 @@ async function executeSubagent(
     },
   });
   promise.catch((err: unknown) => {
+    if (todoTimer) clearTimeout(todoTimer);
     const msg = formatSubagentError(executionId, agentName, err);
     void getExecutionStore(executionId).write('report', msg);
     ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
