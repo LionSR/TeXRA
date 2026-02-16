@@ -383,4 +383,4 @@ Now that you understand TeXRA's LaTeX diff functionality, you may be interested 
 
 - [Intelligent Merge](/guide/intelligent-merge) - Learn how to combine changes intelligently
 - [File Management](/guide/file-management) - Understand how to organize your files effectively
-- [Best Practices](/reference/best-practices) - Discover recommended workflows using diff features
+- [Best Practices](/guide/best-practices) - Discover recommended workflows using diff features
