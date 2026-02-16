@@ -129,15 +129,16 @@ export class ToolUseCycleNode<C> extends Node<
       userChannels: prepRes.userChannels,
     };
 
-    // Emit overview progress after each completed cycle (model call count + files changed).
-    // totalRounds = number of completed model-call cycles (incremented inside the inner flow).
+    // Emit overview progress after each completed cycle.
+    // toolCallCount = actual number of tool invocations (not model cycles).
     if (execRes.outcome === 'completed') {
       const { onProgress } = this.services;
       if (onProgress) {
-        const edits = workspaceSnapshot.interactions?.edits ?? [];
+        const interactions = workspaceSnapshot.interactions;
+        const edits = interactions?.edits ?? [];
         onProgress({
           kind: 'overview',
-          toolCallCount: prepRes.runState.totalRounds,
+          toolCallCount: interactions?.toolCallCount ?? 0,
           filesChanged: edits.map(
             (e: { path: string }) => e.path,
           ),
