@@ -161,7 +161,6 @@ const baseConfig = {
             { text: 'LaTeX Compilation', link: '/guide/latex-compilation.md' },
             { text: 'Best Practices', link: '/guide/best-practices.md' },
             { text: 'Troubleshooting', link: '/guide/troubleshooting' },
-            { text: 'Glossary', link: '/guide/glossary' },
             { text: 'Acknowledgments', link: '/guide/acknowledgments.md' },
           ],
         },
