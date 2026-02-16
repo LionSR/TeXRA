@@ -154,20 +154,12 @@ export class RoundPersistedFlow<
       }
 
       // Determine final status
-      if (currentShared.lastError) {
-        status = EXECUTION_STATUS.ERROR;
-      } else {
-        const interrupted =
-          this.callbacks.checkInterruption?.() ||
-          !currentShared.continueRounds;
-        if (interrupted) {
-          status = EXECUTION_STATUS.INTERRUPTED;
-        } else {
-          await this.callbacks.onRoundCompleted?.(
-            currentShared.currentRound,
-            currentShared,
-          );
-        }
+      status = this.resolveTerminalStatus(currentShared);
+      if (status === EXECUTION_STATUS.COMPLETED) {
+        await this.callbacks.onRoundCompleted?.(
+          currentShared.currentRound,
+          currentShared,
+        );
       }
     } catch (error) {
       status = EXECUTION_STATUS.ERROR;
@@ -212,6 +204,24 @@ export class RoundPersistedFlow<
       shared.continueRounds &&
       !isRoundAtOrBeyondLimit(shared.currentRound + 1, shared.totalRounds)
     );
+  }
+
+  /**
+   * Derive terminal ExecutionStatus from shared state after the round loop exits.
+   *
+   * Priority:
+   * 1. lastError → ERROR (node-level failure)
+   * 2. interrupted / !continueRounds → INTERRUPTED (early stop)
+   * 3. otherwise → COMPLETED (all rounds finished normally)
+   */
+  private resolveTerminalStatus(shared: S): ExecutionStatus {
+    if (shared.lastError) {
+      return EXECUTION_STATUS.ERROR;
+    }
+    if (this.callbacks.checkInterruption?.() || !shared.continueRounds) {
+      return EXECUTION_STATUS.INTERRUPTED;
+    }
+    return EXECUTION_STATUS.COMPLETED;
   }
 
   /**
