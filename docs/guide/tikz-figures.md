@@ -254,4 +254,4 @@ Now that you understand how to work with TikZ figures in TeXRA, you may want to 
 
 - [LaTeX Diff](/guide/latex-diff) - Learn how to compare document versions including figures
 - [Tool Integration](/guide/tool-integration) - Discover other tools TeXRA integrates with
-- [Best Practices](/reference/best-practices) - Learn general best practices for working with TeXRA
+- [Best Practices](/guide/best-practices) - Learn general best practices for working with TeXRA
