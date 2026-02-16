@@ -15,13 +15,13 @@ prompts:
 
     CRITICAL RULES:
     - agentCategory MUST be "toolUse" (not "workflow").
-    - ONLY include tools explicitly listed by the user — do NOT add extras.
+    - ONLY include the tools the user selected — do NOT add extras or remove any.
     - userRequest MUST be a single string (not an array), and MUST contain {{ INSTRUCTION }}
       so the user's free-text instruction is passed through at runtime.
-    - Use the temperature specified by the user.
-    - All fields with defaults can be omitted if the default value is acceptable.
+    - Infer an appropriate temperature from the description (0.7 is a good default).
     - The systemPrompt should describe the agent's role and explain how to use the selected tools.
-    - Do NOT invent tools that are not in the selected list.
+      Tailor the guidance to the specific tool groups available ({{ SELECTED_GROUPS }}).
+    - All fields with defaults can be omitted if the default value is acceptable.
     Respond only with the YAML wrapped in <yaml> tags.
 
     TEMPLATE VARIABLES available in prompts (Nunjucks double-brace syntax):
@@ -37,8 +37,7 @@ prompts:
     Goal: {{ DESCRIPTION }}.
 
     The user selected these tools: {{ SELECTED_TOOLS }}
-    Tool groups selected: {{ SELECTED_GROUPS }}
-    Temperature: {{ TEMPERATURE }}
+    (from groups: {{ SELECTED_GROUPS }})
 
     The YAML must follow this exact structure:
 
@@ -46,15 +45,14 @@ prompts:
     description: <one-line description>
     settings:
       agentCategory: toolUse
-      temperature: {{ TEMPERATURE }}
+      temperature: <infer from description, 0.7 default>
       tools:
         - <tool1>
         - <tool2>
     prompts:
       systemPrompt: |
-        <Role and task description. Explain what the agent does and how it should
-         use the selected tools. Tailor the instructions to the specific tool groups
-         the user chose ({{ SELECTED_GROUPS }}).>
+        <Role and task description. Explain what the agent does and give specific
+         guidance on how to use the selected tools effectively for this task.>
       userPrefix: |
         <Context block with input documents. Use {{ ALL_AUXILIARYS }}, {{ ALL_REFERENCES }},
          {{ ADDITIONAL_INPUTS }}, and wrap {{ INPUT_CONTENT }} in <document> tags.>
@@ -63,6 +61,5 @@ prompts:
 
     IMPORTANT REMINDERS:
     - userRequest must be a single string containing {{ INSTRUCTION }} (not an array).
-    - Only include the tools listed above: {{ SELECTED_TOOLS }}.
-    - temperature must be {{ TEMPERATURE }}.
+    - Include exactly these tools: {{ SELECTED_TOOLS }}.
     - The systemPrompt should guide the agent on how to use its specific tools effectively.

@@ -4,7 +4,7 @@ description: {{ DESCRIPTION }}
 # --- Agent Settings ---
 settings:
   agentCategory: toolUse
-  temperature: {{ TEMPERATURE }}
+  temperature: 0.7
   tools:
 {{ TOOLS_YAML }}
 
