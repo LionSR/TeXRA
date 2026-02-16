@@ -37,8 +37,8 @@ export const agentCreatorCommands = {
 
 type AgentCategory = 'workflow' | 'toolUse';
 
-/** Number of PocketFlow retries for AI generation before falling back to template. */
-const AI_GENERATION_RETRIES = 1;
+/** Total AI generation attempts (1 initial + 1 validation retry) before template fallback. */
+const AI_GENERATION_ATTEMPTS = 2;
 
 interface AgentPromptPair {
   systemPrompt: string;
@@ -564,7 +564,7 @@ class GenerateNode extends Node<AgentCreatorShared> {
   private lastValidationError?: string;
 
   constructor() {
-    super(AI_GENERATION_RETRIES);
+    super(AI_GENERATION_ATTEMPTS);
   }
 
   async prep(shared: AgentCreatorShared): Promise<GeneratePrepResult> {
