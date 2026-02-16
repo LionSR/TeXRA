@@ -102,6 +102,15 @@ const PASSTHROUGH: Record<AgentCategory, Record<string, string>> = {
   workflow: buildPassthrough(WORKFLOW_VARS),
 };
 
+const MULTIPLE_OUTPUT_INSTRUCTIONS = [
+  'IMPORTANT: This agent must handle MULTIPLE output files. Adjust the structure above:',
+  '- Set isMultipleOutput: true',
+  '- Use documentTag: "latex_documents" (plural) and endTag: "</latex_documents>"',
+  '- Add defaultOutputFiles with the file list below',
+  '- In userRequest, instruct the model to wrap each file in <latex_documents> with <document name="..."> blocks',
+  '- Reference {{ OUTPUT_FILES_ORDER }} for the expected output order',
+].join('\n');
+
 const DESCRIPTION_PROMPTS: Record<AgentCategory, string> = {
   toolUse:
     'What should this agent do? Mention capabilities it needs (e.g., search papers, edit files, browse the web)',
@@ -449,16 +458,9 @@ class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
         AGENT_NAME: agentName,
         DESCRIPTION: description,
         MULTIPLE_OUTPUT_NOTE: isMultiple
-          ? [
-              'IMPORTANT: This agent must handle MULTIPLE output files. Adjust the structure above:',
-              '- Set isMultipleOutput: true',
-              '- Use documentTag: "latex_documents" (plural) and endTag: "</latex_documents>"',
-              '- Add defaultOutputFiles with the file list below',
-              '- In userRequest, instruct the model to wrap each file in <latex_documents> with <document name="..."> blocks',
-              '- Reference {{ OUTPUT_FILES_ORDER }} for the expected output order',
-              'Default output files:',
-              outputFilesNote,
-            ].join('\n')
+          ? MULTIPLE_OUTPUT_INSTRUCTIONS +
+            '\nDefault output files:\n' +
+            outputFilesNote
           : '',
       },
       fallbackTemplate: isMultiple
