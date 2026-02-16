@@ -375,20 +375,119 @@ This creates a **latency floor**: the orchestrator only learns about subagent pr
 | Mechanism | Real-Time? | Data Available | Cost to Orchestrator |
 |-----------|-----------|----------------|---------------------|
 | **FollowUpQueue delivery** | Near-real-time (fires at completion/WAITING) | Final result (XML with outputs or last response) | Zero - delivered automatically as follow-up message |
+| **FollowUpQueue progress** (NEW) | Coalesced (3s debounce) | Todos, round progress, tool count, files changed | Zero - delivered automatically |
 | **`executions` with `action=wait`** | Efficient blocking | Status + progress + todos | One tool call per check (blocks efficiently) |
 | **`executions` with `action=view`** | Snapshot | Status, progress, conversation, todos, files | One tool call per check |
 | **`executions/{id}/conversation`** | Snapshot | Full message history with tool calls | One tool call (can be large) |
 | **`executions/{id}/todos`** | Snapshot | Task checklist | One tool call |
 | **Event bus** | True real-time | Everything | Not available to orchestrator (UI only) |
 
+---
+
+## Implementation: Pushed Progress Updates (NEW)
+
+### What Changed
+
+Subagents now proactively push intermediate progress to the orchestrator via the FollowUpQueue, using a new `onProgress` callback wired through the execution stack.
+
+### Progress Update Types (Typed Internally)
+
+```typescript
+// Discriminated union — typed objects internally, XML at boundary
+type SubagentProgressUpdate =
+  | { kind: 'todos'; todos: TodoItem[] }           // Todo list changed
+  | { kind: 'round'; currentRound: number;          // Workflow round done
+      totalRounds: number }
+  | { kind: 'overview'; toolCallCount: number;       // Activity summary
+      filesChanged: string[] }
+```
+
+### XML Format at Boundary
+
+```xml
+<!-- Todo update -->
+<subagent-progress id="abc123" agent="chat" type="todos"
+    completed="2" active="1" pending="3">
+  [x] Read the input file
+  [x] Identify citation errors
+  [>] Fix citations on slide 3
+  [ ] Fix citations on slide 7
+  [ ] Verify bibliography consistency
+  [ ] Final review
+</subagent-progress>
+
+<!-- Round completion (workflow) -->
+<subagent-progress id="def456" agent="correct" type="round"
+    current="2" total="5" />
+
+<!-- Overview (tool-use) -->
+<subagent-progress id="abc123" agent="chat" type="overview"
+    tool-calls="7" files-changed="slides/talk.tex, refs.bib" />
+```
+
+### Coalescing
+
+To avoid flooding the orchestrator when rapid changes occur (e.g., 5 todo updates in 1 second), updates are coalesced with a 3-second debounce timer per update kind:
+
+```
+                    Subagent emits updates
+                    ──────────────────────
+t=0s   onProgress({kind:'todos', ...})   → buffered
+t=0.5s onProgress({kind:'todos', ...})   → replaces previous
+t=1s   onProgress({kind:'overview', ...}) → buffered (different kind)
+t=3s   ─── timer fires ───────────────── → flush both to FollowUpQueue
+t=3.2s onProgress({kind:'todos', ...})   → buffered (new timer)
+t=6.2s ─── timer fires ───────────────── → flush
+```
+
+When the final result is delivered (`onBeforeWaiting` / `onCompleted`), any buffered progress is flushed immediately before the result message.
+
+### Wiring Diagram
+
+```
+executeSubagent() ─── onProgress callback (with coalescing) ──┐
+        │                                                       │
+        ▼                                                       │
+executeAgent(options: { onProgress })                           │
+        │                                                       │
+        ├── Tool-Use path:                                      │
+        │   runToolUseFlow(input: { onProgress })               │
+        │     → ToolUseServices.onProgress                      │
+        │       → ToolUseCycleNode.exec():                      │
+        │           todos.setOnUpdate() → onProgress({todos})   │
+        │       → ToolUseCycleNode.post():                      │
+        │           onProgress({overview: toolCalls, files})     │
+        │                                                       │
+        └── Workflow path:                                      │
+            createRoundProgressCallback(id, onProgress)         │
+              → onRoundCompleted → onProgress({round})          │
+                                                                │
+                      formatSubagentProgress() ◄────────────────┘
+                              │
+                              ▼
+                  ToolUseFollowUpQueue.enqueue()
+                              │
+                              ▼
+                    Orchestrator receives as
+                    user-role follow-up message
+```
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `src/tools/subagentResults.ts` | New `SubagentProgressUpdate` types + `formatSubagentProgress()` |
+| `src/tools/WorkflowTool.ts` | Coalescing `onProgress` callback in `executeSubagent()` |
+| `src/agent/runtime/executeAgent.ts` | `onProgress` in `ExecuteAgentOptions`, wired to both paths |
+| `src/agent/implementations/flows/tooluse/ToolUseServices.ts` | `onProgress` field on services interface |
+| `src/agent/implementations/flows/tooluse/runToolUseFlow.ts` | `onProgress` on `RunToolUseFlowInput` |
+| `src/agent/implementations/flows/tooluse/nodes/ToolUseCycleNode.ts` | Emit todos + overview via `onProgress` |
+
 ### Key Insight
 
-The orchestrator **can** get intermediate updates by polling the `executions` endpoints (especially `conversation` and `todos`), but it must actively choose to do so. The system is designed for an **async fire-and-forget** pattern where the orchestrator launches subagents and receives results via the FollowUpQueue. The `executions` tool exists as an **escape hatch** for when the orchestrator needs to check on long-running subagents, but it's not the primary communication channel.
+The `executions` tool endpoints remain useful for deep inspection (full conversation, file contents, killing stuck processes), but the orchestrator no longer needs to spend tool calls just to learn that progress happened. The primary communication path is now:
 
-The hint is right in the `executeSubagent()` return message (WorkflowTool.ts:170):
-```
-"To check intermediate progress: executions tool with
- path=/executions/${executionId} and action=wait"
-```
-
-This tells the model it *can* poll, but the default expectation is that results arrive automatically.
+1. **Launch** → immediate "Launched async" response
+2. **Progress** → automatic `<subagent-progress>` messages via FollowUpQueue (NEW)
+3. **Result** → automatic `<subagent-result>` message via FollowUpQueue (existing)
+4. **Deep inspection** → `executions` tool (escape hatch, unchanged)
