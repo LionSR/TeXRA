@@ -1110,6 +1110,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /**
+   * Uploads tool file attachments (images and PDFs) to the Anthropic Files API.
+   */
   private async uploadToolAttachments(
     client: Anthropic,
     attachments: ToolFileAttachment[],
@@ -2182,8 +2184,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     if (pageLimitExceeded.length > 0) {
-      const remaining =
-        ANTHROPIC_MAX_PDF_PAGES - this.getTrackedPdfPageCount();
+      const remaining = ANTHROPIC_MAX_PDF_PAGES - this.getTrackedPdfPageCount();
       const names = pageLimitExceeded
         .map((a) => a.path ?? 'attachment.pdf')
         .join(', ');
