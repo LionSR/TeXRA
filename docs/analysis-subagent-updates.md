@@ -2,7 +2,7 @@
 
 ## Short Answer
 
-**Yes, but with important caveats.** The orchestrator *can* query running subagents via the `executions` tool endpoints, but it **doesn't receive streaming mid-execution updates automatically**. The system provides two distinct update channels:
+**Yes, but with important caveats.** The orchestrator _can_ query running subagents via the `executions` tool endpoints, but it **doesn't receive streaming mid-execution updates automatically**. The system provides two distinct update channels:
 
 1. **Active polling** via the `executions` tool (status, progress, todos, conversation)
 2. **Passive delivery** via the FollowUpQueue (final or near-final results only)
@@ -100,21 +100,21 @@ The orchestrator has access to the `executions` tool, which provides a REST-like
 
 **Actions available:**
 
-| Action | Behavior |
-|--------|----------|
-| `view` | Returns data immediately (snapshot of current state) |
+| Action | Behavior                                               |
+| ------ | ------------------------------------------------------ |
+| `view` | Returns data immediately (snapshot of current state)   |
 | `wait` | Blocks until a status change occurs, then returns data |
-| `kill` | Terminates the running execution |
+| `kill` | Terminates the running execution                       |
 
 **What the orchestrator CAN see while a subagent is running:**
 
-| Endpoint | Live Data? | Details |
-|----------|-----------|---------|
-| Summary (`/executions/{id}`) | Yes | Status (RUNNING/WAITING/etc), elapsed time, round progress (`round 2/5`) |
-| Conversation | Yes | Full message history including tool calls and results, updated after each model turn |
-| Todos | Yes | Task list items with status (pending/in_progress/completed) |
-| Files | Partial | Only available after rounds complete (workflow agents write per-round) |
-| Report | No | Only written on completion or when `onBeforeWaiting` fires |
+| Endpoint                     | Live Data? | Details                                                                              |
+| ---------------------------- | ---------- | ------------------------------------------------------------------------------------ |
+| Summary (`/executions/{id}`) | Yes        | Status (RUNNING/WAITING/etc), elapsed time, round progress (`round 2/5`)             |
+| Conversation                 | Yes        | Full message history including tool calls and results, updated after each model turn |
+| Todos                        | Yes        | Task list items with status (pending/in_progress/completed)                          |
+| Files                        | Partial    | Only available after rounds complete (workflow agents write per-round)               |
+| Report                       | No         | Only written on completion or when `onBeforeWaiting` fires                           |
 
 **The `wait` action** is the efficient polling mechanism:
 
@@ -136,6 +136,7 @@ Orchestrator                          ExecutionRegistry
 ```
 
 The `wait` action resolves on **any** of these events:
+
 - Stream status change (RUNNING → WAITING, RUNNING → STOPPED, etc.)
 - Round progress update (`updateExecutionProgress`)
 - Execution kill
@@ -196,6 +197,7 @@ This is the **primary result delivery mechanism**. Results are pushed to the orc
 ### No Streaming of Intermediate Work
 
 The orchestrator does **not** receive real-time streaming of:
+
 - Model token generation in progress
 - Individual tool call results as they happen
 - Partial document rewrites mid-round
@@ -372,15 +374,15 @@ This creates a **latency floor**: the orchestrator only learns about subagent pr
 
 ## Summary: Update Mechanisms Ranked by Usefulness
 
-| Mechanism | Real-Time? | Data Available | Cost to Orchestrator |
-|-----------|-----------|----------------|---------------------|
-| **FollowUpQueue delivery** | Near-real-time (fires at completion/WAITING) | Final result (XML with outputs or last response) | Zero - delivered automatically as follow-up message |
-| **FollowUpQueue progress** (NEW) | Coalesced (3s debounce) | Todos, round progress, tool count, files changed | Zero - delivered automatically |
-| **`executions` with `action=wait`** | Efficient blocking | Status + progress + todos | One tool call per check (blocks efficiently) |
-| **`executions` with `action=view`** | Snapshot | Status, progress, conversation, todos, files | One tool call per check |
-| **`executions/{id}/conversation`** | Snapshot | Full message history with tool calls | One tool call (can be large) |
-| **`executions/{id}/todos`** | Snapshot | Task checklist | One tool call |
-| **Event bus** | True real-time | Everything | Not available to orchestrator (UI only) |
+| Mechanism                           | Real-Time?                                   | Data Available                                   | Cost to Orchestrator                                |
+| ----------------------------------- | -------------------------------------------- | ------------------------------------------------ | --------------------------------------------------- |
+| **FollowUpQueue delivery**          | Near-real-time (fires at completion/WAITING) | Final result (XML with outputs or last response) | Zero - delivered automatically as follow-up message |
+| **FollowUpQueue progress** (NEW)    | Coalesced (3s debounce)                      | Todos, round progress, tool count, files changed | Zero - delivered automatically                      |
+| **`executions` with `action=wait`** | Efficient blocking                           | Status + progress + todos                        | One tool call per check (blocks efficiently)        |
+| **`executions` with `action=view`** | Snapshot                                     | Status, progress, conversation, todos, files     | One tool call per check                             |
+| **`executions/{id}/conversation`**  | Snapshot                                     | Full message history with tool calls             | One tool call (can be large)                        |
+| **`executions/{id}/todos`**         | Snapshot                                     | Task checklist                                   | One tool call                                       |
+| **Event bus**                       | True real-time                               | Everything                                       | Not available to orchestrator (UI only)             |
 
 ---
 
@@ -395,11 +397,17 @@ Subagents now proactively push intermediate progress to the orchestrator via the
 ```typescript
 // Discriminated union — typed objects internally, XML at boundary
 type SubagentProgressUpdate =
-  | { kind: 'todos'; todos: TodoItem[] }           // Todo list changed
-  | { kind: 'round'; currentRound: number;          // Workflow round done
-      totalRounds: number }
-  | { kind: 'overview'; toolCallCount: number;       // Activity summary
-      filesChanged: string[] }
+  | { kind: 'todos'; todos: TodoItem[] } // Todo list changed
+  | {
+      kind: 'round';
+      currentRound: number; // Workflow round done
+      totalRounds: number;
+    }
+  | {
+      kind: 'overview';
+      toolCallCount: number; // Activity summary
+      filesChanged: string[];
+    };
 ```
 
 ### XML Format at Boundary
@@ -474,14 +482,14 @@ executeAgent(options: { onProgress })                           │
 
 ### Files Modified
 
-| File | Change |
-|------|--------|
-| `src/tools/subagentResults.ts` | New `SubagentProgressUpdate` types + `formatSubagentProgress()` |
-| `src/tools/WorkflowTool.ts` | Coalescing `onProgress` callback in `executeSubagent()` |
-| `src/agent/runtime/executeAgent.ts` | `onProgress` in `ExecuteAgentOptions`, wired to both paths |
-| `src/agent/implementations/flows/tooluse/ToolUseServices.ts` | `onProgress` field on services interface |
-| `src/agent/implementations/flows/tooluse/runToolUseFlow.ts` | `onProgress` on `RunToolUseFlowInput` |
-| `src/agent/implementations/flows/tooluse/nodes/ToolUseCycleNode.ts` | Emit todos + overview via `onProgress` |
+| File                                                                | Change                                                          |
+| ------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `src/tools/subagentResults.ts`                                      | New `SubagentProgressUpdate` types + `formatSubagentProgress()` |
+| `src/tools/WorkflowTool.ts`                                         | Coalescing `onProgress` callback in `executeSubagent()`         |
+| `src/agent/runtime/executeAgent.ts`                                 | `onProgress` in `ExecuteAgentOptions`, wired to both paths      |
+| `src/agent/implementations/flows/tooluse/ToolUseServices.ts`        | `onProgress` field on services interface                        |
+| `src/agent/implementations/flows/tooluse/runToolUseFlow.ts`         | `onProgress` on `RunToolUseFlowInput`                           |
+| `src/agent/implementations/flows/tooluse/nodes/ToolUseCycleNode.ts` | Emit todos + overview via `onProgress`                          |
 
 ### Key Insight
 
