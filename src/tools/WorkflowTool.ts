@@ -55,6 +55,7 @@ import {
   formatSubagentDelivery,
   formatSubagentError,
   formatSubagentProgress,
+  type SubagentProgressUpdate,
 } from '@tools/subagentResults';
 import { defineTool } from '@tools/core/define';
 
@@ -130,11 +131,6 @@ async function executeSubagent(
 
   function onProgress(update: SubagentProgressUpdate): void {
     if (hasDelivered) return;
-    // Emit directly — no debouncing needed. The orchestrator's
-    // waitAndDrainAll() naturally batches: it blocks until the first
-    // message arrives, then drains everything else that accumulated.
-    // Multiple progress messages arriving during a model call just
-    // queue up and get consumed together.
     const msg = formatSubagentProgress(executionId, agentName, update);
     ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
   }
