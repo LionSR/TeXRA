@@ -29,6 +29,7 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   type AgentEntry,
   createKey,
+  deduplicateByName,
   getAgent,
   getAgentsBySource,
   getVisibleAgents,
@@ -701,8 +702,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     category: 'workflow' | 'toolUse',
     names: Set<string>,
   ): string[] {
-    const entries =
-      category === 'workflow' ? getWorkflowAgents() : getToolUseAgents();
+    const entries = deduplicateByName(
+      category === 'workflow' ? getWorkflowAgents() : getToolUseAgents(),
+    );
     return entries
       .filter((e) => names.has(e.name))
       .map((e) => createKey(e.source, e.name));
