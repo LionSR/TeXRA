@@ -30,6 +30,8 @@ export {
   isRemoteAgent,
   // Visible agents (for dropdowns and tools)
   getVisibleAgents,
+  // Deduplication
+  deduplicateByName,
   // Description update (for remote agent loading)
   updateAgentDescription,
 } from './agentRegistry';
