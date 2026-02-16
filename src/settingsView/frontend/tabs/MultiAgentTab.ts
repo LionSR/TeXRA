@@ -1,7 +1,8 @@
 /**
  * MultiAgentTab component - multi-agent settings for the settings view.
- * Contains agent mode presets for quick configuration, the Super YOLO toggle
- * for auto-approving agent delegation proposals, and reliability settings.
+ * Contains agent mode presets (built-in + custom) for quick configuration,
+ * the Super YOLO toggle for auto-approving agent delegation proposals,
+ * and reliability settings.
  */
 
 // Third-party imports
@@ -49,6 +50,17 @@ export class MultiAgentTab extends LitElement {
         font-size: var(--font-size-small);
       }
 
+      /* Preset section header */
+      .preset-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .preset-section-header h3 {
+        margin: 0;
+      }
+
       /* Preset cards */
       .preset-grid {
         display: grid;
@@ -57,6 +69,7 @@ export class MultiAgentTab extends LitElement {
       }
 
       .preset-card {
+        position: relative;
         display: flex;
         flex-direction: column;
         gap: var(--spacing-small);
@@ -94,6 +107,11 @@ export class MultiAgentTab extends LitElement {
         font-size: var(--font-size-sm);
         font-weight: 500;
         color: var(--vscode-foreground);
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .preset-card-description {
@@ -117,6 +135,30 @@ export class MultiAgentTab extends LitElement {
         color: var(--color-text-secondary);
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
         border-radius: var(--border-radius);
+      }
+
+      .preset-delete-btn {
+        position: absolute;
+        top: var(--spacing-small);
+        right: var(--spacing-small);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 2px;
+        color: var(--color-text-secondary);
+        background: none;
+        border: none;
+        border-radius: var(--border-radius);
+        cursor: pointer;
+        font-size: var(--font-size-sm);
+      }
+
+      .preset-delete-btn:hover {
+        color: var(--vscode-errorForeground);
+      }
+
+      .preset-card:hover .preset-delete-btn {
+        display: inline-flex;
       }
 
       /* Reliability settings */
@@ -155,6 +197,7 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) toggleDisabled = true;
   @property({ attribute: false }) reliabilitySettings: NumberVscodeSetting[] =
     [];
+  @property({ attribute: false }) customPresets: AgentModePreset[] = [];
 
   private handleToggle(event: Event): void {
     const target = event.target as HTMLInputElement | null;
@@ -167,6 +210,17 @@ export class MultiAgentTab extends LitElement {
     this.dispatchEvent(
       createEvent('apply-agent-mode-preset', { presetId: preset.id }),
     );
+  }
+
+  private handleDeletePreset(event: Event, preset: AgentModePreset): void {
+    event.stopPropagation();
+    this.dispatchEvent(
+      createEvent('delete-agent-mode-preset', { presetId: preset.id }),
+    );
+  }
+
+  private handleSavePreset(): void {
+    this.dispatchEvent(createEvent('save-agent-mode-preset', undefined));
   }
 
   private handleReliabilityChange(
@@ -187,7 +241,10 @@ export class MultiAgentTab extends LitElement {
     );
   }
 
-  private renderPresetCard(preset: AgentModePreset): TemplateResult {
+  private renderPresetCard(
+    preset: AgentModePreset,
+    deletable: boolean,
+  ): TemplateResult {
     const allAgents = [...preset.toolUseAgents, ...preset.workflowAgents];
     return html`
       <div
@@ -205,6 +262,15 @@ export class MultiAgentTab extends LitElement {
             (name) => html`<span class="preset-agent-badge">${name}</span>`,
           )}
         </div>
+        ${deletable
+          ? html`<button
+              class="preset-delete-btn"
+              @click=${(e: Event) => this.handleDeletePreset(e, preset)}
+              title="Delete preset"
+            >
+              <span class="codicon codicon-trash"></span>
+            </button>`
+          : nothing}
       </div>
     `;
   }
@@ -235,7 +301,17 @@ export class MultiAgentTab extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="multi-agent-container tab-content-container">
-        <h3>Mode Presets</h3>
+        <div class="preset-section-header">
+          <h3>Mode Presets</h3>
+          <button
+            class="tab-action-btn"
+            @click=${this.handleSavePreset}
+            title="Save current agent configuration as a preset"
+          >
+            <span class="codicon codicon-save"></span>
+            Save Current
+          </button>
+        </div>
 
         <p class="text-secondary setting-description">
           Apply a preset to quickly configure which agents are enabled for your
@@ -243,7 +319,8 @@ export class MultiAgentTab extends LitElement {
         </p>
 
         <div class="preset-grid">
-          ${AGENT_MODE_PRESETS.map((p) => this.renderPresetCard(p))}
+          ${AGENT_MODE_PRESETS.map((p) => this.renderPresetCard(p, false))}
+          ${this.customPresets.map((p) => this.renderPresetCard(p, true))}
         </div>
 
         <h3>Agent Delegation</h3>
