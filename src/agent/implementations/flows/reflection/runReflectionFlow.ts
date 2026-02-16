@@ -290,18 +290,10 @@ export async function runReflectionFlow<C = unknown>(
     const flowStatus = await pf.run(shared);
     shared = await pf.getShared();
 
-    // Persist conversation as direct key for consistent KV access
-    if (shared?.conversation?.length) {
-      await getExecutionStore(executionId).write(
-        'conversation',
-        shared.conversation,
-      );
-    }
-
     if (shared?.lastError) {
       status = END_GROUP_STATUS.ERROR;
-      // Re-throw after state persistence so runFlowWithLifecycle logs
-      // the error and shows the user notification.
+      // Re-throw after state persistence (handled in finally) so
+      // runFlowWithLifecycle logs the error and shows the user notification.
       throw new Error(shared.lastError.message);
     } else {
       status = executionToEndStatus(flowStatus) as EndGroupStatus;
@@ -310,6 +302,19 @@ export async function runReflectionFlow<C = unknown>(
     status = END_GROUP_STATUS.ERROR;
     throw error;
   } finally {
+    // Persist conversation regardless of success or failure so that
+    // the executions tool can always show what happened before a crash.
+    try {
+      if (shared?.conversation?.length) {
+        await getExecutionStore(executionId).write(
+          'conversation',
+          shared.conversation,
+        );
+      }
+    } catch {
+      // Best-effort — don't mask the original error
+    }
+
     if (status === END_GROUP_STATUS.STOPPED) {
       try {
         const kv = getExecutionStore(executionId);

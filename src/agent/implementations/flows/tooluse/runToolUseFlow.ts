@@ -182,21 +182,10 @@ export async function runToolUseFlow<C = unknown>(
     // would always see the stale initial values.
     shared = (await pf.getShared()) ?? shared;
 
-    // Persist conversation and todos as direct keys before finally deletes the flow record
-    const writes: Promise<void>[] = [];
-    if (shared.messages.length > 0) {
-      writes.push(kv.write('conversation', shared.messages));
-    }
-    const todos = shared.stateSlices?.workspaceSnapshot?.todos?.todos;
-    if (Array.isArray(todos) && todos.length > 0) {
-      writes.push(kv.write('todos', todos));
-    }
-    await Promise.all(writes);
-
     if (shared.lastError) {
       status = END_GROUP_STATUS.ERROR;
-      // Re-throw after state persistence so runFlowWithLifecycle logs
-      // the error and shows the user notification.
+      // Re-throw after state persistence (handled in finally) so
+      // runFlowWithLifecycle logs the error and shows the user notification.
       throw new Error(shared.lastError.message);
     } else {
       const execStatus = input.checkInterruption()
@@ -208,6 +197,24 @@ export async function runToolUseFlow<C = unknown>(
     status = END_GROUP_STATUS.ERROR;
     throw error;
   } finally {
+    // Persist conversation and todos regardless of success or failure.
+    // Previously this ran only on the happy path, so crashes lost all
+    // conversation history — the executions tool would show nothing.
+    try {
+      const kv = getExecutionStore(executionId);
+      const writes: Promise<void>[] = [];
+      if (shared.messages.length > 0) {
+        writes.push(kv.write('conversation', shared.messages));
+      }
+      const todos = shared.stateSlices?.workspaceSnapshot?.todos?.todos;
+      if (Array.isArray(todos) && todos.length > 0) {
+        writes.push(kv.write('todos', todos));
+      }
+      await Promise.all(writes);
+    } catch {
+      // Best-effort — don't mask the original error
+    }
+
     if (shared.userCancelledRetry) {
       logger.debug('Flow record preserved for resume after retry cancellation');
     } else {
