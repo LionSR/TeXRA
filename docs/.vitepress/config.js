@@ -4,7 +4,8 @@ import { withMermaid } from 'vitepress-plugin-mermaid';
 // Define the base VitePress config
 const baseConfig = {
   title: 'TeXRA',
-  description: 'Your Intelligent Academic Research Assistant',
+  description:
+    'Multi-agent AI system for scientific discovery. Specialized agents that polish LaTeX, search literature, generate figures, and build presentations — orchestrated in reproducible workflows inside VS Code.',
   head: [
     ['link', { rel: 'icon', href: '/logo-128x128.svg' }],
     [
@@ -32,14 +33,14 @@ const baseConfig = {
             const pdfTabs = document.querySelectorAll('.pdf-tab');
             const pdfFrame = document.getElementById('pdf-frame');
             const pdfLink = document.getElementById('pdf-link');
-            
+
             if (!pdfTabs.length || !pdfFrame || !pdfLink) return;
-            
+
             pdfTabs.forEach(tab => {
               // Remove any existing click listeners first
               tab.replaceWith(tab.cloneNode(true));
             });
-            
+
             // Re-select tabs after cloning
             const newTabs = document.querySelectorAll('.pdf-tab');
             newTabs.forEach(tab => {
@@ -47,22 +48,22 @@ const baseConfig = {
                 // Prevent any default behavior
                 e.preventDefault();
                 e.stopPropagation();
-                
+
                 // Store current scroll position
                 const scrollPos = window.scrollY || document.documentElement.scrollTop;
-                
+
                 const pdfPath = this.getAttribute('data-pdf');
                 if (!pdfPath) return;
-                
+
                 // Update iframe source
                 pdfFrame.src = pdfPath;
                 // Update "Open in new tab" link
                 pdfLink.href = pdfPath;
-                
+
                 // Update active tab
                 newTabs.forEach(t => t.classList.remove('active'));
                 this.classList.add('active');
-                
+
                 // Restore scroll position
                 setTimeout(() => {
                   window.scrollTo(0, scrollPos);
@@ -72,13 +73,13 @@ const baseConfig = {
               });
             });
           }
-          
+
           // Initial setup
           initPdfTabs();
-          
+
           // Also initialize after a slight delay to handle any page reflows
           setTimeout(initPdfTabs, 1000);
-          
+
           // For single-page applications, re-init on URL changes
           let lastUrl = location.href;
           new MutationObserver(() => {
@@ -97,67 +98,70 @@ const baseConfig = {
     logo: '/logo-128x128.svg',
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Guide', link: '/guide/' },
+      { text: 'Docs', link: '/guide/' },
+      { text: 'Agents', link: '/guide/built-in-agents' },
+      { text: 'Architecture', link: '/guide/agent-architecture' },
       { text: 'Launch', link: '/launch' },
-      { text: 'Reference', link: '/reference/' },
       { text: 'GitHub', link: 'https://github.com/texra-ai/texra-issues' },
     ],
     sidebar: {
       '/guide/': [
         {
-          text: 'Tutorials',
+          text: 'Getting Started',
           items: [
+            { text: 'Introduction', link: '/guide/' },
+            { text: 'Installation', link: '/guide/installation' },
             { text: 'Quick Start', link: '/guide/quick-start' },
-            {
-              text: 'Working with Figures',
-              link: '/guide/working-with-figures.md',
-            },
-            { text: 'TikZ Figures', link: '/guide/tikz-figures' },
           ],
         },
         {
-          text: 'How-to Guides',
+          text: 'Agent System',
+          items: [
+            { text: 'Built-in Agents', link: '/guide/built-in-agents.md' },
+            {
+              text: 'Agent Architecture',
+              link: '/guide/agent-architecture.md',
+            },
+            { text: 'Custom Agents', link: '/guide/custom-agents' },
+            { text: 'Remote Agents', link: '/guide/remote-agents' },
+            { text: 'Models', link: '/guide/models' },
+          ],
+        },
+        {
+          text: 'Workflows',
           items: [
             { text: 'LaTeX Diff', link: '/guide/latex-diff' },
             { text: 'Intelligent Merge', link: '/guide/intelligent-merge' },
             { text: 'Research Tools', link: '/guide/research-tools' },
             { text: 'LaTeX Tools', link: '/guide/latex-tools' },
-            { text: 'File Management', link: '/guide/file-management' },
+            {
+              text: 'Working with Figures',
+              link: '/guide/working-with-figures.md',
+            },
+            { text: 'TikZ Figures', link: '/guide/tikz-figures' },
             { text: 'Multiple Output', link: '/guide/multiple-output' },
+          ],
+        },
+        {
+          text: 'Integrations',
+          items: [
             {
               text: 'Working with Overleaf',
               link: '/guide/working-with-overleaf',
             },
+            { text: 'File Management', link: '/guide/file-management' },
             { text: 'ProgressBoard', link: '/guide/progress-board' },
+            { text: 'Agent Explorer', link: '/guide/agent-explorer' },
           ],
         },
         {
           text: 'Reference',
           items: [
-            { text: 'Built-in Agents', link: '/guide/built-in-agents.md' },
-            { text: 'Models', link: '/guide/models' },
             { text: 'Configuration', link: '/guide/configuration' },
-            { text: 'Custom Agents', link: '/guide/custom-agents' },
-            { text: 'Remote Agents', link: '/guide/remote-agents' },
-          ],
-        },
-        {
-          text: 'Explanation',
-          items: [
-            { text: 'Introduction', link: '/guide/' },
-            {
-              text: 'Agent Architecture',
-              link: '/guide/agent-architecture.md',
-            },
-            { text: 'Best Practices', link: '/guide/best-practices.md' },
-          ],
-        },
-        {
-          text: 'Setup',
-          items: [
-            { text: 'Installation', link: '/guide/installation' },
             { text: 'LaTeX Compilation', link: '/guide/latex-compilation.md' },
-            { text: 'Agent Explorer', link: '/guide/agent-explorer' },
+            { text: 'Best Practices', link: '/guide/best-practices.md' },
+            { text: 'Troubleshooting', link: '/reference/troubleshooting' },
+            { text: 'Glossary', link: '/reference/glossary' },
             { text: 'Acknowledgments', link: '/guide/acknowledgments.md' },
           ],
         },
