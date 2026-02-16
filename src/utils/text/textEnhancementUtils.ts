@@ -1,41 +1,16 @@
-// Third-party imports
-import * as vscode from 'vscode';
-
-// Local imports - agent
 import { createHelperModelKit } from '@agent/runtime/helperModel';
-
-// Local imports - common
-import { getSdkErrorMessage } from '@common/errors';
-
-// Local imports - logger
+import { renderPolishPrompt } from '@agent/runtime/polishModel';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { TaskState } from '@logger/TaskState';
-
-// Local imports - utils
-import { getConfig } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
 
-// Local file imports
 import { extractTextFromTag } from './xmlUtils';
 
 const CHANNEL = 'TextEnhancement';
 
-/**
- * Text Enhancement Utilities
- *
- * This module contains utilities for enhancing and polishing text content.
- * It can be extended with additional text processing functions in the future,
- * such as:
- * - Text summarization
- * - Format conversion (e.g., from plain text to LaTeX)
- * - Code formatting
- * - Text generation based on templates
- * - Text simplification or complexity adjustment
- */
+// ── Types ────────────────────────────────────────────────────
 
-/**
- * Interface for file context information
- */
 export interface FileContext {
   agent?: string;
   inputFile?: string;
@@ -49,9 +24,8 @@ export interface FileContext {
   outputFiles?: string[];
 }
 
-/**
- * Derive a FileContext from a stored task state.
- */
+// ── File context ─────────────────────────────────────────────
+
 export function buildFileContextFromTaskState(
   taskState: TaskState,
 ): FileContext {
@@ -62,7 +36,6 @@ export function buildFileContextFromTaskState(
     context.agent = agentConfig.agent;
   }
 
-  // Add single file fields if they have non-empty values
   const singleFields = [
     'inputFile',
     'referenceFile',
@@ -75,7 +48,6 @@ export function buildFileContextFromTaskState(
     }
   }
 
-  // Add array fields if they have elements
   const arrayFields = [
     'inputFiles',
     'referenceFiles',
@@ -92,222 +64,85 @@ export function buildFileContextFromTaskState(
   return context;
 }
 
-/**
- * Polishes instruction text using Claude AI model
- * Corrects spelling, grammar, and formatting for LaTeX, XML, and Markdown
- * Also corrects file references if fileContext is provided
- *
- * @param text The text to polish
- * @param fileContext Optional context about files being used in the task
- * @returns Promise with the polished text or error message
- */
+function formatFileContext(ctx: FileContext): string {
+  const lines: string[] = ['Current context:'];
+  if (ctx.agent) lines.push(`Agent: ${ctx.agent}`);
+
+  const singles: Array<[string, string | undefined]> = [
+    ['Input File', ctx.inputFile],
+    ['Reference File', ctx.referenceFile],
+    ['Auxiliary File', ctx.auxiliaryFile],
+    ['Figure File', ctx.mediaFile],
+  ];
+  const arrays: Array<[string, string[] | undefined]> = [
+    ['Input Files', ctx.inputFiles],
+    ['Reference Files', ctx.referenceFiles],
+    ['Auxiliary Files', ctx.auxiliaryFiles],
+    ['Media Files', ctx.mediaFiles],
+    ['Output Files', ctx.outputFiles],
+  ];
+
+  const entries: Array<{ label: string; value: string }> = [];
+  for (const [label, value] of singles) {
+    if (value) entries.push({ label, value });
+  }
+  for (const [label, files] of arrays) {
+    if (files && files.length > 0) {
+      entries.push({ label, value: files.join(', ') });
+    }
+  }
+
+  if (entries.length > 0) {
+    lines.push('', 'Files in the task:');
+    for (const { label, value } of entries) {
+      lines.push(`${label}: ${value}`);
+    }
+  }
+
+  return lines.join('\n') + '\n';
+}
+
+// ── Polishing ────────────────────────────────────────────────
+
 export async function polishTextWithAI(
   text: string,
   fileContext?: FileContext,
 ): Promise<{ success: boolean; text: string; error?: string }> {
   try {
-    const useCopilot = getConfig<boolean>('texra.model.useCopilot', false);
+    const fileContextString = fileContext ? formatFileContext(fileContext) : '';
+    const prompt = await renderPolishPrompt(fileContextString, text);
 
-    // Build file context string if available
-    let fileContextString = '';
-    if (fileContext) {
-      const lines: string[] = ['Current context:'];
-
-      if (fileContext.agent) {
-        lines.push(`Agent: ${fileContext.agent}`);
-      }
-
-      const fileEntries: Array<{ label: string; value: string }> = [];
-
-      if (fileContext.inputFile) {
-        fileEntries.push({ label: 'Input File', value: fileContext.inputFile });
-      }
-      if (fileContext.referenceFile) {
-        fileEntries.push({
-          label: 'Reference File',
-          value: fileContext.referenceFile,
-        });
-      }
-      if (fileContext.auxiliaryFile) {
-        fileEntries.push({
-          label: 'Auxiliary File',
-          value: fileContext.auxiliaryFile,
-        });
-      }
-      if (fileContext.mediaFile) {
-        fileEntries.push({
-          label: 'Figure File',
-          value: fileContext.mediaFile,
-        });
-      }
-
-      const arrays: Array<[string, string[] | undefined]> = [
-        ['Input Files', fileContext.inputFiles],
-        ['Reference Files', fileContext.referenceFiles],
-        ['Auxiliary Files', fileContext.auxiliaryFiles],
-        ['Media Files', fileContext.mediaFiles],
-        ['Output Files', fileContext.outputFiles],
-      ];
-
-      for (const [label, files] of arrays) {
-        if (files && files.length > 0) {
-          fileEntries.push({ label, value: files.join(', ') });
-        }
-      }
-
-      if (fileEntries.length > 0) {
-        lines.push('', 'Files in the task:');
-        for (const { label, value } of fileEntries) {
-          lines.push(`${label}: ${value}`);
-        }
-      }
-
-      fileContextString = lines.join('\n');
+    const kit = await createHelperModelKit();
+    if (!kit) {
+      throw new Error(
+        'Helper model not available. Update the model in Settings > Models.',
+      );
+    }
+    const { handler, client } = kit;
+    const messages = await handler.initializeMessages('', prompt);
+    const result = await handler.createResponse({
+      client,
+      messages,
+      temperature: 0,
+    });
+    const { text: responseText } = handler.extractResponse(
+      result.response,
+      '',
+    );
+    if (!isNonEmptyString(responseText)) {
+      throw new Error('Model returned no text.');
     }
 
-    // Setup the prompt
-    const prompt = `Please review the following instruction text and correct any spelling errors, typos, grammatical mistakes, or punctuation issues. Preserve the original meaning and tone without adding new content or changing the structure unless necessary for clarity.
-
-${fileContextString ? fileContextString + '\n' : ''}This text will be used as an instruction for editing the files mentioned above. If the text contains references to these files, please ensure they are correctly spelled and match the exact filenames.
-
-Also, please follow these specific formatting rules:
-1. If you spot inline LaTeX formulas, ensure they are wrapped with $ symbols (e.g., $E=mc^2$)
-2. If you spot XML tags, fix any unbalanced or unpaired tags
-3. If you spot Markdown syntax (like headers, lists, emphasis, links), fix any incorrect syntax
-4. If there are partial or ambiguous references to filenames from the context provided above, correct them to use the proper full filename
-
-Return the corrected text wrapped in <corrected_text> XML tags.
-
-Text to correct:
-${text}`;
-
-    let responseText = '';
-
-    if (useCopilot) {
-      const [model] = await vscode.lm.selectChatModels({
-        vendor: 'copilot',
-        family: 'gpt-4o',
-      });
-      if (!model) {
-        return { success: false, text, error: 'No Copilot model available.' };
-      }
-      const response = await model.sendRequest([
-        vscode.LanguageModelChatMessage.User(prompt),
-      ]);
-      for await (const chunk of response.text) {
-        responseText += chunk;
-      }
-    } else {
-      let kit;
-      try {
-        kit = await createHelperModelKit();
-      } catch (error) {
-        logger.error(
-          CHANNEL,
-          `Failed to initialize helper model: ${getSdkErrorMessage(error)}`,
-        );
-        return {
-          success: false,
-          text,
-          error:
-            'Unable to initialize the instruction polishing model. Please check your API key and model settings.',
-        };
-      }
-
-      if (!kit) {
-        return {
-          success: false,
-          text,
-          error:
-            'Unsupported helper model. Update the helper model in Settings > Models to match a valid model name.',
-        };
-      }
-
-      const { handler, client } = kit;
-
-      let messages;
-      try {
-        messages = await handler.initializeMessages('', prompt);
-      } catch (error) {
-        logger.error(
-          CHANNEL,
-          `Failed to prepare messages for polishing: ${getSdkErrorMessage(error)}`,
-        );
-        return {
-          success: false,
-          text,
-          error:
-            'Unable to prepare the polishing request for the selected model.',
-        };
-      }
-
-      let response;
-      try {
-        const result = await handler.createResponse({
-          client,
-          messages,
-          temperature: 0,
-        });
-        response = result.response;
-      } catch (error) {
-        logger.error(
-          CHANNEL,
-          `Failed to generate polishing response: ${getSdkErrorMessage(error)}`,
-        );
-        return {
-          success: false,
-          text,
-          error: 'The instruction polishing request failed. Please try again.',
-        };
-      }
-
-      let extractedText: string;
-      try {
-        ({ text: extractedText } = handler.extractResponse(response, ''));
-      } catch (error) {
-        logger.error(
-          CHANNEL,
-          `Failed to parse polishing response: ${getSdkErrorMessage(error)}`,
-        );
-        return {
-          success: false,
-          text,
-          error: 'The instruction polishing response could not be parsed.',
-        };
-      }
-
-      if (!isNonEmptyString(extractedText)) {
-        const warningMessage =
-          'Instruction polishing model returned no plain text.';
-        logger.warn(CHANNEL, warningMessage);
-        return {
-          success: false,
-          text,
-          error: warningMessage,
-        };
-      }
-
-      responseText = extractedText;
+    const corrected = extractTextFromTag(responseText, 'corrected_text');
+    if (!corrected) {
+      logger.warn(
+        CHANNEL,
+        'Model did not wrap response in <corrected_text> tags; using raw response',
+      );
     }
-
-    // Extract the corrected text using the utility function
-    const correctedText = extractTextFromTag(responseText, 'corrected_text');
-
-    // Trim leading and trailing newlines from the text
-    const trimmedText = correctedText
-      ? correctedText.trim()
-      : responseText.trim();
-
-    return {
-      success: true,
-      text: trimmedText,
-    };
+    return { success: true, text: (corrected ?? responseText).trim() };
   } catch (error) {
-    logger.error(CHANNEL, `Error polishing text: ${getSdkErrorMessage(error)}`);
-    return {
-      success: false,
-      text: text,
-      error: `Error polishing text: ${error instanceof Error ? 'Text enhancement failed' : 'Unknown error'}`,
-    };
+    logger.error(CHANNEL, `Error polishing text: ${toErrorMessage(error)}`);
+    return { success: false, text, error: toErrorMessage(error) };
   }
 }

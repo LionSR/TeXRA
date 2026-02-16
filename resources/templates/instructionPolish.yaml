@@ -1,0 +1,19 @@
+# Instruction Polish - prompt template for polishing user instruction text
+name: instructionPolish
+description: Polishes instruction text for spelling, grammar, and formatting.
+
+prompts:
+  userRequest: |
+    Please review the following instruction text and correct any spelling errors, typos, grammatical mistakes, or punctuation issues. Preserve the original meaning and tone without adding new content or changing the structure unless necessary for clarity.
+
+    {{ FILE_CONTEXT }}This text will be used as an instruction for editing the files mentioned above. If the text contains references to these files, please ensure they are correctly spelled and match the exact filenames.
+
+    Also, please follow these specific formatting rules:
+    1. If you spot inline LaTeX formulas, ensure they are wrapped with $ symbols (e.g., $E=mc^2$)
+    2. If you spot XML tags, fix any unbalanced or unpaired tags
+    3. If you spot Markdown syntax (like headers, lists, emphasis, links), fix any incorrect syntax
+    4. If there are partial or ambiguous references to filenames from the context provided above, correct them to use the proper full filename
+
+    Return the corrected text wrapped in <corrected_text> XML tags.
+
+    Text to correct:
