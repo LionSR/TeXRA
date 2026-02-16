@@ -450,7 +450,7 @@ Even the best research assistants (human or AI) have off days. This guide helps 
 
 ### Using ProgressBoard
 
-The ProgressBoard is your main debugging tool. See the [ProgressBoard Guide](../guide/progress-board.md) for a full explanation of its features.
+The ProgressBoard is your main debugging tool. See the [ProgressBoard Guide](./progress-board.md) for a full explanation of its features.
 
 Key points for troubleshooting:
 
