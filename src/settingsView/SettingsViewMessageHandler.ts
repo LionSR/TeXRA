@@ -31,6 +31,7 @@ import {
   createKey,
   getAgent,
   getAgentsBySource,
+  getVisibleAgents,
   getWorkflowAgents,
   getToolUseAgents,
   loadAgents,
@@ -688,24 +689,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     return parsed.success ? parsed.data : [];
   }
 
-  /**
-   * Resolve enabled agent keys to plain names.
-   * `undefined` enabledKeys means "never configured" → all agents enabled.
-   */
-  private resolveEnabledNames(
-    agents: AgentEntry[],
-    enabledKeys: string[] | undefined,
-  ): string[] {
-    if (enabledKeys === undefined) return agents.map((e) => e.name);
-    return agents
-      .filter(
-        (e) =>
-          enabledKeys.includes(createKey(e.source, e.name)) ||
-          enabledKeys.includes(e.name),
-      )
-      .map((e) => e.name);
-  }
-
   public async sendAgentModePresets(webview: vscode.Webview): Promise<void> {
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
@@ -783,14 +766,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       await loadAgents();
 
-      const workflowAgents = this.resolveEnabledNames(
-        getWorkflowAgents(),
-        workspaceSM.get<string[]>(WorkspaceStateKey.ENABLED_AGENTS),
-      );
-      const toolUseAgents = this.resolveEnabledNames(
-        getToolUseAgents(),
-        workspaceSM.get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
-      );
+      const workflowAgents = getVisibleAgents('workflow').map((e) => e.name);
+      const toolUseAgents = getVisibleAgents('toolUse').map((e) => e.name);
 
       const preset: AgentModePreset = {
         id: `custom-${Date.now()}`,
