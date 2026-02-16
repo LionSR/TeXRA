@@ -552,6 +552,8 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
 
   private handleKill(executionId: ExecutionId): ToolResult {
     const ctx = getCurrentToolFileInteractionContext();
+    const callerStreamId = ctx?.streamId;
+
     if (ctx?.executionId === executionId) {
       return {
         output: `Cannot kill your own execution (${executionId}).`,
@@ -559,18 +561,20 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       };
     }
 
-    // Scope check: callers can only kill executions whose parentStreamId
-    // matches the caller's own streamId (i.e., only your children).
-    // This prevents subagents from killing siblings or the orchestrator.
-    const callerStreamId = ctx?.streamId;
-    if (callerStreamId) {
-      const target = getHandle(executionId);
-      if (target && target.parentStreamId !== callerStreamId) {
-        return {
-          output: `Cannot kill execution ${executionId}: not a child of this session.`,
-          isError: true,
-        };
-      }
+    const target = getHandle(executionId);
+    if (!target) {
+      return {
+        output: `Execution ${executionId} not found or already completed.`,
+        isError: true,
+      };
+    }
+
+    // Scope: can only kill your own children. Deny if no context.
+    if (!callerStreamId || target.parentStreamId !== callerStreamId) {
+      return {
+        output: `Cannot kill execution ${executionId}: not a child of this session.`,
+        isError: true,
+      };
     }
 
     const success = killExecution(executionId);
@@ -578,7 +582,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       return { output: `Execution ${executionId} terminated.` };
     }
     return {
-      output: `Execution ${executionId} not found or already completed.`,
+      output: `Execution ${executionId} could not be terminated.`,
       isError: true,
     };
   }
