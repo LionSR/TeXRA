@@ -659,7 +659,7 @@ export function getVisibleAgents(
  * Custom agents override built-in agents with the same name.
  * Remote agents use source:name keys to prevent deduplication.
  */
-function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
+export function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
   const byKey = new Map<string, AgentEntry>();
 
   for (const entry of entries) {
