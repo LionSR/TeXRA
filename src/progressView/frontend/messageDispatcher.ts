@@ -320,12 +320,8 @@ const handlers: HandlerRegistry = {
       clearPendingLogUpdatesForStream(stream);
     }
 
-    // Update logs in the separate streamLogs Map
-    ctx.setStreamLogs(stream, () => ({
-      logs: isClear ? [] : messages,
-    }));
-
-    // Update meta (taskGroups, contextState, workflow fields) in streamStates
+    // Update meta first — setStreamState creates the streamStates entry if needed,
+    // which setStreamLogs requires (it guards against unknown streams).
     ctx.setStreamState(stream, (prev): StreamState => {
       const {
         activeRunId,
@@ -389,6 +385,11 @@ const handlers: HandlerRegistry = {
 
       return { ...prev, ...base };
     });
+
+    // Update logs in the separate streamLogs Map (after setStreamState so the entry exists)
+    ctx.setStreamLogs(stream, () => ({
+      logs: isClear ? [] : messages,
+    }));
   },
 
   // --- Log updates ---
