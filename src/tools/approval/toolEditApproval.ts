@@ -16,7 +16,7 @@ import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { type LineChanges, type ToolResult } from '@tools/result';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
-import { countLines, normalizeLineEndings } from '@utils/text/stringUtils';
+import { countLines } from '@utils/text/stringUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 
 import { rejectPendingEntries } from './bashApproval';
@@ -630,34 +630,26 @@ export async function writeApprovedContent(
     return { appliedContent: finalContent, baseContent: '' };
   }
 
+  // All content is already LF-normalized at the FS read boundary,
+  // so comparisons work directly without extra normalization.
   const currentContent = await WorkspaceFS.read(path);
-  const normalizedCurrent = normalizeLineEndings(currentContent);
-  const normalizedOriginal = normalizeLineEndings(originalContent);
-  const normalizedFinal = normalizeLineEndings(finalContent);
-
-  if (normalizedCurrent === normalizedFinal) {
-    return { appliedContent: currentContent, baseContent: currentContent };
-  }
-
-  if (normalizedOriginal === normalizedFinal) {
-    return { appliedContent: currentContent, baseContent: currentContent };
-  }
 
   if (currentContent === finalContent) {
-    return { appliedContent: finalContent, baseContent: currentContent };
+    return { appliedContent: currentContent, baseContent: currentContent };
   }
 
-  if (
-    currentContent === originalContent ||
-    normalizedCurrent === normalizedOriginal
-  ) {
+  if (originalContent === finalContent) {
+    return { appliedContent: currentContent, baseContent: currentContent };
+  }
+
+  if (currentContent === originalContent) {
     await WorkspaceFS.write(path, finalContent);
     return { appliedContent: finalContent, baseContent: currentContent };
   }
 
   const dmp = new diff_match_patch();
-  const patches = dmp.patch_make(normalizedOriginal, normalizedFinal);
-  const [patchedContent, results] = dmp.patch_apply(patches, normalizedCurrent);
+  const patches = dmp.patch_make(originalContent, finalContent);
+  const [patchedContent, results] = dmp.patch_apply(patches, currentContent);
 
   if (results.every(Boolean)) {
     await WorkspaceFS.write(path, patchedContent);
