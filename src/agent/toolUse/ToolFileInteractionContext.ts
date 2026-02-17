@@ -11,6 +11,8 @@ export interface ToolFileInteractionContext {
   toolCallId?: string;
   /** Model short name of the parent agent (e.g. "opus46", "sonnet45"). */
   model?: string;
+  /** Agent name of the parent agent (e.g. "orchestrator", "search-agent"). */
+  agentName?: string;
   tracker: FileInteractionState;
   /** Todo state for managing task lists. Optional for backward compatibility. */
   todoState?: TodoState;
