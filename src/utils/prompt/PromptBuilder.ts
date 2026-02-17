@@ -191,7 +191,11 @@ export async function buildInitialToolUsePrompts(
   agentPrompt: AgentPrompt,
   userVars: Record<string, any>,
   logger?: AgentLogger,
-  options?: { memoryEnabled?: boolean; hasDelegationTools?: boolean; isSubagent?: boolean },
+  options?: {
+    memoryEnabled?: boolean;
+    hasDelegationTools?: boolean;
+    isSubagent?: boolean;
+  },
 ): Promise<InitialPrompts & { instructionSuffix: string }> {
   const builder = new PromptBuilder(
     agentPrompt,

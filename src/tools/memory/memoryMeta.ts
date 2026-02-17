@@ -32,7 +32,10 @@ export function parseFrontmatter(raw: string): {
     return { meta: null, content: raw };
   }
 
-  const endIdx = raw.indexOf(`\n${FRONTMATTER_FENCE}\n`, FRONTMATTER_FENCE.length);
+  const endIdx = raw.indexOf(
+    `\n${FRONTMATTER_FENCE}\n`,
+    FRONTMATTER_FENCE.length,
+  );
   if (endIdx === -1) {
     return { meta: null, content: raw };
   }
