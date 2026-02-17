@@ -13,6 +13,8 @@ import { MEMORY_META_FILE, MEMORY_STORAGE_ROOT } from './constants';
 export interface MemoryFileMeta {
   /** Agent name that last modified this file. */
   modifiedBy: string;
+  /** Execution ID of the run that last modified this file. */
+  executionId?: string;
   /** ISO 8601 timestamp of last modification. */
   modifiedAt: string;
 }
@@ -43,11 +45,13 @@ function toMetaKey(storagePath: string): string {
 export async function recordAttribution(
   storagePath: string,
   agentName: string | undefined,
+  executionId: string | undefined,
 ): Promise<void> {
   if (!agentName) return;
   const meta = await readMeta();
   meta[toMetaKey(storagePath)] = {
     modifiedBy: agentName,
+    executionId,
     modifiedAt: new Date().toISOString(),
   };
   await writeMeta(meta);
@@ -68,6 +72,7 @@ export async function renameAttribution(
   oldStoragePath: string,
   newStoragePath: string,
   agentName: string | undefined,
+  executionId: string | undefined,
 ): Promise<void> {
   const meta = await readMeta();
   const oldKey = toMetaKey(oldStoragePath);
@@ -76,6 +81,7 @@ export async function renameAttribution(
   delete meta[oldKey];
   meta[newKey] = {
     modifiedBy: agentName ?? existing?.modifiedBy ?? 'unknown',
+    executionId: executionId ?? existing?.executionId,
     modifiedAt: new Date().toISOString(),
   };
   await writeMeta(meta);
@@ -92,4 +98,11 @@ export async function getAttribution(
 /** Bulk-read all attributions (keyed by storage-relative path). */
 export async function getAllAttributions(): Promise<MetaMap> {
   return readMeta();
+}
+
+/** Format attribution for display: "agentName (executionId)" or just "agentName". */
+export function formatAttribution(meta: MemoryFileMeta): string {
+  return meta.executionId
+    ? `${meta.modifiedBy} (${meta.executionId})`
+    : meta.modifiedBy;
 }
