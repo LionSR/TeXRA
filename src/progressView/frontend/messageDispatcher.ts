@@ -29,10 +29,12 @@ import {
   updateNestedRounds,
 } from './stateUtils';
 import {
+  EMPTY_STREAM_LOGS,
   getStreamState,
   isToolUseState,
   isWorkflowState,
   type ProgressState,
+  type StreamLogs,
   type StreamState,
 } from './store';
 import type { FrontendEventHandlerContext } from './eventHandlers';
@@ -152,11 +154,13 @@ function updateStreamInfo(
   backendStates?: Record<string, StreamState>,
 ): ProgressState {
   const nextStates = new Map(state.streamStates);
+  const nextLogs = new Map(state.streamLogs);
   const knownStreams = new Set(streams.map((stream) => stream.name));
 
   for (const key of nextStates.keys()) {
     if (!knownStreams.has(key)) {
       nextStates.delete(key);
+      nextLogs.delete(key);
       clearPendingLogUpdatesForStream(key);
     }
   }
@@ -165,18 +169,21 @@ function updateStreamInfo(
     const backendState = backendStates?.[stream.name];
     if (backendState) {
       const existing = nextStates.get(stream.name);
+      // Seed streamLogs from backend state when no frontend logs exist yet
+      if (!nextLogs.has(stream.name) && backendState.logs.length > 0) {
+        nextLogs.set(stream.name, { logs: backendState.logs });
+      }
       // Preserve frontend-owned properties that backend _streamStates never populates:
       // - 'ui': frontend UI state (follow-up text, polish state, etc.)
-      // - 'logs': managed by APPEND_LOG/UPDATE_LOGS, not UPDATE_STREAMS
       // - 'taskGroups': managed by ADD_TASK_GROUP/UPDATE_TASK_GROUP
       // - Workflow run-scoped fields: managed by UPDATE_INSTRUCTION, UPDATE_RUN_USAGE,
       //   UPDATE_FILES, UPDATE_MISSING_OUTPUTS, and UPDATE_LOGS (not UPDATE_STREAMS)
+      // Note: logs are managed by streamLogs Map (via APPEND_LOG/UPDATE_LOG/UPDATE_LOGS)
       const preserveUI = existing && existing.kind === backendState.kind;
       const preserveWorkflow =
         existing && isWorkflowState(existing) && isWorkflowState(backendState);
       nextStates.set(stream.name, {
         ...backendState,
-        logs: existing?.logs ?? backendState.logs,
         taskGroups: existing?.taskGroups ?? backendState.taskGroups,
         ...(preserveWorkflow && {
           runInstructions: existing.runInstructions,
@@ -196,7 +203,7 @@ function updateStreamInfo(
     }
   }
 
-  return { ...state, streams, streamStates: nextStates };
+  return { ...state, streams, streamStates: nextStates, streamLogs: nextLogs };
 }
 
 // ============================================================
@@ -258,6 +265,9 @@ const handlers: HandlerRegistry = {
     const nextStates = new Map(state.streamStates);
     nextStates.delete(streamId);
 
+    const nextLogs = new Map(state.streamLogs);
+    nextLogs.delete(streamId);
+
     const nextStreams = state.streams.filter((s) => s.name !== streamId);
     const nextActiveStreamId =
       state.activeStreamId === streamId ? null : state.activeStreamId;
@@ -269,6 +279,7 @@ const handlers: HandlerRegistry = {
       ...state,
       streams: nextStreams,
       streamStates: nextStates,
+      streamLogs: nextLogs,
       activeStreamId: nextActiveStreamId,
       followupOptionsByStream: new Map(
         [...state.followupOptionsByStream].filter(
@@ -284,6 +295,7 @@ const handlers: HandlerRegistry = {
       ...prev,
       streams: [],
       streamStates: new Map(),
+      streamLogs: new Map(),
       activeStreamId: null,
       followupOptionsByStream: new Map(),
     }));
@@ -295,17 +307,28 @@ const handlers: HandlerRegistry = {
 
     if (!stream && action === 'clear') {
       pendingLogUpdates.clear();
-      ctx.setState((prev) => ({ ...prev, streamStates: new Map() }));
+      ctx.setState((prev) => ({
+        ...prev,
+        streamStates: new Map(),
+        streamLogs: new Map(),
+      }));
       return;
     }
 
     if (!stream) return;
 
+    const isClear = action === 'clear';
+    if (isClear) {
+      clearPendingLogUpdatesForStream(stream);
+    }
+
+    // Update logs in the separate streamLogs Map
+    ctx.setStreamLogs(stream, () => ({
+      logs: isClear ? [] : messages,
+    }));
+
+    // Update meta (taskGroups, contextState, workflow fields) in streamStates
     ctx.setStreamState(stream, (prev): StreamState => {
-      const isClear = action === 'clear';
-      if (isClear) {
-        clearPendingLogUpdatesForStream(stream);
-      }
       const {
         activeRunId,
         runInstructions,
@@ -315,11 +338,7 @@ const handlers: HandlerRegistry = {
         contextState,
       } = data;
 
-      // Common overrides shared by both state types.
-      // Spread the narrowed `prev` (not the union) in each branch so
-      // TypeScript can resolve the return back to the discriminated union.
       const base = {
-        logs: isClear ? [] : messages,
         taskGroups: isClear ? [] : (groups ?? prev.taskGroups),
         contextState: contextState ?? prev.contextState,
       };
@@ -375,10 +394,9 @@ const handlers: HandlerRegistry = {
   },
 
   // --- Log updates ---
-  // These flow through setStreamState → willUpdate → updateContexts like all
-  // other state changes.  Content components are shielded from re-renders by
-  // the hasStreamStateMetaChange gate in updateContexts (log-only updates
-  // produce identical meta refs, so the meta context assignment is skipped).
+  // These use setStreamLogs so only the streamLogs Map gets a new entry.
+  // The streamStates Map stays unchanged, so meta context consumers
+  // (content components) skip re-rendering on log-only updates.
 
   [PROGRESS_VIEW_COMMANDS.APPEND_LOG]: (data, ctx) => {
     const logId = data.logMessage.id;
@@ -395,20 +413,20 @@ const handlers: HandlerRegistry = {
       pendingLogUpdates.delete(getPendingLogKey(data.stream, logId));
     }
 
-    ctx.setStreamState(data.stream, (prev) => {
+    ctx.setStreamLogs(data.stream, (prev) => {
       // Guard: skip if this message is already in the log list (race between
       // UPDATE_LOGS and APPEND_LOG can cause the same entry to arrive twice).
       if (logId && prev.logs.some((entry) => entry.id === logId)) {
         return prev;
       }
-      return { ...prev, logs: [...prev.logs, mergedLogMessage] };
+      return { logs: [...prev.logs, mergedLogMessage] };
     });
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_LOG]: (data, ctx) => {
     const logId = data.logMessage.id;
 
-    ctx.setStreamState(data.stream, (prev) => {
+    ctx.setStreamLogs(data.stream, (prev) => {
       const logIndex = prev.logs.findIndex((entry) => entry.id === logId);
 
       if (logIndex < 0) {
@@ -421,12 +439,12 @@ const handlers: HandlerRegistry = {
             ...data.logMessage,
           });
         }
-        return prev; // Same reference → setStreamState skips update
+        return prev; // Same reference → setStreamLogs skips update
       }
 
       const newLogs = [...prev.logs];
       newLogs[logIndex] = data.logMessage;
-      return { ...prev, logs: newLogs };
+      return { logs: newLogs };
     });
   },
 
