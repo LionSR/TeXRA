@@ -816,10 +816,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       if (confirm !== 'Delete') return;
 
       const updated = presets.filter((p) => p.id !== data.presetId);
-      await workspaceSM.update(
-        WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-        updated,
-      );
+      await workspaceSM.update(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, updated);
 
       await this.withActiveWebview((w) => this.sendAgentModePresets(w));
     } catch (error) {
