@@ -377,7 +377,7 @@ This creates a **latency floor**: the orchestrator only learns about subagent pr
 | Mechanism                           | Real-Time?                                   | Data Available                                   | Cost to Orchestrator                                |
 | ----------------------------------- | -------------------------------------------- | ------------------------------------------------ | --------------------------------------------------- |
 | **FollowUpQueue delivery**          | Near-real-time (fires at completion/WAITING) | Final result (XML with outputs or last response) | Zero - delivered automatically as follow-up message |
-| **FollowUpQueue progress** (NEW)    | Coalesced (3s debounce)                      | Todos, round progress, tool count, files changed | Zero - delivered automatically                      |
+| **FollowUpQueue progress** (NEW)    | Immediate                                    | Todos, round progress, tool count, files changed | Zero - delivered automatically                      |
 | **`executions` with `action=wait`** | Efficient blocking                           | Status + progress + todos                        | One tool call per check (blocks efficiently)        |
 | **`executions` with `action=view`** | Snapshot                                     | Status, progress, conversation, todos, files     | One tool call per check                             |
 | **`executions/{id}/conversation`**  | Snapshot                                     | Full message history with tool calls             | One tool call (can be large)                        |
@@ -433,27 +433,10 @@ type SubagentProgressUpdate =
     tool-calls="7" files-changed="slides/talk.tex, refs.bib" />
 ```
 
-### Coalescing
-
-To avoid flooding the orchestrator when rapid changes occur (e.g., 5 todo updates in 1 second), updates are coalesced with a 3-second debounce timer per update kind:
-
-```
-                    Subagent emits updates
-                    ──────────────────────
-t=0s   onProgress({kind:'todos', ...})   → buffered
-t=0.5s onProgress({kind:'todos', ...})   → replaces previous
-t=1s   onProgress({kind:'overview', ...}) → buffered (different kind)
-t=3s   ─── timer fires ───────────────── → flush both to FollowUpQueue
-t=3.2s onProgress({kind:'todos', ...})   → buffered (new timer)
-t=6.2s ─── timer fires ───────────────── → flush
-```
-
-When the final result is delivered (`onBeforeWaiting` / `onCompleted`), any buffered progress is flushed immediately before the result message.
-
 ### Wiring Diagram
 
 ```
-executeSubagent() ─── onProgress callback (with coalescing) ──┐
+executeSubagent() ─── onProgress callback ──┐
         │                                                       │
         ▼                                                       │
 executeAgent(options: { onProgress })                           │
@@ -485,7 +468,7 @@ executeAgent(options: { onProgress })                           │
 | File                                                                | Change                                                          |
 | ------------------------------------------------------------------- | --------------------------------------------------------------- |
 | `src/tools/subagentResults.ts`                                      | New `SubagentProgressUpdate` types + `formatSubagentProgress()` |
-| `src/tools/WorkflowTool.ts`                                         | Coalescing `onProgress` callback in `executeSubagent()`         |
+| `src/tools/WorkflowTool.ts`                                         | `onProgress` callback in `executeSubagent()`                    |
 | `src/agent/runtime/executeAgent.ts`                                 | `onProgress` in `ExecuteAgentOptions`, wired to both paths      |
 | `src/agent/implementations/flows/tooluse/ToolUseServices.ts`        | `onProgress` field on services interface                        |
 | `src/agent/implementations/flows/tooluse/runToolUseFlow.ts`         | `onProgress` on `RunToolUseFlowInput`                           |
