@@ -2,6 +2,56 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.36.2] - 2026-02-17
+
+### Features
+
+- Added **agent mode presets** — save, load, and delete custom agent configurations from the Multi-Agent tab, with built-in presets (e.g., Analytical Theorist) including orchestrator.
+- Added **Tool Dashboard** tab to settings view showing availability status of all external tools (LaTeX, Git, Lean, Zotero, etc.) with unified dependency checking.
+- Added **AI session descriptions** — tool-use agent sessions now get auto-generated summaries surfaced in the executions tool for better orchestrator context.
+- Added **real-time subagent progress** — orchestrator receives live cost, tool-call count, and file-interaction updates from running subagents via FollowUpQueue.
+- Added **orchestrator memory protocol** — orchestrator agents now record experience and intelligence gathered during sessions for future reuse.
+- Added **leanSearch** agent for Lean 4 / Mathlib research and discovery with arXiv cross-referencing and informal-formal consistency checks.
+- Added **leanSimplifier** agent for Lean 4 proof simplification targeting Mathlib upstream quality standards.
+- Added **presenter** tool-use agent for interactive Beamer presentation building.
+- Added **guided agent creation** — new wizard with description-driven configuration, tool picker, and "From Template" option for blank YAML scaffolding.
+- Added **Customize and Delete actions** to the Agents tab detail pane; retired the VS Code file explorer view for agent management.
+- Added **Select All / Unselect All** buttons per source type (builtin/custom/remote) in agent selection panel.
+- Added **executions tool display** in progress view with action and path in the header.
+- Improved **memory tool** — `str_replace` now requires viewing a file before editing, matching file edit_file behavior.
+- Changed **paper2slide** Beamer theme from Madrid/dolphin to metropolis.
+
+### Bug Fixes
+
+- Fixed **PDF page limit handling** — gracefully intercepts at tool-result level with compaction suggestion instead of crashing the agent.
+- Fixed **arXiv source re-downloading** when files already exist by using .tex file presence as cache signal.
+- Fixed **context window error detection** for OpenAI Responses API.
+- Fixed **os.homedir() crash** in environments without a home directory (e.g., containers).
+- Fixed **latexmk ENOENT** error by extending process PATH with TeX/MiKTeX directories across all platforms.
+- Fixed **Windows/WSL compatibility** — CRLF normalization in tool file reads and approval merge, path normalization throughout.
+- Fixed **workflow delegate display** — exported missing proposalFields schema from shared index.
+- Fixed **agent entering round 1** despite totalRounds=1; preserved interrupted status regardless of round count.
+- Fixed **extra rounds on failure** — RoundPersistedFlow and reflection flow runner now check lastError before continuing.
+- Fixed **non-retryable model errors** crashing the agent instead of reporting gracefully.
+- Fixed **auth error retries** — authentication failures now skip auto-retry; broadened retryable status codes for transient errors.
+- Fixed **wait endpoint blocking** on subagents that already finished.
+- Fixed **bash tool CWD confusion** — system prompts now reinforce workspace root awareness.
+- Fixed **conversation persistence on crash** so executions tool shows history for interrupted sessions.
+- Fixed **keyboard shortcuts** routed by permission queue order instead of DOM order.
+- Fixed **model dropdown** for unauthenticated users with personal API keys.
+
+### Improvements
+
+- Refactored **agent creation** to PocketFlow nodes with description-driven flow and variable separation.
+- Removed **VS Code file explorer** view for agents — all management consolidated into Settings Agents tab.
+- Cleaned up **agent-facing tool descriptions** — removed VS Code UI references and ProgressBoard mentions.
+- Improved **tool error messages** with cross-consistent wording and actionable remediation hints; bash timeout now suggests `run_in_background`.
+- Refactored **workspace filesystem** — replaced ScopedWorkspaceFS inheritance with composition, extracted WorkspaceRoot value object.
+- Merged **executionReaders** into ExecutionKVStore to eliminate indirection layer.
+- Consolidated **settings tab styles** — replaced native form elements with VS Code web components.
+- Rewrote **documentation site** for mathematicians, physicists, and computational scientists with multi-agent scientific discovery framing.
+- Updated dependencies.
+
 ## [0.36.1] - 2026-02-13
 
 ### Bug Fixes
