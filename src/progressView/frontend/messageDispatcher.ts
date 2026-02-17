@@ -29,12 +29,10 @@ import {
   updateNestedRounds,
 } from './stateUtils';
 import {
-  EMPTY_STREAM_LOGS,
   getStreamState,
   isToolUseState,
   isWorkflowState,
   type ProgressState,
-  type StreamLogs,
   type StreamState,
 } from './store';
 import type { FrontendEventHandlerContext } from './eventHandlers';
@@ -444,7 +442,7 @@ const handlers: HandlerRegistry = {
 
       const newLogs = [...prev.logs];
       newLogs[logIndex] = data.logMessage;
-      return { logs: newLogs };
+      return { logs: newLogs, updatedIndex: logIndex };
     });
   },
 

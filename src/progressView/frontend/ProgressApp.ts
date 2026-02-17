@@ -323,6 +323,7 @@ export class ProgressApp extends BaseWebviewApp {
         isToolUse,
         hasStreams,
         streamName: activeStreamInfo.name,
+        updatedIndex: streamLogs.updatedIndex,
       };
     }
 
