@@ -73,11 +73,13 @@ export class ToolUseCycleNode<C> extends Node<
       }),
     );
 
+    const { onProgress } = this.services;
     prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {
       bus.emit('updateTodos', {
         streamId,
         todos,
       });
+      onProgress?.({ kind: 'todos', todos });
     });
 
     try {
@@ -120,11 +122,23 @@ export class ToolUseCycleNode<C> extends Node<
       shared.shouldSkipCycle = false;
     }
 
+    const workspaceSnapshot = prepRes.workspaceState.toSnapshot();
     shared.stateSlices = {
       runStateSnapshot: prepRes.runState,
-      workspaceSnapshot: prepRes.workspaceState.toSnapshot(),
+      workspaceSnapshot,
       userChannels: prepRes.userChannels,
     };
+
+    if (execRes.outcome === 'completed' && this.services.onProgress) {
+      const { interactions } = prepRes.workspaceState;
+      const cost = prepRes.runState.usageAccumulator.totals.totalCost;
+      this.services.onProgress({
+        kind: 'overview',
+        toolCallCount: interactions.toolCallCount,
+        filesChanged: interactions.editedFilePaths,
+        cost: cost > 0 ? cost : undefined,
+      });
+    }
 
     switch (execRes.outcome) {
       case 'completed':

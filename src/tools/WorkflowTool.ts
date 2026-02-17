@@ -54,6 +54,8 @@ import {
 import {
   formatSubagentDelivery,
   formatSubagentError,
+  formatSubagentProgress,
+  type SubagentProgressUpdate,
 } from '@tools/subagentResults';
 import { defineTool } from '@tools/core/define';
 
@@ -127,6 +129,12 @@ async function executeSubagent(
   let hasDelivered = false;
   let childStreamId: StreamTabId | undefined;
 
+  function onProgress(update: SubagentProgressUpdate): void {
+    if (hasDelivered) return;
+    const msg = formatSubagentProgress(executionId, agentName, update);
+    ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+  }
+
   const promise = executeAgent(configPayload, executionId, {
     isSubagent: true,
     parentStreamId: orchestratorStreamId,
@@ -136,6 +144,7 @@ async function executeSubagent(
         setToolEditApprovalSessionBypass(resolvedStreamId, true);
       }
     },
+    onProgress,
     onBeforeWaiting: (lastResponse) => {
       if (hasDelivered || !childStreamId) return;
       hasDelivered = true;
