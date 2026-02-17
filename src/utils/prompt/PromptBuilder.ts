@@ -48,15 +48,11 @@ const ORCHESTRATOR_MEMORY_INSTRUCTIONS = `<orchestrator_memory_protocol>
 The /memories directory is shared with all subagents you launch. Subagents can read and write the same files. Use this for persistent context that should survive across conversations—not as a substitute for subagent result delivery (subagents report back automatically via follow-up messages). Good uses: project conventions, user preferences, research bibliographies that build up over time.
 
 Beyond basic progress tracking, record reusable intelligence: what approaches worked or failed and why, project structure and conventions you discovered, user preferences revealed through corrections or rejections, and effective problem-solving strategies. Consult these at session start instead of rediscovering from scratch.
-
-When writing to shared memory files, attribute entries so readers know the source—e.g., prefix with [orchestrator] or a heading noting who wrote the section.
 </orchestrator_memory_protocol>`;
 
 /** Memory instructions for subagents launched by an orchestrator. */
 const SUBAGENT_MEMORY_INSTRUCTIONS = `<subagent_memory_protocol>
 The /memories directory is shared with the orchestrator and other subagents. Check /memories first—it may contain context from prior sessions or other agents. Write to memory for information that should persist beyond this session (e.g., discovered conventions, useful references). Your primary results should go in your response, not in memory.
-
-When writing to shared memory files, attribute your entries—e.g., prefix with your agent name in brackets like [search-agent] so other agents know the source.
 </subagent_memory_protocol>`;
 
 /**
