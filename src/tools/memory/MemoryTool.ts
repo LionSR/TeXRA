@@ -8,10 +8,7 @@ import { z } from 'zod';
 // Local imports - filesystem utilities
 import { formatRelativeTime } from '@shared/utils/string';
 import { StorageFS } from '@utils/files';
-import {
-  normalizeLineEndings,
-  splitContentLines,
-} from '@utils/text/stringUtils';
+import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local imports - tool core
 import { defineTool } from '../core/define';
@@ -123,8 +120,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
 
   /** Read a memory file, stripping frontmatter. Returns user-visible content and optional metadata. */
   private async readMemoryFile(resolvedPath: string) {
-    const raw = normalizeLineEndings(await StorageFS.read(resolvedPath));
-    return parseFrontmatter(raw);
+    return parseFrontmatter(await StorageFS.read(resolvedPath));
   }
 
   /** Write a memory file with fresh attribution frontmatter. */
