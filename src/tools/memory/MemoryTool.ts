@@ -434,7 +434,12 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
       const childPath = path.join(currentPath, name);
       const stats = await StorageFS.stat(childPath);
       const isDir = type === vscode.FileType.Directory;
-      entries.push({ path: childPath, size: stats.size, mtime: stats.mtime, isDir });
+      entries.push({
+        path: childPath,
+        size: stats.size,
+        mtime: stats.mtime,
+        isDir,
+      });
 
       if (isDir) {
         await this.walkDirectory(childPath, depth + 1, entries);
