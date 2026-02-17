@@ -442,7 +442,7 @@ const handlers: HandlerRegistry = {
 
       const newLogs = [...prev.logs];
       newLogs[logIndex] = data.logMessage;
-      return { logs: newLogs, updatedIndex: logIndex };
+      return { logs: newLogs };
     });
   },
 
