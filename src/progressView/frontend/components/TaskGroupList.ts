@@ -217,6 +217,9 @@ export class TaskGroupList extends LitElement {
 
   /** Replace a single message ref in the cached tree. O(1) node lookup + O(k) findIndex. */
   private replaceSingleMessage(msg: LogMessageData): void {
+    // Try group node first (O(1) lookup). A message with groupId may live in
+    // cachedOtherUngrouped if the group didn't exist at classification time,
+    // so fall through to ungrouped search on miss.
     if (msg.groupId) {
       const node = this.groupNodeIndex.get(msg.groupId);
       if (node) {
@@ -225,9 +228,13 @@ export class TaskGroupList extends LitElement {
           const updated = [...node.messages];
           updated[idx] = msg;
           node.messages = updated;
+          return;
         }
       }
-    } else if (msg.messageType === 'userMessage') {
+    }
+
+    // Search ungrouped lists
+    if (msg.messageType === 'userMessage') {
       const idx = this.cachedUserMessages.findIndex((m) => m.id === msg.id);
       if (idx >= 0) {
         const updated = [...this.cachedUserMessages];
