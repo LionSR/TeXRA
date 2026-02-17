@@ -328,8 +328,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
   }
 
+  private isClaudeSonnet46(): boolean {
+    return this.config.fullName === SONNET_46_FULLNAME;
+  }
+
+  /** Whether this model supports Anthropic's native server-side context compaction. */
+  private isCompactionEligibleModel(): boolean {
+    return this.isClaudeOpus46() || this.isClaudeSonnet46();
+  }
+
   override get supportsManualCompaction(): boolean {
-    return this.isClaudeOpus46() && this.isToolUseMode();
+    return this.isCompactionEligibleModel() && this.isToolUseMode();
   }
 
   override requestCompaction(): void {
@@ -385,7 +394,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return;
     }
 
-    if (!this.isClaudeOpus46()) {
+    if (!this.isCompactionEligibleModel()) {
       return;
     }
 
@@ -575,6 +584,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const isAnthropic1MBetaEligibleModel =
       this.config.fullName === 'claude-sonnet-4-20250514' ||
       this.config.fullName === 'claude-sonnet-4-5' ||
+      this.config.fullName === SONNET_46_FULLNAME ||
       this.config.fullName === OPUS_46_FULLNAME;
     const isAnthropic1MBetaActive =
       useAnthropic1MBeta && isAnthropic1MBetaEligibleModel;
