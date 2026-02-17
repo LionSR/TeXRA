@@ -3,7 +3,7 @@ import * as path from 'path';
 
 // Local imports - utils
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
+import { splitContentLines } from '@utils/text/stringUtils';
 import { toPosixPath } from '@utils/core/pathCore';
 import { safeHomedir } from '@utils/system/platformPaths';
 
@@ -57,7 +57,7 @@ function expandGitignorePattern(
 
 function parseGitignore(content: string): GitignoreRule[] {
   const rules: GitignoreRule[] = [];
-  const lines = normalizeLineEndings(content).split('\n');
+  const lines = splitContentLines(content);
 
   for (const rawLine of lines) {
     let line = rawLine.trim();
