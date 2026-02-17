@@ -53,7 +53,11 @@ export class ToolUsePrepareNode<C> extends Node<
         this.services.prompt,
         userVarChannels.transient,
         logger,
-        { memoryEnabled, hasDelegationTools, isSubagent: this.services.isSubagent },
+        {
+          memoryEnabled,
+          hasDelegationTools,
+          isSubagent: this.services.isSubagent,
+        },
       );
 
     if (userRequest) {
