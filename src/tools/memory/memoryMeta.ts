@@ -21,6 +21,24 @@ export interface MemoryFileMeta {
 
 type MetaMap = Record<string, MemoryFileMeta>;
 
+/**
+ * Serialize all read-modify-write operations on .meta.json.
+ * Concurrent tool calls from parallel subagents queue behind this lock
+ * so one write never silently overwrites another.
+ */
+let metaLock: Promise<void> = Promise.resolve();
+
+function withMetaLock<T>(fn: () => Promise<T>): Promise<T> {
+  const next = metaLock.then(fn, fn);
+  // Keep the chain alive but swallow errors so one failure
+  // doesn't block all subsequent operations.
+  metaLock = next.then(
+    () => {},
+    () => {},
+  );
+  return next;
+}
+
 /** Read the metadata map, returning empty object on missing/corrupt file. */
 async function readMeta(): Promise<MetaMap> {
   try {
@@ -42,49 +60,67 @@ function toMetaKey(storagePath: string): string {
 }
 
 /** Record that an agent modified a file. No-op if agentName is undefined. */
-export async function recordAttribution(
+export function recordAttribution(
   storagePath: string,
   agentName: string | undefined,
   executionId: string | undefined,
 ): Promise<void> {
-  if (!agentName) return;
-  const meta = await readMeta();
-  meta[toMetaKey(storagePath)] = {
-    modifiedBy: agentName,
-    executionId,
-    modifiedAt: new Date().toISOString(),
-  };
-  await writeMeta(meta);
+  if (!agentName) return Promise.resolve();
+  return withMetaLock(async () => {
+    const meta = await readMeta();
+    meta[toMetaKey(storagePath)] = {
+      modifiedBy: agentName,
+      executionId,
+      modifiedAt: new Date().toISOString(),
+    };
+    await writeMeta(meta);
+  });
 }
 
-/** Remove metadata for a deleted file. */
-export async function removeAttribution(storagePath: string): Promise<void> {
-  const meta = await readMeta();
-  const key = toMetaKey(storagePath);
-  if (key in meta) {
-    delete meta[key];
-    await writeMeta(meta);
-  }
+/**
+ * Remove metadata for a deleted path.
+ * If the path is a directory prefix, removes all child entries too.
+ */
+export function removeAttribution(storagePath: string): Promise<void> {
+  return withMetaLock(async () => {
+    const meta = await readMeta();
+    const key = toMetaKey(storagePath);
+    const prefix = key ? `${key}/` : '';
+    let changed = false;
+
+    for (const k of Object.keys(meta)) {
+      if (k === key || (prefix && k.startsWith(prefix))) {
+        delete meta[k];
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      await writeMeta(meta);
+    }
+  });
 }
 
 /** Update metadata key after a rename. */
-export async function renameAttribution(
+export function renameAttribution(
   oldStoragePath: string,
   newStoragePath: string,
   agentName: string | undefined,
   executionId: string | undefined,
 ): Promise<void> {
-  const meta = await readMeta();
-  const oldKey = toMetaKey(oldStoragePath);
-  const newKey = toMetaKey(newStoragePath);
-  const existing = meta[oldKey];
-  delete meta[oldKey];
-  meta[newKey] = {
-    modifiedBy: agentName ?? existing?.modifiedBy ?? 'unknown',
-    executionId: executionId ?? existing?.executionId,
-    modifiedAt: new Date().toISOString(),
-  };
-  await writeMeta(meta);
+  return withMetaLock(async () => {
+    const meta = await readMeta();
+    const oldKey = toMetaKey(oldStoragePath);
+    const newKey = toMetaKey(newStoragePath);
+    const existing = meta[oldKey];
+    delete meta[oldKey];
+    meta[newKey] = {
+      modifiedBy: agentName ?? existing?.modifiedBy ?? 'unknown',
+      executionId: executionId ?? existing?.executionId,
+      modifiedAt: new Date().toISOString(),
+    };
+    await writeMeta(meta);
+  });
 }
 
 /** Look up attribution for a storage path. */
