@@ -70,6 +70,7 @@ function buildTooltip(info: StreamTabInfo): string {
 export class StreamTab extends LitElement {
   static override styles = [
     designTokens,
+    animationStyles,
     codiconIconClasses,
     statusIndicatorStyles,
     css`

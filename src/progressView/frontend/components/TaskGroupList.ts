@@ -122,11 +122,11 @@ export class TaskGroupList extends LitElement {
         | undefined;
       const prevCount = prevMessages?.length ?? 0;
 
-      if (this.messages.length === prevCount) {
+      if (this.messages.length === prevCount && prevMessages) {
         // Same length: text-only update (e.g. streaming UPDATE_LOG).
         // Propagate fresh message references to cached structures so
         // render() passes updated objects to repeat()/log-entry.
-        this.updateCachedMessageRefs();
+        this.updateCachedMessageRefs(prevMessages);
       } else if (this.messages.length > prevCount) {
         // Append-only: classify only the new messages incrementally.
         this.appendNewMessages(prevCount);
@@ -199,12 +199,47 @@ export class TaskGroupList extends LitElement {
     ];
   }
 
-  /** Replace stale message references in cached structures with fresh ones (O(n)). */
-  private updateCachedMessageRefs(): void {
-    const byId = new Map(this.messages.map((m) => [m.id, m]));
+  /**
+   * Replace stale message references in cached structures with fresh ones.
+   *
+   * Optimized for the common streaming case: UPDATE_LOG changes exactly one
+   * entry (typically near the end of the array).  Scans from the end to find
+   * the changed entry in O(1), then uses its groupId to walk directly to the
+   * affected tree node — O(depth) instead of O(n + m) full-tree rebuild.
+   *
+   * Falls back to the full Map approach for the rare case of multiple batched
+   * UPDATE_LOGs changing more than one entry.
+   */
+  private updateCachedMessageRefs(prevMessages: LogMessageData[]): void {
+    // Find changed entries by comparing refs.
+    // Scan from end — streaming target is typically the last message.
+    const changed: LogMessageData[] = [];
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      if (this.messages[i] !== prevMessages[i]) {
+        changed.push(this.messages[i]);
+      }
+    }
+    if (changed.length === 0) return;
 
+    // Single change (common during streaming): targeted swap
+    if (changed.length === 1) {
+      this.replaceSingleMessage(changed[0]);
+      return;
+    }
+
+    // Multiple changes (rare — batched UPDATE_LOGs): full scan
+    const byId = new Map(changed.map((m) => [m.id, m]));
     const updateNode = (node: GroupTree): void => {
-      node.messages = node.messages.map((old) => byId.get(old.id) ?? old);
+      let needsUpdate = false;
+      for (const msg of node.messages) {
+        if (byId.has(msg.id)) {
+          needsUpdate = true;
+          break;
+        }
+      }
+      if (needsUpdate) {
+        node.messages = node.messages.map((old) => byId.get(old.id) ?? old);
+      }
       for (const child of node.children) updateNode(child);
     };
     for (const node of this.cachedTree) updateNode(node);
@@ -215,6 +250,45 @@ export class TaskGroupList extends LitElement {
     this.cachedOtherUngrouped = this.cachedOtherUngrouped.map(
       (old) => byId.get(old.id) ?? old,
     );
+  }
+
+  /**
+   * Replace a single message ref in the cached tree.
+   * Uses groupId to skip directly to the target node — O(depth + k).
+   */
+  private replaceSingleMessage(msg: LogMessageData): void {
+    if (msg.groupId) {
+      const replaceInNodes = (nodes: GroupTree[]): boolean => {
+        for (const node of nodes) {
+          if (node.group.id === msg.groupId) {
+            const idx = node.messages.findIndex((m) => m.id === msg.id);
+            if (idx >= 0) {
+              const updated = [...node.messages];
+              updated[idx] = msg;
+              node.messages = updated;
+            }
+            return true;
+          }
+          if (replaceInNodes(node.children)) return true;
+        }
+        return false;
+      };
+      replaceInNodes(this.cachedTree);
+    } else if (msg.messageType === 'userMessage') {
+      const idx = this.cachedUserMessages.findIndex((m) => m.id === msg.id);
+      if (idx >= 0) {
+        const updated = [...this.cachedUserMessages];
+        updated[idx] = msg;
+        this.cachedUserMessages = updated;
+      }
+    } else {
+      const idx = this.cachedOtherUngrouped.findIndex((m) => m.id === msg.id);
+      if (idx >= 0) {
+        const updated = [...this.cachedOtherUngrouped];
+        updated[idx] = msg;
+        this.cachedOtherUngrouped = updated;
+      }
+    }
   }
 
   /** Play sound when a run group completes */
