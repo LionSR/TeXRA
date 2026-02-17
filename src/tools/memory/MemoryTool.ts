@@ -8,7 +8,10 @@ import { z } from 'zod';
 // Local imports - filesystem utilities
 import { formatRelativeTime } from '@shared/utils/string';
 import { StorageFS } from '@utils/files';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
+import {
+  normalizeLineEndings,
+  splitContentLines,
+} from '@utils/text/stringUtils';
 
 // Local imports - tool core
 import { defineTool } from '../core/define';
@@ -26,7 +29,6 @@ import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInt
 
 // Local imports - shared memory constants and utilities
 import {
-  MEMORY_DISPLAY_ROOT,
   MEMORY_STORAGE_ROOT,
   MAX_VIEW_LINES,
   DIRECTORY_LISTING_DEPTH,
@@ -145,13 +147,30 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     }
   }
 
+  /** Return early result if the file hasn't been viewed yet. */
+  private requireViewBeforeEdit(inputPath: string): ToolResult | undefined {
+    return (
+      requireFileReadForEdit(
+        inputPath,
+        true,
+        'Edits to memory files require viewing the file first. Please use the view command before editing.',
+      ) ?? undefined
+    );
+  }
+
   private async requireEditableFile(
     resolvedPath: string,
     inputPath: string,
   ): Promise<void> {
-    const exists = await StorageFS.exists(resolvedPath);
-    const isDir = exists && (await StorageFS.isDir(resolvedPath));
-    if (!exists || isDir) {
+    try {
+      const stats = await StorageFS.stat(resolvedPath);
+      if (stats.type === vscode.FileType.Directory) {
+        throw new ToolError(
+          `The path ${inputPath} does not exist or is a directory.`,
+        );
+      }
+    } catch (err) {
+      if (err instanceof ToolError) throw err;
       throw new ToolError(
         `The path ${inputPath} does not exist or is a directory.`,
       );
@@ -194,10 +213,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
 
     const { meta, content } = await this.readMemoryFile(resolvedPath);
     recordToolFileRead(inputPath);
-    const lines = content.split('\n');
-    if (lines.length > 0 && lines.at(-1) === '') {
-      lines.pop();
-    }
+    const lines = splitContentLines(content);
     if (lines.length > MAX_VIEW_LINES) {
       throw new ToolError(
         `File ${inputPath} exceeds maximum line limit of 999,999 lines.`,
@@ -255,15 +271,8 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const resolvedPath = this.resolveMemoryPath(inputPath);
     await this.requireEditableFile(resolvedPath, inputPath);
 
-    // Gate: require view before edit (matches edit_file behavior)
-    const readGate = requireFileReadForEdit(
-      inputPath,
-      true,
-      'Edits to memory files require viewing the file first. Please use the view command before editing.',
-    );
-    if (readGate) {
-      return readGate;
-    }
+    const readGate = this.requireViewBeforeEdit(inputPath);
+    if (readGate) return readGate;
 
     const { content } = await this.readMemoryFile(resolvedPath);
     const occurrences = countOccurrences(content, oldStr);
@@ -308,15 +317,8 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const resolvedPath = this.resolveMemoryPath(inputPath);
     await this.requireEditableFile(resolvedPath, inputPath);
 
-    // Gate: require view before edit (matches edit_file behavior)
-    const readGate = requireFileReadForEdit(
-      inputPath,
-      true,
-      'Edits to memory files require viewing the file first. Please use the view command before editing.',
-    );
-    if (readGate) {
-      return readGate;
-    }
+    const readGate = this.requireViewBeforeEdit(inputPath);
+    if (readGate) return readGate;
 
     const { content } = await this.readMemoryFile(resolvedPath);
     const lines = content.split('\n');
