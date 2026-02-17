@@ -9,7 +9,7 @@ import { ToolResult } from '@tools/result';
 import { buildFileAttachment, formatLinesWithNumbers } from '@tools/utils';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { WorkspaceFS, getMimeType } from '@utils/files';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
+import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -74,12 +74,8 @@ export class ReadFileTool extends defineTool({
       return result;
     }
 
-    const content = normalizeLineEndings(await WorkspaceFS.read(input.path));
+    const lines = splitContentLines(await WorkspaceFS.read(input.path));
     recordToolFileRead(input.path);
-    const lines = content.split('\n');
-    if (lines.length > 0 && lines.at(-1) === '') {
-      lines.pop();
-    }
 
     const totalLines = lines.length;
 
