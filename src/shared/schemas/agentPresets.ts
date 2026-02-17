@@ -35,7 +35,14 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'Formal proof development with Lean 4, theorem search, tactic simplification, and LaTeX document support.',
     icon: 'codicon-symbol-structure',
     workflowAgents: ['correct', 'polish', 'draw'],
-    toolUseAgents: ['lean', 'leanSearch', 'leanSimplifier', 'chat', 'review'],
+    toolUseAgents: [
+      'lean',
+      'leanSearch',
+      'leanSimplifier',
+      'chat',
+      'review',
+      'orchestrator',
+    ],
   },
   {
     id: 'computational-scientist',
@@ -44,7 +51,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'Numerical computation, Wolfram Language, data analysis, and scientific writing.',
     icon: 'codicon-pulse',
     workflowAgents: ['correct', 'polish', 'draw'],
-    toolUseAgents: ['research', 'chat', 'review'],
+    toolUseAgents: ['research', 'chat', 'review', 'orchestrator'],
   },
   {
     id: 'theoretical-physicist',
@@ -53,7 +60,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'Symbolic derivations, mathematical verification, literature discussion, and rigorous manuscript review.',
     icon: 'codicon-symbol-operator',
     workflowAgents: ['correct', 'polish', 'draw'],
-    toolUseAgents: ['research', 'review', 'chat', 'discuss'],
+    toolUseAgents: ['research', 'review', 'chat', 'discuss', 'orchestrator'],
   },
   {
     id: 'mathematician',
@@ -62,6 +69,14 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'Formal proofs with Lean 4, symbolic computation, derivation verification, and theorem exploration.',
     icon: 'codicon-symbol-number',
     workflowAgents: ['correct', 'polish', 'draw'],
-    toolUseAgents: ['lean', 'leanSearch', 'leanSimplifier', 'research', 'review', 'chat'],
+    toolUseAgents: [
+      'lean',
+      'leanSearch',
+      'leanSimplifier',
+      'research',
+      'review',
+      'chat',
+      'orchestrator',
+    ],
   },
 ];
