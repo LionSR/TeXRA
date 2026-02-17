@@ -1385,7 +1385,7 @@
     "markdown-it": "^14.1.1",
     "markdown-it-texmath": "^1.0.0",
     "mime-types": "^3.0.1",
-    "minimatch": "^10.1.2",
+    "minimatch": "^10.2.1",
     "nanoid": "^5.1.6",
     "node-pandoc": "^0.3.0",
     "openai": "^6.22.0",
