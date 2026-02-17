@@ -1,14 +1,10 @@
 /**
- * Attribution metadata for memory files.
+ * Attribution metadata for memory files via inline frontmatter.
  *
- * Stores who last modified each file in a sidecar JSON file so that
- * directory listings can show provenance without polluting file content.
+ * Metadata lives inside each file as a small YAML frontmatter block,
+ * making the filesystem the single source of truth.  No sidecar file,
+ * no locking, no orphan cleanup — delete/rename just works.
  */
-import * as path from 'path';
-
-import { StorageFS } from '@utils/files';
-
-import { MEMORY_META_FILE, MEMORY_STORAGE_ROOT } from './constants';
 
 export interface MemoryFileMeta {
   /** Agent name that last modified this file. */
@@ -19,122 +15,92 @@ export interface MemoryFileMeta {
   modifiedAt: string;
 }
 
-type MetaMap = Record<string, MemoryFileMeta>;
+const FRONTMATTER_FENCE = '---';
+
+// ── Parsing ────────────────────────────────────────────────────────
 
 /**
- * Serialize all read-modify-write operations on .meta.json.
- * Concurrent tool calls from parallel subagents queue behind this lock
- * so one write never silently overwrites another.
+ * Split a raw file string into optional attribution metadata and the
+ * user-visible content.  Files without frontmatter return null metadata
+ * and the full string as content (backward-compatible).
  */
-let metaLock: Promise<void> = Promise.resolve();
-
-function withMetaLock<T>(fn: () => Promise<T>): Promise<T> {
-  const next = metaLock.then(fn, fn);
-  // Keep the chain alive but swallow errors so one failure
-  // doesn't block all subsequent operations.
-  metaLock = next.then(
-    () => {},
-    () => {},
-  );
-  return next;
-}
-
-/** Read the metadata map, returning empty object on missing/corrupt file. */
-async function readMeta(): Promise<MetaMap> {
-  try {
-    return await StorageFS.readJson<MetaMap>(MEMORY_META_FILE);
-  } catch {
-    return {};
+export function parseFrontmatter(raw: string): {
+  meta: MemoryFileMeta | null;
+  content: string;
+} {
+  if (!raw.startsWith(`${FRONTMATTER_FENCE}\n`)) {
+    return { meta: null, content: raw };
   }
+
+  const endIdx = raw.indexOf(`\n${FRONTMATTER_FENCE}\n`, FRONTMATTER_FENCE.length);
+  if (endIdx === -1) {
+    return { meta: null, content: raw };
+  }
+
+  const block = raw.slice(FRONTMATTER_FENCE.length + 1, endIdx);
+  const fields: Record<string, string> = {};
+  for (const line of block.split('\n')) {
+    const colon = line.indexOf(':');
+    if (colon > 0) {
+      fields[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
+    }
+  }
+
+  if (!fields.modifiedBy) {
+    return { meta: null, content: raw };
+  }
+
+  return {
+    meta: {
+      modifiedBy: fields.modifiedBy,
+      executionId: fields.executionId || undefined,
+      modifiedAt: fields.modifiedAt || new Date().toISOString(),
+    },
+    content: raw.slice(endIdx + FRONTMATTER_FENCE.length + 2), // skip "\n---\n"
+  };
 }
 
-/** Persist the metadata map. */
-async function writeMeta(meta: MetaMap): Promise<void> {
-  await StorageFS.ensureDir(MEMORY_STORAGE_ROOT);
-  await StorageFS.writeJson(MEMORY_META_FILE, meta);
-}
+// ── Building ───────────────────────────────────────────────────────
 
-/** Convert a resolved storage path to a meta key (relative to memories/). */
-function toMetaKey(storagePath: string): string {
-  return path.relative(MEMORY_STORAGE_ROOT, storagePath);
-}
-
-/** Record that an agent modified a file. No-op if agentName is undefined. */
-export function recordAttribution(
-  storagePath: string,
-  agentName: string | undefined,
-  executionId: string | undefined,
-): Promise<void> {
-  if (!agentName) return Promise.resolve();
-  return withMetaLock(async () => {
-    const meta = await readMeta();
-    meta[toMetaKey(storagePath)] = {
-      modifiedBy: agentName,
-      executionId,
-      modifiedAt: new Date().toISOString(),
-    };
-    await writeMeta(meta);
-  });
+function buildFrontmatter(meta: MemoryFileMeta): string {
+  const lines = [FRONTMATTER_FENCE, `modifiedBy: ${meta.modifiedBy}`];
+  if (meta.executionId) {
+    lines.push(`executionId: ${meta.executionId}`);
+  }
+  lines.push(`modifiedAt: ${meta.modifiedAt}`);
+  lines.push(FRONTMATTER_FENCE);
+  return lines.join('\n');
 }
 
 /**
- * Remove metadata for a deleted path.
- * If the path is a directory prefix, removes all child entries too.
+ * Combine attribution metadata with user content into a single file
+ * string.  If meta is null the content is returned unchanged.
  */
-export function removeAttribution(storagePath: string): Promise<void> {
-  return withMetaLock(async () => {
-    const meta = await readMeta();
-    const key = toMetaKey(storagePath);
-    const prefix = key ? `${key}/` : '';
-    let changed = false;
-
-    for (const k of Object.keys(meta)) {
-      if (k === key || (prefix && k.startsWith(prefix))) {
-        delete meta[k];
-        changed = true;
-      }
-    }
-
-    if (changed) {
-      await writeMeta(meta);
-    }
-  });
+export function buildFile(
+  content: string,
+  meta: MemoryFileMeta | null,
+): string {
+  if (!meta) return content;
+  return `${buildFrontmatter(meta)}\n${content}`;
 }
 
-/** Update metadata key after a rename. */
-export function renameAttribution(
-  oldStoragePath: string,
-  newStoragePath: string,
+/**
+ * Create a fresh MemoryFileMeta for the current agent / execution.
+ * Returns null when agentName is not available (attribution skipped).
+ */
+export function createMeta(
   agentName: string | undefined,
   executionId: string | undefined,
-): Promise<void> {
-  return withMetaLock(async () => {
-    const meta = await readMeta();
-    const oldKey = toMetaKey(oldStoragePath);
-    const newKey = toMetaKey(newStoragePath);
-    const existing = meta[oldKey];
-    delete meta[oldKey];
-    meta[newKey] = {
-      modifiedBy: agentName ?? existing?.modifiedBy ?? 'unknown',
-      executionId: executionId ?? existing?.executionId,
-      modifiedAt: new Date().toISOString(),
-    };
-    await writeMeta(meta);
-  });
+): MemoryFileMeta | null {
+  if (!agentName) return null;
+  return {
+    modifiedBy: agentName,
+    executionId,
+    modifiedAt: new Date().toISOString(),
+  };
 }
 
-/** Look up attribution for a storage path. */
-export async function getAttribution(
-  storagePath: string,
-): Promise<MemoryFileMeta | undefined> {
-  const meta = await readMeta();
-  return meta[toMetaKey(storagePath)];
-}
-
-/** Bulk-read all attributions (keyed by storage-relative path). */
-export async function getAllAttributions(): Promise<MetaMap> {
-  return readMeta();
-}
+// ── Display ────────────────────────────────────────────────────────
 
 /** Format attribution for display: "agentName (executionId)" or just "agentName". */
 export function formatAttribution(meta: MemoryFileMeta): string {
