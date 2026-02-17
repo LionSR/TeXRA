@@ -22,6 +22,22 @@ export function objectToLogString(
 }
 
 /**
+ * Normalize line endings and split into content lines.
+ * A trailing newline does not produce a phantom empty element.
+ *
+ * @example
+ * splitContentLines('a\nb\nc')   // ['a', 'b', 'c']
+ * splitContentLines('a\nb\nc\n') // ['a', 'b', 'c']
+ * splitContentLines('')          // []
+ */
+export function splitContentLines(text: string): string[] {
+  if (!text) return [];
+  const lines = normalizeLineEndings(text).split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  return lines;
+}
+
+/**
  * Count the number of lines in a string.
  * Handles both Unix (\n) and Windows (\r\n) line endings.
  * A trailing newline does not count as an extra line.
@@ -32,10 +48,5 @@ export function objectToLogString(
  * countLines('') // 0
  */
 export function countLines(text: string): number {
-  if (!text) return 0;
-  const normalized = normalizeLineEndings(text);
-  const lines = normalized.split('\n');
-  return normalized.endsWith('\n')
-    ? Math.max(lines.length - 1, 0)
-    : lines.length;
+  return splitContentLines(text).length;
 }
