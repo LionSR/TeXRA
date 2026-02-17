@@ -37,6 +37,7 @@ import {
   UpdateAgentSelectionMessageSchema,
   UpdateCustomAgentDirMessageSchema,
   UpdateSuperYoloEnabledMessageSchema,
+  UpdateAgentModePresetsMessageSchema,
   UpdateToolDashboardMessageSchema,
   type AgentSelectionItem,
   type NumberVscodeSetting,
@@ -53,6 +54,7 @@ import type { VscTabsSelectEvent } from '@vscode-elements/elements/dist/vscode-t
 
 // Local imports - shared schema types
 import type { AgentCategory } from '@shared/schemas/agent';
+import type { AgentModePreset } from '@shared/schemas/agentPresets';
 
 // Local imports - settings view tabs (side-effect: register)
 import './tabs/MemoryTab';
@@ -146,6 +148,9 @@ export class SettingsApp extends BaseWebviewApp {
   @state() private customAgentDirIsDefault = true;
   @state() private agentSubTab: AgentCategory | undefined;
 
+  // Agent mode presets state
+  @state() private customPresets: AgentModePreset[] = [];
+
   // Super YOLO / reliability state
   @state() private superYoloEnabled = false;
   @state() private superYoloToggleDisabled = true;
@@ -170,6 +175,7 @@ export class SettingsApp extends BaseWebviewApp {
     postMessage(SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED);
+    postMessage(SETTINGS_VIEW_COMMANDS.GET_AGENT_MODE_PRESETS);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA);
   }
 
@@ -274,6 +280,16 @@ export class SettingsApp extends BaseWebviewApp {
         this.superYoloEnabled = data.enabled;
         this.superYoloToggleDisabled = false;
         this.reliabilitySettings = data.reliabilitySettings;
+        return;
+      }
+
+      case SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS: {
+        const data = this.parseMessage(
+          raw,
+          UpdateAgentModePresetsMessageSchema,
+        );
+        if (!data) return;
+        this.customPresets = data.customPresets;
         return;
       }
 
@@ -445,6 +461,18 @@ export class SettingsApp extends BaseWebviewApp {
     SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED,
   );
 
+  private handleApplyAgentModePreset = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
+  );
+
+  private handleSaveAgentModePreset(): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET);
+  }
+
+  private handleDeleteAgentModePreset = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET,
+  );
+
   // Tool dashboard event handlers
   private handleToolOpenUrl = forwardDetail(
     SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL,
@@ -586,6 +614,7 @@ export class SettingsApp extends BaseWebviewApp {
               @agent-delete-custom=${this.handleDeleteCustomAgent}
               @agent-set-custom-dir=${this.handleSetCustomAgentDir}
               @agent-reset-custom-dir=${this.handleResetCustomAgentDir}
+              @save-agent-mode-preset=${this.handleSaveAgentModePreset}
             ></agents-tab>
           </vscode-tab-panel>
 
@@ -594,8 +623,11 @@ export class SettingsApp extends BaseWebviewApp {
               .superYoloEnabled=${this.superYoloEnabled}
               .toggleDisabled=${this.superYoloToggleDisabled}
               .reliabilitySettings=${this.reliabilitySettings}
+              .customPresets=${this.customPresets}
               @super-yolo-toggle=${this.handleSuperYoloToggle}
               @reliability-setting-change=${this.handleSetProviderVscodeSetting}
+              @apply-agent-mode-preset=${this.handleApplyAgentModePreset}
+              @delete-agent-mode-preset=${this.handleDeleteAgentModePreset}
             ></multi-agent-tab>
           </vscode-tab-panel>
 
