@@ -383,6 +383,9 @@ export class ProgressApp extends BaseWebviewApp {
     streamId: StreamTabId,
     updater: (prev: StreamLogs) => StreamLogs,
   ): void {
+    // Skip unknown streams — prevents orphan streamLogs entries that survive
+    // updateStreamInfo cleanup (which only iterates streamStates keys)
+    if (!this.appState.streamStates.has(streamId)) return;
     const current =
       this.appState.streamLogs.get(streamId) ?? EMPTY_STREAM_LOGS;
     const updated = updater(current);
