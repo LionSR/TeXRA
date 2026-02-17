@@ -43,12 +43,6 @@ export type FollowupOptionsState = Omit<
  */
 export interface StreamLogs {
   logs: LogMessageData[];
-  /**
-   * Index of the entry replaced by the most recent UPDATE_LOG.
-   * Enables O(1) targeted ref swap in TaskGroupList instead of O(n) full scan.
-   * Undefined for APPEND_LOG (new entry) and UPDATE_LOGS (bulk replace).
-   */
-  updatedIndex?: number;
 }
 
 export const EMPTY_STREAM_LOGS: StreamLogs = { logs: [] };

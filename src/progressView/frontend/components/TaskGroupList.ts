@@ -68,9 +68,6 @@ export class TaskGroupList extends LitElement {
   /** Whether this is a tool-use session (affects run filtering) */
   @property({ attribute: false }) isToolUse = false;
 
-  /** Index of the entry replaced by UPDATE_LOG (O(1) targeted swap hint) */
-  @property({ attribute: false }) updatedIndex?: number;
-
   /** Whether there are any streams in the current filter (controls placeholder) */
   @property({ attribute: false }) hasStreams = false;
 
@@ -84,6 +81,9 @@ export class TaskGroupList extends LitElement {
   private cachedTree: GroupTree[] = [];
   private cachedUserMessages: LogMessageData[] = [];
   private cachedOtherUngrouped: LogMessageData[] = [];
+
+  /** O(1) lookup from groupId → tree node. Built during buildGroupTree(). */
+  private groupNodeIndex = new Map<string, GroupTree>();
 
   /** Memoized set of root group IDs for isGroupVisible() */
   private cachedRootGroupIds: Set<string> = new Set();
@@ -156,20 +156,10 @@ export class TaskGroupList extends LitElement {
    * Avoids full tree rebuilds by classifying only new messages and inserting by timestamp.
    */
   private appendNewMessages(startIndex: number): void {
-    // Build a quick group lookup from the existing tree
-    const treeNodeMap = new Map<string, GroupTree>();
-    const collectNodes = (nodes: GroupTree[]): void => {
-      for (const node of nodes) {
-        treeNodeMap.set(node.group.id, node);
-        collectNodes(node.children);
-      }
-    };
-    collectNodes(this.cachedTree);
-
     for (let i = startIndex; i < this.messages.length; i++) {
       const msg = this.messages[i];
-      if (msg.groupId && treeNodeMap.has(msg.groupId)) {
-        const node = treeNodeMap.get(msg.groupId)!;
+      const node = msg.groupId ? this.groupNodeIndex.get(msg.groupId) : null;
+      if (node) {
         node.messages = this.insertMessageSorted(node.messages, msg);
       } else if (msg.messageType === 'userMessage') {
         this.cachedUserMessages = this.insertMessageSorted(
@@ -205,22 +195,12 @@ export class TaskGroupList extends LitElement {
   /**
    * Replace stale message references in cached structures with fresh ones.
    *
-   * When `updatedIndex` is set (UPDATE_LOG path), does O(1) direct lookup
-   * + O(depth) tree walk to the target group.  Falls back to ref-scanning
-   * the array from the end when the hint is unavailable.
+   * Scans from end (O(1) typical — streaming targets the last message),
+   * then uses groupNodeIndex for O(1) node lookup per changed message.
    */
   private updateCachedMessageRefs(prevMessages: LogMessageData[]): void {
-    // Fast path: upstream told us exactly which entry changed
-    if (
-      this.updatedIndex !== undefined &&
-      this.updatedIndex < this.messages.length
-    ) {
-      this.replaceSingleMessage(this.messages[this.updatedIndex]);
-      return;
-    }
-
-    // No hint: find changed entries by comparing refs.
-    // Scan from end — streaming target is typically near the end.
+    // Find changed entries by comparing refs. Scan from end —
+    // streaming target is typically the last message.
     const changed: LogMessageData[] = [];
     for (let i = this.messages.length - 1; i >= 0; i--) {
       if (this.messages[i] !== prevMessages[i]) {
@@ -229,58 +209,24 @@ export class TaskGroupList extends LitElement {
     }
     if (changed.length === 0) return;
 
-    if (changed.length === 1) {
-      this.replaceSingleMessage(changed[0]);
-      return;
+    // Replace each changed message via O(1) groupNodeIndex lookup
+    for (const msg of changed) {
+      this.replaceSingleMessage(msg);
     }
-
-    // Multiple changes (rare — batched UPDATE_LOGs): full scan
-    const byId = new Map(changed.map((m) => [m.id, m]));
-    const updateNode = (node: GroupTree): void => {
-      let needsUpdate = false;
-      for (const msg of node.messages) {
-        if (byId.has(msg.id)) {
-          needsUpdate = true;
-          break;
-        }
-      }
-      if (needsUpdate) {
-        node.messages = node.messages.map((old) => byId.get(old.id) ?? old);
-      }
-      for (const child of node.children) updateNode(child);
-    };
-    for (const node of this.cachedTree) updateNode(node);
-
-    this.cachedUserMessages = this.cachedUserMessages.map(
-      (old) => byId.get(old.id) ?? old,
-    );
-    this.cachedOtherUngrouped = this.cachedOtherUngrouped.map(
-      (old) => byId.get(old.id) ?? old,
-    );
   }
 
-  /**
-   * Replace a single message ref in the cached tree.
-   * Uses groupId to skip directly to the target node — O(depth + k).
-   */
+  /** Replace a single message ref in the cached tree. O(1) node lookup + O(k) findIndex. */
   private replaceSingleMessage(msg: LogMessageData): void {
     if (msg.groupId) {
-      const replaceInNodes = (nodes: GroupTree[]): boolean => {
-        for (const node of nodes) {
-          if (node.group.id === msg.groupId) {
-            const idx = node.messages.findIndex((m) => m.id === msg.id);
-            if (idx >= 0) {
-              const updated = [...node.messages];
-              updated[idx] = msg;
-              node.messages = updated;
-            }
-            return true;
-          }
-          if (replaceInNodes(node.children)) return true;
+      const node = this.groupNodeIndex.get(msg.groupId);
+      if (node) {
+        const idx = node.messages.findIndex((m) => m.id === msg.id);
+        if (idx >= 0) {
+          const updated = [...node.messages];
+          updated[idx] = msg;
+          node.messages = updated;
         }
-        return false;
-      };
-      replaceInNodes(this.cachedTree);
+      }
     } else if (msg.messageType === 'userMessage') {
       const idx = this.cachedUserMessages.findIndex((m) => m.id === msg.id);
       if (idx >= 0) {
@@ -367,15 +313,19 @@ export class TaskGroupList extends LitElement {
       }
     }
 
-    // Build tree recursively
+    // Build tree recursively, populating the groupId → node index
+    this.groupNodeIndex.clear();
+    const nodeIndex = this.groupNodeIndex;
     function buildNode(group: TaskGroup): GroupTree {
-      return {
+      const node: GroupTree = {
         group,
         children: (childrenMap.get(group.id) ?? [])
           .sort((a, b) => a.startTime - b.startTime)
           .map(buildNode),
         messages: messagesByGroup.get(group.id) ?? [],
       };
+      nodeIndex.set(group.id, node);
+      return node;
     }
 
     // Get root groups (no parent), sorted by start time
