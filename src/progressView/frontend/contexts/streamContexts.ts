@@ -54,6 +54,12 @@ export interface StreamLogContextValue {
   hasStreams: boolean;
   /** Stream name for switch detection in LogList */
   streamName: string | null;
+  /**
+   * Index of the entry replaced by the most recent UPDATE_LOG.
+   * Passed through to TaskGroupList for O(1) targeted ref swap.
+   * Undefined for appends and bulk updates.
+   */
+  updatedIndex?: number;
 }
 
 export const EMPTY_LOG_CONTEXT: StreamLogContextValue = {
