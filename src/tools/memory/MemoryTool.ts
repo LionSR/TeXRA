@@ -39,6 +39,7 @@ import {
   renameAttribution,
   getAttribution,
   getAllAttributions,
+  formatAttribution,
 } from './memoryMeta';
 
 const MemoryToolInputSchema = z.strictObject({
@@ -124,6 +125,10 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     return getCurrentToolFileInteractionContext()?.agentName;
   }
 
+  private getExecutionId(): string | undefined {
+    return getCurrentToolFileInteractionContext()?.executionId;
+  }
+
   private resolveMemoryPath(inputPath: string): string {
     try {
       return displayToStoragePath(inputPath);
@@ -201,7 +206,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
 
     const attribution = await getAttribution(resolvedPath);
     const header = attribution
-      ? `Here's the content of ${inputPath} (last modified by: ${attribution.modifiedBy}) with line numbers:`
+      ? `Here's the content of ${inputPath} (last modified by: ${formatAttribution(attribution)}) with line numbers:`
       : `Here's the content of ${inputPath} with line numbers:`;
 
     return {
@@ -223,7 +228,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     await StorageFS.ensureDir(MEMORY_STORAGE_ROOT);
     await StorageFS.ensureDir(path.dirname(resolvedPath));
     await StorageFS.write(resolvedPath, fileText);
-    await recordAttribution(resolvedPath, this.getAgentName());
+    await recordAttribution(resolvedPath, this.getAgentName(), this.getExecutionId());
     recordToolFileRead(inputPath);
 
     return {
@@ -280,7 +285,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const updated =
       content.slice(0, idx) + newStr + content.slice(idx + oldStr.length);
     await StorageFS.write(resolvedPath, updated);
-    await recordAttribution(resolvedPath, this.getAgentName());
+    await recordAttribution(resolvedPath, this.getAgentName(), this.getExecutionId());
     recordToolFileRead(inputPath);
 
     const updatedLines = updated.split('\n');
@@ -327,7 +332,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     ];
 
     await StorageFS.write(resolvedPath, updatedLines.join('\n'));
-    await recordAttribution(resolvedPath, this.getAgentName());
+    await recordAttribution(resolvedPath, this.getAgentName(), this.getExecutionId());
     recordToolFileRead(inputPath);
 
     return {
@@ -369,7 +374,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     }
 
     await StorageFS.rename(resolvedOldPath, resolvedNewPath);
-    await renameAttribution(resolvedOldPath, resolvedNewPath, this.getAgentName());
+    await renameAttribution(resolvedOldPath, resolvedNewPath, this.getAgentName(), this.getExecutionId());
     return {
       summary: `Renamed: ${oldPathInput} to ${newPathInput}`,
       output: `Successfully renamed ${oldPathInput} to ${newPathInput}`,
@@ -393,7 +398,8 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
       const display = toDisplayPath(entry.path);
       const age = formatRelativeTime(entry.mtime);
       const relative = path.relative(MEMORY_STORAGE_ROOT, entry.path);
-      const by = attributions[relative]?.modifiedBy ?? '-';
+      const meta = attributions[relative];
+      const by = meta ? formatAttribution(meta) : '-';
       return `${formatSize(entry.size)}\t${age}\t${by}\t${display}`;
     });
   }
