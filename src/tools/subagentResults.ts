@@ -125,7 +125,7 @@ export function formatSubagentError(
   const message = err instanceof Error ? err.message : String(err);
   return [
     `<subagent-error id="${escapeAttr(executionId)}" agent="${escapeAttr(agentName)}">`,
-    `<message>${escapeAttr(message)}</message>`,
+    `<message>${escapeText(message)}</message>`,
     '</subagent-error>',
   ].join('\n');
 }
