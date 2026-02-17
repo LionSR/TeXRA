@@ -215,7 +215,7 @@ function proposalResultToToolResult(
       return {
         summary: `User opened '${agentName}' for editing`,
         output:
-          'Proposal opened in main view for editing. User will run manually.',
+          'Proposal opened for editing. The user will run it manually when ready.',
       };
     case 'approve':
       return null;
@@ -273,7 +273,7 @@ const WorkflowAgentInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Model short name (e.g., opus46T, sonnet45T, gpt52, gemini3p). Defaults to the current model if omitted. User can change via dropdown.',
+      'Model short name (e.g., opus46T, sonnet45T, gpt52, gemini3p). Defaults to the current model if omitted.',
     ),
   instruction: z.string().describe('Plain prose instruction for the agent'),
   inputFile: z.string().describe('Primary input file to process (required)'),
@@ -442,7 +442,7 @@ const DelegateAgentInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Model short name (e.g., opus46T, sonnet45T, gpt52, gemini3p). Defaults to the current model if omitted. User can change via dropdown.',
+      'Model short name (e.g., opus46T, sonnet45T, gpt52, gemini3p). Defaults to the current model if omitted.',
     ),
   instruction: z
     .string()

@@ -89,8 +89,8 @@ export class AcceptRunFilesTool extends defineTool({
   description: `Accept output files from a completed run into the workspace.
 
 Locates output files in run storage or the workspace (depending on storage
-mode) and writes them to the workspace. Each file is shown to the user for
-review before writing.
+mode) and writes them to the workspace. Each file goes through an approval
+step before writing and may be rejected.
 
 Parameters map directly to subagent-result delivery attributes:
   execution_id ← <subagent-result id="...">

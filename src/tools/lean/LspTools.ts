@@ -156,10 +156,9 @@ export type LeanInspectInput = z.infer<typeof LeanInspectInputSchema>;
 const NO_DIAGNOSTICS_HELP = `No errors, warnings, or hints for this file.
 
 If you expected errors:
-1. Check the Lean 4 output panel (import/dependency errors appear there)
+1. Import/dependency errors may not surface as diagnostics — check imports manually
 2. Make sure the file is saved
-3. Try \`lean_file\` with command "restart" to refresh the Lean server
-4. Verify the Lean 4 extension is active (look for goal state in the infoview)`;
+3. Try \`lean_file\` with command "restart" to refresh the Lean server`;
 
 /** Navigate editor to first error location if present. */
 async function navigateToFirstError(
@@ -190,9 +189,7 @@ Returns diagnostics from the Lean 4 VS Code extension including:
 
 Tips:
 - If diagnostics seem stale, use lean_file with command "restart" to refresh the Lean server
-- Import/dependency errors may only appear in the Lean 4 output panel
-
-Requires: Lean 4 VS Code extension installed and active.`,
+- Import/dependency errors may not surface as diagnostics — check imports manually`,
   schema: LeanDiagnosticsInputSchema,
 }) {
   protected async execute(input: LeanDiagnosticsInput): Promise<ToolResult> {
