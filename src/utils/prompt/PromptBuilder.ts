@@ -45,14 +45,14 @@ Note: when editing your memory folder, always try to keep its content up-to-date
 
 /** Memory instructions for orchestrators that launch subagents. */
 const ORCHESTRATOR_MEMORY_INSTRUCTIONS = `<orchestrator_memory_protocol>
-The /memories directory is shared with all subagents you launch. Subagents can read and write the same files, so use this for coordination—e.g., have a search agent record findings in /memories/search_results.md that you or a presenter can read later. Check /memories for notes left by subagents.
+The /memories directory is shared with all subagents you launch. Subagents can read and write the same files. Use this for persistent context that should survive across conversations—not as a substitute for subagent result delivery (subagents report back automatically via follow-up messages). Good uses: project conventions, user preferences, research bibliographies that build up over time.
 
 Beyond basic progress tracking, record reusable intelligence: what approaches worked or failed and why, project structure and conventions you discovered, user preferences revealed through corrections or rejections, and effective problem-solving strategies. Consult these at session start instead of rediscovering from scratch.
 </orchestrator_memory_protocol>`;
 
 /** Memory instructions for subagents launched by an orchestrator. */
 const SUBAGENT_MEMORY_INSTRUCTIONS = `<subagent_memory_protocol>
-The /memories directory is shared with the orchestrator and other subagents. Files you write here are visible to them, and you may find notes or context left by other agents. Check /memories first—it may contain relevant context for your task.
+The /memories directory is shared with the orchestrator and other subagents. Check /memories first—it may contain context from prior sessions or other agents. Write to memory for information that should persist beyond this session (e.g., discovered conventions, useful references). Your primary results should go in your response, not in memory.
 </subagent_memory_protocol>`;
 
 /**
