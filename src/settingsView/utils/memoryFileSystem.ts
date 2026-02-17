@@ -15,6 +15,7 @@ import {
   shouldSkipEntry,
 } from '@tools/memory/constants';
 import { relativeToDisplayPath } from '@tools/memory/memoryUtils';
+import { parseFrontmatter, formatAttribution } from '@tools/memory/memoryMeta';
 import { StorageFS } from '@utils/files';
 import type { MemoryViewItem } from '@shared/schemas/settingsViewMessages';
 
@@ -78,7 +79,8 @@ export async function walkMemoryDirectory(
     }
 
     const stats = await StorageFS.stat(nextStoragePath);
-    const content = await StorageFS.read(nextStoragePath);
+    const raw = await StorageFS.read(nextStoragePath);
+    const { meta, content } = parseFrontmatter(raw);
     const previewData = buildPreview(content);
     const displayPath = relativeToDisplayPath(nextRelative);
 
@@ -89,6 +91,7 @@ export async function walkMemoryDirectory(
       mtime: new Date(stats.mtime).toISOString(),
       lineCount: previewData.lineCount,
       preview: previewData.preview,
+      modifiedBy: meta ? formatAttribution(meta) : undefined,
     });
   }
 
