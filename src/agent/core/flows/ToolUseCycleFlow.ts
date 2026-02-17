@@ -603,6 +603,8 @@ class ToolUseDispatchNode<C> extends BatchNode<
       };
     }
 
+    this.services.workspace.interactions.recordToolCall();
+
     const services = this.services;
     const { workspace } = services;
 

@@ -1,8 +1,11 @@
 /**
- * Formatting utilities for subagent results.
+ * Formatting utilities for subagent results and progress updates.
  *
- * Format helpers convert AgentFlowResult into structured XML strings
- * for FollowUpQueue delivery to the orchestrator.
+ * Format helpers convert AgentFlowResult and progress updates into
+ * structured XML strings for FollowUpQueue delivery to the orchestrator.
+ *
+ * Design: Typed objects internally, XML formatting only at the boundary
+ * (just before injection into model context via FollowUpQueue).
  */
 
 import type {
@@ -10,7 +13,44 @@ import type {
   OutputFileSummary,
 } from '@agent/runtime/AgentFlowResult';
 import type { ExecResult } from '@agent/types/ResultTypes';
+import type { TodoItem } from '@shared/schemas';
 import { formatDuration } from '@utils/core';
+
+// ============================================================================
+// Subagent progress types (typed internally, formatted to XML at boundary)
+// ============================================================================
+
+/** Todo state changed in a tool-use subagent. */
+export interface TodoProgressUpdate {
+  readonly kind: 'todos';
+  readonly todos: TodoItem[];
+}
+
+/** Workflow round completed. */
+export interface RoundProgressUpdate {
+  readonly kind: 'round';
+  readonly currentRound: number;
+  readonly totalRounds: number;
+}
+
+/** Periodic overview of tool-use subagent activity. */
+export interface OverviewProgressUpdate {
+  readonly kind: 'overview';
+  readonly toolCallCount: number;
+  readonly filesChanged: string[];
+  readonly cost?: number;
+}
+
+/** Subagent has finished initialization and is about to call the model. */
+export interface StartedProgressUpdate {
+  readonly kind: 'started';
+}
+
+export type SubagentProgressUpdate =
+  | TodoProgressUpdate
+  | RoundProgressUpdate
+  | OverviewProgressUpdate
+  | StartedProgressUpdate;
 
 // ============================================================================
 // Formatting helpers
@@ -85,9 +125,73 @@ export function formatSubagentError(
   const message = err instanceof Error ? err.message : String(err);
   return [
     `<subagent-error id="${escapeAttr(executionId)}" agent="${escapeAttr(agentName)}">`,
-    `<message>${escapeAttr(message)}</message>`,
+    `<message>${escapeText(message)}</message>`,
     '</subagent-error>',
   ].join('\n');
+}
+
+// ============================================================================
+// Subagent progress formatting (typed → XML at boundary)
+// ============================================================================
+
+/** Format a typed progress update as XML for injection into orchestrator context. */
+export function formatSubagentProgress(
+  executionId: string,
+  agentName: string,
+  update: SubagentProgressUpdate,
+): string {
+  const idAttr = `id="${escapeAttr(executionId)}"`;
+  const agentAttr = `agent="${escapeAttr(agentName)}"`;
+
+  switch (update.kind) {
+    case 'todos': {
+      const completed = update.todos.filter(
+        (t) => t.status === 'completed',
+      ).length;
+      const inProgress = update.todos.filter(
+        (t) => t.status === 'in_progress',
+      ).length;
+      const pending = update.todos.length - completed - inProgress;
+      const items = update.todos
+        .map((t) => {
+          const icon =
+            t.status === 'completed'
+              ? '[x]'
+              : t.status === 'in_progress'
+                ? '[>]'
+                : '[ ]';
+          return `  ${icon} ${escapeText(t.content)}`;
+        })
+        .join('\n');
+      return [
+        `<subagent-progress ${idAttr} ${agentAttr} type="todos" completed="${completed}" active="${inProgress}" pending="${pending}">`,
+        items,
+        '</subagent-progress>',
+      ].join('\n');
+    }
+
+    case 'round':
+      return `<subagent-progress ${idAttr} ${agentAttr} type="round" current="${update.currentRound + 1}" total="${update.totalRounds}" />`;
+
+    case 'overview': {
+      const fileList =
+        update.filesChanged.length > 0
+          ? update.filesChanged.map((f) => escapeAttr(f)).join(', ')
+          : 'none';
+      const attrs = [
+        `type="overview"`,
+        `tool-calls="${update.toolCallCount}"`,
+        `files-changed="${fileList}"`,
+      ];
+      if (update.cost !== undefined) {
+        attrs.push(`cost="${update.cost.toFixed(4)}"`);
+      }
+      return `<subagent-progress ${idAttr} ${agentAttr} ${attrs.join(' ')} />`;
+    }
+
+    case 'started':
+      return `<subagent-progress ${idAttr} ${agentAttr} type="started" />`;
+  }
 }
 
 // ============================================================================
