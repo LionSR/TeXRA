@@ -29,8 +29,10 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   type AgentEntry,
   createKey,
+  deduplicateByName,
   getAgent,
   getAgentsBySource,
+  getVisibleAgents,
   getWorkflowAgents,
   getToolUseAgents,
   loadAgents,
@@ -84,6 +86,12 @@ import {
 import { getConfig } from '@utils/config/configUtils';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
+import {
+  AGENT_MODE_PRESETS,
+  AgentModePresetSchema,
+  type AgentModePreset,
+} from '@shared/schemas/agentPresets';
+import { z } from 'zod';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
 import type {
@@ -405,6 +413,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE]: (data) =>
         this.handleRevealAgentFile(data),
 
+      // Agent mode preset handlers
+      [SETTINGS_VIEW_COMMANDS.GET_AGENT_MODE_PRESETS]: () =>
+        this.withActiveWebview((w) => this.sendAgentModePresets(w)),
+      [SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET]: (data) =>
+        this.handleApplyAgentModePreset(data),
+      [SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET]: (data) =>
+        this.handleSaveAgentModePreset(data),
+      [SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET]: (data) =>
+        this.handleDeleteAgentModePreset(data),
+
       // Tool dashboard handlers
       [SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA]: () =>
         this.handleGetToolDashboardData(),
@@ -475,6 +493,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendAgentSelectionData(webview),
       this.sendCustomAgentDir(webview),
       this.sendSuperYoloEnabled(webview),
+      this.sendAgentModePresets(webview),
     ]);
   }
 
@@ -658,6 +677,158 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     void vscode.window.showInformationMessage(
       `Super YOLO mode ${data.enabled ? 'enabled' : 'disabled'}`,
     );
+  }
+
+  // ============================================================
+  // Agent mode preset handler implementations
+  // ============================================================
+
+  /** Read and validate custom presets from workspace state. */
+  private getCustomPresets(): AgentModePreset[] {
+    const raw = workspaceSM.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []);
+    const parsed = z.array(AgentModePresetSchema).safeParse(raw);
+    return parsed.success ? parsed.data : [];
+  }
+
+  public async sendAgentModePresets(webview: vscode.Webview): Promise<void> {
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
+      customPresets: this.getCustomPresets(),
+    });
+  }
+
+  /** Resolve agent names to source:name keys for the given category. */
+  private resolveAgentKeys(
+    category: 'workflow' | 'toolUse',
+    names: Set<string>,
+  ): string[] {
+    const entries = deduplicateByName(
+      category === 'workflow' ? getWorkflowAgents() : getToolUseAgents(),
+    );
+    return entries
+      .filter((e) => names.has(e.name))
+      .map((e) => createKey(e.source, e.name));
+  }
+
+  private async handleApplyAgentModePreset(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.APPLY_AGENT_MODE_PRESET>,
+  ): Promise<void> {
+    try {
+      const preset =
+        AGENT_MODE_PRESETS.find((p) => p.id === data.presetId) ??
+        this.getCustomPresets().find((p) => p.id === data.presetId);
+      if (!preset) {
+        await vscode.window.showErrorMessage(
+          `Unknown preset: ${data.presetId}`,
+        );
+        return;
+      }
+
+      await loadAgents();
+
+      const workflowKeys = this.resolveAgentKeys(
+        'workflow',
+        new Set(preset.workflowAgents),
+      );
+      const toolUseKeys = this.resolveAgentKeys(
+        'toolUse',
+        new Set(preset.toolUseAgents),
+      );
+
+      await workspaceSM.update(WorkspaceStateKey.ENABLED_AGENTS, workflowKeys);
+      await workspaceSM.update(
+        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+        toolUseKeys,
+      );
+
+      await this.refreshAfterAgentMutation();
+
+      void vscode.window.showInformationMessage(
+        `Applied "${preset.name}" preset`,
+      );
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to apply agent mode preset',
+        error,
+      );
+    }
+  }
+
+  private async handleSaveAgentModePreset(
+    _data: MessageFor<typeof SETTINGS_VIEW_CMD.SAVE_AGENT_MODE_PRESET>,
+  ): Promise<void> {
+    try {
+      const name = await vscode.window.showInputBox({
+        prompt: 'Name for the new preset',
+        placeHolder: 'e.g. My Research Setup',
+        validateInput: (v) => (v.trim() ? null : 'Name cannot be empty'),
+      });
+      if (!name) return; // cancelled
+
+      await loadAgents();
+
+      const workflowAgents = getVisibleAgents('workflow').map((e) => e.name);
+      const toolUseAgents = getVisibleAgents('toolUse').map((e) => e.name);
+
+      const preset: AgentModePreset = {
+        id: `custom-${Date.now()}`,
+        name: name.trim(),
+        description: `Custom preset: ${[...toolUseAgents, ...workflowAgents].join(', ')}`,
+        icon: 'codicon-bookmark',
+        workflowAgents,
+        toolUseAgents,
+      };
+
+      const existing = this.getCustomPresets();
+      await workspaceSM.update(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
+        ...existing,
+        preset,
+      ]);
+
+      await this.withActiveWebview((w) => this.sendAgentModePresets(w));
+
+      void vscode.window.showInformationMessage(
+        `Saved preset "${name.trim()}"`,
+      );
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to save agent mode preset',
+        error,
+      );
+    }
+  }
+
+  private async handleDeleteAgentModePreset(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.DELETE_AGENT_MODE_PRESET>,
+  ): Promise<void> {
+    try {
+      const presets = this.getCustomPresets();
+      const target = presets.find((p) => p.id === data.presetId);
+      if (!target) return;
+
+      const confirm = await vscode.window.showWarningMessage(
+        `Delete preset "${target.name}"?`,
+        { modal: true },
+        'Delete',
+      );
+      if (confirm !== 'Delete') return;
+
+      const updated = presets.filter((p) => p.id !== data.presetId);
+      await workspaceSM.update(
+        WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+        updated,
+      );
+
+      await this.withActiveWebview((w) => this.sendAgentModePresets(w));
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to delete agent mode preset',
+        error,
+      );
+    }
   }
 
   // ============================================================
