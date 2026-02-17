@@ -32,6 +32,7 @@ type ResponseAssemblyState = z.output<typeof ResponseAssemblyStateSchema>;
 const FileInteractionStateSnapshotSchema = z.object({
   readFiles: z.array(z.string()).prefault([]),
   edits: z.array(FlattenedEditRecordSchema).prefault([]),
+  toolCallCount: z.number().nonnegative().prefault(0),
 });
 
 type FileInteractionStateSnapshot = z.output<
@@ -44,6 +45,12 @@ export class FileInteractionState {
     string,
     { added: number; removed: number }
   >();
+  private _toolCallCount = 0;
+
+  /** Total number of tool calls executed in this session. */
+  get toolCallCount(): number {
+    return this._toolCallCount;
+  }
 
   static fromSnapshot(snapshot: unknown): FileInteractionState {
     const parsed = FileInteractionStateSnapshotSchema.parse(snapshot);
@@ -55,6 +62,7 @@ export class FileInteractionState {
         removed: entry.removed,
       });
     }
+    state._toolCallCount = parsed.toolCallCount;
     return state;
   }
 
@@ -66,7 +74,18 @@ export class FileInteractionState {
         added: diff.added,
         removed: diff.removed,
       })),
+      toolCallCount: this._toolCallCount,
     };
+  }
+
+  /** Record that a tool call was executed. */
+  recordToolCall(): void {
+    this._toolCallCount += 1;
+  }
+
+  /** Paths of all files with recorded edits. */
+  get editedFilePaths(): string[] {
+    return [...this.edits.keys()];
   }
 
   recordRead(path: string | undefined | null): void {
