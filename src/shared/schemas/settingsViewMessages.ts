@@ -18,6 +18,7 @@ import {
   SETTINGS_VIEW_COMMANDS,
 } from '@common/webview/commands';
 import { AgentCategorySchema, AgentSourceSchema } from './agent';
+import { AgentModePresetSchema } from './agentPresets';
 import {
   DeleteMemoryMessageSchema,
   GetMemoryDataMessageSchema,
@@ -189,6 +190,19 @@ export const UpdateSuperYoloEnabledMessageSchema = z.object({
 });
 export type UpdateSuperYoloEnabledMessage = z.infer<
   typeof UpdateSuperYoloEnabledMessageSchema
+>;
+
+// ============================================================
+// Agent mode presets data schema
+// ============================================================
+
+/** Outbound: backend → frontend agent mode presets (built-in + custom) */
+export const UpdateAgentModePresetsMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS),
+  customPresets: z.array(AgentModePresetSchema),
+});
+export type UpdateAgentModePresetsMessage = z.infer<
+  typeof UpdateAgentModePresetsMessageSchema
 >;
 
 // ============================================================
@@ -379,6 +393,25 @@ const SetSuperYoloEnabledMessageSchema = z.object({
   enabled: z.boolean(),
 });
 
+// Agent mode preset inbound messages
+const GetAgentModePresetsMessageSchema = commandOnly(
+  CMD.GET_AGENT_MODE_PRESETS,
+);
+
+const ApplyAgentModePresetMessageSchema = z.object({
+  command: z.literal(CMD.APPLY_AGENT_MODE_PRESET),
+  presetId: z.string().min(1),
+});
+
+const SaveAgentModePresetMessageSchema = commandOnly(
+  CMD.SAVE_AGENT_MODE_PRESET,
+);
+
+const DeleteAgentModePresetMessageSchema = z.object({
+  command: z.literal(CMD.DELETE_AGENT_MODE_PRESET),
+  presetId: z.string().min(1),
+});
+
 // Tool dashboard inbound messages
 const GetToolDashboardDataMessageSchema = z.object({
   command: z.literal(CMD.GET_TOOL_DASHBOARD_DATA),
@@ -457,6 +490,11 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     // Super YOLO messages
     GetSuperYoloEnabledMessageSchema,
     SetSuperYoloEnabledMessageSchema,
+    // Agent mode preset messages
+    GetAgentModePresetsMessageSchema,
+    ApplyAgentModePresetMessageSchema,
+    SaveAgentModePresetMessageSchema,
+    DeleteAgentModePresetMessageSchema,
   ],
 );
 
