@@ -54,7 +54,7 @@ class UsageLogServiceImpl {
     );
   }
 
-  log(entry: Omit<UsageLogEntry, 'timestamp' | 'extensionVersion'>): void {
+  log(entry: Omit<UsageLogEntry, 'timestamp' | 'extensionVersion' | 'editorType'>): void {
     if (!this.config.enabled) return;
 
     if (this.queue.length >= MAX_QUEUE_SIZE) {
