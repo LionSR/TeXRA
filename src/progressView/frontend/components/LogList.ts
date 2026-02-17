@@ -134,6 +134,7 @@ export class LogList extends LitElement {
       <task-group-list
         .groups=${this.groups}
         .messages=${this.messages}
+        .updatedIndex=${this.streamContext?.updatedIndex}
         .activeRunId=${this.activeRunId}
         .isToolUse=${this.isToolUse}
         .hasStreams=${this.hasStreams}

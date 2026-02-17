@@ -68,6 +68,9 @@ export class TaskGroupList extends LitElement {
   /** Whether this is a tool-use session (affects run filtering) */
   @property({ attribute: false }) isToolUse = false;
 
+  /** Index of the entry replaced by UPDATE_LOG (O(1) targeted swap hint) */
+  @property({ attribute: false }) updatedIndex?: number;
+
   /** Whether there are any streams in the current filter (controls placeholder) */
   @property({ attribute: false }) hasStreams = false;
 
@@ -202,17 +205,22 @@ export class TaskGroupList extends LitElement {
   /**
    * Replace stale message references in cached structures with fresh ones.
    *
-   * Optimized for the common streaming case: UPDATE_LOG changes exactly one
-   * entry (typically near the end of the array).  Scans from the end to find
-   * the changed entry in O(1), then uses its groupId to walk directly to the
-   * affected tree node — O(depth) instead of O(n + m) full-tree rebuild.
-   *
-   * Falls back to the full Map approach for the rare case of multiple batched
-   * UPDATE_LOGs changing more than one entry.
+   * When `updatedIndex` is set (UPDATE_LOG path), does O(1) direct lookup
+   * + O(depth) tree walk to the target group.  Falls back to ref-scanning
+   * the array from the end when the hint is unavailable.
    */
   private updateCachedMessageRefs(prevMessages: LogMessageData[]): void {
-    // Find changed entries by comparing refs.
-    // Scan from end — streaming target is typically the last message.
+    // Fast path: upstream told us exactly which entry changed
+    if (
+      this.updatedIndex !== undefined &&
+      this.updatedIndex < this.messages.length
+    ) {
+      this.replaceSingleMessage(this.messages[this.updatedIndex]);
+      return;
+    }
+
+    // No hint: find changed entries by comparing refs.
+    // Scan from end — streaming target is typically near the end.
     const changed: LogMessageData[] = [];
     for (let i = this.messages.length - 1; i >= 0; i--) {
       if (this.messages[i] !== prevMessages[i]) {
@@ -221,7 +229,6 @@ export class TaskGroupList extends LitElement {
     }
     if (changed.length === 0) return;
 
-    // Single change (common during streaming): targeted swap
     if (changed.length === 1) {
       this.replaceSingleMessage(changed[0]);
       return;
