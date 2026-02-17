@@ -27,7 +27,7 @@ For math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\
 {% if DEFAULT_BIB_PATH %}The default bibliography file is {{ DEFAULT_BIB_PATH }}. You can grep or read this file to search for citations and references.{% endif %}
 </tool_use_instructions>`;
 
-/** Instructions appended when memory tool is enabled */
+/** Base memory instructions for all agents with memory enabled. */
 const MEMORY_TOOL_INSTRUCTIONS = `<memory_tool_instructions>
 IMPORTANT: ALWAYS VIEW YOUR MEMORY DIRECTORY BEFORE DOING ANYTHING ELSE.
 
@@ -40,15 +40,20 @@ MEMORY PROTOCOL:
 
 Your memory persists across conversations, allowing you to continue tasks and remember user preferences over time.
 
-SHARED MEMORY: The /memories directory is shared across all agents in the session, including the main orchestrator and any subagents it launches. When a subagent (e.g., a search agent) writes to /memories, the orchestrator and other subagents can read those files. Use this to coordinate work—for example, a search agent can record literature findings in /memories/search_results.md, and the orchestrator or presenter can read them to incorporate into the final output. Always check /memories first, as it may contain reports or notes left by other agents.
-
 Note: when editing your memory folder, always try to keep its content up-to-date, coherent and organized. You can rename or delete files that are no longer relevant. Do not create new files unless necessary.
 </memory_tool_instructions>`;
 
-/** Extended memory instructions for agents with delegation tools. */
+/** Memory instructions for orchestrators that launch subagents. */
 const ORCHESTRATOR_MEMORY_INSTRUCTIONS = `<orchestrator_memory_protocol>
+The /memories directory is shared with all subagents you launch. Subagents can read and write the same files, so use this for coordination—e.g., have a search agent record findings in /memories/search_results.md that you or a presenter can read later. Check /memories for notes left by subagents.
+
 Beyond basic progress tracking, record reusable intelligence: what approaches worked or failed and why, project structure and conventions you discovered, user preferences revealed through corrections or rejections, and effective problem-solving strategies. Consult these at session start instead of rediscovering from scratch.
 </orchestrator_memory_protocol>`;
+
+/** Memory instructions for subagents launched by an orchestrator. */
+const SUBAGENT_MEMORY_INSTRUCTIONS = `<subagent_memory_protocol>
+The /memories directory is shared with the orchestrator and other subagents. Files you write here are visible to them, and you may find notes or context left by other agents. Check /memories first—it may contain relevant context for your task.
+</subagent_memory_protocol>`;
 
 /**
  * Combine the base system prompt with optional rules from `.texrarules`.
@@ -186,7 +191,7 @@ export async function buildInitialToolUsePrompts(
   agentPrompt: AgentPrompt,
   userVars: Record<string, any>,
   logger?: AgentLogger,
-  options?: { memoryEnabled?: boolean; hasDelegationTools?: boolean },
+  options?: { memoryEnabled?: boolean; hasDelegationTools?: boolean; isSubagent?: boolean },
 ): Promise<InitialPrompts & { instructionSuffix: string }> {
   const builder = new PromptBuilder(
     agentPrompt,
@@ -203,6 +208,8 @@ export async function buildInitialToolUsePrompts(
     suffixParts.push(MEMORY_TOOL_INSTRUCTIONS);
     if (options.hasDelegationTools) {
       suffixParts.push(ORCHESTRATOR_MEMORY_INSTRUCTIONS);
+    } else if (options.isSubagent) {
+      suffixParts.push(SUBAGENT_MEMORY_INSTRUCTIONS);
     }
   }
   suffixParts.push(await buildWorkspaceInfoBlock());
