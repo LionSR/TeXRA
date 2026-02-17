@@ -292,6 +292,34 @@ ON CONFLICT (name) DO UPDATE SET
   agent_category = EXCLUDED.agent_category,
   tools          = EXCLUDED.tools;
 
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'leanSimplifier',
+  'Simplifies Lean 4 proofs and code to Mathlib-quality standards — clear, general, and ready to upstream.',
+  'tool_use/leanSimplifier.yaml',
+  ARRAY['researcher'],
+  'toolUse',
+  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle']
+)
+ON CONFLICT (name) DO UPDATE SET
+  description    = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category,
+  tools          = EXCLUDED.tools;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'leanSearch',
+  'Lean 4 and Mathlib research assistant — finds lemmas, explores APIs, and answers formalization questions.',
+  'tool_use/leanSearch.yaml',
+  ARRAY['researcher'],
+  'toolUse',
+  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'web_search', 'web_fetch', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source']
+)
+ON CONFLICT (name) DO UPDATE SET
+  description    = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category,
+  tools          = EXCLUDED.tools;
+
 -- =============================================================================
 -- VERIFY
 -- =============================================================================
