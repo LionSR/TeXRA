@@ -11,6 +11,9 @@ export const MEMORY_DISPLAY_ROOT = '/memories';
 /** Physical storage path relative to workspace storage (e.g., memories/notes.md) */
 export const MEMORY_STORAGE_ROOT = 'memories';
 
+/** Sidecar file storing per-file attribution metadata (who last modified each file). */
+export const MEMORY_META_FILE = 'memories/.meta.json';
+
 /** Maximum lines to display in tool view output */
 export const MAX_VIEW_LINES = 999_999;
 

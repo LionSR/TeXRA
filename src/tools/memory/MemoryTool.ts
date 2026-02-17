@@ -22,6 +22,7 @@ import {
   formatLinesWithNumbers,
   requireField,
 } from '../utils';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 
 // Local imports - shared memory constants and utilities
 import {
@@ -32,6 +33,13 @@ import {
   shouldSkipEntry,
 } from './constants';
 import { toDisplayPath, formatSize, displayToStoragePath } from './memoryUtils';
+import {
+  recordAttribution,
+  removeAttribution,
+  renameAttribution,
+  getAttribution,
+  getAllAttributions,
+} from './memoryMeta';
 
 const MemoryToolInputSchema = z.strictObject({
   command: z.enum([
@@ -112,6 +120,10 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     }
   }
 
+  private getAgentName(): string | undefined {
+    return getCurrentToolFileInteractionContext()?.agentName;
+  }
+
   private resolveMemoryPath(inputPath: string): string {
     try {
       return displayToStoragePath(inputPath);
@@ -163,7 +175,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
         summary: `Listed directory: ${inputPath}`,
         output: [
           `Contents of ${inputPath} (up to 2 levels deep):`,
-          `SIZE\tMODIFIED\tPATH`,
+          `SIZE\tMODIFIED\tBY\tPATH`,
           ...listing,
         ].join('\n'),
       };
@@ -187,12 +199,14 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const selected = lines.slice(startIndex, endIndex);
     const numbered = formatLinesWithNumbers(selected, startIndex + 1);
 
+    const attribution = await getAttribution(resolvedPath);
+    const header = attribution
+      ? `Here's the content of ${inputPath} (last modified by: ${attribution.modifiedBy}) with line numbers:`
+      : `Here's the content of ${inputPath} with line numbers:`;
+
     return {
       summary: `Viewed file: ${inputPath}`,
-      output: [
-        `Here's the content of ${inputPath} with line numbers:`,
-        ...numbered,
-      ].join('\n'),
+      output: [header, ...numbered].join('\n'),
     };
   }
 
@@ -209,6 +223,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     await StorageFS.ensureDir(MEMORY_STORAGE_ROOT);
     await StorageFS.ensureDir(path.dirname(resolvedPath));
     await StorageFS.write(resolvedPath, fileText);
+    await recordAttribution(resolvedPath, this.getAgentName());
     recordToolFileRead(inputPath);
 
     return {
@@ -265,6 +280,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const updated =
       content.slice(0, idx) + newStr + content.slice(idx + oldStr.length);
     await StorageFS.write(resolvedPath, updated);
+    await recordAttribution(resolvedPath, this.getAgentName());
     recordToolFileRead(inputPath);
 
     const updatedLines = updated.split('\n');
@@ -311,6 +327,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     ];
 
     await StorageFS.write(resolvedPath, updatedLines.join('\n'));
+    await recordAttribution(resolvedPath, this.getAgentName());
     recordToolFileRead(inputPath);
 
     return {
@@ -327,6 +344,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     }
 
     await StorageFS.delete(resolvedPath, { recursive: true });
+    await removeAttribution(resolvedPath);
     return {
       summary: `Deleted: ${inputPath}`,
       output: `Successfully deleted ${inputPath}`,
@@ -351,6 +369,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     }
 
     await StorageFS.rename(resolvedOldPath, resolvedNewPath);
+    await renameAttribution(resolvedOldPath, resolvedNewPath, this.getAgentName());
     return {
       summary: `Renamed: ${oldPathInput} to ${newPathInput}`,
       output: `Successfully renamed ${oldPathInput} to ${newPathInput}`,
@@ -368,10 +387,14 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
 
     await this.walkDirectory(resolvedPath, 0, entries);
 
+    const attributions = await getAllAttributions();
+
     return entries.map((entry) => {
       const display = toDisplayPath(entry.path);
       const age = formatRelativeTime(entry.mtime);
-      return `${formatSize(entry.size)}\t${age}\t${display}`;
+      const relative = path.relative(MEMORY_STORAGE_ROOT, entry.path);
+      const by = attributions[relative]?.modifiedBy ?? '-';
+      return `${formatSize(entry.size)}\t${age}\t${by}\t${display}`;
     });
   }
 
