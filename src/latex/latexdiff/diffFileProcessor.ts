@@ -3,7 +3,6 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
 import { flexibleFS, type FileLocation } from '@utils/files';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 /** LaTeX starred math environments that need label removal during diff processing. */
 const STAR_ENVIRONMENTS = [
@@ -76,23 +75,21 @@ export class DiffFileProcessor {
     let skippingPreambleBlock = false;
     let documentStarted = false;
 
-    const processedLines = normalizeLineEndings(content)
-      .split('\n')
-      .flatMap((line) => {
-        if (TEX_ROOT_COMMENT.test(line)) {
-          return [];
-        }
+    const processedLines = content.split('\n').flatMap((line) => {
+      if (TEX_ROOT_COMMENT.test(line)) {
+        return [];
+      }
 
-        const lineState = this.updateLineState(line, documentStarted);
-        documentStarted = lineState.documentStarted;
-        skippingPreambleBlock = lineState.skipBlock ?? skippingPreambleBlock;
+      const lineState = this.updateLineState(line, documentStarted);
+      documentStarted = lineState.documentStarted;
+      skippingPreambleBlock = lineState.skipBlock ?? skippingPreambleBlock;
 
-        if (skippingPreambleBlock) {
-          return [];
-        }
+      if (skippingPreambleBlock) {
+        return [];
+      }
 
-        return this.formatLine(line);
-      });
+      return this.formatLine(line);
+    });
 
     return processedLines.join('\n') + '\n';
   }

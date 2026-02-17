@@ -21,7 +21,6 @@ import {
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -212,9 +211,10 @@ export class TextEditorTool extends defineTool({
       }
 
       // Expand tabs to 4 spaces for consistent display
-      let fileContent = normalizeLineEndings(
-        await WorkspaceFS.read(filePath),
-      ).replaceAll('\t', '    ');
+      let fileContent = (await WorkspaceFS.read(filePath)).replaceAll(
+        '\t',
+        '    ',
+      );
       let initLine = 1;
 
       if (viewRange) {
@@ -343,9 +343,7 @@ export class TextEditorTool extends defineTool({
       if (readGate) {
         return readGate;
       }
-      const fileContent = normalizeLineEndings(
-        await WorkspaceFS.read(filePath),
-      );
+      const fileContent = await WorkspaceFS.read(filePath);
 
       // Expand tabs to 4 spaces for consistent display
       const expandedFileContent = fileContent.replaceAll('\t', '    ');
@@ -457,9 +455,7 @@ export class TextEditorTool extends defineTool({
       if (readGate) {
         return readGate;
       }
-      const fileContent = normalizeLineEndings(
-        await WorkspaceFS.read(filePath),
-      );
+      const fileContent = await WorkspaceFS.read(filePath);
 
       // Expand tabs to 4 spaces for consistent display
       const expandedFileContent = fileContent.replaceAll('\t', '    ');

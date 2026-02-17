@@ -59,7 +59,7 @@ export abstract class BaseFS {
     target: string,
   ): Promise<string> {
     const content = await vscode.workspace.fs.readFile(this.toUri(target));
-    return Buffer.from(content).toString('utf-8');
+    return Buffer.from(content).toString('utf-8').replaceAll('\r\n', '\n');
   }
 
   public static async readBytes(
@@ -201,7 +201,9 @@ export abstract class BaseFS {
   }
 
   public static readSync(this: typeof BaseFS, target: string): string {
-    return fs.readFileSync(this.preparePath(target), 'utf-8');
+    return fs
+      .readFileSync(this.preparePath(target), 'utf-8')
+      .replaceAll('\r\n', '\n');
   }
 
   public static readBytesSync(this: typeof BaseFS, target: string): Buffer {

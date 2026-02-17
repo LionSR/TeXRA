@@ -17,7 +17,6 @@ import {
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -42,9 +41,7 @@ export class WriteFileTool extends defineTool({
       return readGate;
     }
 
-    const originalContent = exists
-      ? normalizeLineEndings(await WorkspaceFS.read(input.path))
-      : '';
+    const originalContent = exists ? await WorkspaceFS.read(input.path) : '';
 
     const proposedContent = isTexFile(input.path)
       ? replacementEngine.applyAll(input.content)
