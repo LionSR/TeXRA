@@ -1361,6 +1361,8 @@
     "@supabase/supabase-js": "^2.96.0",
     "@vscode-elements/elements": "^2.5.0",
     "@vscode/codicons": "^0.0.44",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "arxiv-client": "^0.0.9",
     "axios": "^1.13.5",
     "bibtex": "^0.9.0",
