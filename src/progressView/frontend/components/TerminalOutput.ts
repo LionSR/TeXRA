@@ -136,9 +136,10 @@ export class TerminalOutput extends LitElement {
       while (this.needsFlush) {
         this.needsFlush = false;
         if (!this.terminal) continue;
+        const terminal = this.terminal;
 
         const text = this.pendingText;
-        const activeBuffer = this.terminal.buffer.active;
+        const activeBuffer = terminal.buffer.active;
         const previousBaseY = activeBuffer.baseY;
         const previousViewportY = activeBuffer.viewportY;
         const distanceFromBottom = previousBaseY - previousViewportY;
@@ -146,22 +147,32 @@ export class TerminalOutput extends LitElement {
 
         const lineCount = text.split('\n').length;
         const scrollback = Math.max(MIN_SCROLLBACK, lineCount);
-        if (this.terminal.options.scrollback !== scrollback) {
-          this.terminal.options = {
-            ...this.terminal.options,
+        if (terminal.options.scrollback !== scrollback) {
+          terminal.options = {
+            ...terminal.options,
             scrollback,
           };
         }
 
-        this.terminal.reset();
+        terminal.reset();
         await new Promise<void>((resolve) => {
-          this.terminal?.write(text, () => resolve());
+          let resolved = false;
+          const complete = (): void => {
+            if (resolved) return;
+            resolved = true;
+            resolve();
+          };
+
+          terminal.write(text, complete);
+          setTimeout(complete, 100);
         });
 
+        if (!this.terminal || this.terminal !== terminal) continue;
+
         if (!wasPinnedToBottom) {
-          const nextBaseY = this.terminal.buffer.active.baseY;
+          const nextBaseY = terminal.buffer.active.baseY;
           const targetViewportY = Math.max(0, nextBaseY - distanceFromBottom);
-          this.terminal.scrollToLine(targetViewportY);
+          terminal.scrollToLine(targetViewportY);
         }
 
         this.refitIfVisible();
