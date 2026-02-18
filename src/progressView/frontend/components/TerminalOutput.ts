@@ -132,30 +132,32 @@ export class TerminalOutput extends LitElement {
   }
 
   private async flushTerminalText(): Promise<void> {
-    while (this.needsFlush) {
-      this.needsFlush = false;
-      if (!this.terminal) continue;
+    try {
+      while (this.needsFlush) {
+        this.needsFlush = false;
+        if (!this.terminal) continue;
 
-      const text = this.pendingText;
-      const lineCount = text.split('\n').length;
-      const scrollback = Math.max(MIN_SCROLLBACK, lineCount);
-      if (this.terminal.options.scrollback !== scrollback) {
-        this.terminal.options = {
-          ...this.terminal.options,
-          scrollback,
-        };
+        const text = this.pendingText;
+        const lineCount = text.split('\n').length;
+        const scrollback = Math.max(MIN_SCROLLBACK, lineCount);
+        if (this.terminal.options.scrollback !== scrollback) {
+          this.terminal.options = {
+            ...this.terminal.options,
+            scrollback,
+          };
+        }
+
+        this.terminal.reset();
+        await new Promise<void>((resolve) => {
+          this.terminal?.write(text, () => resolve());
+        });
+        this.refitIfVisible();
       }
-
-      this.terminal.reset();
-      await new Promise<void>((resolve) => {
-        this.terminal?.write(text, () => resolve());
-      });
-      this.refitIfVisible();
-    }
-
-    this.isFlushingText = false;
-    if (this.needsFlush) {
-      this.renderTerminalText();
+    } finally {
+      this.isFlushingText = false;
+      if (this.needsFlush) {
+        this.renderTerminalText();
+      }
     }
   }
 
