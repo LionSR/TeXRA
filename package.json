@@ -1153,7 +1153,7 @@
           {
             "id": "texra.gettingStarted.housekeeping",
             "title": "Pack and clean up",
-            "description": "After reviewing, use **Pack** $(archive) to archive outputs into a timestamped `History/` folder, or **Clean** $(trash) to delete generated files.\n\nFind these actions in:\n- The **ProgressBoard toolbar** on each completed run\n- The **editor title menu** (overflow `...`) when editing a `.tex` file\n- The **right-click context menu** on `.tex` files\n- The **Command Palette**: search `TeXRA: Pack` or `TeXRA: Clean`\n\nOr try the workspace-wide commands: [Clean all LLM outputs](command:texra.cleanOutput) | [Clean all build files](command:texra.cleanBuild)",
+            "description": "After reviewing, use **Pack** $(archive) to archive outputs into a timestamped `History/` folder, or **Clean** $(trash) to delete generated files.\n\nFind these actions in:\n- The **ProgressBoard toolbar** on each completed run\n- The **editor title menu** (overflow `...`) when editing a `.tex` file\n- The **right-click context menu** on `.tex` files\n\nOr try the workspace-wide commands: [Clean all LLM outputs](command:texra.cleanOutput) | [Clean all build files](command:texra.cleanBuild)",
             "media": {
               "image": "resources/walkthroughs/media/texra-progressboard.png",
               "altText": "Screenshot showing pack and clean buttons in the ProgressBoard toolbar"
