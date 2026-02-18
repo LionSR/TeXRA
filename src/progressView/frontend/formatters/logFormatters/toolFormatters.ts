@@ -61,6 +61,7 @@ import type { WebSearchPayload, LogMessageData } from '@shared/schemas';
 
 // Side-effect import to register <tool-timer> custom element
 import '../../components/ToolTimer';
+import '../../components/TerminalOutput';
 
 /** Default bash tool timeout (matches BASH_TIMEOUT_MS in src/tools/bash.ts). */
 const BASH_DEFAULT_TIMEOUT_MS = 120_000;
@@ -179,6 +180,17 @@ function buildToolSection(
     : wrapInPre(text, extraClass);
 
   return buildToolUseSection(label, content);
+}
+
+/** Build a read-only terminal section for shell output. */
+function buildTerminalSection(label: string, text: string): TemplateResult {
+  return buildToolUseSection(
+    label,
+    html`<terminal-output
+      class="tool-output-terminal"
+      .text=${text}
+    ></terminal-output>`,
+  );
 }
 
 /** Title prefix lookup based on tool state. */
@@ -553,10 +565,12 @@ export function formatToolUseTemplate(
     !isTrivialWriteOutput
   ) {
     sections.push(
-      buildToolSection('Output:', outputText, {
-        toolName,
-        extraClass: 'tool-output-full',
-      }),
+      toolName === 'bash'
+        ? buildTerminalSection('Output:', outputText)
+        : buildToolSection('Output:', outputText, {
+            toolName,
+            extraClass: 'tool-output-full',
+          }),
     );
   }
 
