@@ -13,7 +13,6 @@ import { PersistedState, createWebviewStorage } from '@shared/state';
 
 // Local imports - shared schemas
 import {
-  AGENT_CATEGORY,
   AgentCategoryFilterSchema,
   type StreamTabId,
   type StreamTabInfo,
@@ -485,7 +484,7 @@ export class ProgressApp extends BaseWebviewApp {
     if (!streamId) return;
 
     this.setStreamState(streamId, (prev) => {
-      if (prev.kind !== AGENT_CATEGORY.TOOL_USE) return prev;
+      if (!isToolUseState(prev)) return prev;
       return {
         ...prev,
         ui: {

@@ -293,12 +293,12 @@ export function extractHoverText(contents: Hover['contents']): string | null {
   }
 
   if (Array.isArray(contents)) {
-    const texts = contents.map((item) => {
+    const texts = contents.flatMap((item) => {
       if (typeof item === 'string') return item;
       if ('value' in item) return item.value;
-      return null;
+      return [];
     });
-    return texts.filter(Boolean).join('\n\n');
+    return texts.join('\n\n');
   }
 
   if ('value' in contents) {

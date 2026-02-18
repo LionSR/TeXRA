@@ -15,8 +15,6 @@ import { installToolbarTooltips } from '@shared/controllers';
 import { COMMON_COMMANDS } from '@common/webview/commands';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 
-// Local imports - shared controllers
-
 /**
  * Base class for Lit-powered webview apps.
  *

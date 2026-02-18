@@ -269,6 +269,7 @@ async function resolveDOI(
       ? work.containerTitle[0]
       : undefined;
     const containerTitle =
+      // eslint-disable-next-line eqeqeq -- nullish check for Crossref field
       rawContainer != null ? String(rawContainer) : undefined;
 
     return {
@@ -276,6 +277,7 @@ async function resolveDOI(
       ...(work.title?.[0] && { title: work.title[0] }),
       DOI: doi,
       ...(creators?.length && { creators }),
+      // eslint-disable-next-line eqeqeq -- nullish check for Crossref field
       ...(year != null && { date: String(year) }),
       ...(containerTitle && { publicationTitle: containerTitle }),
       ...(work.volume && { volume: String(work.volume) }),

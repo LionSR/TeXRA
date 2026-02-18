@@ -49,7 +49,7 @@ function getFileTypeLabel(type: vscode.FileType): string {
 function formatEntry(name: string, type: vscode.FileType): string {
   const suffix = type === vscode.FileType.Directory ? '/' : '';
   const label = getFileTypeLabel(type);
-  return `${label.padEnd(4, ' ')} ${name}${suffix}`;
+  return `${label.padEnd(4)} ${name}${suffix}`;
 }
 
 const NO_ENTRIES_MESSAGE = '(no entries after applying ignore filters)';
