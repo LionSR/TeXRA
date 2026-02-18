@@ -7,8 +7,10 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-// Local imports - progress view constants
+// Local imports - shared styles
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
+
+// Local imports - utilities
 import { formatDuration } from '@utils/core';
 import { STREAM_STATUS } from '../constants';
 

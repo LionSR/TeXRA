@@ -1,5 +1,6 @@
 // Local imports - agent
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+
 // Local imports - tools
 import { type ToolResult } from '@tools/result';
 

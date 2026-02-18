@@ -1,7 +1,7 @@
 // Standard library imports
 import * as path from 'path';
 
-// Local imports - core
+// Third-party imports
 import { z } from 'zod';
 
 // Local imports - tools

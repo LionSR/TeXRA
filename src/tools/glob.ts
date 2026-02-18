@@ -68,8 +68,7 @@ export class GlobTool extends defineTool({
           );
         }
 
-        const relativePath =
-          resolved.relative === '.' ? '.' : resolved.relative;
+        const relativePath = resolved.relative;
         if (relativePath === '.' || gitignore.ignores(relativePath)) {
           return null;
         }

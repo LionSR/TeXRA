@@ -8,20 +8,27 @@
 import { z } from 'zod';
 
 /** Schema with only a `command` literal (no payload). */
-export const commandOnly = <T extends string>(command: T) =>
-  z.object({ command: z.literal(command) });
+export function commandOnly<T extends string>(command: T) {
+  return z.object({ command: z.literal(command) });
+}
 
 /** Schema with `command` + optional `filePath`. */
-export const withOptionalFilePath = <T extends string>(command: T) =>
-  z.object({ command: z.literal(command), filePath: z.string().optional() });
+export function withOptionalFilePath<T extends string>(command: T) {
+  return z.object({
+    command: z.literal(command),
+    filePath: z.string().optional(),
+  });
+}
 
 /** Schema with `command` + required `files` string array. */
-export const withFilesArray = <T extends string>(command: T) =>
-  z.object({ command: z.literal(command), files: z.array(z.string()) });
+export function withFilesArray<T extends string>(command: T) {
+  return z.object({ command: z.literal(command), files: z.array(z.string()) });
+}
 
 /** Schema with `command` + optional `notifyWhenEmpty` boolean. */
-export const withNotifyWhenEmpty = <T extends string>(command: T) =>
-  z.object({
+export function withNotifyWhenEmpty<T extends string>(command: T) {
+  return z.object({
     command: z.literal(command),
     notifyWhenEmpty: z.boolean().nullish(),
   });
+}

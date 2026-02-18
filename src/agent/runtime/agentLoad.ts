@@ -63,7 +63,7 @@ export function validateAgentYamlContent(
     name: rootName,
     settings: settingsBlock,
     prompts: promptsBlock,
-  } satisfies AgentYamlValidationResult;
+  };
 }
 
 /** Loads and parses a YAML file from an absolute path. */
@@ -190,11 +190,7 @@ export async function isValidAgentYaml(
   try {
     const rawData = await loadYaml(filePath);
     const { name, settings } = validateAgentYamlContent(rawData);
-
-    return {
-      name,
-      settings,
-    } satisfies ValidAgentDefinition;
+    return { name, settings };
   } catch (err) {
     logger.debug(
       CHANNEL,

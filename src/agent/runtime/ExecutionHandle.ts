@@ -192,11 +192,11 @@ export function interruptActiveChildren(
 /** Collect {executionId, agentName} for handles matching a class under a parent stream. */
 function collectChildSummary(
   parentStreamId: StreamTabId,
-  handles: Iterable<[string, ExecutionHandle]>,
+  handles: Iterable<ExecutionHandle>,
   ctor: new (...args: any[]) => ExecutionHandle,
 ): ActiveChildInfo[] {
   const result: ActiveChildInfo[] = [];
-  for (const [, handle] of handles) {
+  for (const handle of handles) {
     if (handle.parentStreamId !== parentStreamId || !(handle instanceof ctor)) {
       continue;
     }
@@ -218,7 +218,7 @@ function collectChildSummary(
 /** Emit the current active subagent list for a parent to the progress UI. */
 export function emitActiveSubagentsUpdate(
   parentStreamId: StreamTabId,
-  handles: Iterable<[string, ExecutionHandle]>,
+  handles: Iterable<ExecutionHandle>,
 ): void {
   const children = collectChildSummary(
     parentStreamId,
@@ -231,7 +231,7 @@ export function emitActiveSubagentsUpdate(
 /** Emit the current active processes list for a parent to the progress UI. */
 export function emitActiveProcessesUpdate(
   parentStreamId: StreamTabId,
-  handles: Iterable<[string, ExecutionHandle]>,
+  handles: Iterable<ExecutionHandle>,
 ): void {
   const processes = collectChildSummary(
     parentStreamId,

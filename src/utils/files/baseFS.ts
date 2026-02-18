@@ -215,11 +215,12 @@ export abstract class BaseFS {
     target: string,
     content: string | Buffer,
   ): void {
+    const resolved = this.preparePath(target);
     if (typeof content === 'string') {
-      fs.writeFileSync(this.preparePath(target), content, 'utf-8');
-      return;
+      fs.writeFileSync(resolved, content, 'utf-8');
+    } else {
+      fs.writeFileSync(resolved, content);
     }
-    fs.writeFileSync(this.preparePath(target), content);
   }
 
   public static deleteSync(this: typeof BaseFS, target: string): void {

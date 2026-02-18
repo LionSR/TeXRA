@@ -1,15 +1,4 @@
-/**
- * Agent Registry - Simple, flat agent metadata cache.
- *
- * This replaces the over-engineered AgentIndex/AgentIndexLoader/AgentIndexEntry
- * with ~200 lines of straightforward code.
- *
- * Design principles:
- * - Data structures, not classes
- * - Functions, not methods
- * - Zod for validation
- * - No redundant fields
- */
+/** Agent Registry - Flat agent metadata cache with source-priority lookup. */
 
 import * as path from 'path';
 import { glob } from 'glob';
@@ -553,7 +542,7 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
       const dbTools = primary.tools?.length ? primary.tools : undefined;
       entries.push({
         name,
-        source: 'remote' as AgentSource,
+        source: 'remote',
         path: '',
         isMultiple: Boolean(multiple),
         category: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
