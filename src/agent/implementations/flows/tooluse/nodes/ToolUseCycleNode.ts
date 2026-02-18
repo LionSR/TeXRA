@@ -88,7 +88,7 @@ export class ToolUseCycleNode<C> extends Node<
       if (cycleShared.shouldStop && cycleShared.lastError) {
         return {
           outcome: 'failed',
-          message: cycleShared.lastError.message ?? 'Cycle failed',
+          message: cycleShared.lastError.message,
           retryable: cycleShared.lastError.retryable,
         };
       }

@@ -65,10 +65,6 @@ export type TexcountResult = z.infer<typeof TexcountResultSchema>;
 /** Internal validation result - simple discriminated union */
 type ValidationResult = { valid: true } | { valid: false; reason: string };
 
-/**
- * Get full statistics for LaTeX documents using the texcount Perl script.
- */
-
 async function validateTexFile(
   fileLocation: FileLocation,
   channel: string,
@@ -192,15 +188,12 @@ async function getSummedCount(
 
     validPaths.push(filePath);
 
-    if (!enableChineseMode) {
-      const hasChinese = await hasChinesePackages(fileLocation);
-      if (hasChinese) {
-        enableChineseMode = true;
-        logger.debug(
-          channel,
-          `Chinese packages detected in ${filePath}, enabling Chinese character counting`,
-        );
-      }
+    if (!enableChineseMode && (await hasChinesePackages(fileLocation))) {
+      enableChineseMode = true;
+      logger.debug(
+        channel,
+        `Chinese packages detected in ${filePath}, enabling Chinese character counting`,
+      );
     }
   }
 
