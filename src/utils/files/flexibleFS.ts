@@ -33,8 +33,8 @@ export class FlexibleFS {
       return false;
     }
 
-    const content = await this.read(target);
-    return content.length > threshold;
+    const stats = await this.stat(target);
+    return stats.size > threshold;
   }
 
   read(target: FileLocation): Promise<string> {
