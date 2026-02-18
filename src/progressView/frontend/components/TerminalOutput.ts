@@ -44,6 +44,7 @@ export class TerminalOutput extends LitElement {
   private fitAddon: FitAddon | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private writeChain: Promise<void> = Promise.resolve();
+  private detailsElement: HTMLDetailsElement | null = null;
 
   private readonly handleDetailsToggle = (): void => {
     this.refitIfVisible();
@@ -83,10 +84,11 @@ export class TerminalOutput extends LitElement {
   override disconnectedCallback(): void {
     super.disconnectedCallback();
 
-    this.closest('details')?.removeEventListener(
+    this.detailsElement?.removeEventListener(
       'toggle',
       this.handleDetailsToggle,
     );
+    this.detailsElement = null;
     window.removeEventListener('resize', this.handleWindowResize);
 
     this.resizeObserver?.disconnect();
@@ -98,10 +100,8 @@ export class TerminalOutput extends LitElement {
   }
 
   private attachResizeHooks(): void {
-    this.closest('details')?.addEventListener(
-      'toggle',
-      this.handleDetailsToggle,
-    );
+    this.detailsElement = this.closest('details');
+    this.detailsElement?.addEventListener('toggle', this.handleDetailsToggle);
     window.addEventListener('resize', this.handleWindowResize);
 
     this.resizeObserver = new ResizeObserver(() => {
