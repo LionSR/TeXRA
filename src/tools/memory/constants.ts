@@ -1,6 +1,8 @@
 /**
  * Shared constants for memory tool and memory view.
  * Single source of truth for memory-related paths and limits.
+ *
+ * Memory is shared across all agents in a session (orchestrator and subagents).
  */
 
 /** Virtual path prefix shown to users and models (e.g., /memories/notes.md) */
