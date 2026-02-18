@@ -80,6 +80,10 @@ export class MultiAgentTab extends LitElement {
         );
       }
 
+      .preset-card.active {
+        border-color: var(--vscode-focusBorder);
+      }
+
       .preset-card-header {
         display: flex;
         align-items: center;
@@ -187,6 +191,7 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) reliabilitySettings: NumberVscodeSetting[] =
     [];
   @property({ attribute: false }) customPresets: AgentModePreset[] = [];
+  @property({ attribute: false }) activePresetId: string | null = null;
 
   private handleToggle(event: Event): void {
     const target = event.target as HTMLInputElement | null;
@@ -196,6 +201,7 @@ export class MultiAgentTab extends LitElement {
   }
 
   private handlePresetClick(preset: AgentModePreset): void {
+    this.activePresetId = preset.id;
     this.dispatchEvent(
       createEvent('apply-agent-mode-preset', { presetId: preset.id }),
     );
@@ -231,9 +237,10 @@ export class MultiAgentTab extends LitElement {
     deletable: boolean,
   ): TemplateResult {
     const allAgents = [...preset.toolUseAgents, ...preset.workflowAgents];
+    const isActive = this.activePresetId === preset.id;
     return html`
       <div
-        class="preset-card"
+        class="preset-card ${isActive ? 'active' : ''}"
         @click=${() => this.handlePresetClick(preset)}
         title="Apply ${preset.name} preset"
       >
