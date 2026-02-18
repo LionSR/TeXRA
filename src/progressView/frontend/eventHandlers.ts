@@ -12,6 +12,7 @@ import {
   isWorkflowState,
   type ProgressState,
   type StreamFilter,
+  type StreamLogs,
   type StreamSort,
   type StreamState,
 } from './store';
@@ -47,6 +48,10 @@ export interface FrontendEventHandlerContext {
   setStreamState(
     streamId: StreamTabId,
     updater: (prev: StreamState) => StreamState,
+  ): void;
+  setStreamLogs(
+    streamId: StreamTabId,
+    updater: (prev: StreamLogs) => StreamLogs,
   ): void;
   getFollowUpRef(): FollowUpInput | undefined;
   /** Persist filter/sort preferences to webview state. */
