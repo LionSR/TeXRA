@@ -310,7 +310,6 @@ export class LatexDiffManager {
     await compileLatex2Pdf(diffLocation, {
       channel: this.streamId,
       outputDirectory: buildDir,
-      compiler: 'latexmk',
     });
 
     return diffLocation;
