@@ -31,7 +31,6 @@ import {
 // Local imports - agent
 import { ReasoningEffort } from 'llm-zoo';
 import type { AgentConfig } from '@agent/core/AgentConfig';
-// Internal imports
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import {
   OpenAIAPIResponseUsage,
@@ -48,16 +47,14 @@ import {
 } from '@common/errors/sdkErrorUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 
-// Internal imports
+// Local imports - replacement
 import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
 import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 
-// Google finish reasons are re-exported from the SDK
-
-// Local constant
+// Local imports - utils
 import { K_SLICE } from '@utils/config';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import { computeCachePercentage } from './utils/usageNormalization';

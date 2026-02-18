@@ -19,7 +19,6 @@ import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
-// Internal imports
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import {
   OpenAIAPIResponseUsage,
@@ -35,10 +34,8 @@ import {
   isMissingFinishReasonError,
 } from '@common/errors/sdkErrorUtils';
 
-// Type imports
+// Local imports - tools and utils
 import type { ToolDefinition } from '@model';
-
-// Internal imports
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
@@ -69,8 +66,6 @@ import type {
   DeepSeekToolCall,
   OpenAIToolCall,
 } from './types/IModelHandler';
-
-// Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
 

@@ -35,7 +35,7 @@ import type { ToolResult } from '@agent/core/ToolTypes';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - logging
-import { AgentLogger } from '@logger/AgentLogger';
+import type { AgentLogger } from '@logger/AgentLogger';
 // Type imports
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,

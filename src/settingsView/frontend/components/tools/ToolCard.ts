@@ -214,25 +214,24 @@ export class ToolCard extends LitElement {
     }
   }
 
+  private static readonly STATUS_CONFIG: Record<
+    string,
+    { icon: string; label: string }
+  > = {
+    available: { icon: 'codicon-check', label: 'Available' },
+    'not-found': { icon: 'codicon-warning', label: 'Not Found' },
+    unknown: { icon: 'codicon-question', label: 'Unknown' },
+  };
+
   private renderBadge(): TemplateResult {
     const { status } = this.item;
-    const iconClass =
-      status === 'available'
-        ? 'codicon-check'
-        : status === 'not-found'
-          ? 'codicon-warning'
-          : 'codicon-question';
-    const label =
-      status === 'available'
-        ? 'Available'
-        : status === 'not-found'
-          ? 'Not Found'
-          : 'Unknown';
+    const config =
+      ToolCard.STATUS_CONFIG[status] ?? ToolCard.STATUS_CONFIG.unknown;
 
     return html`
       <span class="tool-badge tool-badge--${status}">
-        <span class="codicon ${iconClass}"></span>
-        ${label}
+        <span class="codicon ${config.icon}"></span>
+        ${config.label}
       </span>
     `;
   }

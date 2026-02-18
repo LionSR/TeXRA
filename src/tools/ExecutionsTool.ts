@@ -477,7 +477,6 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     ]);
 
     if (!meta && !config) {
-      const store = getExecutionStore(executionId);
       const hasFlow = await store.exists(`flow:${executionId}`);
       if (!hasFlow) {
         throw new ToolError(`Execution not found: ${executionId}`);
@@ -525,6 +524,20 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     return { output: lines.join('\n') };
   }
 
+  /** Fetch metas and format each child as a summary line. */
+  private async formatChildren(children: ChildRecord[]): Promise<string[]> {
+    const metas = await Promise.all(
+      children.map((c) => getExecutionStore(c.id).readMeta()),
+    );
+    return children.map((child, i) => {
+      const childMeta = metas[i];
+      const info = getExecutionStatusInfo(child.id, childMeta?.terminalStatus);
+      const ts = child.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
+      const desc = childMeta?.description ? `  — ${childMeta.description}` : '';
+      return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;
+    });
+  }
+
   /** Append formatted child entries to output lines. */
   private async appendChildren(
     lines: string[],
@@ -532,21 +545,9 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
   ): Promise<void> {
     if (children.length === 0) return;
     lines.push('', `Children (${children.length}):`);
-    const metas = await Promise.all(
-      children.map((c) => getExecutionStore(c.id).readMeta()),
-    );
-    for (let i = 0; i < children.length; i++) {
-      const child = children[i];
-      const childMeta = metas[i];
-      const childInfo = getExecutionStatusInfo(
-        child.id,
-        childMeta?.terminalStatus,
-      );
-      const ts = child.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
-      const desc = childMeta?.description ? `  — ${childMeta.description}` : '';
-      lines.push(
-        `  ${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(childInfo)}]${desc}`,
-      );
+    const formatted = await this.formatChildren(children);
+    for (const line of formatted) {
+      lines.push(`  ${line}`);
     }
   }
 
@@ -646,17 +647,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       };
     }
 
-    const metas = await Promise.all(
-      children.map((c) => getExecutionStore(c.id).readMeta()),
-    );
-    const lines = children.map((child, i) => {
-      const childMeta = metas[i];
-      const info = getExecutionStatusInfo(child.id, childMeta?.terminalStatus);
-      const ts = child.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
-      const desc = childMeta?.description ? `  — ${childMeta.description}` : '';
-      return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;
-    });
-
+    const lines = await this.formatChildren(children);
     return {
       output: `Children of ${executionId} (${children.length}):\n\n${lines.join('\n')}`,
     };

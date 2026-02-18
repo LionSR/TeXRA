@@ -3,7 +3,7 @@ import {
   EXECUTION_STATUS,
   type EndGroupStatus,
 } from '@shared/schemas';
-import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
+import { getExecutionStore } from '@agent/storage';
 import {
   registerInterruptible,
   unregisterInterruptible,
@@ -140,11 +140,11 @@ export async function runToolUseFlow<C = unknown>(
     stateSlices: null,
   };
 
+  const kv = getExecutionStore(executionId);
+
   try {
     registerInterruptible(streamId, flowContext);
     onSetup?.(flowContext);
-
-    const kv: ExecutionKVStore = getExecutionStore(executionId);
     let flowRecord: FlowRecord | null = null;
     try {
       flowRecord = (await kv.read<FlowRecord>(`flow:${executionId}`)) ?? null;
@@ -202,7 +202,6 @@ export async function runToolUseFlow<C = unknown>(
     // Persist conversation and todos regardless of success or failure so
     // the executions tool can show what happened before a crash.
     try {
-      const kv = getExecutionStore(executionId);
       const writes: Promise<void>[] = [];
       if (shared.messages.length > 0) {
         writes.push(kv.write('conversation', shared.messages));
@@ -220,7 +219,6 @@ export async function runToolUseFlow<C = unknown>(
       logger.debug('Flow record preserved for resume after retry cancellation');
     } else {
       try {
-        const kv = getExecutionStore(executionId);
         await kv.delete(`flow:${executionId}`);
       } catch {
         // Ignore cleanup errors

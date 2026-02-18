@@ -39,11 +39,14 @@ function expandGitignorePattern(
   options: { anchored: boolean; dirOnly: boolean },
 ): string[] {
   const normalized = pattern.replaceAll('\\', '/');
-  const basePattern = options.anchored
-    ? normalized.replace(/^\/+/, '')
-    : normalized.startsWith('**/')
-      ? normalized
-      : `**/${normalized}`;
+  let basePattern: string;
+  if (options.anchored) {
+    basePattern = normalized.replace(/^\/+/, '');
+  } else if (normalized.startsWith('**/')) {
+    basePattern = normalized;
+  } else {
+    basePattern = `**/${normalized}`;
+  }
 
   if (!options.dirOnly) {
     return [basePattern];

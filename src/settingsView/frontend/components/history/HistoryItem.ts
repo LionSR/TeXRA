@@ -177,7 +177,7 @@ export class HistoryItem extends LitElement {
   }
 
   private hasValue(value: ConfigValue): boolean {
-    if (value === null || value === undefined) return false;
+    if (value == null) return false;
     return !Array.isArray(value) || value.length > 0;
   }
 
@@ -304,9 +304,7 @@ export class HistoryItem extends LitElement {
               : html`<em class="history-none">Not set</em>`}
           </span>
           <span class="history-label">InputFile:</span>
-          <span class="history-value">
-            ${config.inputFile ? config.inputFile : 'None'}
-          </span>
+          <span class="history-value"> ${config.inputFile || 'None'} </span>
           ${config.inputFiles?.length
             ? html`
                 <span class="history-label">InputFiles:</span>
