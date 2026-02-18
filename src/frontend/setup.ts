@@ -22,7 +22,7 @@ import { extendEnvPath } from '@utils/system/platformPaths';
  * Version number for the default model list.
  * Increment this when adding new models to force existing users to get the updated defaults.
  */
-const MODEL_LIST_VERSION = 3;
+const MODEL_LIST_VERSION = 4;
 
 /**
  * Legacy agent files that should be deleted from GlobalStorage.
