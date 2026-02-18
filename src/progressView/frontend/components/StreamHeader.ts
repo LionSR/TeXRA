@@ -352,6 +352,10 @@ export class StreamHeader extends LitElement {
         --_badge-color: var(--color-warning, var(--vscode-charts-orange));
       }
 
+      .progress-badge {
+        --_badge-color: var(--color-text-secondary);
+      }
+
       @media (max-width: 500px) {
         .log-header {
           flex-wrap: wrap;
@@ -397,6 +401,7 @@ export class StreamHeader extends LitElement {
     const finishedProcessCount = this.streamState?.finishedProcessCount ?? 0;
     const totalSubagents = activeSubagents.length + finishedSubagentCount;
     const totalProcesses = activeProcesses.length + finishedProcessCount;
+    const progress = this.streamState?.conversationProgress;
 
     return html`
       <div class="log-header">
@@ -449,6 +454,18 @@ export class StreamHeader extends LitElement {
                     ? html`, `
                     : nothing}${finishedProcessCount > 0
                     ? html`${finishedProcessCount} done`
+                    : nothing}
+                </span>`
+              : nothing}
+            ${progress && progress.conversationTurns > 0
+              ? html`<span
+                  class="child-badge progress-badge"
+                  title="Conversation turns: ${progress.conversationTurns}, Tool calls: ${progress.toolCallCount}"
+                >
+                  <i class="codicon codicon-pulse"></i>
+                  ${progress.conversationTurns} turns${progress.toolCallCount >
+                  0
+                    ? html`, ${progress.toolCallCount} tool calls`
                     : nothing}
                 </span>`
               : nothing}

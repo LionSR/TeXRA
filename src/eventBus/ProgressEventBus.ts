@@ -7,6 +7,7 @@ import type {
   AddTaskGroupPayload,
   AgentProposalPermission,
   BashPermission,
+  ConversationProgress,
   ContextStateData,
   ExecutionId,
   LogMessageData,
@@ -91,6 +92,10 @@ export interface ProgressEventPayloads {
   showAgentProposal: AgentProposalPermission;
   resolveAgentProposal: { proposalId: string };
   updateTodos: UpdateTodosPayload;
+  updateConversationProgress: {
+    streamId: StreamTabId;
+    progress: ConversationProgress;
+  };
   updateQueuedFollowUps: { streamId: StreamTabId };
   updateActiveSubagents: {
     parentStreamId: StreamTabId;
