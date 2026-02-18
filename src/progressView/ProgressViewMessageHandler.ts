@@ -593,18 +593,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async restoreProposalToMainView(
     proposal: AgentProposal,
   ): Promise<boolean> {
-    const hasFiles = (arr: string[]): boolean => arr.length > 0;
     const isWorkflow = proposal.agentCategory === AgentCategory.Workflow;
 
     // Use discriminant directly so TypeScript narrows to WorkflowAgentProposal
     const activeFiles =
       proposal.agentCategory === AgentCategory.Workflow
         ? {
-            input: hasFiles(proposal.inputFiles),
-            reference: hasFiles(proposal.referenceFiles),
-            auxiliary: hasFiles(proposal.auxiliaryFiles),
-            media: hasFiles(proposal.mediaFiles),
-            output: hasFiles(proposal.outputFiles),
+            input: proposal.inputFiles.length > 0,
+            reference: proposal.referenceFiles.length > 0,
+            auxiliary: proposal.auxiliaryFiles.length > 0,
+            media: proposal.mediaFiles.length > 0,
+            output: proposal.outputFiles.length > 0,
           }
         : {
             input: false,
@@ -814,14 +813,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       });
     }
 
-    if (file) {
-      if (streamId) {
-        const streamBackups = this.modelOutputBackups.get(streamId);
-        if (streamBackups) {
-          streamBackups.delete(file);
-          if (streamBackups.size === 0) {
-            this.modelOutputBackups.delete(streamId);
-          }
+    if (file && streamId) {
+      const streamBackups = this.modelOutputBackups.get(streamId);
+      if (streamBackups) {
+        streamBackups.delete(file);
+        if (streamBackups.size === 0) {
+          this.modelOutputBackups.delete(streamId);
         }
       }
     }

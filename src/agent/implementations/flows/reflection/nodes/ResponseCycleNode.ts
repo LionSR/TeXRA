@@ -87,12 +87,6 @@ export class ResponseCycleNode<C = unknown> extends Node<
         endTurn: false,
         shouldStop: false,
         outputExists: false,
-        systemPrompt: undefined,
-        responseObject: undefined,
-        responseTimeMs: undefined,
-        stopReason: undefined,
-        processedResponse: undefined,
-        lastError: undefined,
       };
 
       const flow = createResponseCycleFlow<C>();

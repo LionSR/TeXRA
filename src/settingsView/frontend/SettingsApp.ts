@@ -160,7 +160,7 @@ export class SettingsApp extends BaseWebviewApp {
   @state() private toolDashboardItems: ToolDashboardItem[] = [];
   @state() private toolDashboardLoaded = false;
 
-  protected get readyCommand(): string | null {
+  protected override get readyCommand(): string | null {
     return null;
   }
 

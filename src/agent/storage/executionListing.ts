@@ -28,6 +28,7 @@ import type { ExecutionId } from '@shared/schemas';
 const CHANNEL = 'ExecutionListing';
 const INDEX_PATH = 'executions/index.json';
 const LEGACY_HISTORY_KEY = 'texra.agentHistory';
+const EXECUTION_ID_PATTERN = /^[0-9a-f][-0-9a-f]*$/i;
 
 // ============================================================================
 // Public types
@@ -105,7 +106,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
   // Filter for directories matching execution ID pattern (hex UUID-like)
   const executionDirs = entries
     .filter(
-      ([name, type]) => isDirectory(type) && /^[0-9a-f][-0-9a-f]*$/i.test(name),
+      ([name, type]) => isDirectory(type) && EXECUTION_ID_PATTERN.test(name),
     )
     .map(([name]) => name as ExecutionId);
 
@@ -186,7 +187,7 @@ export async function deleteAllExecutions(
     .filter(
       ([name, type]) =>
         isDirectory(type) &&
-        /^[0-9a-f][-0-9a-f]*$/i.test(name) &&
+        EXECUTION_ID_PATTERN.test(name) &&
         !exclude?.has(name),
     )
     .map(([name]) => name as ExecutionId);

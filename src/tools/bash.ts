@@ -108,16 +108,14 @@ export class BashTool extends defineTool({
     });
 
     if (result.timedOut) {
-      const timeoutSec = timeoutMs / 1000;
-      const maxTimeoutSec = 600_000 / 1000;
       const parts: string[] = [
-        `Foreground command timed out after ${timeoutSec}s.`,
+        `Foreground command timed out after ${timeoutMs / 1000}s.`,
       ];
       if (result.stdout) parts.push(`<stdout>${result.stdout}</stdout>`);
       if (result.stderr) parts.push(`<stderr>${result.stderr}</stderr>`);
       parts.push(
         `To fix, either:\n` +
-          `- Increase the timeout parameter up to ${maxTimeoutSec}s (${600_000}ms): { "timeout": ${600_000} }\n` +
+          `- Increase the timeout parameter up to 600s (600000ms): { "timeout": 600000 }\n` +
           `- Set run_in_background: true to execute asynchronously: { "run_in_background": true }`,
       );
       throw new ToolError(parts.join('\n'));
