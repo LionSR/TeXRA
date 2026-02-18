@@ -88,6 +88,8 @@ function resolveTools(
       return true;
     });
 
+  // Inject memory tool into all tool-use agents (including subagents)
+  // so they share the same /memories directory.
   if (getToolUseMemoryEnabled() && !resolved.some((d) => d.name === 'memory')) {
     const memoryTool = registry.get('memory');
     if (memoryTool) {

@@ -8,7 +8,7 @@ import { z } from 'zod';
 // Local imports - filesystem utilities
 import { formatRelativeTime } from '@shared/utils/string';
 import { StorageFS } from '@utils/files';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
+import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local imports - tool core
 import { defineTool } from '../core/define';
@@ -22,16 +22,22 @@ import {
   formatLinesWithNumbers,
   requireField,
 } from '../utils';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 
 // Local imports - shared memory constants and utilities
 import {
-  MEMORY_DISPLAY_ROOT,
   MEMORY_STORAGE_ROOT,
   MAX_VIEW_LINES,
   DIRECTORY_LISTING_DEPTH,
   shouldSkipEntry,
 } from './constants';
 import { toDisplayPath, formatSize, displayToStoragePath } from './memoryUtils';
+import {
+  parseFrontmatter,
+  buildFile,
+  createMeta,
+  formatAttribution,
+} from './memoryMeta';
 
 const MemoryToolInputSchema = z.strictObject({
   command: z.enum([
@@ -112,6 +118,21 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     }
   }
 
+  /** Read a memory file, stripping frontmatter. Returns user-visible content and optional metadata. */
+  private async readMemoryFile(resolvedPath: string) {
+    return parseFrontmatter(await StorageFS.read(resolvedPath));
+  }
+
+  /** Write a memory file with fresh attribution frontmatter. */
+  private async writeMemoryFile(
+    resolvedPath: string,
+    content: string,
+  ): Promise<void> {
+    const ctx = getCurrentToolFileInteractionContext();
+    const meta = createMeta(ctx?.agentName, ctx?.executionId);
+    await StorageFS.write(resolvedPath, buildFile(content, meta));
+  }
+
   private resolveMemoryPath(inputPath: string): string {
     try {
       return displayToStoragePath(inputPath);
@@ -122,13 +143,30 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     }
   }
 
+  /** Return early result if the file hasn't been viewed yet. */
+  private requireViewBeforeEdit(inputPath: string): ToolResult | undefined {
+    return (
+      requireFileReadForEdit(
+        inputPath,
+        true,
+        'Edits to memory files require viewing the file first. Please use the view command before editing.',
+      ) ?? undefined
+    );
+  }
+
   private async requireEditableFile(
     resolvedPath: string,
     inputPath: string,
   ): Promise<void> {
-    const exists = await StorageFS.exists(resolvedPath);
-    const isDir = exists && (await StorageFS.isDir(resolvedPath));
-    if (!exists || isDir) {
+    try {
+      const stats = await StorageFS.stat(resolvedPath);
+      if (stats.type === vscode.FileType.Directory) {
+        throw new ToolError(
+          `The path ${inputPath} does not exist or is a directory.`,
+        );
+      }
+    } catch (err) {
+      if (err instanceof ToolError) throw err;
       throw new ToolError(
         `The path ${inputPath} does not exist or is a directory.`,
       );
@@ -163,18 +201,15 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
         summary: `Listed directory: ${inputPath}`,
         output: [
           `Contents of ${inputPath} (up to 2 levels deep):`,
-          `SIZE\tMODIFIED\tPATH`,
+          `SIZE\tMODIFIED\tBY\tPATH`,
           ...listing,
         ].join('\n'),
       };
     }
 
-    const content = normalizeLineEndings(await StorageFS.read(resolvedPath));
+    const { meta, content } = await this.readMemoryFile(resolvedPath);
     recordToolFileRead(inputPath);
-    const lines = content.split('\n');
-    if (lines.length > 0 && lines.at(-1) === '') {
-      lines.pop();
-    }
+    const lines = splitContentLines(content);
     if (lines.length > MAX_VIEW_LINES) {
       throw new ToolError(
         `File ${inputPath} exceeds maximum line limit of 999,999 lines.`,
@@ -187,12 +222,13 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const selected = lines.slice(startIndex, endIndex);
     const numbered = formatLinesWithNumbers(selected, startIndex + 1);
 
+    const header = meta
+      ? `Here's the content of ${inputPath} (last modified by: ${formatAttribution(meta)}) with line numbers:`
+      : `Here's the content of ${inputPath} with line numbers:`;
+
     return {
       summary: `Viewed file: ${inputPath}`,
-      output: [
-        `Here's the content of ${inputPath} with line numbers:`,
-        ...numbered,
-      ].join('\n'),
+      output: [header, ...numbered].join('\n'),
     };
   }
 
@@ -208,7 +244,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
 
     await StorageFS.ensureDir(MEMORY_STORAGE_ROOT);
     await StorageFS.ensureDir(path.dirname(resolvedPath));
-    await StorageFS.write(resolvedPath, fileText);
+    await this.writeMemoryFile(resolvedPath, fileText);
     recordToolFileRead(inputPath);
 
     return {
@@ -231,17 +267,10 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const resolvedPath = this.resolveMemoryPath(inputPath);
     await this.requireEditableFile(resolvedPath, inputPath);
 
-    // Gate: require view before edit (matches edit_file behavior)
-    const readGate = requireFileReadForEdit(
-      inputPath,
-      true,
-      'Edits to memory files require viewing the file first. Please use the view command before editing.',
-    );
-    if (readGate) {
-      return readGate;
-    }
+    const readGate = this.requireViewBeforeEdit(inputPath);
+    if (readGate) return readGate;
 
-    const content = normalizeLineEndings(await StorageFS.read(resolvedPath));
+    const { content } = await this.readMemoryFile(resolvedPath);
     const occurrences = countOccurrences(content, oldStr);
     if (occurrences === 0) {
       throw new ToolError(
@@ -264,7 +293,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const idx = content.indexOf(oldStr);
     const updated =
       content.slice(0, idx) + newStr + content.slice(idx + oldStr.length);
-    await StorageFS.write(resolvedPath, updated);
+    await this.writeMemoryFile(resolvedPath, updated);
     recordToolFileRead(inputPath);
 
     const updatedLines = updated.split('\n');
@@ -284,17 +313,10 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const resolvedPath = this.resolveMemoryPath(inputPath);
     await this.requireEditableFile(resolvedPath, inputPath);
 
-    // Gate: require view before edit (matches edit_file behavior)
-    const readGate = requireFileReadForEdit(
-      inputPath,
-      true,
-      'Edits to memory files require viewing the file first. Please use the view command before editing.',
-    );
-    if (readGate) {
-      return readGate;
-    }
+    const readGate = this.requireViewBeforeEdit(inputPath);
+    if (readGate) return readGate;
 
-    const content = normalizeLineEndings(await StorageFS.read(resolvedPath));
+    const { content } = await this.readMemoryFile(resolvedPath);
     const lines = content.split('\n');
     const totalLines = lines.length;
     if (insertLine < 0 || insertLine > totalLines) {
@@ -310,7 +332,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
       ...lines.slice(insertLine),
     ];
 
-    await StorageFS.write(resolvedPath, updatedLines.join('\n'));
+    await this.writeMemoryFile(resolvedPath, updatedLines.join('\n'));
     recordToolFileRead(inputPath);
 
     return {
@@ -358,27 +380,49 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
   }
 
   private async buildDirectoryListing(resolvedPath: string): Promise<string[]> {
-    const entries: Array<{ path: string; size: number; mtime: number }> = [];
+    const entries: Array<{
+      path: string;
+      size: number;
+      mtime: number;
+      isDir: boolean;
+    }> = [];
     const rootStats = await StorageFS.stat(resolvedPath);
     entries.push({
       path: resolvedPath,
       size: rootStats.size,
       mtime: rootStats.mtime,
+      isDir: true,
     });
 
     await this.walkDirectory(resolvedPath, 0, entries);
 
-    return entries.map((entry) => {
-      const display = toDisplayPath(entry.path);
-      const age = formatRelativeTime(entry.mtime);
-      return `${formatSize(entry.size)}\t${age}\t${display}`;
-    });
+    return Promise.all(
+      entries.map(async (entry) => {
+        const display = toDisplayPath(entry.path);
+        const age = formatRelativeTime(entry.mtime);
+        let by = '-';
+        if (!entry.isDir) {
+          try {
+            const { meta } = await this.readMemoryFile(entry.path);
+            if (meta) by = formatAttribution(meta);
+          } catch {
+            // Unreadable file — skip attribution
+          }
+        }
+        return `${formatSize(entry.size)}\t${age}\t${by}\t${display}`;
+      }),
+    );
   }
 
   private async walkDirectory(
     currentPath: string,
     depth: number,
-    entries: Array<{ path: string; size: number; mtime: number }>,
+    entries: Array<{
+      path: string;
+      size: number;
+      mtime: number;
+      isDir: boolean;
+    }>,
   ): Promise<void> {
     if (depth >= DIRECTORY_LISTING_DEPTH) return;
 
@@ -387,9 +431,15 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
       if (shouldSkipEntry(name)) continue;
       const childPath = path.join(currentPath, name);
       const stats = await StorageFS.stat(childPath);
-      entries.push({ path: childPath, size: stats.size, mtime: stats.mtime });
+      const isDir = type === vscode.FileType.Directory;
+      entries.push({
+        path: childPath,
+        size: stats.size,
+        mtime: stats.mtime,
+        isDir,
+      });
 
-      if (type === vscode.FileType.Directory) {
+      if (isDir) {
         await this.walkDirectory(childPath, depth + 1, entries);
       }
     }

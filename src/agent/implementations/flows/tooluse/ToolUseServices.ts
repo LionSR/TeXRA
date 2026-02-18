@@ -20,6 +20,8 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly onFollowUpConsumed?: () => void;
   readonly onBeforeWaiting?: (lastResponse: string | undefined) => void;
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
+  /** True when this agent was launched as a subagent by an orchestrator. */
+  readonly isSubagent?: boolean;
 }
 
 export type { FlowParams as ToolUseFlowParams };
