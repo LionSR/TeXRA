@@ -18,7 +18,7 @@ import type { ModelOptionData } from '@shared/schemas';
 export const DEFAULT_MODELS = [
   'gemini3p',
   'gemini3f',
-  'sonnet45T',
+  'sonnet46T',
   'opus46T',
   'gpt52',
   'gpt52pro',
