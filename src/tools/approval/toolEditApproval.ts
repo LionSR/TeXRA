@@ -16,7 +16,7 @@ import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { type LineChanges, type ToolResult } from '@tools/result';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
-import { countLines } from '@utils/text/stringUtils';
+import { countLines, normalizeLineEndings } from '@utils/text/stringUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 
 import { rejectPendingEntries } from './bashApproval';
@@ -489,11 +489,14 @@ async function nativeRequestApproval(
       const openDocument = vscode.workspace.textDocuments.find(
         (doc) => doc.uri.toString() === proposedUri.toString(),
       );
-      const appliedContent = openDocument
-        ? openDocument.getText()
-        : await fs
-            .readFile(proposedUri.fsPath, 'utf8')
-            .catch(() => proposedContent);
+      // Normalize here: these reads bypass BaseFS so may contain CRLF.
+      const appliedContent = normalizeLineEndings(
+        openDocument
+          ? openDocument.getText()
+          : await fs
+              .readFile(proposedUri.fsPath, 'utf8')
+              .catch(() => proposedContent),
+      );
       const userPatch = computeUserPatch(proposedContent, appliedContent);
       result = {
         ...result,
@@ -693,9 +696,12 @@ export async function handleProgressViewToolEditApprovalAction(
       break;
 
     case 'approve': {
-      const appliedContent = await fs
-        .readFile(entry.proposedUri.fsPath, 'utf-8')
-        .catch(() => entry.proposedContent);
+      // Normalize: this read bypasses BaseFS so may contain CRLF.
+      const appliedContent = normalizeLineEndings(
+        await fs
+          .readFile(entry.proposedUri.fsPath, 'utf-8')
+          .catch(() => entry.proposedContent),
+      );
       entry.settle({ accepted: true, appliedContent });
       break;
     }
