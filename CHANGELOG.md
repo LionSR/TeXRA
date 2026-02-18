@@ -6,31 +6,25 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- **Agent mode presets** — save, load, and delete custom agent configurations from the Multi-Agent tab. Includes built-in presets like Analytical Theorist to get started quickly.
+- **Agent management** — save/load/delete custom agent presets from the Multi-Agent tab, create agents via a guided wizard, and customize or delete them directly in Settings > Agents with per-source bulk toggles.
 - **Tool Dashboard** — new settings tab showing which external tools (LaTeX, Git, Lean, Zotero, etc.) are installed and available on your system.
-- **Session descriptions** — agent sessions are now automatically summarized so orchestrators and the executions list have meaningful context at a glance.
-- **Live subagent progress** — the orchestrator now sees real-time cost, tool-call, and file-interaction updates from running subagents instead of waiting for them to finish.
-- **Orchestrator memory** — orchestrator agents record experience and intelligence gathered during sessions, improving results across future runs.
-- **New agents** — added leanSearch (Lean 4 / Mathlib research with arXiv cross-referencing), leanSimplifier (Lean 4 proof simplification), and presenter (interactive Beamer presentation building).
-- **Guided agent creation wizard** — create new agents by describing what you need; the wizard picks a suitable type, suggests tools, and generates the YAML definition for you.
-- **Agent management in settings** — customize and delete agents directly from the Agents tab; Select All / Unselect All buttons per source type (built-in, custom, remote) for quick toggling.
+- **Live subagent visibility** — agent sessions are auto-summarized, and the orchestrator sees real-time cost, tool-call, and file-interaction updates from running subagents.
+- **Orchestrator memory** — orchestrator agents record experience gathered during sessions, improving results across future runs.
+- **New agents** — added leanSearch, leanSimplifier, and presenter for Lean 4 research, proof simplification, and interactive Beamer presentation building.
+- **Terminal output rendering** — bash and shell output in the Progress Board now renders with full ANSI color and formatting support.
 - **Beamer theme** — paper2slide now uses the modern metropolis theme.
-- Added **Claude Sonnet 4.6** (thinking and regular) to the default model list, replacing Sonnet 4.5.
-- Enabled **server-side context compaction** for Sonnet 4.6 in tool-use mode (previously Opus 4.6 only).
-- Added Sonnet 4.6 to the **1M context window beta** eligibility list.
+- Added **Claude Sonnet 4.6** (`sonnet46`, `sonnet46T`) with server-side context compaction and 1M context window beta support.
 
 ### Bug Fixes
 
-- Fixed **stream tab animations** not playing when switching between agent streams.
-- Fixed **message updates being dropped** for grouped messages in certain multi-agent scenarios.
+- Fixed **stream tab animations** not playing and **message updates being dropped** for grouped messages in multi-agent scenarios.
 - Agents no longer crash when hitting the **PDF page limit** — instead they receive a helpful message suggesting compaction.
 - **arXiv sources** are no longer re-downloaded when the files already exist locally.
 - Fixed **context window detection** for OpenAI Responses API models.
 - Fixed a crash in **environments without a home directory** (e.g., Docker containers).
-- Fixed **latexmk not found** errors by auto-detecting TeX installation paths across macOS, Linux, and Windows.
+- Fixed **LaTeX path detection** — auto-detects TeX installation paths across macOS, Linux, and Windows; non-workspace files now resolve project-local `.sty`, `.cls`, and `.bib` files via internal multi-pass compilation.
 - Fixed several **Windows / WSL issues** — line-ending normalization and path handling now work correctly.
-- Fixed agents **running extra rounds after a failure** instead of stopping and reporting the error.
-- Fixed agents **ignoring the interrupted status** when manually stopped mid-run.
+- Fixed agents **not stopping properly** — no longer run extra rounds after a failure or ignore the interrupted status.
 - **Authentication errors** no longer trigger repeated retries; only transient network failures are retried.
 - Fixed **keyboard shortcuts** sometimes being routed to the wrong panel.
 - Fixed **model dropdown** not appearing for users with personal API keys but no TeXRA account.
@@ -38,8 +32,9 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements
 
-- **Multi-agent UI is noticeably faster** — stream tabs now render independently, so switching between agents and receiving updates no longer slows down with many concurrent streams.
-- Agent management is now fully consolidated in the **Settings > Agents** tab — the sidebar explorer view has been removed.
+- **Multi-agent UI is noticeably faster** — switching between agents and receiving updates stays responsive even with many concurrent streams.
+- **Pack and Clean discoverability** — renamed commands to be more descriptive, added keyboard shortcuts (Ctrl+Alt+Shift+C/B), and made them accessible from editor title menus, context menus, and the getting-started walkthrough.
+- **Memory tool safety** — agents must now view a memory file before deleting or renaming it.
 - **Error messages from tools** are now clearer and suggest concrete next steps (e.g., bash timeouts suggest using background mode).
 - Refreshed the **documentation site** with guides oriented toward mathematicians, physicists, and computational scientists.
 - Updated dependencies.
