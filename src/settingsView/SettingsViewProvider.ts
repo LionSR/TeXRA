@@ -58,7 +58,7 @@ export class SettingsViewProvider
       await this.messageHandler.sendAllData(this._view.webview);
     }
 
-    if (tabIndex !== undefined && this._view) {
+    if (tabIndex != null && this._view) {
       await this._view.webview.postMessage({
         command: SETTINGS_VIEW_COMMANDS.SET_TAB,
         tabIndex,
