@@ -82,7 +82,11 @@ export class MemoryItem extends LitElement {
     const size = formatBytes(item.size ?? 0);
     const lines = formatLineCount(item.lineCount ?? 0);
     const updated = formatUpdatedDate(item.mtime);
-    return [size, lines, updated].filter(Boolean).join(' · ');
+    const parts = [size, lines, updated];
+    if (item.modifiedBy) {
+      parts.push(`by ${item.modifiedBy}`);
+    }
+    return parts.filter(Boolean).join(' · ');
   }
 
   override render(): TemplateResult | typeof nothing {

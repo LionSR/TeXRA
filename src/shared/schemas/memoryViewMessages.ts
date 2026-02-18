@@ -24,6 +24,8 @@ export const MemoryViewItemSchema = z.object({
   mtime: z.string(),
   lineCount: z.number(),
   preview: z.string(),
+  /** Agent that last modified this file (from frontmatter attribution). */
+  modifiedBy: z.string().optional(),
 });
 export type MemoryViewItem = z.infer<typeof MemoryViewItemSchema>;
 
