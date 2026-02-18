@@ -109,7 +109,7 @@ const baseConfig = {
         activeMatch: '/guide/built-in-agents',
       },
       {
-        text: 'Architecture',
+        text: 'Workflow',
         link: '/guide/agent-architecture',
         activeMatch: '/guide/agent-architecture',
       },
@@ -131,7 +131,7 @@ const baseConfig = {
           items: [
             { text: 'Built-in Agents', link: '/guide/built-in-agents.md' },
             {
-              text: 'Agent Architecture',
+              text: 'Workflow Agents',
               link: '/guide/agent-architecture.md',
             },
             { text: 'Custom Agents', link: '/guide/custom-agents' },
