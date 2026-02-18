@@ -143,7 +143,7 @@ const PROVIDER_VSCODE_SETTINGS: Record<
       key: 'texra.model.useAnthropic1MBeta',
       label: '1M Context Window Beta',
       description:
-        'Enable the 1M-token context window for Claude Opus 4.6 and Sonnet 4 (usage capped at 200K by extension).',
+        'Enable the 1M-token context window for Claude Opus 4.6, Sonnet 4.6, and Sonnet 4 (usage capped at 200K by extension).',
     },
   ],
 };
