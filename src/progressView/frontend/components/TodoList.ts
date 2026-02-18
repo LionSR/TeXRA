@@ -110,11 +110,16 @@ export class TodoList extends LitElement {
       return nothing;
     }
 
+    const completed = this.todos.filter(
+      (t) => t.status === TODO_STATUS.COMPLETED,
+    ).length;
+    const total = this.todos.length;
+
     return html`
       <vscode-collapsible
         id=${ELEMENT_IDS.TODO_LIST_CONTAINER}
         class="todo-collapsible panel-collapsible"
-        title="Task Progress"
+        title=${`Todos (${completed}/${total})`}
       >
         <div id=${ELEMENT_IDS.TODO_LIST} class="todo-list">
           ${repeat(
