@@ -323,15 +323,12 @@ export async function checkToolInstalled(
       return false;
     };
 
-    // Parse command string into executable and args
-    const parseCommand = (
-      cmd: string,
-    ): { cmdName: string; args: string[] } | null => {
-      const stringArgs = shellParse(cmd).filter(
+    const parseCommand = (cmd: string) => {
+      const parts = shellParse(cmd).filter(
         (arg): arg is string => typeof arg === 'string',
       );
-      if (stringArgs.length === 0) return null;
-      const [cmdName, ...args] = stringArgs;
+      if (parts.length === 0) return null;
+      const [cmdName, ...args] = parts;
       return { cmdName, args };
     };
 
@@ -455,9 +452,8 @@ export async function checkCoreDependencies(
     );
 
     // Add image tool to missing list only if neither is installed
-    const missingTools = [...missingBasicTools];
     if (!hasMagick && !hasGm) {
-      missingTools.push('gm/magick');
+      missingBasicTools.push('gm/magick');
       if (showError) {
         const errorMsg =
           'Neither GraphicsMagick nor ImageMagick is installed. Please install either tool for image processing.\n' +
@@ -469,7 +465,7 @@ export async function checkCoreDependencies(
       }
     }
 
-    return missingTools;
+    return missingBasicTools;
   } catch (error) {
     // If checking fails, assume all tools are missing to prompt user to check
     // This is safer than silently ignoring the error

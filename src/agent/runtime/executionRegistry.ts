@@ -53,7 +53,7 @@ export function trackExecution(handle: ExecutionHandle): void {
   // (where parentStreamId differs from childStreamId)
   if (handle instanceof AgentExecutionHandle) {
     if (handle.parentStreamId !== handle.childStreamId) {
-      emitActiveSubagentsUpdate(handle.parentStreamId, registry.entries());
+      emitActiveSubagentsUpdate(handle.parentStreamId, registry.values());
       bus.emit('setParentStream', {
         childStreamId: handle.childStreamId,
         parentStreamId: handle.parentStreamId,
@@ -63,7 +63,7 @@ export function trackExecution(handle: ExecutionHandle): void {
 
   // Emit process badge update for background bash processes
   if (handle instanceof ProcessExecutionHandle) {
-    emitActiveProcessesUpdate(handle.parentStreamId, registry.entries());
+    emitActiveProcessesUpdate(handle.parentStreamId, registry.values());
   }
 }
 
@@ -78,12 +78,12 @@ export function untrackExecution(executionId: string): void {
     handle instanceof AgentExecutionHandle &&
     handle.parentStreamId !== handle.childStreamId
   ) {
-    emitActiveSubagentsUpdate(handle.parentStreamId, registry.entries());
+    emitActiveSubagentsUpdate(handle.parentStreamId, registry.values());
   }
 
   // Emit process badge update on removal
   if (handle instanceof ProcessExecutionHandle) {
-    emitActiveProcessesUpdate(handle.parentStreamId, registry.entries());
+    emitActiveProcessesUpdate(handle.parentStreamId, registry.values());
   }
 }
 

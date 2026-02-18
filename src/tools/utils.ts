@@ -188,6 +188,7 @@ export function requireField<T>(
   fieldName: string,
   command: string,
 ): T {
+  // eslint-disable-next-line eqeqeq -- nullish check for .nullish() schema fields
   if (value == null) {
     throw new ToolError(
       `Parameter \`${fieldName}\` is required for command: ${command}`,

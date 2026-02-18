@@ -1,4 +1,4 @@
-// Local imports - core
+// Third-party imports
 import { z } from 'zod';
 
 // Local imports - tools

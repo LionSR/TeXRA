@@ -144,10 +144,8 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
   private renderDiffMeta(
     request: ToolEditPermission,
   ): TemplateResult | typeof nothing {
-    const toCount = (value: number | undefined): number => {
-      if (value === undefined || !Number.isFinite(value)) return 0;
-      return Math.max(0, value);
-    };
+    const toCount = (value: number | undefined): number =>
+      value !== undefined && Number.isFinite(value) ? Math.max(0, value) : 0;
     const added = toCount(request.addedLines);
     const removed = toCount(request.removedLines);
     const total = added + removed;
