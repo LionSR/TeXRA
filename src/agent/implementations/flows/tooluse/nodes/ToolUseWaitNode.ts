@@ -37,7 +37,7 @@ export class ToolUseWaitNode<C> extends Node<
       return { kind: 'stop' };
     }
 
-    onBeforeWaiting?.(prepRes.lastResponse);
+    await onBeforeWaiting?.(prepRes.lastResponse);
 
     if (!session.hasQueuedFollowUp()) {
       StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
