@@ -145,9 +145,8 @@ async function executeSubagent(
       }
     },
     onProgress,
-    onBeforeWaiting: (lastResponse) => {
+    onBeforeWaiting: async (lastResponse) => {
       if (hasDelivered || !childStreamId) return;
-      hasDelivered = true;
       const msg = formatSubagentDelivery(agentName, {
         category: 'toolUse' as const,
         status: 'stopped' as const,
@@ -155,7 +154,15 @@ async function executeSubagent(
         executionId,
         streamId: childStreamId,
       });
-      void getExecutionStore(executionId).write('report', msg);
+      // Best-effort persist — must never block delivery or abort the subagent.
+      try {
+        await getExecutionStore(executionId).write('report', msg);
+      } catch {
+        /* storage failure is non-fatal */
+      }
+      // Mark delivered and enqueue only after the write attempt so that
+      // onCompleted can still act as a fallback if we somehow never reach here.
+      hasDelivered = true;
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     },
     onCompleted: (result) => {
