@@ -209,6 +209,9 @@ export interface IModelHandler<
    */
   requestCompaction(): void;
 
+  /** Returns the effective context window, accounting for beta overrides. */
+  getEffectiveContextWindow(): number;
+
   readonly isGoogle: boolean;
   readonly isDeepSeek: boolean;
   readonly isKimi: boolean;

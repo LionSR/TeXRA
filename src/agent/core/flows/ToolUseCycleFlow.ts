@@ -396,7 +396,7 @@ class ToolUseProcessNode<C> extends BaseNode<
         prepRes.responseTimeMs ?? 0,
       );
       const { inputTokens } = normalizedUsage;
-      const { contextWindow } = services.modelHandler.config;
+      const contextWindow = services.modelHandler.getEffectiveContextWindow();
       if (inputTokens > 0 && contextWindow > 0) {
         services.logger.logContextState(inputTokens, contextWindow);
       }
