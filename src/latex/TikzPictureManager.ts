@@ -196,7 +196,7 @@ export class TikzPictureManager {
           suffix,
           channel,
         );
-        await compileLatex2Pdf(texLocation, { channel });
+        await compileLatex2Pdf(texLocation, { channel, compiler: 'pdflatex' });
 
         // Derive PDF location from tex location
         const pdfFilename = path
