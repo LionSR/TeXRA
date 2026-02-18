@@ -13,6 +13,9 @@ const DEFAULT_THEME = {
 
 const MIN_SCROLLBACK = 4_000;
 
+/** Maximum visible rows before terminal scrolls internally. */
+const MAX_VISIBLE_ROWS = 20;
+
 /**
  * Read-only terminal renderer for shell output.
  * Uses xterm.js for ANSI colors/formatting without interactive input.
@@ -28,9 +31,7 @@ export class TerminalOutput extends LitElement {
       }
 
       .terminal-container {
-        min-height: 64px;
-        max-height: var(--height-large);
-        overflow: auto;
+        overflow: hidden;
       }
     `,
   ];
@@ -118,10 +119,21 @@ export class TerminalOutput extends LitElement {
     if (!this.terminal || !this.fitAddon) return;
     if (this.offsetParent === null) return;
 
-    const { width, height } = this.getBoundingClientRect();
-    if (width === 0 || height === 0) return;
+    const { width } = this.getBoundingClientRect();
+    if (width === 0) return;
 
-    this.fitAddon.fit();
+    // Get optimal column count from FitAddon (based on container width)
+    const dims = this.fitAddon.proposeDimensions();
+    const cols = dims?.cols ?? this.terminal.cols;
+
+    // Size rows to content instead of filling the container
+    const buffer = this.terminal.buffer.active;
+    const contentRows = buffer.baseY + buffer.cursorY + 1;
+    const rows = Math.max(1, Math.min(contentRows, MAX_VISIBLE_ROWS));
+
+    if (cols !== this.terminal.cols || rows !== this.terminal.rows) {
+      this.terminal.resize(cols, rows);
+    }
   }
 
   private renderTerminalText(): void {
