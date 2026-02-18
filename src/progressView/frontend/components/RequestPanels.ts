@@ -99,7 +99,7 @@ function isTextInput(el: Element | null): boolean {
   if (tagName.includes('textarea') || tagName.includes('input')) return true;
 
   // Recursively check shadow root for focused text inputs
-  const shadowRoot = (el as Element & { shadowRoot?: ShadowRoot })?.shadowRoot;
+  const shadowRoot = el.shadowRoot;
   if (shadowRoot?.activeElement) {
     return isTextInput(shadowRoot.activeElement);
   }
@@ -234,12 +234,18 @@ export class RequestPanels extends LitElement {
   // ===========================================================================
 
   private getPermissionKey(permission: PermissionState): string {
-    const id =
-      permission.kind === PERMISSION_KIND.RETRY
-        ? permission.data.streamId
-        : permission.kind === PERMISSION_KIND.PROPOSAL
-          ? permission.data.proposalId
-          : permission.data.requestId;
+    let id: string;
+    switch (permission.kind) {
+      case PERMISSION_KIND.RETRY:
+        id = permission.data.streamId;
+        break;
+      case PERMISSION_KIND.PROPOSAL:
+        id = permission.data.proposalId;
+        break;
+      default:
+        id = permission.data.requestId;
+        break;
+    }
     return `${permission.kind}:${id}`;
   }
 }

@@ -57,18 +57,15 @@ export async function indentLatexFilesInDirectory(
   const config = getConfig<string>(configKey, '');
   logger.debug(CHANNEL, `Formatter: ${formatter}, Config: ${config}`);
 
-  if (config) {
-    const configExists = await AbsoluteFS.exists(config);
-    if (!configExists) {
-      logger.error(
-        CHANNEL,
-        `Error: Formatter config file not found at ${config}`,
-      );
-      vscode.window.showErrorMessage(
-        `Formatter config file not found at ${config}`,
-      );
-      return 0;
-    }
+  if (config && !(await AbsoluteFS.exists(config))) {
+    logger.error(
+      CHANNEL,
+      `Error: Formatter config file not found at ${config}`,
+    );
+    vscode.window.showErrorMessage(
+      `Formatter config file not found at ${config}`,
+    );
+    return 0;
   }
 
   let indentedCount = 0;

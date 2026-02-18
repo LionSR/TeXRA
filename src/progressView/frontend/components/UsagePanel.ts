@@ -7,8 +7,6 @@ import { when } from 'lit/directives/when.js';
 import { designTokens } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
-// Local imports - shared schemas
-
 // Local imports - progress view formatters
 import { formatTokens } from '../formatters/timestampUtils';
 
@@ -90,7 +88,7 @@ export class UsagePanel extends LitElement {
     }
 
     return html`
-      <div class="usage-summary-footer" ?hidden=${!hasUsage && !hasContext}>
+      <div class="usage-summary-footer">
         <span
           id=${ELEMENT_IDS.CONTEXT_STATE}
           class="context-state"

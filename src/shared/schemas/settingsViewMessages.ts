@@ -413,18 +413,16 @@ const DeleteAgentModePresetMessageSchema = z.object({
 });
 
 // Tool dashboard inbound messages
-const GetToolDashboardDataMessageSchema = z.object({
-  command: z.literal(CMD.GET_TOOL_DASHBOARD_DATA),
-});
+const GetToolDashboardDataMessageSchema = commandOnly(
+  CMD.GET_TOOL_DASHBOARD_DATA,
+);
 
 const OpenToolInstallUrlMessageSchema = z.object({
   command: z.literal(CMD.OPEN_TOOL_INSTALL_URL),
-  url: z.string().url(),
+  url: z.url(),
 });
 
-const RecheckToolStatusMessageSchema = z.object({
-  command: z.literal(CMD.RECHECK_TOOL_STATUS),
-});
+const RecheckToolStatusMessageSchema = commandOnly(CMD.RECHECK_TOOL_STATUS);
 
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);

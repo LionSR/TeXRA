@@ -704,9 +704,7 @@ async function runLatexdiffViaWorkspaceScan(params: {
   logger.debug(CHANNEL, `Using agent name chunk: ${agentNameChunk}`);
 
   const configuredInputFiles =
-    outputFiles && Array.isArray(outputFiles) && outputFiles.length > 0
-      ? outputFiles
-      : [inputFile];
+    outputFiles && outputFiles.length > 0 ? outputFiles : [inputFile];
 
   logger.debug(CHANNEL, `Input files: ${configuredInputFiles.join(', ')}`);
 

@@ -1,5 +1,5 @@
 // Type imports
-import {
+import type {
   FileInteractionState,
   TodoState,
 } from '@agent/core/AgentWorkspaceState';

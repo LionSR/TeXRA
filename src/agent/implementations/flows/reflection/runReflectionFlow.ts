@@ -96,11 +96,12 @@ function deriveConfig(
   }
 
   const { userRequest } = prompt;
-  const requestCount = Array.isArray(userRequest)
-    ? userRequest.length
-    : userRequest
-      ? 1
-      : 0;
+  let requestCount = 0;
+  if (Array.isArray(userRequest)) {
+    requestCount = userRequest.length;
+  } else if (userRequest) {
+    requestCount = 1;
+  }
   const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
 
   return {
@@ -200,10 +201,11 @@ export async function runReflectionFlow<C = unknown>(
     storageKey,
   );
 
+  const kv = getExecutionStore(executionId);
+
   try {
     registerInterruptible(streamId, interruptible);
 
-    const kv = getExecutionStore(executionId);
     const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
     const validated = flowRecord?.shared
       ? ReflectionFlowStateSchema.safeParse(flowRecord.shared)
@@ -312,10 +314,7 @@ export async function runReflectionFlow<C = unknown>(
     // the executions tool can always show what happened before a crash.
     try {
       if (shared?.conversation?.length) {
-        await getExecutionStore(executionId).write(
-          'conversation',
-          shared.conversation,
-        );
+        await kv.write('conversation', shared.conversation);
       }
     } catch {
       // Best-effort — don't mask the original error
@@ -323,7 +322,6 @@ export async function runReflectionFlow<C = unknown>(
 
     if (status === END_GROUP_STATUS.STOPPED) {
       try {
-        const kv = getExecutionStore(executionId);
         await kv.delete(`flow:${executionId}`);
       } catch {
         // Ignore cleanup errors

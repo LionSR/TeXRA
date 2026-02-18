@@ -152,14 +152,13 @@ export function formatSubagentProgress(
         (t) => t.status === 'in_progress',
       ).length;
       const pending = update.todos.length - completed - inProgress;
+      const TODO_PROGRESS_ICON: Record<string, string> = {
+        completed: '[x]',
+        in_progress: '[>]',
+      };
       const items = update.todos
         .map((t) => {
-          const icon =
-            t.status === 'completed'
-              ? '[x]'
-              : t.status === 'in_progress'
-                ? '[>]'
-                : '[ ]';
+          const icon = TODO_PROGRESS_ICON[t.status ?? ''] ?? '[ ]';
           return `  ${icon} ${escapeText(t.content)}`;
         })
         .join('\n');
