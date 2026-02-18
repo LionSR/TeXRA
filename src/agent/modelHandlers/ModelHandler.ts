@@ -182,6 +182,14 @@ export abstract class ModelHandler<
   }
 
   /**
+   * Returns the effective context window size, accounting for beta overrides.
+   * Subclasses may override (e.g. Anthropic 1M beta).
+   */
+  public getEffectiveContextWindow(): number {
+    return this.config.contextWindow;
+  }
+
+  /**
    * Returns the effective max output tokens for the current mode.
    * Tool-use agents use a reduced value to leave headroom for context growth.
    */

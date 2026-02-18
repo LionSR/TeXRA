@@ -167,6 +167,15 @@ const MIN_COMPACTION_TRIGGER_TOKENS = 50_000;
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
 /**
+ * Long-context pricing: when 1M beta is active and input exceeds 200K tokens,
+ * all tokens in the request are charged at premium rates.
+ * See https://platform.claude.com/docs/en/about-claude/pricing#long-context-pricing
+ */
+const LONG_CONTEXT_TOKEN_THRESHOLD = 200_000;
+const LONG_CONTEXT_INPUT_MULTIPLIER = 2;
+const LONG_CONTEXT_OUTPUT_MULTIPLIER = 1.5;
+
+/**
  * Model patterns that require temperature removal when thinking is enabled.
  * Per Anthropic docs, Claude 4 and Claude 3.7 Sonnet models don't support temperature with thinking.
  */
@@ -299,6 +308,25 @@ export class ModelHandlerAnthropic extends ModelHandler<
    */
   private supportsAdaptiveThinking(): boolean {
     return this.isClaudeOpus46() || this.isClaudeSonnet46();
+  }
+
+  private isAnthropic1MBetaEligible(): boolean {
+    return (
+      this.config.fullName === 'claude-sonnet-4-20250514' ||
+      this.config.fullName === 'claude-sonnet-4-5' ||
+      this.config.fullName === SONNET_46_FULLNAME ||
+      this.config.fullName === OPUS_46_FULLNAME
+    );
+  }
+
+  public override getEffectiveContextWindow(): number {
+    const useAnthropic1MBeta = getConfig<boolean>(
+      'texra.model.useAnthropic1MBeta',
+      false,
+    );
+    return useAnthropic1MBeta && this.isAnthropic1MBetaEligible()
+      ? ANTHROPIC_1M_CONTEXT_WINDOW
+      : this.config.contextWindow;
   }
 
   /**
@@ -573,20 +601,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const useStreaming = this.getStreamingConfig();
     // Track input token count for client-side context management triggering
     let measuredInputTokens: number | undefined;
-    const useAnthropic1MBeta = getConfig<boolean>(
-      'texra.model.useAnthropic1MBeta',
-      false,
-    );
-    const isAnthropic1MBetaEligibleModel =
-      this.config.fullName === 'claude-sonnet-4-20250514' ||
-      this.config.fullName === 'claude-sonnet-4-5' ||
-      this.config.fullName === SONNET_46_FULLNAME ||
-      this.config.fullName === OPUS_46_FULLNAME;
+    const effectiveContextWindow = this.getEffectiveContextWindow();
     const isAnthropic1MBetaActive =
-      useAnthropic1MBeta && isAnthropic1MBetaEligibleModel;
-    const effectiveContextWindow = isAnthropic1MBetaActive
-      ? ANTHROPIC_1M_CONTEXT_WINDOW
-      : this.config.contextWindow;
+      effectiveContextWindow > this.config.contextWindow;
 
     this.enforceCacheControlLimit(messages);
 
@@ -1693,23 +1710,38 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Note: Anthropic doesn't provide tool_use_tokens in their API response
     const usageTotals = this.getUsageTokenTotals(responseUsage);
 
+    // Apply long-context premium when 1M beta is active and input exceeds 200K.
+    // All tokens in the request are charged at premium rates.
+    const totalInputTokens =
+      usageTotals.baseInputTokens +
+      usageTotals.cacheReadTokens +
+      usageTotals.cacheCreationTokens;
+    const isLongContext =
+      this.getEffectiveContextWindow() > LONG_CONTEXT_TOKEN_THRESHOLD &&
+      totalInputTokens > LONG_CONTEXT_TOKEN_THRESHOLD;
+    const inputPrice = isLongContext
+      ? this.config.inputPrice * LONG_CONTEXT_INPUT_MULTIPLIER
+      : this.config.inputPrice;
+    const outputPrice = isLongContext
+      ? this.config.outputPrice * LONG_CONTEXT_OUTPUT_MULTIPLIER
+      : this.config.outputPrice;
+
     let basePrice = calculateTokenPrice(
       usageTotals.baseInputTokens,
       usageTotals.outputTokens,
-      this.config.inputPrice,
-      this.config.outputPrice,
+      inputPrice,
+      outputPrice,
     );
 
     if (this.capabilities.supportsPromptCaching) {
       if (usageTotals.cacheCreationTokens > 0) {
         basePrice +=
-          (usageTotals.cacheCreationTokens * this.config.inputPrice * 1.25) /
-          1e6;
+          (usageTotals.cacheCreationTokens * inputPrice * 1.25) / 1e6;
       }
       if (usageTotals.cacheReadTokens > 0) {
         basePrice +=
           (usageTotals.cacheReadTokens *
-            this.config.inputPrice *
+            inputPrice *
             this.capabilities.cacheDiscountFactor) /
           1e6;
       }
