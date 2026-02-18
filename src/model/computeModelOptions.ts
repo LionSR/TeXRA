@@ -1,5 +1,5 @@
 // Third-party imports
-import { MODEL_CONFIGS, type ModelConfig, type ModelCapabilities } from 'llm-zoo';
+import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
 // Local imports - auth
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -10,40 +10,6 @@ import { ApiProvider, SecretManager } from '@frontend/secretManager';
 
 // Local imports - shared schemas
 import type { ModelOptionData } from '@shared/schemas';
-
-/**
- * Register Sonnet 4.6 models in MODEL_CONFIGS.
- * These are added here until the llm-zoo package includes them natively.
- */
-const SONNET_46_CAPABILITIES: ModelCapabilities = {
-  ...MODEL_CONFIGS['sonnet45T'].capabilities,
-};
-
-MODEL_CONFIGS['sonnet46T'] = {
-  name: 'sonnet46T',
-  fullName: 'claude-sonnet-4-6',
-  openrouterFullName: 'anthropic/claude-sonnet-4.6:thinking',
-  provider: 'anthropic',
-  maxOutputTokens: 64_000,
-  contextWindow: 200_000,
-  inputPrice: 3,
-  outputPrice: 15,
-  capabilities: { ...SONNET_46_CAPABILITIES, supportsReasoning: true, supportsInterleavedThinking: true, supportsAssistantPrefill: false },
-  openRouterOnly: false,
-} as ModelConfig;
-
-MODEL_CONFIGS['sonnet46'] = {
-  name: 'sonnet46',
-  fullName: 'claude-sonnet-4-6',
-  openrouterFullName: 'anthropic/claude-sonnet-4.6',
-  provider: 'anthropic',
-  maxOutputTokens: 64_000,
-  contextWindow: 200_000,
-  inputPrice: 3,
-  outputPrice: 15,
-  capabilities: { ...SONNET_46_CAPABILITIES, supportsReasoning: false, supportsInterleavedThinking: false, supportsAssistantPrefill: true },
-  openRouterOnly: false,
-} as ModelConfig;
 
 /**
  * Default models that should be present in every user's model list.

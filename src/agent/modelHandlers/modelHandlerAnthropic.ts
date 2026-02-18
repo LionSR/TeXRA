@@ -328,10 +328,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
   }
 
-  private isClaudeSonnet46(): boolean {
-    return this.config.fullName === SONNET_46_FULLNAME;
-  }
-
   /** Whether this model supports Anthropic's native server-side context compaction. */
   private isCompactionEligibleModel(): boolean {
     return this.isClaudeOpus46() || this.isClaudeSonnet46();
