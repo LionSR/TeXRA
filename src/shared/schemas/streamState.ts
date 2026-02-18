@@ -37,6 +37,17 @@ export const ActiveChildInfoSchema = z.object({
 
 export type ActiveChildInfo = z.infer<typeof ActiveChildInfoSchema>;
 
+// Conversation Progress (ephemeral counters updated during execution)
+
+export const ConversationProgressSchema = z.object({
+  /** Number of conversation turns (model invocations) completed. */
+  conversationTurns: z.number().prefault(0),
+  /** Cumulative number of individual tool calls executed. */
+  toolCallCount: z.number().prefault(0),
+});
+
+export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
+
 // Base Stream State
 
 const BaseStreamStateSchema = z.object({
@@ -53,6 +64,8 @@ const BaseStreamStateSchema = z.object({
   activeProcesses: z.array(ActiveChildInfoSchema).prefault([]),
   /** Cumulative count of processes that have finished (ephemeral, not persisted). */
   finishedProcessCount: z.number().prefault(0),
+  /** Conversation progress counters (ephemeral, updated during execution). */
+  conversationProgress: ConversationProgressSchema.prefault({}),
 });
 
 // Tool-Use UI State (frontend-only, preserved during backend updates)
