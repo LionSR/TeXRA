@@ -5,8 +5,9 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 
-// Local imports - filesystem utilities
+// Local imports
 import { formatRelativeTime } from '@shared/utils/string';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { StorageFS } from '@utils/files';
 import { splitContentLines } from '@utils/text/stringUtils';
 
@@ -22,7 +23,6 @@ import {
   formatLinesWithNumbers,
   requireField,
 } from '../utils';
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 
 // Local imports - shared memory constants and utilities
 import {

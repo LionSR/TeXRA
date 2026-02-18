@@ -8,8 +8,6 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { ApiProvider, SecretManager } from '@frontend/secretManager';
 
-// Local imports - state
-
 // Local imports - shared schemas
 import type { ModelOptionData } from '@shared/schemas';
 

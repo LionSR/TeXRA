@@ -238,11 +238,12 @@ Useful for finding the right lemma when you know roughly what type it should hav
       summary = `No results across ${queries.length} queries`;
     }
 
+    const allFailed = errorCount === queries.length;
     return {
       summary,
       output: sections.join('\n\n---\n\n'),
       results: totalHits > 0 ? allResults : undefined,
-      isError: errorCount === queries.length || undefined,
+      isError: allFailed ? true : undefined,
     };
   }
 }

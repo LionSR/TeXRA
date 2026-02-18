@@ -35,9 +35,10 @@ import type { StreamFilter, StreamSort } from '../store';
 // Local imports - shared schemas
 import type { StreamTabInfo } from '@shared/schemas';
 
-/** Format status string for display (capitalize first letter) */
+/** Capitalize first letter for display */
 function formatStatusLabel(status: string): string {
-  return status ? status.charAt(0).toUpperCase() + status.slice(1) : '';
+  if (!status) return '';
+  return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 function buildTooltip(info: StreamTabInfo): string {
@@ -50,10 +51,9 @@ function buildTooltip(info: StreamTabInfo): string {
     .join(' • ');
   if (!info.lastTimestamp) return mainLine;
   const lastSeen = formatRelativeTime(info.lastTimestamp);
-  if (lastSeen && mainLine) {
-    return `${mainLine}\nLast activity ${lastSeen}`;
-  }
-  return mainLine;
+  return lastSeen && mainLine
+    ? `${mainLine}\nLast activity ${lastSeen}`
+    : mainLine;
 }
 
 // =============================================================================

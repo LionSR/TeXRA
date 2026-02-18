@@ -168,9 +168,7 @@ export class MainViewProvider
   private setupAgentWatcher() {
     this.agentWatcher = agentDirectories.watchAgentDirectories({
       pattern: '**/*.yaml',
-      onEvent: () => {
-        this.debouncedRefreshAgentOptions();
-      },
+      onEvent: () => this.debouncedRefreshAgentOptions(),
     });
 
     this.context.subscriptions.push(this.agentWatcher);

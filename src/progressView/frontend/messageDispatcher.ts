@@ -9,7 +9,7 @@
  * dispatchMessage(raw, ctx);
  */
 
-// External imports
+// Local imports - shared schemas
 import {
   createStreamState,
   ProgressViewOutboundMessageSchema,
