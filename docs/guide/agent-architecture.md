@@ -1,4 +1,4 @@
-# How TeXRA Agents Work: An Overview
+# Workflow Agents: How They Work
 
 Every time you click "Execute" in TeXRA, an **agent** takes your files and instructions, asks an AI model to do the work, and delivers the result. This page explains what happens under the hood—enough to understand the system, customize it, and troubleshoot when things go sideways.
 
