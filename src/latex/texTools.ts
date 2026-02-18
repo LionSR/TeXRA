@@ -98,6 +98,11 @@ export async function compileLatex2Pdf(
         showError: false, // Suppress error for latexmk to try pdflatex as fallback
       });
       if (!result) {
+        logger.warn(
+          channel,
+          'latexmk not found, falling back to single-pass pdflatex — ' +
+            'bibliography, cross-references, and index may be incomplete',
+        );
         result = await runToolWithCheck('pdflatex', pdflatexArgs, {
           channel,
           env,
