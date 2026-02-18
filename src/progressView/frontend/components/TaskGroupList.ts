@@ -82,6 +82,9 @@ export class TaskGroupList extends LitElement {
   private cachedUserMessages: LogMessageData[] = [];
   private cachedOtherUngrouped: LogMessageData[] = [];
 
+  /** O(1) lookup from groupId → tree node. Built during buildGroupTree(). */
+  private groupNodeIndex = new Map<string, GroupTree>();
+
   /** Memoized set of root group IDs for isGroupVisible() */
   private cachedRootGroupIds: Set<string> = new Set();
 
@@ -122,11 +125,11 @@ export class TaskGroupList extends LitElement {
         | undefined;
       const prevCount = prevMessages?.length ?? 0;
 
-      if (this.messages.length === prevCount) {
+      if (this.messages.length === prevCount && prevMessages) {
         // Same length: text-only update (e.g. streaming UPDATE_LOG).
         // Propagate fresh message references to cached structures so
         // render() passes updated objects to repeat()/log-entry.
-        this.updateCachedMessageRefs();
+        this.updateCachedMessageRefs(prevMessages);
       } else if (this.messages.length > prevCount) {
         // Append-only: classify only the new messages incrementally.
         this.appendNewMessages(prevCount);
@@ -153,20 +156,10 @@ export class TaskGroupList extends LitElement {
    * Avoids full tree rebuilds by classifying only new messages and inserting by timestamp.
    */
   private appendNewMessages(startIndex: number): void {
-    // Build a quick group lookup from the existing tree
-    const treeNodeMap = new Map<string, GroupTree>();
-    const collectNodes = (nodes: GroupTree[]): void => {
-      for (const node of nodes) {
-        treeNodeMap.set(node.group.id, node);
-        collectNodes(node.children);
-      }
-    };
-    collectNodes(this.cachedTree);
-
     for (let i = startIndex; i < this.messages.length; i++) {
       const msg = this.messages[i];
-      if (msg.groupId && treeNodeMap.has(msg.groupId)) {
-        const node = treeNodeMap.get(msg.groupId)!;
+      const node = msg.groupId ? this.groupNodeIndex.get(msg.groupId) : null;
+      if (node) {
         node.messages = this.insertMessageSorted(node.messages, msg);
       } else if (msg.messageType === 'userMessage') {
         this.cachedUserMessages = this.insertMessageSorted(
@@ -199,22 +192,63 @@ export class TaskGroupList extends LitElement {
     ];
   }
 
-  /** Replace stale message references in cached structures with fresh ones (O(n)). */
-  private updateCachedMessageRefs(): void {
-    const byId = new Map(this.messages.map((m) => [m.id, m]));
+  /**
+   * Replace stale message references in cached structures with fresh ones.
+   *
+   * Scans from end (O(1) typical — streaming targets the last message),
+   * then uses groupNodeIndex for O(1) node lookup per changed message.
+   */
+  private updateCachedMessageRefs(prevMessages: LogMessageData[]): void {
+    // Find changed entries by comparing refs. Scan from end —
+    // streaming target is typically the last message.
+    const changed: LogMessageData[] = [];
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      if (this.messages[i] !== prevMessages[i]) {
+        changed.push(this.messages[i]);
+      }
+    }
+    if (changed.length === 0) return;
 
-    const updateNode = (node: GroupTree): void => {
-      node.messages = node.messages.map((old) => byId.get(old.id) ?? old);
-      for (const child of node.children) updateNode(child);
-    };
-    for (const node of this.cachedTree) updateNode(node);
+    // Replace each changed message via O(1) groupNodeIndex lookup
+    for (const msg of changed) {
+      this.replaceSingleMessage(msg);
+    }
+  }
 
-    this.cachedUserMessages = this.cachedUserMessages.map(
-      (old) => byId.get(old.id) ?? old,
-    );
-    this.cachedOtherUngrouped = this.cachedOtherUngrouped.map(
-      (old) => byId.get(old.id) ?? old,
-    );
+  /** Replace a single message ref in the cached tree. O(1) node lookup + O(k) findIndex. */
+  private replaceSingleMessage(msg: LogMessageData): void {
+    // Try group node first (O(1) lookup). A message with groupId may live in
+    // cachedOtherUngrouped if the group didn't exist at classification time,
+    // so fall through to ungrouped search on miss.
+    if (msg.groupId) {
+      const node = this.groupNodeIndex.get(msg.groupId);
+      if (node) {
+        const idx = node.messages.findIndex((m) => m.id === msg.id);
+        if (idx >= 0) {
+          const updated = [...node.messages];
+          updated[idx] = msg;
+          node.messages = updated;
+          return;
+        }
+      }
+    }
+
+    // Search ungrouped lists
+    if (msg.messageType === 'userMessage') {
+      const idx = this.cachedUserMessages.findIndex((m) => m.id === msg.id);
+      if (idx >= 0) {
+        const updated = [...this.cachedUserMessages];
+        updated[idx] = msg;
+        this.cachedUserMessages = updated;
+      }
+    } else {
+      const idx = this.cachedOtherUngrouped.findIndex((m) => m.id === msg.id);
+      if (idx >= 0) {
+        const updated = [...this.cachedOtherUngrouped];
+        updated[idx] = msg;
+        this.cachedOtherUngrouped = updated;
+      }
+    }
   }
 
   /** Play sound when a run group completes */
@@ -286,15 +320,19 @@ export class TaskGroupList extends LitElement {
       }
     }
 
-    // Build tree recursively
+    // Build tree recursively, populating the groupId → node index
+    this.groupNodeIndex.clear();
+    const nodeIndex = this.groupNodeIndex;
     function buildNode(group: TaskGroup): GroupTree {
-      return {
+      const node: GroupTree = {
         group,
         children: (childrenMap.get(group.id) ?? [])
           .sort((a, b) => a.startTime - b.startTime)
           .map(buildNode),
         messages: messagesByGroup.get(group.id) ?? [],
       };
+      nodeIndex.set(group.id, node);
+      return node;
     }
 
     // Get root groups (no parent), sorted by start time
