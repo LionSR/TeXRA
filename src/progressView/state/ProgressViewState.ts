@@ -265,18 +265,23 @@ export class ProgressViewState {
     }
   }
 
-  /** Reset per-run finished child counters when a new run starts on the same stream. */
+  /** Reset per-run ephemeral counters when a new run starts on the same stream. */
   resetFinishedChildCounters(stream: StreamTabId): void {
     const current = this._streamStates.get(stream);
-    if (
-      current &&
-      (current.finishedSubagentCount !== 0 ||
-        current.finishedProcessCount !== 0)
-    ) {
+    if (!current) return;
+
+    const needsReset =
+      current.finishedSubagentCount !== 0 ||
+      current.finishedProcessCount !== 0 ||
+      current.conversationProgress.conversationTurns !== 0 ||
+      current.conversationProgress.toolCallCount !== 0;
+
+    if (needsReset) {
       this._streamStates.set(stream, {
         ...current,
         finishedSubagentCount: 0,
         finishedProcessCount: 0,
+        conversationProgress: { conversationTurns: 0, toolCallCount: 0 },
       });
     }
   }
