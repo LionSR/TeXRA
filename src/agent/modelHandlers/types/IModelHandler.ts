@@ -1,6 +1,5 @@
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
-// Internal imports
 import { AgentCategory, type AgentSetting } from '@agent/core/AgentDataclass';
 import type {
   ConversationRoundStateSnapshot,
@@ -9,7 +8,6 @@ import type {
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ProviderUsage } from '@agent/core/ResponseUsage';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-// Type imports
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { ToolResultPayload } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import type { AgentLogger } from '@logger/AgentLogger';

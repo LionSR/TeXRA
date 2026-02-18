@@ -74,10 +74,9 @@ export async function activate(context: vscode.ExtensionContext) {
   const workspaceFolders = vscode.workspace.workspaceFolders;
 
   if (!workspaceFolders || workspaceFolders.length !== 1) {
-    const message =
-      !workspaceFolders || workspaceFolders.length === 0
-        ? 'TeXRA requires an open workspace. Please open a folder to enable the extension.'
-        : 'TeXRA supports only a single-folder workspace. Please open one folder to enable the extension.';
+    const message = !workspaceFolders?.length
+      ? 'TeXRA requires an open workspace. Please open a folder to enable the extension.'
+      : 'TeXRA supports only a single-folder workspace. Please open one folder to enable the extension.';
     void vscode.window
       .showInformationMessage(message, 'Open Folder')
       .then((choice) => {

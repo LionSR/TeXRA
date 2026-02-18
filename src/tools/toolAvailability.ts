@@ -69,7 +69,7 @@ export async function runExternalToolChecks(): Promise<
   const unavailable = new Set<string>();
   for (const r of results) {
     if (r.status === 'not-found') {
-      r.tools.forEach((t) => unavailable.add(t));
+      for (const t of r.tools) unavailable.add(t);
     }
   }
   cached = unavailable;

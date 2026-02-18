@@ -22,7 +22,7 @@ function toStoragePath(relative: string): string {
  * @returns Display path with virtual prefix (e.g., "/memories/notes.md")
  */
 export function relativeToDisplayPath(relativePath: string): string {
-  if (!relativePath || relativePath === '') {
+  if (!relativePath) {
     return MEMORY_DISPLAY_ROOT;
   }
   return `${MEMORY_DISPLAY_ROOT}/${normalizeFilePath(relativePath)}`;

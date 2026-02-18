@@ -108,10 +108,11 @@ export async function executeCommand(
     env.PATH = extendEnvPath(env.PATH);
 
     // Normalize 'utf-8' to 'utf8' for execa compatibility
+    const rawEncoding = options.encoding ?? 'utf8';
     const encodingOption: ExecaEncodingOption =
-      options.encoding && options.encoding.toLowerCase() === 'utf-8'
+      rawEncoding.toLowerCase() === 'utf-8'
         ? 'utf8'
-        : ((options.encoding ?? 'utf8') as ExecaEncodingOption);
+        : (rawEncoding as ExecaEncodingOption);
 
     const execaOptions: Options = {
       cwd: workspacePath,
@@ -120,7 +121,7 @@ export async function executeCommand(
       timeout: options.timeout,
       reject: false,
       input: options.stdin,
-      ...(options.buffer === false ? { buffer: false } : {}),
+      buffer: options.buffer,
     };
 
     const logChannel = options.channel ?? CHANNEL;

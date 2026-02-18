@@ -128,8 +128,7 @@ export class RetryRequestPanel extends BaseRequestPanel {
     const lines = [
       details.provider && `provider: ${details.provider}`,
       details.requestId && `requestId: ${details.requestId}`,
-      details.rawErrorBody !== undefined &&
-        details.rawErrorBody !== null &&
+      details.rawErrorBody != null &&
         `rawErrorBody: ${formatBody(details.rawErrorBody)}`,
     ].filter(Boolean);
 

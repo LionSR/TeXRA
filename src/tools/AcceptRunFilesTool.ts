@@ -39,8 +39,6 @@ import {
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 
-// Local imports - storage
-
 import type { ExecutionId, FileLocation } from '@shared/schemas';
 
 // ============================================================================

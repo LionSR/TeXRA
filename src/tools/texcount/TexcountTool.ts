@@ -4,9 +4,7 @@ import { z } from 'zod';
 // Local imports - latex utilities
 import { ToolError, type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
-import { getTeXCount, type TexcountMode } from '@latex/texcount';
-
-// Local imports - tool core
+import { getTeXCount } from '@latex/texcount';
 
 const TexcountInputSchema = z.strictObject({
   files: z.union([z.string(), z.array(z.string()).min(1)]),

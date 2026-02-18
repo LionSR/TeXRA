@@ -159,11 +159,14 @@ export class PromptBuilder {
 
   private getRoundTemplate(currRound: number): string | undefined {
     const { userRequest } = this.agentPrompt;
-    const templates = Array.isArray(userRequest)
-      ? userRequest
-      : userRequest
-        ? [userRequest]
-        : [];
+    let templates: string[];
+    if (Array.isArray(userRequest)) {
+      templates = userRequest;
+    } else if (userRequest) {
+      templates = [userRequest];
+    } else {
+      templates = [];
+    }
 
     const round = Math.max(0, currRound);
     if (round < templates.length) return templates[round];
