@@ -431,9 +431,10 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     if (handle) {
       // Running execution: agent/status from handle, only fetch live data from KV
       const store = getExecutionStore(executionId);
-      const [children, todos] = await Promise.all([
+      const [children, todos, report] = await Promise.all([
         store.readChildren(),
         store.readTodos(),
+        store.readReport(),
       ]);
 
       const info = handle.getStatus();
@@ -452,6 +453,10 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
 
       if (todos.length > 0) {
         lines.push('', ...formatTodoSection(todos));
+      }
+
+      if (report) {
+        lines.push('', 'Result:', report);
       }
 
       const runningPaths = getAvailablePaths(
