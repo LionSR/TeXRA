@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 
 import {
   STREAM_STATUS,
+  type ConversationProgress,
   type StorageKey,
   type StreamStatus,
   type StreamTabId,
@@ -33,11 +34,16 @@ import type { EventHandlerContext } from './EventHandlerContext';
 
 export type { UICallbacks };
 
+/** Throttle interval for conversation progress webview pushes (ms). */
+const PROGRESS_THROTTLE_MS = 500;
+
 /** Handles progress event bus subscriptions for the progress view. */
 export class ProgressEventHandler {
   private readonly logger: AgentLogger;
   private readonly pendingTaskGroups = new Map<StreamTabId, TaskGroup[]>();
   private readonly ctx: EventHandlerContext;
+  private progressThrottleTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingProgressUpdates = new Map<StreamTabId, ConversationProgress>();
 
   constructor(
     private state: ProgressViewState,
@@ -69,6 +75,11 @@ export class ProgressEventHandler {
     bus.on('setTaskState', this.handleSetTaskState, { signal });
     bus.on('addTaskGroup', this.handleAddTaskGroup, { signal });
     bus.on('updateTaskGroup', this.handleUpdateTaskGroup, { signal });
+    bus.on(
+      'updateConversationProgress',
+      this.handleUpdateConversationProgress,
+      { signal },
+    );
     bus.on('updateActiveSubagents', this.handleUpdateActiveSubagents, {
       signal,
     });
@@ -87,7 +98,16 @@ export class ProgressEventHandler {
     registerFollowUpEventHandlers(bus, this.ctx, signal);
     registerUIEvents(bus, this.uiCallbacks, signal);
 
-    return [new vscode.Disposable(() => controller.abort())];
+    return [
+      new vscode.Disposable(() => {
+        controller.abort();
+        if (this.progressThrottleTimer) {
+          clearTimeout(this.progressThrottleTimer);
+          this.progressThrottleTimer = null;
+        }
+        this.pendingProgressUpdates.clear();
+      }),
+    ];
   }
 
   private handleSetActiveStream = (
@@ -249,6 +269,50 @@ export class ProgressEventHandler {
     if (this.webviewUpdater.isAvailable() && isActive) {
       this.webviewUpdater.updateTaskGroup(data);
     }
+  }
+
+  private handleUpdateConversationProgress = (
+    data: ProgressEventPayloads['updateConversationProgress'],
+  ): void => {
+    withEventErrorHandling(
+      'ConversationProgress',
+      'failed to handle updateConversationProgress',
+      () => {
+        const { streamId, progress } = data;
+
+        // Always update state immediately so other updateAll calls include it
+        this.state.updateStreamState(streamId, (prev) => ({
+          ...prev,
+          conversationProgress: progress,
+        }));
+
+        // Throttle webview pushes: buffer per-stream, flush on timer
+        this.pendingProgressUpdates.set(streamId, progress);
+        if (!this.progressThrottleTimer) {
+          this.progressThrottleTimer = setTimeout(() => {
+            this.flushProgressUpdates();
+          }, PROGRESS_THROTTLE_MS);
+        }
+      },
+    );
+  };
+
+  private flushProgressUpdates(): void {
+    this.progressThrottleTimer = null;
+    if (
+      this.pendingProgressUpdates.size === 0 ||
+      !this.webviewUpdater.isAvailable()
+    ) {
+      this.pendingProgressUpdates.clear();
+      return;
+    }
+
+    // Only push a full update if the active stream has pending progress
+    const activeStream = this.state.activeStream;
+    if (activeStream && this.pendingProgressUpdates.has(activeStream)) {
+      this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
+    }
+    this.pendingProgressUpdates.clear();
   }
 
   private handleUpdateActiveSubagents = (
