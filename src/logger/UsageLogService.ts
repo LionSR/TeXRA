@@ -36,13 +36,16 @@ class UsageLogServiceImpl {
   private isFlushing = false;
   private config: UsageLogConfig = DEFAULT_CONFIG;
   private extensionVersion: string | undefined;
+  private editorType: string | undefined;
 
   initialize(
     config?: Partial<UsageLogConfig>,
     extensionVersion?: string,
+    editorType?: string,
   ): void {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.extensionVersion = extensionVersion;
+    this.editorType = editorType;
     this.startFlushTimer();
 
     logger.debug(
@@ -51,7 +54,7 @@ class UsageLogServiceImpl {
     );
   }
 
-  log(entry: Omit<UsageLogEntry, 'timestamp' | 'extensionVersion'>): void {
+  log(entry: Omit<UsageLogEntry, 'timestamp' | 'extensionVersion' | 'editorType'>): void {
     if (!this.config.enabled) return;
 
     if (this.queue.length >= MAX_QUEUE_SIZE) {
@@ -63,6 +66,7 @@ class UsageLogServiceImpl {
       ...entry,
       timestamp: new Date().toISOString(),
       extensionVersion: this.extensionVersion,
+      editorType: this.editorType,
     });
     logger.debug(
       CHANNEL,

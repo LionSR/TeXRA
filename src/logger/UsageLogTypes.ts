@@ -32,6 +32,7 @@ export const UsageLogEntrySchema = UsageLogMetadataSchema.extend(
 ).extend({
   timestamp: z.iso.datetime(),
   extensionVersion: z.string().optional(),
+  editorType: z.string().optional(),
 });
 
 export type UsageLogEntry = z.infer<typeof UsageLogEntrySchema>;
