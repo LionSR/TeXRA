@@ -91,6 +91,7 @@ import type {
   BetaContextManagementConfig,
   BetaImageBlockParam,
   BetaMessage,
+  BetaOutputConfig,
   BetaRedactedThinkingBlock,
   BetaRequestDocumentBlock,
   BetaThinkingBlock,
@@ -158,18 +159,10 @@ const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
 const COMPACTION_BETA: AnthropicBeta = 'compact-2026-01-12';
 
 const OPUS_46_FULLNAME = 'claude-opus-4-6';
+const SONNET_46_FULLNAME = 'claude-sonnet-4-6';
 
 /** Compaction must be triggered at or above this minimum input token threshold. */
 const MIN_COMPACTION_TRIGGER_TOKENS = 50_000;
-
-/**
- * Fixed thinking budget for Opus 4.6 in tool-use mode.
- * Must stay constant across rounds to preserve the Anthropic messages cache
- * (changing budget_tokens invalidates cache because thinking tokens are inline).
- * Value chosen to be below the max_tokens floor at compaction threshold:
- *   contextWindow(200K) - compaction(150K) - buffer(2K) = 48K > 40960
- */
-const OPUS_46_TOOL_USE_THINKING_BUDGET = 40_960;
 
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
@@ -293,7 +286,46 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   private isClaudeOpus46(): boolean {
-    return this.config.fullName === OPUS_46_FULLNAME;
+    return this.config.fullName.startsWith(OPUS_46_FULLNAME);
+  }
+
+  private isClaudeSonnet46(): boolean {
+    return this.config.fullName.startsWith(SONNET_46_FULLNAME);
+  }
+
+  /**
+   * Whether this model supports adaptive thinking with the effort parameter.
+   * Per Anthropic docs, only Opus 4.6 and Sonnet 4.6 support adaptive thinking.
+   */
+  private supportsAdaptiveThinking(): boolean {
+    return this.isClaudeOpus46() || this.isClaudeSonnet46();
+  }
+
+  /**
+   * Returns the Anthropic effort level for the current model.
+   * Maps the llm-zoo ReasoningEffort enum to Anthropic's effort levels.
+   * Falls back to 'high' (the API default) when no specific effort is configured.
+   * 'max' is only valid for Opus 4.6.
+   */
+  private getAnthropicEffort(): BetaOutputConfig['effort'] {
+    const reasoningEffort = this.getEffectiveReasoningEffort();
+    if (!reasoningEffort) {
+      return 'high';
+    }
+
+    switch (reasoningEffort) {
+      case 'xhigh':
+        // 'max' is only supported on Opus 4.6
+        return this.isClaudeOpus46() ? 'max' : 'high';
+      case 'high':
+        return 'high';
+      case 'medium':
+        return 'medium';
+      case 'low':
+        return 'low';
+      default:
+        return 'high';
+    }
   }
 
   override get supportsManualCompaction(): boolean {
@@ -454,6 +486,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     options?: TokenCountOptions<Anthropic> & {
       anthropicTools?: MessageCountTokensParams['tools'];
       thinking?: MessageCountTokensParams['thinking'];
+      outputConfig?: BetaOutputConfig;
       contextManagement?: BetaContextManagementConfig;
       betas?: AnthropicBeta[];
     },
@@ -483,6 +516,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Without this, the API returns an error when messages contain thinking blocks.
     if (options?.thinking) {
       countTokensParams.thinking = options.thinking;
+    }
+
+    // Include output_config in token counting so estimates match request options.
+    // This is relevant when effort level is set (adaptive thinking).
+    if (options?.outputConfig) {
+      countTokensParams.output_config = options.outputConfig;
     }
 
     // Include context_management in token counting so estimates match request options.
@@ -570,10 +609,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
       });
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
 
-      // Opus 4.6 no longer requires the interleaved-thinking beta header.
+      // Models using adaptive thinking get interleaved thinking automatically.
+      // Only add the beta header for older models that need it explicitly.
       if (
         this.capabilities.supportsInterleavedThinking &&
-        !this.isClaudeOpus46()
+        !this.supportsAdaptiveThinking()
       ) {
         this.ensureBeta(options, INTERLEAVED_THINKING_BETA);
       }
@@ -588,33 +628,43 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (this.capabilities.supportsReasoning) {
       this.logger.debug('Enabling thinking for model with reasoning support');
 
-      // budget_tokens must be < max_tokens; use 50% to leave room for actual output
-      const maxBudget = Math.floor(options.max_tokens * 0.5);
+      if (this.supportsAdaptiveThinking()) {
+        // Opus 4.6 and Sonnet 4.6: use adaptive thinking with effort parameter.
+        // Adaptive thinking lets the model decide when and how much to think,
+        // and automatically enables interleaved thinking between tool calls.
+        // budget_tokens is deprecated on these models.
+        const effort = this.getAnthropicEffort();
+        options.thinking = { type: 'adaptive' };
+        options.output_config = {
+          ...options.output_config,
+          effort,
+        };
 
-      // Opus 4.6 tool-use uses a FIXED budget to preserve the messages cache.
-      // Changing budget_tokens between rounds invalidates cache because thinking
-      // tokens are stored inline. Workflow and non-tool-use modes use maxBudget
-      // (single-round or long-output scenarios where cache stability is less critical).
-      let defaultBudget: number;
-      if (this.isClaudeOpus46() && this.isToolUseMode()) {
-        defaultBudget = OPUS_46_TOOL_USE_THINKING_BUDGET;
-      } else if (this.isClaudeOpus46()) {
-        defaultBudget = maxBudget;
-      } else if (useStreaming) {
-        defaultBudget = 32768;
+        this.logger.debug(
+          `Set adaptive thinking with effort: ${effort} (max_tokens: ${options.max_tokens})`,
+        );
       } else {
-        defaultBudget = 4096;
+        // Older models: use manual thinking with budget_tokens
+        // budget_tokens must be < max_tokens; use 50% to leave room for actual output
+        const maxBudget = Math.floor(options.max_tokens * 0.5);
+
+        let defaultBudget: number;
+        if (useStreaming) {
+          defaultBudget = 32768;
+        } else {
+          defaultBudget = 4096;
+        }
+        const thinkingBudget = Math.min(defaultBudget, maxBudget);
+
+        options.thinking = {
+          type: 'enabled',
+          budget_tokens: thinkingBudget,
+        };
+
+        this.logger.debug(
+          `Set thinking budget: ${thinkingBudget} tokens (max_tokens: ${options.max_tokens}, streaming: ${useStreaming})`,
+        );
       }
-      const thinkingBudget = Math.min(defaultBudget, maxBudget);
-
-      options.thinking = {
-        type: 'enabled',
-        budget_tokens: thinkingBudget,
-      };
-
-      this.logger.debug(
-        `Set thinking budget: ${thinkingBudget} tokens (max_tokens: ${options.max_tokens}, streaming: ${useStreaming})`,
-      );
 
       // Remove temperature for Claude 4 models when thinking is enabled as per Anthropic docs
       const requiresNoTemperature = THINKING_TEMPERATURE_EXCLUDED_PATTERNS.some(
@@ -667,6 +717,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
             systemPrompt,
             anthropicTools: options.tools,
             thinking: options.thinking,
+            outputConfig: options.output_config ?? undefined,
             contextManagement: options.context_management ?? undefined,
             betas: options.betas,
           });
@@ -702,10 +753,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
             );
             options.max_tokens = validation.adjustedMaxTokens;
 
-            // Only adjust thinking budget when it would violate API constraint
-            // (budget_tokens must be < max_tokens). Avoid unnecessary changes
-            // because changing budget_tokens invalidates the Anthropic messages
-            // cache, forcing expensive prefix re-creation.
+            // Only adjust thinking budget when using manual mode and it would
+            // violate API constraint (budget_tokens must be < max_tokens).
+            // Adaptive thinking has no budget_tokens to adjust.
             if (
               options.thinking?.type === 'enabled' &&
               options.thinking.budget_tokens >= options.max_tokens
