@@ -136,6 +136,14 @@ export const toolUseStyles = css`
     overflow: auto;
   }
 
+  .tool-output-terminal {
+    display: block;
+    border-radius: var(--border-radius-small);
+    overflow: hidden;
+    background: var(--vscode-editor-background, #1e1e1e);
+    border: var(--border-thin) solid var(--color-border);
+  }
+
   /* Proposal setup link (in summary row and body) */
   .proposal-restore-link {
     color: var(--color-text-link);
