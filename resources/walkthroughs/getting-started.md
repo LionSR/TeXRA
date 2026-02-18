@@ -11,7 +11,7 @@ replace them with higher-fidelity captures once we finalize the walkthrough layo
 5. **Enable automatic figure extraction** – Let TeXRA find figures and TikZ blocks for you before asking agents to edit.
 6. **Execute and follow progress** – Watch runs stream in via the ProgressBoard.
 7. **Review and diff outputs** – Compare generated files before accepting or packaging them.
-8. **Pack and clean up** – Archive outputs into a `History/` folder with Pack, or remove them with Clean. These actions are available in the ProgressBoard toolbar, editor title menu, right-click context menu, and the Command Palette.
+8. **Pack and clean up** – Archive outputs into a `History/` folder with Pack, or remove them with Clean. These actions are available in the ProgressBoard toolbar, editor title menu, and right-click context menu.
 
 > **Note:** We are reusing documentation imagery until we capture walkthrough-specific screenshots.
 > Track replacements in the follow-up issue linked to this walkthrough.

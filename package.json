@@ -1291,38 +1291,6 @@
           "command": "texra.cleanBuild",
           "group": "z_texra@2"
         }
-      ],
-      "view/item/context": [
-        {
-          "command": "texra.folderExplorer.newFile",
-          "when": "view == texra.folderExplorer && viewItem == folder",
-          "group": "1_modification"
-        },
-        {
-          "command": "texra.folderExplorer.newFolder",
-          "when": "view == texra.folderExplorer && viewItem == folder",
-          "group": "1_modification"
-        },
-        {
-          "command": "texra.folderExplorer.rename",
-          "when": "view == texra.folderExplorer && viewItem != editing",
-          "group": "2_modification"
-        },
-        {
-          "command": "texra.folderExplorer.delete",
-          "when": "view == texra.folderExplorer && viewItem != editing",
-          "group": "3_modification"
-        },
-        {
-          "command": "texra.folderExplorer.addToList",
-          "when": "view == texra.folderExplorer && viewItem == file",
-          "group": "4_modification"
-        },
-        {
-          "command": "texra.folderExplorer.revealInOS",
-          "when": "view == texra.folderExplorer && viewItem == folder",
-          "group": "5_modification"
-        }
       ]
     },
     "keybindings": [
