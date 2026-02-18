@@ -198,7 +198,9 @@ export class UsageMonitor {
     if (this.accumulatedRounds.length === 0) return;
 
     const rounds = this.accumulatedRounds;
+    const totalResponseTimeMs = this.accumulatedResponseTimeMs;
     this.accumulatedRounds = [];
+    this.accumulatedResponseTimeMs = 0;
 
     const totals = {
       inputTokens: 0,
@@ -218,7 +220,7 @@ export class UsageMonitor {
       totals.cost += r.cost;
     }
 
-    this.logToBackend(this.accumulatedResponseTimeMs, totals, {
+    this.logToBackend(totalResponseTimeMs, totals, {
       roundCount: rounds.length,
       rounds,
     });

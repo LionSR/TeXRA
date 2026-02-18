@@ -586,45 +586,47 @@ export async function executeAgent(
         logger.info(`Executing ${agentName} with model ${config.model}`);
         const interrupts = createInterruptCallbacks();
 
-        if (setting.agentCategory === AgentCategory.ToolUse) {
-          const result = await runToolUseFlow({
+        try {
+          if (setting.agentCategory === AgentCategory.ToolUse) {
+            const result = await runToolUseFlow({
+              ...ctx,
+              ...interrupts,
+              onRoundFinalized: (run) =>
+                ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
+              setting: ctx.setting as AgentToolUseSetting,
+              isSubagent,
+              onBeforeWaiting: options?.onBeforeWaiting,
+              onFollowUpConsumed: () =>
+                bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
+            });
+            return {
+              category: 'toolUse' as const,
+              status: result.status,
+              lastResponse: result.lastResponse,
+              executionId: ctx.executionId,
+              streamId,
+            };
+          }
+
+          const result = await runReflectionFlow({
             ...ctx,
             ...interrupts,
             onRoundFinalized: (run) =>
-              ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
-            setting: ctx.setting as AgentToolUseSetting,
-            isSubagent,
-            onBeforeWaiting: options?.onBeforeWaiting,
-            onFollowUpConsumed: () =>
-              bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
+              ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
+            setting: ctx.setting as AgentWorkflowSetting,
+            parentStage: ctx.parentStage,
+            onRoundCompleted: createRoundProgressCallback(ctx.executionId),
           });
-          ctx.usageMonitor.flushToBackend();
           return {
-            category: 'toolUse' as const,
+            category: 'workflow' as const,
             status: result.status,
-            lastResponse: result.lastResponse,
+            outputs: toOutputSummaries(result.roundOutputs),
             executionId: ctx.executionId,
             streamId,
           };
+        } finally {
+          ctx.usageMonitor.flushToBackend();
         }
-
-        const result = await runReflectionFlow({
-          ...ctx,
-          ...interrupts,
-          onRoundFinalized: (run) =>
-            ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
-          setting: ctx.setting as AgentWorkflowSetting,
-          parentStage: ctx.parentStage,
-          onRoundCompleted: createRoundProgressCallback(ctx.executionId),
-        });
-        ctx.usageMonitor.flushToBackend();
-        return {
-          category: 'workflow' as const,
-          status: result.status,
-          outputs: toOutputSummaries(result.roundOutputs),
-          executionId: ctx.executionId,
-          streamId,
-        };
       });
     },
     {
@@ -660,28 +662,31 @@ export async function executeMergeAgent(
       logger.info(`Executing merge with model ${model}`);
 
       const fileService = new TaskRunFileService(executionId);
-      const result = await runReflectionFlow({
-        ...ctx,
-        ...createInterruptCallbacks(),
-        onRoundFinalized: (run) =>
-          ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
-        setting: ctx.setting as AgentWorkflowSetting,
-        getOutputFileLocation: createMergeOutputFileLocationGetter(
-          inputFile,
-          editedFile,
-          fileService,
-        ),
-        parentStage: ctx.parentStage,
-        onRoundCompleted: createRoundProgressCallback(ctx.executionId),
-      });
-      ctx.usageMonitor.flushToBackend();
-      return {
-        category: 'workflow' as const,
-        status: result.status,
-        outputs: toOutputSummaries(result.roundOutputs),
-        executionId: ctx.executionId,
-        streamId,
-      };
+      try {
+        const result = await runReflectionFlow({
+          ...ctx,
+          ...createInterruptCallbacks(),
+          onRoundFinalized: (run) =>
+            ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
+          setting: ctx.setting as AgentWorkflowSetting,
+          getOutputFileLocation: createMergeOutputFileLocationGetter(
+            inputFile,
+            editedFile,
+            fileService,
+          ),
+          parentStage: ctx.parentStage,
+          onRoundCompleted: createRoundProgressCallback(ctx.executionId),
+        });
+        return {
+          category: 'workflow' as const,
+          status: result.status,
+          outputs: toOutputSummaries(result.roundOutputs),
+          executionId: ctx.executionId,
+          streamId,
+        };
+      } finally {
+        ctx.usageMonitor.flushToBackend();
+      }
     });
   });
 }
@@ -710,28 +715,31 @@ export async function resumeToolUseFromSnapshot(
     async () => {
       StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
 
-      const result = await runToolUseFlow(
-        {
-          ...ctx,
-          ...createInterruptCallbacks(),
-          onRoundFinalized: (run) =>
-            ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
-          setting: setting as AgentToolUseSetting,
-          resumeSnapshot: snapshot,
-          onFollowUpConsumed: () =>
-            bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
-        },
-        undefined,
-        setupSession ? (context) => setupSession(context.session) : undefined,
-      );
-      ctx.usageMonitor.flushToBackend();
-      return {
-        category: 'toolUse' as const,
-        status: result.status,
-        lastResponse: result.lastResponse,
-        executionId: ctx.executionId,
-        streamId,
-      };
+      try {
+        const result = await runToolUseFlow(
+          {
+            ...ctx,
+            ...createInterruptCallbacks(),
+            onRoundFinalized: (run) =>
+              ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
+            setting: setting as AgentToolUseSetting,
+            resumeSnapshot: snapshot,
+            onFollowUpConsumed: () =>
+              bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
+          },
+          undefined,
+          setupSession ? (context) => setupSession(context.session) : undefined,
+        );
+        return {
+          category: 'toolUse' as const,
+          status: result.status,
+          lastResponse: result.lastResponse,
+          executionId: ctx.executionId,
+          streamId,
+        };
+      } finally {
+        ctx.usageMonitor.flushToBackend();
+      }
     },
     { category: 'toolUse' },
   );
