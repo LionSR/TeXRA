@@ -18,6 +18,8 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- Fixed **stream tab animations** not playing when switching between agent streams.
+- Fixed **message updates being dropped** for grouped messages in certain multi-agent scenarios.
 - Agents no longer crash when hitting the **PDF page limit** — instead they receive a helpful message suggesting compaction.
 - **arXiv sources** are no longer re-downloaded when the files already exist locally.
 - Fixed **context window detection** for OpenAI Responses API models.
@@ -33,6 +35,7 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements
 
+- **Multi-agent UI is noticeably faster** — stream tabs now render independently, so switching between agents and receiving updates no longer slows down with many concurrent streams.
 - Agent management is now fully consolidated in the **Settings > Agents** tab — the sidebar explorer view has been removed.
 - **Error messages from tools** are now clearer and suggest concrete next steps (e.g., bash timeouts suggest using background mode).
 - Refreshed the **documentation site** with guides oriented toward mathematicians, physicists, and computational scientists.
