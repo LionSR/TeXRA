@@ -55,7 +55,9 @@ export class FileInteractionState {
   static fromSnapshot(snapshot: unknown): FileInteractionState {
     const parsed = FileInteractionStateSnapshotSchema.parse(snapshot);
     const state = new FileInteractionState();
-    parsed.readFiles.forEach((path) => state.readFiles.add(path));
+    for (const filePath of parsed.readFiles) {
+      state.readFiles.add(filePath);
+    }
     for (const entry of parsed.edits) {
       state.edits.set(entry.path, {
         added: entry.added,

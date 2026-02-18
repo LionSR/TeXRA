@@ -32,8 +32,6 @@ import { SecretManager, ApiProvider } from '@frontend/secretManager';
 // Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
 
-// Local imports - model
-
 // Local imports - tools
 import type { ToolFileAttachment } from '@tools/result';
 

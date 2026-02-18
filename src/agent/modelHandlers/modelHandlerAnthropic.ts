@@ -937,9 +937,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
       delete cacheControlledBlocks[idx].cache_control;
     }
 
-    this.cacheControlledBlock = [...cacheControlledBlocks]
-      .reverse()
-      .find(isCacheControlEligibleBlock);
+    this.cacheControlledBlock = cacheControlledBlocks.findLast(
+      isCacheControlEligibleBlock,
+    );
   }
 
   private async replaceDocumentDataWithUploads(
@@ -1341,15 +1341,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.logger.error(errMsg);
       throw new Error(errMsg);
     }
-    messages.push({
-      role: 'user',
-      content: [{ type: 'text', text: trimmedMessage, citations: null }],
-    });
+    const content: ContentBlockParam[] = [
+      { type: 'text', text: trimmedMessage, citations: null },
+    ];
+    messages.push({ role: 'user', content });
 
-    const lastMessage = messages.at(-1);
-    if (lastMessage && Array.isArray(lastMessage.content)) {
-      this.assignCacheControlToLatest(lastMessage.content);
-    }
+    this.assignCacheControlToLatest(content);
 
     return messages;
   }
@@ -1524,15 +1521,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
     this.logger.debug(
       `Adding continuation message to conversation. Continuation message:\n ${userMessageContinuation}`,
     );
-    messages.push({
-      role: 'user',
-      content: [{ type: 'text', text: userMessageContinuation }],
-    });
+    const content: ContentBlockParam[] = [
+      { type: 'text', text: userMessageContinuation },
+    ];
+    messages.push({ role: 'user', content });
 
-    const lastMessage = messages.at(-1);
-    if (lastMessage && Array.isArray(lastMessage.content)) {
-      this.assignCacheControlToLatest(lastMessage.content);
-    }
+    this.assignCacheControlToLatest(content);
   }
 
   /** Initializes output file and handles prefill content, returning [isComplete, updatedMessages]. */

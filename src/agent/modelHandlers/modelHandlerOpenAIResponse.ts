@@ -60,8 +60,6 @@ import {
 } from './types/ServerToolTypes';
 import type { ModelConfig } from 'llm-zoo';
 import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
-
-// Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type {
   CreateResponseOptions,

@@ -41,7 +41,7 @@ function detectShell(): string | undefined {
       const name = path.basename(comspec).toLowerCase();
       if (name === 'powershell.exe' || name === 'pwsh.exe') return 'PowerShell';
       if (name === 'cmd.exe') return 'cmd';
-      return name?.replace(/\.exe$/, '');
+      return name.replace(/\.exe$/, '');
     }
     return undefined;
   }

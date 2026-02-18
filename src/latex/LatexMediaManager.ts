@@ -253,7 +253,7 @@ export class LatexMediaManager {
       logTikzSummary?: boolean;
     },
   ): Promise<void> {
-    if (!files || files.length === 0) {
+    if (files.length === 0 || !supportsVision) {
       return;
     }
 
@@ -268,10 +268,6 @@ export class LatexMediaManager {
       .map((f) => f.file);
 
     if (existingFiles.length === 0) {
-      return;
-    }
-
-    if (!supportsVision) {
       return;
     }
 

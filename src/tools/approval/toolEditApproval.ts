@@ -723,11 +723,14 @@ export function buildApprovalRejectedResult(
 ): ToolResult {
   const baseMessage = `User rejected ${sourceTool} for ${path}.`;
   const feedback = userMessage?.trim();
-  return {
+  const result: ToolResult = {
     output: baseMessage,
     summary: baseMessage,
     error: baseMessage,
     isError: true,
-    ...(feedback ? { userInstruction: feedback } : {}),
   };
+  if (feedback) {
+    result.userInstruction = feedback;
+  }
+  return result;
 }

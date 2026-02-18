@@ -15,14 +15,14 @@ const STAR_ENVIRONMENTS = [
 ];
 
 /** Substrings that trigger extra newlines before the line for readability. */
-const PACKAGES_NEEDING_NEWLINE = new Set([
+const PACKAGES_NEEDING_NEWLINE = [
   '\\usepackage{tikz}',
   '\\usepackage{pgfplots}',
   '\\providecommand{\\DIFaddbegin}',
   '\\RequirePackage[normalem]{ulem}',
   '\\usetikzlibrary',
   '\\RequirePackage{color}',
-]);
+] as const;
 
 /** Pattern to match TEX root comments (handles various spacing: %!TEX, % !TEX, %! TEX). */
 const TEX_ROOT_COMMENT = /^%\s?!\s?TEX root/;
@@ -127,7 +127,7 @@ export class DiffFileProcessor {
   }
 
   private needsNewlineBefore(line: string): boolean {
-    return [...PACKAGES_NEEDING_NEWLINE].some((pkg) => line.includes(pkg));
+    return PACKAGES_NEEDING_NEWLINE.some((pkg) => line.includes(pkg));
   }
 
   private async processTikzPictureEndings(

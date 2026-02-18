@@ -168,12 +168,9 @@ export class ToolsTab extends LitElement {
   private groupByCategory(): Map<ToolCategory, ToolDashboardItem[]> {
     const groups = new Map<ToolCategory, ToolDashboardItem[]>();
     for (const item of this.items) {
-      const existing = groups.get(item.category);
-      if (existing) {
-        existing.push(item);
-      } else {
-        groups.set(item.category, [item]);
-      }
+      const list = groups.get(item.category) ?? [];
+      list.push(item);
+      groups.set(item.category, list);
     }
     return groups;
   }
@@ -181,8 +178,12 @@ export class ToolsTab extends LitElement {
   private renderSummary(): TemplateResult | typeof nothing {
     if (this.items.length === 0) return nothing;
 
-    const available = this.items.filter((i) => i.status === 'available').length;
-    const missing = this.items.filter((i) => i.status === 'not-found').length;
+    let available = 0;
+    let missing = 0;
+    for (const item of this.items) {
+      if (item.status === 'available') available++;
+      else if (item.status === 'not-found') missing++;
+    }
 
     return html`
       <div class="tools-summary">
@@ -206,11 +207,12 @@ export class ToolsTab extends LitElement {
     category: ToolCategory,
     items: ToolDashboardItem[],
   ): TemplateResult {
+    const meta = CATEGORY_META[category];
     return html`
       <div class="category-section">
         <div class="category-header">
-          <span class="codicon ${CATEGORY_META[category].icon}"></span>
-          ${CATEGORY_META[category].label}
+          <span class="codicon ${meta.icon}"></span>
+          ${meta.label}
           <span class="category-count">(${items.length})</span>
         </div>
         ${repeat(

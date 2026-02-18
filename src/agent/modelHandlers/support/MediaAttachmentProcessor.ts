@@ -25,8 +25,6 @@ import {
 } from '@utils/files';
 import type { ModelCapabilities } from 'llm-zoo';
 
-// Internal imports
-
 /**
  * Result of loading a media file.
  * @property path - Display path for logging/UI (workspace-relative for workspace files,

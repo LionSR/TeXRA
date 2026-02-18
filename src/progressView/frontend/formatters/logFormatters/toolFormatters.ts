@@ -519,7 +519,7 @@ export function formatToolUseTemplate(
     }
   }
   // Default handling for other tools
-  else if (input !== undefined && input !== null) {
+  else if (input != null) {
     const codeLanguage = TOOL_CODE_LANGUAGES.get(toolName);
     const { isCodeOnly, code } = codeLanguage
       ? extractCodeOnlyInput(input)
