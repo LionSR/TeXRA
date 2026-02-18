@@ -22,7 +22,7 @@ All notable changes to this project will be documented in this file.
 - **arXiv sources** are no longer re-downloaded when the files already exist locally.
 - Fixed **context window detection** for OpenAI Responses API models.
 - Fixed a crash in **environments without a home directory** (e.g., Docker containers).
-- Fixed **LaTeX path detection** — auto-detects TeX installation paths across macOS, Linux, and Windows; non-workspace files now resolve project-local `.sty`, `.cls`, and `.bib` files via internal multi-pass compilation.
+- Fixed **LaTeX path detection** — auto-detects TeX installation paths across macOS, Linux, and Windows; non-workspace files now resolve project-local `.sty`, `.cls`, and `.bib` files correctly.
 - Fixed several **Windows / WSL issues** — line-ending normalization and path handling now work correctly.
 - Fixed agents **not stopping properly** — no longer run extra rounds after a failure or ignore the interrupted status.
 - **Authentication errors** no longer trigger repeated retries; only transient network failures are retried.
@@ -35,8 +35,7 @@ All notable changes to this project will be documented in this file.
 - **Multi-agent UI is noticeably faster** — switching between agents and receiving updates stays responsive even with many concurrent streams.
 - **Pack and Clean discoverability** — renamed commands to be more descriptive, added keyboard shortcuts (Ctrl+Alt+Shift+C/B), and made them accessible from editor title menus, context menus, and the getting-started walkthrough.
 - **Memory tool safety** — agents must now view a memory file before deleting or renaming it.
-- **Error messages from tools** are now clearer and suggest concrete next steps (e.g., bash timeouts suggest using background mode).
-- Refreshed the **documentation site** with guides oriented toward mathematicians, physicists, and computational scientists.
+- **Error messages from tools** are now clearer and suggest concrete next steps.
 - Updated dependencies.
 
 ## [0.36.1] - 2026-02-13
@@ -49,30 +48,30 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- Added **review agent** for manuscript verification — checks mathematical correctness, derivation soundness, notation consistency, and code-manuscript consistency using Wolfram with Python/SymPy fallback.
-- Added **Super YOLO mode** for auto-approving agent proposals (delegate_workflow, delegate_agent) without user interaction, with per-stream toggle in the stream header and settings in the Multi-Agent tab.
-- **Subagent model inheritance** — delegated agents now default to the parent agent's model instead of a fixed default, with a dynamic available models list in tool descriptions.
-- Added **reliability settings** (compaction threshold, retry attempts, retry backoff) to the Multi-Agent tab in settings view.
+- Added **review agent** for manuscript verification — checks mathematical correctness, derivation soundness, notation consistency, and code-manuscript consistency.
+- Added **Super YOLO mode** for auto-approving agent proposals without user interaction, with per-stream toggle and settings in the Multi-Agent tab.
+- **Subagent model inheritance** — delegated agents now default to the parent agent's model.
+- Added **reliability settings** (compaction threshold, retry attempts, retry backoff) to the Multi-Agent tab.
 - Added **parent agent breadcrumbs** on subagent stream tabs with clickable navigation back to the parent stream.
 - Added **modification timestamps** and column headers to memory tool directory listings.
-- Added **execution management** — orchestrator agents can now wait for, inspect, and terminate subagent runs with live round progress tracking.
-- Added **active process badges** and structured delegation display in the progress view for better multi-agent visibility.
+- Added **execution management** — orchestrator agents can now wait for, inspect, and terminate subagent runs.
+- Added **active process badges** in the progress view.
 
 ### Bug Fixes
 
-- Fixed **Kimi tool-use batching** — reasoning_content now included in batched follow-up messages to prevent API errors on parallel tool calls.
-- Fixed **Anthropic manual compaction** trigger not being honored.
+- Fixed **Kimi tool-use** causing API errors on parallel tool calls.
+- Fixed **manual compaction** trigger not being honored.
 - Fixed **gzip-only arXiv sources** not decompressing correctly for single-file downloads.
-- Fixed **Overleaf/ShareLaTeX project URLs** — clone dialog now accepts standard project URLs and any domain with `/project/<id>`; auth failures show a "Get Token" button linking to the settings page.
-- Fixed **Super YOLO toggle** not syncing state on stream switch or webview reload; disabling now clears all per-stream bypasses.
+- Fixed **Overleaf/ShareLaTeX project URLs** — clone dialog now accepts standard project URLs; auth failures show a "Get Token" button.
+- Fixed **Super YOLO toggle** not syncing state on stream switch or webview reload.
 - Fixed **parent stream link** persistence across extension restarts.
-- Fixed **stream-switch events** from parent breadcrumb links not reaching the handler in split layout.
-- Fixed **stream diagnostics** rendering to only show when events were actually processed.
+- Fixed **stream-switch events** from parent breadcrumb links not working in split layout.
+- Fixed **stream diagnostics** showing when no events were processed.
 
 ### Improvements
 
 - Removed **deprecated models** (sonnet45, opus46, kimi25, qwen3max) from the default model list.
-- Suppressed **file lineage** display for non-rewrite agents to avoid misleading diff output.
+- Suppressed **file lineage** display for non-rewrite agents.
 - Updated dependencies.
 
 ## [0.35.10] - 2026-02-10
@@ -81,52 +80,46 @@ All notable changes to this project will be documented in this file.
 
 - Added **agent browser** in settings view with split-panel layout, visibility config, and keyboard navigation.
 - Added **context-aware "New Agent" button** matching the current agent category.
-- Added **simplifier** and **presenter** tool-use agents for scientific code/LaTeX cleanup and interactive Beamer presentation building.
+- Added **simplifier** and **presenter** tool-use agents for scientific code/LaTeX cleanup and Beamer presentations.
 - **Main view agent/model buttons** now open settings view tabs directly.
 - Added **model dropdown** and **sync/async mode badges** on agent proposals.
-- Added **execution status** on runs tool and orchestrator badge in UI.
-- Added **live tool timers** with timeout display and **real-time bash streaming** including stderr.
-- Added **reject-with-feedback** for bash command approvals with combined multi-file rejection messages.
+- Added **execution status** badges on orchestrator and runs tool.
+- Added **live tool timers** with timeout display and **real-time bash output**.
+- Added **reject-with-feedback** for bash command approvals.
 - Added **manual conversation compaction** for tool-use agents.
 - Added **memory tool display** in progress view.
-- Added **subagent output capture** for richer orchestration.
-- Added **remote agent tool surfacing** via persisted metadata.
-- Added **proactive relay token refresh** before model invocations.
+- Added **subagent output capture** for orchestration.
+- Added **remote agent tools** shown in agent proposals.
 - Added **batched Lean loogle queries**.
-- Added **accept_run_files tool** with approval panel for orchestrator to accept workflow outputs.
-- Added **client-side PDF page limit validation** for Anthropic API — compaction-aware, marks limit errors as non-retryable.
+- Added **accept_run_files tool** for orchestrator to accept workflow outputs.
+- Added **PDF page limit handling** — agents receive guidance instead of errors.
 - Added **structured fields** (title, author, year) to the `zotero_search` tool.
 - Added **Terms of Service** and **Providers** pages to the documentation site.
 
 ### Bug Fixes
 
-- Fixed **context window overflow** from reasoning token accumulation in response chaining.
-- Fixed **Anthropic cache invalidation** from thinking budget changes; fixed budget for Opus 4.6 tool-use.
-- Fixed **max_tokens for thinking models** halved in tool-use mode.
-- Fixed **compaction size reporting** to use output_tokens directly.
+- Fixed **context window overflow** during long sessions.
+- Fixed **cache invalidation** causing unnecessary re-sends.
+- Fixed **thinking model token limits** being too low in tool-use mode.
+- Fixed **compaction size** reporting inaccuracy.
 - Fixed **auto-scroll** when switching stream tabs.
 - Fixed **stream tab delete button** clipped at narrow widths.
-- Fixed **proposal race conditions** between model options loading and resolution.
-- Fixed **agent visibility** — "never configured" vs "explicitly empty", auto-adds new agents.
-- Fixed **bash process cleanup** — kills process group on timeout, Windows support.
-- Fixed **background polling** — retry on 404, preserved HTTP metadata.
+- Fixed **agent proposals** racing with model options loading.
+- Fixed **agent visibility** not handling new agents correctly.
+- Fixed **bash processes** not cleaning up on timeout (Windows included).
+- Fixed **background polling** reliability.
 - Fixed **path traversal** and **workspace boundary** validation.
 - Fixed **Windows path** normalization throughout.
-- Fixed **Lean 4** FileUri client lookup and syntax highlighting.
-- Fixed **agent status icon** not updating to RUNNING after successful retry.
-- Fixed **LaTeX diff dropdowns** opening downward — now open upward.
-- Fixed **Anthropic request-id** not captured correctly in error diagnostics.
-- Fixed **Zotero search** schema and label misalignment.
+- Fixed **Lean 4** file lookup and syntax highlighting.
+- Fixed **agent status icon** not updating after successful retry.
+- Fixed **LaTeX diff dropdowns** opening in the wrong direction.
+- Fixed **Zotero search** results not displaying correctly.
 
 ### Improvements
 
-- Optimized **Anthropic cache breakpoints** — 4 evenly spaced for better hit rates.
-- Added **tool timeouts** across all tools and **parallel call deduplication**.
-- Optimized **progress view rendering** with Lit improvements and cached flow records.
-- Refined **orchestrator agent** as long-term project steward with git/build conventions.
-- Made **agent creator provider-agnostic** with Nunjucks templating.
-- Improved **Lean agent** — .lake/packages search, post-build diagnostics.
-- **Migrated agent settings** from VS Code config to internal state managers.
+- Added **tool timeouts** across all tools.
+- Optimized **progress view** performance.
+- **Migrated agent settings** to the Settings View.
 - Removed **deprecated agents** (tex_linter_fix, xml_validator).
 - **Restricted tool-use agents** from out-of-workspace filesystem access.
 - Updated dependencies.
@@ -135,50 +128,43 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- Added **Claude Opus 4.6 models** (`opus46`, `opus46T`).
-- Added **model selection UI** in Models tab with provider-grouped checkboxes, deprecation toggles, and tier availability indicators.
+- Added **Claude Opus 4.6** (`opus46`, `opus46T`).
+- Added **model selection UI** in Models tab with provider grouping, deprecation toggles, and tier indicators.
 - Added **polish model dropdown** in the model selection section.
-- Added **inline provider API key management** in the Models tab with set/remove/status for all providers.
+- Added **inline provider API key management** in the Models tab.
 - Added **unified Dashboard** consolidating history, memory, and profile views with a searchable, collapsible history list.
 - Added **diff display** for edit tool in progress view with inline line numbers and file links.
 - Added **live tool commands** in progress view, shown immediately before execution completes.
 - Task Progress section now **collapsed by default** for a cleaner UI.
-- Orchestrator now shows available tools in the **TOOL_USE_AGENTS** list.
 - Increased **default session retention** to 2 weeks.
-- Added **Anthropic server compaction** support with compaction summaries surfaced in progress view.
-- Migrated **streaming & endpoint settings** from VS Code config to Settings View.
+- Added **server compaction** support with summaries shown in progress view.
+- Migrated **streaming & endpoint settings** to the Settings View.
 - Enabled **1M context window beta** for Claude Opus 4.6.
-- Added **workspace info** to agent system prompts for better project context.
 
 ### Bug Fixes
 
-- Fixed **sign-in timeout** when auth provider fails to register, and auth errors no longer block unrelated initialization.
-- Fixed **monologue leaking** into tool-use agent file outputs.
-- Fixed `$` **in replacement strings** being interpreted during edit tool operations.
+- Fixed **sign-in timeout** when auth provider fails, and auth errors no longer block unrelated initialization.
+- Fixed **agent output** leaking internal reasoning into files.
+- Fixed `$` **in replacement strings** being interpreted during edit operations.
 - Fixed **GPT-5 token counting** fallback when counting fails.
 - Fixed **Windows compatibility** for paths and line endings in graphicspath parsing.
-- Fixed **context overflow** from maxOutputTokens in tool-use agents.
-- Fixed **token counting accuracy** across model handlers and inflated message history after compaction.
-- Fixed **LatexDiff UI regression**.
+- Fixed **context overflow** in tool-use agents.
+- Fixed **token counting accuracy** and inflated history after compaction.
+- Fixed **LaTeX diff UI** regression.
 - Fixed error message titles not being selectable/copyable.
-- Fixed **duplicate media file listing** in Init stage progress view.
-- Fixed **progress view state** issues (stream initialization, missing runId handling, status drift).
+- Fixed **duplicate media file listing** in progress view.
 
 ### Improvements
 
-- Replaced buttons with codicon toolbar buttons across settings view and progress view for a more native VS Code look.
-- Simplified user message styling to minimalist VS Code native look.
-- Consolidated webview styles into shared commons bundle and `.panel-collapsible` class.
-- Improved **grep tool descriptions** to prevent output_mode errors.
-- Faster webpack builds with `transpileOnly`.
-- Updated dependencies (supabase, glob, minimatch, jsdom, @vscode/test-cli, globals, esbuild, @openrouter/sdk).
+- More native VS Code look with codicon toolbar buttons across settings and progress views.
+- Updated dependencies.
 
 ## [0.35.8] - 2026-02-02
 
 ### Features
 
 - Added **Kimi K2.5 models** with thinking and temperature support, and **DeepSeek thinking parameter**.
-- Added **accurate token counting** for OpenAI Response API, replacing heuristic estimates.
+- Added **accurate token counting** for OpenAI Response API.
 - Added **syntax highlighting** in bash command approval prompts.
 
 ### Bug Fixes
@@ -188,89 +174,77 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements
 
-- Large-scale internal refactoring of webview components, agent core, flows, state persistence, and token counting for improved maintainability.
-- Updated dependencies including llm-zoo bump to 1.0.3.
+- Internal refactoring for improved maintainability.
+- Updated dependencies.
 
 ## [0.35.7] - 2026-01-24
 
 ### Features
 
-- Added **Zotero integration** tools (`zotero_search`, `zotero_export`, `zotero_add`) via Better BibTeX JSON-RPC for literature management.
+- Added **Zotero integration** tools (`zotero_search`, `zotero_export`, `zotero_add`) for literature management.
 - Added **ShareLaTeX git support** in the clone command for self-hosted Overleaf instances.
 - Added **bib path setting** (`texra.defaultBibPath`) to configure the default bibliography file location.
 - Added **apply agents** for implementing review suggestions, and **attach agent outputs** option in follow-up mode.
-- Added **bash command approval system** with per-stream YOLO mode bypass, following the same pattern as tool edit approvals. **YOLO mode** is now per-stream with a distinct visual indicator.
+- Added **bash command approval system** with per-stream YOLO mode bypass. **YOLO mode** is now per-stream with a distinct visual indicator.
 - Added **grep offset parameter** for paginating through large search results.
-- Progress view improvements: **syntax highlighting** for `write_file`, `edit_file` (with inline diff), and bash commands; **selectable tool use headers**; and **stream diagnostics** in retry UI details panel.
+- Progress view improvements: **syntax highlighting** for tool output and bash commands, and **selectable tool use headers**.
 - Agent and model dropdowns now **sync between progress view and main webview**.
 - **User messages** can now be sent while tools are executing without ending the turn.
-- Added **automatic token refresh** on relay 401 errors for improved session continuity.
+- Added **automatic token refresh** for improved session continuity.
 
 ### Bug Fixes
 
-- Fixed tool display issues: edit tool not showing deletions when `new_str` is empty, grep error handling for empty results, and Wolfram error messages missing timeout/exit code info.
-- Fixed progress view rendering: nested scrollbars in code blocks and KaTeX MathML causing duplicate text.
-- Fixed retry and auth handling: background response reliability, new streams blocked during retry waits, manual retry after 401 refresh failure, and infinite token refresh loop on persistent 401 errors.
-- Fixed session persistence: first user message disappearing for old tool-use sessions and stale log element cache when switching agent categories.
+- Fixed tool display issues: edit tool not showing deletions, grep error handling for empty results, and Wolfram error messages missing details.
+- Fixed progress view rendering: nested scrollbars in code blocks and math causing duplicate text.
+- Fixed retry and auth handling: background response reliability and token refresh loops.
+- Fixed session persistence: first user message disappearing and stale content when switching agents.
 - Fixed diff naming producing incorrect labels when input file contains round numbers.
 - Fixed merge agent not respecting multiple outputs setting.
-- Fixed OpenAI Responses API not waiting for in_progress responses when using `previous_response_id`.
+- Fixed OpenAI Responses API not completing background responses.
 
 ### Improvements
 
-- Improved tool error recovery suggestions and result summaries.
-- Disabled thinking clearing by default to prevent early context management issues.
-- Optimized progress view performance with binary search, root group tracking, markdown caching, and DOM batching.
-- Updated dependencies including SDK packages, Prettier, @supabase/supabase-js, and zod-v3-to-v4.
+- Improved tool error recovery suggestions.
+- Optimized progress view performance.
+- Updated dependencies.
 
 ## [0.35.6] - 2026-01-19
 
 ### Features
 
 - Added **Orchestrator** tool-use agent for multi-agent workflow coordination with proposal review system.
-- Added **Runs tool** for accessing agent execution history via `/runs` virtual filesystem.
+- Added **Runs tool** for accessing agent execution history.
 - Added **Workflow agent proposal** system with frontend UI for reviewing and approving delegated tasks.
-- Added **Lean** agent to default tool-use agents with VS Code integration, real-time diagnostics, and tools (`lean_goal`, `lean_hover`, `lean_loogle`, `lean_restart`).
-- Added **LaTeXdiff changed pages only** option for tool edit proposals (ONLYCHANGEDPAGE by default).
+- Added **Lean** agent to default tool-use agents with VS Code integration, real-time diagnostics, and dedicated tools.
+- Added **LaTeXdiff changed pages only** option for tool edit proposals.
 - Added **pasted arXiv URL support** in download source command.
 - Added **New button with mode-specific clearing** for workflow/tool-use views.
-- Added **always-visible YOLO mode toggle** button in the header for quick access.
+- Added **always-visible YOLO mode toggle** button in the header.
 - Added **literal matching option** to grep tool for fixed string searches.
 - Added **reference-agents** folder with example agent definitions.
 
 ### Bug Fixes
 
 - Fixed agent/model dropdowns to open upward for better visibility.
-- Fixed extension activation error with Zod v4 schema refinement separation.
-- Fixed progress view theming with VS Code CSS variables.
-- Fixed LaTeX tool detection with improved logging and robustness.
+- Fixed extension activation error.
+- Fixed progress view theming.
+- Fixed LaTeX tool detection reliability.
 - Fixed empty chat display and stale log content between tabs.
-- Fixed chat resume schema validation to support flat message format.
-- Fixed range parameter handling in read_file tool for array format.
+- Fixed chat resume validation to support flat message format.
+- Fixed range parameter handling in read_file tool.
 - Fixed context window updates during streaming.
-- Fixed diff naming to prevent `diffr{X}r{X}` when comparing same-round files.
-
-### Improvements
-
-- Flattened abstraction layers in agent execution path.
-- Consolidated CSS styles and removed redundancy across views.
-- Schema-based state initialization with Zod v4 patterns.
-- Consolidated path utilities and removed pass-through functions.
-- Simplified progress view architecture and UI managers.
-- Converted interfaces to Zod schemas with lean implementation patterns.
-- Simplified code patterns and reduced duplication.
-- Removed dead code, deprecated functions, and obsolete approval paths.
+- Fixed diff naming to prevent incorrect labels when comparing same-round files.
 
 ## [0.35.5] - 2026-01-15
 
 ### Features
 
-- Added **Followup Task** feature for workflow continuation directly in the Progress View, with chat mode for discussing results and support for multiple file merges.
+- Added **Followup Task** feature for workflow continuation directly in the Progress View, with chat mode and support for multiple file merges.
 - Added a **Lean Proof** tool-use agent for informal-to-formal Lean 4 verification workflows.
 - Added a **Merge Multiple** agent for batch merge operations.
 - Added **LaTeXdiff preview** button in tool edit approval dropdown for comparing proposed changes.
-- Added expandable error details to retry dialog UI for better debugging.
-- Relay errors are now retryable with clearer error messaging and distinct UI indicators.
+- Added expandable error details to retry dialog UI.
+- Relay errors are now retryable with clearer error messaging.
 - Added setting to control thinking block clearing (`texra.model.enableThinkingClearing`).
 - VS Code GitHub login is now hidden behind a config flag.
 
@@ -284,11 +258,7 @@ All notable changes to this project will be documented in this file.
 - Fixed tooltip and dropdown clipping issues.
 - Fixed bash tool error messages to include stdout.
 - Fixed queued follow-up messages not being combined.
-- Fixed context state display to use only actual API tokens.
-
-### Improvements
-
-- Internal refactoring to simplify code patterns and improve consistency across command handlers.
+- Fixed context state display accuracy.
 
 ## [0.35.4] - 2026-01-10
 
@@ -296,8 +266,7 @@ All notable changes to this project will be documented in this file.
 
 - Added **Memory View** for browsing and managing agent memory entries with delete controls.
 - Added **context utilization display** showing percentage of context window used on each API call.
-- Added automatic conversation compaction for OpenAI Responses API to manage long sessions.
-- Added configurable context management with thinking block clearing for Anthropic models.
+- Added automatic conversation compaction for long sessions.
 - Added button to open progress view in a separate editor tab.
 - Chat mode is now the default session type with a simplified UI.
 - Memory tool is now enabled by default with a toolbar toggle.
@@ -310,25 +279,22 @@ All notable changes to this project will be documented in this file.
 
 - Fixed canceling rejection by pressing Escape on feedback input.
 - Fixed memory list not refreshing after deletion failure.
-- Fixed thinking block clearing not triggering properly on the client side.
+- Fixed thinking block clearing not triggering properly.
 - Fixed LaTeX math delimiters not rendering correctly in markdown output.
 - Fixed conversation messages not syncing after tool-use cycles.
 - Fixed log content clearing when falling back to default session kind.
-- Fixed abort errors not using correct SDK error type.
 - Fixed chat history clearing on follow-up after extension reload.
 - Fixed memory checkbox not being clickable.
-- Fixed thinking blocks clearing prematurely before token threshold was reached.
+- Fixed thinking blocks clearing prematurely.
 - Fixed agent dropdown not syncing with session toggle.
 - Fixed cached tokens not being included in context measurement.
 
 ### Improvements
 
 - Improved tool use display to distinguish user feedback from errors.
-- Unified header styles across history, profile, and memory views.
+- Unified header styles across dashboard views.
 - Simplified run selector dropdown to show only timestamp.
-- Moved task-run temp storage from global to workspace storage for better isolation.
-- Reduced token usage in tool results by using plain text instead of JSON.
-- Updated dependencies: Google GenAI, Supabase, VS Code types.
+- Updated dependencies.
 
 ## [0.35.3] - 2026-01-05
 
@@ -341,23 +307,15 @@ All notable changes to this project will be documented in this file.
 - Improved progress board layout with better log grouping and reduced whitespace.
 - Fixed relay authentication expiring during long-running sessions.
 
-### Improvements
-
-- Internal refactoring to reduce abstraction overhead and improve code organization.
-
 ## [0.35.2] - 2025-12-30
 
 ### Bug Fixes
 
 - Fixed symlink handling in workspace path resolution and file dialogs.
-- Fixed OAuth callback handling for web environments with localhost fallback.
-- Fixed status tooltip clipping by positioning it above the indicator.
-- Fixed clean auxiliary files button to use correct trash icon.
+- Fixed OAuth callback handling for web environments.
+- Fixed status tooltip clipping.
+- Fixed clean auxiliary files button icon.
 - Added resuming status styling and changed stopped status to neutral gray.
-
-### Improvements
-
-- Optimized path conversion to avoid redundant operations.
 
 ## [0.35.1] - 2025-12-29
 
@@ -374,30 +332,26 @@ All notable changes to this project will be documented in this file.
 
 - Fixed LaTeX-style backtick quotes in document name extraction.
 - Fixed dropdown option selection not updating visually.
-- Fixed cloud icon sizing inconsistency in agent dropdown.
-- Fixed tool name handling in tool definitions resolver.
+- Fixed cloud icon sizing in agent dropdown.
+- Fixed tool name handling in tool definitions.
 - Fixed absolute path handling in file location creation.
 - Fixed agent and model selection reverting to defaults.
 - Fixed missing usage info in OpenAI Responses API streaming.
 - Disabled automatic retries by default to give users explicit control.
 - Added tooltips to toolbar buttons across all webviews.
 - Clarified reference and auxiliary file selector tooltips.
-- Fixed provider cache stale state and Google model path extraction.
-- Fixed memory leak from undisposed event listener subscription.
 - API Access toggle now visible for all authenticated users.
-- Fixed tier config retry after transient failures.
-- Fixed race conditions in tier system caching.
 
 ### Improvements
 
-- Updated core dependencies: Supabase, fs-extra, OpenAI, webpack, Zod v4.
+- Updated core dependencies.
 
 ## [0.35.0] - 2025-12-16
 
 ### Bug Fixes
 
-- Fixed OpenAI streaming to collect all reasoning items with web search.
-- Fixed Google model response text computation.
+- Fixed OpenAI streaming with web search results.
+- Fixed Google model response handling.
 - Fixed LaTeX replacement rules causing formatting issues.
 - Fixed latexdiff output causing compilation errors.
 - Fixed model dropdown resetting media selection when changed.
@@ -406,96 +360,67 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements
 
-- Updated core dependencies: MCP SDK, Supabase, OpenAI, Zod, webpack.
+- Updated core dependencies.
 
 ## [0.34.10] - 2025-12-13
 
 ### Features
 
-- Added **GPT-5.2** (`gpt52`, `gpt52pro`) to the default model list with xhigh
-  reasoning effort support for extended problem-solving tasks.
-- Introduced **flexible user groups** with permission-based access control,
-  supporting multi-group visibility and tier levels (Max/Ultra) for remote
-  agents.
-- Added a **todo list UI** in the progress view for tool-use agents, letting
-  you track task progress during agent workflows.
-- Added **Research agent** for analytical derivations and scientific research
-  tasks.
-- Added **Search agent** to the default tool-use agents list for web search
-  workflows.
-- Profile view now displays a **multi-output support indicator** for agents
-  that support multiple outputs.
+- Added **GPT-5.2** (`gpt52`, `gpt52pro`) to the default model list.
+- Introduced **flexible user groups** with permission-based access control
+  and tier levels (Max/Ultra) for remote agents.
+- Added a **todo list UI** in the progress view for tool-use agents.
+- Added **Research agent** for analytical derivations and scientific research.
+- Added **Search agent** to the default tool-use agents for web search workflows.
+- Profile view now displays a **multi-output support indicator**.
 
 ### Bug Fixes
 
-- Resolved duplicate sign-in messages caused by authentication race conditions.
-- Fixed profile view agent selection reliability when switching between
-  remote agents.
-- OpenAI streaming now correctly includes reasoning items when web search
-  results reference them.
-- Fixed agent selection race condition when switching session types.
-
-### Improvements
-
-- Updated OpenAI reasoning effort to HIGH for improved model performance.
+- Resolved duplicate sign-in messages.
+- Fixed profile view agent selection reliability when switching between remote agents.
+- Fixed OpenAI streaming missing reasoning items with web search.
+- Fixed agent selection when switching session types.
 
 ## [0.34.9] - 2025-12-10
 
 ### Features
 
 - Added **native web search** support for Anthropic and OpenAI models, with
-  real-time search results displayed in the progress view during streaming.
-- Introduced a new **Web Search** tool-use agent optimized for research queries
-  that leverage provider-native search capabilities.
-- Added **OpenAI deep research models** (`o3-deep-research`, `o4-mini-deep-research`)
-  for extended reasoning tasks.
-- Updated **DeepSeek models to V3.2** with streaming reasoning support via
-  OpenRouter.
-- Added **getting started guidance** that appears when opening an empty folder,
-  helping new users bootstrap their first project.
+  real-time search results displayed in the progress view.
+- Introduced a new **Web Search** tool-use agent optimized for research queries.
+- Added **OpenAI deep research models** (`o3-deep-research`, `o4-mini-deep-research`).
+- Updated **DeepSeek models to V3.2** with streaming reasoning support.
+- Added **getting started guidance** that appears when opening an empty folder.
 
 ### Bug Fixes
 
-- Fixed Windows path handling in progress view stream tabs, resolving duplicate
-  tab issues on Windows systems.
-- Agent selection now persists correctly when switching between sessions or when
-  the selected agent isn't in the current options list.
-- Remote agents with multiple output variants now group correctly like local
-  agents.
-- Improved content block ordering in Anthropic streaming responses, fixing
-  issues with interleaved thinking and text blocks.
-- Fixed figure path resolution for input files located in subdirectories.
+- Fixed Windows path handling in progress view stream tabs.
+- Agent selection now persists correctly when switching between sessions.
+- Remote agents with multiple output variants now group correctly.
+- Fixed Anthropic streaming with interleaved thinking and text blocks.
+- Fixed figure path resolution for input files in subdirectories.
 - Fixed `\input` path compatibility by normalizing leading `./` prefixes.
 - User-cancelled requests no longer trigger automatic retries.
-- Fixed banner display issues when refreshing the webview input.
+- Fixed banner display issues when refreshing the webview.
 
 ### Improvements
 
-- Refactored internal HTTP status handling using the `http-status-codes`
-  package for better maintainability.
-- Consolidated prompt utilities and Zod schemas for improved type safety.
-- Updated core dependencies: Anthropic SDK 0.71.2, Google GenAI 1.32.0,
-  KaTeX 0.16.27, winston 3.19.0.
+- Updated core dependencies.
 
 ## [0.34.8] - 2025-12-04
 
 ### Features
 
-- Added **DeepSeek V3.2 Speciale** (`deepseekT+`), a high-compute variant
-  optimized for maximum reasoning and agentic performance with 163k context.
-- Enabled tool calling for DeepSeek thinking models so they can participate in
-  tool-use workflows.
+- Added **DeepSeek V3.2 Speciale** (`deepseekT+`) with 163k context.
+- Enabled tool calling for DeepSeek thinking models.
 
 ### Bug Fixes
 
-- Improved tool detection on Unix-like systems for `latexdiff` and related
-  utilities.
+- Improved tool detection on Unix-like systems for `latexdiff` and related utilities.
 
 ### Improvements
 
-- Refactored internal schema handling for better type safety and
-  maintainability.
-- Updated core dependencies for improved stability.
+- Updated core dependencies.
 
 ## [0.34.7] - 2025-11-30
 
@@ -507,40 +432,27 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- Introduced **Remote Agents** with Supabase authentication, letting you browse
-  and run cloud-hosted agents directly from the new Profile view.
-- Added **manual retry controls** so you can retry failed API requests on demand
-  instead of relying solely on automatic retries.
-- Display provider icons in the model dropdown for quick visual identification
-  of each model's source.
+- Introduced **Remote Agents**, letting you browse and run cloud-hosted agents
+  directly from the new Profile view.
+- Added **manual retry controls** so you can retry failed API requests on demand.
+- Display provider icons in the model dropdown.
 
 ### Improvements
 
-- Added Claude Opus 4.5 (thinking and regular) to the default model catalog,
-  VS Code settings, and documentation so the latest Anthropic tier is
-  available out of the box.
-- Widened agent and model dropdowns by ~20% and added descriptive tooltips
-  explaining indicator icons.
-- Footer dropdowns now open upward to prevent clipping at the bottom of the
-  panel.
-- Stream tab close buttons are always visible, making it easier to dismiss
-  completed runs.
-- File selection lists are now sorted alphabetically by name.
+- Added **Claude Opus 4.5** (`opus45`, `opus45T`) to the default model catalog.
+- Widened agent and model dropdowns and added descriptive tooltips.
+- Footer dropdowns now open upward to prevent clipping.
+- Stream tab close buttons are always visible.
+- File selection lists are now sorted alphabetically.
 - History view displays the session kind (workflow vs tool use) for each entry.
 
 ### Bug Fixes
 
-- Resolved duplicate agent names appearing in the dropdown when multiple
-  sources define the same agent.
+- Resolved duplicate agent names appearing in the dropdown.
 - The API key banner displays reliably on initial webview load.
 - arXiv search queries with multiple terms now return more relevant results.
 
 ## [0.34.5] - 2025-11-21
-
-### Improvements
-
-- General refactoring to streamline the extension and keep the progress board
-  experience smooth.
 
 ### Bug Fixes
 
@@ -550,627 +462,572 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- Added a **Collect references** helper that gathers the BibTeX entries your project cites and calls out anything missing, so you can tidy bibliographies before submitting.
-- Expanded the model catalog with **GPT-5.1** (`gpt51`), offering GPT-5-class reasoning with fresh pricing and full tool support.
+- Added a **Collect references** helper that gathers the BibTeX entries your project cites and calls out anything missing.
+- Added **GPT-5.1** (`gpt51`) to the model catalog.
 
 ### Improvements
 
-- The progress board now loads conversations faster and keeps stream updates responsive, even for long sessions.
-- Run reviews feel smoother thanks to persistent run context, clearer timestamps, and an input box that’s ready whenever a follow-up is needed.
+- The progress board now loads conversations faster and keeps stream updates responsive.
+- Run reviews feel smoother with persistent run context, clearer timestamps, and a ready input box.
 - Workspace cleanup is less disruptive: generated artifacts stick around, TeX files are detected more reliably, and `\input{}` paths stay intact.
 
 ### Bug Fixes
 
-- Workflow controls once again behave as expected—resume, restart, and stop actions reliably reflect the state of your run.
-- Progress board summaries stay in sync with agent defaults and usage totals, preventing stale data from lingering between refreshes.
-- Tool calls are steadier across providers, avoiding duplicate uploads, empty payload errors, and missing workflow outputs.
-- Bibliography parsing now handles complex citation files without crashing, keeping reference extraction dependable.
+- Workflow controls once again behave as expected — resume, restart, and stop actions reliably reflect the state of your run.
+- Progress board summaries stay in sync with agent defaults and usage totals.
+- Tool calls are steadier across providers, avoiding duplicate uploads and missing workflow outputs.
+- Bibliography parsing now handles complex citation files without crashing.
 
 ## [0.34.3] - 2025-11-07
 
 ### Features
 
-- Add a **Clone Overleaf Project** command that initializes a local workspace
-  from an Overleaf project so newcomers can bootstrap a folder without manual
-  downloads or Git juggling.
-- Require approving tool-proposed edits from the progress board, complete with
-  a pending approvals queue, unified diffs, and the ability to turn rejection
-  notes directly into follow-up instructions.
-- Capture XML output summaries—including detected tag contents, serialized
-  `<document>` elements, and single-output paths—so orchestrated workflows can
-  reuse generated artifacts without re-running the same tools.
-- Add dedicated arXiv metadata/search and Crossref DOI lookup tools to the
-  default registry so agents can fetch paper details without manual API calls.
-- Add Kimi K2 thinking variants to the model catalog so the latest Moonshot
-  releases are immediately available in TeXRA.
+- Added **Clone Overleaf Project** command to initialize a local workspace from an Overleaf project.
+- Added **tool edit approvals** from the progress board with a pending approvals queue, unified diffs, and rejection-to-follow-up flow.
+- Added **workflow output capture** so orchestrated workflows can reuse generated artifacts.
+- Added dedicated **arXiv metadata/search** and **Crossref DOI lookup** tools.
+- Added **Kimi K2** thinking variants to the model catalog.
 
 ### Improvements
 
-- Expand the progress board empty state with a direct shortcut to the Overleaf
-  clone flow and streamline the header with toolbar session switching, tighter
-  dropdowns, and clearer delete affordances.
-- Harden the new Overleaf initialization by validating tokens, enforcing
-  workspace preflight checks, and surfacing full command output when cloning.
-- Render progress tool logs and tour output in YAML to keep structured
-  responses readable at a glance.
-- Update Kimi K2 naming and pricing while reusing shared vision helpers so
-  image attachments stay consistent across providers.
-- Stabilize agent logging, tool-use persistence, and continuation reporting so
-  usage totals, follow-up prompts, and streaming status badges stay in sync.
+- Expanded the progress board empty state with a shortcut to the Overleaf clone flow.
+- Improved Overleaf initialization validation and error reporting.
+- Updated Kimi K2 naming and pricing.
 
 ### Bug Fixes
 
-- Stabilize Google Gemini tool calls by simplifying stream aggregation and
-  aligning tool-call handling with the provider API.
-- Keep the new arXiv metadata tools fresh by resetting cached search state so
-  repeat lookups always return current abstracts and figure links.
-- Guard progress board detail toggles and approval actions to eliminate
-  runtime errors while reviewing runs.
-- Fix duplicated LaTeX environment tags that produced malformed `eqnarray`
-  blocks in generated documents.
-- Restore tool-use cost tracking and keep user edit patches synchronized with
-  the approvals workflow.
-- Prevent YAML log loaders from failing when generated files expose quick
-  actions.
-- Fall back to inline file upload when OpenAI Files API times out to prevent
-  request failures.
+- Fixed Google Gemini tool call reliability.
+- Fixed arXiv metadata tools returning stale results.
+- Fixed progress board errors when reviewing runs.
+- Fixed duplicated LaTeX environment tags producing malformed output.
+- Fixed tool-use cost tracking and edit approval sync.
+- Fixed OpenAI file upload fallback on timeout.
 
 ## [0.34.2] - 2025-10-31
 
 ### Features
 
-- Redesigned the Progress Board with a resizable split layout, a persistent instruction panel with copy support, and inline follow-up controls for polishing, recording, clearing, or sending responses without leaving the log view.
-- Streamlined the main command view with toolbar-based file pickers, context-menu toggles that close when clicking elsewhere, and a radio-group session selector to switch between workflow and chat agents faster.
+- Redesigned the **Progress Board** with a resizable split layout, persistent instruction panel, and inline follow-up controls.
+- Streamlined the **main command view** with toolbar-based file pickers and a radio-group session selector.
 
 ### Improvements
 
-- Format `read_file` text responses with padded line numbers, extend ranged reads to 2,000 lines, and report when callers request windows beyond the file length for easier downstream edits.
-- Expand LaTeX cleanup to convert common HTML entities, remove invalid section endings, and expand legacy equation macros into full environments for cleaner compiled documents.
+- Improved `read_file` tool with line numbers and ranged reads up to 2,000 lines.
+- Expanded LaTeX cleanup to handle more HTML entities and legacy equation macros.
 
 ### Bug Fixes
 
-- Return PDFs and common image formats from the `read_file` tool as native attachments with model guidance so binary files are no longer streamed as corrupted text.
+- PDFs and images from the `read_file` tool are now returned as proper attachments instead of corrupted text.
 
 ## [0.34.1] - 2025-10-24
 
 ### Bug Fixes
 
-- Fix toolbar controls and automatic log scrolling in progress view.
-- Fix Claude Haiku 4.5T thinking mode not working correctly.
-- Fix dropdown menus being cut off at container edges.
+- Fixed toolbar controls and automatic log scrolling in progress view.
+- Fixed Claude Haiku 4.5T thinking mode not working correctly.
+- Fixed dropdown menus being cut off at container edges.
 
 ### Improvements
 
-- Show inline progress display when polishing instructions instead of notifications.
-- Cleaner and more streamlined progress board stream tabs.
-- More compact model selection dropdown for better screen space usage.
-- Updated core dependencies for improved stability.
+- Show inline progress display when polishing instructions.
+- Cleaner progress board stream tabs.
+- More compact model selection dropdown.
+- Updated core dependencies.
 
-## [0.34.0] - [2025-10-19]
+## [0.34.0] - 2025-10-19
 
 ### Features
 
-- Add an interactive VS Code walkthrough that guides first-time users through model setup, file selection, and the progress board.
-- Expand the Anthropic catalog with Claude Haiku 4.5 (`haiku45T`, `haiku45`), including pricing, capability metadata, and updated documentation.
+- Added an interactive VS Code **walkthrough** that guides first-time users through model setup, file selection, and the progress board.
+- Added **Claude Haiku 4.5** (`haiku45T`, `haiku45`) to the model catalog.
 
 ### Improvements
 
-- Streamline custom agent prompts by keeping all rounds in the `userRequest` list whileth automatically migrating older `userReflect` entries and highlighting anything that still needs attention.
-- Ensure the model picker waits for its options to load so newly enabled models reliably appear, even on slower machines.
-- Add Magic Polish and microphone recording controls directly to the progress view follow-up input box with auto-resizing textarea for more convenient conversation continuations.
-- Update CoT (Chain-of-Thought) agent icon from terminal to list-tree for clearer visual distinction in progress view stream tabs.
+- Streamlined custom agent prompt handling with automatic migration of older entries.
+- Model picker now waits for options to load so newly enabled models appear reliably.
+- Added Magic Polish and microphone recording controls to the progress view follow-up input.
+- Updated CoT agent icon for clearer visual distinction.
 
 ### Bug Fixes
 
-- Restore scratchpad exports to reopen the named document you selected when agents generate multiple files.
-- Repair tool-use session migration so previously saved runs load and resume without errors.
-- Improve OpenAI "thinking" summaries with clearer spacing, making reasoning traces easier to scan in the progress view.
-- Keep workflow outputs visible in the progress board when no new files were written, avoiding unnecessary refreshes.
-- Show progress board timestamps in your local timezone instead of UTC.
+- Fixed scratchpad exports to reopen the named document when agents generate multiple files.
+- Fixed tool-use session migration so saved runs load and resume without errors.
+- Improved OpenAI thinking summaries with clearer spacing.
+- Fixed workflow outputs disappearing from the progress board when no new files were written.
+- Progress board timestamps now show in your local timezone instead of UTC.
 
 ## [0.33.10] - 2025-10-10
 
 ### Features
 
-- Add OpenAI GPT-5 Pro (`gpt5pro`) to the model catalog with updated pricing and documentation.
-- Prompt for latexdiff math markup before each run so you can pick the right level of equation detail on demand.
-- Introduce new `extract_figures` and `extract_tikz_figures` tools so agents can return referenced images and compiled TikZ PDFs as structured attachments.
-- Expand the `read_file` tool with ranged reads, letting agents request only the lines they need from large files.
+- Added **GPT-5 Pro** (`gpt5pro`) to the model catalog.
+- Prompt for latexdiff math markup before each run.
+- Added `extract_figures` and `extract_tikz_figures` tools for returning referenced images and compiled TikZ PDFs.
+- Added ranged reads to `read_file` tool.
 
 ### Improvements
 
-- Streamline LaTeX figure tooling by auto-managing attachment limits, deferring uploads to provider handlers, and keeping prompts lightweight during tool calls.
-- Add one-click **Generate diff** controls and auto-select the relevant comparison commit so you can review outdated files without hunting for hashes.
-- Refresh the Progress Board with copy buttons, native status styling, and a cleaner layout that keeps model responses, special details, and status logs easy to scan.
-- Update the Progress Board empty state with quick links to create a sample project, fetch an arXiv source, or open the user guide.
-- Poll OpenAI background responses while gating progress updates, ensuring long-running background runs advance reliably without stray streaming updates.
+- Added one-click **Generate diff** controls with auto-selected comparison commit.
+- Refreshed the **Progress Board** with copy buttons, native status styling, and a cleaner layout.
+- Updated Progress Board empty state with quick links.
 
 ### Bug Fixes
 
-- Preserve run-group identifiers so agent error logs stay attached to the latest run in the Progress Board timeline.
-- Disable streaming automatically whenever background responses are enabled and mark their updates as status messages to keep background replies stable.
-- Stop launching agent runs when initialization fails and harden progress event handling to avoid duplicate task groups and stale badges.
-- Hide workflow-only model responses from the Progress Board and ensure compare actions run `latexdiff` before opening diffs, keeping the VS Code compare view reliable.
-- Improve LaTeX fenced-block parsing—including inline math and `aligned` environments—so generated summaries retain spacing and formatting.
-- Default to the first available workflow agent when none is configured, restoring the expected agent selection in new workspaces.
-- Keep arXiv downloads inside their staging folder, move `main.tex` files into place, and clean up the temporary directory after processing.
+- Fixed agent error logs detaching from the latest run in the Progress Board.
+- Fixed background responses generating stray streaming updates.
+- Fixed agent runs launching when initialization fails.
+- Fixed workflow-only responses showing in the Progress Board.
+- Improved LaTeX fenced-block parsing for inline math and `aligned` environments.
+- Fixed default agent selection in new workspaces.
+- Fixed arXiv downloads leaving files outside their staging folder.
 
 ## [0.33.9] - 2025-10-03
 
 ### Features
 
-- Introduce new `apply_path` and `download_arxiv_source` tools so agents can apply patches and fetch arXiv sources without leaving TeXRA.
-- Default workflow and tool-use pickers to curated Correct and Chat presets, remember multi-output toggles, and automatically seed custom agent directories for new workspaces.
-- Add an **Open storage** button in the progress view with richer file refresh feedback so you can inspect run outputs and diffs immediately.
-- Add between-round `latexdiff` controls and Texcount mode selection to customize LaTeX comparison and word-count workflows.
-- Add Claude Sonnet 4.5 (thinking and regular) to the Anthropic catalog and default model list so the latest Claude release is immediately available in TeXRA.
+- Added `apply_path` and `download_arxiv_source` tools for patches and arXiv source fetching.
+- Default workflow and tool-use pickers now use curated presets.
+- Added **Open storage** button in the progress view for inspecting run outputs.
+- Added between-round `latexdiff` controls and Texcount mode selection.
+- Added **Claude Sonnet 4.5** (`sonnet45`, `sonnet45T`) to the model catalog.
 
 ### Bug Fixes
 
-- Upload Anthropic PDF attachments to the Files API so requests reuse `file_id`s instead of resending large base64 payloads.
-- Ensure follow-up Anthropic requests keep the Files API beta header when referencing previously uploaded PDFs.
-- Sanitize Anthropic PDF filenames before uploading so nested paths with forbidden characters no longer trigger Files API errors.
-- Skip Anthropic token counting when requests already reference Files API assets and defer PDF uploads until after token usage is calculated to avoid countTokens errors.
-- Harden tool-use session resume so queued follow-ups, execution state, and multi-output agents restore reliably after reloads.
-- Respect `.gitignore` rules across `glob`, `grep`, and file listings to keep excluded paths out of workspace inspections.
-- Stabilize custom agent directory initialization and tool-use registry cleanup so default agents appear consistently.
-- Guard Google upload pipelines and diagnostics tooling to avoid sending derived media and to surface clearer errors when runs fail.
+- Fixed Anthropic PDF uploads on follow-up requests.
+- Fixed PDF filename handling for nested paths.
+- Fixed tool-use session resume so follow-ups, execution state, and multi-output agents restore reliably.
+- Respect `.gitignore` rules across `glob`, `grep`, and file listings.
+- Fixed custom agent directory initialization and default agent visibility.
+- Fixed Google model errors not surfacing clearly.
 
 ## [0.33.8] - 2025-09-30
 
 ### Features
 
-- Split the agent picker into workflow and tool-use sessions with a toggle so users can quickly see the agents that apply to their workflow.
-- Update Gemini 2.5 Flash preview entries to the September 2025 release.
-- Refresh Qwen-Max and Qwen Plus integrations with updated pricing, naming, and thinking support in the DashScope handler.
+- Split the agent picker into **workflow and tool-use sessions** with a toggle.
+- Updated **Gemini 2.5 Flash** to the September 2025 release.
+- Updated **Qwen-Max and Qwen Plus** with new pricing and thinking support.
 
 ### Bug Fixes
 
-- Improve scratchpad markdown fallbacks by converting HTML with Turndown when Pandoc is unavailable, keeping formatting stable across environments.
-- Ensure prompt XML exports always resolve to absolute paths for both workspace files and execution-scoped runs to avoid downstream lookups failing.
-- Harden progress view state handling with validation on task groups, toggles, and stream statuses to prevent invalid data from corrupting summaries.
-- Restore main view configurations using the shared task-state helper so history entries hydrate without manual JSON juggling.
-- Cap `read_file` tool responses at the first 400 lines to keep large files from overwhelming tool-use transcripts.
-- Enable interleaved thinking by default for supported Claude tool-use agents so follow-up reasoning stays in sync with tool results.
-- Rebuild the agent selector footer with a compact session toggle and per-session dropdowns so the UI stays narrow and focused.
-- Populate the tool-use dropdown from the dedicated `texra.toolUseAgents` list and automatic discovery so the old include toggle is no longer needed.
-- Trim the default tool-use agent list to the conversational presets so specialized utilities stay opt-in per workspace.
-- Narrow the model selector width and streamline tool-use labelling so dropdowns stay tidy without superscript markers.
-
-### Bug Fixes
-
-- Migrate history view toggle state persistence from JSON strings to structured arrays so expansion settings reliably load across versions.
-- Clear queued restore context when the main view fails to initialize, preventing stale state from resurfacing on the next activation.
-- Guard the model select observer lifecycle and update queue so successive model option messages render reliably without leaking observers.
+- Improved scratchpad markdown fallbacks when Pandoc is unavailable.
+- Fixed prompt exports not resolving paths correctly.
+- Fixed progress view state corruption.
+- Fixed history entries not restoring correctly.
+- Capped `read_file` tool responses at 400 lines to prevent oversized outputs.
+- Redesigned agent selector footer with compact session toggle and per-session dropdowns.
+- Trimmed default tool-use agent list to conversational presets.
+- Fixed history view toggle state not persisting across versions.
+- Fixed stale state resurfacing after failed initialization.
+- Fixed model options not rendering reliably on successive updates.
 
 ## [0.33.7] - 2025-09-22
 
 ### Features
 
-- Add install and re-check actions to the dependency banner so required tools can be installed or revalidated in place
-- Separate tool-use streams in the Progress Board with All / Workflow / Tool Use filters and clearer tab titles
-- Show tool-use hints in the agent dropdown to highlight agents that launch tool workflows
-- Add a copy button to each model response entry for quickly reusing generated text
-- Persist tool-use sessions across restarts, including a resume command and settings to control retention
-- Add workspace-aware `glob`, `grep`, and `ls` tools to the default registry and chat agent so every workflow can inspect files safely
-- Introduce a `web_fetch` tool that downloads web pages and converts their HTML into Markdown for review inside agent workflows
-- Add dedicated `read_file`, `write_file`, and `edit_file` tools and wire them into the default chat agent for clearer, safer workspace editing
-- Ship a built-in read-only `ask` agent so you can inspect project files without risking accidental changes
-- Show the active instruction at the top of the Progress Board with expandable and copyable text, keeping prompts visible while a run executes
-- Allow DeepSeek chat models to call tools via function calling so they can participate fully in tool-use workflows
+- Added install and re-check actions to the dependency banner.
+- Separate tool-use streams in the Progress Board with All / Workflow / Tool Use filters.
+- Show tool-use hints in the agent dropdown.
+- Added a copy button to each model response entry.
+- Persist tool-use sessions across restarts with a resume command.
+- Added workspace-aware `glob`, `grep`, and `ls` tools to the default registry.
+- Added a `web_fetch` tool for downloading and converting web pages to Markdown.
+- Added `read_file`, `write_file`, and `edit_file` tools for workspace editing.
+- Added a built-in read-only `ask` agent for safe project inspection.
+- Show the active instruction at the top of the Progress Board.
+- Allow DeepSeek chat models to call tools.
 
 ### Bug Fixes
 
-- Decode HTML entities in follow-up messages so languages like Chinese render correctly in the Progress Board
-- Accept legacy tool configuration keys to keep existing tool-use agents working after the prefill cleanup
-- Fix LaTeX replacements for beamer column layouts and Schrödinger names to avoid corrupting generated files
-- Skip rendering empty model response logs so the Progress Board no longer shows blank entries
-- Disable workflow toolbar actions while viewing tool-use streams to prevent unsupported commands from running
-- Trim Anthropic requests and block empty user messages to avoid API errors
-- Keep tool-use runs visible by automatically updating the Progress Board filter when a workflow starts in another stream
-- Log agent errors inside their stream groups so failures surface directly in the Progress Board timeline
-- Honor `.gitignore_global` rules in the `ls` tool so global exclusions stay hidden during workspace listings
-- Restore missing `output_text` segments in OpenAI Responses so assistants no longer drop parts of their replies
+- Fixed HTML entities in follow-up messages so languages like Chinese render correctly.
+- Fixed legacy tool configuration keys breaking after cleanup.
+- Fixed LaTeX replacements for beamer column layouts and special characters.
+- Fixed empty model response logs showing in the Progress Board.
+- Fixed workflow toolbar actions running on tool-use streams.
+- Fixed empty user messages causing API errors.
+- Fixed tool-use runs not visible when a workflow starts in another stream.
+- Fixed agent errors not surfacing in the Progress Board timeline.
+- Fixed `.gitignore_global` rules not honored in workspace listings.
+- Fixed OpenAI Responses dropping parts of assistant replies.
 
 ### Improvements
 
-- Summarize tool-use logs with clearer titles, error highlighting, and expandable sections that collapse very long outputs into a scrollable view
+- Summarize tool-use logs with clearer titles and expandable sections for long outputs.
 
 ## [0.33.6] - 2025-09-14
 
 ### Features
 
-- Show a banner when required dependencies are missing and check tools before running
-- Add `kimi2` to the model list
-- Clarify output file controls in the webview
-- Improve tool-use agent infrastructure with better tool definition and parsing
+- Show a banner when required dependencies are missing and check tools before running.
+- Added `kimi2` to the model list.
+- Clarified output file controls in the webview.
 
 ### Bug Fixes
 
-- Detect Ghostscript correctly on Windows and stop flagging GraphicsMagick when ImageMagick is installed
-- Show tool-use agents in the dropdown when enabled and restore agent configuration banners
-- Improve model API key banner behavior and multi-file toggle labels
-- Hide file selection notification when choosing reference, auxiliary, or media files in the main view
-- Skip empty thinking logs in model reasoning display
+- Fixed Ghostscript detection on Windows and ImageMagick false positive.
+- Fixed tool-use agents not appearing in the dropdown when enabled.
+- Fixed model API key banner behavior and multi-file toggle labels.
+- Fixed file selection notification showing for non-input files.
+- Fixed empty thinking logs showing in model reasoning display.
 
 ### Improvements
 
-- Updated AI SDK packages: Anthropic SDK 0.62.0, Google GenAI 1.19.0, OpenAI 5.20.2
-- Enhanced webview infrastructure with centralized theme handling and message management
-- Improved file dialog helpers for better cross-platform compatibility
+- Updated AI SDK packages.
+- Improved file dialog helpers for better cross-platform compatibility.
 
-## [0.33.5] - 2025-09-07 💪
+## [0.33.5] - 2025-09-07
 
 ### Features
 
-- Replace Qwen Max with Qwen3 Max for improved reasoning and 256k context
-- Update Qwen Plus to 2025-07-28 snapshot with hybrid reasoning and 1M context
-- Mark Qwen Plus and Qwen Turbo as reasoning models with optional `enable_thinking`
-- Update Moonshot Kimi models to K2 0905 preview and add turbo variant
-- Add setting to enable/disable GPT-5 reasoning summaries due to user tier limitations
-- Add configuration banner for missing agent files with quick setup actions
-- Add visual indicator for agents with multiple output support in dropdown
-- Replace "(no key)" with ✗ symbol for cleaner model dropdown display
+- Replaced Qwen Max with **Qwen3 Max** for improved reasoning and 256k context.
+- Updated **Qwen Plus** with hybrid reasoning and 1M context.
+- Updated **Moonshot Kimi** models to K2 0905 preview and added turbo variant.
+- Added setting to enable/disable GPT-5 reasoning summaries.
+- Added configuration banner for missing agent files with quick setup actions.
+- Added visual indicator for agents with multiple output support.
+- Replaced "(no key)" with a cleaner symbol in model dropdown.
 
 ## [0.33.4] - 2025-09-03
 
 ### Features
 
-- Support round-specific reflection prompts and iteration across multiple rounds
-- Record per-round agent and tool state for future analysis
-- Highlight missing API keys for models with provider-specific banner and setup links
-- Add model metadata tooltips showing provider, context window, and cost in model selector dropdown
+- Support round-specific reflection prompts and iteration across multiple rounds.
+- Highlight missing API keys with provider-specific banner and setup links.
+- Added model metadata tooltips showing provider, context window, and cost.
 
 ### Bug Fixes
 
-- Generalize output handling and packaging scripts to work with any round count
-- Track total executed rounds in agent statistics
-- Consolidate API key setup alerts into banner to avoid multiple popups
-- Unescape underscores in LaTeX references to remove unnecessary escape characters
+- Fixed output handling to work with any round count.
+- Consolidated API key setup alerts into a single banner.
+- Fixed unnecessary escape characters in LaTeX references.
 
 ## [0.33.3] - 2025-08-29
 
 ### Features
 
-- Include `.bbl` files when searching for reference files
-- Guide new users through API key setup with links to provider pages
-- Show persistent “Set API Key” banner and status bar warning until a key is configured
+- Include `.bbl` files when searching for reference files.
+- Guide new users through API key setup with links to provider pages.
+- Show persistent "Set API Key" banner until a key is configured.
 
 ### Bug Fixes
 
-- Restrict GPT OSS models to OpenRouter only
-- Improve API key detection to check environment variables and only show intro message when no keys are configured
+- Restrict GPT OSS models to OpenRouter only.
+- Improved API key detection to check environment variables.
 
 ## [0.33.2] - 2025-08-25
 
 ### Features
 
-- Add sample project command (`texra.createSampleProject`) to help new users get started with a complete example
-- Add chat tool-use agent for interactive document-based conversations
-- Stream model responses separately from reasoning for better visibility into agent thinking
-- Show helpful empty-state placeholder in progress view with quick links when no tasks are running
-- Add interactive launch page to documentation site with repository configuration forms
+- Added sample project command to help new users get started with a complete example.
+- Added chat tool-use agent for interactive document-based conversations.
+- Stream model responses separately from reasoning for better visibility into agent thinking.
+- Show helpful empty-state placeholder in progress view with quick links.
+- Added interactive launch page to documentation site.
 
 ### Bug Fixes
 
-- Show welcome dialog asynchronously to ensure it displays properly on first launch
-- Use active task output selection for pack and clean operations
-- Toggle placeholder visibility correctly when clearing progress view logs
-
-### Improvements
-
-- Enhanced progress view with better empty state handling and clearer visual feedback
+- Fixed welcome dialog not displaying properly on first launch.
+- Fixed pack and clean operations using wrong task output.
+- Fixed placeholder visibility when clearing progress view logs.
 
 ## [0.33.1] - 2025-08-22
 
 ### Features
 
-- Detect arXiv source file type and handle plain `.tex` downloads without extraction
-- Add descriptive tooltips for Input, Reference, Auxiliary and Media file selectors in the main webview
-- Show onboarding tooltips on first use of the input file selector or model picker, with a "Never remind again" option
-- Add real-time streaming display for model reasoning/thinking processes (Claude, DeepSeek, o1)
+- Detect arXiv source file type and handle plain `.tex` downloads without extraction.
+- Added descriptive tooltips for Input, Reference, Auxiliary and Media file selectors.
+- Show onboarding tooltips on first use with a "Never remind again" option.
+- Added real-time streaming display for model reasoning/thinking processes.
 
 ### Bug Fixes
 
-- Restrict extension to single workspace folder to prevent initialization issues
-- Set welcome dialog flag only after the dialog displays to avoid missing messages
+- Restrict extension to single workspace folder to prevent initialization issues.
+- Fixed welcome dialog flag set before dialog displays.
 
-## [0.33.0] - 2025-08-19 🎂 Birthday Edition
+## [0.33.0] - 2025-08-19
 
 ### Features
 
-- Show TeXRA task status in the VS Code status bar
-- Automatically resize large images (> 2000px) before base64 encoding to optimize memory usage and performance
-- Allow disabling LaTeX formatting and silencing missing `latexindent` warnings
-- Added configurable `texra.maxImageDimension` setting to control the maximum image size threshold
-- Add "New" button in main view to reset all fields
-- Add `texra.includeToolUseAgents` setting to optionally show built-in tool-use agents in the agent dropdown (deprecated in 0.33.8)
-- Prompt users to install LaTeX Workshop extension with "Never remind again" option for enhanced LaTeX features
+- Show TeXRA task status in the VS Code status bar.
+- Automatically resize large images (> 2000px) for better performance.
+- Allow disabling LaTeX formatting and silencing missing `latexindent` warnings.
+- Added `texra.maxImageDimension` setting to control the maximum image size.
+- Added "New" button in main view to reset all fields.
+- Prompt users to install LaTeX Workshop extension with "Never remind again" option.
 
 ### Bug Fixes
 
-- Stabilize status bar command registration and task cancellation handling
-- Detect MSYS2 Perl directories on Windows so `latexdiff` can find `perl`
-- Prevent first task from being marked as error when progress view loads
-- Rename OpenRouter alias `anthropic/claude-opus-4.1:thinking` to `anthropic/claude-opus-4.1`
-- Fixed DeepSeek model streaming response aggregation
-- Fixed Google model streaming to preserve finish reason correctly
-- Respect existing LaTeX Workshop configuration when updating settings
+- Fixed status bar command registration and task cancellation handling.
+- Fixed `latexdiff` not finding Perl on Windows with MSYS2.
+- Fixed first task being marked as error when progress view loads.
+- Fixed DeepSeek and Google model streaming issues.
+- Fixed LaTeX Workshop configuration being overwritten.
 
 ### Improvements
 
-- Enhanced image processing with dimension validation, better error handling, and improved logging
-- Enhanced LaTeX environment setup with better extension recommendations
-- Improved streaming API stability for various model providers
-- Increased robustness of LaTeX extraction from agent responses
+- Improved streaming stability across model providers.
+- Improved LaTeX extraction from agent responses.
 
 ## [0.32.10] - 2025-08-13
 
 ### Bug Fixes
 
-- Prompt users to open a workspace folder when none is active to avoid initialization.
+- Prompt users to open a workspace folder when none is active.
 
 ## [0.32.9] - 2025-08-09
 
 ### Bug Fixes
 
-- Upload PDFs to OpenAI via the Files API instead of embedding base64 data in Responses requests.
+- Fixed PDF uploads to OpenAI.
 
 ## [0.32.8] - 2025-08-09
 
 ### Features
 
-- Enable model streaming & response APIs by default:
-  - `texra.model.useOpenAIResponsesAPI` now defaults to `true` (was `false`)
+- Enabled model streaming & response APIs by default.
 
 ## [0.32.7] - 2025-08-08
 
 ### Features
 
-- Added Claude Opus 4.1 (regular and thinking) models (`opus41` and `opus41T`)
-- Added GPT OSS 120B and 20B reasoning models (`gptoss` and `gptoss-`)
-- Added GPT-5 family models (`gpt5`, `gpt5-`, `gpt5--`)
-- Route GPT OSS models through OpenAI Responses API by default
+- Added **Claude Opus 4.1** (`opus41`, `opus41T`).
+- Added **GPT OSS** 120B and 20B reasoning models (`gptoss`, `gptoss-`).
+- Added **GPT-5** family models (`gpt5`, `gpt5-`, `gpt5--`).
 
 ### Bug Fixes
 
-- Updated OpenAI, Anthropic, and Gemini SDKs to their latest releases
+- Updated OpenAI, Anthropic, and Gemini SDKs.
 
 ## [0.32.6] - 2025-08-03
 
 ### Features
 
-- **Follow-up Chat**: Continue conversations with tool-use agents (web search, code execution) directly in the progress view with multi-line input support (Shift+Enter for new lines, Enter to send)
-- **Code Syntax Highlighting**: Code blocks in progress view now have syntax highlighting that automatically adapts to your VS Code theme
+- **Follow-up Chat** — continue conversations with tool-use agents directly in the progress view with multi-line input support.
+- **Code Syntax Highlighting** — code blocks in progress view now adapt to your VS Code theme.
 
 ## [0.32.5] - 2025-07-31
 
 ### Features
 
-- Added syntax highlighting for code blocks in the progress view
-- Introduced tool-use agents with support for web search and code execution
-- Added stream sorting option in progress view settings
+- Added syntax highlighting for code blocks in the progress view.
+- Introduced tool-use agents with support for web search and code execution.
+- Added stream sorting option in progress view settings.
 
 ### Bug Fixes
 
-- Fixed duplicate agents appearing in the dropdown menu
-- Improved theme switching for code highlighting
-- Fixed various issues with file list button interactions
+- Fixed duplicate agents appearing in the dropdown menu.
+- Fixed theme switching for code highlighting.
+- Fixed various issues with file list button interactions.
 
 ## [0.32.4] - 2025-07-25
 
 ### Features
 
-- Right-click on YAML agent files in Explorer to quickly add them to your agent list
-- Improved agent configuration with better file type handling and validation
+- Right-click on YAML agent files in Explorer to quickly add them to your agent list.
+- Improved agent configuration with better file type handling.
 
 ### Bug Fixes
 
-- Fixed restoration of agent states when reopening TeXRA sessions
-- Improved agent metadata handling for better performance tracking
+- Fixed restoration of agent states when reopening sessions.
 
 ## [0.32.3] - 2025-07-20
 
 ### Features
 
-- Improved statistics view UI with cleaner rendering and streamlined display
+- Improved statistics view UI with cleaner rendering.
 
 ## [0.32.2] - 2025-07-19
 
 ### Bug Fixes
 
-- Fixed missing LaTeX diff message rendering in progress view
+- Fixed missing LaTeX diff message rendering in progress view.
 
 ## [0.32.1] - 2025-07-10
 
 ### Features
 
-- Default model switched to **Gemini 2.5 Pro**
-- Added Grok 4 model with extended context window support
+- Default model switched to **Gemini 2.5 Pro**.
+- Added **Grok 4** model with extended context window support.
 
 ## [0.32.0] - 2025-07-07
 
 ### Features
 
-- Claude Sonnet 4T (Thinking) model set as default
-- Added Grok 4 Beta model support with 131k context window
+- **Claude Sonnet 4T** (Thinking) model set as default.
+- Added **Grok 4 Beta** model with 131k context window.
 
 ## [0.31.10] - 2025-07-04
 
 ### Features
 
-- Progress view templates for consistent UI
-- Markdown rendering restored with KaTeX math support
-- Diff errors now displayed as helpful tooltips
+- Progress view templates for consistent UI.
+- Markdown rendering restored with KaTeX math support.
+- Diff errors now displayed as helpful tooltips.
 
 ## [0.31.9] - 2025-07-01
 
 ### Features
 
-- Improved file list display in progress view
-- Missing output files now highlighted with direct links for easy access
+- Improved file list display in progress view.
+- Missing output files now highlighted with direct links.
 
 ## [0.31.8] - 2025-06-28
 
 ### Features
 
-- Added diagnostics tool and validation agent
-- KaTeX math rendering in progress view
-- Smoother streaming updates in progress view
+- Added diagnostics tool and validation agent.
+- KaTeX math rendering in progress view.
+- Smoother streaming updates in progress view.
 
 ## [0.31.7] - 2025-06-25
 
 ### Features
 
-- Added bulk latexdiff-vc runner for comparing multiple file versions
-- New tool-use agent capabilities
+- Added bulk latexdiff-vc runner for comparing multiple file versions.
+- New tool-use agent capabilities.
 
 ## [0.31.6] - 2025-06-25
 
 ### Features
 
-- Live reasoning updates displayed in progress view
-- Improved markdown rendering with better styling
+- Live reasoning updates displayed in progress view.
+- Improved markdown rendering with better styling.
 
 ## [0.31.5] - 2025-06-23
 
 ### Features
 
-- Redesigned scratchpad and thinking sections
-- Microphone transcription with ElevenLabs support
+- Redesigned scratchpad and thinking sections.
+- Microphone transcription with ElevenLabs support.
 
 ## [0.31.4] - 2025-06-17
 
 ### Features
 
-- Settings and history buttons moved to editor title bar for easier access
-- Optional audio notification when agent rounds complete
-- Enhanced agent creator with better YAML template support
+- Settings and history buttons moved to editor title bar.
+- Optional audio notification when agent rounds complete.
+- Enhanced agent creator with better YAML template support.
 
 ## [0.31.3] - 2025-06-15
 
 ### Features
 
-- Clipboard image pasting in instruction box with automatic cleanup
-- Added arXiv source processor for research papers
-- New deep research model support
+- Clipboard image pasting in instruction box with automatic cleanup.
+- Added arXiv source processor for research papers.
+- New deep research model support.
 
 ## [0.31.2] - 2025-06-08
 
 ### Features
 
-- Collapsible LaTeX diff sections for better organization
-- Automatic detection of TeX tools on all platforms
-- Cleaner error messages throughout the extension
+- Collapsible LaTeX diff sections.
+- Automatic detection of TeX tools on all platforms.
+- Cleaner error messages throughout the extension.
 
 ## [0.31.1] - 2025-06-04
 
 ### Features
 
-- Added GitHub Copilot model support
-- Smoother streaming output display
-- Diff view auto-refresh and quick access to compiled outputs
+- Added GitHub Copilot model support.
+- Smoother streaming output display.
+- Diff view auto-refresh and quick access to compiled outputs.
 
 ## [0.31.0] - 2025-06-03
 
 ### Features
 
-- Google AI thought summaries displayed in progress board
-- Improved diff editor with smart word wrap
-- Dynamic setting updates without restart
+- Google AI thought summaries displayed in progress board.
+- Improved diff editor with smart word wrap.
+- Dynamic setting updates without restart.
 
 ## [0.30.9] - 2025-05-24
 
 ### Features
 
-- Automatic cleanup of output files after housekeeping
-- Simplified log navigation with collapsible sections
-- Unified dropdown interface for tools and auto-extract options
+- Automatic cleanup of output files after housekeeping.
+- Simplified log navigation with collapsible sections.
+- Unified dropdown interface for tools and auto-extract options.
 
 ## [0.30.8] - 2025-05-22
 
 ### Features
 
-- Clickable output filenames for quick file access
-- Improved history browser with better action buttons
-- Refined UI spacing and visual consistency
+- Clickable output filenames for quick file access.
+- Improved history browser with better action buttons.
+- Refined UI spacing and visual consistency.
 
 ## [0.30.7] - 2025-05-21
 
 ### Features
 
-- File progress tracking and diff visualization in progress view
-- Updated API pricing information for all models
-- Round configuration now available in agent settings
+- File progress tracking and diff visualization in progress view.
+- Updated API pricing information for all models.
+- Round configuration now available in agent settings.
 
 ## [0.30.6] - 2025-05-19
 
 ### Features
 
-- Updated SDKs for OpenAI, Anthropic, and Google models
-- Improved error messages and user feedback
+- Updated SDKs for OpenAI, Anthropic, and Google models.
+- Improved error messages and user feedback.
 
 ## [0.30.5] - 2025-05-13
 
 ### Features
 
-- New command to apply LaTeX replacements to current file
-- Added Moonshot Kimi and Alibaba Qwen model support
-- Configurable LaTeX diff markup options
+- New command to apply LaTeX replacements to current file.
+- Added Moonshot Kimi and Alibaba Qwen model support.
+- Configurable LaTeX diff markup options.
 
 ## [0.30.2] - 2025-05-06
 
 ### Improvements
 
-- Updated Gemini model naming for clarity
+- Updated Gemini model naming for clarity.
 
 ## [0.30.1] - 2025-05-06
 
 ### Features
 
-- Updated Gemini 2.5 Pro model configuration
-- Enhanced quick-start documentation
+- Updated Gemini 2.5 Pro model configuration.
+- Enhanced quick-start documentation.
 
 ## [0.30.0] - 2025-05-04
 
 ### Features
 
-- Explorer now hides build directories by default
-- Enhanced DeepSeek model support
-- Improved PDF viewer with better tab management
+- Explorer now hides build directories by default.
+- Enhanced DeepSeek model support.
+- Improved PDF viewer with better tab management.
 
 ## [0.29.11] - 2025-05-04
 
 ### Features
 
-- Added O4 models support
-- Improved DeepSeek integration with official API and OpenRouter
-
-### Improvements
-
-- Updated delete button icon in progress view
+- Added O4 models support.
+- Improved DeepSeek integration with official API and OpenRouter.
 
 ## [0.29.10] - 2025-05-04
 
 ### Improvements
 
-- Code formatting improvements and stability enhancements
+- Code formatting improvements and stability enhancements.
 
 ## [0.29.7] - 2025-05-02
 
 ### Bug Fixes
 
-- Fixed progress view display issues
+- Fixed progress view display issues.
 
 ## [0.29.2] - 2025-04-22
 
 ### Features
 
-- Added Gemini-2.5-Flash model support
-- Enhanced Unicode character replacements
+- Added Gemini-2.5-Flash model support.
+- Enhanced Unicode character replacements.
 
 ## [0.29.0] - 2025-04-17
 
 ### Features
 
-- First public release of TeXRA
+- First public release of TeXRA.
