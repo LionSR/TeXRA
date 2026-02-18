@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.36.2] - 2026-02-17
+
+### Features
+
+- **Agent mode presets** — save, load, and delete custom agent configurations from the Multi-Agent tab. Includes built-in presets like Analytical Theorist to get started quickly.
+- **Tool Dashboard** — new settings tab showing which external tools (LaTeX, Git, Lean, Zotero, etc.) are installed and available on your system.
+- **Session descriptions** — agent sessions are now automatically summarized so orchestrators and the executions list have meaningful context at a glance.
+- **Live subagent progress** — the orchestrator now sees real-time cost, tool-call, and file-interaction updates from running subagents instead of waiting for them to finish.
+- **Orchestrator memory** — orchestrator agents record experience and intelligence gathered during sessions, improving results across future runs.
+- **New agents** — added leanSearch (Lean 4 / Mathlib research with arXiv cross-referencing), leanSimplifier (Lean 4 proof simplification), and presenter (interactive Beamer presentation building).
+- **Guided agent creation wizard** — create new agents by describing what you need; the wizard picks a suitable type, suggests tools, and generates the YAML definition for you.
+- **Agent management in settings** — customize and delete agents directly from the Agents tab; Select All / Unselect All buttons per source type (built-in, custom, remote) for quick toggling.
+- **Beamer theme** — paper2slide now uses the modern metropolis theme.
+
+### Bug Fixes
+
+- Fixed **stream tab animations** not playing when switching between agent streams.
+- Fixed **message updates being dropped** for grouped messages in certain multi-agent scenarios.
+- Agents no longer crash when hitting the **PDF page limit** — instead they receive a helpful message suggesting compaction.
+- **arXiv sources** are no longer re-downloaded when the files already exist locally.
+- Fixed **context window detection** for OpenAI Responses API models.
+- Fixed a crash in **environments without a home directory** (e.g., Docker containers).
+- Fixed **latexmk not found** errors by auto-detecting TeX installation paths across macOS, Linux, and Windows.
+- Fixed several **Windows / WSL issues** — line-ending normalization and path handling now work correctly.
+- Fixed agents **running extra rounds after a failure** instead of stopping and reporting the error.
+- Fixed agents **ignoring the interrupted status** when manually stopped mid-run.
+- **Authentication errors** no longer trigger repeated retries; only transient network failures are retried.
+- Fixed **keyboard shortcuts** sometimes being routed to the wrong panel.
+- Fixed **model dropdown** not appearing for users with personal API keys but no TeXRA account.
+- Fixed interrupted sessions losing their **conversation history** — previous messages are now preserved so you can review what happened.
+
+### Improvements
+
+- **Multi-agent UI is noticeably faster** — stream tabs now render independently, so switching between agents and receiving updates no longer slows down with many concurrent streams.
+- Agent management is now fully consolidated in the **Settings > Agents** tab — the sidebar explorer view has been removed.
+- **Error messages from tools** are now clearer and suggest concrete next steps (e.g., bash timeouts suggest using background mode).
+- Refreshed the **documentation site** with guides oriented toward mathematicians, physicists, and computational scientists.
+- Updated dependencies.
+
 ## [0.36.1] - 2026-02-13
 
 ### Bug Fixes
