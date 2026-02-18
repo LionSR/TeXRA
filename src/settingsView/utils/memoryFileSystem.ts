@@ -15,7 +15,9 @@ import {
   shouldSkipEntry,
 } from '@tools/memory/constants';
 import { relativeToDisplayPath } from '@tools/memory/memoryUtils';
+import { parseFrontmatter, formatAttribution } from '@tools/memory/memoryMeta';
 import { StorageFS } from '@utils/files';
+import { splitContentLines } from '@utils/text/stringUtils';
 import type { MemoryViewItem } from '@shared/schemas/settingsViewMessages';
 
 /**
@@ -27,11 +29,7 @@ export function buildPreview(content: string): {
   preview: string;
   lineCount: number;
 } {
-  const lines = content.split('\n');
-  if (lines.length > 0 && lines.at(-1) === '') {
-    lines.pop();
-  }
-
+  const lines = splitContentLines(content);
   const lineCount = lines.length;
   const previewLines = lines.slice(0, MAX_PREVIEW_LINES);
   let preview = previewLines.join('\n');
@@ -78,7 +76,8 @@ export async function walkMemoryDirectory(
     }
 
     const stats = await StorageFS.stat(nextStoragePath);
-    const content = await StorageFS.read(nextStoragePath);
+    const raw = await StorageFS.read(nextStoragePath);
+    const { meta, content } = parseFrontmatter(raw);
     const previewData = buildPreview(content);
     const displayPath = relativeToDisplayPath(nextRelative);
 
@@ -89,6 +88,7 @@ export async function walkMemoryDirectory(
       mtime: new Date(stats.mtime).toISOString(),
       lineCount: previewData.lineCount,
       preview: previewData.preview,
+      modifiedBy: meta ? formatAttribution(meta) : undefined,
     });
   }
 
