@@ -86,7 +86,7 @@ export class MemoryItem extends LitElement {
     if (item.modifiedBy) {
       parts.push(`by ${item.modifiedBy}`);
     }
-    return parts.filter(Boolean).join(' · ');
+    return parts.join(' · ');
   }
 
   override render(): TemplateResult | typeof nothing {
