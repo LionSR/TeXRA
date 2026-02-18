@@ -187,6 +187,7 @@ export const UpdateSuperYoloEnabledMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED),
   enabled: z.boolean(),
   reliabilitySettings: z.array(NumberVscodeSettingSchema).prefault([]),
+  allowOrchestratorKill: z.boolean(),
 });
 export type UpdateSuperYoloEnabledMessage = z.infer<
   typeof UpdateSuperYoloEnabledMessageSchema
@@ -393,6 +394,12 @@ const SetSuperYoloEnabledMessageSchema = z.object({
   enabled: z.boolean(),
 });
 
+// Allow orchestrator kill inbound message
+const SetAllowOrchestratorKillMessageSchema = z.object({
+  command: z.literal(CMD.SET_ALLOW_ORCHESTRATOR_KILL),
+  enabled: z.boolean(),
+});
+
 // Agent mode preset inbound messages
 const GetAgentModePresetsMessageSchema = commandOnly(
   CMD.GET_AGENT_MODE_PRESETS,
@@ -488,6 +495,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     // Super YOLO messages
     GetSuperYoloEnabledMessageSchema,
     SetSuperYoloEnabledMessageSchema,
+    SetAllowOrchestratorKillMessageSchema,
     // Agent mode preset messages
     GetAgentModePresetsMessageSchema,
     ApplyAgentModePresetMessageSchema,

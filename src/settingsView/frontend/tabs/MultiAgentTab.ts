@@ -188,6 +188,7 @@ export class MultiAgentTab extends LitElement {
 
   @property({ attribute: false }) superYoloEnabled = false;
   @property({ attribute: false }) toggleDisabled = true;
+  @property({ attribute: false }) allowOrchestratorKill = true;
   @property({ attribute: false }) reliabilitySettings: NumberVscodeSetting[] =
     [];
   @property({ attribute: false }) customPresets: AgentModePreset[] = [];
@@ -197,6 +198,15 @@ export class MultiAgentTab extends LitElement {
     const target = event.target as HTMLInputElement | null;
     this.dispatchEvent(
       createEvent('super-yolo-toggle', { enabled: Boolean(target?.checked) }),
+    );
+  }
+
+  private handleKillToggle(event: Event): void {
+    const target = event.target as HTMLInputElement | null;
+    this.dispatchEvent(
+      createEvent('allow-orchestrator-kill-toggle', {
+        enabled: Boolean(target?.checked),
+      }),
     );
   }
 
@@ -324,6 +334,20 @@ export class MultiAgentTab extends LitElement {
             When enabled, allows per-stream auto-approval of agent delegation
             proposals. Use the rocket button in the progress view toolbar to
             activate Super YOLO for individual streams.
+          </p>
+        </div>
+
+        <div class="setting-block">
+          <vscode-checkbox
+            ?checked=${this.allowOrchestratorKill}
+            @change=${this.handleKillToggle}
+          >
+            Allow orchestrator to kill subagents
+          </vscode-checkbox>
+          <p class="text-secondary setting-description">
+            When enabled, the orchestrator can terminate running subagents via
+            the kill action. Disable to prevent premature termination of
+            long-running tasks.
           </p>
         </div>
 

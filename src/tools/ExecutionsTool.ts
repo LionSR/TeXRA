@@ -41,6 +41,7 @@ import {
 import { ProcessExecutionHandle } from '@agent/runtime/ExecutionHandle';
 
 // Local imports - utils
+import { WorkspaceStateKey, workspaceSM } from '@common/state';
 import { StorageFS } from '@utils/files';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
@@ -557,6 +558,16 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
   }
 
   private handleKill(executionId: ExecutionId): ToolResult {
+    if (
+      !workspaceSM.get<boolean>(WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL, true)
+    ) {
+      return {
+        output:
+          'Killing subagents is disabled. Enable it in Settings > Multi-Agent.',
+        isError: true,
+      };
+    }
+
     const ctx = getCurrentToolFileInteractionContext();
     const callerStreamId = ctx?.streamId;
 
