@@ -114,8 +114,14 @@ function getBasicVars(
       })
       .join('\n');
 
-  const workflowAgentsList = formatAgentList(getVisibleAgents('workflow'));
-  const toolUseAgentsList = formatToolUseAgentList(getVisibleAgents('toolUse'));
+  // Filter out the current agent so it doesn't see itself as a delegation target
+  const selfName = agentConfig.agent;
+  const workflowAgentsList = formatAgentList(
+    getVisibleAgents('workflow').filter((a) => a.name !== selfName),
+  );
+  const toolUseAgentsList = formatToolUseAgentList(
+    getVisibleAgents('toolUse').filter((a) => a.name !== selfName),
+  );
 
   // Get default bib path from settings (empty string if not configured)
   const defaultBibPath = getConfig<string>('texra.bib.defaultPath', '');
