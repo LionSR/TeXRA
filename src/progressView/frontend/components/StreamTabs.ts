@@ -40,63 +40,42 @@ function formatStatusLabel(status: string): string {
   return status ? status.charAt(0).toUpperCase() + status.slice(1) : '';
 }
 
-@customElement('stream-tabs')
-export class StreamTabs extends LitElement {
+function buildTooltip(info: StreamTabInfo): string {
+  const mainLine = [
+    info.label,
+    info.model && `Model: ${info.model}`,
+    info.inputFile && `Input: ${info.inputFile}`,
+  ]
+    .filter(Boolean)
+    .join(' • ');
+  if (!info.lastTimestamp) return mainLine;
+  const lastSeen = formatRelativeTime(info.lastTimestamp);
+  if (lastSeen && mainLine) {
+    return `${mainLine}\nLast activity ${lastSeen}`;
+  }
+  return mainLine;
+}
+
+// =============================================================================
+// StreamTab — individual tab component
+// =============================================================================
+
+/**
+ * Individual stream tab.  Re-renders only when its own `.info` ref or
+ * `.active` flag changes.  Since the upstream `streams.map()` preserves
+ * object references for unchanged items, most tabs skip rendering entirely
+ * on status updates to a single stream.
+ */
+@customElement('stream-tab')
+export class StreamTab extends LitElement {
   static override styles = [
     designTokens,
     animationStyles,
-    commonViewStyles,
     codiconIconClasses,
     statusIndicatorStyles,
     css`
       :host {
-        display: flex;
-        flex-direction: column;
-        flex: 1;
-        width: 100%;
-        min-height: 0;
-        overflow: hidden;
-      }
-
-      :host([hidden]) {
-        display: none;
-      }
-
-      .tabs {
-        display: flex;
-        flex-direction: column;
-        flex: 1;
-        min-width: 0;
-        font-size: var(--font-size-sm);
-        border-left: var(--border-thin) solid var(--color-border);
-        height: 100%;
-        overflow: visible;
-        background-color: var(--background-color);
-      }
-
-      .tabs-content {
-        flex: 1;
-        overflow-y: auto;
-        min-height: 0;
-      }
-
-      .clear-all-container {
-        flex-shrink: 0;
-        border-top: var(--border-thin) solid var(--color-border);
-        padding: var(--spacing-small);
-      }
-
-      .agent-filter-group {
-        display: flex;
-        justify-content: flex-start;
-        flex-wrap: wrap;
-        gap: var(--spacing-small);
-        margin-bottom: var(--spacing-small);
-      }
-
-      .agent-filter-group vscode-radio {
-        min-width: auto;
-        flex: 0 0 auto;
+        display: block;
       }
 
       .tab-container {
@@ -206,6 +185,150 @@ export class StreamTabs extends LitElement {
       .tab-delete:focus-within {
         color: var(--vscode-errorForeground);
       }
+    `,
+  ];
+
+  @property({ attribute: false }) info!: StreamTabInfo;
+  @property({ type: Boolean }) active = false;
+
+  override render(): TemplateResult {
+    const stream = this.info;
+    const tooltip = buildTooltip(stream);
+    const status = stream.status ?? STREAM_STATUS.READY;
+    const statusLabel = formatStatusLabel(status);
+    const agentDecorator = getAgentCategoryDecorator(stream.agentCategory);
+
+    return html`
+      <div
+        class=${classMap({
+          'tab-container': true,
+          'stream-tab': true,
+          'is-active': this.active,
+        })}
+      >
+        <button
+          class="tab"
+          data-stream=${stream.name}
+          data-action="select"
+          title=${tooltip}
+        >
+          <div class="tab-header">
+            <span
+              class=${classMap({
+                'tab-status': true,
+                [`is-${status}`]: Boolean(status),
+              })}
+              data-status=${statusLabel}
+            ></span>
+            <span class="tab-title"
+              >${stream.parentStreamId ? '↳ ' : ''}${stream.label ||
+              stream.name}</span
+            >
+          </div>
+          <div class="tab-meta">
+            <span class="last-active"
+              >${stream.lastTimestamp
+                ? formatRelativeTime(stream.lastTimestamp)
+                : ''}</span
+            >
+            <span class="model">${stream.model ?? ''}</span>
+            <i
+              class=${`codicon codicon-${agentDecorator.icon} agent-category`}
+              title=${`Category: ${agentDecorator.label}`}
+            ></i>
+            ${when(
+              stream.isRemote,
+              () => html`
+                <i
+                  class=${`codicon codicon-${AGENT_DECORATORS.properties.remote.icon} remote-agent`}
+                  title=${AGENT_DECORATORS.properties.remote.hint}
+                ></i>
+              `,
+            )}
+            ${when(
+              stream.hasMultipleOutputs,
+              () => html`
+                <i
+                  class=${`codicon codicon-${AGENT_DECORATORS.properties.multipleOutputs.icon} multi-file`}
+                  title=${AGENT_DECORATORS.properties.multipleOutputs.hint}
+                ></i>
+              `,
+            )}
+          </div>
+        </button>
+        <vscode-toolbar-button
+          class="tab-delete"
+          icon="close"
+          title="Delete stream"
+          aria-label="Delete stream"
+          data-stream=${stream.name}
+          data-action="delete"
+        ></vscode-toolbar-button>
+      </div>
+    `;
+  }
+}
+
+// =============================================================================
+// StreamTabs — tab list container
+// =============================================================================
+
+@customElement('stream-tabs')
+export class StreamTabs extends LitElement {
+  static override styles = [
+    designTokens,
+    animationStyles,
+    commonViewStyles,
+    css`
+      :host {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        width: 100%;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      :host([hidden]) {
+        display: none;
+      }
+
+      .tabs {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-width: 0;
+        font-size: var(--font-size-sm);
+        border-left: var(--border-thin) solid var(--color-border);
+        height: 100%;
+        overflow: visible;
+        background-color: var(--background-color);
+      }
+
+      .tabs-content {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+      }
+
+      .clear-all-container {
+        flex-shrink: 0;
+        border-top: var(--border-thin) solid var(--color-border);
+        padding: var(--spacing-small);
+      }
+
+      .agent-filter-group {
+        display: flex;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        gap: var(--spacing-small);
+        margin-bottom: var(--spacing-small);
+      }
+
+      .agent-filter-group vscode-radio {
+        min-width: auto;
+        flex: 0 0 auto;
+      }
 
       .sort-btn.active::part(control) {
         background-color: var(--vscode-toolbar-hoverBackground);
@@ -241,7 +364,12 @@ export class StreamTabs extends LitElement {
             ${repeat(
               this.streams,
               (stream) => stream.name,
-              (stream) => this.renderTab(stream),
+              (stream) => html`
+                <stream-tab
+                  .info=${stream}
+                  ?active=${stream.name === this.activeStreamId}
+                ></stream-tab>
+              `,
             )}
           </div>
           ${when(
@@ -306,83 +434,6 @@ export class StreamTabs extends LitElement {
     `;
   }
 
-  private renderTab(stream: StreamTabInfo): TemplateResult {
-    const isActive = stream.name === this.activeStreamId;
-    const tooltip = this.buildTooltip(stream);
-    const status = stream.status ?? STREAM_STATUS.READY;
-    const statusLabel = formatStatusLabel(status);
-    const agentDecorator = getAgentCategoryDecorator(stream.agentCategory);
-
-    return html`
-      <div
-        class=${classMap({
-          'tab-container': true,
-          'stream-tab': true,
-          'is-active': isActive,
-        })}
-      >
-        <button
-          class="tab"
-          data-stream=${stream.name}
-          data-action="select"
-          title=${tooltip}
-        >
-          <div class="tab-header">
-            <span
-              class=${classMap({
-                'tab-status': true,
-                [`is-${status}`]: Boolean(status),
-              })}
-              data-status=${statusLabel}
-            ></span>
-            <span class="tab-title"
-              >${stream.parentStreamId ? '↳ ' : ''}${stream.label ||
-              stream.name}</span
-            >
-          </div>
-          <div class="tab-meta">
-            <span class="last-active"
-              >${stream.lastTimestamp
-                ? formatRelativeTime(stream.lastTimestamp)
-                : ''}</span
-            >
-            <span class="model">${stream.model ?? ''}</span>
-            <i
-              class=${`codicon codicon-${agentDecorator.icon} agent-category`}
-              title=${`Category: ${agentDecorator.label}`}
-            ></i>
-            ${when(
-              stream.isRemote,
-              () => html`
-                <i
-                  class=${`codicon codicon-${AGENT_DECORATORS.properties.remote.icon} remote-agent`}
-                  title=${AGENT_DECORATORS.properties.remote.hint}
-                ></i>
-              `,
-            )}
-            ${when(
-              stream.hasMultipleOutputs,
-              () => html`
-                <i
-                  class=${`codicon codicon-${AGENT_DECORATORS.properties.multipleOutputs.icon} multi-file`}
-                  title=${AGENT_DECORATORS.properties.multipleOutputs.hint}
-                ></i>
-              `,
-            )}
-          </div>
-        </button>
-        <vscode-toolbar-button
-          class="tab-delete"
-          icon="close"
-          title="Delete stream"
-          aria-label="Delete stream"
-          data-stream=${stream.name}
-          data-action="delete"
-        ></vscode-toolbar-button>
-      </div>
-    `;
-  }
-
   private handleTabClick(event: MouseEvent): void {
     const actionElement = getComposedPathElement<HTMLElement>(
       event,
@@ -422,21 +473,5 @@ export class StreamTabs extends LitElement {
 
   private handleDeleteAll(): void {
     this.dispatchEvent(ProgressEvents.deleteAll());
-  }
-
-  private buildTooltip(info: StreamTabInfo): string {
-    const mainLine = [
-      info.label,
-      info.model && `Model: ${info.model}`,
-      info.inputFile && `Input: ${info.inputFile}`,
-    ]
-      .filter(Boolean)
-      .join(' • ');
-    if (!info.lastTimestamp) return mainLine;
-    const lastSeen = formatRelativeTime(info.lastTimestamp);
-    if (lastSeen && mainLine) {
-      return `${mainLine}\nLast activity ${lastSeen}`;
-    }
-    return mainLine;
   }
 }

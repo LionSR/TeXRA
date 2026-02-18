@@ -5,6 +5,7 @@ import {
   type AgentCategory,
   type AgentCategoryFilter,
   type ContextState,
+  type LogMessageData,
   type SetFollowupOptionsMessage,
   type StreamState,
   type StreamTabInfo,
@@ -34,12 +35,27 @@ export type FollowupOptionsState = Omit<
   'command' | 'stream'
 >;
 
+/**
+ * Log data stored separately from stream meta state.
+ * This separation lets Lit skip re-renders of content components
+ * (StreamHeader, TodoList, UsagePanel, FollowUpInput) during streaming —
+ * only LogList/TaskGroupList re-render when logs change.
+ */
+export interface StreamLogs {
+  logs: LogMessageData[];
+}
+
+export const EMPTY_STREAM_LOGS: StreamLogs = { logs: [] };
+
 export interface ProgressState {
   activeStreamId: StreamTabId | null;
   streams: StreamTabInfo[];
   streamFilter: StreamFilter;
   streamSort: StreamSort;
+  /** Meta state per stream (status, todos, usage, ui, taskGroups, etc.) */
   streamStates: Map<StreamTabId, StreamState>;
+  /** Log messages per stream — separated so log appends don't trigger meta context updates */
+  streamLogs: Map<StreamTabId, StreamLogs>;
   followupOptionsByStream: Map<StreamTabId, FollowupOptionsState>;
 }
 
@@ -50,6 +66,7 @@ export function createInitialState(): ProgressState {
     streamFilter: 'all',
     streamSort: 'time',
     streamStates: new Map(),
+    streamLogs: new Map(),
     followupOptionsByStream: new Map(),
   };
 }
