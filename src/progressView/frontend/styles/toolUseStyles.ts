@@ -144,12 +144,6 @@ export const toolUseStyles = css`
     border: var(--border-thin) solid var(--color-border);
   }
 
-  .tool-output-terminal .terminal-container {
-    min-height: 64px;
-    max-height: var(--height-large);
-    overflow: auto;
-  }
-
   /* Proposal setup link (in summary row and body) */
   .proposal-restore-link {
     color: var(--color-text-link);
