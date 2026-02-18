@@ -1,3 +1,7 @@
+// Standard library imports
+import * as os from 'os';
+import * as path from 'path';
+
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -7,14 +11,67 @@ import { isLatexFile } from '@common/files/fileTypeUtils';
 
 // Local imports - utilities
 import * as logger from '@logger/logUtils';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS, pathToLocation } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import {
   LATEX_VIEWER_OPEN_DELAY_MS,
   LATEX_VIEWER_REFRESH_DELAY_MS,
 } from '@utils/config';
 
+// Local imports - latex
+import { compileLatex2Pdf } from '@latex/texTools';
+
 const CHANNEL = 'OpenBuildUtils';
+
+/**
+ * Resolve `latex-workshop.latex.outDir` by expanding all LaTeX Workshop
+ * placeholders for the given file.  Longer placeholders are replaced first
+ * so that e.g. `%DOC_EXT%` is not partially consumed by `%DOC%`.
+ *
+ * Falls back to a relative path resolved against the file's directory when the
+ * result is not absolute.
+ */
+function resolveLatexWorkshopOutDir(filePath: string): string {
+  const raw = vscode.workspace
+    .getConfiguration('latex-workshop.latex')
+    .get<string>('outDir', '%DIR%/build');
+
+  const dir = path.dirname(filePath);
+  const normalizedRaw = raw.trim();
+  if (!normalizedRaw) {
+    return path.join(dir, 'build');
+  }
+
+  const docfile = path.basename(filePath, path.extname(filePath));
+  const doc = path.join(dir, docfile);
+  const workspaceFolder =
+    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? dir;
+  const relativeDir = path.relative(workspaceFolder, dir);
+  const relativeDoc = path.relative(workspaceFolder, doc);
+
+  // Order matters: longer/more-specific placeholders first to avoid partial matches.
+  const replacements: [string, string][] = [
+    ['%DOC_EXT_W32%', filePath.replace(/\//g, '\\')],
+    ['%DOCFILE_EXT%', path.basename(filePath)],
+    ['%DOC_EXT%', filePath],
+    ['%DOCFILE%', docfile],
+    ['%DOC_W32%', doc.replace(/\//g, '\\')],
+    ['%DOC%', doc],
+    ['%DIR_W32%', dir.replace(/\//g, '\\')],
+    ['%DIR%', dir],
+    ['%WORKSPACE_FOLDER%', workspaceFolder],
+    ['%RELATIVE_DIR%', relativeDir],
+    ['%RELATIVE_DOC%', relativeDoc],
+    ['%TMPDIR%', os.tmpdir()],
+  ];
+
+  let resolved = normalizedRaw;
+  for (const [placeholder, value] of replacements) {
+    resolved = resolved.replaceAll(placeholder, value);
+  }
+
+  return path.isAbsolute(resolved) ? resolved : path.resolve(dir, resolved);
+}
 
 /**
  * Open a file, compile if it is TeX, and display the resulting PDF.
@@ -39,23 +96,50 @@ export async function openBuildDisplayIfTex(
     return;
   }
 
-  await openAndBuildLatex(uri, options.preserveFocus ?? false);
+  await openAndBuildLatex(uri, fileLocation, options.preserveFocus ?? false);
 }
 
 /**
  * Open LaTeX file, build it, and display PDF viewer.
+ *
+ * Files inside the workspace are compiled via LaTeX Workshop so the user
+ * gets the full editor integration (synctex, diagnostics, etc.).
+ *
+ * Files outside the workspace (e.g. in run-storage) are compiled with the
+ * internal `compileLatex2Pdf` helper which sets TEXINPUTS to include the
+ * workspace root, ensuring project-local .sty / .cls / .bib files are found.
  */
 async function openAndBuildLatex(
   uri: vscode.Uri,
+  fileLocation: FileLocation,
   preserveFocus: boolean,
 ): Promise<void> {
   const doc = await vscode.workspace.openTextDocument(uri);
   await vscode.window.showTextDocument(doc, { preview: true, preserveFocus });
 
-  try {
-    await vscode.commands.executeCommand('latex-workshop.build', uri);
-  } catch (err) {
-    logger.warn(CHANNEL, `LaTeX Workshop build failed: ${toErrorMessage(err)}`);
+  if (fileLocation.kind === 'workspace') {
+    try {
+      await vscode.commands.executeCommand('latex-workshop.build', uri);
+    } catch (err) {
+      logger.warn(
+        CHANNEL,
+        `LaTeX Workshop build failed: ${toErrorMessage(err)}`,
+      );
+    }
+  } else {
+    // Outside workspace — LaTeX Workshop cannot resolve project-local
+    // packages, so compile internally with TEXINPUTS set.
+    // Resolve the same outDir that LaTeX Workshop uses so the viewer finds the PDF.
+    const outDir = resolveLatexWorkshopOutDir(uri.fsPath);
+    const ok = await compileLatex2Pdf(pathToLocation(uri.fsPath), {
+      outputDirectory: outDir,
+    });
+    if (!ok) {
+      logger.warn(
+        CHANNEL,
+        `Internal LaTeX compilation failed for ${uri.fsPath}`,
+      );
+    }
   }
 
   scheduleViewerDisplay();
