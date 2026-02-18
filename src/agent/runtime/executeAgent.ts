@@ -309,6 +309,7 @@ function toOutputSummaries(roundOutputs: RoundOutput[]): OutputFileSummary[] {
 /** Create an onRoundCompleted callback that feeds progress into the execution registry and orchestrator. */
 function createRoundProgressCallback(
   executionId: ExecutionId,
+  streamId: StreamTabId,
   onProgress?: (update: SubagentProgressUpdate) => void,
 ): (roundIndex: number, totalRounds: number) => void {
   return (roundIndex, totalRounds) => {
@@ -320,6 +321,13 @@ function createRoundProgressCallback(
       kind: 'round',
       currentRound: roundIndex,
       totalRounds,
+    });
+    bus.emit('updateConversationProgress', {
+      streamId,
+      progress: {
+        conversationTurns: roundIndex + 1,
+        toolCallCount: 0,
+      },
     });
   };
 }
@@ -604,6 +612,7 @@ export async function executeAgent(
         const interrupts = createInterruptCallbacks();
 
         if (setting.agentCategory === AgentCategory.ToolUse) {
+          let toolUseTurns = 0;
           const result = await runToolUseFlow({
             ...ctx,
             ...interrupts,
@@ -612,7 +621,19 @@ export async function executeAgent(
             setting: ctx.setting as AgentToolUseSetting,
             isSubagent,
             onBeforeWaiting: options?.onBeforeWaiting,
-            onProgress: options?.onProgress,
+            onProgress: (update) => {
+              if (update.kind === 'overview') {
+                toolUseTurns++;
+                bus.emit('updateConversationProgress', {
+                  streamId,
+                  progress: {
+                    conversationTurns: toolUseTurns,
+                    toolCallCount: update.toolCallCount,
+                  },
+                });
+              }
+              options?.onProgress?.(update);
+            },
             onFollowUpConsumed: () =>
               bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
           });
@@ -627,6 +648,7 @@ export async function executeAgent(
 
         const onRoundCompleted = createRoundProgressCallback(
           ctx.executionId,
+          streamId,
           options?.onProgress,
         );
         const result = await runReflectionFlow({
@@ -694,7 +716,7 @@ export async function executeMergeAgent(
         parentStage: ctx.parentStage,
         onRoundCompleted: createRoundProgressCallback(
           ctx.executionId,
-          undefined,
+          streamId,
         ),
       });
       return {
