@@ -43,8 +43,10 @@ export class TerminalOutput extends LitElement {
   private terminal: Terminal | null = null;
   private fitAddon: FitAddon | null = null;
   private resizeObserver: ResizeObserver | null = null;
-  private writeChain: Promise<void> = Promise.resolve();
   private detailsElement: HTMLDetailsElement | null = null;
+  private isFlushingText = false;
+  private needsFlush = false;
+  private pendingText = '';
 
   private readonly handleDetailsToggle = (): void => {
     this.refitIfVisible();
@@ -78,6 +80,8 @@ export class TerminalOutput extends LitElement {
 
   override updated(changedProperties: Map<string, unknown>): void {
     if (!changedProperties.has('text')) return;
+    this.pendingText = this.text;
+    this.needsFlush = true;
     this.renderTerminalText();
   }
 
@@ -121,10 +125,19 @@ export class TerminalOutput extends LitElement {
   }
 
   private renderTerminalText(): void {
-    const flushWrite = async (): Promise<void> => {
-      if (!this.terminal) return;
+    if (this.isFlushingText) return;
 
-      const lineCount = this.text.split('\n').length;
+    this.isFlushingText = true;
+    void this.flushTerminalText();
+  }
+
+  private async flushTerminalText(): Promise<void> {
+    while (this.needsFlush) {
+      this.needsFlush = false;
+      if (!this.terminal) continue;
+
+      const text = this.pendingText;
+      const lineCount = text.split('\n').length;
       const scrollback = Math.max(MIN_SCROLLBACK, lineCount);
       if (this.terminal.options.scrollback !== scrollback) {
         this.terminal.options = {
@@ -135,12 +148,15 @@ export class TerminalOutput extends LitElement {
 
       this.terminal.reset();
       await new Promise<void>((resolve) => {
-        this.terminal?.write(this.text, () => resolve());
+        this.terminal?.write(text, () => resolve());
       });
       this.refitIfVisible();
-    };
+    }
 
-    this.writeChain = this.writeChain.then(flushWrite, flushWrite);
+    this.isFlushingText = false;
+    if (this.needsFlush) {
+      this.renderTerminalText();
+    }
   }
 
   private resolveThemeFromCssVars(): {
