@@ -11,6 +11,8 @@ const DEFAULT_THEME = {
   fontFamily: 'monospace',
 } as const;
 
+const MIN_SCROLLBACK = 4_000;
+
 /**
  * Read-only terminal renderer for shell output.
  * Uses xterm.js for ANSI colors/formatting without interactive input.
@@ -41,6 +43,7 @@ export class TerminalOutput extends LitElement {
   private terminal: Terminal | null = null;
   private fitAddon: FitAddon | null = null;
   private resizeObserver: ResizeObserver | null = null;
+  private writeChain: Promise<void> = Promise.resolve();
 
   private readonly handleDetailsToggle = (): void => {
     this.refitIfVisible();
@@ -55,7 +58,7 @@ export class TerminalOutput extends LitElement {
     this.terminal = new Terminal({
       disableStdin: true,
       convertEol: true,
-      scrollback: 4_000,
+      scrollback: MIN_SCROLLBACK,
       fontFamily: resolvedTheme.fontFamily,
       fontSize: 12,
       theme: {
@@ -75,7 +78,6 @@ export class TerminalOutput extends LitElement {
   override updated(changedProperties: Map<string, unknown>): void {
     if (!changedProperties.has('text')) return;
     this.renderTerminalText();
-    this.refitIfVisible();
   }
 
   override disconnectedCallback(): void {
@@ -119,9 +121,26 @@ export class TerminalOutput extends LitElement {
   }
 
   private renderTerminalText(): void {
-    if (!this.terminal) return;
-    this.terminal.reset();
-    this.terminal.write(this.text);
+    const flushWrite = async (): Promise<void> => {
+      if (!this.terminal) return;
+
+      const lineCount = this.text.split('\n').length;
+      const scrollback = Math.max(MIN_SCROLLBACK, lineCount);
+      if (this.terminal.options.scrollback !== scrollback) {
+        this.terminal.options = {
+          ...this.terminal.options,
+          scrollback,
+        };
+      }
+
+      this.terminal.reset();
+      await new Promise<void>((resolve) => {
+        this.terminal?.write(this.text, () => resolve());
+      });
+      this.refitIfVisible();
+    };
+
+    this.writeChain = this.writeChain.then(flushWrite, flushWrite);
   }
 
   private resolveThemeFromCssVars(): {
