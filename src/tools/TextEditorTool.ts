@@ -400,7 +400,6 @@ export class TextEditorTool extends defineTool({
       if (appliedContent !== baseContent) {
         this.addToHistory(filePath, baseContent);
       }
-      const finalContent = appliedContent;
 
       recordToolFileRead(filePath);
 
@@ -412,13 +411,13 @@ export class TextEditorTool extends defineTool({
       const endLine =
         replacementLine + SNIPPET_LINES + (newStr.match(/\n/g) ?? []).length;
 
-      const newFileLines = finalContent.split('\n');
+      const newFileLines = appliedContent.split('\n');
       const snippet = newFileLines.slice(startLine - 1, endLine).join('\n');
 
       const userDiffNote = formatUnifiedApprovalUserDiff(
         filePath,
         newFileContent,
-        finalContent,
+        appliedContent,
       );
       const successIntro = `The file ${filePath} has been edited.`;
       const snippetOutput = this.makeOutput(
@@ -502,11 +501,10 @@ export class TextEditorTool extends defineTool({
       if (appliedContent !== baseContent) {
         this.addToHistory(filePath, baseContent);
       }
-      const finalContent = appliedContent;
 
       recordToolFileRead(filePath);
 
-      const previewLines = finalContent.split('\n');
+      const previewLines = appliedContent.split('\n');
       const insertIndex = insertLine - 1;
       const snippetStart = Math.max(0, insertIndex - SNIPPET_LINES);
       const snippetEnd = Math.min(
@@ -520,7 +518,7 @@ export class TextEditorTool extends defineTool({
       const userDiffNote = formatUnifiedApprovalUserDiff(
         filePath,
         newFileContent,
-        finalContent,
+        appliedContent,
       );
 
       const successIntro = `The file ${filePath} has been edited.`;
@@ -585,7 +583,6 @@ export class TextEditorTool extends defineTool({
         approvedContent,
       );
       history.pop();
-      const finalContent = appliedContent;
 
       recordToolFileRead(filePath);
 
@@ -596,9 +593,9 @@ export class TextEditorTool extends defineTool({
       const userDiffNote = formatUnifiedApprovalUserDiff(
         filePath,
         previousContent,
-        finalContent,
+        appliedContent,
       );
-      const baseOutput = `Last edit to ${filePath} undone successfully. ${this.makeOutput(finalContent, filePath)}`;
+      const baseOutput = `Last edit to ${filePath} undone successfully. ${this.makeOutput(appliedContent, filePath)}`;
       const output = userDiffNote
         ? `${baseOutput}\n${userDiffNote}`
         : baseOutput;

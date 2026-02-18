@@ -95,10 +95,7 @@ function getRecentCommits(rootPath?: string): string[] | null {
   if (result.exitCode !== 0) {
     return [];
   }
-  return result.stdout
-    .toString()
-    .split('\n')
-    .map((line) => line.trim());
+  return result.stdout.split('\n').map((line) => line.trim());
 }
 
 function findCommitInHistory(
@@ -139,7 +136,7 @@ function findCommitInHistory(
     return sanitizedCommit;
   }
 
-  const label = labelResult.stdout.toString().trim();
+  const label = labelResult.stdout.trim();
   return label || sanitizedCommit;
 }
 

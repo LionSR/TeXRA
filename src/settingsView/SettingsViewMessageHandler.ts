@@ -212,11 +212,15 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
         SecretManager.getApiKeySecretName(provider),
       );
       const envValue = process.env[`${provider.toUpperCase()}_API_KEY`];
-      const status: ProviderKeyStatus['status'] = secretValue
-        ? 'set'
-        : envValue
-          ? 'env'
-          : 'not-set';
+
+      let status: ProviderKeyStatus['status'];
+      if (secretValue) {
+        status = 'set';
+      } else if (envValue) {
+        status = 'env';
+      } else {
+        status = 'not-set';
+      }
 
       return {
         provider,
@@ -630,9 +634,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendCustomAgentDir(webview: vscode.Webview): Promise<void> {
-    const configuredPath = (
-      globalSM.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, '') ?? ''
-    ).trim();
+    const configuredPath = globalSM
+      .get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, '')
+      .trim();
     const isDefault = configuredPath === '';
     const resolvedPath = await agentDirectories.custom();
     await webview.postMessage({
@@ -647,9 +651,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
 
   public async sendSuperYoloEnabled(webview: vscode.Webview): Promise<void> {
-    const enabled =
-      workspaceSM.get<boolean>(WorkspaceStateKey.SUPER_YOLO_ENABLED, false) ??
-      false;
+    const enabled = workspaceSM.get<boolean>(
+      WorkspaceStateKey.SUPER_YOLO_ENABLED,
+      false,
+    );
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
       enabled,
