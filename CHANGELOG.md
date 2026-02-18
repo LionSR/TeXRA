@@ -15,6 +15,9 @@ All notable changes to this project will be documented in this file.
 - **Guided agent creation wizard** — create new agents by describing what you need; the wizard picks a suitable type, suggests tools, and generates the YAML definition for you.
 - **Agent management in settings** — customize and delete agents directly from the Agents tab; Select All / Unselect All buttons per source type (built-in, custom, remote) for quick toggling.
 - **Beamer theme** — paper2slide now uses the modern metropolis theme.
+- Added **Claude Sonnet 4.6** (thinking and regular) to the default model list, replacing Sonnet 4.5.
+- Enabled **server-side context compaction** for Sonnet 4.6 in tool-use mode (previously Opus 4.6 only).
+- Added Sonnet 4.6 to the **1M context window beta** eligibility list.
 
 ### Bug Fixes
 
