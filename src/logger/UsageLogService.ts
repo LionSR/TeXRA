@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
 import { UsageLogResponseSchema } from './UsageLogTypes';
@@ -116,7 +117,7 @@ class UsageLogServiceImpl {
     } catch (error) {
       logger.warn(
         CHANNEL,
-        `Failed to send usage batch: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to send usage batch: ${toErrorMessage(error)}`,
       );
     } finally {
       this.isFlushing = false;

@@ -242,7 +242,7 @@ class BatchNode<
   Svc = unknown,
 > extends Node<S, P, Svc> {
   async _exec(items: unknown[]): Promise<unknown[]> {
-    if (!items || !Array.isArray(items)) return [];
+    if (!Array.isArray(items)) return [];
     const results = [];
     for (const item of items) {
       // Check abort signal before each batch item for responsive cancellation
@@ -258,7 +258,7 @@ class ParallelBatchNode<
   Svc = unknown,
 > extends Node<S, P, Svc> {
   async _exec(items: unknown[]): Promise<unknown[]> {
-    if (!items || !Array.isArray(items)) return [];
+    if (!Array.isArray(items)) return [];
     // Check abort signal before starting parallel execution
     if (this.signal?.aborted) return [];
     const results = await Promise.all(items.map((item) => super._exec(item)));
