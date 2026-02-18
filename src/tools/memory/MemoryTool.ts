@@ -78,27 +78,36 @@ export class MemoryTool extends defineTool({
 Paths must start with /memories. Use /memories to list files, /memories/file.md for specific files. "/" alone is invalid.`,
   schema: MemoryToolInputSchema,
 }) {
+  /**
+   * Canonicalize a raw display path so that equivalent spellings
+   * (e.g. `/memories/` vs `/memories`) resolve to the same string.
+   * Round-trips through storage resolution to normalize slashes and segments.
+   */
+  private canonicalize(rawPath: string): string {
+    return toDisplayPath(displayToStoragePath(rawPath));
+  }
+
   protected async execute(input: MemoryToolInput): Promise<ToolResult> {
     switch (input.command) {
       case 'view':
         return this.view(
-          requireField(input.path, 'path', input.command),
+          this.canonicalize(requireField(input.path, 'path', input.command)),
           input.view_range ?? undefined,
         );
       case 'create':
         return this.create(
-          requireField(input.path, 'path', input.command),
+          this.canonicalize(requireField(input.path, 'path', input.command)),
           requireField(input.file_text, 'file_text', input.command),
         );
       case 'str_replace':
         return this.strReplace(
-          requireField(input.path, 'path', input.command),
+          this.canonicalize(requireField(input.path, 'path', input.command)),
           requireField(input.old_str, 'old_str', input.command),
           requireField(input.new_str, 'new_str', input.command),
         );
       case 'insert':
         return this.insert(
-          requireField(input.path, 'path', input.command),
+          this.canonicalize(requireField(input.path, 'path', input.command)),
           requireField(input.insert_line, 'insert_line', input.command),
           requireField(
             input.insert_text ?? input.new_str,
@@ -107,11 +116,17 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
           ),
         );
       case 'delete':
-        return this.delete(requireField(input.path, 'path', input.command));
+        return this.delete(
+          this.canonicalize(requireField(input.path, 'path', input.command)),
+        );
       case 'rename':
         return this.rename(
-          requireField(input.old_path, 'old_path', input.command),
-          requireField(input.new_path, 'new_path', input.command),
+          this.canonicalize(
+            requireField(input.old_path, 'old_path', input.command),
+          ),
+          this.canonicalize(
+            requireField(input.new_path, 'new_path', input.command),
+          ),
         );
       default:
         throw new ToolError(`Unrecognized command: ${input.command}`);
@@ -144,12 +159,15 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
   }
 
   /** Return early result if the file hasn't been viewed yet. */
-  private requireViewBeforeEdit(inputPath: string): ToolResult | undefined {
+  private requireViewBeforeModify(
+    inputPath: string,
+    operation: string = 'editing',
+  ): ToolResult | undefined {
     return (
       requireFileReadForEdit(
         inputPath,
         true,
-        'Edits to memory files require viewing the file first. Please use the view command before editing.',
+        `Modifications to memory files require viewing the file first. Please use the view command before ${operation}.`,
       ) ?? undefined
     );
   }
@@ -197,6 +215,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const stats = await StorageFS.stat(resolvedPath);
     if (stats.type === vscode.FileType.Directory) {
       const listing = await this.buildDirectoryListing(resolvedPath);
+      recordToolFileRead(inputPath);
       return {
         summary: `Listed directory: ${inputPath}`,
         output: [
@@ -267,7 +286,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const resolvedPath = this.resolveMemoryPath(inputPath);
     await this.requireEditableFile(resolvedPath, inputPath);
 
-    const readGate = this.requireViewBeforeEdit(inputPath);
+    const readGate = this.requireViewBeforeModify(inputPath);
     if (readGate) return readGate;
 
     const { content } = await this.readMemoryFile(resolvedPath);
@@ -313,7 +332,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const resolvedPath = this.resolveMemoryPath(inputPath);
     await this.requireEditableFile(resolvedPath, inputPath);
 
-    const readGate = this.requireViewBeforeEdit(inputPath);
+    const readGate = this.requireViewBeforeModify(inputPath);
     if (readGate) return readGate;
 
     const { content } = await this.readMemoryFile(resolvedPath);
@@ -348,6 +367,9 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
       throw new ToolError(`The path ${inputPath} does not exist.`);
     }
 
+    const readGate = this.requireViewBeforeModify(inputPath, 'deleting');
+    if (readGate) return readGate;
+
     await StorageFS.delete(resolvedPath, { recursive: true });
     return {
       summary: `Deleted: ${inputPath}`,
@@ -366,6 +388,9 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     if (!oldExists) {
       throw new ToolError(`The path ${oldPathInput} does not exist.`);
     }
+
+    const readGate = this.requireViewBeforeModify(oldPathInput, 'renaming');
+    if (readGate) return readGate;
 
     const newExists = await StorageFS.exists(resolvedNewPath);
     if (newExists) {
