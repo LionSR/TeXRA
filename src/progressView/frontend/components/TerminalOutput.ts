@@ -138,6 +138,12 @@ export class TerminalOutput extends LitElement {
         if (!this.terminal) continue;
 
         const text = this.pendingText;
+        const activeBuffer = this.terminal.buffer.active;
+        const previousBaseY = activeBuffer.baseY;
+        const previousViewportY = activeBuffer.viewportY;
+        const distanceFromBottom = previousBaseY - previousViewportY;
+        const wasPinnedToBottom = distanceFromBottom <= 1;
+
         const lineCount = text.split('\n').length;
         const scrollback = Math.max(MIN_SCROLLBACK, lineCount);
         if (this.terminal.options.scrollback !== scrollback) {
@@ -151,6 +157,13 @@ export class TerminalOutput extends LitElement {
         await new Promise<void>((resolve) => {
           this.terminal?.write(text, () => resolve());
         });
+
+        if (!wasPinnedToBottom) {
+          const nextBaseY = this.terminal.buffer.active.baseY;
+          const targetViewportY = Math.max(0, nextBaseY - distanceFromBottom);
+          this.terminal.scrollToLine(targetViewportY);
+        }
+
         this.refitIfVisible();
       }
     } finally {
