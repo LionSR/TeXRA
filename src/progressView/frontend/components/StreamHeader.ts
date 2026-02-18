@@ -463,8 +463,8 @@ export class StreamHeader extends LitElement {
                   title="Conversation turns: ${progress.conversationTurns}, Tool calls: ${progress.toolCallCount}"
                 >
                   <i class="codicon codicon-pulse"></i>
-                  ${progress.conversationTurns} turns${progress.toolCallCount >
-                  0
+                  ${progress.conversationTurns}
+                  turns${progress.toolCallCount > 0
                     ? html`, ${progress.toolCallCount} tool calls`
                     : nothing}
                 </span>`

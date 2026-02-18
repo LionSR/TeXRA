@@ -13,6 +13,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
+import { capitalize } from '@shared/utils/string';
 
 // Local imports - shared banner styles
 import { warningBannerStyles } from '../styles/warningBannerStyles';
@@ -48,9 +49,7 @@ export class ApiKeyBanner extends LitElement {
     if (!this.state.visible) return nothing;
 
     const provider = this.state.provider ?? '';
-    const providerLabel = provider
-      ? `${provider.charAt(0).toUpperCase()}${provider.slice(1)}`
-      : '';
+    const providerLabel = provider ? capitalize(provider) : '';
 
     return html`
       <div id="apiKeyBanner" class="warning-banner">
