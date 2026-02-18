@@ -293,7 +293,7 @@ class ResponseProcessNode<C> extends BaseNode<
       );
 
       const { inputTokens } = normalizedUsage;
-      const { contextWindow } = modelHandler.config;
+      const contextWindow = modelHandler.getEffectiveContextWindow();
       if (inputTokens > 0 && contextWindow > 0) {
         logger.logContextState(inputTokens, contextWindow);
       }
