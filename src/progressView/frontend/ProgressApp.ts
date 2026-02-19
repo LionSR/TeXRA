@@ -200,7 +200,7 @@ export class ProgressApp extends BaseWebviewApp {
     return html`
       <div class="main-container">
         <vscode-split-layout
-          split="horizontal"
+          split="vertical"
           initial-handle-position="25%"
         >
           <stream-tabs
