@@ -4,9 +4,8 @@ import { computeAgentOptionsData } from '@agent/index';
 // Local imports - model options
 import { computeModelOptionsData } from '@model/computeModelOptions';
 
-// Local imports - state
-import { GlobalStateKey, globalSM } from '@common/state';
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
+// Local imports - helper model
+import { getHelperModelName } from '@agent/runtime/helperModel';
 
 export interface OptionsPayload {
   agentOptions: Awaited<ReturnType<typeof computeAgentOptionsData>>;
@@ -20,10 +19,7 @@ export async function loadOptions(): Promise<OptionsPayload> {
     computeAgentOptionsData(),
   ]);
 
-  const defaultMergeModel = globalSM.get<string>(
-    GlobalStateKey.HELPER_MODEL,
-    DEFAULT_HELPER_MODEL,
-  );
+  const defaultMergeModel = getHelperModelName();
 
   return {
     agentOptions,
