@@ -45,7 +45,7 @@ GPT-5 reasoning summaries require account verification. Enable with `texra.model
 
 | Model ID     | Use Case                             | Cost | Speed  |
 | :----------- | :----------------------------------- | :--- | :----- |
-| `gemini3p`   | Pro with reasoning, 1M context       | $$$  | Medium |
+| `gemini31p`  | Pro with reasoning, 1M context       | $$$  | Medium |
 | `gemini3f`   | Flash with reasoning, 1M context     | $$   | Fast   |
 | `gemini25p`  | Strong reasoning, vision, 1M context | $$$  | Medium |
 | `gemini25f`  | Fast reasoning, 1M context           | $$   | Fast   |
@@ -95,7 +95,7 @@ Customize available models in VS Code Settings under `texra.models`:
 
 ```json
 "texra.models": [
-  "gemini3p",
+  "gemini31p",
   "sonnet45T",
   "opus46T",
   "gpt52",

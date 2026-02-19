@@ -42,7 +42,7 @@ default list is maintained in the [Models Guide](./models.md). Override it by
 specifying your own model identifiers:
 
 ```json
-"texra.models": ["sonnet45T", "opus46T", "gemini3p", "gpt52"]
+"texra.models": ["sonnet45T", "opus46T", "gemini31p", "gpt52"]
 ```
 
 ### API Provider Settings
