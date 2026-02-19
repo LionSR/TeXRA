@@ -114,7 +114,6 @@ const baseConfig = {
         activeMatch: '/guide/agent-architecture',
       },
       { text: 'Launch', link: '/launch' },
-      { text: 'Open Source', link: '/guide/open-source' },
       { text: 'GitHub', link: 'https://github.com/texra-ai/texra-issues' },
     ],
     sidebar: {
