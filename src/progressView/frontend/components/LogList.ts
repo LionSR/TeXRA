@@ -104,6 +104,9 @@ export class LogList extends LitElement {
     return this.streamContext?.hasStreams ?? false;
   }
 
+  /** Max cached stream DOM trees. Oldest non-active entries are evicted beyond this. */
+  private static readonly MAX_CACHED_STREAMS = 5;
+
   /** Per-stream DOM cache: one TaskGroupList per visited stream */
   private streamCache = new Map<string, CachedStream>();
   private storage = createWebviewStorage(vscode);
@@ -125,10 +128,16 @@ export class LogList extends LitElement {
   protected willUpdate(): void {
     const streamId = this.streamContext?.streamName ?? null;
 
-    // Detect stream switch (before creating cache entry for first-visit check)
+    // Detect stream switch
     if (streamId !== this.activeStreamId) {
       this.activeStreamId = streamId;
       this.shouldScrollToBottom = true;
+    }
+
+    // All streams removed — drop the entire cache
+    if (!this.hasStreams && this.streamCache.size > 0) {
+      this.streamCache.clear();
+      return;
     }
 
     // Update cache for active stream with latest context data
@@ -138,18 +147,21 @@ export class LogList extends LitElement {
       entry.messages = this.messages;
       entry.activeRunId = this.activeRunId;
       entry.isToolUse = this.isToolUse;
+
+      // Evict oldest non-active entries when cache exceeds cap
+      this.evictStaleCacheEntries();
     }
   }
 
   override render(): TemplateResult {
-    if (this.streamCache.size === 0) {
+    if (this.streamCache.size === 0 || !this.hasStreams) {
       return html`<task-group-list
         .hasStreams=${this.hasStreams}
       ></task-group-list>`;
     }
 
     return html`${repeat(
-      [...this.streamCache],
+      this.streamCache,
       ([id]) => id,
       ([id, data]) => html`
         <task-group-list
@@ -191,6 +203,16 @@ export class LogList extends LitElement {
   // ============================================================
   // Private methods
   // ============================================================
+
+  /** Evict oldest non-active cache entries when over the cap */
+  private evictStaleCacheEntries(): void {
+    if (this.streamCache.size <= LogList.MAX_CACHED_STREAMS) return;
+    for (const [id] of this.streamCache) {
+      if (id === this.activeStreamId) continue;
+      this.streamCache.delete(id);
+      if (this.streamCache.size <= LogList.MAX_CACHED_STREAMS) break;
+    }
+  }
 
   /** Get or create a cached entry for a stream, loading persisted toggle states */
   private getOrCreateEntry(streamId: string): CachedStream {
