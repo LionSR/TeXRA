@@ -731,7 +731,6 @@ Based on settings in package.json:
 These settings are configured via VS Code's built-in Settings UI:
 
 - `texra.latex.*` (7), `texra.latexdiff.*` (4) - LaTeX formatting, latexdiff, TikZ, replacements
-- `texra.merge.defaultModel` - Multi-agent merge model
 - `texra.ui.*` (3), `texra.progressBoard.streamSortOrder`, `texra.maxImageDimension` - UI preferences
 - `texra.git.numberOfCommitsToShow` - Git integration
 - `texra.audio.soxPath` - System paths

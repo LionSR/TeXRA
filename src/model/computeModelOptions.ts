@@ -16,7 +16,7 @@ import type { ModelOptionData } from '@shared/schemas';
  * Update this list and increment MODEL_LIST_VERSION in setup.ts when adding new models.
  */
 export const DEFAULT_MODELS = [
-  'gemini3p',
+  'gemini31p',
   'gemini3f',
   'sonnet46T',
   'opus46T',

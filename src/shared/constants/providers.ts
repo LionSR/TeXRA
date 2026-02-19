@@ -26,5 +26,5 @@ export const MODEL_PROVIDERS_ORDER: ModelProvider[] = [
   ModelProvider.DASHSCOPE,
 ];
 
-/** Default model used for auxiliary/helper tasks (polishing, agent creation, session descriptions). */
+/** Default model used for auxiliary/helper tasks (polishing, agent creation, merge, session descriptions). */
 export const DEFAULT_HELPER_MODEL = 'sonnet45';

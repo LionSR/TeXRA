@@ -91,7 +91,7 @@ export const MainViewPersistedStateSchema = UIFileFieldsSchema.merge(
   sessionType: SessionTypeSchema.prefault('toolUse'),
   workflowAgent: z.string().prefault('correct'),
   toolUseAgent: z.string().prefault('chat'),
-  model: z.string().prefault('gemini3p'),
+  model: z.string().prefault('gemini31p'),
   commit: z.string().prefault('HEAD'),
   instruction: z.string().prefault(''),
   baseFile: z.string().prefault(''),
