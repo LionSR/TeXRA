@@ -204,8 +204,8 @@ export const commonViewStyles: CSSResult = css`
     border-radius: var(--border-radius);
     cursor: pointer;
     transition:
-      color 0.1s ease,
-      border-color 0.1s ease;
+      color 0.15s ease,
+      border-color 0.15s ease;
   }
 
   .tab-action-btn:hover {

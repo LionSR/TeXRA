@@ -124,6 +124,7 @@ export const toggleStyles = css`
 
   .toggle-icon:focus-visible {
     outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
 
@@ -165,7 +166,7 @@ export const multiFilesStyles = css`
     justify-content: space-between;
     align-items: center;
     border-radius: var(--border-radius-small);
-    transition: background-color 0.1s ease;
+    transition: background-color 0.15s ease;
   }
 
   .file-item:hover {
@@ -199,6 +200,7 @@ export const multiFilesStyles = css`
   .remove-button:focus-visible {
     opacity: 1;
     outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
 
@@ -260,7 +262,7 @@ export const dropdownStyles = css`
   }
 
   .dropdown-container .dropdown-menu vscode-checkbox {
-    transition: background-color 0.1s ease;
+    transition: background-color 0.15s ease;
   }
 
   .dropdown-container .dropdown-menu vscode-checkbox:hover {
