@@ -651,13 +651,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const isAnthropic1MBetaActive =
       effectiveContextWindow > this.config.contextWindow;
 
-    // Count cache breakpoint slots reserved for system prompt and tool definitions.
-    // The Anthropic API allows max 4 breakpoints; these reduce the budget for messages.
-    const reservedCacheSlots =
-      (systemPrompt && this.capabilities.supportsPromptCaching ? 1 : 0) +
-      (tools && tools.length > 0 && this.capabilities.supportsPromptCaching
-        ? 1
-        : 0);
+    // Count cache breakpoint slots reserved outside of messages.
+    // The Anthropic API allows max 4 breakpoints total. We reserve slots for:
+    // - System prompt (1 explicit breakpoint)
+    // - Last tool definition (1 explicit breakpoint)
+    // - Top-level automatic caching (1 slot for the conversation tail)
+    // This leaves the remaining budget for message-level markers (e.g. compaction blocks).
+    const reservedCacheSlots = this.capabilities.supportsPromptCaching
+      ? (systemPrompt ? 1 : 0) + (tools && tools.length > 0 ? 1 : 0) + 1
+      : 0;
     this.enforceCacheControlLimit(messages, reservedCacheSlots);
 
     const documentAnalysis = this.analyzeDocumentSources(messages);
@@ -677,6 +679,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
       temperature,
       stop_sequences: endTag ? [endTag] : undefined,
       system: this.buildCachedSystemPrompt(systemPrompt),
+      // Automatic caching: the API applies a cache breakpoint to the last
+      // cacheable block, so the growing conversation tail is always cached.
+      // This complements the explicit breakpoints on tools and system prompt.
+      ...(this.capabilities.supportsPromptCaching && {
+        cache_control: EPHEMERAL_CACHE_CONTROL,
+      }),
     };
 
     if (tools && tools.length > 0) {

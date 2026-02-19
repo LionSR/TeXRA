@@ -543,6 +543,64 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
+  it('sends automatic cache_control and cached system prompt in API request', async () => {
+    const handler = createAnthropicHandler();
+    stubHandlerForTest(handler);
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'hello', citations: null }],
+      },
+    ];
+
+    const messageOptions: any[] = [];
+    const client = {
+      beta: {
+        messages: {
+          create: async (opts: any) => {
+            messageOptions.push(opts);
+            return {
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-test',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            } as any;
+          },
+        },
+      },
+    } as any;
+
+    await handler.createResponse({
+      client,
+      messages,
+      temperature: 0,
+      systemPrompt: 'You are a helpful assistant.',
+    });
+
+    const options = messageOptions[0] ?? {};
+
+    // Verify top-level automatic caching
+    assert.deepEqual(
+      options.cache_control,
+      { type: 'ephemeral' },
+      'should include top-level cache_control for automatic caching',
+    );
+
+    // Verify system prompt is sent as TextBlockParam[] with cache_control
+    assert.ok(
+      Array.isArray(options.system),
+      'system prompt should be an array of TextBlockParam',
+    );
+    assert.equal(options.system.length, 1);
+    assert.equal(options.system[0].type, 'text');
+    assert.equal(options.system[0].text, 'You are a helpful assistant.');
+    assert.deepEqual(options.system[0].cache_control, { type: 'ephemeral' });
+  });
+
   it('trims follow-up text and rejects empty follow-ups', async () => {
     const handler = createAnthropicHandler();
     const baseMessages = await handler.initializeMessages('prefix', 'request');
