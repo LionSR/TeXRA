@@ -83,7 +83,12 @@ import {
   setProviderEndpoint,
   supportsCustomEndpoint,
 } from '@utils/config/constants';
-import { getConfig } from '@utils/config/configUtils';
+import {
+  getConfig,
+  isConfigExplicitlySet,
+  updateConfig,
+} from '@utils/config/configUtils';
+import { checkToolInstalled } from '@utils/system/toolUtils';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import {
@@ -434,6 +439,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleOpenToolInstallUrl(data),
       [SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS]: () =>
         this.handleRecheckToolStatus(),
+
+      // LaTeX settings handlers
+      [SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS]: () =>
+        this.withActiveWebview((w) => this.sendLatexSettingsStatus(w)),
+      [SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS]: (data) =>
+        this.handleApplyLatexSettings(data),
+      [SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP]: () =>
+        this.handleInstallLatexWorkshop(),
     };
   }
 
@@ -498,6 +511,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendCustomAgentDir(webview),
       this.sendSuperYoloEnabled(webview),
       this.sendAgentModePresets(webview),
+      this.sendLatexSettingsStatus(webview),
     ]);
   }
 
@@ -1688,6 +1702,102 @@ prompts:
       await showLoggedErrorMessage(
         this.channel,
         'Failed to reset custom agent directory',
+        error,
+      );
+    }
+  }
+
+  // ============================================================
+  // LaTeX settings handler implementations
+  // ============================================================
+
+  private static readonly LATEX_WORKSHOP_EXT_ID = 'James-Yu.latex-workshop';
+
+  /** Recommended LaTeX-related VS Code settings and their target values. */
+  private static readonly LATEX_RECOMMENDED_SETTINGS: {
+    key: string;
+    value: unknown;
+    field: 'outDir' | 'autoRevealExclude';
+  }[] = [
+    {
+      key: 'latex-workshop.latex.outDir',
+      value: '%DIR%/build/',
+      field: 'outDir',
+    },
+    {
+      key: 'explorer.autoRevealExclude',
+      value: { '**/build/': true },
+      field: 'autoRevealExclude',
+    },
+  ];
+
+  public async sendLatexSettingsStatus(webview: vscode.Webview): Promise<void> {
+    const settings: Record<string, boolean> = {
+      latexWorkshopInstalled: Boolean(
+        vscode.extensions.getExtension(
+          SettingsViewMessageHandler.LATEX_WORKSHOP_EXT_ID,
+        ),
+      ),
+      latexdiffInstalled: await checkToolInstalled('latexdiff', false),
+    };
+    for (const {
+      key,
+      field,
+    } of SettingsViewMessageHandler.LATEX_RECOMMENDED_SETTINGS) {
+      settings[field] = isConfigExplicitlySet(key);
+    }
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
+      settings,
+    });
+  }
+
+  private async handleInstallLatexWorkshop(): Promise<void> {
+    try {
+      await vscode.commands.executeCommand(
+        'workbench.extensions.installExtension',
+        SettingsViewMessageHandler.LATEX_WORKSHOP_EXT_ID,
+      );
+      void vscode.window.showInformationMessage(
+        'LaTeX Workshop extension installed',
+      );
+      await this.withActiveWebview((w) => this.sendLatexSettingsStatus(w));
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to install LaTeX Workshop',
+        error,
+      );
+    }
+  }
+
+  private async handleApplyLatexSettings(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.APPLY_LATEX_SETTINGS>,
+  ): Promise<void> {
+    try {
+      const targets = data.field
+        ? SettingsViewMessageHandler.LATEX_RECOMMENDED_SETTINGS.filter(
+            (s) => s.field === data.field,
+          )
+        : SettingsViewMessageHandler.LATEX_RECOMMENDED_SETTINGS;
+
+      for (const { key, value } of targets) {
+        await updateConfig(key, value, {
+          target: vscode.ConfigurationTarget.Global,
+          prefix: false,
+        });
+      }
+
+      await this.withActiveWebview((w) => this.sendLatexSettingsStatus(w));
+      void vscode.window.showInformationMessage(
+        data.field
+          ? 'LaTeX setting applied'
+          : 'All recommended LaTeX settings applied',
+      );
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to apply LaTeX settings',
         error,
       );
     }

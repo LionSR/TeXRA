@@ -43,6 +43,9 @@ export enum GlobalStateKey {
   STREAMING_MOONSHOT = 'texra.streaming.moonshot',
   STREAMING_DASHSCOPE = 'texra.streaming.dashscope',
 
+  // LaTeX settings
+  LATEX_CONFIG_VERSION = 'texra.latexConfigVersion',
+
   // Agent settings (migrated from VS Code config)
   CUSTOM_AGENT_DIR = 'texra.customAgentDir',
   REMOTE_AGENT_META_CACHE = 'texra.remoteAgentMetaCache',

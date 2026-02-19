@@ -25,6 +25,15 @@ import { extendEnvPath } from '@utils/system/platformPaths';
 const MODEL_LIST_VERSION = 4;
 
 /**
+ * Version number for LaTeX-related VS Code config setup.
+ * Increment this when changing which settings are auto-configured.
+ */
+const LATEX_CONFIG_VERSION = 1;
+
+/** Extension ID for LaTeX Workshop */
+const LATEX_WORKSHOP_EXT_ID = 'James-Yu.latex-workshop';
+
+/**
  * Legacy agent files that should be deleted from GlobalStorage.
  * These agents have moved to remote-only and should not exist locally.
  */
@@ -205,12 +214,19 @@ export async function configureLatexSettings(): Promise<void> {
   }
 
   try {
-    const latexWorkshop = vscode.extensions.getExtension(
-      'James-Yu.latex-workshop',
-    );
+    const latexWorkshop = vscode.extensions.getExtension(LATEX_WORKSHOP_EXT_ID);
 
     if (!latexWorkshop) {
+      // Prompt has its own suppression — run every activation, not gated by version.
       await promptLatexWorkshopInstall();
+      return;
+    }
+
+    // Only write VS Code config once per version bump
+    const storedVersion = globalSM.get<number>(
+      GlobalStateKey.LATEX_CONFIG_VERSION,
+    );
+    if (storedVersion === LATEX_CONFIG_VERSION) {
       return;
     }
 
@@ -219,39 +235,15 @@ export async function configureLatexSettings(): Promise<void> {
       'LaTeX Workshop extension detected, configuring settings',
     );
 
+    // outDir, explorer.autoRevealExclude, and explorer.autoReveal are now
+    // opt-in recommendations shown in the Settings > LaTeX tab.
     const settings: Array<[string, unknown]> = [
-      // LaTeX Workshop build settings
-      ['latex-workshop.latex.build.fromWorkspaceFolder', true],
-      [
-        'latex-workshop.latex.external.build.args',
-        ['--output-directory=build', '-f', '-pdf'],
-      ],
-      ['latex-workshop.latex.outDir', '%DIR%/build/'],
-      [
-        'latex-workshop.latex.magic.args',
-        [
-          '-synctex=1',
-          '-interaction=nonstopmode',
-          '-file-line-error',
-          '%DOC%',
-          '-pdf',
-          '-f',
-        ],
-      ],
-      ['latex-workshop.formatting.latex', 'latexindent'],
-      // Language-specific editor settings
       [
         '[latex]',
         {
           'editor.wordWrap': 'on',
-          'files.autoSave': 'afterDelay',
-          'intellisense.update.delay': 1000,
         },
       ],
-      ['[yaml]', { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' }],
-      // Explorer settings
-      ['explorer.autoRevealExclude', { 'build/': true }],
-      ['explorer.autoReveal', false],
     ];
 
     for (const [key, value] of settings) {
@@ -267,7 +259,10 @@ export async function configureLatexSettings(): Promise<void> {
       logger.info('extension', 'Activity bar location set to default');
     }
 
-    logger.info('extension', 'LaTeX Workshop settings configured successfully');
+    await globalSM.update(
+      GlobalStateKey.LATEX_CONFIG_VERSION,
+      LATEX_CONFIG_VERSION,
+    );
   } catch (err) {
     logger.error(
       'extension',
@@ -290,7 +285,7 @@ async function promptLatexWorkshopInstall(): Promise<void> {
         callback: () =>
           safeExecuteCommand(
             'workbench.extensions.installExtension',
-            ['James-Yu.latex-workshop'],
+            [LATEX_WORKSHOP_EXT_ID],
             'extension',
           ),
       },

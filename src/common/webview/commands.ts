@@ -355,6 +355,10 @@ export const SETTINGS_VIEW_CMD = {
   GET_TOOL_DASHBOARD_DATA: 'getToolDashboardData',
   OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',
   RECHECK_TOOL_STATUS: 'recheckToolStatus',
+  // LaTeX settings commands
+  GET_LATEX_SETTINGS_STATUS: 'getLatexSettingsStatus',
+  APPLY_LATEX_SETTINGS: 'applyLatexSettings',
+  INSTALL_LATEX_WORKSHOP: 'installLatexWorkshop',
 } as const;
 
 // Settings view specific commands (combines Memory, History, and Profile views)
@@ -374,4 +378,5 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_SUPER_YOLO_ENABLED: 'updateSuperYoloEnabled',
   UPDATE_AGENT_MODE_PRESETS: 'updateAgentModePresets',
   UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
+  UPDATE_LATEX_SETTINGS_STATUS: 'updateLatexSettingsStatus',
 } as const;

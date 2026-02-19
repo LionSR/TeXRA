@@ -53,6 +53,7 @@ export const SETTINGS_TAB_ORDER = [
   'AGENTS',
   'MULTI_AGENT',
   'TOOLS',
+  'LATEX',
 ] as const;
 
 export type SettingsTabName = (typeof SETTINGS_TAB_ORDER)[number];
@@ -258,6 +259,28 @@ export type UpdateToolDashboardMessage = z.infer<
 >;
 
 // ============================================================
+// LaTeX settings data schemas
+// ============================================================
+
+/** Status of each recommended LaTeX-related VS Code setting. */
+export const LatexSettingsStatusSchema = z.object({
+  outDir: z.boolean(),
+  autoRevealExclude: z.boolean(),
+  latexWorkshopInstalled: z.boolean(),
+  latexdiffInstalled: z.boolean(),
+});
+export type LatexSettingsStatus = z.infer<typeof LatexSettingsStatusSchema>;
+
+/** Outbound: backend → frontend LaTeX settings status */
+export const UpdateLatexSettingsStatusMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS),
+  settings: LatexSettingsStatusSchema,
+});
+export type UpdateLatexSettingsStatusMessage = z.infer<
+  typeof UpdateLatexSettingsStatusMessageSchema
+>;
+
+// ============================================================
 // Inbound message schemas (frontend → backend)
 // ============================================================
 
@@ -424,6 +447,18 @@ const OpenToolInstallUrlMessageSchema = z.object({
 
 const RecheckToolStatusMessageSchema = commandOnly(CMD.RECHECK_TOOL_STATUS);
 
+// LaTeX settings inbound messages
+const GetLatexSettingsStatusMessageSchema = commandOnly(
+  CMD.GET_LATEX_SETTINGS_STATUS,
+);
+const ApplyLatexSettingsMessageSchema = z.object({
+  command: z.literal(CMD.APPLY_LATEX_SETTINGS),
+  field: z.enum(['outDir', 'autoRevealExclude']).optional(),
+});
+const InstallLatexWorkshopMessageSchema = commandOnly(
+  CMD.INSTALL_LATEX_WORKSHOP,
+);
+
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);
 
@@ -440,6 +475,10 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     GetToolDashboardDataMessageSchema,
     OpenToolInstallUrlMessageSchema,
     RecheckToolStatusMessageSchema,
+    // LaTeX settings messages
+    GetLatexSettingsStatusMessageSchema,
+    ApplyLatexSettingsMessageSchema,
+    InstallLatexWorkshopMessageSchema,
     // Memory messages
     GetMemoryDataMessageSchema,
     OpenMemoryFileMessageSchema,
