@@ -215,7 +215,8 @@ export class ProgressApp extends BaseWebviewApp {
       <div class="main-container">
         <vscode-split-layout
           split="vertical"
-          initial-handle-position="${this.tabsOnRight ? '75%' : '25%'}"
+          initial-handle-position="75%"
+          .handlePosition=${this.tabsOnRight ? '75%' : '25%'}
         >
           <stream-tabs
             slot="${this.tabsOnRight ? 'end' : 'start'}"
