@@ -37,10 +37,7 @@ import { playCompletionSound } from '../utils/audioNotification';
 
 // Local imports - formatters
 import { formatLogEntry } from '../formatters';
-import {
-  getDateTimeFormatter,
-  getTimeFormatter,
-} from '../formatters/timestampUtils';
+import { getTimeFormatter } from '../formatters/timestampUtils';
 
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
 
@@ -433,12 +430,11 @@ export class TaskGroupList extends LitElement {
     );
   }
 
-  /** Render group header inline (replaces TaskGroupHeader component) */
+  /** Render child group header inline (only called for non-root groups) */
   private renderGroupHeader(group: TaskGroup): TemplateResult {
-    const isRoot = !group.parentGroupId;
-    const date = new Date(group.startTime);
-    const formatter = isRoot ? getDateTimeFormatter() : getTimeFormatter();
-    const formattedStartTime = formatter.format(date);
+    const formattedStartTime = getTimeFormatter().format(
+      new Date(group.startTime),
+    );
     const durationText = group.endTime
       ? formatDuration(group.endTime - group.startTime)
       : '';
@@ -447,7 +443,7 @@ export class TaskGroupList extends LitElement {
       <span class="group-status-icon">
         <i class="codicon codicon-${getStatusIcon(group.status)}"></i>
       </span>
-      ${isRoot ? nothing : html`<span class="group-title">${group.name}</span>`}
+      <span class="group-title">${group.name}</span>
       <span class="group-time">
         <span class="group-start-time" data-start=${String(group.startTime)}>
           <i class="codicon codicon-clock"></i> ${formattedStartTime}
