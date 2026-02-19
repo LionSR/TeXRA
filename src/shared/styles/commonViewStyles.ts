@@ -28,6 +28,10 @@ export const commonViewStyles: CSSResult = css`
     background-color: var(--vscode-list-hoverBackground);
   }
 
+  .list-item:focus-within {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+  }
+
   .list-item-header {
     display: flex;
     justify-content: space-between;
@@ -81,11 +85,18 @@ export const commonViewStyles: CSSResult = css`
     cursor: pointer;
     color: var(--color-text-link);
     text-decoration: none;
+    transition: color 0.15s ease;
   }
 
   .clickable-link:hover {
     color: var(--color-text-link-active);
     text-decoration: underline;
+  }
+
+  .clickable-link:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
   }
 
   .detail-section {
@@ -116,10 +127,17 @@ export const commonViewStyles: CSSResult = css`
     list-style: none;
     user-select: none;
     opacity: var(--opacity-normal);
+    transition: opacity 0.15s ease;
   }
 
   .details-summary:hover {
     opacity: 1;
+  }
+
+  .details-summary:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
   }
 
   /* Toggle icon for collapsible details - applies to any summary */
@@ -127,6 +145,7 @@ export const commonViewStyles: CSSResult = css`
     opacity: var(--opacity-subtle);
     font-size: var(--font-size-sm);
     display: inline-block;
+    transition: transform 0.15s ease;
   }
 
   details[open] > summary .toggle-icon {
@@ -158,10 +177,17 @@ export const commonViewStyles: CSSResult = css`
 
   .btn-secondary {
     opacity: var(--opacity-normal);
+    transition: opacity 0.15s ease;
   }
 
   .btn-secondary:hover {
     opacity: var(--opacity-full);
+  }
+
+  .btn-secondary:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
   }
 
   /* Shared tab content container — consistent max-width and centering for all settings tabs */
@@ -184,12 +210,48 @@ export const commonViewStyles: CSSResult = css`
     border-radius: var(--border-radius);
     cursor: pointer;
     transition:
-      color 0.1s ease,
-      border-color 0.1s ease;
+      color 0.15s ease,
+      border-color 0.15s ease;
   }
 
   .tab-action-btn:hover {
     color: var(--vscode-foreground);
     border-color: var(--vscode-focusBorder);
+  }
+
+  .tab-action-btn:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+  }
+
+  /* Utility: single-line text truncation with ellipsis */
+  .truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Utility: minimal icon button reset (no background, no border) */
+  .icon-btn-reset {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    color: inherit;
+    opacity: var(--opacity-subtle);
+    transition: opacity 0.15s ease;
+  }
+
+  .icon-btn-reset:hover {
+    opacity: var(--opacity-full);
+  }
+
+  .icon-btn-reset:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
   }
 `;

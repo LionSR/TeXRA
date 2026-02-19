@@ -74,6 +74,11 @@ export class ApiKeyBanner extends LitElement {
             ${provider ? 'Get Key' : 'API Key Guide'}
           </vscode-toolbar-button>
         </div>
+        <span class="hint">
+          Chat subscriptions (ChatGPT Plus, Claude Pro, etc.) do not include API
+          access. You need a separate API key from the provider's developer
+          platform.
+        </span>
       </div>
     `;
   }

@@ -69,7 +69,7 @@ export const getMarkdownRenderer = (): MarkdownIt => {
       delimiters: ['dollars', 'brackets', 'beg_end'],
       katexOptions: {
         throwOnError: false,
-        errorColor: '#cc0000',
+        errorColor: 'var(--color-error, #cc0000)',
         macros: katexMacros,
       },
     });

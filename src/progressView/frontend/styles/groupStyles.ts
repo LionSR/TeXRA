@@ -14,6 +14,13 @@ export const groupStyles = css`
     align-items: center;
     background-color: transparent;
     border-left: var(--border-medium) solid var(--color-border);
+    transition:
+      border-left-color 0.2s ease,
+      background-color 0.15s ease;
+  }
+
+  .log-group-header:hover {
+    background-color: var(--vscode-list-hoverBackground);
   }
 
   .log-group-header {

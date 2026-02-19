@@ -205,7 +205,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .bash-approval-request__command .code-block {
-    border-left: 3px solid var(--vscode-terminal-ansiYellow);
+    border-left: var(--border-thick) solid var(--vscode-terminal-ansiYellow);
   }
 
   .bash-approval-request__command .code-block pre {
@@ -324,7 +324,7 @@ export const requestPanelStyles: CSSResult = css`
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    padding: 2px 6px;
+    padding: var(--spacing-tiny) 6px;
     border-radius: var(--border-radius);
     white-space: nowrap;
   }
