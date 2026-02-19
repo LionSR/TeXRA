@@ -61,6 +61,7 @@ import {
   formatSubagentDelivery,
   formatSubagentError,
   formatSubagentProgress,
+  formatResumeInstruction,
   type SubagentProgressUpdate,
 } from '@tools/subagentResults';
 import { defineTool } from '@tools/core/define';
@@ -600,7 +601,8 @@ export class ResumeAgentTool extends defineTool({
     // Send the follow-up FIRST, then open the delivery gate only on success.
     // This avoids a window where onBeforeWaiting could fire with a stale
     // result if the send fails and we had already reset hasDelivered.
-    const result = await sendFollowUp(handle.childStreamId, input.instruction);
+    const framedInstruction = formatResumeInstruction(input.instruction);
+    const result = await sendFollowUp(handle.childStreamId, framedInstruction);
 
     switch (result.status) {
       case 'sent':

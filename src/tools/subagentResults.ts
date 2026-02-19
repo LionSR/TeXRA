@@ -194,6 +194,25 @@ export function formatSubagentProgress(
 }
 
 // ============================================================================
+// Orchestrator resume framing
+// ============================================================================
+
+/**
+ * Wrap an orchestrator's follow-up instruction in an XML tag so the subagent
+ * knows it is being resumed (not receiving a fresh user message).
+ */
+export function formatResumeInstruction(instruction: string): string {
+  return [
+    '<orchestrator-resume>',
+    'Your orchestrator is resuming you with follow-up instructions.',
+    'Continue from where you left off — your full conversation history is intact.',
+    '',
+    escapeText(instruction),
+    '</orchestrator-resume>',
+  ].join('\n');
+}
+
+// ============================================================================
 // Background bash result formatting
 // ============================================================================
 
