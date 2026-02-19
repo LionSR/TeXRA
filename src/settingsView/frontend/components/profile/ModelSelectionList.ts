@@ -36,7 +36,6 @@ export class ModelSelectionList extends LitElement {
 
   @property({ attribute: false }) models: ModelSelectionItem[] = [];
   @property({ attribute: false }) helperModel = '';
-  @property({ attribute: false }) mergeModel = '';
   @property({ attribute: false }) authenticated = false;
   @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
     'personal';
@@ -99,13 +98,6 @@ export class ModelSelectionList extends LitElement {
     const value = (e.currentTarget as HTMLSelectElement).value;
     this.dispatchEvent(
       ModelSelectionEvents.setHelperModel({ modelName: value }),
-    );
-  }
-
-  private handleMergeModelChange(e: Event): void {
-    const value = (e.currentTarget as HTMLSelectElement).value;
-    this.dispatchEvent(
-      ModelSelectionEvents.setMergeModel({ modelName: value }),
     );
   }
 
@@ -199,26 +191,22 @@ export class ModelSelectionList extends LitElement {
     `;
   }
 
-  private renderModelDropdown(
-    label: string,
-    value: string,
-    onChange: (e: Event) => void,
-  ): TemplateResult {
+  private renderHelperModelDropdown(): TemplateResult {
     const enabledModels = this.models.filter((m) => m.enabled);
 
     return html`
       <div class="helper-model-row">
-        <label>${label}</label>
+        <label>Helper model:</label>
         <vscode-single-select
           class="helper-model-select"
-          .value=${value}
-          @change=${onChange}
+          .value=${this.helperModel}
+          @change=${this.handleHelperModelChange}
         >
           ${enabledModels.map(
             (m) =>
               html`<vscode-option
                 value=${m.name}
-                ?selected=${m.name === value}
+                ?selected=${m.name === this.helperModel}
               >
                 ${m.name}
               </vscode-option>`,
@@ -237,8 +225,7 @@ export class ModelSelectionList extends LitElement {
         <p class="model-selection-description">
           Select which models appear in the dropdown.
         </p>
-        ${this.renderModelDropdown('Helper model:', this.helperModel, this.handleHelperModelChange)}
-        ${this.renderModelDropdown('Merge model:', this.mergeModel, this.handleMergeModelChange)}
+        ${this.renderHelperModelDropdown()}
         ${groups.map((g) => this.renderProviderGroup(g))}
       </div>
     `;

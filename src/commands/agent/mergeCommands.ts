@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { executeMergeAgent } from '@agent/runtime/executeAgent';
 import { showLoggedMessageWithDocs } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
-import { DEFAULT_MERGE_MODEL } from '@shared/constants/providers';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 const CHANNEL = 'MergeCommands';
 
@@ -32,7 +32,7 @@ async function handleMerge(
   }
 
   await executeMergeAgent(
-    model ?? globalSM.get<string>(GlobalStateKey.MERGE_MODEL, DEFAULT_MERGE_MODEL),
+    model ?? globalSM.get<string>(GlobalStateKey.HELPER_MODEL, DEFAULT_HELPER_MODEL),
     baseFile ?? inputFile,
     editedFile,
   );

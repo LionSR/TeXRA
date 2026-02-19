@@ -45,7 +45,6 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
     [];
   @property({ attribute: false }) helperModel = '';
-  @property({ attribute: false }) mergeModel = '';
 
   override render(): TemplateResult {
     const apiAccessSection = this.authenticated
@@ -60,7 +59,6 @@ export class ModelsTab extends LitElement {
         <model-selection-list
           .models=${this.modelSelectionItems}
           .helperModel=${this.helperModel}
-          .mergeModel=${this.mergeModel}
           .authenticated=${this.authenticated}
           .apiAccessMode=${this.apiAccessMode}
           .allowedModels=${this.allowedModels}

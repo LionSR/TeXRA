@@ -43,10 +43,7 @@ import {
   type NumberVscodeSetting,
   type ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
-import {
-  DEFAULT_HELPER_MODEL,
-  DEFAULT_MERGE_MODEL,
-} from '@shared/constants/providers';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 // Local imports - settings view commands
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -143,7 +140,6 @@ export class SettingsApp extends BaseWebviewApp {
   // Model selection state
   @state() private modelSelectionItems: ModelSelectionItem[] = [];
   @state() private helperModel = DEFAULT_HELPER_MODEL;
-  @state() private mergeModel = DEFAULT_MERGE_MODEL;
 
   // Agent selection state
   @state() private workflowAgents: AgentSelectionItem[] = [];
@@ -256,7 +252,6 @@ export class SettingsApp extends BaseWebviewApp {
         if (!data) return;
         this.modelSelectionItems = data.models;
         this.helperModel = data.helperModel;
-        this.mergeModel = data.mergeModel;
         return;
       }
 
@@ -419,10 +414,6 @@ export class SettingsApp extends BaseWebviewApp {
 
   private handleSetHelperModel = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_HELPER_MODEL,
-  );
-
-  private handleSetMergeModel = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_MERGE_MODEL,
   );
 
   // Agent selection event handlers
@@ -591,7 +582,6 @@ export class SettingsApp extends BaseWebviewApp {
               .globalStreamingDefault=${this.globalStreamingDefault}
               .modelSelectionItems=${this.modelSelectionItems}
               .helperModel=${this.helperModel}
-              .mergeModel=${this.mergeModel}
               @profile-api-access-mode=${this.handleApiAccessMode}
               @provider-key-set=${this.handleSetProviderKey}
               @provider-key-remove=${this.handleRemoveProviderKey}
@@ -604,7 +594,6 @@ export class SettingsApp extends BaseWebviewApp {
               @provider-open-url=${this.handleOpenUrl}
               @model-enabled-set=${this.handleSetModelEnabled}
               @helper-model-set=${this.handleSetHelperModel}
-              @merge-model-set=${this.handleSetMergeModel}
             ></models-tab>
           </vscode-tab-panel>
 

@@ -21,7 +21,6 @@ import {
   PROVIDER_DISPLAY_NAMES,
   MODEL_PROVIDERS_ORDER,
   DEFAULT_HELPER_MODEL,
-  DEFAULT_MERGE_MODEL,
 } from '@shared/constants/providers';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, MAX_TIER } from '@auth/config';
@@ -383,8 +382,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleSetModelEnabled(data),
       [SETTINGS_VIEW_COMMANDS.SET_HELPER_MODEL]: (data) =>
         this.handleSetHelperModel(data),
-      [SETTINGS_VIEW_COMMANDS.SET_MERGE_MODEL]: (data) =>
-        this.handleSetMergeModel(data),
 
       // Custom agent directory handlers
       [SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR]: () =>
@@ -619,15 +616,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       GlobalStateKey.HELPER_MODEL,
       DEFAULT_HELPER_MODEL,
     );
-    const mergeModel = globalSM.get<string>(
-      GlobalStateKey.MERGE_MODEL,
-      DEFAULT_MERGE_MODEL,
-    );
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       models,
       helperModel,
-      mergeModel,
     });
   }
 
@@ -1213,7 +1205,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     await globalSM.update(GlobalStateKey.ENABLED_MODELS, updated);
 
-    // Auto-reset helper/merge model if it was just disabled
+    // Auto-reset helper model if it was just disabled
     if (!data.enabled) {
       const helperModel = globalSM.get<string>(
         GlobalStateKey.HELPER_MODEL,
@@ -1222,15 +1214,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       if (helperModel === data.modelName) {
         const newHelper = updated[0] ?? DEFAULT_HELPER_MODEL;
         await globalSM.update(GlobalStateKey.HELPER_MODEL, newHelper);
-      }
-
-      const mergeModel = globalSM.get<string>(
-        GlobalStateKey.MERGE_MODEL,
-        DEFAULT_MERGE_MODEL,
-      );
-      if (mergeModel === data.modelName) {
-        const newMerge = updated[0] ?? DEFAULT_MERGE_MODEL;
-        await globalSM.update(GlobalStateKey.MERGE_MODEL, newMerge);
       }
     }
 
@@ -1242,13 +1225,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_HELPER_MODEL>,
   ): Promise<void> {
     await globalSM.update(GlobalStateKey.HELPER_MODEL, data.modelName);
-    await this.withActiveWebview((w) => this.sendModelSelectionData(w));
-  }
-
-  private async handleSetMergeModel(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MERGE_MODEL>,
-  ): Promise<void> {
-    await globalSM.update(GlobalStateKey.MERGE_MODEL, data.modelName);
     await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
