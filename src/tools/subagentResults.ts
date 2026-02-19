@@ -194,18 +194,18 @@ export function formatSubagentProgress(
 }
 
 // ============================================================================
-// Orchestrator resume framing
+// Orchestrator follow-up framing
 // ============================================================================
 
 /**
  * Wrap an orchestrator's follow-up instruction in an XML tag so the subagent
- * knows it is being resumed (not receiving a fresh user message).
+ * knows this is a follow-up from its orchestrator (not a fresh user message).
  */
-export function formatResumeInstruction(instruction: string): string {
+export function formatFollowUpInstruction(instruction: string): string {
   return [
-    '<orchestrator-resume>',
+    '<orchestrator-followup>',
     escapeText(instruction),
-    '</orchestrator-resume>',
+    '</orchestrator-followup>',
   ].join('\n');
 }
 
