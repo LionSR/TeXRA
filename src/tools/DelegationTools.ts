@@ -615,9 +615,14 @@ export class ResumeAgentTool extends defineTool({
     const result = await sendFollowUp(handle.childStreamId, framedInstruction);
 
     switch (result.status) {
+      case 'sent':
       case 'queued':
-        // Gate is safe to reset — the subagent is WAITING and will process
-        // the follow-up on resume, delivering via onBeforeWaiting.
+        // Both are success paths.  'sent' is the normal case — the subagent
+        // is blocked in WaitNode with an active flow context, so
+        // appendFollowUp delivers directly.  'queued' is a fallback when
+        // the context has been cleaned up but the stream status is still
+        // WAITING.  In either case, reset the delivery gate so the next
+        // onBeforeWaiting delivers the resumed cycle's result.
         deliveryState.hasDelivered = false;
         return {
           summary: `Follow-up sent to '${handle.agentName}'`,
@@ -626,13 +631,6 @@ export class ResumeAgentTool extends defineTool({
             `Execution ID: ${input.execution_id}`,
           ].join('\n'),
         };
-      case 'sent':
-        // 'sent' means the agent has an active flow context — it is not
-        // WAITING.  This shouldn't happen given the hasDelivered guard
-        // above, but handle it defensively.
-        throw new Error(
-          `'${handle.agentName}' is still actively processing. Wait for its result before sending a follow-up.`,
-        );
       case 'error':
         throw new Error(
           `Failed to send follow-up to '${handle.agentName}': ${result.message}`,
