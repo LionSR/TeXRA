@@ -150,8 +150,8 @@ export class StreamTab extends LitElement {
         margin: 0 var(--spacing-small) 0 0;
         color: var(--vscode-icon-foreground, var(--vscode-foreground));
         transition:
-          color 120ms ease,
-          background-color 120ms ease;
+          color 0.15s ease,
+          background-color 0.15s ease;
       }
 
       .tab-container:hover {
@@ -374,7 +374,10 @@ export class StreamTabs extends LitElement {
           </div>
           ${when(
             this.streams.length === 0,
-            () => html`<div class="log-placeholder">No streams yet.</div>`,
+            () =>
+              html`<div class="log-placeholder">
+                No streams yet. Run a TeXRA command to get started.
+              </div>`,
           )}
         </div>
         <div class="clear-all-container">

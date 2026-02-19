@@ -233,7 +233,13 @@ export class HistoryList extends LitElement {
 
   override render(): TemplateResult {
     if (!this.items.length) {
-      return html`<div class="empty-state">No history items found</div>`;
+      return html`<div class="empty-state">
+        <p>No history items found.</p>
+        <p class="text-secondary">
+          History is recorded when you run agent commands. Past results will
+          appear here.
+        </p>
+      </div>`;
     }
 
     const hasMatches = (this.state?.totalMatches ?? 0) > 0;
