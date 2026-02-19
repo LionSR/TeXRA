@@ -114,7 +114,7 @@ const baseConfig = {
         activeMatch: '/guide/agent-architecture',
       },
       { text: 'Launch', link: '/launch' },
-      { text: 'Open Source', link: '/open-source' },
+      { text: 'Open Source', link: '/guide/open-source' },
       { text: 'GitHub', link: 'https://github.com/texra-ai/texra-issues' },
     ],
     sidebar: {
@@ -175,6 +175,7 @@ const baseConfig = {
             { text: 'Best Practices', link: '/guide/best-practices.md' },
             { text: 'Troubleshooting', link: '/guide/troubleshooting' },
             { text: 'Acknowledgments', link: '/guide/acknowledgments.md' },
+            { text: 'Open Source Projects', link: '/guide/open-source' },
           ],
         },
       ],
@@ -185,7 +186,7 @@ const baseConfig = {
     },
     footer: {
       message:
-        '<a href="/terms">Terms of Service</a> · <a href="/providers">Providers</a> · <a href="/open-source">Open Source</a>',
+        '<a href="/terms">Terms of Service</a> · <a href="/providers">Providers</a> · <a href="/guide/open-source">Open Source</a>',
       copyright: 'Copyright © 2024-2026 TeXRA Team. All rights reserved.',
     },
   },
