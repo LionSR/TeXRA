@@ -396,6 +396,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.withActiveWebview((w) => this.sendSuperYoloEnabled(w)),
       [SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED]: (data) =>
         this.handleSetSuperYoloEnabled(data),
+      [SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL]: (data) =>
+        this.handleSetAllowOrchestratorKill(data),
 
       // Agent selection handlers
       [SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION]: () =>
@@ -655,10 +657,15 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       WorkspaceStateKey.SUPER_YOLO_ENABLED,
       false,
     );
+    const allowOrchestratorKill = workspaceSM.get<boolean>(
+      WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
+      true,
+    );
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
       enabled,
       reliabilitySettings: getReliabilitySettings(),
+      allowOrchestratorKill,
     });
   }
 
@@ -682,6 +689,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     void vscode.window.showInformationMessage(
       `Super YOLO mode ${data.enabled ? 'enabled' : 'disabled'}`,
     );
+  }
+
+  private async handleSetAllowOrchestratorKill(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_ALLOW_ORCHESTRATOR_KILL>,
+  ): Promise<void> {
+    await workspaceSM.update(
+      WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
+      data.enabled,
+    );
+    await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
   }
 
   // ============================================================
