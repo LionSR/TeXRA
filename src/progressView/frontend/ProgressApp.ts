@@ -1,8 +1,9 @@
 // Third-party imports
-import { html, css, type TemplateResult } from 'lit';
+import { html, css, nothing, type TemplateResult } from 'lit';
 import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
-import { createRef, ref } from 'lit/directives/ref.js';
+import { createRef, ref, type Ref } from 'lit/directives/ref.js';
+import { repeat } from 'lit/directives/repeat.js';
 
 import { z } from 'zod';
 
@@ -17,7 +18,6 @@ import {
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
-import { getEffectiveRunId } from '@shared/streams/runSelection';
 import { StreamSortSchema } from '@shared/streams/streamSort';
 
 // Local imports - webview commands
@@ -78,6 +78,7 @@ import type { FrontendEventHandlerContext } from './eventHandlers';
 import type { MessageHandlerContext } from './messageDispatcher';
 
 // Local imports - progress view components
+import './components/StreamPanel';
 import './components/StreamTabs';
 import './components/ToolUseStreamContent';
 import './components/WorkflowStreamContent';
@@ -87,7 +88,6 @@ import './components/LatexdiffResults';
 import './components/ContextManagement';
 
 // Local imports - progress view component types
-import type { FollowUpInput } from './components/FollowUpInput';
 import type { PermissionState } from './components/PermissionCard';
 import type { ToolUseStreamContent } from './components/ToolUseStreamContent';
 
@@ -145,8 +145,21 @@ export class ProgressApp extends BaseWebviewApp {
   @state()
   private permissionsContextValue: PermissionState[] = [];
 
-  // Container ref for accessing child component methods (FollowUpInput)
-  private toolUseContentRef = createRef<ToolUseStreamContent>();
+  /**
+   * Per-stream refs for ToolUseStreamContent — used for imperative
+   * FollowUpInput access (focus, polish). Keyed by streamId.
+   */
+  private toolUseContentRefs = new Map<string, Ref<ToolUseStreamContent>>();
+
+  /**
+   * Set of stream IDs that have been viewed during this session.
+   * Their DOM subtrees are preserved (hidden) when switching away,
+   * enabling instant tab switching without DOM reconstruction.
+   *
+   * Not @state: updated in willUpdate() before render(), driven by
+   * appState changes. Mutated in-place for efficiency.
+   */
+  private visitedStreamIds = new Set<string>();
 
   /**
    * Memoized filtered+sorted stream list, recomputed once per willUpdate()
@@ -179,17 +192,23 @@ export class ProgressApp extends BaseWebviewApp {
   protected override willUpdate(changed: Map<string, unknown>): void {
     if (!changed.has('appState') && !changed.has('permissions')) return;
 
-    const prevAppState = changed.get('appState') as ProgressState | undefined;
+    if (changed.has('appState')) {
+      const prevAppState = changed.get('appState') as
+        | ProgressState
+        | undefined;
 
-    // Re-sort streams when the list or sort/filter criteria change.
-    if (
-      changed.has('appState') &&
-      (!prevAppState ||
+      // Re-sort streams when the list or sort/filter criteria change.
+      if (
+        !prevAppState ||
         prevAppState.streams !== this.appState.streams ||
         prevAppState.streamFilter !== this.appState.streamFilter ||
-        prevAppState.streamSort !== this.appState.streamSort)
-    ) {
-      this.cachedFilteredStreams = getFilteredStreams(this.appState);
+        prevAppState.streamSort !== this.appState.streamSort
+      ) {
+        this.cachedFilteredStreams = getFilteredStreams(this.appState);
+      }
+
+      // Track visited streams for DOM caching
+      this.updateVisitedStreams();
     }
 
     this.updateContexts();
@@ -225,44 +244,85 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   /**
-   * Render stream content based on stream type.
-   * Single branch point - delegates to typed container components.
+   * Render all visited stream panels.
+   *
+   * Each stream gets a `<stream-panel>` wrapper that provides per-stream
+   * contexts. The active panel is visible (`display: contents`); all others
+   * are hidden (`display: none`). DOM is preserved when switching — no
+   * destruction/recreation, no re-formatting of log entries.
+   *
+   * Unvisited streams have zero DOM cost. Only streams the user has
+   * actually viewed during this session are kept in memory.
    */
   private renderStreamContent(): TemplateResult {
-    const { streamInfo, streamState, isToolUse } = this.streamContextValue;
-    if (!streamInfo || !streamState) {
-      // No active stream - show empty log-list
+    if (this.visitedStreamIds.size === 0) {
+      // No visited streams - show empty log-list placeholder
       return html`<log-list></log-list>`;
     }
 
-    // Single branch point: delegate to typed container component
-    if (isToolUse) {
-      return html`
-        <tool-use-stream-content
-          ${ref(this.toolUseContentRef)}
-          @toolbar-command=${this.onToolbarCommand}
-          @permission-action=${this.onPermissionAction}
-          @followup-change=${this.onFollowUpChange}
-          @followup-send=${this.onFollowUpSend}
-          @followup-polish=${this.onFollowUpPolish}
-          @followup-clear=${this.onFollowUpClear}
-          @followup-focus-complete=${this.onFollowUpFocusComplete}
-        ></tool-use-stream-content>
-      `;
-    }
+    return html`${repeat(
+      [...this.visitedStreamIds],
+      (id) => id,
+      (id) => this.renderStreamPanel(id),
+    )}`;
+  }
 
-    // Workflow stream (default for non-tool-use)
+  /** Render a single stream panel with per-stream context provider. */
+  private renderStreamPanel(
+    streamId: string,
+  ): TemplateResult | typeof nothing {
+    const streamInfo = this.appState.streams.find(
+      (s) => s.name === streamId,
+    );
+    if (!streamInfo) return nothing;
+
+    const streamState = getStreamState(
+      this.appState,
+      streamId,
+      streamInfo.agentCategory,
+    );
+    const streamLogs =
+      this.appState.streamLogs.get(streamId) ?? EMPTY_STREAM_LOGS;
+    const followupOptions =
+      this.appState.followupOptionsByStream.get(streamId) ?? null;
+    const isActive = streamId === this.appState.activeStreamId;
+    const isToolUse = isToolUseState(streamState);
+
     return html`
-      <workflow-stream-content
-        @toolbar-command=${this.onToolbarCommand}
-        @permission-action=${this.onPermissionAction}
-        @run-selected=${this.onRunSelected}
-        @file-action=${this.onFileAction}
-        @followup-request-options=${this.onFollowupRequestOptions}
-        @followup-mode-change=${this.onFollowupModeChange}
-        @followup-setup=${this.onFollowupSetup}
-        @followup-run=${this.onFollowupRun}
-      ></workflow-stream-content>
+      <stream-panel
+        ?hidden=${!isActive}
+        .streamInfo=${streamInfo}
+        .streamState=${streamState}
+        .streamLogs=${streamLogs}
+        .followupOptions=${followupOptions}
+        .hasStreams=${this.cachedFilteredStreams.length > 0}
+      >
+        ${isToolUse
+          ? html`
+              <tool-use-stream-content
+                ${ref(this.getOrCreateToolUseRef(streamId))}
+                @toolbar-command=${this.onToolbarCommand}
+                @permission-action=${this.onPermissionAction}
+                @followup-change=${this.onFollowUpChange}
+                @followup-send=${this.onFollowUpSend}
+                @followup-polish=${this.onFollowUpPolish}
+                @followup-clear=${this.onFollowUpClear}
+                @followup-focus-complete=${this.onFollowUpFocusComplete}
+              ></tool-use-stream-content>
+            `
+          : html`
+              <workflow-stream-content
+                @toolbar-command=${this.onToolbarCommand}
+                @permission-action=${this.onPermissionAction}
+                @run-selected=${this.onRunSelected}
+                @file-action=${this.onFileAction}
+                @followup-request-options=${this.onFollowupRequestOptions}
+                @followup-mode-change=${this.onFollowupModeChange}
+                @followup-setup=${this.onFollowupSetup}
+                @followup-run=${this.onFollowupRun}
+              ></workflow-stream-content>
+            `}
+      </stream-panel>
     `;
   }
 
@@ -273,82 +333,59 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   /**
-   * Update stream contexts from current appState.
+   * Update app-level contexts.
    *
-   * Logs and meta are stored in separate Maps (streamLogs vs streamStates),
-   * so log-only updates (~10Hz during streaming) don't change the streamStates
-   * ref — the meta context assignment is naturally skipped via simple `!==`.
-   * No field-by-field comparison needed.
+   * Per-stream data (streamStateContext, streamLogContext) is now provided
+   * by individual StreamPanel wrappers. The app-level providers serve as
+   * fallback for the empty state (when no StreamPanel is in the tree).
+   *
+   * Permissions context remains app-level since it's stream-independent.
    */
   private updateContexts(): void {
     const hasStreams = this.cachedFilteredStreams.length > 0;
-    const activeStreamInfo = this.appState.activeStreamId
-      ? (this.cachedFilteredStreams.find(
-          (s) => s.name === this.appState.activeStreamId,
-        ) ?? null)
-      : null;
 
-    if (!activeStreamInfo) {
+    // App-level stream contexts: only update when hasStreams changes.
+    // StreamPanel shadows these for its children with per-stream data.
+    if (this.streamLogContextValue.hasStreams !== hasStreams) {
       this.streamLogContextValue = { ...EMPTY_LOG_CONTEXT, hasStreams };
+    }
+    if (this.streamContextValue.hasStreams !== hasStreams) {
       this.streamContextValue = { ...EMPTY_STREAM_CONTEXT, hasStreams };
-      this.permissionsContextValue = this.permissions;
-      return;
     }
 
-    const streamState = getStreamState(
-      this.appState,
-      activeStreamInfo.name,
-      activeStreamInfo.agentCategory,
-    );
-    const streamLogs =
-      this.appState.streamLogs.get(activeStreamInfo.name) ?? EMPTY_STREAM_LOGS;
-    const isToolUse = isToolUseState(streamState);
-    const runId = getEffectiveRunId(streamState, { mode: 'fallback' });
-
-    // Log context: rebuild when logs, taskGroups, or related fields changed.
-    const prevLog = this.streamLogContextValue;
-    if (
-      prevLog.logs !== streamLogs.logs ||
-      prevLog.taskGroups !== streamState.taskGroups ||
-      prevLog.runId !== runId ||
-      prevLog.isToolUse !== isToolUse ||
-      prevLog.hasStreams !== hasStreams ||
-      prevLog.streamName !== activeStreamInfo.name
-    ) {
-      this.streamLogContextValue = {
-        logs: streamLogs.logs,
-        taskGroups: streamState.taskGroups,
-        runId,
-        isToolUse,
-        hasStreams,
-        streamName: activeStreamInfo.name,
-      };
-    }
-
-    // Meta context: simple ref check on streamState.
-    // Since log-only updates (APPEND_LOG, UPDATE_LOG) only touch streamLogs Map,
-    // the streamStates entry ref stays the same → this assignment is skipped.
-    const followupOptions =
-      this.appState.followupOptionsByStream.get(activeStreamInfo.name) ?? null;
-    const prevCtx = this.streamContextValue;
-    if (
-      prevCtx.streamInfo !== activeStreamInfo ||
-      prevCtx.streamState !== streamState ||
-      prevCtx.runId !== runId ||
-      prevCtx.followupOptions !== followupOptions ||
-      prevCtx.isToolUse !== isToolUse ||
-      prevCtx.hasStreams !== hasStreams
-    ) {
-      this.streamContextValue = {
-        streamInfo: activeStreamInfo,
-        streamState,
-        runId,
-        followupOptions,
-        isToolUse,
-        hasStreams,
-      };
-    }
     this.permissionsContextValue = this.permissions;
+  }
+
+  /**
+   * Track visited streams for DOM caching.
+   * Add active stream to the visited set; remove deleted streams.
+   */
+  private updateVisitedStreams(): void {
+    const activeId = this.appState.activeStreamId;
+    if (activeId) {
+      this.visitedStreamIds.add(activeId);
+    }
+
+    // Remove streams that no longer exist
+    const currentIds = new Set(this.appState.streams.map((s) => s.name));
+    for (const id of this.visitedStreamIds) {
+      if (!currentIds.has(id)) {
+        this.visitedStreamIds.delete(id);
+        this.toolUseContentRefs.delete(id);
+      }
+    }
+  }
+
+  /** Get or create a ref for a tool-use stream's content component. */
+  private getOrCreateToolUseRef(
+    streamId: string,
+  ): Ref<ToolUseStreamContent> {
+    let r = this.toolUseContentRefs.get(streamId);
+    if (!r) {
+      r = createRef<ToolUseStreamContent>();
+      this.toolUseContentRefs.set(streamId, r);
+    }
+    return r;
   }
 
   private setStreamState(
@@ -407,7 +444,11 @@ export class ProgressApp extends BaseWebviewApp {
         this.setStreamState(streamId, updater),
       setStreamLogs: (streamId, updater) =>
         this.setStreamLogs(streamId, updater),
-      getFollowUpRef: () => this.toolUseContentRef.value?.getFollowUpRef(),
+      getFollowUpRef: () => {
+        const activeId = this.appState.activeStreamId;
+        if (!activeId) return undefined;
+        return this.toolUseContentRefs.get(activeId)?.value?.getFollowUpRef();
+      },
       savePrefs: (prefs) => this.prefsManager.update(prefs),
     };
   }
