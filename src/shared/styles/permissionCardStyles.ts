@@ -26,7 +26,7 @@ export const permissionCardStyles: CSSResult = css`
     padding: var(--spacing-xlarge);
     max-width: 600px;
     width: min(92vw, 600px);
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 6px 24px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.35));
   }
 
   .permission-header {
@@ -84,6 +84,14 @@ export const permissionCardStyles: CSSResult = css`
     border-radius: var(--border-radius);
     cursor: pointer;
     font-size: var(--font-size);
+    transition:
+      background-color 0.15s ease,
+      opacity 0.15s ease;
+  }
+
+  .action-button:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
   }
 
   .action-button--secondary {
@@ -134,10 +142,17 @@ export const permissionCardStyles: CSSResult = css`
     color: var(--vscode-textLink-foreground);
     cursor: pointer;
     text-decoration: none;
+    transition: color 0.15s ease;
   }
 
   .file-link:hover {
     text-decoration: underline;
+  }
+
+  .file-link:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
   }
 
   .feedback-section {
@@ -165,7 +180,7 @@ export const permissionCardStyles: CSSResult = css`
     box-sizing: border-box;
   }
 
-  .feedback-input:focus {
+  .feedback-input:focus-visible {
     outline: var(--border-thin) solid var(--vscode-focusBorder);
   }
 `;

@@ -18,7 +18,7 @@ const TOOLTIP_STYLES: Partial<CSSStyleDeclaration> = {
   pointerEvents: 'none',
   zIndex: '10000',
   opacity: '0',
-  transition: 'opacity 0.15s',
+  transition: 'opacity 0.15s ease',
 };
 
 /**

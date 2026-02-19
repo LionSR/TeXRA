@@ -63,6 +63,7 @@ async function refreshApiKeyStatus() {
   const exists = await SecretManager.anyApiKeyExists();
   if (!exists) {
     apiKeyStatusBarItem.text = '$(warning) TeXRA: API Key Required';
+    apiKeyStatusBarItem.tooltip = 'No API keys configured — click to set up';
     apiKeyStatusBarItem.command = 'texra.setApiKey';
     apiKeyStatusBarItem.show();
   } else {
@@ -221,7 +222,8 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.StatusBarAlignment.Left,
   );
   statusBarItem.command = 'texra.showProgressView';
-  statusBarItem.text = 'TeXRA: Idle';
+  statusBarItem.text = '$(bracket-dot) TeXRA: Idle';
+  statusBarItem.tooltip = 'Show TeXRA Tasks';
   statusBarItem.show();
 
   apiKeyStatusBarItem = vscode.window.createStatusBarItem(
@@ -238,8 +240,14 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const runningStreams = new Set<string>();
   const updateStatusBarText = () => {
-    statusBarItem!.text =
-      runningStreams.size > 0 ? 'TeXRA: Running' : 'TeXRA: Idle';
+    const count = runningStreams.size;
+    if (count > 1) {
+      statusBarItem!.text = `$(loading) TeXRA: ${count} active`;
+    } else if (count === 1) {
+      statusBarItem!.text = '$(loading) TeXRA: Running';
+    } else {
+      statusBarItem!.text = '$(bracket-dot) TeXRA: Idle';
+    }
   };
 
   disposeStatusListener = bus.on(

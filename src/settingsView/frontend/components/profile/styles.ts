@@ -276,6 +276,12 @@ export const profileViewStyles: CSSResult = css`
     color: var(--vscode-foreground);
   }
 
+  .provider-expand-btn:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
+  }
+
   .provider-expand-btn.expanded {
     transform: rotate(90deg);
   }
@@ -422,6 +428,12 @@ export const profileViewStyles: CSSResult = css`
     background: var(--vscode-list-hoverBackground);
   }
 
+  .provider-group-header:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
+  }
+
   .provider-group-chevron {
     display: inline-flex;
     align-items: center;
@@ -504,6 +516,12 @@ export const profileViewStyles: CSSResult = css`
     background: var(--vscode-list-hoverBackground);
   }
 
+  .deprecated-toggle:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
+  }
+
   .deprecated-models {
     border-top: var(--border-thin) solid var(--color-border);
     background: var(--vscode-textBlockQuote-background);
@@ -511,7 +529,7 @@ export const profileViewStyles: CSSResult = css`
 
   /* Unavailable model rows (not in relay allowlist) */
   .model-row--unavailable {
-    opacity: 0.55;
+    opacity: var(--opacity-disabled);
   }
 
   .model-key-icon {

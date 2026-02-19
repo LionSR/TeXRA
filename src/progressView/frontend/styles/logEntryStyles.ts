@@ -120,10 +120,17 @@ export const logEntryStyles = css`
   :is(.file-link, .web-search-link) {
     color: var(--color-text-link);
     cursor: pointer;
+    transition: color 0.15s ease;
   }
 
   :is(.file-link, .web-search-link):hover {
     text-decoration: underline;
+  }
+
+  :is(.file-link, .web-search-link):focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
   }
 
   .web-search-link {
@@ -171,7 +178,9 @@ export const logEntryStyles = css`
     padding: 0 var(--spacing-tiny);
     opacity: 0;
     margin-left: auto;
-    transition: opacity 0.2s ease;
+    transition:
+      opacity 0.2s ease,
+      color 0.2s ease;
     cursor: pointer;
   }
 

@@ -61,11 +61,12 @@ export const layoutStyles = css`
 
   .log-placeholder a {
     color: var(--color-text-link);
-    text-decoration: underline;
+    cursor: pointer;
+    text-decoration: none;
   }
 
   .log-placeholder a:hover {
-    text-decoration: none;
+    text-decoration: underline;
   }
 `;
 
