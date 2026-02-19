@@ -2294,10 +2294,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       outputPayload = parts;
-    } else if (
-      attachments.length > 0 &&
-      this.canProcessToolResultAttachments
-    ) {
+    } else if (attachments.length > 0 && this.canProcessToolResultAttachments) {
       // Inline base64 fallback: when file uploads are unavailable (e.g. OpenRouter)
       // but the model supports visual content, embed images/PDFs directly.
       const inlineParts = await this.buildInlineAttachmentParts(attachments);
