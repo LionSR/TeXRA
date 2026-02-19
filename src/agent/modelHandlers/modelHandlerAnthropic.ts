@@ -86,6 +86,7 @@ import type {
 } from './types/IModelHandler';
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
+  BetaCacheControlEphemeral,
   BetaContentBlock,
   BetaContentBlockParam,
   BetaCompactionBlock,
@@ -96,7 +97,9 @@ import type {
   BetaOutputConfig,
   BetaRedactedThinkingBlock,
   BetaRequestDocumentBlock,
+  BetaTextBlockParam,
   BetaThinkingBlock,
+  BetaToolUnion,
   BetaUsage,
   MessageCountTokensParams,
   MessageCreateParams,
@@ -489,6 +492,47 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
   }
 
+  /**
+   * Converts a system prompt string to a TextBlockParam array with cache control.
+   * When prompt caching is supported, the system prompt is wrapped as a content block
+   * with cache_control so it gets independently cached across API calls. This avoids
+   * re-processing the system prompt on every request when only messages change.
+   */
+  private buildCachedSystemPrompt(
+    systemPrompt: string | undefined,
+  ): string | BetaTextBlockParam[] | undefined {
+    if (!systemPrompt || !this.capabilities.supportsPromptCaching) {
+      return systemPrompt;
+    }
+
+    return [
+      {
+        type: 'text' as const,
+        text: systemPrompt,
+        cache_control: EPHEMERAL_CACHE_CONTROL as BetaCacheControlEphemeral,
+      },
+    ];
+  }
+
+  /**
+   * Applies cache control to the last tool definition so that all tool definitions
+   * are cached as a single prefix. Tools rarely change between requests, making them
+   * ideal candidates for caching independently from messages.
+   */
+  private applyCacheControlToLastTool(
+    tools: BetaToolUnion[] | undefined,
+  ): void {
+    if (!tools || tools.length === 0 || !this.capabilities.supportsPromptCaching) {
+      return;
+    }
+
+    const lastTool = tools.at(-1);
+    if (lastTool) {
+      (lastTool as { cache_control?: BetaCacheControlEphemeral }).cache_control =
+        EPHEMERAL_CACHE_CONTROL as BetaCacheControlEphemeral;
+    }
+  }
+
   async getClient(): Promise<Anthropic> {
     const credential = await this.getApiKey();
     const baseUrl = this.getBaseUrl();
@@ -607,7 +651,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const isAnthropic1MBetaActive =
       effectiveContextWindow > this.config.contextWindow;
 
-    this.enforceCacheControlLimit(messages);
+    // Count cache breakpoint slots reserved for system prompt and tool definitions.
+    // The Anthropic API allows max 4 breakpoints; these reduce the budget for messages.
+    const reservedCacheSlots =
+      (systemPrompt && this.capabilities.supportsPromptCaching ? 1 : 0) +
+      (tools && tools.length > 0 && this.capabilities.supportsPromptCaching
+        ? 1
+        : 0);
+    this.enforceCacheControlLimit(messages, reservedCacheSlots);
 
     const documentAnalysis = this.analyzeDocumentSources(messages);
     let hasFileReference = documentAnalysis.hasFileSource;
@@ -625,13 +676,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
       messages,
       temperature,
       stop_sequences: endTag ? [endTag] : undefined,
-      system: systemPrompt,
+      system: this.buildCachedSystemPrompt(systemPrompt),
     };
 
     if (tools && tools.length > 0) {
       options.tools = toAnthropicTools(tools, {
         supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
       });
+      this.applyCacheControlToLastTool(options.tools);
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
 
       // Models using adaptive thinking get interleaved thinking automatically.
@@ -970,7 +1022,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
     );
   }
 
-  private enforceCacheControlLimit(messages: MessageParam[]): void {
+  /**
+   * Enforces the Anthropic API limit of MAX_CACHE_CONTROLLED_BLOCKS (4) cache breakpoints
+   * across the entire request. The reservedSlots parameter accounts for breakpoints
+   * already used by system prompt and tool definitions, reducing the budget available
+   * for message-level cache markers.
+   */
+  private enforceCacheControlLimit(
+    messages: MessageParam[],
+    reservedSlots = 0,
+  ): void {
     if (!this.capabilities.supportsPromptCaching) {
       return;
     }
@@ -1003,10 +1064,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
     }
 
-    // Remove excess cache control markers, keeping only the last MAX_CACHE_CONTROLLED_BLOCKS
+    // Reduce the available budget by slots reserved for system prompt and tool breakpoints
+    const availableSlots = Math.max(
+      0,
+      MAX_CACHE_CONTROLLED_BLOCKS - reservedSlots,
+    );
     const excess = Math.max(
       0,
-      cacheControlledBlocks.length - MAX_CACHE_CONTROLLED_BLOCKS,
+      cacheControlledBlocks.length - availableSlots,
     );
     for (let idx = 0; idx < excess; idx += 1) {
       delete cacheControlledBlocks[idx].cache_control;

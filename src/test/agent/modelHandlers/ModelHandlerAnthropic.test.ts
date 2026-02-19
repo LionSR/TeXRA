@@ -437,6 +437,112 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
+  it('reduces message cache budget when reservedSlots are provided', () => {
+    const handler = createAnthropicHandler();
+    const messageContent: ContentBlockParam[] = [];
+
+    for (let idx = 0; idx < 4; idx += 1) {
+      messageContent.push({
+        type: 'text',
+        text: `block-${idx}`,
+        citations: null,
+        cache_control: { type: 'ephemeral' },
+      } as ContentBlockParam & { cache_control: { type: 'ephemeral' } });
+    }
+
+    const messages: MessageParam[] = [
+      { role: 'user', content: messageContent },
+    ];
+
+    // Reserve 2 slots for system prompt and tools, leaving 2 for messages
+    (handler as any).enforceCacheControlLimit(messages, 2);
+
+    const cacheControlledBlocks = messageContent.filter(
+      (block) =>
+        'cache_control' in block &&
+        (block as { cache_control?: unknown }).cache_control !== undefined,
+    );
+
+    assert.equal(
+      cacheControlledBlocks.length,
+      2,
+      'only 2 message cache markers should remain when 2 slots are reserved',
+    );
+    assert.deepEqual(
+      cacheControlledBlocks.map((block) => (block as { text?: string }).text),
+      ['block-2', 'block-3'],
+      'the two most recent blocks should retain cache control markers',
+    );
+  });
+
+  it('converts system prompt to TextBlockParam with cache control', () => {
+    const handler = createAnthropicHandler();
+
+    const result = (handler as any).buildCachedSystemPrompt(
+      'You are a helpful assistant.',
+    );
+
+    assert.ok(Array.isArray(result), 'should return an array');
+    assert.equal(result.length, 1, 'should contain a single text block');
+    assert.equal(result[0].type, 'text');
+    assert.equal(result[0].text, 'You are a helpful assistant.');
+    assert.deepEqual(result[0].cache_control, { type: 'ephemeral' });
+  });
+
+  it('returns undefined system prompt as-is when no prompt provided', () => {
+    const handler = createAnthropicHandler();
+
+    const result = (handler as any).buildCachedSystemPrompt(undefined);
+    assert.equal(result, undefined);
+  });
+
+  it('returns system prompt as string when caching is disabled', () => {
+    const handler = createAnthropicHandler({ supportsPromptCaching: false });
+
+    const result = (handler as any).buildCachedSystemPrompt(
+      'You are a helpful assistant.',
+    );
+    assert.equal(result, 'You are a helpful assistant.');
+  });
+
+  it('applies cache control to the last tool definition', () => {
+    const handler = createAnthropicHandler();
+
+    const tools = [
+      { name: 'tool_a', input_schema: { type: 'object', properties: {} } },
+      { name: 'tool_b', input_schema: { type: 'object', properties: {} } },
+    ];
+
+    (handler as any).applyCacheControlToLastTool(tools);
+
+    assert.equal(
+      (tools[0] as any).cache_control,
+      undefined,
+      'first tool should not have cache control',
+    );
+    assert.deepEqual(
+      (tools[1] as any).cache_control,
+      { type: 'ephemeral' },
+      'last tool should have cache control',
+    );
+  });
+
+  it('skips tool cache control when caching is disabled', () => {
+    const handler = createAnthropicHandler({ supportsPromptCaching: false });
+
+    const tools = [
+      { name: 'tool_a', input_schema: { type: 'object', properties: {} } },
+    ];
+
+    (handler as any).applyCacheControlToLastTool(tools);
+
+    assert.equal(
+      (tools[0] as any).cache_control,
+      undefined,
+      'tool should not have cache control when caching disabled',
+    );
+  });
+
   it('trims follow-up text and rejects empty follow-ups', async () => {
     const handler = createAnthropicHandler();
     const baseMessages = await handler.initializeMessages('prefix', 'request');
