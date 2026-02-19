@@ -12,6 +12,8 @@ export const ModelSelectionEvents = {
     createEvent('model-enabled-set', detail),
   setHelperModel: (detail: { modelName: string }) =>
     createEvent('helper-model-set', detail),
+  setMergeModel: (detail: { modelName: string }) =>
+    createEvent('merge-model-set', detail),
 } as const;
 
 export const ProviderKeyEvents = {

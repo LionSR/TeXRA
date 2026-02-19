@@ -31,6 +31,7 @@ export enum GlobalStateKey {
   // Model selection settings
   ENABLED_MODELS = 'enabledModels',
   HELPER_MODEL = 'polishModel',
+  MERGE_MODEL = 'mergeModel',
 
   // Streaming settings
   STREAMING_GLOBAL = 'texra.streaming.global',

@@ -4,7 +4,8 @@ import * as vscode from 'vscode';
 // Local imports
 import { executeMergeAgent } from '@agent/runtime/executeAgent';
 import { showLoggedMessageWithDocs } from '@common/errors';
-import { getConfig } from '@utils/config';
+import { GlobalStateKey, globalSM } from '@common/state';
+import { DEFAULT_MERGE_MODEL } from '@shared/constants/providers';
 
 const CHANNEL = 'MergeCommands';
 
@@ -31,7 +32,7 @@ async function handleMerge(
   }
 
   await executeMergeAgent(
-    model ?? getConfig('texra.merge.defaultModel', 'gemini3f'),
+    model ?? globalSM.get<string>(GlobalStateKey.MERGE_MODEL, DEFAULT_MERGE_MODEL),
     baseFile ?? inputFile,
     editedFile,
   );

@@ -159,6 +159,7 @@ export const UpdateModelSelectionMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION),
   models: z.array(ModelSelectionItemSchema),
   helperModel: z.string(),
+  mergeModel: z.string(),
 });
 export type UpdateModelSelectionMessage = z.infer<
   typeof UpdateModelSelectionMessageSchema
@@ -323,6 +324,11 @@ const SetHelperModelMessageSchema = z.object({
   modelName: z.string().min(1),
 });
 
+const SetMergeModelMessageSchema = z.object({
+  command: z.literal(CMD.SET_MERGE_MODEL),
+  modelName: z.string().min(1),
+});
+
 // Agent selection inbound messages
 const GetAgentSelectionMessageSchema = commandOnly(CMD.GET_AGENT_SELECTION);
 
@@ -471,6 +477,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     GetModelSelectionMessageSchema,
     SetModelEnabledMessageSchema,
     SetHelperModelMessageSchema,
+    SetMergeModelMessageSchema,
     // Agent selection messages
     GetAgentSelectionMessageSchema,
     OpenAgentYamlMessageSchema,

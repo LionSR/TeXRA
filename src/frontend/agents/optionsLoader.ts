@@ -4,8 +4,9 @@ import { computeAgentOptionsData } from '@agent/index';
 // Local imports - model options
 import { computeModelOptionsData } from '@model/computeModelOptions';
 
-// Local imports - config
-import { getConfig } from '@utils/config';
+// Local imports - state
+import { GlobalStateKey, globalSM } from '@common/state';
+import { DEFAULT_MERGE_MODEL } from '@shared/constants/providers';
 
 export interface OptionsPayload {
   agentOptions: Awaited<ReturnType<typeof computeAgentOptionsData>>;
@@ -19,9 +20,9 @@ export async function loadOptions(): Promise<OptionsPayload> {
     computeAgentOptionsData(),
   ]);
 
-  const defaultMergeModel = getConfig<string>(
-    'texra.merge.defaultModel',
-    'gemini3f',
+  const defaultMergeModel = globalSM.get<string>(
+    GlobalStateKey.MERGE_MODEL,
+    DEFAULT_MERGE_MODEL,
   );
 
   return {

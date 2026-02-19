@@ -615,55 +615,6 @@
         }
       },
       {
-        "title": "Merge Operations",
-        "properties": {
-          "texra.merge.defaultModel": {
-            "type": "string",
-            "default": "gemini3f",
-            "enum": [
-              "gemini3f",
-              "gemini31p",
-              "gemini3p",
-              "gpt41",
-              "gpt52",
-              "kimi25T",
-              "kimi25",
-              "kimi2T",
-              "kimi2",
-              "deepseek",
-              "deepseekT",
-              "qwen3max",
-              "qwenplus",
-              "grok4",
-              "sonnet45T",
-              "sonnet4T",
-              "haiku45T"
-            ],
-            "enumDescriptions": [
-              "Gemini 3 Flash (Recommended - fast)",
-              "Gemini 3.1 Pro",
-              "Gemini 3 Pro (Deprecated)",
-              "OpenAI GPT-4.1 (fast)",
-              "OpenAI GPT-5.2",
-              "Kimi K2.5",
-              "Kimi K2",
-              "Kimi K2 Thinking",
-              "Kimi K2 Thinking",
-              "DeepSeek V3.2",
-              "DeepSeek V3.2 Thinking",
-              "Qwen-Max",
-              "Qwen Plus",
-              "Grok 4",
-              "Claude Sonnet 4.5 Thinking",
-              "Claude Sonnet 4 Thinking",
-              "Claude Haiku 4.5 Thinking (fast)"
-            ],
-            "description": "Default model to use for merge operations. Fast models like Gemini 3 Flash, GPT-4.1, or Kimi or Haiku are recommended.",
-            "order": 1
-          }
-        }
-      },
-      {
         "title": "Audio",
         "properties": {
           "texra.audio.soxPath": {

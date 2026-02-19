@@ -28,3 +28,6 @@ export const MODEL_PROVIDERS_ORDER: ModelProvider[] = [
 
 /** Default model used for auxiliary/helper tasks (polishing, agent creation, session descriptions). */
 export const DEFAULT_HELPER_MODEL = 'sonnet45';
+
+/** Default model used for merge operations (fast models recommended). */
+export const DEFAULT_MERGE_MODEL = 'gemini3f';
