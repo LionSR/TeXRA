@@ -299,7 +299,7 @@ export class StreamTabs extends LitElement {
         flex: 1;
         min-width: 0;
         font-size: var(--font-size-sm);
-        border-left: var(--border-thin) solid var(--color-border);
+        border-bottom: var(--border-thin) solid var(--color-border);
         height: 100%;
         overflow: visible;
         background-color: var(--background-color);
