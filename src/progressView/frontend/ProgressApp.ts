@@ -112,6 +112,7 @@ export class ProgressApp extends BaseWebviewApp {
       display: flex;
       width: 100%;
       height: 100vh;
+      border: none; /* Remove outer border — redundant inside a sidebar/panel */
     }
 
     .content-area {

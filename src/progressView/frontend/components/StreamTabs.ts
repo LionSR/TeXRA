@@ -299,7 +299,7 @@ export class StreamTabs extends LitElement {
         flex: 1;
         min-width: 0;
         font-size: var(--font-size-sm);
-        border-bottom: var(--border-thin) solid var(--color-border);
+        /* No border needed — vscode-split-layout provides the separator */
         height: 100%;
         overflow: visible;
         background-color: var(--background-color);
