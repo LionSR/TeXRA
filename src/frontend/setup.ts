@@ -22,7 +22,7 @@ import { extendEnvPath } from '@utils/system/platformPaths';
  * Version number for the default model list.
  * Increment this when adding new models to force existing users to get the updated defaults.
  */
-const MODEL_LIST_VERSION = 4;
+const MODEL_LIST_VERSION = 5;
 
 /**
  * Legacy agent files that should be deleted from GlobalStorage.
@@ -115,7 +115,6 @@ export async function refreshModelListIfNeeded(): Promise<void> {
 
   try {
     await mergeNewModelsIfCustomized();
-    await resetModelConfigsToDefaults();
     await globalSM.update(
       GlobalStateKey.MODEL_LIST_VERSION,
       MODEL_LIST_VERSION,
@@ -158,21 +157,6 @@ async function mergeNewModelsIfCustomized(): Promise<void> {
     'extension',
     `Merged ${modelsToAdd.length} new models into user's list: ${modelsToAdd.join(', ')}`,
   );
-}
-
-/**
- * Resets model-related configs to undefined so package.json defaults apply
- */
-async function resetModelConfigsToDefaults(): Promise<void> {
-  const configsToReset = ['texra.merge.defaultModel'];
-
-  for (const key of configsToReset) {
-    if (isConfigExplicitlySet(key)) {
-      await updateConfig(key, undefined, {
-        target: vscode.ConfigurationTarget.Global,
-      });
-    }
-  }
 }
 
 /** Default options for global settings that should only be set if not already configured */
