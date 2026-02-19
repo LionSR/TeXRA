@@ -217,7 +217,12 @@ export class LogList extends LitElement {
   /** Get or create a cached entry for a stream, loading persisted toggle states */
   private getOrCreateEntry(streamId: string): CachedStream {
     let entry = this.streamCache.get(streamId);
-    if (entry) return entry;
+    if (entry) {
+      // Move to end of Map iteration order so LRU eviction works correctly
+      this.streamCache.delete(streamId);
+      this.streamCache.set(streamId, entry);
+      return entry;
+    }
 
     const stateManager = new PersistedState(
       this.storage,
