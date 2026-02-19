@@ -20,6 +20,7 @@ export enum WorkspaceStateKey {
   ENABLED_TOOL_USE_AGENTS = 'texra.enabledToolUseAgents',
   PARENT_STREAM_IDS = 'texra.parentStreamIds',
   SUPER_YOLO_ENABLED = 'texra.superYoloEnabled',
+  ALLOW_ORCHESTRATOR_KILL = 'texra.allowOrchestratorKill',
   CUSTOM_AGENT_PRESETS = 'texra.customAgentPresets',
 }
 
