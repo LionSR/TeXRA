@@ -39,9 +39,11 @@ import {
   UpdateSuperYoloEnabledMessageSchema,
   UpdateAgentModePresetsMessageSchema,
   UpdateToolDashboardMessageSchema,
+  UpdateLatexSettingsStatusMessageSchema,
   type AgentSelectionItem,
   type NumberVscodeSetting,
   type ToolDashboardItem,
+  DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/schemas/settingsViewMessages';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
@@ -63,6 +65,7 @@ import './tabs/ModelsTab';
 import './tabs/AgentsTab';
 import './tabs/MultiAgentTab';
 import './tabs/ToolsTab';
+import './tabs/LaTeXTab';
 import type { HistoryTab } from './tabs/HistoryTab';
 
 const HISTORY_ACTION_COMMANDS: Record<string, string> = {
@@ -161,6 +164,10 @@ export class SettingsApp extends BaseWebviewApp {
   @state() private toolDashboardItems: ToolDashboardItem[] = [];
   @state() private toolDashboardLoaded = false;
 
+  // LaTeX settings state
+  @state() private latexSettingsStatus = { ...DEFAULT_LATEX_SETTINGS_STATUS };
+  @state() private latexSettingsLoaded = false;
+
   protected override get readyCommand(): string | null {
     return null;
   }
@@ -178,6 +185,7 @@ export class SettingsApp extends BaseWebviewApp {
     postMessage(SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_AGENT_MODE_PRESETS);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA);
+    postMessage(SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS);
   }
 
   private parseMessage<T>(
@@ -300,6 +308,17 @@ export class SettingsApp extends BaseWebviewApp {
         if (!data) return;
         this.toolDashboardItems = data.items;
         this.toolDashboardLoaded = true;
+        return;
+      }
+
+      case SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS: {
+        const data = this.parseMessage(
+          raw,
+          UpdateLatexSettingsStatusMessageSchema,
+        );
+        if (!data) return;
+        this.latexSettingsStatus = data.settings;
+        this.latexSettingsLoaded = true;
         return;
       }
 
@@ -484,8 +503,21 @@ export class SettingsApp extends BaseWebviewApp {
     SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL,
   );
 
+  private handleToolInstallExtension = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION,
+  );
+
   private handleToolRecheck(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS);
+  }
+
+  // LaTeX settings event handlers
+  private handleApplyLatexSettings = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS,
+  );
+
+  private handleInstallLatexWorkshop(): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP);
   }
 
   private handleOpenVscodeSettings(): void {
@@ -557,6 +589,7 @@ export class SettingsApp extends BaseWebviewApp {
           <vscode-tab-header slot="header">Agents</vscode-tab-header>
           <vscode-tab-header slot="header">Multi-Agent</vscode-tab-header>
           <vscode-tab-header slot="header">Tools</vscode-tab-header>
+          <vscode-tab-header slot="header">LaTeX</vscode-tab-header>
 
           <vscode-tab-panel>
             <memory-tab
@@ -645,8 +678,18 @@ export class SettingsApp extends BaseWebviewApp {
               .items=${this.toolDashboardItems}
               .loaded=${this.toolDashboardLoaded}
               @tool-open-url=${this.handleToolOpenUrl}
+              @tool-install-extension=${this.handleToolInstallExtension}
               @tool-recheck=${this.handleToolRecheck}
             ></tools-tab>
+          </vscode-tab-panel>
+
+          <vscode-tab-panel>
+            <latex-tab
+              .settings=${this.latexSettingsStatus}
+              .loaded=${this.latexSettingsLoaded}
+              @latex-apply-settings=${this.handleApplyLatexSettings}
+              @latex-install-workshop=${this.handleInstallLatexWorkshop}
+            ></latex-tab>
           </vscode-tab-panel>
         </vscode-tabs>
       </div>
