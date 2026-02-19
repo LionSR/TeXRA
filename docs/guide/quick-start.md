@@ -239,7 +239,7 @@ Here are some common tasks you can try with TeXRA:
 ### Fixing Grammar and Typos
 
 - **Agent**: `correct`
-- **Model**: `gemini3f`, `gemini3p`, `gpt41`, or `sonnet45`
+- **Model**: `gemini3f`, `gemini31p`, `gpt41`, or `sonnet45`
 - **Instruction**: "Fix grammatical errors and typos without changing the content or technical terminology."
 
 ### Converting a Paper to Slides
