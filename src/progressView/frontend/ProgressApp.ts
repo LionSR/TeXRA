@@ -91,6 +91,17 @@ import type { FollowUpInput } from './components/FollowUpInput';
 import type { PermissionState } from './components/PermissionCard';
 import type { ToolUseStreamContent } from './components/ToolUseStreamContent';
 
+/** Type guard for sidebar position messages (not part of the outbound schema). */
+function isSidebarPositionMessage(
+  raw: unknown,
+): raw is { command: 'updateSidebarPosition'; position: 'left' | 'right' } {
+  return (
+    typeof raw === 'object' &&
+    raw !== null &&
+    (raw as Record<string, unknown>).command === 'updateSidebarPosition'
+  );
+}
+
 @customElement('progress-app')
 export class ProgressApp extends BaseWebviewApp {
   static override styles = css`
@@ -133,6 +144,9 @@ export class ProgressApp extends BaseWebviewApp {
 
   @state() private appState: ProgressState;
   @state() private permissions: PermissionState[] = [];
+
+  /** Whether stream tabs render on the right side (true when sidebar is on the left). */
+  @state() private tabsOnRight = true;
 
   @provide({ context: streamStateContext })
   @state()
@@ -201,10 +215,11 @@ export class ProgressApp extends BaseWebviewApp {
       <div class="main-container">
         <vscode-split-layout
           split="vertical"
-          initial-handle-position="25%"
+          initial-handle-position="${this.tabsOnRight ? '75%' : '25%'}"
         >
           <stream-tabs
-            slot="start"
+            slot="${this.tabsOnRight ? 'end' : 'start'}"
+            side="${this.tabsOnRight ? 'right' : 'left'}"
             .streams=${this.cachedFilteredStreams}
             .activeStreamId=${this.appState.activeStreamId}
             .filter=${this.appState.streamFilter}
@@ -217,7 +232,7 @@ export class ProgressApp extends BaseWebviewApp {
           ></stream-tabs>
 
           <div
-            slot="end"
+            slot="${this.tabsOnRight ? 'start' : 'end'}"
             class="content-area"
             @stream-switch=${this.onStreamSwitch}
           >
@@ -271,6 +286,12 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   protected handleMessage(raw: unknown): void {
+    // Handle sidebar position updates (layout hint, not part of outbound schema)
+    if (isSidebarPositionMessage(raw)) {
+      this.tabsOnRight = raw.position === 'left';
+      return;
+    }
+
     // Schema-driven dispatch - parses once with discriminated union,
     // then routes to typed handler
     dispatchMessage(raw, this.createMessageHandlerContext());

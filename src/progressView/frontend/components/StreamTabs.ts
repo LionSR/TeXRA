@@ -299,10 +299,17 @@ export class StreamTabs extends LitElement {
         flex: 1;
         min-width: 0;
         font-size: var(--font-size-sm);
-        border-right: var(--border-thin) solid var(--color-border);
         height: 100%;
         overflow: visible;
         background-color: var(--background-color);
+      }
+
+      /* Border on the side adjacent to the content area */
+      :host([side='left']) .tabs {
+        border-right: var(--border-thin) solid var(--color-border);
+      }
+      :host([side='right']) .tabs {
+        border-left: var(--border-thin) solid var(--color-border);
       }
 
       .tabs-content {
@@ -351,6 +358,7 @@ export class StreamTabs extends LitElement {
     `,
   ];
 
+  @property({ reflect: true }) side: 'left' | 'right' = 'left';
   @property({ attribute: false }) streams: StreamTabInfo[] = [];
   @property({ attribute: false }) activeStreamId: string | null = null;
   @property({ attribute: false }) filter: StreamFilter = 'all';

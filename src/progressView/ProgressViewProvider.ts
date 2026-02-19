@@ -289,6 +289,11 @@ export class ProgressViewProvider
         }
       }),
       webviewView.onDidDispose(this.cleanupView.bind(this)),
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration('workbench.sideBar.location')) {
+          this.sendSidebarPosition();
+        }
+      }),
     );
 
     this.updateWebview();
@@ -349,6 +354,7 @@ export class ProgressViewProvider
 
     this._pendingUpdateOptions = null;
     this.updateWebview({ forceRebuild: true });
+    this.sendSidebarPosition();
     this.replayPendingPrompts();
   }
 
@@ -364,6 +370,36 @@ export class ProgressViewProvider
 
     this.retryRequestHandler.replay();
     this.agentProposalHandler.replay();
+  }
+
+  /**
+   * Read the primary sidebar location from VS Code settings.
+   * The progress view is registered in the primary sidebar activity bar,
+   * so this determines which side the stream tabs panel appears on.
+   */
+  private getSidebarPosition(): 'left' | 'right' {
+    return (
+      vscode.workspace
+        .getConfiguration('workbench')
+        .get<string>('sideBar.location') ?? 'left'
+    ) as 'left' | 'right';
+  }
+
+  /**
+   * Send sidebar position to all webviews so they can orient the layout
+   * (stream tabs on the editor-adjacent side).
+   */
+  private sendSidebarPosition(): void {
+    const position = this.getSidebarPosition();
+    for (const webview of [
+      this._view?.webview,
+      this._panelView?.webview,
+    ]) {
+      webview?.postMessage({
+        command: 'updateSidebarPosition',
+        position,
+      });
+    }
   }
 
   public getPendingAgentProposal(
