@@ -21,6 +21,8 @@ import { getZoteroPort } from '@tools/zotero/bbtClient';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 
+const LEAN4_EXT_ID = 'leanprover.lean4';
+
 // ============================================================
 // Type
 // ============================================================
@@ -33,13 +35,53 @@ export interface ExternalToolDef {
   readonly tools: readonly RegisteredToolName[];
   /** Returns true if the external dependency is available. */
   readonly check: () => Promise<boolean>;
+  /** Optional detailed status string resolved at check time (shown below description). */
+  readonly detailCheck?: () => Promise<string | undefined>;
   // Dashboard UI metadata
   readonly name: string;
   readonly category: ToolCategory;
   readonly description: string;
   readonly installGuide?: string;
   readonly installUrl?: string;
+  /** VS Code extension ID — when present, the dashboard offers a direct "Install" button. */
+  readonly installExtensionId?: string;
   readonly configNotes?: string;
+  /** When true, the tool is checked for availability but not shown in the Tools tab dashboard. */
+  readonly hideFromDashboard?: boolean;
+}
+
+// ============================================================
+// Zotero probe helpers
+// ============================================================
+
+/** Probe the Zotero connector endpoint (responds if Zotero is running). */
+async function probeZoteroConnector(port: number): Promise<boolean> {
+  try {
+    await axios.get(`http://127.0.0.1:${port}/connector/ping`, {
+      timeout: 2000,
+    });
+    return true;
+  } catch (error: unknown) {
+    // Any HTTP response means Zotero is running
+    if (axios.isAxiosError(error) && error.response) return true;
+    return false;
+  }
+}
+
+/** Probe the Better BibTeX JSON-RPC endpoint. */
+async function probeZoteroBbt(port: number): Promise<boolean> {
+  try {
+    await axios.get(`http://127.0.0.1:${port}/better-bibtex/json-rpc`, {
+      timeout: 2000,
+    });
+    return true;
+  } catch (error: unknown) {
+    // 405 = server running but expects POST — BBT is available
+    if (axios.isAxiosError(error) && error.response?.status === 405) {
+      return true;
+    }
+    return false;
+  }
 }
 
 // ============================================================
@@ -62,6 +104,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       '  Windows: Install via MiKTeX or TeX Live package manager',
     installUrl: 'https://app.uio.no/ifi/texcount/',
     configNotes: 'Part of most TeX Live distributions.',
+    hideFromDashboard: true, // Shown in LaTeX settings tab instead
     check: () => checkToolInstalled('texcount', false),
   },
   {
@@ -104,20 +147,21 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     configNotes:
       'Zotero must be running with Better BibTeX installed. Port configurable via texra.bib.zoteroPort.',
     check: async () => {
-      try {
-        const port = getZoteroPort();
-        await axios.get(`http://127.0.0.1:${port}/better-bibtex/json-rpc`, {
-          timeout: 2000,
-        });
-        return true;
-      } catch (error: unknown) {
-        // 405 Method Not Allowed means the server is running but expects POST —
-        // any HTTP response from the endpoint means Zotero + BBT is available.
-        if (axios.isAxiosError(error) && error.response?.status === 405) {
-          return true;
-        }
-        return false;
+      const port = getZoteroPort();
+      const bbtOk = await probeZoteroBbt(port);
+      return bbtOk;
+    },
+    detailCheck: async () => {
+      const port = getZoteroPort();
+      const zoteroOk = await probeZoteroConnector(port);
+      const bbtOk = await probeZoteroBbt(port);
+      if (zoteroOk && bbtOk) {
+        return `Zotero running on port ${port}, Better BibTeX responding.`;
       }
+      if (zoteroOk && !bbtOk) {
+        return `Zotero detected on port ${port}, but Better BibTeX is not responding. Install the Better BibTeX plugin.`;
+      }
+      return `Zotero not detected on port ${port}. Make sure Zotero is running.`;
     },
   },
   {
@@ -143,72 +187,14 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'provided by the VS Code extension.',
     installUrl:
       'https://marketplace.visualstudio.com/items?itemName=leanprover.lean4',
+    installExtensionId: LEAN4_EXT_ID,
     configNotes: 'Lean 4 VS Code extension must be installed and active.',
     check: async () => {
-      const lean4Ext = vscode.extensions.getExtension('leanprover.lean4');
+      const lean4Ext = vscode.extensions.getExtension(LEAN4_EXT_ID);
       return lean4Ext !== undefined;
     },
   },
 
-  // ── System dependencies (no agent tools gated) ───────────────
-  {
-    id: 'latex-format',
-    tools: [],
-    name: 'LaTeX Formatting (latexindent)',
-    category: 'system',
-    description:
-      'Format and indent LaTeX documents. Requires latexindent and Perl.',
-    installGuide:
-      'latexindent is a Perl script for formatting LaTeX files.\n\n' +
-      'Installation:\n' +
-      '  Mac:     brew install latexindent\n' +
-      '  Ubuntu:  sudo apt-get install texlive-extra-utils\n' +
-      '  Windows: Install via MiKTeX or TeX Live package manager\n\n' +
-      'Perl is also required:\n' +
-      '  Mac:     brew install perl\n' +
-      '  Ubuntu:  sudo apt-get install perl\n' +
-      '  Windows: Download from strawberryperl.com',
-    installUrl: 'https://github.com/cmhughes/latexindent.pl',
-    configNotes: 'Part of most TeX Live distributions. Requires Perl runtime.',
-    check: async () => {
-      const [hasLatexindent, hasPerl] = await Promise.all([
-        checkToolInstalled('latexindent', false),
-        checkToolInstalled('perl', false),
-      ]);
-      return hasLatexindent && hasPerl;
-    },
-  },
-  {
-    id: 'image-processing',
-    tools: [],
-    name: 'Image Processing (Ghostscript + GM/IM)',
-    category: 'system',
-    description:
-      'Convert PDF pages to PNG images for preview. Requires Ghostscript and either GraphicsMagick or ImageMagick.',
-    installGuide:
-      'Ghostscript converts PDF to raster images; GraphicsMagick or\n' +
-      'ImageMagick handles the final PNG output.\n\n' +
-      'Ghostscript:\n' +
-      '  Mac:     brew install ghostscript\n' +
-      '  Ubuntu:  sudo apt-get install ghostscript\n' +
-      '  Windows: Download from ghostscript.com\n\n' +
-      'GraphicsMagick (recommended):\n' +
-      '  Mac:     brew install graphicsmagick\n' +
-      '  Ubuntu:  sudo apt-get install graphicsmagick\n' +
-      '  Windows: Download from graphicsmagick.org\n\n' +
-      'OR ImageMagick:\n' +
-      '  Mac:     brew install imagemagick\n' +
-      '  Ubuntu:  sudo apt-get install imagemagick\n' +
-      '  Windows: Download from imagemagick.org',
-    installUrl: 'https://ghostscript.com/releases/gsdnld.html',
-    configNotes: 'Needs Ghostscript plus either GraphicsMagick or ImageMagick.',
-    check: async () => {
-      const [hasGs, hasGm, hasMagick] = await Promise.all([
-        checkToolInstalled('gs', false),
-        checkToolInstalled('gm', false),
-        checkToolInstalled('magick', false),
-      ]);
-      return hasGs && (hasGm || hasMagick);
-    },
-  },
+  // System dependencies (latexindent, image processing) have moved to the
+  // LaTeX settings tab — see LaTeXTab.ts and SettingsViewMessageHandler.ts.
 ];

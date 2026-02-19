@@ -8,6 +8,7 @@ import fsExtra from 'fs-extra';
 import * as vscode from 'vscode';
 
 // Local imports
+import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
@@ -23,6 +24,12 @@ import { extendEnvPath } from '@utils/system/platformPaths';
  * Increment this when adding new models to force existing users to get the updated defaults.
  */
 const MODEL_LIST_VERSION = 5;
+
+/**
+ * Version number for LaTeX-related VS Code config setup.
+ * Increment this when changing which settings are auto-configured.
+ */
+const LATEX_CONFIG_VERSION = 2;
 
 /**
  * Legacy agent files that should be deleted from GlobalStorage.
@@ -189,12 +196,19 @@ export async function configureLatexSettings(): Promise<void> {
   }
 
   try {
-    const latexWorkshop = vscode.extensions.getExtension(
-      'James-Yu.latex-workshop',
-    );
+    const latexWorkshop = vscode.extensions.getExtension(LATEX_WORKSHOP_EXT_ID);
 
     if (!latexWorkshop) {
+      // Prompt has its own suppression — run every activation, not gated by version.
       await promptLatexWorkshopInstall();
+      return;
+    }
+
+    // Only write VS Code config once per version bump
+    const storedVersion = globalSM.get<number>(
+      GlobalStateKey.LATEX_CONFIG_VERSION,
+    );
+    if (storedVersion === LATEX_CONFIG_VERSION) {
       return;
     }
 
@@ -203,39 +217,20 @@ export async function configureLatexSettings(): Promise<void> {
       'LaTeX Workshop extension detected, configuring settings',
     );
 
+    // ── Migration: clean up settings that older TeXRA versions force-wrote ──
+    // These are now either opt-in (LaTeX tab) or left to LaTeX Workshop defaults.
+    if (storedVersion === undefined || storedVersion < 2) {
+      await resetLegacyLatexSettings();
+    }
+
+    // Settings that TeXRA still auto-configures (write-once).
     const settings: Array<[string, unknown]> = [
-      // LaTeX Workshop build settings
-      ['latex-workshop.latex.build.fromWorkspaceFolder', true],
-      [
-        'latex-workshop.latex.external.build.args',
-        ['--output-directory=build', '-f', '-pdf'],
-      ],
-      ['latex-workshop.latex.outDir', '%DIR%/build/'],
-      [
-        'latex-workshop.latex.magic.args',
-        [
-          '-synctex=1',
-          '-interaction=nonstopmode',
-          '-file-line-error',
-          '%DOC%',
-          '-pdf',
-          '-f',
-        ],
-      ],
-      ['latex-workshop.formatting.latex', 'latexindent'],
-      // Language-specific editor settings
       [
         '[latex]',
         {
           'editor.wordWrap': 'on',
-          'files.autoSave': 'afterDelay',
-          'intellisense.update.delay': 1000,
         },
       ],
-      ['[yaml]', { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' }],
-      // Explorer settings
-      ['explorer.autoRevealExclude', { 'build/': true }],
-      ['explorer.autoReveal', false],
     ];
 
     for (const [key, value] of settings) {
@@ -251,12 +246,85 @@ export async function configureLatexSettings(): Promise<void> {
       logger.info('extension', 'Activity bar location set to default');
     }
 
-    logger.info('extension', 'LaTeX Workshop settings configured successfully');
+    await globalSM.update(
+      GlobalStateKey.LATEX_CONFIG_VERSION,
+      LATEX_CONFIG_VERSION,
+    );
   } catch (err) {
     logger.error(
       'extension',
       `Error configuring LaTeX settings: ${toErrorMessage(err)}`,
     );
+  }
+}
+
+/**
+ * Reset settings that older TeXRA versions (< v0.37) auto-wrote on every activation.
+ * Only resets a setting if its current global value matches what TeXRA set,
+ * so user customizations are preserved.
+ */
+async function resetLegacyLatexSettings(): Promise<void> {
+  const GLOBAL = vscode.ConfigurationTarget.Global;
+  const cfg = vscode.workspace.getConfiguration();
+
+  // Deep equality check for arrays/objects
+  const eq = (a: unknown, b: unknown): boolean =>
+    JSON.stringify(a) === JSON.stringify(b);
+
+  // Simple settings: reset to undefined if value matches what TeXRA wrote.
+  const legacySettings: Array<[string, unknown]> = [
+    ['latex-workshop.latex.build.fromWorkspaceFolder', true],
+    [
+      'latex-workshop.latex.external.build.args',
+      ['--output-directory=build', '-f', '-pdf'],
+    ],
+    [
+      'latex-workshop.latex.magic.args',
+      [
+        '-synctex=1',
+        '-interaction=nonstopmode',
+        '-file-line-error',
+        '%DOC%',
+        '-pdf',
+        '-f',
+      ],
+    ],
+    ['latex-workshop.formatting.latex', 'latexindent'],
+    ['explorer.autoReveal', false],
+  ];
+
+  for (const [key, oldValue] of legacySettings) {
+    const inspection = cfg.inspect(key);
+    if (inspection?.globalValue !== undefined && eq(inspection.globalValue, oldValue)) {
+      await cfg.update(key, undefined, GLOBAL);
+      logger.info('extension', `Reset legacy setting: ${key}`);
+    }
+  }
+
+  // Language-scoped settings: remove only the keys TeXRA added.
+  const legacyLanguageKeys: Array<[string, Record<string, unknown>]> = [
+    ['[latex]', { 'files.autoSave': 'afterDelay', 'intellisense.update.delay': 1000 }],
+    ['[yaml]', { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' }],
+  ];
+
+  for (const [langKey, oldKeys] of legacyLanguageKeys) {
+    const inspection = cfg.inspect<Record<string, unknown>>(langKey);
+    const current = inspection?.globalValue;
+    if (!current || typeof current !== 'object') continue;
+
+    const cleaned = { ...current };
+    let changed = false;
+    for (const [k, v] of Object.entries(oldKeys)) {
+      if (eq(cleaned[k], v)) {
+        delete cleaned[k];
+        changed = true;
+      }
+    }
+    if (changed) {
+      const newValue = Object.keys(cleaned).length > 0 ? cleaned : undefined;
+      await cfg.update(langKey, newValue, GLOBAL);
+      logger.info('extension', `Cleaned legacy keys from ${langKey}`);
+    }
   }
 }
 
@@ -274,7 +342,7 @@ async function promptLatexWorkshopInstall(): Promise<void> {
         callback: () =>
           safeExecuteCommand(
             'workbench.extensions.installExtension',
-            ['James-Yu.latex-workshop'],
+            [LATEX_WORKSHOP_EXT_ID],
             'extension',
           ),
       },
