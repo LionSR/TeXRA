@@ -1,0 +1,564 @@
+/**
+ * LaTeXTab component - shows recommended LaTeX-related VS Code settings
+ * and lets the user apply them with a single click.
+ */
+
+// Third-party imports
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { customElement, property, state } from 'lit/decorators.js';
+
+// Local imports - shared styles
+import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
+
+// Local imports - shared schemas
+import {
+  DEFAULT_LATEX_SETTINGS_STATUS,
+  type LatexSettingsStatus,
+} from '@shared/schemas/settingsViewMessages';
+
+// Local imports - shared constants
+import {
+  PDFLATEX_INSTALL_GUIDE,
+  LATEXDIFF_INSTALL_GUIDE,
+  LATEXINDENT_INSTALL_GUIDE,
+  TEXCOUNT_INSTALL_GUIDE,
+  IMAGE_PROCESSING_INSTALL_GUIDE,
+  type Platform,
+} from '@shared/constants/latex';
+
+/** Path keys in LatexSettingsStatus for tool paths. */
+type ToolPathKey =
+  | 'pdflatexPath'
+  | 'latexmkPath'
+  | 'latexdiffPath'
+  | 'latexindentPath'
+  | 'texcountPath'
+  | 'ghostscriptPath'
+  | 'graphicsmagickPath';
+
+/** Metadata for a dependency shown in the Dependencies section. */
+interface DependencyInfo {
+  readonly key: keyof LatexSettingsStatus;
+  readonly name: string;
+  readonly installedDesc: string;
+  readonly missingDesc: string;
+  readonly installGuide?: Record<Platform, string>;
+  /** Keys to check for detected tool paths (shown when installed). */
+  readonly pathKeys?: ToolPathKey[];
+  /** If provided, renders an action button when missing (e.g. VS Code install). */
+  readonly actionEvent?: string;
+  readonly actionLabel?: string;
+}
+
+const DEPENDENCIES: DependencyInfo[] = [
+  {
+    key: 'texDistributionInstalled',
+    name: 'TeX Distribution',
+    installedDesc: 'Installed — pdflatex/latexmk detected on PATH.',
+    missingDesc:
+      'Not found — a TeX distribution (TeX Live, MacTeX, or MiKTeX) is required to compile LaTeX documents.',
+    installGuide: PDFLATEX_INSTALL_GUIDE,
+    pathKeys: ['pdflatexPath', 'latexmkPath'],
+  },
+  {
+    key: 'latexWorkshopInstalled',
+    name: 'LaTeX Workshop',
+    installedDesc:
+      'Installed — provides LaTeX compilation, PDF preview, and IntelliSense.',
+    missingDesc:
+      'Not installed — required for LaTeX compilation, PDF preview, and IntelliSense.',
+    actionEvent: 'latex-install-workshop',
+    actionLabel: 'Install',
+  },
+  {
+    key: 'latexdiffInstalled',
+    name: 'latexdiff',
+    installedDesc:
+      'Installed — enables visual comparison of LaTeX document revisions.',
+    missingDesc:
+      'Not found — install via your TeX distribution to enable diff comparisons.',
+    installGuide: LATEXDIFF_INSTALL_GUIDE,
+    pathKeys: ['latexdiffPath'],
+  },
+  {
+    key: 'latexindentInstalled',
+    name: 'latexindent',
+    installedDesc:
+      'Installed — used by agents to clean up formatting after editing your LaTeX source.',
+    missingDesc:
+      'Not found — without it, agents may produce inconsistent indentation ' +
+      'when editing .tex files. Requires Perl.',
+    installGuide: LATEXINDENT_INSTALL_GUIDE,
+    pathKeys: ['latexindentPath'],
+  },
+  {
+    key: 'texcountInstalled',
+    name: 'TeXcount',
+    installedDesc:
+      'Installed — enables word, heading, and figure counting in LaTeX documents.',
+    missingDesc:
+      'Not found — without it, agents cannot count words or structural elements in your .tex files. ' +
+      'Part of most TeX Live distributions.',
+    installGuide: TEXCOUNT_INSTALL_GUIDE,
+    pathKeys: ['texcountPath'],
+  },
+  {
+    key: 'imageProcessingInstalled',
+    name: 'Image Processing',
+    installedDesc:
+      'Installed — Ghostscript + GraphicsMagick/ImageMagick detected for PDF-to-PNG conversion.',
+    missingDesc:
+      'Not found — needed to generate PNG previews of compiled PDF pages. ' +
+      'Requires Ghostscript and either GraphicsMagick or ImageMagick.',
+    installGuide: IMAGE_PROCESSING_INSTALL_GUIDE,
+    pathKeys: ['ghostscriptPath', 'graphicsmagickPath'],
+  },
+];
+
+/** Metadata for each recommended setting. */
+interface SettingInfo {
+  readonly key: keyof LatexSettingsStatus;
+  readonly name: string;
+  readonly configKey: string;
+  readonly value: string;
+  readonly description: string;
+}
+
+const RECOMMENDED_SETTINGS: SettingInfo[] = [
+  {
+    key: 'outDir',
+    name: 'LaTeX Output Directory',
+    configKey: 'latex-workshop.latex.outDir',
+    value: '%DIR%/build/',
+    description:
+      'Redirect compilation artifacts to a build/ subfolder, keeping your project root clean.',
+  },
+  {
+    key: 'autoRevealExclude',
+    name: 'Explorer Auto-Reveal Exclude',
+    configKey: 'explorer.autoRevealExclude',
+    value: '{ "**/build/": true }',
+    description:
+      'Prevent the build/ folder from being auto-revealed in the Explorer sidebar.',
+  },
+];
+
+@customElement('latex-tab')
+export class LaTeXTab extends LitElement {
+  static override styles = [
+    designTokens,
+    codiconStyles,
+    commonViewStyles,
+    css`
+      :host {
+        display: block;
+      }
+
+      .latex-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: var(--spacing-large);
+      }
+
+      .latex-title {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        font-size: var(--font-size-lg);
+        font-weight: 500;
+        color: var(--vscode-foreground);
+      }
+
+      .latex-description {
+        margin-bottom: var(--spacing-large);
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-sm);
+        line-height: 1.5;
+      }
+
+      .dependency-card {
+        padding: var(--spacing-medium);
+        margin-bottom: var(--spacing-medium);
+        border: var(--border-thin) solid var(--color-border);
+        border-radius: var(--radius-medium);
+        background: var(--vscode-editor-background);
+      }
+
+      .dependency-row {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-medium);
+      }
+
+      .dependency-icon {
+        flex-shrink: 0;
+        font-size: var(--font-size-lg);
+      }
+
+      .dependency-icon.installed {
+        color: var(--vscode-testing-iconPassed, #73c991);
+      }
+
+      .dependency-icon.missing {
+        color: var(--vscode-testing-iconFailed, #f48771);
+      }
+
+      .dependency-info {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .dependency-name {
+        font-weight: 500;
+        color: var(--vscode-foreground);
+      }
+
+      .dependency-description {
+        font-size: var(--font-size-sm);
+        color: var(--color-text-secondary);
+        margin-top: 2px;
+      }
+
+      .dependency-guide-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        padding: var(--spacing-tiny) 0;
+        margin-top: var(--spacing-small);
+        font-size: var(--font-size-sm);
+        font-family: inherit;
+        color: var(--vscode-textLink-foreground, #3794ff);
+        background: none;
+        border: none;
+        cursor: pointer;
+        transition: opacity 0.1s ease;
+      }
+
+      .dependency-guide-toggle:hover {
+        opacity: 0.8;
+      }
+
+      .dependency-guide {
+        margin-top: var(--spacing-small);
+        padding: var(--spacing-medium);
+        background: var(
+          --vscode-textCodeBlock-background,
+          rgba(128, 128, 128, 0.08)
+        );
+        border-radius: var(--radius-medium);
+        font-size: var(--font-size-sm);
+        color: var(--vscode-foreground);
+        line-height: 1.5;
+        white-space: pre-wrap;
+      }
+
+      .dependency-path {
+        margin-top: 4px;
+        font-family: var(--vscode-editor-font-family, monospace);
+        font-size: var(--font-size-sm);
+        color: var(--color-text-secondary);
+      }
+
+      .section-header {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        padding-bottom: var(--spacing-small);
+        margin-bottom: var(--spacing-medium);
+        border-bottom: var(--border-thin) solid var(--color-border);
+        font-size: var(--font-size-sm);
+        font-weight: 500;
+        color: var(--color-text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .setting-card {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--spacing-medium);
+        padding: var(--spacing-medium);
+        margin-bottom: var(--spacing-medium);
+        border: var(--border-thin) solid var(--color-border);
+        border-radius: var(--radius-medium);
+        background: var(--vscode-editor-background);
+      }
+
+      .setting-status-icon {
+        flex-shrink: 0;
+        margin-top: 2px;
+        font-size: var(--font-size-lg);
+      }
+
+      .setting-status-icon.is-set {
+        color: var(--vscode-testing-iconPassed, #73c991);
+      }
+
+      .setting-status-icon.not-set {
+        color: var(--vscode-testing-iconFailed, #f48771);
+      }
+
+      .setting-info {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .setting-name {
+        font-weight: 500;
+        color: var(--vscode-foreground);
+        margin-bottom: 2px;
+      }
+
+      .setting-config-key {
+        font-family: var(--vscode-editor-font-family, monospace);
+        font-size: var(--font-size-sm);
+        color: var(--color-text-secondary);
+        margin-bottom: var(--spacing-small);
+      }
+
+      .setting-value {
+        font-family: var(--vscode-editor-font-family, monospace);
+        font-size: var(--font-size-sm);
+        color: var(--vscode-textLink-foreground);
+      }
+
+      .setting-description {
+        font-size: var(--font-size-sm);
+        color: var(--color-text-secondary);
+        line-height: 1.4;
+        margin-top: var(--spacing-small);
+      }
+
+      .setting-badge {
+        flex-shrink: 0;
+        font-size: var(--font-size-xs, 11px);
+        padding: 2px 6px;
+        border-radius: var(--radius-small, 3px);
+        font-weight: 500;
+      }
+
+      .setting-badge.is-set {
+        background: var(--vscode-testing-iconPassed, #73c991);
+        color: var(--vscode-editor-background);
+      }
+
+      .setting-badge.not-set {
+        background: var(--vscode-badge-background);
+        color: var(--vscode-badge-foreground);
+      }
+    `,
+  ];
+
+  @property({ attribute: false })
+  settings: LatexSettingsStatus = { ...DEFAULT_LATEX_SETTINGS_STATUS };
+
+  @property({ type: Boolean }) loaded = false;
+
+  @state() private expandedGuides = new Set<string>();
+
+  private toggleGuide(key: string): void {
+    const next = new Set(this.expandedGuides);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    this.expandedGuides = next;
+  }
+
+  private handleApply(field?: SettingInfo['key'], reset = false): void {
+    this.dispatchEvent(
+      new CustomEvent('latex-apply-settings', {
+        bubbles: true,
+        composed: true,
+        detail: { ...(field ? { field } : {}), ...(reset ? { reset } : {}) },
+      }),
+    );
+  }
+
+  private allSettingsSet(): boolean {
+    return this.settings.outDir && this.settings.autoRevealExclude;
+  }
+
+  /** Collect detected tool paths for a dependency. */
+  private getDetectedPaths(dep: DependencyInfo): string[] {
+    if (!dep.pathKeys) return [];
+    return dep.pathKeys
+      .map((k) => this.settings[k])
+      .filter((v): v is string => v !== null && v !== undefined);
+  }
+
+  private renderDependencyCard(dep: DependencyInfo): TemplateResult {
+    const installed = this.settings[dep.key];
+    const expanded = this.expandedGuides.has(dep.key);
+    const platform = this.settings.platform as Platform;
+    const guideText = dep.installGuide?.[platform] ?? dep.installGuide?.linux;
+    const detectedPaths = installed ? this.getDetectedPaths(dep) : [];
+
+    return html`
+      <div class="dependency-card">
+        <div class="dependency-row">
+          <span
+            class="codicon dependency-icon ${installed
+              ? 'installed codicon-check'
+              : 'missing codicon-warning'}"
+          ></span>
+          <div class="dependency-info">
+            <div class="dependency-name">${dep.name}</div>
+            <div class="dependency-description">
+              ${installed ? dep.installedDesc : dep.missingDesc}
+            </div>
+            ${detectedPaths.map(
+              (p) => html`<div class="dependency-path">${p}</div>`,
+            )}
+          </div>
+          ${installed
+            ? html`<span class="setting-badge is-set">Installed</span>`
+            : dep.actionEvent
+              ? html`
+                  <button
+                    class="tab-action-btn"
+                    @click=${() =>
+                      this.dispatchEvent(
+                        new CustomEvent(dep.actionEvent!, {
+                          bubbles: true,
+                          composed: true,
+                        }),
+                      )}
+                    title="${dep.actionLabel ?? 'Install'}"
+                  >
+                    <span class="codicon codicon-cloud-download"></span>
+                    ${dep.actionLabel ?? 'Install'}
+                  </button>
+                `
+              : html`<span class="setting-badge not-set">Not found</span>`}
+        </div>
+        ${!installed && guideText
+          ? html`
+              <button
+                class="dependency-guide-toggle"
+                @click=${() => this.toggleGuide(dep.key)}
+              >
+                <span
+                  class="codicon ${expanded
+                    ? 'codicon-chevron-down'
+                    : 'codicon-chevron-right'}"
+                ></span>
+                Installation Guide
+              </button>
+              ${expanded
+                ? html`<div class="dependency-guide">${guideText}</div>`
+                : nothing}
+            `
+          : nothing}
+      </div>
+    `;
+  }
+
+  private renderDependencies(): TemplateResult {
+    return html`
+      <div class="section-header">
+        <span class="codicon codicon-package"></span>
+        Dependencies
+      </div>
+      ${DEPENDENCIES.map((dep) => this.renderDependencyCard(dep))}
+    `;
+  }
+
+  private renderSettingCard(info: SettingInfo): TemplateResult {
+    const isSet = this.settings[info.key];
+    return html`
+      <div class="setting-card">
+        <span
+          class="codicon setting-status-icon ${isSet
+            ? 'is-set'
+            : 'not-set'} ${isSet ? 'codicon-check' : 'codicon-warning'}"
+        ></span>
+        <div class="setting-info">
+          <div class="setting-name">${info.name}</div>
+          <div class="setting-config-key">${info.configKey}</div>
+          <div class="setting-value">${info.value}</div>
+          <div class="setting-description">${info.description}</div>
+        </div>
+        ${isSet
+          ? html`
+              <button
+                class="tab-action-btn"
+                @click=${() => this.handleApply(info.key, true)}
+                title="Reset this setting to default"
+              >
+                <span class="codicon codicon-discard"></span>
+                Reset
+              </button>
+            `
+          : html`
+              <button
+                class="tab-action-btn"
+                @click=${() => this.handleApply(info.key)}
+                title="Apply this setting"
+              >
+                <span class="codicon codicon-check"></span>
+                Apply
+              </button>
+            `}
+      </div>
+    `;
+  }
+
+  override render(): TemplateResult {
+    if (!this.loaded) {
+      return html`
+        <div class="tab-content-container">
+          <div
+            style="text-align:center;padding:var(--spacing-large);color:var(--color-text-secondary)"
+          >
+            <span class="codicon codicon-loading codicon-modifier-spin"></span>
+            Loading LaTeX settings...
+          </div>
+        </div>
+      `;
+    }
+
+    return html`
+      <div class="tab-content-container">
+        <div class="latex-header">
+          <div class="latex-title">
+            <span class="codicon codicon-file-code"></span>
+            LaTeX Settings
+          </div>
+          ${!this.allSettingsSet()
+            ? html`
+                <button
+                  class="tab-action-btn"
+                  @click=${() => this.handleApply()}
+                  title="Apply all recommended settings"
+                >
+                  <span class="codicon codicon-check-all"></span>
+                  Apply All
+                </button>
+              `
+            : nothing}
+        </div>
+
+        ${this.renderDependencies()}
+
+        <div class="section-header" style="margin-top:var(--spacing-large)">
+          <span class="codicon codicon-settings-gear"></span>
+          Recommended Settings
+        </div>
+
+        <div class="latex-description">
+          Agents create temporary files during compilation. The following VS
+          Code settings are recommended to keep your workspace tidy and avoid
+          distracting sidebar activity.
+        </div>
+
+        ${RECOMMENDED_SETTINGS.map((info) => this.renderSettingCard(info))}
+      </div>
+    `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'latex-tab': LaTeXTab;
+  }
+}
