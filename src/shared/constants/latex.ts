@@ -4,14 +4,77 @@ export const LATEX_WORKSHOP_EXT_ID = 'James-Yu.latex-workshop';
 /** Supported platform keys for install guides. */
 export type Platform = 'darwin' | 'win32' | 'linux';
 
-/**
- * Per-tool, per-platform install instructions.
- *
- * These are the single source of truth consumed by both:
- *   - `toolUtils.ts` TOOL_CONFIGS (runtime error messages)
- *   - `LaTeXTab.ts` dependency cards (settings UI)
- */
-export const PDFLATEX_INSTALL_GUIDE: Record<Platform, string> = {
+// ============================================================
+// Install guide builders
+// ============================================================
+
+type Guide = Record<Platform, string>;
+
+/** Tool installable via brew, apt, and a Windows download URL. */
+function brewAptUrl(
+  label: string,
+  brew: string,
+  apt: string,
+  winUrl: string,
+): Guide {
+  return {
+    darwin: `Install ${label}:\n  brew install ${brew}`,
+    linux: `Install ${label}:\n  sudo apt-get install ${apt}`,
+    win32: `Install ${label}:\n  ${winUrl}`,
+  };
+}
+
+/** Append optional notes per-platform. */
+function withNotes(
+  base: Guide,
+  notes: Partial<Guide>,
+): Guide {
+  return {
+    darwin: base.darwin + (notes.darwin ? `\n\n${notes.darwin}` : ''),
+    linux: base.linux + (notes.linux ? `\n\n${notes.linux}` : ''),
+    win32: base.win32 + (notes.win32 ? `\n\n${notes.win32}` : ''),
+  };
+}
+
+/** TeX Live tool: brew + apt on unix, MiKTeX Console + tlmgr on Windows. */
+function texLiveGuide(
+  tool: string,
+  opts: { brew: string; apt: string; notes?: Partial<Guide> },
+): Guide {
+  const base: Guide = {
+    darwin: `Install ${tool}:\n  brew install ${opts.brew}`,
+    linux: `Install ${tool}:\n  sudo apt-get install ${opts.apt}`,
+    win32:
+      `MiKTeX: Open MiKTeX Console → Packages → search "${tool}" → Install\n\n` +
+      `TeX Live: tlmgr install ${tool}`,
+  };
+  return opts.notes ? withNotes(base, opts.notes) : base;
+}
+
+/** Combine multiple guides into a single multi-section guide. */
+function combineGuides(
+  ...sections: Array<[label: string, guide: Guide]>
+): Guide {
+  const platforms: Platform[] = ['darwin', 'linux', 'win32'];
+  return Object.fromEntries(
+    platforms.map((p) => [
+      p,
+      sections.map(([label, g]) => `${label}:\n  ${g[p].split('\n  ')[1]}`).join('\n\n'),
+    ]),
+  ) as Guide;
+}
+
+// ============================================================
+// Per-tool install guides (single source of truth)
+//
+// Consumed by:
+//   - `toolUtils.ts` TOOL_CONFIGS (runtime error messages)
+//   - `LaTeXTab.ts` dependency cards (settings UI)
+// ============================================================
+
+// ── Unique guides (no shared pattern) ──────────────────────
+
+export const PDFLATEX_INSTALL_GUIDE: Guide = {
   darwin:
     'Install MacTeX (recommended):\n' +
     '  brew install --cask mactex\n\n' +
@@ -33,181 +96,109 @@ export const PDFLATEX_INSTALL_GUIDE: Record<Platform, string> = {
     'the new binaries on your PATH.',
 };
 
-export const LATEXDIFF_INSTALL_GUIDE: Record<Platform, string> = {
-  darwin:
-    'Install latexdiff:\n' +
-    '  brew install latexdiff\n\n' +
-    'Also included with MacTeX (texlive-extra-utils).',
-  linux:
-    'Install latexdiff:\n' +
-    '  sudo apt-get install latexdiff\n\n' +
-    'Part of most TeX Live distributions (texlive-extra-utils).',
-  win32:
-    'MiKTeX: Open MiKTeX Console → Packages → search "latexdiff" → Install\n\n' +
-    'TeX Live: tlmgr install latexdiff\n\n' +
-    'Part of most TeX Live distributions (texlive-extra-utils).',
-};
-
-export const LATEXINDENT_INSTALL_GUIDE: Record<Platform, string> = {
-  darwin:
-    'Install latexindent:\n' +
-    '  brew install latexindent\n\n' +
-    'Also included with MacTeX. Requires Perl (pre-installed on macOS).',
-  linux:
-    'Install latexindent:\n' +
-    '  sudo apt-get install texlive-extra-utils\n\n' +
-    'Requires Perl:\n' +
-    '  sudo apt-get install perl',
-  win32:
-    'MiKTeX: Open MiKTeX Console → Packages → search "latexindent" → Install\n\n' +
-    'TeX Live: tlmgr install latexindent\n\n' +
-    'Also requires Perl (Strawberry Perl recommended):\n' +
-    '  https://strawberryperl.com/',
-};
-
-export const TEXCOUNT_INSTALL_GUIDE: Record<Platform, string> = {
-  darwin:
-    'Install TeXcount:\n' +
-    '  brew install texcount\n\n' +
-    'Also included with MacTeX and most TeX Live distributions.',
-  linux:
-    'Install TeXcount:\n' +
-    '  sudo apt-get install texlive-extra-utils\n\n' +
-    'Part of most TeX Live distributions.',
-  win32:
-    'MiKTeX: Open MiKTeX Console → Packages → search "texcount" → Install\n\n' +
-    'TeX Live: tlmgr install texcount\n\n' +
-    'Part of most TeX Live distributions.',
-};
-
-export const PERL_INSTALL_GUIDE: Record<Platform, string> = {
+export const PERL_INSTALL_GUIDE: Guide = {
   darwin:
     'Perl is pre-installed on macOS.\n' +
     'If missing, reinstall via:\n' +
     '  brew install perl',
-  linux:
-    'Install Perl:\n' +
-    '  sudo apt-get install perl',
-  win32:
-    'Install Strawberry Perl (recommended):\n' +
-    '  https://strawberryperl.com/',
+  linux: 'Install Perl:\n  sudo apt-get install perl',
+  win32: 'Install Strawberry Perl (recommended):\n  https://strawberryperl.com/',
 };
 
-export const GHOSTSCRIPT_INSTALL_GUIDE: Record<Platform, string> = {
+export const TEXFMT_INSTALL_GUIDE: Guide = {
   darwin:
-    'Install Ghostscript:\n' +
-    '  brew install ghostscript',
+    'Install tex-fmt:\n  brew install tex-fmt\n\n' +
+    'Or via Cargo:\n  cargo install tex-fmt',
   linux:
-    'Install Ghostscript:\n' +
-    '  sudo apt-get install ghostscript',
-  win32:
-    'Install Ghostscript:\n' +
-    '  https://ghostscript.com/releases/gsdnld.html',
+    'Install tex-fmt:\n  apt install tex-fmt\n\n' +
+    'Or via Cargo:\n  cargo install tex-fmt',
+  win32: 'Install tex-fmt via Cargo:\n  cargo install tex-fmt',
 };
 
-export const GRAPHICSMAGICK_INSTALL_GUIDE: Record<Platform, string> = {
+export const WOLFRAM_INSTALL_GUIDE: Guide = {
   darwin:
-    'Install GraphicsMagick:\n' +
-    '  brew install graphicsmagick',
+    'Install Wolfram Engine:\n  brew install --cask wolfram-engine\n\n' +
+    'Or download from:\n  https://www.wolfram.com/engine/',
   linux:
-    'Install GraphicsMagick:\n' +
-    '  sudo apt-get install graphicsmagick',
-  win32:
-    'Install GraphicsMagick:\n' +
-    '  http://www.graphicsmagick.org/download.html',
-};
-
-export const IMAGEMAGICK_INSTALL_GUIDE: Record<Platform, string> = {
-  darwin:
-    'Install ImageMagick:\n' +
-    '  brew install imagemagick',
-  linux:
-    'Install ImageMagick:\n' +
-    '  sudo apt-get install imagemagick',
-  win32:
-    'Install ImageMagick:\n' +
-    '  https://imagemagick.org/script/download.php',
-};
-
-export const LATEXMK_INSTALL_GUIDE: Record<Platform, string> = {
-  darwin:
-    'Install latexmk:\n' +
-    '  brew install latexmk\n\n' +
-    'Also included with MacTeX.',
-  linux:
-    'Install latexmk:\n' +
-    '  sudo apt-get install latexmk',
-  win32:
-    'MiKTeX: Open MiKTeX Console → Packages → search "latexmk" → Install\n\n' +
-    'TeX Live: tlmgr install latexmk',
-};
-
-export const TEXFMT_INSTALL_GUIDE: Record<Platform, string> = {
-  darwin:
-    'Install tex-fmt:\n' +
-    '  brew install tex-fmt\n\n' +
-    'Or via Cargo:\n' +
-    '  cargo install tex-fmt',
-  linux:
-    'Install tex-fmt:\n' +
-    '  apt install tex-fmt\n\n' +
-    'Or via Cargo:\n' +
-    '  cargo install tex-fmt',
-  win32:
-    'Install tex-fmt via Cargo:\n' +
-    '  cargo install tex-fmt',
-};
-
-export const WOLFRAM_INSTALL_GUIDE: Record<Platform, string> = {
-  darwin:
-    'Install Wolfram Engine:\n' +
-    '  brew install --cask wolfram-engine\n\n' +
-    'Or download from:\n' +
-    '  https://www.wolfram.com/engine/',
-  linux:
-    'Install Wolfram Engine:\n' +
-    '  https://www.wolfram.com/engine/\n\n' +
+    'Install Wolfram Engine:\n  https://www.wolfram.com/engine/\n\n' +
     'Follow the Linux installation guide on the Wolfram site.',
-  win32:
-    'Install Wolfram Engine:\n' +
-    '  https://www.wolfram.com/engine/',
+  win32: 'Install Wolfram Engine:\n  https://www.wolfram.com/engine/',
 };
 
-export const PANDOC_INSTALL_GUIDE: Record<Platform, string> = {
-  darwin:
-    'Install pandoc:\n' +
-    '  brew install pandoc',
-  linux:
-    'Install pandoc:\n' +
-    '  sudo apt-get install pandoc',
-  win32:
-    'Install pandoc:\n' +
-    '  https://pandoc.org/installing.html',
-};
+// ── Simple brew / apt / URL tools ──────────────────────────
 
-export const IMAGE_PROCESSING_INSTALL_GUIDE: Record<Platform, string> = {
-  darwin:
-    'Ghostscript:\n' +
-    '  brew install ghostscript\n\n' +
-    'GraphicsMagick (recommended):\n' +
-    '  brew install graphicsmagick\n\n' +
-    'Or ImageMagick:\n' +
-    '  brew install imagemagick',
-  linux:
-    'Ghostscript:\n' +
-    '  sudo apt-get install ghostscript\n\n' +
-    'GraphicsMagick (recommended):\n' +
-    '  sudo apt-get install graphicsmagick\n\n' +
-    'Or ImageMagick:\n' +
-    '  sudo apt-get install imagemagick',
-  win32:
-    'Ghostscript:\n' +
-    '  https://ghostscript.com/releases/gsdnld.html\n\n' +
-    'GraphicsMagick (recommended):\n' +
-    '  http://www.graphicsmagick.org/download.html\n\n' +
-    'Or ImageMagick:\n' +
-    '  https://imagemagick.org/script/download.php',
-};
+export const GHOSTSCRIPT_INSTALL_GUIDE = brewAptUrl(
+  'Ghostscript', 'ghostscript', 'ghostscript',
+  'https://ghostscript.com/releases/gsdnld.html',
+);
+
+export const GRAPHICSMAGICK_INSTALL_GUIDE = brewAptUrl(
+  'GraphicsMagick', 'graphicsmagick', 'graphicsmagick',
+  'http://www.graphicsmagick.org/download.html',
+);
+
+export const IMAGEMAGICK_INSTALL_GUIDE = brewAptUrl(
+  'ImageMagick', 'imagemagick', 'imagemagick',
+  'https://imagemagick.org/script/download.php',
+);
+
+export const PANDOC_INSTALL_GUIDE = brewAptUrl(
+  'pandoc', 'pandoc', 'pandoc',
+  'https://pandoc.org/installing.html',
+);
+
+// ── TeX Live tools (brew + apt + MiKTeX/tlmgr) ────────────
+
+const TEX_EXTRA = 'Part of most TeX Live distributions (texlive-extra-utils).';
+const TEX_DIST = 'Part of most TeX Live distributions.';
+
+export const LATEXDIFF_INSTALL_GUIDE = texLiveGuide('latexdiff', {
+  brew: 'latexdiff',
+  apt: 'latexdiff',
+  notes: {
+    darwin: 'Also included with MacTeX (texlive-extra-utils).',
+    linux: TEX_EXTRA,
+    win32: TEX_EXTRA,
+  },
+});
+
+export const LATEXINDENT_INSTALL_GUIDE = texLiveGuide('latexindent', {
+  brew: 'latexindent',
+  apt: 'texlive-extra-utils',
+  notes: {
+    darwin: 'Also included with MacTeX. Requires Perl (pre-installed on macOS).',
+    linux: 'Requires Perl:\n  sudo apt-get install perl',
+    win32: 'Also requires Perl (Strawberry Perl recommended):\n  https://strawberryperl.com/',
+  },
+});
+
+export const TEXCOUNT_INSTALL_GUIDE = texLiveGuide('texcount', {
+  brew: 'texcount',
+  apt: 'texlive-extra-utils',
+  notes: {
+    darwin: 'Also included with MacTeX and most TeX Live distributions.',
+    linux: TEX_DIST,
+    win32: TEX_DIST,
+  },
+});
+
+export const LATEXMK_INSTALL_GUIDE = texLiveGuide('latexmk', {
+  brew: 'latexmk',
+  apt: 'latexmk',
+  notes: { darwin: 'Also included with MacTeX.' },
+});
+
+// ── Composite guide (image processing bundle) ──────────────
+
+export const IMAGE_PROCESSING_INSTALL_GUIDE = combineGuides(
+  ['Ghostscript', GHOSTSCRIPT_INSTALL_GUIDE],
+  ['GraphicsMagick (recommended)', GRAPHICSMAGICK_INSTALL_GUIDE],
+  ['Or ImageMagick', IMAGEMAGICK_INSTALL_GUIDE],
+);
+
+// ============================================================
+// Utility functions
+// ============================================================
 
 /**
  * Normalize a raw platform string to one of the three supported values.
@@ -222,7 +213,7 @@ export function normalizePlatform(raw: string): Platform {
  * Falls back to linux if the platform is unrecognized.
  */
 export function getInstallGuide(
-  guide: Record<Platform, string>,
+  guide: Guide,
   platform: string,
 ): string {
   return guide[normalizePlatform(platform)] ?? guide.linux;
