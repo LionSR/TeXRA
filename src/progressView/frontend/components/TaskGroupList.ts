@@ -2,18 +2,17 @@
  * Fully declarative task group list component.
  * Data flows in, DOM flows out. No imperative manipulation.
  *
- * Uses Shadow DOM with modular styles for encapsulation.
+ * Renders groups, headers, and log entries inline — no intermediate
+ * Shadow DOM components. Uses guard() to skip unchanged templates.
  */
 
 // Third-party imports
-import { LitElement, html, type TemplateResult, nothing } from 'lit';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
+import { guard } from 'lit/directives/guard.js';
 import { repeat } from 'lit/directives/repeat.js';
-
-// Local imports - side effects: register components
-import './TaskGroupItem';
-import './LogEntry';
-import './LogPlaceholder';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared schemas
 import { STREAM_STATUS } from '@shared/schemas';
@@ -22,18 +21,26 @@ import { STREAM_STATUS } from '@shared/schemas';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';
 import { getGettingStartedHtml } from '@shared/utils/uiConstants';
+import { formatDuration } from '@utils/core';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
 
 // Local imports - progress view constants
-import { ELEMENT_IDS } from '../constants';
+import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';
 
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
 
 // Local imports - progress view utils
 import { playCompletionSound } from '../utils/audioNotification';
+
+// Local imports - formatters
+import { formatLogEntry } from '../formatters';
+import {
+  getDateTimeFormatter,
+  getTimeFormatter,
+} from '../formatters/timestampUtils';
 
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
 
@@ -46,6 +53,20 @@ interface GroupTree {
 const PLACEHOLDER_HTML = getGettingStartedHtml(
   'No runs yet—use TeXRA commands to start. Try ',
 );
+
+/** Maps group status to codicon class (with optional animation) */
+function getStatusIcon(status: string): string {
+  switch (status) {
+    case STREAM_STATUS.RUNNING:
+      return 'sync spin';
+    case STREAM_STATUS.ERROR:
+      return 'error';
+    case STREAM_STATUS.STOPPED:
+      return 'check';
+    default:
+      return 'circle-outline';
+  }
+}
 
 @customElement('task-group-list')
 export class TaskGroupList extends LitElement {
@@ -128,7 +149,7 @@ export class TaskGroupList extends LitElement {
       if (this.messages.length === prevCount && prevMessages) {
         // Same length: text-only update (e.g. streaming UPDATE_LOG).
         // Propagate fresh message references to cached structures so
-        // render() passes updated objects to repeat()/log-entry.
+        // render() passes updated objects to repeat()/guard().
         this.updateCachedMessageRefs(prevMessages);
       } else if (this.messages.length > prevCount) {
         // Append-only: classify only the new messages incrementally.
@@ -393,24 +414,49 @@ export class TaskGroupList extends LitElement {
     return remaining <= threshold;
   }
 
-  /** Handle group toggle events */
-  private handleGroupToggle(
-    event: CustomEvent<{ groupId: string; expanded: boolean }>,
-  ): void {
-    const { groupId, expanded } = event.detail;
+  /** Handle details toggle — reads groupId from element ID to avoid closures */
+  private handleDetailsToggle(event: Event): void {
+    const details = event.currentTarget as HTMLDetailsElement;
+    const groupId = details.id.slice(GROUP_DOM_IDS.DETAILS_PREFIX.length);
     if (this.toggleStates) {
-      this.toggleStates.set(groupId, !expanded);
+      this.toggleStates.set(groupId, !details.open);
     }
   }
 
-  /** Render ungrouped messages as log entries */
+  /** Render ungrouped messages as log entries with guard() for change detection */
   private renderUngroupedMessages(messages: LogMessageData[]) {
     if (messages.length === 0) return nothing;
     return repeat(
       messages,
       (m) => m.id,
-      (m) => html`<log-entry .message=${m}></log-entry>`,
+      (m) => guard([m], () => formatLogEntry(m)),
     );
+  }
+
+  /** Render group header inline (replaces TaskGroupHeader component) */
+  private renderGroupHeader(group: TaskGroup): TemplateResult {
+    const isRoot = !group.parentGroupId;
+    const date = new Date(group.startTime);
+    const formatter = isRoot ? getDateTimeFormatter() : getTimeFormatter();
+    const formattedStartTime = formatter.format(date);
+    const durationText = group.endTime
+      ? formatDuration(group.endTime - group.startTime)
+      : '';
+
+    return html`
+      <span class="group-status-icon">
+        <i class="codicon codicon-${getStatusIcon(group.status)}"></i>
+      </span>
+      ${isRoot ? nothing : html`<span class="group-title">${group.name}</span>`}
+      <span class="group-time">
+        <span class="group-start-time" data-start=${String(group.startTime)}>
+          <i class="codicon codicon-clock"></i> ${formattedStartTime}
+        </span>
+        ${durationText
+          ? html`<span class="group-duration">${durationText}</span>`
+          : nothing}
+      </span>
+    `;
   }
 
   /** Render a group node and its children recursively */
@@ -422,42 +468,66 @@ export class TaskGroupList extends LitElement {
       return nothing;
     }
 
+    const detailsId = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
+    const contentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
+
+    const logEntries = repeat(
+      messages,
+      (m) => m.id,
+      (m) => guard([m], () => formatLogEntry(m)),
+    );
+    const childGroups = repeat(
+      children,
+      (c) => c.group.id,
+      (c) => this.renderGroupNode(c),
+    );
+
+    // Root groups: simple container (no collapsible)
+    if (!group.parentGroupId) {
+      return html`
+        <div id=${detailsId} class="log-group log-run" data-run-id=${group.id}>
+          <div id=${contentId} class="log-group-content">
+            ${logEntries} ${childGroups}
+          </div>
+        </div>
+      `;
+    }
+
+    // Child groups: collapsible details element
     return html`
-      <task-group-item
-        .group=${group}
-        .expanded=${this.isExpanded(group.id)}
-        @group-toggle=${this.handleGroupToggle}
+      <details
+        id=${detailsId}
+        class="log-group"
+        ?open=${this.isExpanded(group.id)}
+        @toggle=${this.handleDetailsToggle}
       >
-        ${repeat(
-          messages,
-          (m) => m.id,
-          (m) => html`<log-entry .message=${m}></log-entry>`,
-        )}
-        ${repeat(
-          children,
-          (c) => c.group.id,
-          (c) => this.renderGroupNode(c),
-        )}
-      </task-group-item>
+        <summary
+          id="${GROUP_DOM_IDS.HEADER_PREFIX}${group.id}"
+          class=${classMap({
+            'log-group-header': true,
+            [`is-${group.status}`]: true,
+          })}
+        >
+          ${this.renderGroupHeader(group)}
+        </summary>
+        <div id=${contentId} class="log-group-content">
+          ${logEntries} ${childGroups}
+        </div>
+      </details>
     `;
   }
 
   override render(): TemplateResult {
     // Show placeholder only when there are no streams in the current filter
-    // (not when a specific stream is empty)
     if (!this.hasStreams) {
       return html`
         <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
-          <log-placeholder
-            id=${ELEMENT_IDS.LOG_PLACEHOLDER}
-            .content=${PLACEHOLDER_HTML}
-          ></log-placeholder>
+          <div class="log-placeholder">${unsafeHTML(PLACEHOLDER_HTML)}</div>
         </vscode-scrollable>
       `;
     }
 
     // Tool-use: user messages first, then tree, then other ungrouped (errors etc)
-    // This preserves chronological order for errors while ensuring user prompts appear first.
     // Workflow: tree first, then all ungrouped messages
     const [ungroupedBefore, ungroupedAfter] = this.isToolUse
       ? [this.cachedUserMessages, this.cachedOtherUngrouped]
