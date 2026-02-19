@@ -529,7 +529,7 @@ export const profileViewStyles: CSSResult = css`
 
   /* Unavailable model rows (not in relay allowlist) */
   .model-row--unavailable {
-    opacity: 0.55;
+    opacity: var(--opacity-disabled);
   }
 
   .model-key-icon {

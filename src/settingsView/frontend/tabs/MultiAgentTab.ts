@@ -122,14 +122,14 @@ export class MultiAgentTab extends LitElement {
       .preset-card-agents {
         display: flex;
         flex-wrap: wrap;
-        gap: 4px;
+        gap: var(--spacing-small);
         margin-top: var(--spacing-tiny);
       }
 
       .preset-agent-badge {
         display: inline-block;
         padding: 1px 6px;
-        font-size: 10px;
+        font-size: var(--font-size-xs, 10px);
         color: var(--color-text-secondary);
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
         border-radius: var(--border-radius);
@@ -142,7 +142,7 @@ export class MultiAgentTab extends LitElement {
         display: none;
         align-items: center;
         justify-content: center;
-        padding: 2px;
+        padding: var(--spacing-tiny);
         color: var(--color-text-secondary);
         background: none;
         border: none;

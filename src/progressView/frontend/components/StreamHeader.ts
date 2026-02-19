@@ -267,7 +267,10 @@ export class StreamHeader extends LitElement {
       .yolo-toggle-button,
       .super-yolo-toggle-button {
         flex-shrink: 0;
-        transition: all 0.2s ease;
+        transition:
+          color 0.2s ease,
+          background-color 0.2s ease,
+          box-shadow 0.2s ease;
       }
 
       .yolo-toggle-button.is-active,

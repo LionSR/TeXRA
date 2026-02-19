@@ -65,7 +65,7 @@ export class ToolCard extends LitElement {
       .tool-badge {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
+        gap: var(--spacing-small);
         padding: 1px var(--spacing-small);
         font-size: var(--font-size-xs, 11px);
         border-radius: var(--border-radius);
@@ -106,7 +106,7 @@ export class ToolCard extends LitElement {
       .tool-ids {
         display: flex;
         flex-wrap: wrap;
-        gap: 4px;
+        gap: var(--spacing-small);
         margin-bottom: var(--spacing-small);
       }
 

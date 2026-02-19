@@ -483,7 +483,7 @@ export function formatToolUseTemplate(
         const isMapped = dest && source && dest !== source;
         const edit = editsByPath.get(dest);
         const diffStats = edit?.lineChanges
-          ? html` <span class="file-stats"><span class="added">+${edit.lineChanges.added}</span><span class="removed" style="margin-left:4px">-${edit.lineChanges.removed}</span></span>`
+          ? html` <span class="file-stats"><span class="added">+${edit.lineChanges.added}</span><span class="removed" style="margin-left:var(--spacing-small)">-${edit.lineChanges.removed}</span></span>`
           : nothing;
         // prettier-ignore
         return html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="file-link clickable-link" data-file=${dest}>${dest}</span>${isMapped ? html` <span class="file-source">(from ${source})</span>` : nothing}${diffStats}</li>`;

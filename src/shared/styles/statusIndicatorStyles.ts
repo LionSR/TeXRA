@@ -10,7 +10,10 @@ export const statusIndicatorStyles: CSSResult = css`
     flex-shrink: 0;
     background-color: var(--vscode-descriptionForeground);
     opacity: var(--opacity-subtle, 0.7);
-    transition: all 0.3s ease;
+    transition:
+      background-color 0.3s ease,
+      box-shadow 0.3s ease,
+      opacity 0.3s ease;
   }
 
   .status-indicator.is-running,
