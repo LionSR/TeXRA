@@ -1,8 +1,10 @@
 /**
- * LogList component - declarative log rendering.
+ * LogList component - declarative log rendering with per-stream DOM caching.
  *
  * Consumes streamLogContext to get groups, messages, activeRunId, and isToolUse.
- * Delegates rendering to TaskGroupList.
+ * Renders one TaskGroupList per visited stream, hiding inactive ones with
+ * display:none. Tab switching toggles visibility — zero DOM re-creation.
+ *
  * Handles event delegation for clicks, toggles, and file links.
  *
  * Uses Shadow DOM with modular styles for encapsulation.
@@ -11,7 +13,9 @@
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
-import { customElement, query, state } from 'lit/decorators.js';
+import { customElement, state } from 'lit/decorators.js';
+import { createRef, ref, type Ref } from 'lit/directives/ref.js';
+import { repeat } from 'lit/directives/repeat.js';
 import { z } from 'zod';
 
 // Local imports - side-effect: register component
@@ -44,7 +48,7 @@ import { logStyles } from '../styles/logStyles';
 import { getCopyContent } from '../formatters/copyContentStore';
 import { getProposalInput } from '../formatters/proposalInputStore';
 
-// Local imports - progress view components (type-only for @query reference)
+// Local imports - progress view components (type-only)
 import type { TaskGroupList } from './TaskGroupList';
 
 // Local imports - shared schemas
@@ -56,7 +60,15 @@ const LogListStateSchema = z
   })
   .catch({ groupToggleStates: [] });
 
-type LogListState = z.infer<typeof LogListStateSchema>;
+/** Cached per-stream data and DOM state */
+interface CachedStream {
+  groups: TaskGroup[];
+  messages: LogMessageData[];
+  activeRunId: string | null;
+  isToolUse: boolean;
+  toggleStates: ToggleStateStore;
+  ref: Ref<TaskGroupList>;
+}
 
 @customElement('log-list')
 export class LogList extends LitElement {
@@ -92,20 +104,11 @@ export class LogList extends LitElement {
     return this.streamContext?.hasStreams ?? false;
   }
 
-  /** Reference to child TaskGroupList for scroll operations */
-  @query('task-group-list')
-  private taskGroupList?: TaskGroupList;
-
+  /** Per-stream DOM cache: one TaskGroupList per visited stream */
+  private streamCache = new Map<string, CachedStream>();
   private storage = createWebviewStorage(vscode);
-  private stateManager?: PersistedState<LogListState>;
-  private toggleStates: ToggleStateStore;
   private activeStreamId: string | null = null;
   private shouldScrollToBottom = false;
-
-  constructor() {
-    super();
-    this.toggleStates = new ToggleStateStore(() => this.saveToggleStates());
-  }
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -121,42 +124,67 @@ export class LogList extends LitElement {
 
   protected willUpdate(): void {
     const streamId = this.streamContext?.streamName ?? null;
-    if (streamId === this.activeStreamId) {
-      return;
+
+    // Detect stream switch (before creating cache entry for first-visit check)
+    if (streamId !== this.activeStreamId) {
+      this.activeStreamId = streamId;
+      this.shouldScrollToBottom = true;
     }
-    this.activeStreamId = streamId;
-    this.shouldScrollToBottom = true;
-    this.initializeState(streamId);
+
+    // Update cache for active stream with latest context data
+    if (streamId) {
+      const entry = this.getOrCreateEntry(streamId);
+      entry.groups = this.groups;
+      entry.messages = this.messages;
+      entry.activeRunId = this.activeRunId;
+      entry.isToolUse = this.isToolUse;
+    }
   }
 
   override render(): TemplateResult {
-    return html`
-      <task-group-list
-        .groups=${this.groups}
-        .messages=${this.messages}
-        .activeRunId=${this.activeRunId}
-        .isToolUse=${this.isToolUse}
+    if (this.streamCache.size === 0) {
+      return html`<task-group-list
         .hasStreams=${this.hasStreams}
-        .toggleStates=${this.toggleStates}
-      ></task-group-list>
-    `;
+      ></task-group-list>`;
+    }
+
+    return html`${repeat(
+      [...this.streamCache],
+      ([id]) => id,
+      ([id, data]) => html`
+        <task-group-list
+          ${ref(data.ref)}
+          style=${id === this.activeStreamId ? '' : 'display:none'}
+          .groups=${data.groups}
+          .messages=${data.messages}
+          .activeRunId=${data.activeRunId}
+          .isToolUse=${data.isToolUse}
+          .hasStreams=${this.hasStreams}
+          .toggleStates=${data.toggleStates}
+        ></task-group-list>
+      `,
+    )}`;
   }
 
   override updated(): void {
+    const activeEl = this.activeStreamId
+      ? this.streamCache.get(this.activeStreamId)?.ref.value
+      : undefined;
+
     if (this.shouldScrollToBottom) {
       // Force scroll to bottom when switching to a different stream tab.
       // Must wait for child TaskGroupList to finish rendering (updateComplete)
       // and then for a layout pass (requestAnimationFrame) so vscode-scrollable
       // has an accurate scrollMax before we scroll.
       this.shouldScrollToBottom = false;
-      void this.taskGroupList?.updateComplete.then(() => {
+      void activeEl?.updateComplete.then(() => {
         requestAnimationFrame(() => {
-          this.taskGroupList?.scrollToBottom();
+          activeEl?.scrollToBottom();
         });
       });
     } else {
       // Scroll to bottom after render if the user is already near the end
-      this.taskGroupList?.scrollToBottomIfNearEnd();
+      activeEl?.scrollToBottomIfNearEnd();
     }
   }
 
@@ -164,35 +192,38 @@ export class LogList extends LitElement {
   // Private methods
   // ============================================================
 
-  private saveToggleStates(): void {
-    if (!this.stateManager) {
-      return;
-    }
-    try {
-      this.stateManager.update({
-        groupToggleStates: this.toggleStates.entries(),
-      });
-    } catch (error) {
-      console.error('[LogList] Failed to save toggle states', error);
-    }
-  }
+  /** Get or create a cached entry for a stream, loading persisted toggle states */
+  private getOrCreateEntry(streamId: string): CachedStream {
+    let entry = this.streamCache.get(streamId);
+    if (entry) return entry;
 
-  private initializeState(streamId: string | null): void {
-    this.toggleStates = new ToggleStateStore(() => this.saveToggleStates());
-    if (!streamId) {
-      this.stateManager = undefined;
-      return;
-    }
-    const storageKey = `logListState:${streamId}`;
-    this.stateManager = new PersistedState(
+    const stateManager = new PersistedState(
       this.storage,
-      storageKey,
+      `logListState:${streamId}`,
       LogListStateSchema,
     );
-    const previous = this.stateManager.getState();
+    const toggleStates = new ToggleStateStore(() => {
+      try {
+        stateManager.update({ groupToggleStates: toggleStates.entries() });
+      } catch (error) {
+        console.error('[LogList] Failed to save toggle states', error);
+      }
+    });
+    const previous = stateManager.getState();
     if (previous.groupToggleStates.length > 0) {
-      this.toggleStates.load(previous.groupToggleStates);
+      toggleStates.load(previous.groupToggleStates);
     }
+
+    entry = {
+      groups: [],
+      messages: [],
+      activeRunId: null,
+      isToolUse: false,
+      toggleStates,
+      ref: createRef<TaskGroupList>(),
+    };
+    this.streamCache.set(streamId, entry);
+    return entry;
   }
 
   /** Handle click events for file links, copy buttons, etc. */
