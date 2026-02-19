@@ -260,7 +260,7 @@ export class ProviderKeyList extends LitElement {
     const description =
       this.apiAccessMode === 'included'
         ? 'You are using included access. Personal keys below are optional overrides.'
-        : 'Set API keys for the providers you want to use.';
+        : 'Set API keys for the providers you want to use. Chat subscriptions (ChatGPT Plus, Claude Pro, etc.) do not include API access\u2014you need a key from the provider\u2019s developer platform.';
 
     return html`
       <div class="provider-keys-section">

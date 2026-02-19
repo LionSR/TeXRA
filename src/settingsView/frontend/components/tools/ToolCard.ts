@@ -65,7 +65,7 @@ export class ToolCard extends LitElement {
       .tool-badge {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
+        gap: var(--spacing-small);
         padding: 1px var(--spacing-small);
         font-size: var(--font-size-xs, 11px);
         border-radius: var(--border-radius);
@@ -75,12 +75,20 @@ export class ToolCard extends LitElement {
 
       .tool-badge--available {
         color: var(--vscode-testing-iconPassed, #73c991);
-        background: rgba(115, 201, 145, 0.12);
+        background: color-mix(
+          in srgb,
+          var(--vscode-testing-iconPassed, #73c991) 12%,
+          transparent
+        );
       }
 
       .tool-badge--not-found {
         color: var(--vscode-testing-iconFailed, #f48771);
-        background: rgba(244, 135, 113, 0.12);
+        background: color-mix(
+          in srgb,
+          var(--vscode-testing-iconFailed, #f48771) 12%,
+          transparent
+        );
       }
 
       .tool-badge--unknown {
@@ -98,7 +106,7 @@ export class ToolCard extends LitElement {
       .tool-ids {
         display: flex;
         flex-wrap: wrap;
-        gap: 4px;
+        gap: var(--spacing-small);
         margin-bottom: var(--spacing-small);
       }
 
@@ -122,11 +130,17 @@ export class ToolCard extends LitElement {
         background: none;
         border: none;
         cursor: pointer;
-        transition: opacity 0.1s ease;
+        transition: opacity 0.15s ease;
       }
 
       .tool-guide-toggle:hover {
         opacity: 0.8;
+      }
+
+      .tool-guide-toggle:focus-visible {
+        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline-offset: 1px;
+        border-radius: var(--border-radius-small);
       }
 
       .tool-guide {
@@ -162,12 +176,17 @@ export class ToolCard extends LitElement {
         border-radius: var(--border-radius);
         cursor: pointer;
         transition:
-          background 0.1s ease,
-          opacity 0.1s ease;
+          background 0.15s ease,
+          opacity 0.15s ease;
       }
 
       .tool-action-btn:hover {
         background: var(--vscode-button-hoverBackground, #1177bb);
+      }
+
+      .tool-action-btn:focus-visible {
+        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline-offset: 1px;
       }
 
       .tool-action-btn--secondary {

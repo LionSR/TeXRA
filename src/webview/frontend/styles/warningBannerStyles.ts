@@ -22,6 +22,14 @@ export const warningBannerStyles: CSSResult = css`
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-tiny) var(--spacing-medium);
+  }
+
+  .warning-banner .hint {
+    width: 100%;
+    font-size: var(--font-size-sm);
+    opacity: var(--opacity-normal);
   }
 
   .actions {

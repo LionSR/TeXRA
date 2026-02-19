@@ -153,10 +153,17 @@ export const toolUseStyles = css`
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-tiny);
+    transition: color 0.15s ease;
   }
 
   .proposal-restore-link:hover {
     text-decoration: underline;
+  }
+
+  .proposal-restore-link:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
   }
 
   .proposal-banner-setup {

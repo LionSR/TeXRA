@@ -127,6 +127,15 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext): void {
         return;
       }
 
+      const confirm = await vscode.window.showWarningMessage(
+        `Remove the ${provider} API key? This cannot be undone.`,
+        'Remove',
+        'Cancel',
+      );
+      if (confirm !== 'Remove') {
+        return;
+      }
+
       try {
         await SecretManager.delete(SecretManager.getApiKeySecretName(provider));
         vscode.window.showInformationMessage(
