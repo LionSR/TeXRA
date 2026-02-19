@@ -20,7 +20,7 @@ import type { WriteInput } from '@tools/WriteTool';
 import type {
   DelegateAgentInput,
   WorkflowAgentInput,
-} from '@tools/WorkflowTool';
+} from '@tools/DelegationTools';
 import type { AcceptRunFilesInput } from '@tools/AcceptRunFilesTool';
 
 // Local imports - Lit template utilities
