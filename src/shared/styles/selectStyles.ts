@@ -51,10 +51,17 @@ export const selectStyles: CSSResult = css`
 
   .clickable {
     cursor: pointer;
+    transition: color 0.15s ease;
   }
 
   .clickable:hover {
     color: var(--vscode-foreground);
+  }
+
+  .clickable:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
   }
 
   .codicon.clickable:hover {

@@ -5,7 +5,7 @@ Each step links directly to commands in the extension. Screenshots reference exi
 replace them with higher-fidelity captures once we finalize the walkthrough layout.
 
 1. **Create the sample workspace** – Use the bundled project to explore TeXRA safely.
-2. **Connect your API keys** – Configure Anthropic, OpenAI, Google, or other providers before running agents.
+2. **Connect your API keys** – Configure Anthropic, OpenAI, Google, or other providers before running agents. Note: chat subscriptions (ChatGPT Plus, Claude Pro, etc.) do not include API access — you need a separate API key from each provider's developer platform.
 3. **Stage your files** – Choose inputs, references, auxiliary assets, and media from the main view.
 4. **Pick an agent and model** – Match your task to the right persona and model tier.
 5. **Enable automatic figure extraction** – Let TeXRA find figures and TikZ blocks for you before asking agents to edit.

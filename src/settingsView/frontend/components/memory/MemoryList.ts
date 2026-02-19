@@ -39,8 +39,11 @@ export class MemoryList extends LitElement {
   override render(): TemplateResult {
     if (!this.items.length) {
       return html`<div class="empty-state">
-        No saved memories yet. The assistant will create notes here when it
-        needs to remember something.
+        <p>No saved memories yet.</p>
+        <p class="text-secondary">
+          Memories are created automatically when the assistant learns something
+          worth remembering across conversations.
+        </p>
       </div>`;
     }
 

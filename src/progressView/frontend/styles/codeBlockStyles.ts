@@ -53,8 +53,8 @@ export const codeBlockStyles = css`
     cursor: pointer;
     border-radius: var(--border-radius-small);
     transition:
-      background-color 0.15s,
-      color 0.15s;
+      background-color 0.15s ease,
+      color 0.15s ease;
 
     &:hover {
       background-color: var(
@@ -73,6 +73,11 @@ export const codeBlockStyles = css`
 
     &.copied {
       color: var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
+    }
+
+    &:focus-visible {
+      outline: var(--border-thin) solid var(--vscode-focusBorder);
+      outline-offset: 1px;
     }
   }
 
