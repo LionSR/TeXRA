@@ -604,15 +604,26 @@ export class ResumeAgentTool extends defineTool({
     // Only allow resume after the subagent has delivered its result and is
     // in WAITING state.  Resuming mid-cycle would race: the current cycle's
     // onBeforeWaiting could consume the gate reset and swallow the resumed
-    // cycle's result.
+    // cycle's result.  Resetting the gate *before* sendFollowUp also
+    // prevents concurrent resume calls from both passing the check — the
+    // second caller sees hasDelivered === false and is rejected.
     if (!deliveryState.hasDelivered) {
       throw new Error(
         `'${handle.agentName}' is still processing. Wait for its result before sending a follow-up.`,
       );
     }
+    deliveryState.hasDelivered = false;
 
     const framedInstruction = formatFollowUpInstruction(input.instruction);
-    const result = await sendFollowUp(handle.childStreamId, framedInstruction);
+    let result: Awaited<ReturnType<typeof sendFollowUp>>;
+    try {
+      result = await sendFollowUp(handle.childStreamId, framedInstruction);
+    } catch (err) {
+      // Restore the gate so the subagent's current result can still be
+      // delivered if a transient error prevented sending.
+      deliveryState.hasDelivered = true;
+      throw err;
+    }
 
     switch (result.status) {
       case 'sent':
@@ -621,9 +632,7 @@ export class ResumeAgentTool extends defineTool({
         // is blocked in WaitNode with an active flow context, so
         // appendFollowUp delivers directly.  'queued' is a fallback when
         // the context has been cleaned up but the stream status is still
-        // WAITING.  In either case, reset the delivery gate so the next
-        // onBeforeWaiting delivers the resumed cycle's result.
-        deliveryState.hasDelivered = false;
+        // WAITING.  Gate was already reset above.
         return {
           summary: `Follow-up sent to '${handle.agentName}'`,
           output: [
@@ -632,10 +641,14 @@ export class ResumeAgentTool extends defineTool({
           ].join('\n'),
         };
       case 'error':
+        // Restore the gate — the follow-up was not accepted.
+        deliveryState.hasDelivered = true;
         throw new Error(
           `Failed to send follow-up to '${handle.agentName}': ${result.message}`,
         );
       case 'no_session':
+        // Restore the gate — the follow-up was not accepted.
+        deliveryState.hasDelivered = true;
         throw new Error(
           `No active session for '${handle.agentName}' (stream status: ${result.streamStatus ?? 'unknown'}). The subagent may have stopped or its session expired.`,
         );
