@@ -223,4 +223,35 @@ export const commonViewStyles: CSSResult = css`
     outline: var(--border-thin) solid var(--vscode-focusBorder);
     outline-offset: 1px;
   }
+
+  /* Utility: single-line text truncation with ellipsis */
+  .truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Utility: minimal icon button reset (no background, no border) */
+  .icon-btn-reset {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    color: inherit;
+    opacity: var(--opacity-subtle);
+    transition: opacity 0.15s ease;
+  }
+
+  .icon-btn-reset:hover {
+    opacity: var(--opacity-full);
+  }
+
+  .icon-btn-reset:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
+  }
 `;

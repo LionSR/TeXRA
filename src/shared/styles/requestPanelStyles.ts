@@ -205,7 +205,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .bash-approval-request__command .code-block {
-    border-left: 3px solid var(--vscode-terminal-ansiYellow);
+    border-left: var(--border-thick) solid var(--vscode-terminal-ansiYellow);
   }
 
   .bash-approval-request__command .code-block pre {
