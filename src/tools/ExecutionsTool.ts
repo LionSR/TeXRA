@@ -558,16 +558,6 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
   }
 
   private handleKill(executionId: ExecutionId): ToolResult {
-    if (
-      !workspaceSM.get<boolean>(WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL, true)
-    ) {
-      return {
-        output:
-          'Killing subagents is disabled. Enable it in Settings > Multi-Agent.',
-        isError: true,
-      };
-    }
-
     const ctx = getCurrentToolFileInteractionContext();
     const callerStreamId = ctx?.streamId;
 
@@ -590,6 +580,18 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     if (!callerStreamId || target.parentStreamId !== callerStreamId) {
       return {
         output: `Cannot kill execution ${executionId}: not a child of this session.`,
+        isError: true,
+      };
+    }
+
+    // Only block subagent kills when the toggle is disabled; process kills are always allowed.
+    if (
+      target instanceof AgentExecutionHandle &&
+      !workspaceSM.get<boolean>(WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL, true)
+    ) {
+      return {
+        output:
+          'Killing subagents is disabled. Enable it in Settings > Multi-Agent.',
         isError: true,
       };
     }
