@@ -176,19 +176,23 @@ export class TaskGroupList extends LitElement {
   private appendNewMessages(startIndex: number): void {
     for (let i = startIndex; i < this.messages.length; i++) {
       const msg = this.messages[i];
-      const node = msg.groupId ? this.groupNodeIndex.get(msg.groupId) : null;
-      if (node) {
-        node.messages = this.insertMessageSorted(node.messages, msg);
-      } else if (msg.messageType === 'userMessage') {
+      if (msg.messageType === 'userMessage') {
+        // User messages always go to the dedicated list regardless of groupId.
+        // See buildGroupTree() for rationale.
         this.cachedUserMessages = this.insertMessageSorted(
           this.cachedUserMessages,
           msg,
         );
       } else {
-        this.cachedOtherUngrouped = this.insertMessageSorted(
-          this.cachedOtherUngrouped,
-          msg,
-        );
+        const node = msg.groupId ? this.groupNodeIndex.get(msg.groupId) : null;
+        if (node) {
+          node.messages = this.insertMessageSorted(node.messages, msg);
+        } else {
+          this.cachedOtherUngrouped = this.insertMessageSorted(
+            this.cachedOtherUngrouped,
+            msg,
+          );
+        }
       }
     }
   }
@@ -235,6 +239,18 @@ export class TaskGroupList extends LitElement {
 
   /** Replace a single message ref in the cached tree. O(1) node lookup + O(k) findIndex. */
   private replaceSingleMessage(msg: LogMessageData): void {
+    // User messages are always in cachedUserMessages (never in group nodes),
+    // matching the classification order in buildGroupTree/appendNewMessages.
+    if (msg.messageType === 'userMessage') {
+      const idx = this.cachedUserMessages.findIndex((m) => m.id === msg.id);
+      if (idx >= 0) {
+        const updated = [...this.cachedUserMessages];
+        updated[idx] = msg;
+        this.cachedUserMessages = updated;
+      }
+      return;
+    }
+
     // Try group node first (O(1) lookup). A message with groupId may live in
     // cachedOtherUngrouped if the group didn't exist at classification time,
     // so fall through to ungrouped search on miss.
@@ -251,21 +267,12 @@ export class TaskGroupList extends LitElement {
       }
     }
 
-    // Search ungrouped lists
-    if (msg.messageType === 'userMessage') {
-      const idx = this.cachedUserMessages.findIndex((m) => m.id === msg.id);
-      if (idx >= 0) {
-        const updated = [...this.cachedUserMessages];
-        updated[idx] = msg;
-        this.cachedUserMessages = updated;
-      }
-    } else {
-      const idx = this.cachedOtherUngrouped.findIndex((m) => m.id === msg.id);
-      if (idx >= 0) {
-        const updated = [...this.cachedOtherUngrouped];
-        updated[idx] = msg;
-        this.cachedOtherUngrouped = updated;
-      }
+    // Search other ungrouped
+    const idx = this.cachedOtherUngrouped.findIndex((m) => m.id === msg.id);
+    if (idx >= 0) {
+      const updated = [...this.cachedOtherUngrouped];
+      updated[idx] = msg;
+      this.cachedOtherUngrouped = updated;
     }
   }
 
@@ -326,13 +333,16 @@ export class TaskGroupList extends LitElement {
     const otherUngrouped: LogMessageData[] = [];
 
     for (const msg of sortedMessages) {
-      if (msg.groupId && groupMap.has(msg.groupId)) {
+      if (msg.messageType === 'userMessage') {
+        // User messages always go to the dedicated list regardless of groupId.
+        // Follow-ups consumed during a run cycle inherit the run's groupId via
+        // AsyncLocalStorage, but should render in the top-level user section,
+        // not nested among progress entries inside the group.
+        userMessages.push(msg);
+      } else if (msg.groupId && groupMap.has(msg.groupId)) {
         const bucket = messagesByGroup.get(msg.groupId) ?? [];
         bucket.push(msg);
         messagesByGroup.set(msg.groupId, bucket);
-      } else if (msg.messageType === 'userMessage') {
-        // Separate user messages for tool-use ordering (user messages first)
-        userMessages.push(msg);
       } else {
         otherUngrouped.push(msg);
       }
