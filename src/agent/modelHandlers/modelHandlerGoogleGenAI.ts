@@ -55,7 +55,7 @@ import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 
 // Local imports - utils
-import { K_SLICE } from '@utils/config';
+import { K_SLICE, getModelRetryMaxAttempts } from '@utils/config';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
@@ -343,6 +343,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         apiKey: credential,
         httpOptions: {
           baseUrl: baseUrl ?? undefined,
+          // Align SDK-level retries with the user's retry configuration.
+          // The SDK retries transient network errors and 5xx responses automatically.
+          // attempts includes the initial request, so add 1 to the max-retries value.
+          retryOptions: { attempts: getModelRetryMaxAttempts() + 1 },
         },
       });
     }
@@ -357,6 +361,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         apiKey: credential,
         httpOptions: {
           baseUrl: baseUrl ?? undefined,
+          retryOptions: { attempts: getModelRetryMaxAttempts() + 1 },
         },
       });
     }
