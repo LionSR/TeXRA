@@ -49,10 +49,23 @@ export const layoutStyles = css`
     overflow-y: auto;
   }
 
-  log-entry,
-  user-message,
-  task-group-item {
+  user-message {
     display: block;
+  }
+
+  .log-placeholder {
+    text-align: center;
+    color: var(--color-text-secondary);
+    padding: var(--spacing-large) var(--spacing-medium);
+  }
+
+  .log-placeholder a {
+    color: var(--color-text-link);
+    text-decoration: underline;
+  }
+
+  .log-placeholder a:hover {
+    text-decoration: none;
   }
 `;
 

@@ -4,11 +4,7 @@
  */
 
 // Local imports - formatter helpers
-import {
-  safeFormat,
-  shouldBeOpen,
-  type FormatOptions,
-} from './baseLogFormatter';
+import { safeFormat, type FormatOptions } from './baseLogFormatter';
 import {
   formatBannerContentTemplate,
   formatContextManagementTemplate,
@@ -117,8 +113,12 @@ export function formatLogEntry(
 ): TemplateResult {
   const { messageType } = logMessage;
 
-  // Determine if details should be open (undefined means no preference)
-  const isOpen = shouldBeOpen(messageType ?? '', options, AUTO_EXPANDED_TYPES);
+  // Determine if details should be open (undefined = no preference)
+  const isOpen =
+    options.preservedOpen ??
+    (options.defaultOpen && AUTO_EXPANDED_TYPES.has(messageType ?? '')
+      ? true
+      : undefined);
   const templateOptions = { defaultOpen: isOpen };
 
   const formatter = messageType ? TEMPLATE_FORMATTERS[messageType] : null;
