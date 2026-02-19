@@ -1870,8 +1870,14 @@ prompts:
 
         if (typeof value === 'object' && value !== null) {
           const recommended = value as Record<string, unknown>;
-          const existing = getConfig<Record<string, unknown>>(key, {});
-          const remaining = { ...existing };
+          // Read only the user's explicit global entries — not VS Code defaults —
+          // so we don't leak built-in defaults into settings.json.
+          const inspection = vscode.workspace.getConfiguration().inspect(key);
+          const globalObj = (inspection?.globalValue ?? {}) as Record<
+            string,
+            unknown
+          >;
+          const remaining = { ...globalObj };
 
           // Always clean up legacy keys from older TeXRA versions.
           for (const k of legacyKeys ?? []) {
