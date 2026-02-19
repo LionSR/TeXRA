@@ -29,7 +29,7 @@ const MODEL_LIST_VERSION = 4;
  * Version number for LaTeX-related VS Code config setup.
  * Increment this when changing which settings are auto-configured.
  */
-const LATEX_CONFIG_VERSION = 1;
+const LATEX_CONFIG_VERSION = 2;
 
 /**
  * Legacy agent files that should be deleted from GlobalStorage.
@@ -233,8 +233,13 @@ export async function configureLatexSettings(): Promise<void> {
       'LaTeX Workshop extension detected, configuring settings',
     );
 
-    // outDir, explorer.autoRevealExclude, and explorer.autoReveal are now
-    // opt-in recommendations shown in the Settings > LaTeX tab.
+    // ── Migration: clean up settings that older TeXRA versions force-wrote ──
+    // These are now either opt-in (LaTeX tab) or left to LaTeX Workshop defaults.
+    if (storedVersion === undefined || storedVersion < 2) {
+      await resetLegacyLatexSettings();
+    }
+
+    // Settings that TeXRA still auto-configures (write-once).
     const settings: Array<[string, unknown]> = [
       [
         '[latex]',
@@ -266,6 +271,76 @@ export async function configureLatexSettings(): Promise<void> {
       'extension',
       `Error configuring LaTeX settings: ${toErrorMessage(err)}`,
     );
+  }
+}
+
+/**
+ * Reset settings that older TeXRA versions (< v0.37) auto-wrote on every activation.
+ * Only resets a setting if its current global value matches what TeXRA set,
+ * so user customizations are preserved.
+ */
+async function resetLegacyLatexSettings(): Promise<void> {
+  const GLOBAL = vscode.ConfigurationTarget.Global;
+  const cfg = vscode.workspace.getConfiguration();
+
+  // Deep equality check for arrays/objects
+  const eq = (a: unknown, b: unknown): boolean =>
+    JSON.stringify(a) === JSON.stringify(b);
+
+  // Simple settings: reset to undefined if value matches what TeXRA wrote.
+  const legacySettings: Array<[string, unknown]> = [
+    ['latex-workshop.latex.build.fromWorkspaceFolder', true],
+    [
+      'latex-workshop.latex.external.build.args',
+      ['--output-directory=build', '-f', '-pdf'],
+    ],
+    [
+      'latex-workshop.latex.magic.args',
+      [
+        '-synctex=1',
+        '-interaction=nonstopmode',
+        '-file-line-error',
+        '%DOC%',
+        '-pdf',
+        '-f',
+      ],
+    ],
+    ['latex-workshop.formatting.latex', 'latexindent'],
+    ['explorer.autoReveal', false],
+  ];
+
+  for (const [key, oldValue] of legacySettings) {
+    const inspection = cfg.inspect(key);
+    if (inspection?.globalValue !== undefined && eq(inspection.globalValue, oldValue)) {
+      await cfg.update(key, undefined, GLOBAL);
+      logger.info('extension', `Reset legacy setting: ${key}`);
+    }
+  }
+
+  // Language-scoped settings: remove only the keys TeXRA added.
+  const legacyLanguageKeys: Array<[string, Record<string, unknown>]> = [
+    ['[latex]', { 'files.autoSave': 'afterDelay', 'intellisense.update.delay': 1000 }],
+    ['[yaml]', { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' }],
+  ];
+
+  for (const [langKey, oldKeys] of legacyLanguageKeys) {
+    const inspection = cfg.inspect<Record<string, unknown>>(langKey);
+    const current = inspection?.globalValue;
+    if (!current || typeof current !== 'object') continue;
+
+    const cleaned = { ...current };
+    let changed = false;
+    for (const [k, v] of Object.entries(oldKeys)) {
+      if (eq(cleaned[k], v)) {
+        delete cleaned[k];
+        changed = true;
+      }
+    }
+    if (changed) {
+      const newValue = Object.keys(cleaned).length > 0 ? cleaned : undefined;
+      await cfg.update(langKey, newValue, GLOBAL);
+      logger.info('extension', `Cleaned legacy keys from ${langKey}`);
+    }
   }
 }
 
