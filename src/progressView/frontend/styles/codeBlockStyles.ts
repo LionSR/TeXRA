@@ -74,6 +74,10 @@ export const codeBlockStyles = css`
     &.copied {
       color: var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
     }
+
+    &:focus-visible {
+      outline: var(--border-thin) solid var(--vscode-focusBorder);
+    }
   }
 
   /* Syntax highlighted code blocks */

@@ -353,13 +353,17 @@ export class InstructionPanel extends LitElement {
               icon="sparkle"
               label="Polish instruction"
               title="Polish instruction text with AI"
+              ?disabled=${session.isPolishing}
               data-action="polish"
             ></vscode-toolbar-button>
             <vscode-progress-ring
               id="polishProgressContainer"
               style=${styleMap({
-                display: session.isPolishing ? 'block' : 'none',
-                ...(session.isPolishing && { width: '16px', height: '16px' }),
+                width: '16px',
+                height: '16px',
+                opacity: session.isPolishing ? '1' : '0',
+                transition: 'opacity 0.2s ease',
+                ...(session.isPolishing ? {} : { pointerEvents: 'none' }),
               })}
             ></vscode-progress-ring>
             <vscode-toolbar-button

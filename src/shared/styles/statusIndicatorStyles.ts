@@ -32,6 +32,17 @@ export const statusIndicatorStyles: CSSResult = css`
     background-color: var(--color-error, #f44336);
     box-shadow: 0 0 4px var(--color-error, #f44336);
     opacity: 1;
+    animation: pulse-error 2s ease-in-out 3;
+  }
+
+  @keyframes pulse-error {
+    0%,
+    100% {
+      box-shadow: 0 0 4px var(--color-error, #f44336);
+    }
+    50% {
+      box-shadow: 0 0 8px var(--color-error, #f44336);
+    }
   }
 
   .status-indicator.is-waiting,

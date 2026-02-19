@@ -809,7 +809,7 @@
         "title": "Clean All Build Files (Workspace-wide)",
         "shortTitle": "Clean Build Files",
         "category": "TeXRA",
-        "icon": "$(remove)"
+        "icon": "$(trash)"
       },
       {
         "command": "texra.indentTeX",
@@ -1061,9 +1061,9 @@
       },
       {
         "command": "texra.showSettingsView",
-        "title": "Show Dashboard",
+        "title": "Show Settings",
         "category": "TeXRA",
-        "icon": "$(settings)"
+        "icon": "$(gear)"
       }
     ],
     "walkthroughs": [
@@ -1313,6 +1313,11 @@
         "command": "texra.cleanBuild",
         "key": "ctrl+alt+shift+b",
         "mac": "cmd+option+shift+b"
+      },
+      {
+        "command": "texra.execute",
+        "key": "ctrl+alt+e",
+        "mac": "cmd+option+e"
       }
     ]
   },

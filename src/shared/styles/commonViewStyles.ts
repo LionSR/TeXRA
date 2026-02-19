@@ -28,6 +28,10 @@ export const commonViewStyles: CSSResult = css`
     background-color: var(--vscode-list-hoverBackground);
   }
 
+  .list-item:focus-within {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+  }
+
   .list-item-header {
     display: flex;
     justify-content: space-between;
@@ -81,11 +85,18 @@ export const commonViewStyles: CSSResult = css`
     cursor: pointer;
     color: var(--color-text-link);
     text-decoration: none;
+    transition: color 0.15s ease;
   }
 
   .clickable-link:hover {
     color: var(--color-text-link-active);
     text-decoration: underline;
+  }
+
+  .clickable-link:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
   }
 
   .detail-section {
@@ -116,10 +127,17 @@ export const commonViewStyles: CSSResult = css`
     list-style: none;
     user-select: none;
     opacity: var(--opacity-normal);
+    transition: opacity 0.15s ease;
   }
 
   .details-summary:hover {
     opacity: 1;
+  }
+
+  .details-summary:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
   }
 
   /* Toggle icon for collapsible details - applies to any summary */
@@ -127,6 +145,7 @@ export const commonViewStyles: CSSResult = css`
     opacity: var(--opacity-subtle);
     font-size: var(--font-size-sm);
     display: inline-block;
+    transition: transform 0.15s ease;
   }
 
   details[open] > summary .toggle-icon {
@@ -158,6 +177,7 @@ export const commonViewStyles: CSSResult = css`
 
   .btn-secondary {
     opacity: var(--opacity-normal);
+    transition: opacity 0.15s ease;
   }
 
   .btn-secondary:hover {

@@ -122,6 +122,11 @@ export const toggleStyles = css`
     border: none;
   }
 
+  .toggle-icon:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    border-radius: var(--border-radius-small);
+  }
+
   .file-select[data-expanded='true'] .optional-label,
   .file-select[data-expanded='true'] .toggle-icon {
     color: var(--vscode-foreground);
@@ -159,6 +164,12 @@ export const multiFilesStyles = css`
     display: flex;
     justify-content: space-between;
     align-items: center;
+    border-radius: var(--border-radius-small);
+    transition: background-color 0.1s ease;
+  }
+
+  .file-item:hover {
+    background-color: var(--vscode-list-hoverBackground);
   }
 
   .file-name {
@@ -178,10 +189,17 @@ export const multiFilesStyles = css`
     padding: 0;
     display: inline-flex;
     align-items: center;
+    transition: opacity 0.15s ease;
   }
 
   .remove-button:hover {
     opacity: 1;
+  }
+
+  .remove-button:focus-visible {
+    opacity: 1;
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    border-radius: var(--border-radius-small);
   }
 
   .file-list-placeholder {
@@ -239,6 +257,10 @@ export const dropdownStyles = css`
     height: 20px;
     padding: var(--spacing-tiny);
     font-size: var(--font-size-sm);
+  }
+
+  .dropdown-container .dropdown-menu vscode-checkbox {
+    transition: background-color 0.1s ease;
   }
 
   .dropdown-container .dropdown-menu vscode-checkbox:hover {
