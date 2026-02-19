@@ -418,6 +418,8 @@ export class TaskGroupList extends LitElement {
     if (this.toggleStates) {
       this.toggleStates.set(groupId, !details.open);
     }
+    // Re-render to add/remove children from the DOM (lazy collapsed groups)
+    this.requestUpdate();
   }
 
   /** Render ungrouped messages as log entries with guard() for change detection */
@@ -467,34 +469,35 @@ export class TaskGroupList extends LitElement {
     const detailsId = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
     const contentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 
-    const logEntries = repeat(
-      messages,
-      (m) => m.id,
-      (m) => guard([m], () => formatLogEntry(m)),
-    );
-    const childGroups = repeat(
-      children,
-      (c) => c.group.id,
-      (c) => this.renderGroupNode(c),
-    );
-
-    // Root groups: simple container (no collapsible)
+    // Root groups: simple container (no collapsible), always render content
     if (!group.parentGroupId) {
       return html`
         <div id=${detailsId} class="log-group log-run" data-run-id=${group.id}>
           <div id=${contentId} class="log-group-content">
-            ${logEntries} ${childGroups}
+            ${repeat(
+              messages,
+              (m) => m.id,
+              (m) => guard([m], () => formatLogEntry(m)),
+            )}
+            ${repeat(
+              children,
+              (c) => c.group.id,
+              (c) => this.renderGroupNode(c),
+            )}
           </div>
         </div>
       `;
     }
 
-    // Child groups: collapsible details element
+    // Child groups: collapsible details element.
+    // Collapsed child groups contribute zero DOM nodes for their content.
+    const expanded = this.isExpanded(group.id);
+
     return html`
       <details
         id=${detailsId}
         class="log-group"
-        ?open=${this.isExpanded(group.id)}
+        ?open=${expanded}
         @toggle=${this.handleDetailsToggle}
       >
         <summary
@@ -507,7 +510,17 @@ export class TaskGroupList extends LitElement {
           ${this.renderGroupHeader(group)}
         </summary>
         <div id=${contentId} class="log-group-content">
-          ${logEntries} ${childGroups}
+          ${expanded
+            ? html`${repeat(
+                  messages,
+                  (m) => m.id,
+                  (m) => guard([m], () => formatLogEntry(m)),
+                )}${repeat(
+                  children,
+                  (c) => c.group.id,
+                  (c) => this.renderGroupNode(c),
+                )}`
+            : nothing}
         </div>
       </details>
     `;
