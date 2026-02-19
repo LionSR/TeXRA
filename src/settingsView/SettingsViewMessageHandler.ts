@@ -1853,11 +1853,22 @@ prompts:
       for (const { key, value } of targets) {
         let resolvedValue: unknown = data.reset ? undefined : value;
 
-        // Merge object values (e.g. autoRevealExclude) with existing config
-        // to avoid overwriting the user's other entries.
-        if (!data.reset && typeof value === 'object' && value !== null) {
+        if (typeof value === 'object' && value !== null) {
+          const recommended = value as Record<string, unknown>;
           const existing = getConfig<Record<string, unknown>>(key, {});
-          resolvedValue = { ...existing, ...(value as Record<string, unknown>) };
+
+          if (data.reset) {
+            // Remove only the TeXRA-recommended keys, keep the user's other entries.
+            const remaining = { ...existing };
+            for (const k of Object.keys(recommended)) {
+              delete remaining[k];
+            }
+            resolvedValue =
+              Object.keys(remaining).length > 0 ? remaining : undefined;
+          } else {
+            // Merge recommended keys into existing config.
+            resolvedValue = { ...existing, ...recommended };
+          }
         }
 
         await updateConfig(key, resolvedValue, {

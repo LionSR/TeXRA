@@ -80,6 +80,111 @@ export const TEXCOUNT_INSTALL_GUIDE: Record<Platform, string> = {
     'Part of most TeX Live distributions.',
 };
 
+export const PERL_INSTALL_GUIDE: Record<Platform, string> = {
+  darwin:
+    'Perl is pre-installed on macOS.\n' +
+    'If missing, reinstall via:\n' +
+    '  brew install perl',
+  linux:
+    'Install Perl:\n' +
+    '  sudo apt-get install perl',
+  win32:
+    'Install Strawberry Perl (recommended):\n' +
+    '  https://strawberryperl.com/',
+};
+
+export const GHOSTSCRIPT_INSTALL_GUIDE: Record<Platform, string> = {
+  darwin:
+    'Install Ghostscript:\n' +
+    '  brew install ghostscript',
+  linux:
+    'Install Ghostscript:\n' +
+    '  sudo apt-get install ghostscript',
+  win32:
+    'Install Ghostscript:\n' +
+    '  https://ghostscript.com/releases/gsdnld.html',
+};
+
+export const GRAPHICSMAGICK_INSTALL_GUIDE: Record<Platform, string> = {
+  darwin:
+    'Install GraphicsMagick:\n' +
+    '  brew install graphicsmagick',
+  linux:
+    'Install GraphicsMagick:\n' +
+    '  sudo apt-get install graphicsmagick',
+  win32:
+    'Install GraphicsMagick:\n' +
+    '  http://www.graphicsmagick.org/download.html',
+};
+
+export const IMAGEMAGICK_INSTALL_GUIDE: Record<Platform, string> = {
+  darwin:
+    'Install ImageMagick:\n' +
+    '  brew install imagemagick',
+  linux:
+    'Install ImageMagick:\n' +
+    '  sudo apt-get install imagemagick',
+  win32:
+    'Install ImageMagick:\n' +
+    '  https://imagemagick.org/script/download.php',
+};
+
+export const LATEXMK_INSTALL_GUIDE: Record<Platform, string> = {
+  darwin:
+    'Install latexmk:\n' +
+    '  brew install latexmk\n\n' +
+    'Also included with MacTeX.',
+  linux:
+    'Install latexmk:\n' +
+    '  sudo apt-get install latexmk',
+  win32:
+    'MiKTeX: Open MiKTeX Console → Packages → search "latexmk" → Install\n\n' +
+    'TeX Live: tlmgr install latexmk',
+};
+
+export const TEXFMT_INSTALL_GUIDE: Record<Platform, string> = {
+  darwin:
+    'Install tex-fmt:\n' +
+    '  brew install tex-fmt\n\n' +
+    'Or via Cargo:\n' +
+    '  cargo install tex-fmt',
+  linux:
+    'Install tex-fmt:\n' +
+    '  apt install tex-fmt\n\n' +
+    'Or via Cargo:\n' +
+    '  cargo install tex-fmt',
+  win32:
+    'Install tex-fmt via Cargo:\n' +
+    '  cargo install tex-fmt',
+};
+
+export const WOLFRAM_INSTALL_GUIDE: Record<Platform, string> = {
+  darwin:
+    'Install Wolfram Engine:\n' +
+    '  brew install --cask wolfram-engine\n\n' +
+    'Or download from:\n' +
+    '  https://www.wolfram.com/engine/',
+  linux:
+    'Install Wolfram Engine:\n' +
+    '  https://www.wolfram.com/engine/\n\n' +
+    'Follow the Linux installation guide on the Wolfram site.',
+  win32:
+    'Install Wolfram Engine:\n' +
+    '  https://www.wolfram.com/engine/',
+};
+
+export const PANDOC_INSTALL_GUIDE: Record<Platform, string> = {
+  darwin:
+    'Install pandoc:\n' +
+    '  brew install pandoc',
+  linux:
+    'Install pandoc:\n' +
+    '  sudo apt-get install pandoc',
+  win32:
+    'Install pandoc:\n' +
+    '  https://pandoc.org/installing.html',
+};
+
 export const IMAGE_PROCESSING_INSTALL_GUIDE: Record<Platform, string> = {
   darwin:
     'Ghostscript:\n' +

@@ -13,6 +13,16 @@ import * as logger from '@logger/logUtils';
 import {
   PDFLATEX_INSTALL_GUIDE,
   LATEXDIFF_INSTALL_GUIDE,
+  LATEXINDENT_INSTALL_GUIDE,
+  TEXCOUNT_INSTALL_GUIDE,
+  PERL_INSTALL_GUIDE,
+  GHOSTSCRIPT_INSTALL_GUIDE,
+  GRAPHICSMAGICK_INSTALL_GUIDE,
+  IMAGEMAGICK_INSTALL_GUIDE,
+  LATEXMK_INSTALL_GUIDE,
+  TEXFMT_INSTALL_GUIDE,
+  WOLFRAM_INSTALL_GUIDE,
+  PANDOC_INSTALL_GUIDE,
   getInstallGuide,
 } from '@shared/constants/latex';
 
@@ -34,72 +44,22 @@ interface ToolConfig {
   openDocsCommand?: string; // Optional command to open documentation
 }
 
-// Installation instructions for LaTeX tools
-function installInstructions(...steps: string[]): string {
-  return 'Installation instructions:\n' + steps.map((s) => `- ${s}`).join('\n');
-}
+// Platform-specific install instructions resolved at module load.
+// All guides are defined in @shared/constants/latex (single source of truth).
+const p = process.platform;
 
-const MIKTEX_OR_TEXLIVE =
-  'Windows: Install through MiKTeX or TeX Live package manager';
-
-const LATEXDIFF_INSTRUCTIONS = getInstallGuide(
-  LATEXDIFF_INSTALL_GUIDE,
-  process.platform,
-);
-const LATEXINDENT_INSTRUCTIONS = installInstructions(
-  'Mac: brew install latexindent',
-  'Ubuntu: sudo apt-get install texlive-extra-utils',
-  MIKTEX_OR_TEXLIVE,
-);
-const TEXFMT_INSTRUCTIONS = installInstructions(
-  'Cargo: cargo install tex-fmt',
-  'Mac: brew install tex-fmt',
-  'Debian: apt install tex-fmt',
-);
-const TEXCOUNT_INSTRUCTIONS = installInstructions(
-  'Mac: brew install texcount',
-  'Ubuntu: sudo apt-get install texlive-extra-utils',
-  MIKTEX_OR_TEXLIVE,
-);
-const PERL_INSTRUCTIONS = installInstructions(
-  'Mac: brew install perl',
-  'Ubuntu: sudo apt-get install perl',
-  'Windows: Download from https://strawberryperl.com/',
-);
-const GHOSTSCRIPT_INSTRUCTIONS = installInstructions(
-  'Mac: brew install ghostscript',
-  'Ubuntu: sudo apt-get install ghostscript',
-  'Windows: Download from https://ghostscript.com/releases/gsdnld.html',
-);
-const GM_INSTRUCTIONS = installInstructions(
-  'Mac: brew install graphicsmagick',
-  'Ubuntu: sudo apt-get install graphicsmagick',
-  'Windows: Download from http://www.graphicsmagick.org/download.html',
-);
-const MAGICK_INSTRUCTIONS = installInstructions(
-  'Mac: brew install imagemagick',
-  'Ubuntu: sudo apt-get install imagemagick',
-  'Windows: Download from https://imagemagick.org/script/download.php',
-);
-const WOLFRAM_INSTRUCTIONS = installInstructions(
-  'Mac: brew install wolfram-engine',
-  'Ubuntu: sudo apt-get install wolfram-engine',
-  'Windows: Download from https://www.wolfram.com/engine/',
-);
-const PANDOC_INSTRUCTIONS = installInstructions(
-  'Mac: brew install pandoc',
-  'Ubuntu: sudo apt-get install pandoc',
-  'Windows: Download from https://pandoc.org/installing.html',
-);
-const PDFLATEX_INSTRUCTIONS = getInstallGuide(
-  PDFLATEX_INSTALL_GUIDE,
-  process.platform,
-);
-const LATEXMK_INSTRUCTIONS = installInstructions(
-  'Mac: brew install latexmk',
-  'Ubuntu: sudo apt-get install latexmk',
-  MIKTEX_OR_TEXLIVE,
-);
+const LATEXDIFF_INSTRUCTIONS = getInstallGuide(LATEXDIFF_INSTALL_GUIDE, p);
+const LATEXINDENT_INSTRUCTIONS = getInstallGuide(LATEXINDENT_INSTALL_GUIDE, p);
+const TEXFMT_INSTRUCTIONS = getInstallGuide(TEXFMT_INSTALL_GUIDE, p);
+const TEXCOUNT_INSTRUCTIONS = getInstallGuide(TEXCOUNT_INSTALL_GUIDE, p);
+const PERL_INSTRUCTIONS = getInstallGuide(PERL_INSTALL_GUIDE, p);
+const GHOSTSCRIPT_INSTRUCTIONS = getInstallGuide(GHOSTSCRIPT_INSTALL_GUIDE, p);
+const GM_INSTRUCTIONS = getInstallGuide(GRAPHICSMAGICK_INSTALL_GUIDE, p);
+const MAGICK_INSTRUCTIONS = getInstallGuide(IMAGEMAGICK_INSTALL_GUIDE, p);
+const WOLFRAM_INSTRUCTIONS = getInstallGuide(WOLFRAM_INSTALL_GUIDE, p);
+const PANDOC_INSTRUCTIONS = getInstallGuide(PANDOC_INSTALL_GUIDE, p);
+const PDFLATEX_INSTRUCTIONS = getInstallGuide(PDFLATEX_INSTALL_GUIDE, p);
+const LATEXMK_INSTRUCTIONS = getInstallGuide(LATEXMK_INSTALL_GUIDE, p);
 
 // All tool configurations in one place
 const TOOL_CONFIGS: Record<string, ToolConfig> = {
