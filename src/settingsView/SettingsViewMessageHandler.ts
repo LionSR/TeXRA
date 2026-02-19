@@ -22,6 +22,10 @@ import {
   MODEL_PROVIDERS_ORDER,
   DEFAULT_HELPER_MODEL,
 } from '@shared/constants/providers';
+import {
+  LATEX_WORKSHOP_EXT_ID,
+  normalizePlatform,
+} from '@shared/constants/latex';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, MAX_TIER } from '@auth/config';
 import { AUTH_COMMANDS } from '@auth/constants';
@@ -89,6 +93,7 @@ import {
   updateConfig,
 } from '@utils/config/configUtils';
 import { checkToolInstalled } from '@utils/system/toolUtils';
+import { findToolInCommonPaths } from '@utils/system/platformPaths';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import {
@@ -437,6 +442,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleGetToolDashboardData(),
       [SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL]: (data) =>
         this.handleOpenToolInstallUrl(data),
+      [SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION]: (data) =>
+        this.handleInstallToolExtension(data),
       [SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS]: () =>
         this.handleRecheckToolStatus(),
 
@@ -1711,8 +1718,6 @@ prompts:
   // LaTeX settings handler implementations
   // ============================================================
 
-  private static readonly LATEX_WORKSHOP_EXT_ID = 'James-Yu.latex-workshop';
-
   /** Recommended LaTeX-related VS Code settings and their target values. */
   private static readonly LATEX_RECOMMENDED_SETTINGS: {
     key: string;
@@ -1731,44 +1736,108 @@ prompts:
     },
   ];
 
-  public async sendLatexSettingsStatus(webview: vscode.Webview): Promise<void> {
-    const settings: Record<string, boolean> = {
-      latexWorkshopInstalled: Boolean(
-        vscode.extensions.getExtension(
-          SettingsViewMessageHandler.LATEX_WORKSHOP_EXT_ID,
-        ),
-      ),
-      latexdiffInstalled: await checkToolInstalled('latexdiff', false),
-    };
-    for (const {
-      key,
-      field,
-    } of SettingsViewMessageHandler.LATEX_RECOMMENDED_SETTINGS) {
-      settings[field] = isConfigExplicitlySet(key);
+  /**
+   * Check whether a recommended LaTeX setting's value is active.
+   * For string values: exact match.
+   * For object values: recommended keys are a subset of the current config.
+   */
+  private isRecommendedValueSet(field: 'outDir' | 'autoRevealExclude'): boolean {
+    const setting = SettingsViewMessageHandler.LATEX_RECOMMENDED_SETTINGS.find(
+      (s) => s.field === field,
+    );
+    if (!setting) return false;
+    if (!isConfigExplicitlySet(setting.key)) return false;
+
+    const current = getConfig<unknown>(setting.key);
+    if (typeof setting.value === 'object' && setting.value !== null) {
+      // For object values, check that every recommended key is present
+      if (typeof current !== 'object' || current === null) return false;
+      return Object.entries(setting.value as Record<string, unknown>).every(
+        ([k, v]) => (current as Record<string, unknown>)[k] === v,
+      );
     }
+    return current === setting.value;
+  }
+
+  public async sendLatexSettingsStatus(webview: vscode.Webview): Promise<void> {
+    const [
+      pdflatexOk,
+      latexmkOk,
+      latexdiffOk,
+      latexindentOk,
+      perlOk,
+      texcountOk,
+      gsOk,
+      gmOk,
+      magickOk,
+    ] = await Promise.all([
+      checkToolInstalled('pdflatex', false),
+      checkToolInstalled('latexmk', false),
+      checkToolInstalled('latexdiff', false),
+      checkToolInstalled('latexindent', false),
+      checkToolInstalled('perl', false),
+      checkToolInstalled('texcount', false),
+      checkToolInstalled('gs', false),
+      checkToolInstalled('gm', false),
+      checkToolInstalled('magick', false),
+    ]);
+
+    const platform = normalizePlatform(process.platform);
+
+    const settings = {
+      outDir: this.isRecommendedValueSet('outDir'),
+      autoRevealExclude: this.isRecommendedValueSet('autoRevealExclude'),
+      texDistributionInstalled: pdflatexOk || latexmkOk,
+      latexWorkshopInstalled: Boolean(
+        vscode.extensions.getExtension(LATEX_WORKSHOP_EXT_ID),
+      ),
+      latexdiffInstalled: latexdiffOk,
+      latexindentInstalled: latexindentOk && perlOk,
+      texcountInstalled: texcountOk,
+      imageProcessingInstalled: gsOk && (gmOk || magickOk),
+      platform,
+      pdflatexPath: findToolInCommonPaths('pdflatex'),
+      latexmkPath: findToolInCommonPaths('latexmk'),
+      latexdiffPath: findToolInCommonPaths('latexdiff'),
+      latexindentPath: findToolInCommonPaths('latexindent'),
+      texcountPath: findToolInCommonPaths('texcount'),
+      ghostscriptPath: findToolInCommonPaths('gs'),
+      graphicsmagickPath:
+        findToolInCommonPaths('gm') ?? findToolInCommonPaths('magick'),
+    };
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
       settings,
     });
   }
 
-  private async handleInstallLatexWorkshop(): Promise<void> {
+  /** Install a VS Code extension and refresh the given view data. */
+  private async installExtension(
+    extensionId: string,
+    refresh: (w: vscode.Webview) => Promise<void>,
+  ): Promise<void> {
     try {
       await vscode.commands.executeCommand(
         'workbench.extensions.installExtension',
-        SettingsViewMessageHandler.LATEX_WORKSHOP_EXT_ID,
+        extensionId,
       );
       void vscode.window.showInformationMessage(
-        'LaTeX Workshop extension installed',
+        `Extension "${extensionId}" installed`,
       );
-      await this.withActiveWebview((w) => this.sendLatexSettingsStatus(w));
+      await this.withActiveWebview(refresh);
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
-        'Failed to install LaTeX Workshop',
+        `Failed to install extension "${extensionId}"`,
         error,
       );
     }
+  }
+
+  private async handleInstallLatexWorkshop(): Promise<void> {
+    await this.installExtension(LATEX_WORKSHOP_EXT_ID, (w) =>
+      this.sendLatexSettingsStatus(w),
+    );
   }
 
   private async handleApplyLatexSettings(
@@ -1782,22 +1851,32 @@ prompts:
         : SettingsViewMessageHandler.LATEX_RECOMMENDED_SETTINGS;
 
       for (const { key, value } of targets) {
-        await updateConfig(key, value, {
+        let resolvedValue: unknown = data.reset ? undefined : value;
+
+        // Merge object values (e.g. autoRevealExclude) with existing config
+        // to avoid overwriting the user's other entries.
+        if (!data.reset && typeof value === 'object' && value !== null) {
+          const existing = getConfig<Record<string, unknown>>(key, {});
+          resolvedValue = { ...existing, ...(value as Record<string, unknown>) };
+        }
+
+        await updateConfig(key, resolvedValue, {
           target: vscode.ConfigurationTarget.Global,
           prefix: false,
         });
       }
 
       await this.withActiveWebview((w) => this.sendLatexSettingsStatus(w));
+      const verb = data.reset ? 'reset' : 'applied';
       void vscode.window.showInformationMessage(
         data.field
-          ? 'LaTeX setting applied'
-          : 'All recommended LaTeX settings applied',
+          ? `LaTeX setting ${verb}`
+          : `All recommended LaTeX settings ${verb}`,
       );
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
-        'Failed to apply LaTeX settings',
+        'Failed to update LaTeX settings',
         error,
       );
     }
@@ -1823,6 +1902,14 @@ prompts:
     data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_TOOL_INSTALL_URL>,
   ): Promise<void> {
     await vscode.env.openExternal(vscode.Uri.parse(data.url));
+  }
+
+  private async handleInstallToolExtension(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.INSTALL_TOOL_EXTENSION>,
+  ): Promise<void> {
+    await this.installExtension(data.extensionId, (w) =>
+      this.sendToolDashboardData(w),
+    );
   }
 
   private async handleRecheckToolStatus(): Promise<void> {

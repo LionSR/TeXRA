@@ -10,6 +10,11 @@ import * as vscode from 'vscode';
 import type { ExecResult } from '@agent/types/ResultTypes';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import {
+  PDFLATEX_INSTALL_GUIDE,
+  LATEXDIFF_INSTALL_GUIDE,
+  getInstallGuide,
+} from '@shared/constants/latex';
 
 // Local file imports
 import {
@@ -37,10 +42,9 @@ function installInstructions(...steps: string[]): string {
 const MIKTEX_OR_TEXLIVE =
   'Windows: Install through MiKTeX or TeX Live package manager';
 
-const LATEXDIFF_INSTRUCTIONS = installInstructions(
-  'Mac: brew install latexdiff',
-  'Ubuntu: sudo apt-get install latexdiff',
-  MIKTEX_OR_TEXLIVE,
+const LATEXDIFF_INSTRUCTIONS = getInstallGuide(
+  LATEXDIFF_INSTALL_GUIDE,
+  process.platform,
 );
 const LATEXINDENT_INSTRUCTIONS = installInstructions(
   'Mac: brew install latexindent',
@@ -87,10 +91,9 @@ const PANDOC_INSTRUCTIONS = installInstructions(
   'Ubuntu: sudo apt-get install pandoc',
   'Windows: Download from https://pandoc.org/installing.html',
 );
-const PDFLATEX_INSTRUCTIONS = installInstructions(
-  'Mac: brew install texlive',
-  'Ubuntu: sudo apt-get install texlive-full',
-  MIKTEX_OR_TEXLIVE,
+const PDFLATEX_INSTRUCTIONS = getInstallGuide(
+  PDFLATEX_INSTALL_GUIDE,
+  process.platform,
 );
 const LATEXMK_INSTRUCTIONS = installInstructions(
   'Mac: brew install latexmk',

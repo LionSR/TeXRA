@@ -43,7 +43,7 @@ import {
   type AgentSelectionItem,
   type NumberVscodeSetting,
   type ToolDashboardItem,
-  type LatexSettingsStatus,
+  DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/schemas/settingsViewMessages';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
@@ -164,12 +164,7 @@ export class SettingsApp extends BaseWebviewApp {
   @state() private toolDashboardLoaded = false;
 
   // LaTeX settings state
-  @state() private latexSettingsStatus: LatexSettingsStatus = {
-    outDir: false,
-    autoRevealExclude: false,
-    latexWorkshopInstalled: false,
-    latexdiffInstalled: false,
-  };
+  @state() private latexSettingsStatus = { ...DEFAULT_LATEX_SETTINGS_STATUS };
   @state() private latexSettingsLoaded = false;
 
   protected override get readyCommand(): string | null {
@@ -502,6 +497,10 @@ export class SettingsApp extends BaseWebviewApp {
     SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL,
   );
 
+  private handleToolInstallExtension = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION,
+  );
+
   private handleToolRecheck(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS);
   }
@@ -670,6 +669,7 @@ export class SettingsApp extends BaseWebviewApp {
               .items=${this.toolDashboardItems}
               .loaded=${this.toolDashboardLoaded}
               @tool-open-url=${this.handleToolOpenUrl}
+              @tool-install-extension=${this.handleToolInstallExtension}
               @tool-recheck=${this.handleToolRecheck}
             ></tools-tab>
           </vscode-tab-panel>

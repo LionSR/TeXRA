@@ -214,6 +214,18 @@ export class ToolCard extends LitElement {
     }
   }
 
+  private handleInstallExtension(): void {
+    if (this.item.installExtensionId) {
+      this.dispatchEvent(
+        new CustomEvent('tool-install-extension', {
+          detail: { extensionId: this.item.installExtensionId },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    }
+  }
+
   private static readonly STATUS_CONFIG: Record<
     string,
     { icon: string; label: string }
@@ -255,10 +267,23 @@ export class ToolCard extends LitElement {
         ? html`
             <div class="tool-guide">${this.item.installGuide}</div>
             <div class="tool-guide-actions">
-              ${this.item.installUrl
+              ${this.item.installExtensionId
                 ? html`
                     <button
                       class="tool-action-btn"
+                      @click=${this.handleInstallExtension}
+                    >
+                      <span class="codicon codicon-cloud-download"></span>
+                      Install Extension
+                    </button>
+                  `
+                : nothing}
+              ${this.item.installUrl
+                ? html`
+                    <button
+                      class="tool-action-btn ${this.item.installExtensionId
+                        ? 'tool-action-btn--secondary'
+                        : ''}"
                       @click=${this.handleInstallUrl}
                     >
                       <span class="codicon codicon-link-external"></span>
@@ -287,6 +312,9 @@ export class ToolCard extends LitElement {
           </div>
         </div>
         <div class="tool-description">${this.item.description}</div>
+        ${this.item.statusDetail
+          ? html`<div class="tool-config-note">${this.item.statusDetail}</div>`
+          : nothing}
         <div class="tool-ids">
           ${this.item.tools.map(
             (tool) =>

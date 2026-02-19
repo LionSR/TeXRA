@@ -8,6 +8,7 @@ import fsExtra from 'fs-extra';
 import * as vscode from 'vscode';
 
 // Local imports
+import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
@@ -29,9 +30,6 @@ const MODEL_LIST_VERSION = 4;
  * Increment this when changing which settings are auto-configured.
  */
 const LATEX_CONFIG_VERSION = 1;
-
-/** Extension ID for LaTeX Workshop */
-const LATEX_WORKSHOP_EXT_ID = 'James-Yu.latex-workshop';
 
 /**
  * Legacy agent files that should be deleted from GlobalStorage.

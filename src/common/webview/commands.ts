@@ -354,6 +354,7 @@ export const SETTINGS_VIEW_CMD = {
   // Tool dashboard commands
   GET_TOOL_DASHBOARD_DATA: 'getToolDashboardData',
   OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',
+  INSTALL_TOOL_EXTENSION: 'installToolExtension',
   RECHECK_TOOL_STATUS: 'recheckToolStatus',
   // LaTeX settings commands
   GET_LATEX_SETTINGS_STATUS: 'getLatexSettingsStatus',

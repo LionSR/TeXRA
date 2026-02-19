@@ -245,7 +245,9 @@ export const ToolDashboardItemSchema = z.object({
   requiresSetup: z.boolean(),
   installGuide: z.string().optional(),
   installUrl: z.string().optional(),
+  installExtensionId: z.string().optional(),
   configNotes: z.string().optional(),
+  statusDetail: z.string().optional(),
 });
 export type ToolDashboardItem = z.infer<typeof ToolDashboardItemSchema>;
 
@@ -266,10 +268,42 @@ export type UpdateToolDashboardMessage = z.infer<
 export const LatexSettingsStatusSchema = z.object({
   outDir: z.boolean(),
   autoRevealExclude: z.boolean(),
+  texDistributionInstalled: z.boolean(),
   latexWorkshopInstalled: z.boolean(),
   latexdiffInstalled: z.boolean(),
+  latexindentInstalled: z.boolean(),
+  texcountInstalled: z.boolean(),
+  imageProcessingInstalled: z.boolean(),
+  platform: z.enum(['darwin', 'win32', 'linux']),
+  pdflatexPath: z.string().nullable(),
+  latexmkPath: z.string().nullable(),
+  latexdiffPath: z.string().nullable(),
+  latexindentPath: z.string().nullable(),
+  texcountPath: z.string().nullable(),
+  ghostscriptPath: z.string().nullable(),
+  graphicsmagickPath: z.string().nullable(),
 });
 export type LatexSettingsStatus = z.infer<typeof LatexSettingsStatusSchema>;
+
+/** Shared default — used by SettingsApp and LaTeXTab before backend data arrives. */
+export const DEFAULT_LATEX_SETTINGS_STATUS: LatexSettingsStatus = {
+  outDir: false,
+  autoRevealExclude: false,
+  texDistributionInstalled: false,
+  latexWorkshopInstalled: false,
+  latexdiffInstalled: false,
+  latexindentInstalled: false,
+  texcountInstalled: false,
+  imageProcessingInstalled: false,
+  platform: 'linux',
+  pdflatexPath: null,
+  latexmkPath: null,
+  latexdiffPath: null,
+  latexindentPath: null,
+  texcountPath: null,
+  ghostscriptPath: null,
+  graphicsmagickPath: null,
+};
 
 /** Outbound: backend → frontend LaTeX settings status */
 export const UpdateLatexSettingsStatusMessageSchema = z.object({
@@ -445,6 +479,11 @@ const OpenToolInstallUrlMessageSchema = z.object({
   url: z.url(),
 });
 
+const InstallToolExtensionMessageSchema = z.object({
+  command: z.literal(CMD.INSTALL_TOOL_EXTENSION),
+  extensionId: z.string().min(1),
+});
+
 const RecheckToolStatusMessageSchema = commandOnly(CMD.RECHECK_TOOL_STATUS);
 
 // LaTeX settings inbound messages
@@ -454,6 +493,7 @@ const GetLatexSettingsStatusMessageSchema = commandOnly(
 const ApplyLatexSettingsMessageSchema = z.object({
   command: z.literal(CMD.APPLY_LATEX_SETTINGS),
   field: z.enum(['outDir', 'autoRevealExclude']).optional(),
+  reset: z.boolean().optional(),
 });
 const InstallLatexWorkshopMessageSchema = commandOnly(
   CMD.INSTALL_LATEX_WORKSHOP,
@@ -474,6 +514,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     // Tool dashboard messages
     GetToolDashboardDataMessageSchema,
     OpenToolInstallUrlMessageSchema,
+    InstallToolExtensionMessageSchema,
     RecheckToolStatusMessageSchema,
     // LaTeX settings messages
     GetLatexSettingsStatusMessageSchema,

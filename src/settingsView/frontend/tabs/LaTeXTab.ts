@@ -5,13 +5,115 @@
 
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas
-import type { LatexSettingsStatus } from '@shared/schemas/settingsViewMessages';
+import {
+  DEFAULT_LATEX_SETTINGS_STATUS,
+  type LatexSettingsStatus,
+} from '@shared/schemas/settingsViewMessages';
+
+// Local imports - shared constants
+import {
+  PDFLATEX_INSTALL_GUIDE,
+  LATEXDIFF_INSTALL_GUIDE,
+  LATEXINDENT_INSTALL_GUIDE,
+  TEXCOUNT_INSTALL_GUIDE,
+  IMAGE_PROCESSING_INSTALL_GUIDE,
+  type Platform,
+} from '@shared/constants/latex';
+
+/** Path keys in LatexSettingsStatus for tool paths. */
+type ToolPathKey =
+  | 'pdflatexPath'
+  | 'latexmkPath'
+  | 'latexdiffPath'
+  | 'latexindentPath'
+  | 'texcountPath'
+  | 'ghostscriptPath'
+  | 'graphicsmagickPath';
+
+/** Metadata for a dependency shown in the Dependencies section. */
+interface DependencyInfo {
+  readonly key: keyof LatexSettingsStatus;
+  readonly name: string;
+  readonly installedDesc: string;
+  readonly missingDesc: string;
+  readonly installGuide?: Record<Platform, string>;
+  /** Keys to check for detected tool paths (shown when installed). */
+  readonly pathKeys?: ToolPathKey[];
+  /** If provided, renders an action button when missing (e.g. VS Code install). */
+  readonly actionEvent?: string;
+  readonly actionLabel?: string;
+}
+
+const DEPENDENCIES: DependencyInfo[] = [
+  {
+    key: 'texDistributionInstalled',
+    name: 'TeX Distribution',
+    installedDesc: 'Installed — pdflatex/latexmk detected on PATH.',
+    missingDesc:
+      'Not found — a TeX distribution (TeX Live, MacTeX, or MiKTeX) is required to compile LaTeX documents.',
+    installGuide: PDFLATEX_INSTALL_GUIDE,
+    pathKeys: ['pdflatexPath', 'latexmkPath'],
+  },
+  {
+    key: 'latexWorkshopInstalled',
+    name: 'LaTeX Workshop',
+    installedDesc:
+      'Installed — provides LaTeX compilation, PDF preview, and IntelliSense.',
+    missingDesc:
+      'Not installed — required for LaTeX compilation, PDF preview, and IntelliSense.',
+    actionEvent: 'latex-install-workshop',
+    actionLabel: 'Install',
+  },
+  {
+    key: 'latexdiffInstalled',
+    name: 'latexdiff',
+    installedDesc:
+      'Installed — enables visual comparison of LaTeX document revisions.',
+    missingDesc:
+      'Not found — install via your TeX distribution to enable diff comparisons.',
+    installGuide: LATEXDIFF_INSTALL_GUIDE,
+    pathKeys: ['latexdiffPath'],
+  },
+  {
+    key: 'latexindentInstalled',
+    name: 'latexindent',
+    installedDesc:
+      'Installed — used by agents to clean up formatting after editing your LaTeX source.',
+    missingDesc:
+      'Not found — without it, agents may produce inconsistent indentation ' +
+      'when editing .tex files. Requires Perl.',
+    installGuide: LATEXINDENT_INSTALL_GUIDE,
+    pathKeys: ['latexindentPath'],
+  },
+  {
+    key: 'texcountInstalled',
+    name: 'TeXcount',
+    installedDesc:
+      'Installed — enables word, heading, and figure counting in LaTeX documents.',
+    missingDesc:
+      'Not found — without it, agents cannot count words or structural elements in your .tex files. ' +
+      'Part of most TeX Live distributions.',
+    installGuide: TEXCOUNT_INSTALL_GUIDE,
+    pathKeys: ['texcountPath'],
+  },
+  {
+    key: 'imageProcessingInstalled',
+    name: 'Image Processing',
+    installedDesc:
+      'Installed — Ghostscript + GraphicsMagick/ImageMagick detected for PDF-to-PNG conversion.',
+    missingDesc:
+      'Not found — needed to generate PNG previews of compiled PDF pages. ' +
+      'Requires Ghostscript and either GraphicsMagick or ImageMagick.',
+    installGuide: IMAGE_PROCESSING_INSTALL_GUIDE,
+    pathKeys: ['ghostscriptPath', 'graphicsmagickPath'],
+  },
+];
 
 /** Metadata for each recommended setting. */
 interface SettingInfo {
@@ -76,14 +178,17 @@ export class LaTeXTab extends LitElement {
       }
 
       .dependency-card {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-medium);
         padding: var(--spacing-medium);
-        margin-bottom: var(--spacing-large);
+        margin-bottom: var(--spacing-medium);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--radius-medium);
         background: var(--vscode-editor-background);
+      }
+
+      .dependency-row {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-medium);
       }
 
       .dependency-icon {
@@ -113,6 +218,46 @@ export class LaTeXTab extends LitElement {
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
         margin-top: 2px;
+      }
+
+      .dependency-guide-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        padding: var(--spacing-tiny) 0;
+        margin-top: var(--spacing-small);
+        font-size: var(--font-size-sm);
+        font-family: inherit;
+        color: var(--vscode-textLink-foreground, #3794ff);
+        background: none;
+        border: none;
+        cursor: pointer;
+        transition: opacity 0.1s ease;
+      }
+
+      .dependency-guide-toggle:hover {
+        opacity: 0.8;
+      }
+
+      .dependency-guide {
+        margin-top: var(--spacing-small);
+        padding: var(--spacing-medium);
+        background: var(
+          --vscode-textCodeBlock-background,
+          rgba(128, 128, 128, 0.08)
+        );
+        border-radius: var(--radius-medium);
+        font-size: var(--font-size-sm);
+        color: var(--vscode-foreground);
+        line-height: 1.5;
+        white-space: pre-wrap;
+      }
+
+      .dependency-path {
+        margin-top: 4px;
+        font-family: var(--vscode-editor-font-family, monospace);
+        font-size: var(--font-size-sm);
+        color: var(--color-text-secondary);
       }
 
       .section-header {
@@ -206,30 +351,25 @@ export class LaTeXTab extends LitElement {
   ];
 
   @property({ attribute: false })
-  settings: LatexSettingsStatus = {
-    outDir: false,
-    autoRevealExclude: false,
-    latexWorkshopInstalled: false,
-    latexdiffInstalled: false,
-  };
+  settings: LatexSettingsStatus = { ...DEFAULT_LATEX_SETTINGS_STATUS };
 
   @property({ type: Boolean }) loaded = false;
 
-  private handleApply(field?: SettingInfo['key']): void {
+  @state() private expandedGuides = new Set<string>();
+
+  private toggleGuide(key: string): void {
+    const next = new Set(this.expandedGuides);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    this.expandedGuides = next;
+  }
+
+  private handleApply(field?: SettingInfo['key'], reset = false): void {
     this.dispatchEvent(
       new CustomEvent('latex-apply-settings', {
         bubbles: true,
         composed: true,
-        detail: field ? { field } : {},
-      }),
-    );
-  }
-
-  private handleInstallWorkshop(): void {
-    this.dispatchEvent(
-      new CustomEvent('latex-install-workshop', {
-        bubbles: true,
-        composed: true,
+        detail: { ...(field ? { field } : {}), ...(reset ? { reset } : {}) },
       }),
     );
   }
@@ -238,30 +378,77 @@ export class LaTeXTab extends LitElement {
     return this.settings.outDir && this.settings.autoRevealExclude;
   }
 
-  private renderDependencyCard(
-    name: string,
-    installed: boolean,
-    installedDesc: string,
-    missingDesc: string,
-    action?: TemplateResult,
-  ): TemplateResult {
+  /** Collect detected tool paths for a dependency. */
+  private getDetectedPaths(dep: DependencyInfo): string[] {
+    if (!dep.pathKeys) return [];
+    return dep.pathKeys
+      .map((k) => this.settings[k])
+      .filter((v): v is string => v !== null && v !== undefined);
+  }
+
+  private renderDependencyCard(dep: DependencyInfo): TemplateResult {
+    const installed = this.settings[dep.key];
+    const expanded = this.expandedGuides.has(dep.key);
+    const platform = this.settings.platform as Platform;
+    const guideText = dep.installGuide?.[platform] ?? dep.installGuide?.linux;
+    const detectedPaths = installed ? this.getDetectedPaths(dep) : [];
+
     return html`
       <div class="dependency-card">
-        <span
-          class="codicon dependency-icon ${installed
-            ? 'installed codicon-check'
-            : 'missing codicon-warning'}"
-        ></span>
-        <div class="dependency-info">
-          <div class="dependency-name">${name}</div>
-          <div class="dependency-description">
-            ${installed ? installedDesc : missingDesc}
+        <div class="dependency-row">
+          <span
+            class="codicon dependency-icon ${installed
+              ? 'installed codicon-check'
+              : 'missing codicon-warning'}"
+          ></span>
+          <div class="dependency-info">
+            <div class="dependency-name">${dep.name}</div>
+            <div class="dependency-description">
+              ${installed ? dep.installedDesc : dep.missingDesc}
+            </div>
+            ${detectedPaths.map(
+              (p) => html`<div class="dependency-path">${p}</div>`,
+            )}
           </div>
+          ${installed
+            ? html`<span class="setting-badge is-set">Installed</span>`
+            : dep.actionEvent
+              ? html`
+                  <button
+                    class="tab-action-btn"
+                    @click=${() =>
+                      this.dispatchEvent(
+                        new CustomEvent(dep.actionEvent!, {
+                          bubbles: true,
+                          composed: true,
+                        }),
+                      )}
+                    title="${dep.actionLabel ?? 'Install'}"
+                  >
+                    <span class="codicon codicon-cloud-download"></span>
+                    ${dep.actionLabel ?? 'Install'}
+                  </button>
+                `
+              : html`<span class="setting-badge not-set">Not found</span>`}
         </div>
-        ${installed
-          ? html`<span class="setting-badge is-set">Installed</span>`
-          : (action ??
-            html`<span class="setting-badge not-set">Not found</span>`)}
+        ${!installed && guideText
+          ? html`
+              <button
+                class="dependency-guide-toggle"
+                @click=${() => this.toggleGuide(dep.key)}
+              >
+                <span
+                  class="codicon ${expanded
+                    ? 'codicon-chevron-down'
+                    : 'codicon-chevron-right'}"
+                ></span>
+                Installation Guide
+              </button>
+              ${expanded
+                ? html`<div class="dependency-guide">${guideText}</div>`
+                : nothing}
+            `
+          : nothing}
       </div>
     `;
   }
@@ -272,28 +459,7 @@ export class LaTeXTab extends LitElement {
         <span class="codicon codicon-package"></span>
         Dependencies
       </div>
-      ${this.renderDependencyCard(
-        'LaTeX Workshop',
-        this.settings.latexWorkshopInstalled,
-        'Installed — provides LaTeX compilation, PDF preview, and IntelliSense.',
-        'Not installed — required for LaTeX compilation, PDF preview, and IntelliSense.',
-        html`
-          <button
-            class="tab-action-btn"
-            @click=${this.handleInstallWorkshop}
-            title="Install LaTeX Workshop extension"
-          >
-            <span class="codicon codicon-cloud-download"></span>
-            Install
-          </button>
-        `,
-      )}
-      ${this.renderDependencyCard(
-        'latexdiff',
-        this.settings.latexdiffInstalled,
-        'Installed — enables visual comparison of LaTeX document revisions.',
-        'Not found — install via your TeX distribution to enable diff comparisons.',
-      )}
+      ${DEPENDENCIES.map((dep) => this.renderDependencyCard(dep))}
     `;
   }
 
@@ -313,7 +479,16 @@ export class LaTeXTab extends LitElement {
           <div class="setting-description">${info.description}</div>
         </div>
         ${isSet
-          ? html`<span class="setting-badge is-set">Set</span>`
+          ? html`
+              <button
+                class="tab-action-btn"
+                @click=${() => this.handleApply(info.key, true)}
+                title="Reset this setting to default"
+              >
+                <span class="codicon codicon-discard"></span>
+                Reset
+              </button>
+            `
           : html`
               <button
                 class="tab-action-btn"
