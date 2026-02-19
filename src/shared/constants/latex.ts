@@ -25,10 +25,7 @@ function brewAptUrl(
 }
 
 /** Append optional notes per-platform. */
-function withNotes(
-  base: Guide,
-  notes: Partial<Guide>,
-): Guide {
+function withNotes(base: Guide, notes: Partial<Guide>): Guide {
   return {
     darwin: base.darwin + (notes.darwin ? `\n\n${notes.darwin}` : ''),
     linux: base.linux + (notes.linux ? `\n\n${notes.linux}` : ''),
@@ -59,7 +56,9 @@ function combineGuides(
   return Object.fromEntries(
     platforms.map((p) => [
       p,
-      sections.map(([label, g]) => `${label}:\n  ${g[p].split('\n  ')[1]}`).join('\n\n'),
+      sections
+        .map(([label, g]) => `${label}:\n  ${g[p].split('\n  ')[1]}`)
+        .join('\n\n'),
     ]),
   ) as Guide;
 }
@@ -102,7 +101,8 @@ export const PERL_INSTALL_GUIDE: Guide = {
     'If missing, reinstall via:\n' +
     '  brew install perl',
   linux: 'Install Perl:\n  sudo apt-get install perl',
-  win32: 'Install Strawberry Perl (recommended):\n  https://strawberryperl.com/',
+  win32:
+    'Install Strawberry Perl (recommended):\n  https://strawberryperl.com/',
 };
 
 export const TEXFMT_INSTALL_GUIDE: Guide = {
@@ -128,22 +128,30 @@ export const WOLFRAM_INSTALL_GUIDE: Guide = {
 // ── Simple brew / apt / URL tools ──────────────────────────
 
 export const GHOSTSCRIPT_INSTALL_GUIDE = brewAptUrl(
-  'Ghostscript', 'ghostscript', 'ghostscript',
+  'Ghostscript',
+  'ghostscript',
+  'ghostscript',
   'https://ghostscript.com/releases/gsdnld.html',
 );
 
 export const GRAPHICSMAGICK_INSTALL_GUIDE = brewAptUrl(
-  'GraphicsMagick', 'graphicsmagick', 'graphicsmagick',
+  'GraphicsMagick',
+  'graphicsmagick',
+  'graphicsmagick',
   'http://www.graphicsmagick.org/download.html',
 );
 
 export const IMAGEMAGICK_INSTALL_GUIDE = brewAptUrl(
-  'ImageMagick', 'imagemagick', 'imagemagick',
+  'ImageMagick',
+  'imagemagick',
+  'imagemagick',
   'https://imagemagick.org/script/download.php',
 );
 
 export const PANDOC_INSTALL_GUIDE = brewAptUrl(
-  'pandoc', 'pandoc', 'pandoc',
+  'pandoc',
+  'pandoc',
+  'pandoc',
   'https://pandoc.org/installing.html',
 );
 
@@ -166,9 +174,11 @@ export const LATEXINDENT_INSTALL_GUIDE = texLiveGuide('latexindent', {
   brew: 'latexindent',
   apt: 'texlive-extra-utils',
   notes: {
-    darwin: 'Also included with MacTeX. Requires Perl (pre-installed on macOS).',
+    darwin:
+      'Also included with MacTeX. Requires Perl (pre-installed on macOS).',
     linux: 'Requires Perl:\n  sudo apt-get install perl',
-    win32: 'Also requires Perl (Strawberry Perl recommended):\n  https://strawberryperl.com/',
+    win32:
+      'Also requires Perl (Strawberry Perl recommended):\n  https://strawberryperl.com/',
   },
 });
 
@@ -212,9 +222,6 @@ export function normalizePlatform(raw: string): Platform {
  * Select the install guide for the given platform.
  * Falls back to linux if the platform is unrecognized.
  */
-export function getInstallGuide(
-  guide: Guide,
-  platform: string,
-): string {
+export function getInstallGuide(guide: Guide, platform: string): string {
   return guide[normalizePlatform(platform)] ?? guide.linux;
 }

@@ -295,7 +295,10 @@ async function resetLegacyLatexSettings(): Promise<void> {
 
   for (const [key, oldValue] of legacySettings) {
     const inspection = cfg.inspect(key);
-    if (inspection?.globalValue !== undefined && eq(inspection.globalValue, oldValue)) {
+    if (
+      inspection?.globalValue !== undefined &&
+      eq(inspection.globalValue, oldValue)
+    ) {
       await cfg.update(key, undefined, GLOBAL);
       logger.info('extension', `Reset legacy setting: ${key}`);
     }
@@ -303,7 +306,10 @@ async function resetLegacyLatexSettings(): Promise<void> {
 
   // Language-scoped settings: remove only the keys TeXRA added.
   const legacyLanguageKeys: Array<[string, Record<string, unknown>]> = [
-    ['[latex]', { 'files.autoSave': 'afterDelay', 'intellisense.update.delay': 1000 }],
+    [
+      '[latex]',
+      { 'files.autoSave': 'afterDelay', 'intellisense.update.delay': 1000 },
+    ],
     ['[yaml]', { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' }],
   ];
 
