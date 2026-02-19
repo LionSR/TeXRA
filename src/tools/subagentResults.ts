@@ -204,8 +204,6 @@ export function formatSubagentProgress(
 export function formatResumeInstruction(instruction: string): string {
   return [
     '<orchestrator-resume>',
-    'Your orchestrator is resuming you with follow-up instructions. Continue from where you left off.',
-    '',
     escapeText(instruction),
     '</orchestrator-resume>',
   ].join('\n');
