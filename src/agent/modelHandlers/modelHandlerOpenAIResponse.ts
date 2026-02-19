@@ -1342,6 +1342,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           hasThinkingContent: false,
         };
 
+        /** Finalize and reset the thinking stream if it has content. */
+        const rotateThinkingStream = (): void => {
+          if (!state.hasThinkingContent) return;
+          state.thinkingStream.finalize();
+          state.hasThinkingContent = false;
+          state.thinkingStream = this.createThinkingStream();
+        };
+
         for await (const event of stream) {
           if (this.isReasoningDeltaEvent(event)) {
             state.thinkingStream.append(event.delta);
@@ -1351,20 +1359,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           } else if (this.isWebSearchInProgressEvent(event)) {
             // Web search starting - finalize current thinking stream
             // Don't emit placeholder here - wait for output_item.done with full data
-            if (state.hasThinkingContent) {
-              state.thinkingStream.finalize();
-              state.hasThinkingContent = false;
-              // Create new thinking stream for potential continuation after search
-              state.thinkingStream = this.createThinkingStream();
-            }
+            rotateThinkingStream();
           } else if (this.isFunctionCallArgumentsDoneEvent(event)) {
             // Function call arguments complete - finalize streams since no more
             // text/thinking deltas will arrive after tool calls begin.
-            if (state.hasThinkingContent) {
-              state.thinkingStream.finalize();
-              state.hasThinkingContent = false;
-              state.thinkingStream = this.createThinkingStream();
-            }
+            rotateThinkingStream();
             this.logger.debug(
               `Tool call ready during streaming: ${event.name}`,
             );
@@ -1377,11 +1376,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
               hasOpenAIWebSearchData(item)
             ) {
               // Finalize thinking if we have content (in case in_progress didn't fire)
-              if (state.hasThinkingContent) {
-                state.thinkingStream.finalize();
-                state.hasThinkingContent = false;
-                state.thinkingStream = this.createThinkingStream();
-              }
+              rotateThinkingStream();
               this.emitOpenAIWebSearch(item);
               state.emittedWebSearchIds.add(item.id);
             }
