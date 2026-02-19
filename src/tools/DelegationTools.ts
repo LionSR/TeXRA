@@ -210,13 +210,16 @@ async function executeSubagent(
     .finally(() => {
       activeSubagentDelivery.delete(executionId);
     });
+  const isToolUse = configPayload.agentCategory === AgentCategory.ToolUse;
   return {
     summary: `Launched '${agentName}' (async)`,
     output: [
       `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,
       `Execution ID: ${executionId}`,
       `To check intermediate progress: executions tool with path=/executions/${executionId} and action=wait (waits for next status change).`,
-      `To send follow-up instructions after delivery: use resume_agent with this execution ID.`,
+      ...(isToolUse
+        ? [`To send follow-up instructions after delivery: use resume_agent with this execution ID.`]
+        : []),
     ].join('\n'),
   };
 }
@@ -598,31 +601,38 @@ export class ResumeAgentTool extends defineTool({
       );
     }
 
-    // Send the follow-up FIRST, then open the delivery gate only on success.
-    // This avoids a window where onBeforeWaiting could fire with a stale
-    // result if the send fails and we had already reset hasDelivered.
+    // Only allow resume after the subagent has delivered its result and is
+    // in WAITING state.  Resuming mid-cycle would race: the current cycle's
+    // onBeforeWaiting could consume the gate reset and swallow the resumed
+    // cycle's result.
+    if (!deliveryState.hasDelivered) {
+      throw new Error(
+        `'${handle.agentName}' is still processing. Wait for its result before sending a follow-up.`,
+      );
+    }
+
     const framedInstruction = formatFollowUpInstruction(input.instruction);
     const result = await sendFollowUp(handle.childStreamId, framedInstruction);
 
     switch (result.status) {
-      case 'sent':
+      case 'queued':
+        // Gate is safe to reset — the subagent is WAITING and will process
+        // the follow-up on resume, delivering via onBeforeWaiting.
         deliveryState.hasDelivered = false;
         return {
-          summary: `Resumed '${handle.agentName}' with follow-up`,
+          summary: `Follow-up sent to '${handle.agentName}'`,
           output: [
             `Follow-up instruction sent to '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
             `Execution ID: ${input.execution_id}`,
           ].join('\n'),
         };
-      case 'queued':
-        deliveryState.hasDelivered = false;
-        return {
-          summary: `Follow-up queued for '${handle.agentName}'`,
-          output: [
-            `Follow-up instruction queued for '${handle.agentName}' (status: ${result.reason}). It will be processed when the subagent is ready.`,
-            `Execution ID: ${input.execution_id}`,
-          ].join('\n'),
-        };
+      case 'sent':
+        // 'sent' means the agent has an active flow context — it is not
+        // WAITING.  This shouldn't happen given the hasDelivered guard
+        // above, but handle it defensively.
+        throw new Error(
+          `'${handle.agentName}' is still actively processing. Wait for its result before sending a follow-up.`,
+        );
       case 'error':
         throw new Error(
           `Failed to send follow-up to '${handle.agentName}': ${result.message}`,
