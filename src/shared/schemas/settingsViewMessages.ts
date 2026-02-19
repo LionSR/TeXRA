@@ -187,7 +187,7 @@ export const UpdateSuperYoloEnabledMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED),
   enabled: z.boolean(),
   reliabilitySettings: z.array(NumberVscodeSettingSchema).prefault([]),
-  allowOrchestratorKill: z.boolean(),
+  allowOrchestratorKill: z.boolean().prefault(true),
 });
 export type UpdateSuperYoloEnabledMessage = z.infer<
   typeof UpdateSuperYoloEnabledMessageSchema
