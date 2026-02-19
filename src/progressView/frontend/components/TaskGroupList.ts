@@ -522,14 +522,14 @@ export class TaskGroupList extends LitElement {
         <div id=${contentId} class="log-group-content">
           ${expanded
             ? html`${repeat(
-                  messages,
-                  (m) => m.id,
-                  (m) => guard([m], () => formatLogEntry(m)),
-                )}${repeat(
-                  children,
-                  (c) => c.group.id,
-                  (c) => this.renderGroupNode(c),
-                )}`
+                messages,
+                (m) => m.id,
+                (m) => guard([m], () => formatLogEntry(m)),
+              )}${repeat(
+                children,
+                (c) => c.group.id,
+                (c) => this.renderGroupNode(c),
+              )}`
             : nothing}
         </div>
       </details>
