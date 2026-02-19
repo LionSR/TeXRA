@@ -286,6 +286,9 @@ export class ProgressViewProvider
       webviewView.onDidChangeVisibility(() => {
         if (webviewView.visible) {
           this.updateWebview();
+          // Re-detect sidebar side — visibility changes fire when the view
+          // is dragged between primary sidebar, secondary sidebar, or panel.
+          this.sendSidebarPosition();
         }
       }),
       webviewView.onDidDispose(this.cleanupView.bind(this)),
@@ -373,16 +376,37 @@ export class ProgressViewProvider
   }
 
   /**
-   * Read the primary sidebar location from VS Code settings.
-   * The progress view is registered in the primary sidebar activity bar,
-   * so this determines which side the stream tabs panel appears on.
+   * Determine which physical side of the screen the progress view is on.
+   *
+   * Queries the `viewContainerLocation:texra-panel` context key to find the
+   * actual container ('sidebar' = primary, 'secondarySideBar' = secondary),
+   * then combines with `workbench.sideBar.location` to compute the physical
+   * side.  Falls back to the config-only approach if the context key command
+   * is unavailable (older VS Code versions).
    */
-  private getSidebarPosition(): 'left' | 'right' {
-    return (
-      vscode.workspace
+  private async detectViewSide(): Promise<'left' | 'right'> {
+    const primarySide =
+      (vscode.workspace
         .getConfiguration('workbench')
-        .get<string>('sideBar.location') ?? 'left'
-    ) as 'left' | 'right';
+        .get<string>('sideBar.location') ?? 'left') as 'left' | 'right';
+
+    try {
+      const location: string | undefined =
+        await vscode.commands.executeCommand(
+          'vscode.getContextKeyValue',
+          'viewContainerLocation:texra-panel',
+        );
+
+      if (location === 'secondarySideBar') {
+        // Secondary sidebar is always opposite the primary
+        return primarySide === 'left' ? 'right' : 'left';
+      }
+    } catch {
+      // Context key command not available — fall through to default
+    }
+
+    // Primary sidebar (default) or panel — use the config value
+    return primarySide;
   }
 
   /**
@@ -390,16 +414,17 @@ export class ProgressViewProvider
    * (stream tabs on the editor-adjacent side).
    */
   private sendSidebarPosition(): void {
-    const position = this.getSidebarPosition();
-    for (const webview of [
-      this._view?.webview,
-      this._panelView?.webview,
-    ]) {
-      webview?.postMessage({
-        command: 'updateSidebarPosition',
-        position,
-      });
-    }
+    void this.detectViewSide().then((position) => {
+      for (const webview of [
+        this._view?.webview,
+        this._panelView?.webview,
+      ]) {
+        webview?.postMessage({
+          command: 'updateSidebarPosition',
+          position,
+        });
+      }
+    });
   }
 
   public getPendingAgentProposal(
