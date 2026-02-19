@@ -24,6 +24,21 @@ export interface HelperModelKit {
 }
 
 /**
+ * Resolve the configured helper model name from global state.
+ * Used for merge operations, progress view defaults, and anywhere
+ * only the model name (not a full handler) is needed.
+ */
+export function getHelperModelName(): string {
+  const configuredModel = globalSM.get<string>(
+    GlobalStateKey.HELPER_MODEL,
+    DEFAULT_HELPER_MODEL,
+  );
+  return isNonEmptyString(configuredModel)
+    ? configuredModel.trim()
+    : DEFAULT_HELPER_MODEL;
+}
+
+/**
  * Resolve the configured helper model, create a non-streaming handler,
  * and obtain a client.
  *
@@ -34,13 +49,7 @@ export interface HelperModelKit {
 export async function createHelperModelKit(): Promise<
   HelperModelKit | undefined
 > {
-  const configuredModel = globalSM.get<string>(
-    GlobalStateKey.HELPER_MODEL,
-    DEFAULT_HELPER_MODEL,
-  );
-  const modelName = isNonEmptyString(configuredModel)
-    ? configuredModel.trim()
-    : DEFAULT_HELPER_MODEL;
+  const modelName = getHelperModelName();
 
   const modelConfig = MODEL_CONFIGS[modelName];
   if (!modelConfig) {

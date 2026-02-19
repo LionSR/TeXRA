@@ -3,8 +3,8 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { executeMergeAgent } from '@agent/runtime/executeAgent';
+import { getHelperModelName } from '@agent/runtime/helperModel';
 import { showLoggedMessageWithDocs } from '@common/errors';
-import { getConfig } from '@utils/config';
 
 const CHANNEL = 'MergeCommands';
 
@@ -31,7 +31,7 @@ async function handleMerge(
   }
 
   await executeMergeAgent(
-    model ?? getConfig('texra.merge.defaultModel', 'gemini3f'),
+    model ?? getHelperModelName(),
     baseFile ?? inputFile,
     editedFile,
   );

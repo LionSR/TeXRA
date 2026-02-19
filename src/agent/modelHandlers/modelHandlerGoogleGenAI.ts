@@ -159,7 +159,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   private isGemini3Model(): boolean {
-    return this.config.fullName.includes('gemini-3-');
+    return /^gemini-3[\.\-]/.test(this.config.fullName);
   }
 
   /**

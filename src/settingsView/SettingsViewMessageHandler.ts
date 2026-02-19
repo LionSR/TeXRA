@@ -46,6 +46,7 @@ import {
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
+import { getHelperModelName } from '@agent/runtime/helperModel';
 import {
   BaseViewMessageHandler,
   SETTINGS_VIEW_COMMANDS,
@@ -614,14 +615,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   public async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
     const models = buildModelSelectionItems();
-    const helperModel = globalSM.get<string>(
-      GlobalStateKey.HELPER_MODEL,
-      DEFAULT_HELPER_MODEL,
-    );
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       models,
-      helperModel,
+      helperModel: getHelperModelName(),
     });
   }
 
@@ -1223,15 +1220,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await globalSM.update(GlobalStateKey.ENABLED_MODELS, updated);
 
     // Auto-reset helper model if it was just disabled
-    if (!data.enabled) {
-      const helperModel = globalSM.get<string>(
-        GlobalStateKey.HELPER_MODEL,
-        DEFAULT_HELPER_MODEL,
-      );
-      if (helperModel === data.modelName) {
-        const newHelper = updated[0] ?? DEFAULT_HELPER_MODEL;
-        await globalSM.update(GlobalStateKey.HELPER_MODEL, newHelper);
-      }
+    if (!data.enabled && getHelperModelName() === data.modelName) {
+      const newHelper = updated[0] ?? DEFAULT_HELPER_MODEL;
+      await globalSM.update(GlobalStateKey.HELPER_MODEL, newHelper);
     }
 
     void vscode.commands.executeCommand('texra.refreshAllOptions');

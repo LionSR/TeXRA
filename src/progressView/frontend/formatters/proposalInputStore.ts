@@ -25,11 +25,11 @@ import { hashString } from './hashUtils';
  * Add `.prefault()` defaults for fields the LLM may omit in tool input.
  */
 const LenientToolUseProposalSchema = ToolUseAgentProposalSchema.extend({
-  model: z.string().prefault('gemini3p'),
+  model: z.string().prefault('gemini31p'),
 });
 
 const LenientWorkflowProposalSchema = WorkflowAgentProposalSchema.extend({
-  model: z.string().prefault('gemini3p'),
+  model: z.string().prefault('gemini31p'),
   inputFiles: z.array(z.string()).prefault([]),
   referenceFile: z.string().nullable().prefault(null),
   referenceFiles: z.array(z.string()).prefault([]),
