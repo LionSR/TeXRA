@@ -110,7 +110,7 @@ async function handleCompare(
         'viewContainerLocation:texra-panel',
       );
 
-      if (location !== 'panel') {
+      if (location === 'sidebar' || location === 'secondarySideBar') {
         await vscode.commands.executeCommand('workbench.action.closePanel');
       }
     } catch (err) {
