@@ -1174,15 +1174,14 @@
           "id": "texra",
           "title": "TeXRA",
           "icon": "resources/logo-128x128.svg"
-        }
-      ],
-      "panel": [
+        },
         {
           "id": "texra-panel",
           "title": "TeXRA ProgressBoard",
           "icon": "$(server-process)"
         }
-      ]
+      ],
+      "panel": []
     },
     "views": {
       "texra": [

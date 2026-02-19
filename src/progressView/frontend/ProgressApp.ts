@@ -93,6 +93,9 @@ import type { ToolUseStreamContent } from './components/ToolUseStreamContent';
 
 @customElement('progress-app')
 export class ProgressApp extends BaseWebviewApp {
+  /** Width threshold below which we switch to vertical (top/bottom) layout. */
+  private static readonly NARROW_THRESHOLD_PX = 500;
+
   static override styles = css`
     :host {
       display: flex;
@@ -133,6 +136,10 @@ export class ProgressApp extends BaseWebviewApp {
   @state() private appState: ProgressState;
   @state() private permissions: PermissionState[] = [];
 
+  /** Whether the container is narrow (sidebar) or wide (panel/editor). */
+  @state() private _isNarrow = false;
+  private _resizeObserver?: ResizeObserver;
+
   @provide({ context: streamStateContext })
   @state()
   private streamContextValue: StreamContextValue = EMPTY_STREAM_CONTEXT;
@@ -172,6 +179,26 @@ export class ProgressApp extends BaseWebviewApp {
     };
   }
 
+  override connectedCallback(): void {
+    super.connectedCallback();
+    this._resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const width = entry.contentRect.width;
+        const narrow = width > 0 && width < ProgressApp.NARROW_THRESHOLD_PX;
+        if (narrow !== this._isNarrow) {
+          this._isNarrow = narrow;
+        }
+      }
+    });
+    this._resizeObserver.observe(this);
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this._resizeObserver?.disconnect();
+    this._resizeObserver = undefined;
+  }
+
   protected override get readyCommand(): string | null {
     return PROGRESS_VIEW_COMMANDS.WEBVIEW_READY;
   }
@@ -196,6 +223,42 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   render(): TemplateResult {
+    const streamTabs = html`
+      <stream-tabs
+        .streams=${this.cachedFilteredStreams}
+        .activeStreamId=${this.appState.activeStreamId}
+        .filter=${this.appState.streamFilter}
+        .sort=${this.appState.streamSort}
+        @stream-switch=${this.onStreamSwitch}
+        @stream-delete=${this.onStreamDelete}
+        @filter-change=${this.onFilterChange}
+        @sort-change=${this.onSortChange}
+        @delete-all=${this.onDeleteAll}
+      ></stream-tabs>
+    `;
+
+    // Narrow view (sidebar): top/bottom split — tabs on top, content below
+    if (this._isNarrow) {
+      return html`
+        <div class="main-container">
+          <vscode-split-layout
+            split="horizontal"
+            initial-handle-position="25%"
+          >
+            <div slot="start">${streamTabs}</div>
+            <div
+              slot="end"
+              class="content-area"
+              @stream-switch=${this.onStreamSwitch}
+            >
+              ${this.renderStreamContent()}
+            </div>
+          </vscode-split-layout>
+        </div>
+      `;
+    }
+
+    // Wide view (panel/editor tab): left/right split — content left, tabs right
     return html`
       <div class="main-container">
         <vscode-split-layout initial-handle-position="80%">
@@ -206,19 +269,7 @@ export class ProgressApp extends BaseWebviewApp {
           >
             ${this.renderStreamContent()}
           </div>
-
-          <stream-tabs
-            slot="end"
-            .streams=${this.cachedFilteredStreams}
-            .activeStreamId=${this.appState.activeStreamId}
-            .filter=${this.appState.streamFilter}
-            .sort=${this.appState.streamSort}
-            @stream-switch=${this.onStreamSwitch}
-            @stream-delete=${this.onStreamDelete}
-            @filter-change=${this.onFilterChange}
-            @sort-change=${this.onSortChange}
-            @delete-all=${this.onDeleteAll}
-          ></stream-tabs>
+          <div slot="end">${streamTabs}</div>
         </vscode-split-layout>
       </div>
     `;
