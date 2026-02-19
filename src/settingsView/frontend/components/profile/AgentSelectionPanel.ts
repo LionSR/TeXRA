@@ -243,13 +243,18 @@ export class AgentSelectionPanel extends LitElement {
         border-radius: var(--border-radius);
         cursor: pointer;
         transition:
-          background 0.1s ease,
-          border-color 0.1s ease;
+          background 0.15s ease,
+          border-color 0.15s ease;
       }
 
       .agent-action-btn:hover {
         background: var(--vscode-list-hoverBackground);
         border-color: var(--vscode-focusBorder);
+      }
+
+      .agent-action-btn:focus-visible {
+        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline-offset: 1px;
       }
 
       .agent-count {
@@ -276,6 +281,12 @@ export class AgentSelectionPanel extends LitElement {
 
       .agent-count-link:hover {
         text-decoration: underline;
+      }
+
+      .agent-count-link:focus-visible {
+        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline-offset: 1px;
+        border-radius: var(--border-radius-small);
       }
 
       .agent-empty-message {

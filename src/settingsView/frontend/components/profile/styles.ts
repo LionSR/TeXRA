@@ -276,6 +276,12 @@ export const profileViewStyles: CSSResult = css`
     color: var(--vscode-foreground);
   }
 
+  .provider-expand-btn:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
+  }
+
   .provider-expand-btn.expanded {
     transform: rotate(90deg);
   }
@@ -422,6 +428,12 @@ export const profileViewStyles: CSSResult = css`
     background: var(--vscode-list-hoverBackground);
   }
 
+  .provider-group-header:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
+  }
+
   .provider-group-chevron {
     display: inline-flex;
     align-items: center;
@@ -502,6 +514,12 @@ export const profileViewStyles: CSSResult = css`
   .deprecated-toggle:hover {
     color: var(--vscode-foreground);
     background: var(--vscode-list-hoverBackground);
+  }
+
+  .deprecated-toggle:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
   }
 
   .deprecated-models {

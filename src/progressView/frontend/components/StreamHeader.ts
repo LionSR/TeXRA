@@ -234,7 +234,7 @@ export class StreamHeader extends LitElement {
         white-space: nowrap;
         opacity: 0;
         pointer-events: none;
-        transition: opacity 0.2s;
+        transition: opacity 0.2s ease;
         z-index: 100;
       }
 
@@ -321,6 +321,12 @@ export class StreamHeader extends LitElement {
       .parent-link:hover {
         opacity: var(--opacity-full);
         color: var(--color-text-link);
+      }
+
+      .parent-link:focus-visible {
+        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline-offset: 1px;
+        border-radius: var(--border-radius-small);
       }
 
       .parent-link .codicon {

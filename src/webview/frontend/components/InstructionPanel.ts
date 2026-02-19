@@ -100,7 +100,7 @@ export class InstructionPanel extends LitElement {
 
       vscode-textarea#instruction::part(control) {
         max-height: var(--height-xlarge);
-        transition: height 0.1s ease-out;
+        transition: height 0.15s ease;
       }
 
       .instruction-controls {

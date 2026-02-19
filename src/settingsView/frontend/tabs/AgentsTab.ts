@@ -75,6 +75,12 @@ export class AgentsTab extends LitElement {
         color: var(--vscode-foreground);
       }
 
+      .agents-sub-tab:focus-visible {
+        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline-offset: 1px;
+        border-radius: var(--border-radius-small);
+      }
+
       .agents-sub-tab.active {
         color: var(--vscode-foreground);
         border-bottom-color: var(--vscode-focusBorder);
@@ -159,11 +165,17 @@ export class AgentsTab extends LitElement {
         border: none;
         border-radius: var(--border-radius);
         cursor: pointer;
-        transition: color 0.1s ease;
+        transition: color 0.15s ease;
       }
 
       .agents-dir-icon-btn:hover {
         color: var(--vscode-foreground);
+      }
+
+      .agents-dir-icon-btn:focus-visible {
+        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline-offset: 1px;
+        border-radius: var(--border-radius-small);
       }
     `,
   ];

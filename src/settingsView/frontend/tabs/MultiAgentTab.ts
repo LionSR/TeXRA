@@ -80,6 +80,11 @@ export class MultiAgentTab extends LitElement {
         );
       }
 
+      .preset-card:focus-visible {
+        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline-offset: 1px;
+      }
+
       .preset-card.active {
         border-color: var(--vscode-focusBorder);
       }
@@ -148,6 +153,12 @@ export class MultiAgentTab extends LitElement {
 
       .preset-delete-btn:hover {
         color: var(--vscode-errorForeground);
+      }
+
+      .preset-delete-btn:focus-visible {
+        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline-offset: 1px;
+        border-radius: var(--border-radius-small);
       }
 
       .preset-card:hover .preset-delete-btn {

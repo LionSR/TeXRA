@@ -184,6 +184,12 @@ export const commonViewStyles: CSSResult = css`
     opacity: var(--opacity-full);
   }
 
+  .btn-secondary:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
+  }
+
   /* Shared tab content container — consistent max-width and centering for all settings tabs */
   .tab-content-container {
     max-width: 1000px;
@@ -211,5 +217,10 @@ export const commonViewStyles: CSSResult = css`
   .tab-action-btn:hover {
     color: var(--vscode-foreground);
     border-color: var(--vscode-focusBorder);
+  }
+
+  .tab-action-btn:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
   }
 `;
