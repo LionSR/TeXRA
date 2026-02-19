@@ -574,7 +574,7 @@ export type ResumeAgentInput = z.infer<typeof ResumeAgentInputSchema>;
 export class ResumeAgentTool extends defineTool({
   name: 'resume_agent',
   description:
-    'Resume a previously launched tool-use subagent with follow-up instructions. The subagent must be in WAITING state (it has delivered its result and is paused). The subagent retains its full conversation history and workspace state, so you can ask it to continue, refine, or extend its previous work without re-explaining context. Result is delivered asynchronously via follow-up message, just like the original delegation. Only works for tool-use subagents (delegate_agent), not workflow agents (delegate_workflow).',
+    'Send follow-up instructions to a WAITING tool-use subagent. The subagent keeps its full history, so reference previous work freely. Result arrives asynchronously like the original delegation.',
   schema: ResumeAgentInputSchema,
 }) {
   protected async execute(input: ResumeAgentInput): Promise<ToolResult> {
