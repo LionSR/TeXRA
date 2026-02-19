@@ -242,9 +242,9 @@ export async function activate(context: vscode.ExtensionContext) {
   const updateStatusBarText = () => {
     const count = runningStreams.size;
     if (count > 1) {
-      statusBarItem!.text = `$(sync~spin) TeXRA: ${count} active`;
+      statusBarItem!.text = `$(loading) TeXRA: ${count} active`;
     } else if (count === 1) {
-      statusBarItem!.text = '$(sync~spin) TeXRA: Running';
+      statusBarItem!.text = '$(loading) TeXRA: Running';
     } else {
       statusBarItem!.text = '$(bracket-dot) TeXRA: Idle';
     }
