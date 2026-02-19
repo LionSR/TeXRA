@@ -26,7 +26,7 @@ texmath.rules.brackets.inline.push({
 let markdownRenderer: MarkdownIt | null = null;
 
 // LRU cache for rendered markdown (content hash → HTML)
-const CACHE_MAX_SIZE = 500;
+const CACHE_MAX_SIZE = 2000;
 const markdownCache = new Map<string, string>();
 
 /**
