@@ -46,17 +46,17 @@ const anthropicModels = from(ModelProvider.ANTHROPIC);
 
 ### Key APIs
 
-| Function | Description |
-|---|---|
-| `lookup(model)` | Get full model configuration |
-| `resolve(apiName)` | Search by full API identifier |
-| `from(provider)` | Filter models by provider |
-| `where(predicate)` | Custom filtering by capabilities |
-| `supporting(capability)` | Find models with a specific feature |
-| `withContext(tokens)` | Models meeting context requirements |
-| `cheapest(filters)` | Most cost-effective model for given constraints |
-| `cost(model, usage)` | Calculate exact usage costs |
-| `compareCosts(models, usage)` | Side-by-side cost comparison |
+| Function                      | Description                                     |
+| ----------------------------- | ----------------------------------------------- |
+| `lookup(model)`               | Get full model configuration                    |
+| `resolve(apiName)`            | Search by full API identifier                   |
+| `from(provider)`              | Filter models by provider                       |
+| `where(predicate)`            | Custom filtering by capabilities                |
+| `supporting(capability)`      | Find models with a specific feature             |
+| `withContext(tokens)`         | Models meeting context requirements             |
+| `cheapest(filters)`           | Most cost-effective model for given constraints |
+| `cost(model, usage)`          | Calculate exact usage costs                     |
+| `compareCosts(models, usage)` | Side-by-side cost comparison                    |
 
 ::: tip Use Case
 llm-zoo powers TeXRA's model selection and cost estimation internally. If you're building LLM-powered tools, routing logic, or cost dashboards, it saves you from maintaining your own model registry.
