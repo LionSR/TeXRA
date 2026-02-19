@@ -1723,6 +1723,8 @@ prompts:
     key: string;
     value: unknown;
     field: 'outDir' | 'autoRevealExclude';
+    /** Object keys from older TeXRA versions to migrate (remove on apply, clean on reset). */
+    legacyKeys?: string[];
   }[] = [
     {
       key: 'latex-workshop.latex.outDir',
@@ -1733,6 +1735,8 @@ prompts:
       key: 'explorer.autoRevealExclude',
       value: { '**/build/': true },
       field: 'autoRevealExclude',
+      // Old setup.ts wrote { 'build/': true } — migrate to **/build/
+      legacyKeys: ['build/'],
     },
   ];
 
@@ -1741,7 +1745,9 @@ prompts:
    * For string values: exact match.
    * For object values: recommended keys are a subset of the current config.
    */
-  private isRecommendedValueSet(field: 'outDir' | 'autoRevealExclude'): boolean {
+  private isRecommendedValueSet(
+    field: 'outDir' | 'autoRevealExclude',
+  ): boolean {
     const setting = SettingsViewMessageHandler.LATEX_RECOMMENDED_SETTINGS.find(
       (s) => s.field === field,
     );
@@ -1752,9 +1758,18 @@ prompts:
     if (typeof setting.value === 'object' && setting.value !== null) {
       // For object values, check that every recommended key is present
       if (typeof current !== 'object' || current === null) return false;
-      return Object.entries(setting.value as Record<string, unknown>).every(
-        ([k, v]) => (current as Record<string, unknown>)[k] === v,
+      const cur = current as Record<string, unknown>;
+      const rec = setting.value as Record<string, unknown>;
+      const hasRecommended = Object.entries(rec).every(
+        ([k, v]) => cur[k] === v,
       );
+      if (hasRecommended) return true;
+      // Also treat legacy keys as "set" so existing users see the check mark
+      // (they'll get migrated to the new key on next Apply).
+      if (setting.legacyKeys?.length) {
+        return setting.legacyKeys.some((k) => cur[k] !== undefined);
+      }
+      return false;
     }
     return current === setting.value;
   }
@@ -1850,16 +1865,21 @@ prompts:
           )
         : SettingsViewMessageHandler.LATEX_RECOMMENDED_SETTINGS;
 
-      for (const { key, value } of targets) {
+      for (const { key, value, legacyKeys } of targets) {
         let resolvedValue: unknown = data.reset ? undefined : value;
 
         if (typeof value === 'object' && value !== null) {
           const recommended = value as Record<string, unknown>;
           const existing = getConfig<Record<string, unknown>>(key, {});
+          const remaining = { ...existing };
+
+          // Always clean up legacy keys from older TeXRA versions.
+          for (const k of legacyKeys ?? []) {
+            delete remaining[k];
+          }
 
           if (data.reset) {
-            // Remove only the TeXRA-recommended keys, keep the user's other entries.
-            const remaining = { ...existing };
+            // Remove the recommended keys, keep the user's other entries.
             for (const k of Object.keys(recommended)) {
               delete remaining[k];
             }
@@ -1867,7 +1887,7 @@ prompts:
               Object.keys(remaining).length > 0 ? remaining : undefined;
           } else {
             // Merge recommended keys into existing config.
-            resolvedValue = { ...existing, ...recommended };
+            resolvedValue = { ...remaining, ...recommended };
           }
         }
 

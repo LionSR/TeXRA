@@ -21,6 +21,8 @@ import { getZoteroPort } from '@tools/zotero/bbtClient';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 
+const LEAN4_EXT_ID = 'leanprover.lean4';
+
 // ============================================================
 // Type
 // ============================================================
@@ -185,10 +187,10 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'provided by the VS Code extension.',
     installUrl:
       'https://marketplace.visualstudio.com/items?itemName=leanprover.lean4',
-    installExtensionId: 'leanprover.lean4',
+    installExtensionId: LEAN4_EXT_ID,
     configNotes: 'Lean 4 VS Code extension must be installed and active.',
     check: async () => {
-      const lean4Ext = vscode.extensions.getExtension('leanprover.lean4');
+      const lean4Ext = vscode.extensions.getExtension(LEAN4_EXT_ID);
       return lean4Ext !== undefined;
     },
   },
