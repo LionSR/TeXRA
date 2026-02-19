@@ -155,6 +155,7 @@ export class SettingsApp extends BaseWebviewApp {
   @state() private superYoloEnabled = false;
   @state() private superYoloToggleDisabled = true;
   @state() private reliabilitySettings: NumberVscodeSetting[] = [];
+  @state() private allowOrchestratorKill = true;
 
   // Tool dashboard state
   @state() private toolDashboardItems: ToolDashboardItem[] = [];
@@ -280,6 +281,7 @@ export class SettingsApp extends BaseWebviewApp {
         this.superYoloEnabled = data.enabled;
         this.superYoloToggleDisabled = false;
         this.reliabilitySettings = data.reliabilitySettings;
+        this.allowOrchestratorKill = data.allowOrchestratorKill;
         return;
       }
 
@@ -461,6 +463,10 @@ export class SettingsApp extends BaseWebviewApp {
     SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED,
   );
 
+  private handleAllowOrchestratorKillToggle = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL,
+  );
+
   private handleApplyAgentModePreset = forwardDetail(
     SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
   );
@@ -624,7 +630,10 @@ export class SettingsApp extends BaseWebviewApp {
               .toggleDisabled=${this.superYoloToggleDisabled}
               .reliabilitySettings=${this.reliabilitySettings}
               .customPresets=${this.customPresets}
+              .allowOrchestratorKill=${this.allowOrchestratorKill}
               @super-yolo-toggle=${this.handleSuperYoloToggle}
+              @allow-orchestrator-kill-toggle=${this
+                .handleAllowOrchestratorKillToggle}
               @reliability-setting-change=${this.handleSetProviderVscodeSetting}
               @apply-agent-mode-preset=${this.handleApplyAgentModePreset}
               @delete-agent-mode-preset=${this.handleDeleteAgentModePreset}
