@@ -124,7 +124,12 @@ export class AgentLogger {
     options: LogOptions = {},
   ): void {
     logger[level](this.streamId, message, {
-      groupId: options.groupId ?? this.resolveActiveGroupId(),
+      // Distinguish "caller passed explicit groupId" (even if undefined/null)
+      // from "caller didn't specify" (inherit from async context).
+      groupId:
+        'groupId' in options
+          ? (options.groupId ?? undefined)
+          : this.resolveActiveGroupId(),
       messageType: options.messageType,
       isAgent: this.isAgentLogger,
       data: options.data,
@@ -283,7 +288,13 @@ export class AgentLogger {
   }
 
   userMessage(message: string, groupId?: string): void {
-    this.info(message, { groupId, messageType: MESSAGE_TYPES.USER_MESSAGE });
+    // User messages are top-level input — never inherit group context.
+    // Pass groupId explicitly (defaults to undefined) to prevent the
+    // log() fallback to resolveActiveGroupId().
+    this.log('info', message, {
+      groupId: groupId ?? undefined,
+      messageType: MESSAGE_TYPES.USER_MESSAGE,
+    });
   }
 
   logToolUse(data: unknown, groupId?: string): void {
