@@ -153,11 +153,25 @@ export async function buildToolDashboardItems(): Promise<ToolDashboardItem[]> {
   // Run fresh checks — also updates the availability cache
   const results = await runExternalToolChecks();
 
+  // Resolve optional detail checks in parallel
+  const detailResults = await Promise.all(
+    results.map(async ({ id }) => {
+      const def = EXTERNAL_TOOL_DEFS.find((c) => c.id === id);
+      if (!def?.detailCheck) return undefined;
+      try {
+        return await def.detailCheck();
+      } catch {
+        return undefined;
+      }
+    }),
+  );
+
   // Merge check results with UI metadata from EXTERNAL_TOOL_DEFS
   const externalItems: ToolDashboardItem[] = [];
-  for (const { id, tools, status } of results) {
+  for (let i = 0; i < results.length; i++) {
+    const { id, tools, status } = results[i];
     const def = EXTERNAL_TOOL_DEFS.find((c) => c.id === id);
-    if (!def) continue;
+    if (!def || def.hideFromDashboard) continue;
     externalItems.push({
       id: def.id,
       name: def.name,
@@ -168,7 +182,9 @@ export async function buildToolDashboardItems(): Promise<ToolDashboardItem[]> {
       requiresSetup: true,
       installGuide: def.installGuide,
       installUrl: def.installUrl,
+      installExtensionId: def.installExtensionId,
       configNotes: def.configNotes,
+      statusDetail: detailResults[i],
     });
   }
 
