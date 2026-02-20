@@ -59,9 +59,11 @@ import { AnthropicStreamHandler } from './support/AnthropicStreamHandler';
 import { toAnthropicTools } from './toolConversion';
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 import {
+  extractAnthropicWebFetchResults,
   extractAnthropicWebSearchResults,
   isAnthropicServerToolContent,
   isAnthropicServerToolUse,
+  isAnthropicWebFetchResult,
   isAnthropicWebSearchResult,
   type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
@@ -115,6 +117,7 @@ import type {
   RedactedThinkingBlockParam,
   ServerToolUseBlock,
   WebSearchToolResultBlock,
+  WebFetchToolResultBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
 /** Supported image media types from SDK's Base64ImageSource definition */
@@ -626,6 +629,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (tools?.length) {
       options.tools = toAnthropicTools(tools, {
         supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
+        // Web fetch is available on the same Anthropic models that support native web search
+        supportsNativeWebFetch: this.capabilities.supportsNativeWebSearch,
       });
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
 
@@ -1799,7 +1804,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         totalInput,
       ),
       serverToolRequests:
-        rawUsage.server_tool_use?.web_search_requests || undefined,
+        (rawUsage.server_tool_use?.web_search_requests ?? 0) +
+          (rawUsage.server_tool_use?.web_fetch_requests ?? 0) || undefined,
       _native: rawUsage,
     };
   }
@@ -2083,51 +2089,62 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * Returns both normalized results for display and raw content blocks for context.
    * Single source of truth for Anthropic server tool extraction.
    *
-   * Strips orphaned server_tool_use blocks (missing web_search_tool_result pair)
-   * to prevent 400 errors when these blocks are echoed in follow-up messages.
+   * Strips orphaned server_tool_use blocks (missing result pair) to prevent
+   * 400 errors when these blocks are echoed in follow-up messages.
    */
   override extractServerToolData(
     responseObject: BetaMessage,
   ): ServerToolExtractionResult {
     if (!Array.isArray(responseObject?.content)) {
-      return { webSearchResults: [], contentBlocks: [] };
+      return { webSearchResults: [], webFetchResults: [], contentBlocks: [] };
     }
 
     // Extract content blocks that need to be preserved
-    // Filter for server tool content (server_tool_use, web_search_tool_result)
+    // Filter for server tool content (server_tool_use, web_search_tool_result, web_fetch_tool_result)
     // Cast needed because BetaContentBlock has slightly different types than the regular API
     let contentBlocks = responseObject.content.filter(
       isAnthropicServerToolContent,
-    ) as (ServerToolUseBlock | WebSearchToolResultBlock)[];
+    ) as (ServerToolUseBlock | WebSearchToolResultBlock | WebFetchToolResultBlock)[];
 
-    // Strip orphaned server_tool_use blocks that lack a matching result.
-    const resultIds = new Set(
+    // Collect IDs of result blocks that have matching server_tool_use calls.
+    const searchResultIds = new Set(
       contentBlocks
         .filter(isAnthropicWebSearchResult)
         .map((b) => b.tool_use_id),
     );
-    contentBlocks = contentBlocks.filter(
-      (block) =>
-        !isAnthropicServerToolUse(block) ||
-        block.name !== 'web_search' ||
-        resultIds.has(block.id),
+    const fetchResultIds = new Set(
+      contentBlocks
+        .filter(isAnthropicWebFetchResult)
+        .map((b) => b.tool_use_id),
     );
 
-    // Extract normalized web search results for display
+    // Strip orphaned server_tool_use blocks that lack a matching result.
+    contentBlocks = contentBlocks.filter((block) => {
+      if (!isAnthropicServerToolUse(block)) return true;
+      if (block.name === 'web_search') return searchResultIds.has(block.id);
+      if (block.name === 'web_fetch') return fetchResultIds.has(block.id);
+      return true;
+    });
+
+    // Extract normalized results for display
     const webSearchResults = extractAnthropicWebSearchResults(
       responseObject.content,
     );
+    const webFetchResults = extractAnthropicWebFetchResults(
+      responseObject.content,
+    );
 
-    return { webSearchResults, contentBlocks };
+    return { webSearchResults, webFetchResults, contentBlocks };
   }
 
   /**
    * Extract assistant content blocks from an Anthropic response, excluding tool_use blocks.
-   * Preserves thinking, text, server_tool_use, and web_search_tool_result blocks.
+   * Preserves thinking, text, server_tool_use, web_search_tool_result, and
+   * web_fetch_tool_result blocks.
    *
-   * Validates that every server_tool_use (web_search) block has a matching
-   * web_search_tool_result block. Orphaned server_tool_use blocks are stripped
-   * to prevent 400 errors on the next API call.
+   * Validates that every server_tool_use (web_search/web_fetch) block has a matching
+   * result block. Orphaned server_tool_use blocks are stripped to prevent 400 errors
+   * on the next API call.
    */
   override extractAssistantContent(responseObject: BetaMessage): unknown[] {
     if (!Array.isArray(responseObject?.content)) {
@@ -2138,28 +2155,32 @@ export class ModelHandlerAnthropic extends ModelHandler<
       (block) => block.type !== 'tool_use',
     );
 
-    // Validate server_tool_use / web_search_tool_result pairing.
-    // The API rejects messages where a server_tool_use (web_search) block
-    // exists without its corresponding web_search_tool_result block.
-    const resultIds = new Set(
+    // Validate server_tool_use / result block pairing.
+    // The API rejects messages where a server_tool_use block exists
+    // without its corresponding result block.
+    const searchResultIds = new Set(
       assistantContent
         .filter(isAnthropicWebSearchResult)
         .map((b) => b.tool_use_id),
     );
+    const fetchResultIds = new Set(
+      assistantContent
+        .filter(isAnthropicWebFetchResult)
+        .map((b) => b.tool_use_id),
+    );
     const orphanedIds: string[] = [];
     for (const block of assistantContent) {
-      if (
-        isAnthropicServerToolUse(block) &&
-        block.name === 'web_search' &&
-        !resultIds.has(block.id)
-      ) {
+      if (!isAnthropicServerToolUse(block)) continue;
+      if (block.name === 'web_search' && !searchResultIds.has(block.id)) {
+        orphanedIds.push(block.id);
+      } else if (block.name === 'web_fetch' && !fetchResultIds.has(block.id)) {
         orphanedIds.push(block.id);
       }
     }
     if (orphanedIds.length > 0) {
       const orphanSet = new Set(orphanedIds);
       this.logger.debug(
-        `Stripping ${orphanedIds.length} orphaned server_tool_use block(s) without web_search_tool_result: ${orphanedIds.join(', ')}. ` +
+        `Stripping ${orphanedIds.length} orphaned server_tool_use block(s) without matching result: ${orphanedIds.join(', ')}. ` +
           `Response content types: [${responseObject.content.map((b) => b.type).join(', ')}]`,
       );
       assistantContent = assistantContent.filter(

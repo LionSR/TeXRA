@@ -6,6 +6,7 @@
 import { MESSAGE_TYPES, type StreamDiagnostics } from '@shared/schemas';
 import {
   extractDomain,
+  type WebFetchResult,
   type WebSearchResult,
   type WebSearchResultEntry,
 } from '@agent/modelHandlers/types/ServerToolTypes';
@@ -15,6 +16,8 @@ import type {
   ServerToolUseBlock,
   WebSearchToolResultBlock,
   WebSearchResultBlock,
+  WebFetchToolResultBlock,
+  WebFetchBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
 /**
@@ -29,10 +32,10 @@ interface AnthropicMessageStream {
 }
 
 /**
- * Maximum size for accumulated search input JSON (64KB).
- * Prevents memory growth for very long queries.
+ * Maximum size for accumulated server tool input JSON (64KB).
+ * Prevents memory growth for very long queries/URLs.
  */
-const MAX_SEARCH_INPUT_SIZE = 65536;
+const MAX_SERVER_TOOL_INPUT_SIZE = 65536;
 
 /**
  * State tracked during Anthropic streaming.
@@ -44,8 +47,12 @@ interface AnthropicStreamState {
   lastBlockIndex: number;
   /** Track web search: tool_use_id → { index, accumulated input JSON } */
   pendingSearches: Map<string, { index: number; input: string }>;
+  /** Track web fetch: tool_use_id → { index, accumulated input JSON } */
+  pendingFetches: Map<string, { index: number; input: string }>;
   /** Track emitted search IDs to prevent duplicate logging in flow */
   emittedSearchIds: Set<string>;
+  /** Track emitted fetch IDs to prevent duplicate logging in flow */
+  emittedFetchIds: Set<string>;
   /** Flag to prevent processing events after finalize */
   finalized: boolean;
 }
@@ -92,10 +99,10 @@ interface StreamFactories {
  * Streaming strategy for interleaved content blocks:
  * - Thinking blocks: each gets its own stream entry (separate thinking phases)
  * - Text blocks: consecutive text blocks merge, non-consecutive are separate
- * - Server tools (web_search): emit to progress view when results arrive
+ * - Server tools (web_search, web_fetch): emit to progress view when results arrive
  *
  * Example: text_0 → server_tool_1 → result_2 → text_3 → text_4
- *   → Output #1 (text_0), WebSearch, Output #2 (text_3 + text_4 merged)
+ *   → Output #1 (text_0), WebSearch/WebFetch, Output #2 (text_3 + text_4 merged)
  */
 export class AnthropicStreamHandler {
   private readonly thinkingStreams = new Map<
@@ -106,7 +113,9 @@ export class AnthropicStreamHandler {
     outputStream: null,
     lastBlockIndex: -1,
     pendingSearches: new Map(),
+    pendingFetches: new Map(),
     emittedSearchIds: new Set(),
+    emittedFetchIds: new Set(),
     finalized: false,
   };
   private readonly diagnostics: StreamDiagnosticsState = {
@@ -144,6 +153,13 @@ export class AnthropicStreamHandler {
    */
   getEmittedSearchIds(): Set<string> {
     return this.state.emittedSearchIds;
+  }
+
+  /**
+   * Gets the set of emitted fetch IDs for duplicate prevention in flow.
+   */
+  getEmittedFetchIds(): Set<string> {
+    return this.state.emittedFetchIds;
   }
 
   /**
@@ -192,7 +208,9 @@ export class AnthropicStreamHandler {
 
     // Clear state to prevent memory leaks
     this.state.pendingSearches.clear();
+    this.state.pendingFetches.clear();
     this.state.emittedSearchIds.clear();
+    this.state.emittedFetchIds.clear();
   }
 
   /**
@@ -278,10 +296,19 @@ export class AnthropicStreamHandler {
           index: blockIndex,
           input: '',
         });
+      } else if (block.name === 'web_fetch') {
+        this.state.pendingFetches.set(block.id, {
+          index: blockIndex,
+          input: '',
+        });
       }
     } else if (blockType === 'web_search_tool_result') {
       this.handleWebSearchResult(
         event.content_block as WebSearchToolResultBlock,
+      );
+    } else if (blockType === 'web_fetch_tool_result') {
+      this.handleWebFetchResult(
+        event.content_block as WebFetchToolResultBlock,
       );
     }
 
@@ -306,17 +333,8 @@ export class AnthropicStreamHandler {
         break;
       case 'input_json_delta':
         this.diagnostics.toolInputChars += event.delta.partial_json.length;
-        // Accumulate input JSON for web search to get query (with size limit)
-        for (const searchData of this.state.pendingSearches.values()) {
-          if (searchData.index === event.index) {
-            // Apply size limit to prevent memory growth
-            if (searchData.input.length < MAX_SEARCH_INPUT_SIZE) {
-              const remaining = MAX_SEARCH_INPUT_SIZE - searchData.input.length;
-              searchData.input += event.delta.partial_json.slice(0, remaining);
-            }
-            break;
-          }
-        }
+        // Accumulate input JSON for server tools to extract query/URL (with size limit)
+        this.accumulateServerToolInput(event.index, event.delta.partial_json);
         break;
       case 'compaction_delta':
         // Compaction content arrives as a single summary delta and is not user-visible output.
@@ -368,6 +386,88 @@ export class AnthropicStreamHandler {
 
     // Clean up
     this.state.pendingSearches.delete(block.tool_use_id);
+  }
+
+  /**
+   * Handles web_fetch_tool_result blocks.
+   */
+  private handleWebFetchResult(block: WebFetchToolResultBlock): void {
+    const fetchData = this.state.pendingFetches.get(block.tool_use_id);
+
+    // Parse URL from accumulated input JSON
+    const fetchUrl = this.parseFetchUrl(fetchData?.input);
+
+    // Determine if fetch succeeded or failed
+    const isSuccess =
+      typeof block.content === 'object' &&
+      block.content !== null &&
+      block.content.type === 'web_fetch_result';
+
+    const result: WebFetchResult = isSuccess
+      ? {
+          url: (block.content as WebFetchBlock).url || fetchUrl,
+          title: (block.content as WebFetchBlock).content?.title ?? undefined,
+          provider: 'anthropic',
+          callId: block.tool_use_id,
+          status: 'completed',
+        }
+      : {
+          url: fetchUrl,
+          provider: 'anthropic',
+          callId: block.tool_use_id,
+          status: 'failed',
+          errorCode: (block.content as { error_code?: string }).error_code,
+        };
+
+    // Emit to progress view
+    if (result.url || result.status === 'failed') {
+      this.emitWebFetchResult(result);
+      this.state.emittedFetchIds.add(block.tool_use_id);
+    }
+
+    // Clean up
+    this.state.pendingFetches.delete(block.tool_use_id);
+  }
+
+  /**
+   * Accumulates input JSON for pending server tool calls (web search and web fetch).
+   * Applies a size limit to prevent memory growth.
+   */
+  private accumulateServerToolInput(
+    blockIndex: number,
+    partialJson: string,
+  ): void {
+    // Check both pending searches and pending fetches
+    for (const pendingMap of [
+      this.state.pendingSearches,
+      this.state.pendingFetches,
+    ]) {
+      for (const [, data] of pendingMap) {
+        if (data.index === blockIndex) {
+          if (data.input.length < MAX_SERVER_TOOL_INPUT_SIZE) {
+            const remaining = MAX_SERVER_TOOL_INPUT_SIZE - data.input.length;
+            data.input += partialJson.slice(0, remaining);
+          }
+          return;
+        }
+      }
+    }
+  }
+
+  /**
+   * Parses the fetch URL from accumulated input JSON.
+   */
+  private parseFetchUrl(input: string | undefined): string {
+    if (!input) return '';
+
+    try {
+      const parsed = JSON.parse(input) as { url?: string };
+      return parsed.url ?? '';
+    } catch {
+      // Partial JSON (common for streaming), try to extract URL with regex
+      const match = input.match(/"url"\s*:\s*"([^"]+)"/);
+      return match?.[1] ?? '';
+    }
   }
 
   /**
@@ -426,6 +526,15 @@ export class AnthropicStreamHandler {
   private emitWebSearchResult(result: WebSearchResult): void {
     if (this.config.progressViewEnabled) {
       this.logger.logWebSearch(result);
+    }
+  }
+
+  /**
+   * Emits a web fetch result to the progress view.
+   */
+  private emitWebFetchResult(result: WebFetchResult): void {
+    if (this.config.progressViewEnabled) {
+      this.logger.logWebFetch(result);
     }
   }
 }

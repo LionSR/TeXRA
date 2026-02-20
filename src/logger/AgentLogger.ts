@@ -424,6 +424,10 @@ export class AgentLogger {
     });
   }
 
+  logWebFetch(data: unknown, groupId?: string): void {
+    this.info('', { groupId, messageType: MESSAGE_TYPES.WEB_FETCH, data });
+  }
+
   withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined {
     const groupId = this.resolveActiveGroupId();
     return groupId ? fn(groupId) : undefined;
