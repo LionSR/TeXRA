@@ -6,35 +6,53 @@
  */
 import * as vscode from 'vscode';
 
-import { mapToolNamesToGroupNames } from '@tools/toolAvailability';
+import { mapToolNamesToGroups } from '@tools/toolAvailability';
 
 /** Groups already surfaced in a notification this session — avoids repeat popups. */
 const notifiedGroups = new Set<string>();
 
 /**
- * Show a single notification listing tool *groups* that were excluded due to
- * missing dependencies, with a button to open the Tools dashboard.
+ * Show notifications for tool groups excluded due to missing dependencies.
+ *
+ * Groups visible on the Tools dashboard get an "Open Tools Dashboard" button.
+ * Groups hidden from the dashboard (e.g. TeXcount, shown in LaTeX settings
+ * instead) get a plain message — no misleading dashboard link.
+ *
  * Each group is only notified once per session.
  */
 export function notifyUnavailableTools(excludedToolNames: string[]): void {
-  const groups = mapToolNamesToGroupNames(excludedToolNames);
-  const fresh = groups.filter((g) => !notifiedGroups.has(g));
+  const groups = mapToolNamesToGroups(excludedToolNames);
+  const fresh = groups.filter((g) => !notifiedGroups.has(g.name));
   if (fresh.length === 0) return;
-  for (const g of fresh) notifiedGroups.add(g);
+  for (const g of fresh) notifiedGroups.add(g.name);
 
-  const label =
-    fresh.length === 1
-      ? `"${fresh[0]}" tools were`
-      : `${fresh.map((g) => `"${g}"`).join(', ')} tools were`;
+  const dashboardGroups = fresh.filter((g) => !g.hideFromDashboard);
+  const hiddenGroups = fresh.filter((g) => g.hideFromDashboard);
 
-  void vscode.window
-    .showInformationMessage(
+  if (dashboardGroups.length > 0) {
+    const label = formatGroupLabel(dashboardGroups.map((g) => g.name));
+    void vscode.window
+      .showInformationMessage(
+        `${label} excluded — external dependencies not installed.`,
+        'Open Tools Dashboard',
+      )
+      .then((choice) => {
+        if (choice === 'Open Tools Dashboard') {
+          void vscode.commands.executeCommand('texra.showTools');
+        }
+      });
+  }
+
+  if (hiddenGroups.length > 0) {
+    const label = formatGroupLabel(hiddenGroups.map((g) => g.name));
+    void vscode.window.showInformationMessage(
       `${label} excluded — external dependencies not installed.`,
-      'Open Tools Dashboard',
-    )
-    .then((choice) => {
-      if (choice === 'Open Tools Dashboard') {
-        void vscode.commands.executeCommand('texra.showTools');
-      }
-    });
+    );
+  }
+}
+
+function formatGroupLabel(names: string[]): string {
+  return names.length === 1
+    ? `"${names[0]}" tools were`
+    : `${names.map((n) => `"${n}"`).join(', ')} tools were`;
 }

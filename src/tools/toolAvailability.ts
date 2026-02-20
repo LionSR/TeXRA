@@ -90,22 +90,31 @@ export function getUnavailableToolNamesCached(): ReadonlySet<string> {
   return cached ?? new Set();
 }
 
+/** Info about an unavailable tool group, used by the notification layer. */
+export interface UnavailableGroupInfo {
+  readonly name: string;
+  readonly hideFromDashboard: boolean;
+}
+
 /**
- * Map a list of unavailable tool names to their human-readable group names
- * (e.g. `["lean_diagnostics", "lean_file"]` → `["Lean 4 Proof Assistant"]`).
- * Returns deduplicated group names in definition order.
+ * Map a list of unavailable tool names to their group info
+ * (e.g. `["lean_diagnostics", "lean_file"]` → `[{ name: "Lean 4 Proof Assistant", … }]`).
+ * Returns deduplicated entries in definition order.
  */
-export function mapToolNamesToGroupNames(
+export function mapToolNamesToGroups(
   toolNames: readonly string[],
-): string[] {
+): UnavailableGroupInfo[] {
   const nameSet = new Set(toolNames);
   const seen = new Set<string>();
-  const groups: string[] = [];
+  const groups: UnavailableGroupInfo[] = [];
   for (const def of EXTERNAL_TOOL_DEFS) {
     if (seen.has(def.id)) continue;
     if (def.tools.some((t) => nameSet.has(t))) {
       seen.add(def.id);
-      groups.push(def.name);
+      groups.push({
+        name: def.name,
+        hideFromDashboard: def.hideFromDashboard ?? false,
+      });
     }
   }
   return groups;
