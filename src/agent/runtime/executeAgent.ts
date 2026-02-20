@@ -147,6 +147,28 @@ async function validateAndGetModelConfig(modelName: string): Promise<void> {
   throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
 }
 
+/**
+ * Create a "Run:" stage, optionally logging a user instruction first.
+ *
+ * ORDERING INVARIANT: The instruction is emitted BEFORE the stage is created.
+ * At this point no group context exists, so the message gets no groupId and
+ * its timestamp precedes the stage's startTime.  The chronological timeline
+ * therefore renders the instruction *before* the run group.
+ *
+ * Both operations live in one function so the ordering cannot be
+ * accidentally reversed by future edits.
+ */
+async function beginRunStage(
+  agentLogger: AgentLogger,
+  label: string,
+  instruction: string | undefined,
+): Promise<AgentLogStage> {
+  if (instruction) {
+    agentLogger.userMessage(instruction);
+  }
+  return agentLogger.stage(label);
+}
+
 interface ResolveAgentOptions {
   streamTabIdOverride?: StreamTabId;
 }
@@ -211,7 +233,18 @@ async function resolveAgentBase(
     hasMultipleOutputs: useMultipleOutputs,
   });
 
-  const parentStage = await agentLogger.stage(`Run: ${config.agent}`);
+  const toolUseInstruction =
+    setting.agentCategory === AgentCategory.ToolUse &&
+    config.instruction?.trim() &&
+    !options?.streamTabIdOverride
+      ? config.instruction.trim()
+      : undefined;
+
+  const parentStage = await beginRunStage(
+    agentLogger,
+    `Run: ${config.agent}`,
+    toolUseInstruction,
+  );
   const storageKey: StorageKey = parentStage.id
     ? normalizeRunId(parentStage.id)
     : (executionId as StorageKey);
