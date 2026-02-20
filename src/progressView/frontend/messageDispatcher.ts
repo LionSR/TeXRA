@@ -454,10 +454,25 @@ const handlers: HandlerRegistry = {
     const isActiveStream = stream === state.activeStreamId;
     const shouldFocus = isActiveStream && status === STREAM_STATUS.WAITING;
 
-    // Single atomic update: stream state + tab metadata in one setState call,
-    // avoiding two Map copies and two Lit re-render triggers.
+    // Fast path: skip no-op updates where status and timestamp haven't changed.
+    // Avoids O(n) Map copy + O(n) array map + downstream sort/render cascade.
+    const existingInfo = state.streams.find((s) => s.name === stream);
+    if (existingInfo) {
+      const currentState = state.streamStates.get(stream);
+      const statusSame = currentState
+        ? currentState.status === status
+        : (existingInfo.status ?? STREAM_STATUS.READY) === status;
+      const timestampSame =
+        lastTimestamp === undefined ||
+        lastTimestamp === existingInfo.lastTimestamp;
+      if (statusSame && timestampSame && !shouldFocus) return;
+    }
+
+    // Atomic update: stream state + tab metadata in one setState call.
+    // Only touches the changed stream's entry in the Map and array.
     ctx.setState((prev) => {
-      const streamInfo = prev.streams.find((s) => s.name === stream);
+      const streamInfo =
+        existingInfo ?? prev.streams.find((s) => s.name === stream);
       const nextStates = new Map(prev.streamStates);
 
       if (streamInfo) {

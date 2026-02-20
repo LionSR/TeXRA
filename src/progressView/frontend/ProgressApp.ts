@@ -155,6 +155,12 @@ export class ProgressApp extends BaseWebviewApp {
    */
   private cachedFilteredStreams: StreamTabInfo[] = [];
 
+  /**
+   * Name→StreamTabInfo index built from cachedFilteredStreams.
+   * Provides O(1) lookups in updateContexts instead of O(n) find().
+   */
+  private cachedStreamIndex = new Map<string, StreamTabInfo>();
+
   private prefsManager = new PersistedState(
     createWebviewStorage(vscode),
     'progressViewPrefs',
@@ -181,18 +187,87 @@ export class ProgressApp extends BaseWebviewApp {
 
     const prevAppState = changed.get('appState') as ProgressState | undefined;
 
-    // Re-sort streams when the list or sort/filter criteria change.
-    if (
-      changed.has('appState') &&
-      (!prevAppState ||
-        prevAppState.streams !== this.appState.streams ||
+    if (changed.has('appState')) {
+      const streamsChanged =
+        !prevAppState || prevAppState.streams !== this.appState.streams;
+      const criteriaChanged =
+        !prevAppState ||
         prevAppState.streamFilter !== this.appState.streamFilter ||
-        prevAppState.streamSort !== this.appState.streamSort)
-    ) {
-      this.cachedFilteredStreams = getFilteredStreams(this.appState);
+        prevAppState.streamSort !== this.appState.streamSort;
+
+      if (criteriaChanged) {
+        // Sort/filter criteria changed — full re-sort required.
+        this.rebuildFilteredStreams();
+      } else if (streamsChanged) {
+        // Streams array ref changed. Check if it's structural (add/remove/reorder)
+        // or metadata-only (status/timestamp update on existing streams).
+        // Structural changes require O(n log n) re-sort; metadata-only can
+        // patch in-place at O(n), which is the hot path during streaming when
+        // UPDATE_STREAM_STATUS fires per-stream.
+        const prevStreams = prevAppState?.streams ?? [];
+        if (this.isStructuralStreamChange(prevStreams, this.appState.streams)) {
+          this.rebuildFilteredStreams();
+        } else {
+          this.patchFilteredStreams(this.appState.streams);
+        }
+      }
     }
 
     this.updateContexts();
+  }
+
+  /**
+   * Full rebuild: re-sort, re-filter, rebuild index.
+   * Called on structural changes (add/remove streams) or sort/filter criteria change.
+   */
+  private rebuildFilteredStreams(): void {
+    this.cachedFilteredStreams = getFilteredStreams(this.appState);
+    this.cachedStreamIndex = new Map(
+      this.cachedFilteredStreams.map((s) => [s.name, s]),
+    );
+  }
+
+  /**
+   * Detect if the streams array changed structurally (different names or count)
+   * vs just metadata updates on existing streams. Compares names positionally
+   * so add/remove/reorder are detected. O(n) comparison but skips O(n log n) sort.
+   */
+  private isStructuralStreamChange(
+    prevStreams: StreamTabInfo[],
+    nextStreams: StreamTabInfo[],
+  ): boolean {
+    if (prevStreams.length !== nextStreams.length) return true;
+    for (let i = 0; i < nextStreams.length; i++) {
+      if (nextStreams[i].name !== prevStreams[i].name) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Patch metadata-only changes into cachedFilteredStreams without re-sorting.
+   * O(n) scan to find and replace changed entries, avoiding O(n log n) sort.
+   *
+   * Produces a new array reference so Lit detects the property change on
+   * stream-tabs, but preserves object references for unchanged streams so
+   * individual stream-tab components skip rendering.
+   */
+  private patchFilteredStreams(nextStreams: StreamTabInfo[]): void {
+    // Build a quick lookup of the new stream data by name
+    const nextByName = new Map(nextStreams.map((s) => [s.name, s]));
+    let anyChanged = false;
+
+    const patched = this.cachedFilteredStreams.map((cached) => {
+      const updated = nextByName.get(cached.name);
+      if (!updated || updated === cached) return cached;
+      anyChanged = true;
+      return updated;
+    });
+
+    if (anyChanged) {
+      this.cachedFilteredStreams = patched;
+      // Rebuild index with updated refs
+      this.cachedStreamIndex = new Map(patched.map((s) => [s.name, s]));
+    }
   }
 
   render(): TemplateResult {
@@ -282,10 +357,9 @@ export class ProgressApp extends BaseWebviewApp {
    */
   private updateContexts(): void {
     const hasStreams = this.cachedFilteredStreams.length > 0;
+    // O(1) lookup via index Map instead of O(n) find() on cachedFilteredStreams
     const activeStreamInfo = this.appState.activeStreamId
-      ? (this.cachedFilteredStreams.find(
-          (s) => s.name === this.appState.activeStreamId,
-        ) ?? null)
+      ? (this.cachedStreamIndex.get(this.appState.activeStreamId) ?? null)
       : null;
 
     if (!activeStreamInfo) {
@@ -356,12 +430,13 @@ export class ProgressApp extends BaseWebviewApp {
     updater: (prev: StreamState) => StreamState,
   ): void {
     // Fast path: stream already has state (common during streaming).
-    // Only fall back to streams.find() when creating default state for new streams.
+    // Only fall back to index lookup when creating default state for new streams.
     let current = this.appState.streamStates.get(streamId);
     if (!current) {
-      const streamInfo = this.appState.streams.find(
-        (stream) => stream.name === streamId,
-      );
+      // Use cachedStreamIndex for O(1) lookup instead of O(n) streams.find()
+      const streamInfo =
+        this.cachedStreamIndex.get(streamId) ??
+        this.appState.streams.find((stream) => stream.name === streamId);
       // Skip unknown streams - they'll receive full state via UPDATE_LOGS after initialization
       if (!streamInfo) return;
       current = getStreamState(
