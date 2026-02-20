@@ -494,10 +494,12 @@ export class ProgressEventHandler {
     // Legacy fallback: old tool-use sessions saved before beginRunStage()
     // started emitting logger.userMessage() won't have a userMessage log entry.
     // Synthesise one from runInstructions so the instruction still renders.
+    // Check ALL messages (not just [0]) to avoid duplicates with data from
+    // intermediate versions that logged userMessage inside the group context.
     if (
       activeRunId &&
       this.getStreamCategory(stream) === AgentCategory.ToolUse &&
-      messages[0]?.messageType !== 'userMessage'
+      !messages.some((m) => m.messageType === 'userMessage')
     ) {
       const instructionText = runInstructions[activeRunId]?.text?.trim();
       if (instructionText) {
