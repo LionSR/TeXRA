@@ -471,9 +471,8 @@ export class LaTeXTab extends LitElement {
     if (!options?.length) return null;
     const pm = this.settings.packageManager;
     return (
-      options.find(
-        (cmd) => !cmd.packageManager || cmd.packageManager === pm,
-      ) ?? null
+      options.find((cmd) => !cmd.packageManager || cmd.packageManager === pm) ??
+      null
     );
   }
 
@@ -648,8 +647,7 @@ export class LaTeXTab extends LitElement {
             <button
               class="tab-action-btn"
               title="Copy ${pmName} install command"
-              @click=${(e: Event) =>
-                this.handleCopyCommand(e, installCommand)}
+              @click=${(e: Event) => this.handleCopyCommand(e, installCommand)}
             >
               <span class="codicon codicon-copy"></span>
               Copy

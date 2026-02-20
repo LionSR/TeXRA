@@ -494,7 +494,11 @@ export function formatToolUseTemplate(
     }
   }
   // Handle resume_agent separately — it has execution_id, not agent/model
-  else if (toolName === 'resume_agent' && typeof input === 'object' && input !== null) {
+  else if (
+    toolName === 'resume_agent' &&
+    typeof input === 'object' &&
+    input !== null
+  ) {
     const resumeInput = input as ResumeAgentInput;
     // prettier-ignore
     sections.push(buildToolUseSection('Execution:', html`<code class="execution-id">${resumeInput.execution_id}</code>`));

@@ -124,8 +124,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'need WolframScript on your PATH. The Wolfram Engine includes\n' +
       'it automatically. Free licenses are available for development use.',
     installUrl: 'https://www.wolfram.com/engine/',
-    configNotes:
-      'Requires the free Wolfram Engine (provides wolframscript).',
+    configNotes: 'Requires the free Wolfram Engine (provides wolframscript).',
     check: () => checkToolInstalled('wolframscript', false),
   },
   {

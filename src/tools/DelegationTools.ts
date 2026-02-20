@@ -218,7 +218,9 @@ async function executeSubagent(
       `Execution ID: ${executionId}`,
       `To check intermediate progress: executions tool with path=/executions/${executionId} and action=wait (waits for next status change).`,
       ...(isToolUse
-        ? [`To send follow-up instructions after delivery: use resume_agent with this execution ID.`]
+        ? [
+            `To send follow-up instructions after delivery: use resume_agent with this execution ID.`,
+          ]
         : []),
     ].join('\n'),
   };
