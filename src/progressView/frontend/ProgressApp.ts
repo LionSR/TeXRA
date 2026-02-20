@@ -187,23 +187,55 @@ export class ProgressApp extends BaseWebviewApp {
 
     const prevAppState = changed.get('appState') as ProgressState | undefined;
 
-    // Re-sort only when the structural stream list or sort/filter criteria change.
-    // Status updates (UPDATE_STREAM_STATUS) never touch streams[] — they only
-    // update streamStates, so this guard is never true for pure status changes.
-    if (
-      changed.has('appState') &&
-      (!prevAppState ||
+    if (changed.has('appState') && prevAppState) {
+      const structuralChange =
         prevAppState.streams !== this.appState.streams ||
         prevAppState.streamFilter !== this.appState.streamFilter ||
-        prevAppState.streamSort !== this.appState.streamSort)
-    ) {
-      this.cachedFilteredStreams = getFilteredStreams(this.appState);
-      this.cachedStreamIndex = new Map(
-        this.cachedFilteredStreams.map((s) => [s.name, s]),
-      );
+        prevAppState.streamSort !== this.appState.streamSort;
+
+      // Time sort reads lastTimestamp from streamStates, so re-sort when
+      // streamStates changes too — but only for time sort.  Agent/inputFile
+      // sorts depend only on static StreamTabInfo fields.
+      const timeOrderMayChange =
+        !structuralChange &&
+        this.appState.streamSort === 'time' &&
+        prevAppState.streamStates !== this.appState.streamStates;
+
+      if (structuralChange || timeOrderMayChange) {
+        this.recomputeFilteredStreams(timeOrderMayChange);
+      }
+    } else if (changed.has('appState')) {
+      // First render or no previous state — unconditional sort.
+      this.recomputeFilteredStreams(false);
     }
 
     this.updateContexts();
+  }
+
+  /**
+   * Re-sort and filter the stream list.
+   *
+   * When `checkStability` is true (status-only update with time sort), we
+   * compare the resulting order with the cached list.  If the order didn't
+   * change, we keep the old array reference so downstream components
+   * (StreamTabs repeat()) skip re-evaluation.
+   */
+  private recomputeFilteredStreams(checkStability: boolean): void {
+    const next = getFilteredStreams(this.appState);
+    if (checkStability && this.isSameOrder(this.cachedFilteredStreams, next)) {
+      return; // Order unchanged — keep old reference.
+    }
+    this.cachedFilteredStreams = next;
+    this.cachedStreamIndex = new Map(next.map((s) => [s.name, s]));
+  }
+
+  /** O(n) name-sequence comparison — cheap relative to sort. */
+  private isSameOrder(a: StreamTabInfo[], b: StreamTabInfo[]): boolean {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i].name !== b[i].name) return false;
+    }
+    return true;
   }
 
   render(): TemplateResult {

@@ -194,16 +194,15 @@ export class StreamTab extends LitElement {
 
   @property({ attribute: false }) info!: StreamTabInfo;
   @property({ type: Boolean }) active = false;
-  /** Live status from StreamState (takes precedence over info.status). */
-  @property() override_status = '';
-  /** Live lastTimestamp from StreamState (takes precedence over info.lastTimestamp). */
-  @property({ type: Number }) override_lastTimestamp: number | undefined;
+  /** Current status from StreamState — the live source of truth during streaming. */
+  @property() liveStatus = '';
+  /** Current lastTimestamp from StreamState — the live source of truth during streaming. */
+  @property({ type: Number }) liveTimestamp: number | undefined;
 
   override render(): TemplateResult {
     const stream = this.info;
-    const status =
-      this.override_status || stream.status || STREAM_STATUS.READY;
-    const lastTimestamp = this.override_lastTimestamp ?? stream.lastTimestamp;
+    const status = this.liveStatus || stream.status || STREAM_STATUS.READY;
+    const lastTimestamp = this.liveTimestamp ?? stream.lastTimestamp;
     const tooltip = buildTooltip(stream, lastTimestamp);
     const statusLabel = formatStatusLabel(status);
     const agentDecorator = getAgentCategoryDecorator(stream.agentCategory);
@@ -381,9 +380,8 @@ export class StreamTabs extends LitElement {
                 return html`
                   <stream-tab
                     .info=${stream}
-                    .override_status=${state?.status ?? ''}
-                    .override_lastTimestamp=${state?.lastTimestamp ??
-                    undefined}
+                    .liveStatus=${state?.status ?? ''}
+                    .liveTimestamp=${state?.lastTimestamp ?? undefined}
                     ?active=${stream.name === this.activeStreamId}
                   ></stream-tab>
                 `;

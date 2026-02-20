@@ -29,7 +29,6 @@ import {
   updateNestedRounds,
 } from './stateUtils';
 import {
-  getStreamState,
   isToolUseState,
   isWorkflowState,
   type ProgressState,
@@ -449,8 +448,8 @@ const handlers: HandlerRegistry = {
 
   // Status updates — only touches streamStates Map, never the streams[] array.
   // This is the key perf invariant: streams[] is structural (add/remove only)
-  // and stays stable during streaming, so status updates never trigger the
-  // O(n log n) re-sort + tab-list re-render cascade.
+  // and stays stable during streaming.  The sort reads live timestamps from
+  // streamStates (via sortStreams), but only re-sorts when order changes.
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS]: (data, ctx) => {
     const { stream, status, lastTimestamp } = data;
     const state = ctx.getState();
@@ -468,28 +467,20 @@ const handlers: HandlerRegistry = {
     }
 
     // Only update streamStates — streams[] is NOT touched.
-    ctx.setState((prev) => {
-      const streamInfo = prev.streams.find((s) => s.name === stream);
-      if (!streamInfo) return prev;
-
-      const current = getStreamState(prev, stream, streamInfo.agentCategory);
-      const nextStates = new Map(prev.streamStates);
-      const updatedState =
-        isToolUseState(current) && shouldFocus
-          ? {
-              ...current,
-              status,
-              lastTimestamp: lastTimestamp ?? current.lastTimestamp,
-              ui: { ...current.ui, shouldFocusFollowUp: true },
-            }
-          : {
-              ...current,
-              status,
-              lastTimestamp: lastTimestamp ?? current.lastTimestamp,
-            };
-      nextStates.set(stream, updatedState);
-
-      return { ...prev, streamStates: nextStates };
+    ctx.setStreamState(stream, (current) => {
+      if (isToolUseState(current) && shouldFocus) {
+        return {
+          ...current,
+          status,
+          lastTimestamp: lastTimestamp ?? current.lastTimestamp,
+          ui: { ...current.ui, shouldFocusFollowUp: true },
+        };
+      }
+      return {
+        ...current,
+        status,
+        lastTimestamp: lastTimestamp ?? current.lastTimestamp,
+      };
     });
   },
 
