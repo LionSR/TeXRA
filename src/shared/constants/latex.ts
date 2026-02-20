@@ -251,8 +251,6 @@ export const IMAGE_PROCESSING_INSTALL_GUIDE = combineGuides(
  * Used by the LaTeX tab to power "Copy command" and "Run in Terminal" buttons.
  */
 export interface InstallCommand {
-  /** Human-readable label (e.g. "Homebrew", "APT", "Scoop"). */
-  readonly label: string;
   /** The full shell command (e.g. "brew install ghostscript"). */
   readonly command: string;
   /**
@@ -287,21 +285,18 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
   texDistributionInstalled: {
     darwin: [
       {
-        label: 'Homebrew',
         command: 'brew install --cask mactex',
         packageManager: 'brew',
       },
     ],
     linux: [
       {
-        label: 'APT',
         command: 'sudo apt-get install -y texlive-full',
         packageManager: 'apt',
       },
     ],
     win32: [
       {
-        label: 'Scoop',
         command: 'scoop install miktex',
         packageManager: 'scoop',
       },
@@ -310,14 +305,12 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
   latexdiffInstalled: {
     darwin: [
       {
-        label: 'Homebrew',
         command: 'brew install latexdiff',
         packageManager: 'brew',
       },
     ],
     linux: [
       {
-        label: 'APT',
         command: 'sudo apt-get install -y latexdiff',
         packageManager: 'apt',
       },
@@ -327,14 +320,12 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
   latexindentInstalled: {
     darwin: [
       {
-        label: 'Homebrew',
         command: 'brew install latexindent',
         packageManager: 'brew',
       },
     ],
     linux: [
       {
-        label: 'APT',
         command: 'sudo apt-get install -y texlive-extra-utils perl',
         packageManager: 'apt',
       },
@@ -344,14 +335,12 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
   texcountInstalled: {
     darwin: [
       {
-        label: 'Homebrew',
         command: 'brew install texcount',
         packageManager: 'brew',
       },
     ],
     linux: [
       {
-        label: 'APT',
         command: 'sudo apt-get install -y texlive-extra-utils',
         packageManager: 'apt',
       },
@@ -361,21 +350,18 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
   imageProcessingInstalled: {
     darwin: [
       {
-        label: 'Homebrew',
         command: 'brew install ghostscript graphicsmagick',
         packageManager: 'brew',
       },
     ],
     linux: [
       {
-        label: 'APT',
         command: 'sudo apt-get install -y ghostscript graphicsmagick',
         packageManager: 'apt',
       },
     ],
     win32: [
       {
-        label: 'Scoop',
         command: 'scoop install ghostscript graphicsmagick',
         packageManager: 'scoop',
       },

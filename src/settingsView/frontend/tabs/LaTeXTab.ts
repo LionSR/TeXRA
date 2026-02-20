@@ -268,21 +268,9 @@ export class LaTeXTab extends LitElement {
       }
 
       .dependency-install-actions {
-        margin-top: var(--spacing-small);
-      }
-
-      .install-label {
-        font-size: var(--font-size-xs, 11px);
-        color: var(--color-text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 4px;
-      }
-
-      .install-command-row {
         display: flex;
-        align-items: center;
         gap: var(--spacing-small);
+        margin-top: var(--spacing-small);
       }
 
       .install-command-text {
@@ -569,32 +557,23 @@ export class LaTeXTab extends LitElement {
         ${!installed && installCmd
           ? html`
               <div class="dependency-install-actions">
-                <div class="install-label">
-                  via ${installCmd.label}
-                </div>
-                <div class="install-command-row">
-                  <code class="install-command-text"
-                    >${installCmd.command}</code
-                  >
-                  <button
-                    class="tab-action-btn"
-                    title="Copy command"
-                    @click=${(e: Event) =>
-                      this.handleCopyCommand(e, installCmd.command)}
-                  >
-                    <span class="codicon codicon-copy"></span>
-                    Copy
-                  </button>
-                  <button
-                    class="tab-action-btn"
-                    title="Run in VS Code terminal"
-                    @click=${() =>
-                      this.handleRunInTerminal(installCmd.command)}
-                  >
-                    <span class="codicon codicon-terminal"></span>
-                    Run in Terminal
-                  </button>
-                </div>
+                <button
+                  class="tab-action-btn"
+                  title="Copy: ${installCmd.command}"
+                  @click=${(e: Event) =>
+                    this.handleCopyCommand(e, installCmd.command)}
+                >
+                  <span class="codicon codicon-copy"></span>
+                  Copy
+                </button>
+                <button
+                  class="tab-action-btn"
+                  title="Run: ${installCmd.command}"
+                  @click=${() => this.handleRunInTerminal(installCmd.command)}
+                >
+                  <span class="codicon codicon-terminal"></span>
+                  Run in Terminal
+                </button>
               </div>
             `
           : nothing}
