@@ -24,7 +24,7 @@ import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
 import {
   getUnavailableToolNamesCached,
-  getUnavailableGroupNamesCached,
+  mapToolNamesToGroupNames,
 } from '@tools/toolAvailability';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
@@ -76,7 +76,7 @@ const notifiedGroups = new Set<string>();
  * Each group is only notified once per session.
  */
 function notifyUnavailableTools(excludedToolNames: string[]): void {
-  const groups = getUnavailableGroupNamesCached(excludedToolNames);
+  const groups = mapToolNamesToGroupNames(excludedToolNames);
   const fresh = groups.filter((g) => !notifiedGroups.has(g));
   if (fresh.length === 0) return;
   for (const g of fresh) notifiedGroups.add(g);

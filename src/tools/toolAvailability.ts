@@ -95,7 +95,7 @@ export function getUnavailableToolNamesCached(): ReadonlySet<string> {
  * (e.g. `["lean_diagnostics", "lean_file"]` → `["Lean 4 Proof Assistant"]`).
  * Returns deduplicated group names in definition order.
  */
-export function getUnavailableGroupNamesCached(
+export function mapToolNamesToGroupNames(
   toolNames: readonly string[],
 ): string[] {
   const nameSet = new Set(toolNames);
