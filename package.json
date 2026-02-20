@@ -1397,7 +1397,7 @@
     "fast-json-stable-stringify": "^2.1.0",
     "fast-xml-parser": "^5.3.6",
     "fs-extra": "^11.3.3",
-    "glob": "^13.0.5",
+    "glob": "^13.0.6",
     "he": "^1.2.0",
     "highlight.js": "^11.11.1",
     "highlightjs-lean": "^1.2.0",
