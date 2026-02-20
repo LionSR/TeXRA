@@ -211,6 +211,18 @@ async function resolveAgentBase(
     hasMultipleOutputs: useMultipleOutputs,
   });
 
+  // Log the initial user request BEFORE creating the run group so that
+  // the message timestamp precedes the group's startTime. This ensures
+  // the message renders before the group in the chronological timeline.
+  // Skip on resume (streamTabIdOverride) where the message was already logged.
+  if (
+    setting.agentCategory === AgentCategory.ToolUse &&
+    config.instruction?.trim() &&
+    !options?.streamTabIdOverride
+  ) {
+    agentLogger.userMessage(config.instruction.trim());
+  }
+
   const parentStage = await agentLogger.stage(`Run: ${config.agent}`);
   const storageKey: StorageKey = parentStage.id
     ? normalizeRunId(parentStage.id)
