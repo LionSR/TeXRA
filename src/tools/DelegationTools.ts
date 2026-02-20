@@ -1,8 +1,9 @@
 /**
  * Tools for delegating agent executions from tool-use agents.
- * Two separate tools for clean separation of concerns:
+ * Three separate tools for clean separation of concerns:
  * - delegate_workflow: For workflow agents (structured file I/O, fixed-round full-document rewrite)
  * - delegate_agent: For tool-use agents (interactive, versatile — edits, creation, research)
+ * - resume_agent: Resume a WAITING tool-use subagent with follow-up instructions
  *
  * All subagents execute asynchronously — result delivered via follow-up queue.
  */
@@ -30,9 +31,14 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
+  getHandle,
+  AgentExecutionHandle,
+} from '@agent/runtime/executionRegistry';
+import {
   getCurrentToolFileInteractionContext,
   type ToolFileInteractionContext,
 } from '@agent/toolUse/ToolFileInteractionContext';
+import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
 // Local imports - logger
@@ -55,6 +61,7 @@ import {
   formatSubagentDelivery,
   formatSubagentError,
   formatSubagentProgress,
+  formatFollowUpInstruction,
   type SubagentProgressUpdate,
 } from '@tools/subagentResults';
 import { defineTool } from '@tools/core/define';
@@ -67,8 +74,26 @@ import { generateExecutionId } from '@utils/core/executionId';
 // Shared utilities
 // ============================================================================
 
-const LOG_CHANNEL = 'WorkflowTool';
+const LOG_CHANNEL = 'DelegationTools';
 logger.initialize(LOG_CHANNEL);
+
+// ============================================================================
+// Subagent delivery state tracking
+// ============================================================================
+
+/**
+ * Per-execution delivery gate for subagent result routing.
+ *
+ * `hasDelivered` prevents duplicate delivery of the same result via both
+ * `onBeforeWaiting` and `onCompleted`. When `resume_agent` confirms a
+ * follow-up was accepted, it resets `hasDelivered` so the next cycle's
+ * `onBeforeWaiting` delivers the new result back to the orchestrator.
+ */
+interface SubagentDeliveryState {
+  hasDelivered: boolean;
+}
+
+const activeSubagentDelivery = new Map<string, SubagentDeliveryState>();
 
 /** Get required context fields, throwing if unavailable. */
 function getRequiredContext(): ToolFileInteractionContext & {
@@ -124,13 +149,16 @@ async function executeSubagent(
     parentExecutionId,
   );
 
-  // Track whether result has already been delivered (via onBeforeWaiting)
-  // to avoid duplicate delivery when the promise eventually resolves.
-  let hasDelivered = false;
+  // Track delivery state in the module-level map so resume_agent can reset it.
+  // The flag prevents duplicate delivery of the same result via both
+  // onBeforeWaiting and onCompleted. When resume_agent resets the flag,
+  // the next onBeforeWaiting will deliver the resumed cycle's result.
+  const deliveryState: SubagentDeliveryState = { hasDelivered: false };
+  activeSubagentDelivery.set(executionId, deliveryState);
   let childStreamId: StreamTabId | undefined;
 
   function onProgress(update: SubagentProgressUpdate): void {
-    if (hasDelivered) return;
+    if (deliveryState.hasDelivered) return;
     const msg = formatSubagentProgress(executionId, agentName, update);
     ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
   }
@@ -146,7 +174,7 @@ async function executeSubagent(
     },
     onProgress,
     onBeforeWaiting: async (lastResponse) => {
-      if (hasDelivered || !childStreamId) return;
+      if (deliveryState.hasDelivered || !childStreamId) return;
       const msg = formatSubagentDelivery(agentName, {
         category: 'toolUse' as const,
         status: 'stopped' as const,
@@ -162,28 +190,36 @@ async function executeSubagent(
       }
       // Mark delivered and enqueue only after the write attempt so that
       // onCompleted can still act as a fallback if we somehow never reach here.
-      hasDelivered = true;
+      deliveryState.hasDelivered = true;
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     },
     onCompleted: (result) => {
-      if (hasDelivered) return;
-      hasDelivered = true;
+      if (deliveryState.hasDelivered) return;
+      deliveryState.hasDelivered = true;
       const msg = formatSubagentDelivery(agentName, result);
       void getExecutionStore(executionId).write('report', msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     },
   });
-  promise.catch((err: unknown) => {
-    const msg = formatSubagentError(executionId, agentName, err);
-    void getExecutionStore(executionId).write('report', msg);
-    ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
-  });
+  promise
+    .catch((err: unknown) => {
+      const msg = formatSubagentError(executionId, agentName, err);
+      void getExecutionStore(executionId).write('report', msg);
+      ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+    })
+    .finally(() => {
+      activeSubagentDelivery.delete(executionId);
+    });
+  const isToolUse = configPayload.agentCategory === AgentCategory.ToolUse;
   return {
     summary: `Launched '${agentName}' (async)`,
     output: [
       `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,
       `Execution ID: ${executionId}`,
       `To check intermediate progress: executions tool with path=/executions/${executionId} and action=wait (waits for next status change).`,
+      ...(isToolUse
+        ? [`To send follow-up instructions after delivery: use resume_agent with this execution ID.`]
+        : []),
     ].join('\n'),
   };
 }
@@ -514,5 +550,108 @@ Example: agent=chat, instruction="The presentation at slides/talk.tex has incorr
     } satisfies ToolUseAgentProposal);
 
     return proposeAndExecute(proposal, input.agent, ctx.streamId, 'delegation');
+  }
+}
+
+// ============================================================================
+// resume_agent tool - send follow-up instructions to a WAITING subagent
+// ============================================================================
+
+/** Schema for resume_agent tool. */
+const ResumeAgentInputSchema = z.object({
+  execution_id: z
+    .string()
+    .describe(
+      'Execution ID of the tool-use subagent to resume (from the original delegate_agent result or /executions)',
+    ),
+  instruction: z
+    .string()
+    .describe(
+      'Follow-up instruction for the subagent. Must be self-contained — the subagent retains its full conversation history, so you can reference its previous work.',
+    ),
+});
+
+export type ResumeAgentInput = z.infer<typeof ResumeAgentInputSchema>;
+
+/** Tool for resuming a WAITING tool-use subagent with follow-up instructions. */
+export class ResumeAgentTool extends defineTool({
+  name: 'resume_agent',
+  description:
+    'Send follow-up instructions to a WAITING tool-use subagent. The subagent keeps its full history, so reference previous work freely. Result arrives asynchronously like the original delegation.',
+  schema: ResumeAgentInputSchema,
+}) {
+  protected async execute(input: ResumeAgentInput): Promise<ToolResult> {
+    const handle = getHandle(input.execution_id);
+    if (!(handle instanceof AgentExecutionHandle)) {
+      throw new Error(
+        `Execution '${input.execution_id}' not found or not an agent execution. Use the executions tool to check status.`,
+      );
+    }
+
+    if (handle.category !== 'toolUse') {
+      throw new Error(
+        `Execution '${input.execution_id}' is a workflow agent. Only tool-use subagents can be resumed.`,
+      );
+    }
+
+    const deliveryState = activeSubagentDelivery.get(input.execution_id);
+    if (!deliveryState) {
+      throw new Error(
+        `Execution '${input.execution_id}' is no longer tracked for delivery. It may have already completed.`,
+      );
+    }
+
+    // Only allow resume after the subagent has delivered its result and is
+    // in WAITING state.  Resuming mid-cycle would race: the current cycle's
+    // onBeforeWaiting could consume the gate reset and swallow the resumed
+    // cycle's result.  Resetting the gate *before* sendFollowUp also
+    // prevents concurrent resume calls from both passing the check — the
+    // second caller sees hasDelivered === false and is rejected.
+    if (!deliveryState.hasDelivered) {
+      throw new Error(
+        `'${handle.agentName}' is still processing. Wait for its result before sending a follow-up.`,
+      );
+    }
+    deliveryState.hasDelivered = false;
+
+    const framedInstruction = formatFollowUpInstruction(input.instruction);
+    let result: Awaited<ReturnType<typeof sendFollowUp>>;
+    try {
+      result = await sendFollowUp(handle.childStreamId, framedInstruction);
+    } catch (err) {
+      // Restore the gate so the subagent's current result can still be
+      // delivered if a transient error prevented sending.
+      deliveryState.hasDelivered = true;
+      throw err;
+    }
+
+    switch (result.status) {
+      case 'sent':
+      case 'queued':
+        // Both are success paths.  'sent' is the normal case — the subagent
+        // is blocked in WaitNode with an active flow context, so
+        // appendFollowUp delivers directly.  'queued' is a fallback when
+        // the context has been cleaned up but the stream status is still
+        // WAITING.  Gate was already reset above.
+        return {
+          summary: `Follow-up sent to '${handle.agentName}'`,
+          output: [
+            `Follow-up instruction sent to '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
+            `Execution ID: ${input.execution_id}`,
+          ].join('\n'),
+        };
+      case 'error':
+        // Restore the gate — the follow-up was not accepted.
+        deliveryState.hasDelivered = true;
+        throw new Error(
+          `Failed to send follow-up to '${handle.agentName}': ${result.message}`,
+        );
+      case 'no_session':
+        // Restore the gate — the follow-up was not accepted.
+        deliveryState.hasDelivered = true;
+        throw new Error(
+          `No active session for '${handle.agentName}' (stream status: ${result.streamStatus ?? 'unknown'}). The subagent may have stopped or its session expired.`,
+        );
+    }
   }
 }
