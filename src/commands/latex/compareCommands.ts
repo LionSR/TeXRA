@@ -100,17 +100,26 @@ async function handleCompare(
     const editedFileName = path.basename(editedLocation.absolutePath);
     const title = `Compare: ${editedFileName} ↔ ${baseFileName}`;
 
-    // If the ProgressBoard lives in the secondary sidebar, close the bottom
-    // panel to give the diff view more space. If the view is in the panel
-    // already, leave it open.
+    // If the ProgressBoard lives in the secondary sidebar (either via the
+    // panel container or the dedicated secondary sidebar container), close the
+    // bottom panel to give the diff view more space.
     const contextKeyCommandId = 'vscode.getContextKeyValue';
     try {
-      const location: string | undefined = await vscode.commands.executeCommand(
-        contextKeyCommandId,
-        'viewContainerLocation:texra-panel',
-      );
+      const [panelLocation, secondaryLocation] = await Promise.all([
+        vscode.commands.executeCommand<string | undefined>(
+          contextKeyCommandId,
+          'viewContainerLocation:texra-panel',
+        ),
+        vscode.commands.executeCommand<string | undefined>(
+          contextKeyCommandId,
+          'viewContainerLocation:texra-secondary',
+        ),
+      ]);
 
-      if (location === 'secondarySideBar') {
+      if (
+        panelLocation === 'secondarySideBar' ||
+        secondaryLocation === 'secondarySideBar'
+      ) {
         await vscode.commands.executeCommand('workbench.action.closePanel');
       }
     } catch (err) {

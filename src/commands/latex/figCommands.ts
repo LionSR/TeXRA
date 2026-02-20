@@ -71,16 +71,24 @@ async function handleExtractFigurePaths(): Promise<void> {
       );
 
       if (figurePaths.length > 0) {
-        const selected = await vscode.window.showQuickPick(figurePaths, {
+        const items = figurePaths.map((figurePath) => ({
+          label: path.basename(figurePath),
+          description: figurePath,
+          resourceUri: vscode.Uri.file(figurePath),
+          path: figurePath,
+        }));
+
+        const selected = await vscode.window.showQuickPick(items, {
           placeHolder: 'Found figures (select to copy path)',
+          prompt: 'Selecting a figure copies its path to the clipboard.',
           canPickMany: false,
         });
 
         if (selected) {
-          await vscode.env.clipboard.writeText(selected);
+          await vscode.env.clipboard.writeText(selected.path);
           await showLoggedInfoMessage(
             CHANNEL,
-            `Copied figure path: ${selected}`,
+            `Copied figure path: ${selected.path}`,
           );
         }
       } else {
@@ -118,6 +126,7 @@ async function handleExtractTikzFigures(): Promise<void> {
 
         const selected = await vscode.window.showQuickPick(items, {
           placeHolder: 'Found TikZ figures (select to copy label)',
+          prompt: 'Selecting a figure copies its label to the clipboard.',
           canPickMany: false,
         });
 
@@ -165,11 +174,13 @@ async function handleCompileTikzFigures(): Promise<void> {
             const items = compiledFiles.map((fileLocation) => ({
               label: path.basename(fileLocation.absolutePath),
               description: fileLocation.absolutePath,
+              resourceUri: vscode.Uri.file(fileLocation.absolutePath),
               file: fileLocation.absolutePath,
             }));
 
             const selected = await vscode.window.showQuickPick(items, {
               placeHolder: 'Compiled TikZ figures (select to open)',
+              prompt: 'Selecting a figure opens it in the editor.',
               canPickMany: false,
             });
 

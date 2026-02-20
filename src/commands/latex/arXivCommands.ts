@@ -26,25 +26,56 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
       arXivCommands.downloadArXivSource,
       async () => {
         try {
-          const arxivId = await vscode.window.showInputBox({
-            placeHolder: 'e.g., 2404.12175 or https://arxiv.org/abs/2404.12175',
-            prompt: 'Enter arXiv ID or URL',
-            validateInput: arxivProcessor.validateId.bind(arxivProcessor),
+          const { arxivId, autoIndent } = await new Promise<{
+            arxivId: string | undefined;
+            autoIndent: boolean;
+          }>((resolve) => {
+            const inputBox = vscode.window.createInputBox();
+            inputBox.placeholder =
+              'e.g., 2404.12175 or https://arxiv.org/abs/2404.12175';
+            inputBox.prompt = 'Enter arXiv ID or URL';
+            inputBox.title = 'Download arXiv Source';
+
+            const indentToggle: vscode.QuickInputButton = {
+              iconPath: new vscode.ThemeIcon('indent'),
+              tooltip: 'Auto-indent LaTeX files after download',
+              toggle: { checked: true },
+            };
+            inputBox.buttons = [indentToggle];
+
+            inputBox.onDidTriggerButton(() => {
+              // Toggle state is managed automatically by VS Code
+            });
+
+            inputBox.onDidChangeValue((value) => {
+              const error = arxivProcessor.validateId(value);
+              inputBox.validationMessage = error ?? '';
+            });
+
+            inputBox.onDidAccept(() => {
+              const value = inputBox.value;
+              const error = arxivProcessor.validateId(value);
+              if (error) {
+                inputBox.validationMessage = error;
+                return;
+              }
+              const checked = (indentToggle.toggle as { checked: boolean })
+                .checked;
+              inputBox.dispose();
+              resolve({ arxivId: value, autoIndent: checked });
+            });
+
+            inputBox.onDidHide(() => {
+              inputBox.dispose();
+              resolve({ arxivId: undefined, autoIndent: false });
+            });
+
+            inputBox.show();
           });
 
           if (!arxivId) {
             return;
           }
-
-          const shouldAutoIndent = await vscode.window.showQuickPick(
-            ['Yes', 'No'],
-            {
-              placeHolder: 'Auto-indent LaTeX files after download?',
-              canPickMany: false,
-            },
-          );
-
-          const autoIndent = shouldAutoIndent === 'Yes';
           let extractedPath = '';
 
           await vscode.window.withProgress(

@@ -72,12 +72,28 @@ export class SecretManager {
     );
   }
 
+  /**
+   * Returns the set of secret storage keys that match the `apiKey.*` prefix.
+   * Uses `SecretStorage.keys()` (VS Code 1.105+) for a single round-trip
+   * instead of probing each provider individually.
+   */
+  private static async getStoredApiKeyNames(): Promise<Set<string>> {
+    const allKeys = await this.storage.keys();
+    return new Set(allKeys.filter((k) => k.startsWith('apiKey.')));
+  }
+
   public static async anyApiKeyExists(): Promise<boolean> {
-    // Check all local API keys in parallel
-    const keyChecks = await Promise.all(
-      this.API_PROVIDERS.map((provider) => this.apiKeyExists(provider)),
+    // Fast check via keys() — one call covers all providers
+    const storedKeys = await this.getStoredApiKeyNames();
+    if (storedKeys.size > 0) {
+      return true;
+    }
+    // Check environment variables as fallback
+    const hasEnvKey = this.API_PROVIDERS.some(
+      (provider) =>
+        process.env[`${provider.toUpperCase()}_API_KEY`] !== undefined,
     );
-    if (keyChecks.some(Boolean)) {
+    if (hasEnvKey) {
       return true;
     }
     // Fall back to server-side keys (Ultra tier + enabled providers)
@@ -92,16 +108,19 @@ export class SecretManager {
   public static async getApiProviderQuickPickItems(): Promise<
     ApiProviderQuickPickItem[]
   > {
-    const checks = this.API_PROVIDERS.map(async (provider) => ({
-      provider,
-      exists: await this.apiKeyExists(provider),
-    }));
+    // Single call to enumerate stored keys, then check env vars only for missing ones
+    const storedKeys = await this.getStoredApiKeyNames();
 
-    const results = await Promise.all(checks);
-    return results.map(({ provider, exists }) => ({
-      label: provider,
-      description: exists ? 'key set' : 'not set',
-      provider,
-    }));
+    return this.API_PROVIDERS.map((provider) => {
+      const secretName = this.getApiKeySecretName(provider);
+      const exists =
+        storedKeys.has(secretName) ||
+        process.env[`${provider.toUpperCase()}_API_KEY`] !== undefined;
+      return {
+        label: provider,
+        description: exists ? 'key set' : 'not set',
+        provider,
+      };
+    });
   }
 }

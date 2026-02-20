@@ -330,6 +330,8 @@ async function pickTools(
       title: `Tool Use Agent: ${agentName}`,
       placeHolder:
         'Select tool groups (pre-selected based on your description)',
+      prompt:
+        'Each group bundles related tools. The detail line shows which tools are included.',
       canPickMany: true,
     },
   );
@@ -427,6 +429,8 @@ class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
       {
         title: `Workflow Agent: ${agentName}`,
         placeHolder: 'Choose the agent output style',
+        prompt:
+          'Single output rewrites one document; multiple output produces several files in parallel.',
       },
     );
     if (!outputChoice) return undefined;

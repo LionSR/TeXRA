@@ -131,6 +131,8 @@ async function handleGetTeXCount(): Promise<void> {
           ],
           {
             placeHolder: 'Count options',
+            prompt:
+              '"Follow \\input/\\include" merges all sub-files into one total.',
             canPickMany: false,
           },
         );

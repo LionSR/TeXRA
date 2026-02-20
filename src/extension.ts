@@ -278,6 +278,11 @@ export async function activate(context: vscode.ExtensionContext) {
       progressViewProvider,
       { webviewOptions: { retainContextWhenHidden: true } },
     ),
+    vscode.window.registerWebviewViewProvider(
+      'texra.progressViewSecondary',
+      progressViewProvider,
+      { webviewOptions: { retainContextWhenHidden: true } },
+    ),
   );
 
   const welcomeKey = 'texra.welcomeShown';

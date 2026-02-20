@@ -94,6 +94,8 @@ export async function signIn(): Promise<void> {
     const selected = await vscode.window.showQuickPick(getSignInOptions(), {
       placeHolder: 'Choose a sign-in method',
       title: 'TeXRA Sign In',
+      prompt:
+        'Sign in to access remote agents and sync your settings across devices.',
     });
     if (!selected) return;
 

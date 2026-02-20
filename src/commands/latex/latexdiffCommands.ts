@@ -107,6 +107,8 @@ async function promptForLatexdiffMathMarkup(): Promise<
   const selection = await vscode.window.showQuickPick(prioritizedItems, {
     title: 'Latexdiff math markup',
     placeHolder: 'Select math markup granularity for this diff run',
+    prompt:
+      'The configured default is shown first. "coarse" works well for most documents.',
     ignoreFocusOut: true,
   });
 

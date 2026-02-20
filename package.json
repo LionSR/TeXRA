@@ -5,7 +5,7 @@
   "version": "0.36.3",
   "publisher": "texra-ai",
   "engines": {
-    "vscode": "^1.99.3"
+    "vscode": "^1.109.0"
   },
   "categories": [
     "Programming Languages",
@@ -1135,6 +1135,13 @@
           "title": "TeXRA ProgressBoard",
           "icon": "$(server-process)"
         }
+      ],
+      "secondarySidebar": [
+        {
+          "id": "texra-secondary",
+          "title": "TeXRA Tasks",
+          "icon": "resources/logo-128x128.svg"
+        }
       ]
     },
     "views": {
@@ -1152,6 +1159,15 @@
           "id": "texra.progressView",
           "name": "TeXRA: ProgressBoard",
           "contextualTitle": "ProgressBoard",
+          "icon": "$(server-process)"
+        }
+      ],
+      "texra-secondary": [
+        {
+          "type": "webview",
+          "id": "texra.progressViewSecondary",
+          "name": "TeXRA: Tasks",
+          "contextualTitle": "Tasks",
           "icon": "$(server-process)"
         }
       ]
@@ -1209,6 +1225,26 @@
           "command": "texra.openProgressViewInTab",
           "when": "view == texra.progressView",
           "group": "navigation@7"
+        },
+        {
+          "command": "texra.indentTeX",
+          "when": "view == texra.progressViewSecondary",
+          "group": "navigation@1"
+        },
+        {
+          "command": "texra.cleanOutput",
+          "when": "view == texra.progressViewSecondary",
+          "group": "navigation@2"
+        },
+        {
+          "command": "texra.cleanBuild",
+          "when": "view == texra.progressViewSecondary",
+          "group": "navigation@3"
+        },
+        {
+          "command": "texra.showDashboard",
+          "when": "view == texra.progressViewSecondary",
+          "group": "navigation@4"
         },
         {
           "command": "texra.mainView.reset",
@@ -1315,7 +1351,7 @@
     "@types/shell-quote": "^1.7.5",
     "@types/sortablejs": "^1.15.9",
     "@types/turndown": "^5.0.6",
-    "@types/vscode": "^1.99.0",
+    "@types/vscode": "^1.109.0",
     "@typescript-eslint/eslint-plugin": "^8.56.0",
     "@typescript-eslint/parser": "^8.56.0",
     "@vscode/test-cli": "^0.0.12",

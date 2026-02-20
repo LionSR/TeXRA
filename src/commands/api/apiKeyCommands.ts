@@ -103,6 +103,8 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext): void {
             providerItems,
             {
               placeHolder: 'Select API provider',
+              prompt:
+                'Keys marked "key set" are already configured. Select a provider to add or update its key.',
             },
           );
           selectedProvider = providerPick?.provider;
@@ -120,6 +122,8 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext): void {
       const providerItems = await SecretManager.getApiProviderQuickPickItems();
       const providerPick = await vscode.window.showQuickPick(providerItems, {
         placeHolder: 'Select API provider to remove key',
+        prompt:
+          'Only providers marked "key set" have stored keys to remove.',
       });
 
       const provider = providerPick?.provider;
