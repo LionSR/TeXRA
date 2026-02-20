@@ -10,20 +10,20 @@ export type Platform = 'darwin' | 'win32' | 'linux';
 
 type Guide = Record<Platform, string>;
 
-/** Tool installable via brew, apt, and a Windows download URL. */
+/** Tool installable via brew, apt, and a download URL. */
 function brewAptUrl(
   label: string,
   brew: string,
   apt: string,
-  winUrl: string,
+  url: string,
 ): Guide {
   return {
     darwin:
       `Install ${label}:\n  brew install ${brew}\n\n` +
       `"brew" requires Homebrew (https://brew.sh).\n` +
-      `Or download ${label} from its official website.`,
+      `Or download directly:\n  ${url}`,
     linux: `Install ${label}:\n  sudo apt-get install ${apt}`,
-    win32: `Install ${label}:\n  ${winUrl}`,
+    win32: `Install ${label}:\n  ${url}`,
   };
 }
 
@@ -59,12 +59,22 @@ function combineGuides(
 ): Guide {
   const platforms: Platform[] = ['darwin', 'linux', 'win32'];
   return Object.fromEntries(
-    platforms.map((p) => [
-      p,
-      sections
-        .map(([label, g]) => `${label}:\n  ${g[p].split('\n  ')[1]}`)
-        .join('\n\n'),
-    ]),
+    platforms.map((p) => {
+      // Extract just the install command (first paragraph) from each guide
+      const body = sections
+        .map(([label, g]) => {
+          const command = g[p].split('\n\n')[0].split('\n  ')[1];
+          return `${label}:\n  ${command}`;
+        })
+        .join('\n\n');
+      // Append a single Homebrew note for macOS instead of repeating per-section
+      return [
+        p,
+        p === 'darwin'
+          ? body + '\n\n"brew" requires Homebrew (https://brew.sh).'
+          : body,
+      ];
+    }),
   ) as Guide;
 }
 
