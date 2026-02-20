@@ -25,6 +25,9 @@ import {
 import {
   LATEX_WORKSHOP_EXT_ID,
   normalizePlatform,
+  DEPENDENCY_INSTALL_COMMANDS,
+  HOMEBREW_INSTALL_COMMAND,
+  SCOOP_INSTALL_COMMAND,
 } from '@shared/constants/latex';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, MAX_TIER } from '@auth/config';
@@ -93,7 +96,10 @@ import {
   isConfigExplicitlySet,
   updateConfig,
 } from '@utils/config/configUtils';
-import { checkToolInstalled } from '@utils/system/toolUtils';
+import {
+  checkToolInstalled,
+  detectPackageManager,
+} from '@utils/system/toolUtils';
 import { findToolInCommonPaths } from '@utils/system/platformPaths';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
@@ -457,6 +463,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleApplyLatexSettings(data),
       [SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP]: () =>
         this.handleInstallLatexWorkshop(),
+      [SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND]: (data) =>
+        this.handleRunInstallCommand(data),
     };
   }
 
@@ -1827,6 +1835,7 @@ prompts:
       ghostscriptPath: findToolInCommonPaths('gs'),
       graphicsmagickPath:
         findToolInCommonPaths('gm') ?? findToolInCommonPaths('magick'),
+      packageManager: detectPackageManager(),
     };
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
@@ -1925,6 +1934,41 @@ prompts:
         error,
       );
     }
+  }
+
+  /** Allowlist of commands that may be executed via the Run in Terminal button. */
+  private static readonly ALLOWED_INSTALL_COMMANDS: ReadonlySet<string> =
+    new Set([
+      HOMEBREW_INSTALL_COMMAND,
+      SCOOP_INSTALL_COMMAND,
+      ...Object.values(DEPENDENCY_INSTALL_COMMANDS).flatMap((platforms) =>
+        Object.values(platforms).flatMap((cmds) =>
+          cmds.map((cmd) => cmd.command),
+        ),
+      ),
+    ]);
+
+  private async handleRunInstallCommand(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.RUN_INSTALL_COMMAND>,
+  ): Promise<void> {
+    if (
+      !SettingsViewMessageHandler.ALLOWED_INSTALL_COMMANDS.has(
+        data.installCommand,
+      )
+    ) {
+      this.logger.warn(
+        this.channel,
+        `Rejected unknown install command: ${data.installCommand}`,
+      );
+      return;
+    }
+
+    const terminal = vscode.window.createTerminal({
+      name: 'TeXRA Install',
+      hideFromUser: false,
+    });
+    terminal.show();
+    terminal.sendText(data.installCommand);
   }
 
   // ============================================================

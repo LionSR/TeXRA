@@ -101,7 +101,7 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
   wolframscript: {
     command: 'wolframscript -version',
     errorMessage:
-      'Mathematica/wolframscript is not installed or not in your PATH.\n' +
+      '"wolframscript" is not installed or not in your PATH.\n' +
       WOLFRAM_INSTRUCTIONS,
   },
 
@@ -438,4 +438,53 @@ export async function checkCoreDependencies(
     );
     return ['latexindent', 'perl', 'gs', 'gm/magick'];
   }
+}
+
+/**
+ * Detect the first available package manager on the system.
+ * Returns 'brew', 'apt', 'scoop', or null if none found.
+ */
+export function detectPackageManager(): 'brew' | 'apt' | 'scoop' | null {
+  const extendedPath = extendEnvPath();
+  const execOptions = {
+    env: { ...process.env, PATH: extendedPath },
+    reject: false,
+  };
+
+  // Platform-aware order: check the platform's native PM first so that
+  // cross-platform installs (e.g. Linuxbrew on Linux) don't shadow the
+  // PM that DEPENDENCY_INSTALL_COMMANDS actually uses for that platform.
+  type PM = { name: 'brew' | 'apt' | 'scoop'; args: string[] };
+  const allManagers: PM[] = [
+    { name: 'brew', args: ['--version'] },
+    { name: 'apt', args: ['--version'] },
+    { name: 'scoop', args: ['--version'] },
+  ];
+  const preferred: Record<string, string> = {
+    darwin: 'brew',
+    linux: 'apt',
+    win32: 'scoop',
+  };
+  const first = preferred[process.platform];
+  const managers = first
+    ? [
+        allManagers.find((m) => m.name === first)!,
+        ...allManagers.filter((m) => m.name !== first),
+      ]
+    : allManagers;
+
+  for (const { name, args } of managers) {
+    try {
+      const result = execaSync(name, args, execOptions);
+      if (result.exitCode === 0) {
+        logger.debug(CHANNEL, `Package manager detected: ${name}`);
+        return name;
+      }
+    } catch {
+      // Not available, try next
+    }
+  }
+
+  logger.debug(CHANNEL, 'No package manager detected');
+  return null;
 }
