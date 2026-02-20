@@ -60,10 +60,6 @@ export class ToolUsePrepareNode<C> extends Node<
         },
       );
 
-    if (userRequest) {
-      logger.userMessage(userRequest);
-    }
-
     const systemMessage = systemPrompt
       ? `${systemPrompt}\n${instructionSuffix}`
       : instructionSuffix;
