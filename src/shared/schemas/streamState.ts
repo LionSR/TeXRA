@@ -53,6 +53,9 @@ export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
 const BaseStreamStateSchema = z.object({
   info: StreamTabInfoSchema.optional(),
   status: StreamStatusSchema.optional(),
+  /** Last activity timestamp — kept on StreamState so status updates don't
+   *  mutate the structural streams[] array and trigger re-sort cascades. */
+  lastTimestamp: z.number().optional(),
   logs: z.array(LogMessageDataSchema).prefault([]),
   taskGroups: z.array(TaskGroupSchema).prefault([]),
   contextState: ContextStateSchema.optional(),

@@ -447,7 +447,10 @@ const handlers: HandlerRegistry = {
     });
   },
 
-  // Status updates
+  // Status updates — only touches streamStates Map, never the streams[] array.
+  // This is the key perf invariant: streams[] is structural (add/remove only)
+  // and stays stable during streaming, so status updates never trigger the
+  // O(n log n) re-sort + tab-list re-render cascade.
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS]: (data, ctx) => {
     const { stream, status, lastTimestamp } = data;
     const state = ctx.getState();
@@ -455,52 +458,38 @@ const handlers: HandlerRegistry = {
     const shouldFocus = isActiveStream && status === STREAM_STATUS.WAITING;
 
     // Fast path: skip no-op updates where status and timestamp haven't changed.
-    // Avoids O(n) Map copy + O(n) array map + downstream sort/render cascade.
-    const existingInfo = state.streams.find((s) => s.name === stream);
-    if (existingInfo) {
-      const currentState = state.streamStates.get(stream);
-      const statusSame = currentState
-        ? currentState.status === status
-        : (existingInfo.status ?? STREAM_STATUS.READY) === status;
+    const currentState = state.streamStates.get(stream);
+    if (currentState) {
+      const statusSame = currentState.status === status;
       const timestampSame =
         lastTimestamp === undefined ||
-        lastTimestamp === existingInfo.lastTimestamp;
+        lastTimestamp === currentState.lastTimestamp;
       if (statusSame && timestampSame && !shouldFocus) return;
     }
 
-    // Atomic update: stream state + tab metadata in one setState call.
-    // Only touches the changed stream's entry in the Map and array.
+    // Only update streamStates — streams[] is NOT touched.
     ctx.setState((prev) => {
-      const streamInfo =
-        existingInfo ?? prev.streams.find((s) => s.name === stream);
+      const streamInfo = prev.streams.find((s) => s.name === stream);
+      if (!streamInfo) return prev;
+
+      const current = getStreamState(prev, stream, streamInfo.agentCategory);
       const nextStates = new Map(prev.streamStates);
+      const updatedState =
+        isToolUseState(current) && shouldFocus
+          ? {
+              ...current,
+              status,
+              lastTimestamp: lastTimestamp ?? current.lastTimestamp,
+              ui: { ...current.ui, shouldFocusFollowUp: true },
+            }
+          : {
+              ...current,
+              status,
+              lastTimestamp: lastTimestamp ?? current.lastTimestamp,
+            };
+      nextStates.set(stream, updatedState);
 
-      if (streamInfo) {
-        const current = getStreamState(prev, stream, streamInfo.agentCategory);
-        const updatedState =
-          isToolUseState(current) && shouldFocus
-            ? {
-                ...current,
-                status,
-                ui: { ...current.ui, shouldFocusFollowUp: true },
-              }
-            : { ...current, status };
-        nextStates.set(stream, updatedState);
-      }
-
-      return {
-        ...prev,
-        streamStates: nextStates,
-        streams: prev.streams.map((item) =>
-          item.name === stream
-            ? {
-                ...item,
-                status,
-                lastTimestamp: lastTimestamp ?? item.lastTimestamp,
-              }
-            : item,
-        ),
-      };
+      return { ...prev, streamStates: nextStates };
     });
   },
 

@@ -33,7 +33,7 @@ import { getComposedPathElement, getRadioValue } from '../utils';
 import type { StreamFilter, StreamSort } from '../store';
 
 // Local imports - shared schemas
-import type { StreamTabInfo } from '@shared/schemas';
+import type { StreamState, StreamTabInfo } from '@shared/schemas';
 
 /** Capitalize first letter for display */
 function formatStatusLabel(status: string): string {
@@ -41,7 +41,10 @@ function formatStatusLabel(status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-function buildTooltip(info: StreamTabInfo): string {
+function buildTooltip(
+  info: StreamTabInfo,
+  lastTimestamp: number | undefined,
+): string {
   const mainLine = [
     info.label,
     info.model && `Model: ${info.model}`,
@@ -49,8 +52,8 @@ function buildTooltip(info: StreamTabInfo): string {
   ]
     .filter(Boolean)
     .join(' • ');
-  if (!info.lastTimestamp) return mainLine;
-  const lastSeen = formatRelativeTime(info.lastTimestamp);
+  if (!lastTimestamp) return mainLine;
+  const lastSeen = formatRelativeTime(lastTimestamp);
   return lastSeen && mainLine
     ? `${mainLine}\nLast activity ${lastSeen}`
     : mainLine;
@@ -61,10 +64,11 @@ function buildTooltip(info: StreamTabInfo): string {
 // =============================================================================
 
 /**
- * Individual stream tab.  Re-renders only when its own `.info` ref or
- * `.active` flag changes.  Since the upstream `streams.map()` preserves
- * object references for unchanged items, most tabs skip rendering entirely
- * on status updates to a single stream.
+ * Individual stream tab.  Structural identity (`.info`) is stable — the
+ * streams[] array only changes on add/remove.  Volatile runtime data
+ * (`.status`, `.lastTimestamp`) is passed as separate scalar properties
+ * from StreamState, so only the tab whose status actually changed
+ * re-renders; Lit's default equality check on primitives handles the rest.
  */
 @customElement('stream-tab')
 export class StreamTab extends LitElement {
@@ -190,11 +194,17 @@ export class StreamTab extends LitElement {
 
   @property({ attribute: false }) info!: StreamTabInfo;
   @property({ type: Boolean }) active = false;
+  /** Live status from StreamState (takes precedence over info.status). */
+  @property() override_status = '';
+  /** Live lastTimestamp from StreamState (takes precedence over info.lastTimestamp). */
+  @property({ type: Number }) override_lastTimestamp: number | undefined;
 
   override render(): TemplateResult {
     const stream = this.info;
-    const tooltip = buildTooltip(stream);
-    const status = stream.status ?? STREAM_STATUS.READY;
+    const status =
+      this.override_status || stream.status || STREAM_STATUS.READY;
+    const lastTimestamp = this.override_lastTimestamp ?? stream.lastTimestamp;
+    const tooltip = buildTooltip(stream, lastTimestamp);
     const statusLabel = formatStatusLabel(status);
     const agentDecorator = getAgentCategoryDecorator(stream.agentCategory);
 
@@ -227,8 +237,8 @@ export class StreamTab extends LitElement {
           </div>
           <div class="tab-meta">
             <span class="last-active"
-              >${stream.lastTimestamp
-                ? formatRelativeTime(stream.lastTimestamp)
+              >${lastTimestamp
+                ? formatRelativeTime(lastTimestamp)
                 : ''}</span
             >
             <span class="model">${stream.model ?? ''}</span>
@@ -352,6 +362,8 @@ export class StreamTabs extends LitElement {
   ];
 
   @property({ attribute: false }) streams: StreamTabInfo[] = [];
+  @property({ attribute: false }) streamStates: Map<string, StreamState> =
+    new Map();
   @property({ attribute: false }) activeStreamId: string | null = null;
   @property({ attribute: false }) filter: StreamFilter = 'all';
   @property({ attribute: false }) sort: StreamSort = 'time';
@@ -364,12 +376,18 @@ export class StreamTabs extends LitElement {
             ${repeat(
               this.streams,
               (stream) => stream.name,
-              (stream) => html`
-                <stream-tab
-                  .info=${stream}
-                  ?active=${stream.name === this.activeStreamId}
-                ></stream-tab>
-              `,
+              (stream) => {
+                const state = this.streamStates.get(stream.name);
+                return html`
+                  <stream-tab
+                    .info=${stream}
+                    .override_status=${state?.status ?? ''}
+                    .override_lastTimestamp=${state?.lastTimestamp ??
+                    undefined}
+                    ?active=${stream.name === this.activeStreamId}
+                  ></stream-tab>
+                `;
+              },
             )}
           </div>
           ${when(

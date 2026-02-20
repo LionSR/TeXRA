@@ -187,87 +187,23 @@ export class ProgressApp extends BaseWebviewApp {
 
     const prevAppState = changed.get('appState') as ProgressState | undefined;
 
-    if (changed.has('appState')) {
-      const streamsChanged =
-        !prevAppState || prevAppState.streams !== this.appState.streams;
-      const criteriaChanged =
-        !prevAppState ||
+    // Re-sort only when the structural stream list or sort/filter criteria change.
+    // Status updates (UPDATE_STREAM_STATUS) never touch streams[] — they only
+    // update streamStates, so this guard is never true for pure status changes.
+    if (
+      changed.has('appState') &&
+      (!prevAppState ||
+        prevAppState.streams !== this.appState.streams ||
         prevAppState.streamFilter !== this.appState.streamFilter ||
-        prevAppState.streamSort !== this.appState.streamSort;
-
-      if (criteriaChanged) {
-        // Sort/filter criteria changed — full re-sort required.
-        this.rebuildFilteredStreams();
-      } else if (streamsChanged) {
-        // Streams array ref changed. Check if it's structural (add/remove/reorder)
-        // or metadata-only (status/timestamp update on existing streams).
-        // Structural changes require O(n log n) re-sort; metadata-only can
-        // patch in-place at O(n), which is the hot path during streaming when
-        // UPDATE_STREAM_STATUS fires per-stream.
-        const prevStreams = prevAppState?.streams ?? [];
-        if (this.isStructuralStreamChange(prevStreams, this.appState.streams)) {
-          this.rebuildFilteredStreams();
-        } else {
-          this.patchFilteredStreams(this.appState.streams);
-        }
-      }
+        prevAppState.streamSort !== this.appState.streamSort)
+    ) {
+      this.cachedFilteredStreams = getFilteredStreams(this.appState);
+      this.cachedStreamIndex = new Map(
+        this.cachedFilteredStreams.map((s) => [s.name, s]),
+      );
     }
 
     this.updateContexts();
-  }
-
-  /**
-   * Full rebuild: re-sort, re-filter, rebuild index.
-   * Called on structural changes (add/remove streams) or sort/filter criteria change.
-   */
-  private rebuildFilteredStreams(): void {
-    this.cachedFilteredStreams = getFilteredStreams(this.appState);
-    this.cachedStreamIndex = new Map(
-      this.cachedFilteredStreams.map((s) => [s.name, s]),
-    );
-  }
-
-  /**
-   * Detect if the streams array changed structurally (different names or count)
-   * vs just metadata updates on existing streams. Compares names positionally
-   * so add/remove/reorder are detected. O(n) comparison but skips O(n log n) sort.
-   */
-  private isStructuralStreamChange(
-    prevStreams: StreamTabInfo[],
-    nextStreams: StreamTabInfo[],
-  ): boolean {
-    if (prevStreams.length !== nextStreams.length) return true;
-    for (let i = 0; i < nextStreams.length; i++) {
-      if (nextStreams[i].name !== prevStreams[i].name) return true;
-    }
-    return false;
-  }
-
-  /**
-   * Patch metadata-only changes into cachedFilteredStreams without re-sorting.
-   * O(n) scan to find and replace changed entries, avoiding O(n log n) sort.
-   *
-   * Produces a new array reference so Lit detects the property change on
-   * stream-tabs, but preserves object references for unchanged streams so
-   * individual stream-tab components skip rendering.
-   */
-  private patchFilteredStreams(nextStreams: StreamTabInfo[]): void {
-    // Build a quick lookup of the new stream data by name
-    const nextByName = new Map(nextStreams.map((s) => [s.name, s]));
-    let anyChanged = false;
-
-    const patched = this.cachedFilteredStreams.map((cached) => {
-      const updated = nextByName.get(cached.name);
-      if (!updated || updated === cached) return cached;
-      anyChanged = true;
-      return updated;
-    });
-
-    if (anyChanged) {
-      this.cachedFilteredStreams = patched;
-      // Rebuild index with updated refs
-      this.cachedStreamIndex = new Map(patched.map((s) => [s.name, s]));
-    }
   }
 
   render(): TemplateResult {
@@ -285,6 +221,7 @@ export class ProgressApp extends BaseWebviewApp {
           <stream-tabs
             slot="end"
             .streams=${this.cachedFilteredStreams}
+            .streamStates=${this.appState.streamStates}
             .activeStreamId=${this.appState.activeStreamId}
             .filter=${this.appState.streamFilter}
             .sort=${this.appState.streamSort}
