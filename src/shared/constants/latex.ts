@@ -255,8 +255,6 @@ export interface InstallCommand {
   readonly label: string;
   /** The full shell command (e.g. "brew install ghostscript"). */
   readonly command: string;
-  /** Whether the command requires sudo (used to decide button behaviour). */
-  readonly requiresSudo: boolean;
   /**
    * The package manager the command targets.
    * `null` means the command is always available (e.g. a direct download URL).
@@ -291,7 +289,6 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
       {
         label: 'Homebrew',
         command: 'brew install --cask mactex',
-        requiresSudo: false,
         packageManager: 'brew',
       },
     ],
@@ -299,7 +296,6 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
       {
         label: 'APT',
         command: 'sudo apt-get install -y texlive-full',
-        requiresSudo: true,
         packageManager: 'apt',
       },
     ],
@@ -307,7 +303,6 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
       {
         label: 'Scoop',
         command: 'scoop install miktex',
-        requiresSudo: false,
         packageManager: 'scoop',
       },
     ],
@@ -317,7 +312,6 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
       {
         label: 'Homebrew',
         command: 'brew install latexdiff',
-        requiresSudo: false,
         packageManager: 'brew',
       },
     ],
@@ -325,7 +319,6 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
       {
         label: 'APT',
         command: 'sudo apt-get install -y latexdiff',
-        requiresSudo: true,
         packageManager: 'apt',
       },
     ],
@@ -336,7 +329,6 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
       {
         label: 'Homebrew',
         command: 'brew install latexindent',
-        requiresSudo: false,
         packageManager: 'brew',
       },
     ],
@@ -344,7 +336,6 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
       {
         label: 'APT',
         command: 'sudo apt-get install -y texlive-extra-utils perl',
-        requiresSudo: true,
         packageManager: 'apt',
       },
     ],
@@ -355,7 +346,6 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
       {
         label: 'Homebrew',
         command: 'brew install texcount',
-        requiresSudo: false,
         packageManager: 'brew',
       },
     ],
@@ -363,7 +353,6 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
       {
         label: 'APT',
         command: 'sudo apt-get install -y texlive-extra-utils',
-        requiresSudo: true,
         packageManager: 'apt',
       },
     ],
@@ -374,7 +363,6 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
       {
         label: 'Homebrew',
         command: 'brew install ghostscript graphicsmagick',
-        requiresSudo: false,
         packageManager: 'brew',
       },
     ],
@@ -382,7 +370,6 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
       {
         label: 'APT',
         command: 'sudo apt-get install -y ghostscript graphicsmagick',
-        requiresSudo: true,
         packageManager: 'apt',
       },
     ],
@@ -390,7 +377,6 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
       {
         label: 'Scoop',
         command: 'scoop install ghostscript graphicsmagick',
-        requiresSudo: false,
         packageManager: 'scoop',
       },
     ],

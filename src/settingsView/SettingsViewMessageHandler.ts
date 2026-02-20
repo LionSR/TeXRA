@@ -25,6 +25,9 @@ import {
 import {
   LATEX_WORKSHOP_EXT_ID,
   normalizePlatform,
+  DEPENDENCY_INSTALL_COMMANDS,
+  HOMEBREW_INSTALL_COMMAND,
+  SCOOP_INSTALL_COMMAND,
 } from '@shared/constants/latex';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, MAX_TIER } from '@auth/config';
@@ -1933,9 +1936,33 @@ prompts:
     }
   }
 
+  /** Allowlist of commands that may be executed via the Run in Terminal button. */
+  private static readonly ALLOWED_INSTALL_COMMANDS: ReadonlySet<string> =
+    new Set([
+      HOMEBREW_INSTALL_COMMAND,
+      SCOOP_INSTALL_COMMAND,
+      ...Object.values(DEPENDENCY_INSTALL_COMMANDS).flatMap((platforms) =>
+        Object.values(platforms).flatMap((cmds) =>
+          cmds.map((cmd) => cmd.command),
+        ),
+      ),
+    ]);
+
   private async handleRunInstallCommand(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.RUN_INSTALL_COMMAND>,
   ): Promise<void> {
+    if (
+      !SettingsViewMessageHandler.ALLOWED_INSTALL_COMMANDS.has(
+        data.installCommand,
+      )
+    ) {
+      this.logger.warn(
+        this.channel,
+        `Rejected unknown install command: ${data.installCommand}`,
+      );
+      return;
+    }
+
     const terminal = vscode.window.createTerminal({
       name: 'TeXRA Install',
       hideFromUser: false,

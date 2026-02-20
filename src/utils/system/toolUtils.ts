@@ -451,12 +451,27 @@ export function detectPackageManager(): 'brew' | 'apt' | 'scoop' | null {
     reject: false,
   };
 
-  // Order: brew first (macOS), then apt (Linux), then scoop (Windows)
-  const managers = [
-    { name: 'brew' as const, args: ['--version'] },
-    { name: 'apt' as const, args: ['--version'] },
-    { name: 'scoop' as const, args: ['--version'] },
+  // Platform-aware order: check the platform's native PM first so that
+  // cross-platform installs (e.g. Linuxbrew on Linux) don't shadow the
+  // PM that DEPENDENCY_INSTALL_COMMANDS actually uses for that platform.
+  type PM = { name: 'brew' | 'apt' | 'scoop'; args: string[] };
+  const allManagers: PM[] = [
+    { name: 'brew', args: ['--version'] },
+    { name: 'apt', args: ['--version'] },
+    { name: 'scoop', args: ['--version'] },
   ];
+  const preferred: Record<string, string> = {
+    darwin: 'brew',
+    linux: 'apt',
+    win32: 'scoop',
+  };
+  const first = preferred[process.platform];
+  const managers = first
+    ? [
+        allManagers.find((m) => m.name === first)!,
+        ...allManagers.filter((m) => m.name !== first),
+      ]
+    : allManagers;
 
   for (const { name, args } of managers) {
     try {
