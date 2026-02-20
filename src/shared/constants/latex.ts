@@ -18,7 +18,10 @@ function brewAptUrl(
   winUrl: string,
 ): Guide {
   return {
-    darwin: `Install ${label}:\n  brew install ${brew}`,
+    darwin:
+      `Install ${label}:\n  brew install ${brew}\n\n` +
+      `"brew" requires Homebrew (https://brew.sh).\n` +
+      `Or download ${label} from its official website.`,
     linux: `Install ${label}:\n  sudo apt-get install ${apt}`,
     win32: `Install ${label}:\n  ${winUrl}`,
   };
@@ -39,7 +42,9 @@ function texLiveGuide(
   opts: { brew: string; apt: string; notes?: Partial<Guide> },
 ): Guide {
   const base: Guide = {
-    darwin: `Install ${tool}:\n  brew install ${opts.brew}`,
+    darwin:
+      `Install ${tool}:\n  brew install ${opts.brew}\n\n` +
+      `"brew" requires Homebrew (https://brew.sh).`,
     linux: `Install ${tool}:\n  sudo apt-get install ${opts.apt}`,
     win32:
       `MiKTeX: Open MiKTeX Console → Packages → search "${tool}" → Install\n\n` +
@@ -79,6 +84,9 @@ export const PDFLATEX_INSTALL_GUIDE: Guide = {
     '  brew install --cask mactex\n\n' +
     'Or lightweight alternative:\n' +
     '  brew install texlive\n\n' +
+    'These commands require Homebrew (https://brew.sh), a free\n' +
+    'macOS package manager. Or download MacTeX directly from:\n' +
+    '  https://www.tug.org/mactex/mactex-download.html\n\n' +
     'After installing, restart VS Code so TeXRA can detect\n' +
     'the new binaries on your PATH.',
   linux:
@@ -99,7 +107,8 @@ export const PERL_INSTALL_GUIDE: Guide = {
   darwin:
     'Perl is pre-installed on macOS.\n' +
     'If missing, reinstall via:\n' +
-    '  brew install perl',
+    '  brew install perl\n\n' +
+    '"brew" requires Homebrew (https://brew.sh).',
   linux: 'Install Perl:\n  sudo apt-get install perl',
   win32:
     'Install Strawberry Perl (recommended):\n  https://strawberryperl.com/',
@@ -108,6 +117,7 @@ export const PERL_INSTALL_GUIDE: Guide = {
 export const TEXFMT_INSTALL_GUIDE: Guide = {
   darwin:
     'Install tex-fmt:\n  brew install tex-fmt\n\n' +
+    '"brew" requires Homebrew (https://brew.sh).\n\n' +
     'Or via Cargo:\n  cargo install tex-fmt',
   linux:
     'Install tex-fmt:\n  apt install tex-fmt\n\n' +
@@ -118,6 +128,7 @@ export const TEXFMT_INSTALL_GUIDE: Guide = {
 export const WOLFRAM_INSTALL_GUIDE: Guide = {
   darwin:
     'Install Wolfram Engine:\n  brew install --cask wolfram-engine\n\n' +
+    '"brew" requires Homebrew (https://brew.sh).\n' +
     'Or download from:\n  https://www.wolfram.com/engine/',
   linux:
     'Install Wolfram Engine:\n  https://www.wolfram.com/engine/\n\n' +

@@ -47,6 +47,24 @@ You can also install TeXRA directly in your preferred editor using protocol-base
 
 Now for the slightly less fun part – making sure TeXRA has all the tools it needs to work its magic. TeXRA relies on several external tools to function properly. Follow the instructions for your operating system.
 
+### Homebrew (macOS only) {#homebrew}
+
+::: info WHAT IS HOMEBREW?
+[Homebrew](https://brew.sh/) is a free package manager for macOS that makes it easy to install command-line tools and applications from the terminal. Many of the macOS instructions below use `brew install` commands, which require Homebrew to be installed first.
+:::
+
+If you're on macOS and don't have Homebrew yet, open the **Terminal** app (found in Applications → Utilities) and paste this command:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Follow the on-screen prompts to complete the installation. Once finished, you can use any of the `brew install` commands in the sections below.
+
+::: tip
+If you prefer not to use Homebrew, each section also links to the tool's official website where you can download a traditional installer.
+:::
+
 ### LaTeX Distribution
 
 ::: tip IMPORTANT
@@ -65,7 +83,7 @@ Install either:
 Install MacTeX:
 
 - Download from [tug.org/mactex/mactex-download.html](https://www.tug.org/mactex/mactex-download.html)
-- Or use Homebrew: `brew install --cask mactex`
+- Or use [Homebrew](#homebrew): `brew install --cask mactex`
 
 #### Linux (Ubuntu/Debian)
 
