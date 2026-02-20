@@ -19,8 +19,9 @@ import type { ReadInput } from '@tools/ReadTool';
 import type { WriteInput } from '@tools/WriteTool';
 import type {
   DelegateAgentInput,
+  ResumeAgentInput,
   WorkflowAgentInput,
-} from '@tools/WorkflowTool';
+} from '@tools/DelegationTools';
 import type { AcceptRunFilesInput } from '@tools/AcceptRunFilesTool';
 
 // Local imports - Lit template utilities
@@ -490,6 +491,17 @@ export function formatToolUseTemplate(
       })}`;
       // prettier-ignore
       sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
+    }
+  }
+  // Handle resume_agent separately — it has execution_id, not agent/model
+  else if (toolName === 'resume_agent' && typeof input === 'object' && input !== null) {
+    const resumeInput = input as ResumeAgentInput;
+    // prettier-ignore
+    sections.push(buildToolUseSection('Execution:', html`<code class="execution-id">${resumeInput.execution_id}</code>`));
+    if (resumeInput.instruction) {
+      sections.push(
+        buildToolUseSection('Instruction:', wrapInPre(resumeInput.instruction)),
+      );
     }
   }
   // Handle delegation tools with structured display
