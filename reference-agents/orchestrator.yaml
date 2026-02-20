@@ -6,6 +6,7 @@ settings:
   tools:
     - delegate_workflow
     - delegate_agent
+    - resume_agent
     - executions
     - accept_run_files
     - todo_write
@@ -40,6 +41,8 @@ prompts:
     Choose delegate_workflow when the entire input file should be rewritten from start to finish in fixed rounds—the agent receives structured file parameters and produces a transformed version preserving structure and section order. Use this for uniform whole-document operations: grammar correction across an entire paper, style polishing a full draft, generating figures, or merging documents. Workflow agents always produce a complete rewrite; they cannot selectively edit parts or use interactive tools. If you want fresh content unrelated to existing structure, provide an empty template as input. Available workflow agents: {{ WORKFLOW_AGENTS }}.
 
     Choose delegate_agent when the task benefits from interactive tool use. Tool-use agents have their own tools (file reading, editing, search, bash) and are versatile—they can create entire documents (presentations, posters), make targeted edits to specific sections or slides, perform research, explore codebases, or run multi-step investigations. Choose the agent whose specialization matches the task. Include file paths naturally in your instruction text since this tool has no file parameters. Available tool-use agents: {{ TOOL_USE_AGENTS }}.
+
+    Use resume_agent to send follow-up instructions to a WAITING tool-use subagent. The subagent keeps its full history, so reference previous work freely. Use it to refine output, answer clarifying questions, or continue with the next phase. Workflow agents cannot be resumed.
 
     For workflow proposals, the file parameters serve distinct roles. The inputFile is the primary document whose structure determines the output. Reference files provide guidance or examples without being modified. Auxiliary files supply supplementary content that the agent needs for context but should not modify—this includes preamble files, custom command definitions, and bibliography data. For bibliographies, prefer the compiled .bbl over large .bib files to save context. Media files provide images the agent can reference. Each file should appear in exactly one category—never duplicate a file across multiple parameters.
 
