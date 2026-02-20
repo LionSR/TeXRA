@@ -60,6 +60,7 @@ export const StreamTabInfoSchema = z.object({
   status: StreamStatusSchema.nullish(),
   executionId: ExecutionIdSchema.optional(),
   parentStreamId: StreamTabIdSchema.optional(),
+  worktreeBranch: z.string().optional(),
 });
 export type StreamTabInfo = z.infer<typeof StreamTabInfoSchema>;
 

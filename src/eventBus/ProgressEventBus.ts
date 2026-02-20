@@ -43,6 +43,7 @@ interface SetTaskStatePayload {
   streamId: StreamTabId;
   executionId?: ExecutionId;
   taskState: TaskState;
+  worktreeBranch?: string;
 }
 
 const MAX_BUFFER_SIZE = 1000;

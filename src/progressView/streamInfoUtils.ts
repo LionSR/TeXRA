@@ -89,6 +89,7 @@ function buildStreamInfo(
     status: statuses?.get(id),
     executionId: state.getExecutionId(id),
     parentStreamId: state.getParentStreamId(id),
+    worktreeBranch: state.getWorktreeBranch(id),
   };
 }
 

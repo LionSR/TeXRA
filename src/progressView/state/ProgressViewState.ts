@@ -85,6 +85,7 @@ export class ProgressViewState {
   private _prefs!: PersistedState<ProgressViewPrefs>;
   private readonly taskStates = new Map<StreamTabId, TaskState>();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
+  private readonly worktreeBranches = new Map<StreamTabId, string>();
   private _streamStates = new Map<StreamTabId, StreamState>();
   private _sessionState = new Map<StreamTabId, StreamSessionState>();
 
@@ -380,6 +381,14 @@ export class ProgressViewState {
     return this.taskStates.get(streamTabId);
   }
 
+  setWorktreeBranch(streamTabId: StreamTabId, branch: string): void {
+    this.worktreeBranches.set(streamTabId, branch);
+  }
+
+  getWorktreeBranch(streamTabId: StreamTabId): string | undefined {
+    return this.worktreeBranches.get(streamTabId);
+  }
+
   getRunOutputFiles(
     stream: StreamTabId,
     options: { storageKey: StorageKey },
@@ -407,6 +416,7 @@ export class ProgressViewState {
 
     const removedState = this.taskStates.delete(stream);
     this._executionIds.delete(stream);
+    this.worktreeBranches.delete(stream);
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
 
@@ -440,6 +450,7 @@ export class ProgressViewState {
     ]);
     this.taskStates.clear();
     this._executionIds.clear();
+    this.worktreeBranches.clear();
     this._sessionState.clear();
     this._streamStates.clear();
     this._prefs.reset();

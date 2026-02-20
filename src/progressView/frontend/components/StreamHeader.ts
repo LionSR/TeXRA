@@ -365,6 +365,10 @@ export class StreamHeader extends LitElement {
         --_badge-color: var(--color-text-secondary);
       }
 
+      .worktree-badge {
+        --_badge-color: var(--color-success, var(--vscode-charts-green));
+      }
+
       @media (max-width: 500px) {
         .log-header {
           flex-wrap: wrap;
@@ -434,6 +438,15 @@ export class StreamHeader extends LitElement {
               })}
               data-status=${statusLabel}
             ></span>
+            ${this.stream.worktreeBranch
+              ? html`<span
+                  class="child-badge worktree-badge"
+                  title="Running in worktree: ${this.stream.worktreeBranch}"
+                >
+                  <i class="codicon codicon-git-branch"></i>
+                  ${this.stream.worktreeBranch}
+                </span>`
+              : nothing}
             ${totalSubagents > 0
               ? html`<span
                   class="child-badge subagent-badge"

@@ -515,7 +515,7 @@ async function resolveAndAcquireStream(
 async function prepareAgentUI(
   ctx: ResolvedAgentBase,
   executionId: ExecutionId | undefined,
-  options?: { isSubagent?: boolean },
+  options?: { isSubagent?: boolean; worktreeBranch?: string },
 ): Promise<void> {
   if (executionId) await ensureRunDir(executionId);
   const { streamId, config } = ctx;
@@ -547,6 +547,7 @@ async function prepareAgentUI(
     streamId,
     executionId,
     taskState: agentConfigToTaskState(config),
+    worktreeBranch: options?.worktreeBranch,
   });
 
   const { outputFiles, useMultipleOutputs } = config;
@@ -586,6 +587,8 @@ export interface ExecuteAgentOptions {
    * without affecting the user's working tree.
    */
   workspacePath?: string;
+  /** Git branch name created for worktree isolation (displayed in progress view metadata). */
+  worktreeBranch?: string;
 }
 
 export async function executeAgent(
@@ -609,7 +612,10 @@ export async function executeAgent(
     streamId,
     agentName,
     async () => {
-      await prepareAgentUI(ctx, executionId, { isSubagent });
+      await prepareAgentUI(ctx, executionId, {
+        isSubagent,
+        worktreeBranch: options?.worktreeBranch,
+      });
 
       const taskStage = await logger.stage(
         `Task: ${agentName}@${config.model}`,

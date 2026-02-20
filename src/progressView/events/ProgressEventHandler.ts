@@ -165,12 +165,16 @@ export class ProgressEventHandler {
       'StreamStatus',
       'failed to handle setTaskState',
       () => {
-        const { streamId, executionId, taskState } = data;
+        const { streamId, executionId, taskState, worktreeBranch } = data;
         const isActiveStream = this.state.activeStream === streamId;
         const category = taskState.agentConfig.agentCategory;
         const previousFilter = this.state.agentCategoryFilter;
 
         this.state.setTaskState(streamId, taskState);
+
+        if (worktreeBranch) {
+          this.state.setWorktreeBranch(streamId, worktreeBranch);
+        }
 
         if (isActiveStream) {
           this.maybeUpdateFilterForCategory(category);

@@ -56,6 +56,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     // Worktree isolation: create a separate git worktree for the agent
     const useWorktree = config.toolConfig?.worktreeIsolation === true;
     let worktreePath: string | undefined;
+    let worktreeBranch: string | undefined;
     try {
       if (useWorktree && !isResume) {
         const info = await createWorktree({
@@ -63,13 +64,15 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
           agentName: config.agent,
         });
         worktreePath = info.path;
+        worktreeBranch = info.branch;
         logger.info(
           CHANNEL,
-          `Created worktree for agent "${config.agent}" at ${worktreePath}`,
+          `Created worktree for agent "${config.agent}" on branch ${worktreeBranch}`,
         );
       }
       await executeAgent(config, executionId, {
         workspacePath: worktreePath,
+        worktreeBranch,
       });
     } finally {
       if (worktreePath) {
