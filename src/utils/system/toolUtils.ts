@@ -439,3 +439,37 @@ export async function checkCoreDependencies(
     return ['latexindent', 'perl', 'gs', 'gm/magick'];
   }
 }
+
+/**
+ * Detect the first available package manager on the system.
+ * Returns 'brew', 'apt', 'scoop', or null if none found.
+ */
+export function detectPackageManager(): 'brew' | 'apt' | 'scoop' | null {
+  const extendedPath = extendEnvPath();
+  const execOptions = {
+    env: { ...process.env, PATH: extendedPath },
+    reject: false,
+  };
+
+  // Order: brew first (macOS), then apt (Linux), then scoop (Windows)
+  const managers = [
+    { name: 'brew' as const, args: ['--version'] },
+    { name: 'apt' as const, args: ['--version'] },
+    { name: 'scoop' as const, args: ['--version'] },
+  ];
+
+  for (const { name, args } of managers) {
+    try {
+      const result = execaSync(name, args, execOptions);
+      if (result.exitCode === 0) {
+        logger.debug(CHANNEL, `Package manager detected: ${name}`);
+        return name;
+      }
+    } catch {
+      // Not available, try next
+    }
+  }
+
+  logger.debug(CHANNEL, 'No package manager detected');
+  return null;
+}

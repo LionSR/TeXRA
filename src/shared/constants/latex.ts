@@ -243,6 +243,100 @@ export const IMAGE_PROCESSING_INSTALL_GUIDE = combineGuides(
 );
 
 // ============================================================
+// Structured install commands (for Copy / Run in Terminal)
+// ============================================================
+
+/**
+ * A concrete install command for a dependency on a given platform.
+ * Used by the LaTeX tab to power "Copy command" and "Run in Terminal" buttons.
+ */
+export interface InstallCommand {
+  /** The full shell command (e.g. "brew install ghostscript"). */
+  readonly command: string;
+  /** Whether the command requires sudo (used to decide button behaviour). */
+  readonly requiresSudo: boolean;
+  /** The package manager the command targets (null = direct download / manual). */
+  readonly packageManager: 'brew' | 'apt' | null;
+}
+
+/**
+ * Per-dependency install commands keyed by `DependencyInfo.key`.
+ *
+ * A `null` entry means there is no single-command install for that
+ * platform (e.g. Windows usually requires a manual download).
+ */
+export const DEPENDENCY_INSTALL_COMMANDS: Record<
+  string,
+  Record<Platform, InstallCommand | null>
+> = {
+  texDistributionInstalled: {
+    darwin: {
+      command: 'brew install --cask mactex',
+      requiresSudo: false,
+      packageManager: 'brew',
+    },
+    linux: {
+      command: 'sudo apt-get install -y texlive-full',
+      requiresSudo: true,
+      packageManager: 'apt',
+    },
+    win32: null,
+  },
+  latexdiffInstalled: {
+    darwin: {
+      command: 'brew install latexdiff',
+      requiresSudo: false,
+      packageManager: 'brew',
+    },
+    linux: {
+      command: 'sudo apt-get install -y latexdiff',
+      requiresSudo: true,
+      packageManager: 'apt',
+    },
+    win32: null,
+  },
+  latexindentInstalled: {
+    darwin: {
+      command: 'brew install latexindent',
+      requiresSudo: false,
+      packageManager: 'brew',
+    },
+    linux: {
+      command: 'sudo apt-get install -y texlive-extra-utils perl',
+      requiresSudo: true,
+      packageManager: 'apt',
+    },
+    win32: null,
+  },
+  texcountInstalled: {
+    darwin: {
+      command: 'brew install texcount',
+      requiresSudo: false,
+      packageManager: 'brew',
+    },
+    linux: {
+      command: 'sudo apt-get install -y texlive-extra-utils',
+      requiresSudo: true,
+      packageManager: 'apt',
+    },
+    win32: null,
+  },
+  imageProcessingInstalled: {
+    darwin: {
+      command: 'brew install ghostscript graphicsmagick',
+      requiresSudo: false,
+      packageManager: 'brew',
+    },
+    linux: {
+      command: 'sudo apt-get install -y ghostscript graphicsmagick',
+      requiresSudo: true,
+      packageManager: 'apt',
+    },
+    win32: null,
+  },
+};
+
+// ============================================================
 // Utility functions
 // ============================================================
 

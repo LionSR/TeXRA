@@ -93,7 +93,10 @@ import {
   isConfigExplicitlySet,
   updateConfig,
 } from '@utils/config/configUtils';
-import { checkToolInstalled } from '@utils/system/toolUtils';
+import {
+  checkToolInstalled,
+  detectPackageManager,
+} from '@utils/system/toolUtils';
 import { findToolInCommonPaths } from '@utils/system/platformPaths';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
@@ -457,6 +460,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleApplyLatexSettings(data),
       [SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP]: () =>
         this.handleInstallLatexWorkshop(),
+      [SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND]: (data) =>
+        this.handleRunInstallCommand(data),
     };
   }
 
@@ -1827,6 +1832,7 @@ prompts:
       ghostscriptPath: findToolInCommonPaths('gs'),
       graphicsmagickPath:
         findToolInCommonPaths('gm') ?? findToolInCommonPaths('magick'),
+      packageManager: detectPackageManager(),
     };
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
@@ -1925,6 +1931,17 @@ prompts:
         error,
       );
     }
+  }
+
+  private async handleRunInstallCommand(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.RUN_INSTALL_COMMAND>,
+  ): Promise<void> {
+    const terminal = vscode.window.createTerminal({
+      name: 'TeXRA Install',
+      hideFromUser: false,
+    });
+    terminal.show();
+    terminal.sendText(data.installCommand);
   }
 
   // ============================================================

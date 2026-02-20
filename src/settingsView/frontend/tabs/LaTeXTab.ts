@@ -23,8 +23,13 @@ import {
   LATEXINDENT_INSTALL_GUIDE,
   TEXCOUNT_INSTALL_GUIDE,
   IMAGE_PROCESSING_INSTALL_GUIDE,
+  DEPENDENCY_INSTALL_COMMANDS,
+  type InstallCommand,
   type Platform,
 } from '@shared/constants/latex';
+
+// Local imports - shared utilities
+import { copyTextToClipboard } from '@shared/utils/clipboard';
 
 /** Path keys in LatexSettingsStatus for tool paths. */
 type ToolPathKey =
@@ -260,6 +265,17 @@ export class LaTeXTab extends LitElement {
         color: var(--color-text-secondary);
       }
 
+      .dependency-install-actions {
+        display: flex;
+        gap: var(--spacing-small);
+        margin-top: var(--spacing-small);
+      }
+
+      .copy-success {
+        color: var(--vscode-testing-iconPassed, #73c991) !important;
+        border-color: var(--vscode-testing-iconPassed, #73c991) !important;
+      }
+
       .section-header {
         display: flex;
         align-items: center;
@@ -378,6 +394,47 @@ export class LaTeXTab extends LitElement {
     return this.settings.outDir && this.settings.autoRevealExclude;
   }
 
+  /**
+   * Return the install command for a missing dependency, or null if no
+   * single-command install is available (e.g. Windows manual download, or
+   * the required package manager is not installed).
+   */
+  private getInstallCommand(dep: DependencyInfo): InstallCommand | null {
+    const platform = this.settings.platform as Platform;
+    const commands = DEPENDENCY_INSTALL_COMMANDS[dep.key];
+    if (!commands) return null;
+    const cmd = commands[platform];
+    if (!cmd) return null;
+    // Only offer the command if the required package manager is present
+    if (cmd.packageManager && cmd.packageManager !== this.settings.packageManager) {
+      return null;
+    }
+    return cmd;
+  }
+
+  private async handleCopyCommand(e: Event, command: string): Promise<void> {
+    const button = (e.currentTarget ?? e.target) as HTMLElement;
+    const ok = await copyTextToClipboard(command);
+    if (ok) {
+      button.classList.add('copy-success');
+      button.setAttribute('title', 'Copied!');
+      setTimeout(() => {
+        button.classList.remove('copy-success');
+        button.setAttribute('title', 'Copy command');
+      }, 2000);
+    }
+  }
+
+  private handleRunInTerminal(command: string): void {
+    this.dispatchEvent(
+      new CustomEvent('latex-run-install-command', {
+        bubbles: true,
+        composed: true,
+        detail: { installCommand: command },
+      }),
+    );
+  }
+
   /** Collect detected tool paths for a dependency. */
   private getDetectedPaths(dep: DependencyInfo): string[] {
     if (!dep.pathKeys) return [];
@@ -392,6 +449,7 @@ export class LaTeXTab extends LitElement {
     const platform = this.settings.platform as Platform;
     const guideText = dep.installGuide?.[platform] ?? dep.installGuide?.linux;
     const detectedPaths = installed ? this.getDetectedPaths(dep) : [];
+    const installCmd = !installed ? this.getInstallCommand(dep) : null;
 
     return html`
       <div class="dependency-card">
@@ -431,6 +489,29 @@ export class LaTeXTab extends LitElement {
                 `
               : html`<span class="setting-badge not-set">Not found</span>`}
         </div>
+        ${!installed && installCmd
+          ? html`
+              <div class="dependency-install-actions">
+                <button
+                  class="tab-action-btn"
+                  title="Copy command"
+                  @click=${(e: Event) =>
+                    this.handleCopyCommand(e, installCmd.command)}
+                >
+                  <span class="codicon codicon-copy"></span>
+                  Copy
+                </button>
+                <button
+                  class="tab-action-btn"
+                  title="Run in VS Code terminal"
+                  @click=${() => this.handleRunInTerminal(installCmd.command)}
+                >
+                  <span class="codicon codicon-terminal"></span>
+                  Run in Terminal
+                </button>
+              </div>
+            `
+          : nothing}
         ${!installed && guideText
           ? html`
               <button

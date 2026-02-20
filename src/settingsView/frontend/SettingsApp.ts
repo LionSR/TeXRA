@@ -520,6 +520,10 @@ export class SettingsApp extends BaseWebviewApp {
     postMessage(SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP);
   }
 
+  private handleRunInstallCommand = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
+  );
+
   private handleOpenVscodeSettings(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS);
   }
@@ -689,6 +693,7 @@ export class SettingsApp extends BaseWebviewApp {
               .loaded=${this.latexSettingsLoaded}
               @latex-apply-settings=${this.handleApplyLatexSettings}
               @latex-install-workshop=${this.handleInstallLatexWorkshop}
+              @latex-run-install-command=${this.handleRunInstallCommand}
             ></latex-tab>
           </vscode-tab-panel>
         </vscode-tabs>
