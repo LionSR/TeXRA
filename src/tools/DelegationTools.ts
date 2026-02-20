@@ -67,7 +67,7 @@ import {
 import { defineTool } from '@tools/core/define';
 
 // Local imports - utils
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, workspaceRootStorage } from '@utils/files';
 import { generateExecutionId } from '@utils/core/executionId';
 
 // ============================================================================
@@ -166,6 +166,8 @@ async function executeSubagent(
   const promise = executeAgent(configPayload, executionId, {
     isSubagent: true,
     parentStreamId: orchestratorStreamId,
+    // Inherit worktree path so subagents operate in the same worktree
+    workspacePath: workspaceRootStorage.getStore(),
     onStreamResolved: (resolvedStreamId) => {
       childStreamId = resolvedStreamId;
       if (options?.enableYoloOnChild) {

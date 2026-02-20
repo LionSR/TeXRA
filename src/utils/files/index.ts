@@ -4,6 +4,7 @@ export { WorkspaceFS } from './workspaceFS';
 export { AbsoluteFS } from './absoluteFS';
 export { StorageFS, GlobalStorageFS } from './storageFS';
 export { RelativeFS } from './relativeFS';
+export { workspaceRootStorage } from './workspaceRootContext';
 
 // Heavily-used utilities (re-exported for convenience)
 export * from './fileMappingUtils';

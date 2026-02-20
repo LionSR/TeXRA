@@ -36,6 +36,7 @@ import {
   createWorkspaceLocation,
   type AgentFileLocation,
   type WorkspaceFileLocation,
+  workspaceRootStorage,
 } from '@utils/files';
 import { PromptBuilder } from '@utils/prompt';
 import { LatexMediaManager } from '@latex';
@@ -295,7 +296,10 @@ export async function runReflectionFlow<C = unknown>(
       await pf.setShared(shared);
     }
 
-    const flowStatus = await pf.run(shared);
+    // When running in a worktree, the entire flow sees the override.
+    const flowStatus = await (input.workspacePath
+      ? workspaceRootStorage.run(input.workspacePath, () => pf.run(shared))
+      : pf.run(shared));
     shared = await pf.getShared();
 
     if (shared?.lastError) {

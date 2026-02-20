@@ -579,6 +579,13 @@ export interface ExecuteAgentOptions {
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Fires after flow completes but BEFORE untrackExecution, so follow-ups are enqueued before waiters resolve. */
   onCompleted?: (result: AgentFlowResult) => void;
+  /**
+   * Worktree root override. When set, all tools see this directory as
+   * their workspace instead of the VS Code workspace folder.
+   * Used for git worktree isolation — agents work on a separate branch
+   * without affecting the user's working tree.
+   */
+  workspacePath?: string;
 }
 
 export async function executeAgent(
@@ -620,6 +627,7 @@ export async function executeAgent(
               ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
             setting: ctx.setting as AgentToolUseSetting,
             isSubagent,
+            workspacePath: options?.workspacePath,
             onBeforeWaiting: options?.onBeforeWaiting,
             onProgress: (update) => {
               if (update.kind === 'overview') {
@@ -659,6 +667,7 @@ export async function executeAgent(
           setting: ctx.setting as AgentWorkflowSetting,
           parentStage: ctx.parentStage,
           onRoundCompleted,
+          workspacePath: options?.workspacePath,
         });
         return {
           category: 'workflow' as const,

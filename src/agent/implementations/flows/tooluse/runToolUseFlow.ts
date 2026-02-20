@@ -34,6 +34,7 @@ import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
 import type { SubagentProgressUpdate } from '@tools/subagentResults';
+import { workspaceRootStorage } from '@utils/files';
 
 export interface RunToolUseFlowInput<
   C = unknown,
@@ -177,7 +178,11 @@ export async function runToolUseFlow<C = unknown>(
       ToolUseServices<C>
     >(prepareNode, kv);
     pf.setServices(services);
-    await pf.run(shared);
+    // Single activation point: when running in a worktree, the entire flow
+    // (prompts, tools, subagents) sees the override via AsyncLocalStorage.
+    await (input.workspacePath
+      ? workspaceRootStorage.run(input.workspacePath, () => pf.run(shared))
+      : pf.run(shared));
     // Re-read shared from the flow record — PersistedFlow deep-clones the
     // initial shared via structuredClone, so nodes mutate the clone, not the
     // original object.  Without this, reads of lastError, messages, etc. below

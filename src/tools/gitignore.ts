@@ -32,7 +32,12 @@ const EMPTY_GITIGNORE_MATCHER: GitignoreMatcher = {
   ignoreFiles: [],
 };
 
-let gitignoreMatcherPromise: Promise<GitignoreMatcher> | undefined;
+/**
+ * Per-root cache for gitignore matchers.
+ * Worktrees may have different .gitignore files than the main workspace,
+ * so the cache is keyed by the effective workspace root path.
+ */
+const matcherCache = new Map<string, Promise<GitignoreMatcher>>();
 
 function expandGitignorePattern(
   pattern: string,
@@ -200,12 +205,22 @@ async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
 }
 
 export async function getGitignoreMatcher(): Promise<GitignoreMatcher> {
-  if (!gitignoreMatcherPromise) {
-    gitignoreMatcherPromise = loadGitignoreMatcher();
+  const root = WorkspaceFS.getPath();
+  if (!root) return EMPTY_GITIGNORE_MATCHER;
+
+  let promise = matcherCache.get(root);
+  if (!promise) {
+    promise = loadGitignoreMatcher();
+    matcherCache.set(root, promise);
   }
-  return gitignoreMatcherPromise;
+  return promise;
 }
 
-export function clearGitignoreCache(): void {
-  gitignoreMatcherPromise = undefined;
+/** Evict cached gitignore matchers. Pass a root to evict a single entry; omit to clear all. */
+export function clearGitignoreCache(root?: string): void {
+  if (root) {
+    matcherCache.delete(root);
+  } else {
+    matcherCache.clear();
+  }
 }

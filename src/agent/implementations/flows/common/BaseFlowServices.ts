@@ -22,6 +22,11 @@ export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {
   setAbortController: (ctrl: AbortController | null) => void;
   onInterrupt?: () => void;
   onRoundFinalized?: RoundFinalizedCallback;
+  /**
+   * Worktree root override. When set, tools see this directory as workspace.
+   * Threads automatically through all services via interface extension.
+   */
+  workspacePath?: string;
 }
 
 export interface FlowParams {
