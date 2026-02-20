@@ -63,6 +63,12 @@ export interface MessageHandlerContext extends FrontendEventHandlerContext {
 const pendingLogUpdates = new Map<string, Partial<LogMessageData>>();
 
 /**
+ * Per-stream log ID -> array index lookup.
+ * Avoids O(n) scans on every UPDATE_LOG when streams contain many entries.
+ */
+const logIdIndexByStream = new Map<string, Map<string, number>>();
+
+/**
  * Proposal IDs that were resolved before their SHOW message arrived.
  * When RESOLVE arrives for a proposal not yet in the permission list, we stash the ID.
  * A subsequent SHOW for a stashed ID is dropped instead of creating a ghost permission.
@@ -85,6 +91,30 @@ function clearPendingLogUpdatesForStream(streamId: string): void {
       pendingLogUpdates.delete(key);
     }
   }
+}
+
+function getOrCreateLogIdIndex(streamId: string): Map<string, number> {
+  const existing = logIdIndexByStream.get(streamId);
+  if (existing) return existing;
+  const created = new Map<string, number>();
+  logIdIndexByStream.set(streamId, created);
+  return created;
+}
+
+function clearLogIdIndexForStream(streamId: string): void {
+  logIdIndexByStream.delete(streamId);
+}
+
+function rebuildLogIdIndexForStream(
+  streamId: string,
+  logs: LogMessageData[],
+): void {
+  const index = new Map<string, number>();
+  for (let i = 0; i < logs.length; i++) {
+    const id = logs[i]?.id;
+    if (id) index.set(id, i);
+  }
+  logIdIndexByStream.set(streamId, index);
 }
 
 function addPermission(
@@ -146,6 +176,24 @@ function setActiveStreamRecording(
   }));
 }
 
+function isSameStreamInfo(a: StreamTabInfo, b: StreamTabInfo): boolean {
+  return (
+    a.name === b.name &&
+    a.label === b.label &&
+    a.model === b.model &&
+    a.agent === b.agent &&
+    a.agentCategory === b.agentCategory &&
+    a.hasMultipleOutputs === b.hasMultipleOutputs &&
+    a.isRemote === b.isRemote &&
+    a.lastTimestamp === b.lastTimestamp &&
+    a.inputFile === b.inputFile &&
+    a.creationTimestamp === b.creationTimestamp &&
+    a.status === b.status &&
+    a.executionId === b.executionId &&
+    a.parentStreamId === b.parentStreamId
+  );
+}
+
 function updateStreamInfo(
   state: ProgressState,
   streams: StreamTabInfo[],
@@ -160,16 +208,32 @@ function updateStreamInfo(
       nextStates.delete(key);
       nextLogs.delete(key);
       clearPendingLogUpdatesForStream(key);
+      clearLogIdIndexForStream(key);
     }
   }
 
-  for (const stream of streams) {
+  const previousStreamsById = new Map(
+    state.streams.map((stream) => [stream.name, stream]),
+  );
+  let streamsChanged = streams.length !== state.streams.length;
+  const nextStreams = streams.map((stream, index) => {
+    const previous = previousStreamsById.get(stream.name);
+    const next =
+      previous && isSameStreamInfo(previous, stream) ? previous : stream;
+    if (!streamsChanged && state.streams[index] !== next) {
+      streamsChanged = true;
+    }
+    return next;
+  });
+
+  for (const stream of nextStreams) {
     const backendState = backendStates?.[stream.name];
     if (backendState) {
       const existing = nextStates.get(stream.name);
       // Seed streamLogs from backend state when no frontend logs exist yet
       if (!nextLogs.has(stream.name) && backendState.logs.length > 0) {
         nextLogs.set(stream.name, { logs: backendState.logs });
+        rebuildLogIdIndexForStream(stream.name, backendState.logs);
       }
       // Preserve frontend-owned properties that backend _streamStates never populates:
       // - 'ui': frontend UI state (follow-up text, polish state, etc.)
@@ -201,7 +265,12 @@ function updateStreamInfo(
     }
   }
 
-  return { ...state, streams, streamStates: nextStates, streamLogs: nextLogs };
+  return {
+    ...state,
+    streams: streamsChanged ? nextStreams : state.streams,
+    streamStates: nextStates,
+    streamLogs: nextLogs,
+  };
 }
 
 // ============================================================
@@ -272,6 +341,7 @@ const handlers: HandlerRegistry = {
 
     // Always clear pending log updates for deleted stream, not just active stream
     clearPendingLogUpdatesForStream(streamId);
+    clearLogIdIndexForStream(streamId);
 
     ctx.setState(() => ({
       ...state,
@@ -289,6 +359,7 @@ const handlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: (_data, ctx) => {
     pendingLogUpdates.clear();
+    logIdIndexByStream.clear();
     ctx.setState((prev) => ({
       ...prev,
       streams: [],
@@ -305,6 +376,7 @@ const handlers: HandlerRegistry = {
 
     if (!stream && action === 'clear') {
       pendingLogUpdates.clear();
+      logIdIndexByStream.clear();
       ctx.setState((prev) => ({
         ...prev,
         streamStates: new Map(),
@@ -318,6 +390,7 @@ const handlers: HandlerRegistry = {
     const isClear = action === 'clear';
     if (isClear) {
       clearPendingLogUpdatesForStream(stream);
+      clearLogIdIndexForStream(stream);
     }
 
     // Update meta first — setStreamState creates the streamStates entry if needed,
@@ -389,7 +462,12 @@ const handlers: HandlerRegistry = {
     // Update logs in the separate streamLogs Map (after setStreamState so the entry exists)
     ctx.setStreamLogs(stream, () => ({
       logs: isClear ? [] : messages,
+      lastUpdatedLogId: null,
+      lastUpdatedLogIndex: null,
     }));
+    if (!isClear) {
+      rebuildLogIdIndexForStream(stream, messages);
+    }
   },
 
   // --- Log updates ---
@@ -398,6 +476,8 @@ const handlers: HandlerRegistry = {
   // (content components) skip re-rendering on log-only updates.
 
   [PROGRESS_VIEW_COMMANDS.APPEND_LOG]: (data, ctx) => {
+    if (!ctx.getState().streamStates.has(data.stream)) return;
+
     const logId = data.logMessage.id;
     const pendingUpdate =
       logId && data.stream
@@ -412,21 +492,45 @@ const handlers: HandlerRegistry = {
       pendingLogUpdates.delete(getPendingLogKey(data.stream, logId));
     }
 
+    const logIdIndex = getOrCreateLogIdIndex(data.stream);
     ctx.setStreamLogs(data.stream, (prev) => {
       // Guard: skip if this message is already in the log list (race between
       // UPDATE_LOGS and APPEND_LOG can cause the same entry to arrive twice).
-      if (logId && prev.logs.some((entry) => entry.id === logId)) {
+      if (logId && logIdIndex.has(logId)) {
         return prev;
       }
-      return { logs: [...prev.logs, mergedLogMessage] };
+      const nextIndex = prev.logs.length;
+      if (logId) {
+        logIdIndex.set(logId, nextIndex);
+      }
+      return {
+        logs: [...prev.logs, mergedLogMessage],
+        lastUpdatedLogId: logId ?? null,
+        lastUpdatedLogIndex: nextIndex,
+      };
     });
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_LOG]: (data, ctx) => {
+    if (!ctx.getState().streamStates.has(data.stream)) return;
+
     const logId = data.logMessage.id;
+    const logIdIndex = getOrCreateLogIdIndex(data.stream);
 
     ctx.setStreamLogs(data.stream, (prev) => {
-      const logIndex = prev.logs.findIndex((entry) => entry.id === logId);
+      let logIndex = logId ? (logIdIndex.get(logId) ?? -1) : -1;
+
+      // Recover from stale/missing index (e.g., after backend snapshot sync).
+      if (
+        logIndex < 0 ||
+        logIndex >= prev.logs.length ||
+        (logId && prev.logs[logIndex]?.id !== logId)
+      ) {
+        logIndex = prev.logs.findIndex((entry) => entry.id === logId);
+        if (logId && logIndex >= 0) {
+          logIdIndex.set(logId, logIndex);
+        }
+      }
 
       if (logIndex < 0) {
         // Out-of-order: APPEND hasn't arrived yet, stash for later merge
@@ -443,7 +547,11 @@ const handlers: HandlerRegistry = {
 
       const newLogs = [...prev.logs];
       newLogs[logIndex] = data.logMessage;
-      return { logs: newLogs };
+      return {
+        logs: newLogs,
+        lastUpdatedLogId: logId ?? null,
+        lastUpdatedLogIndex: logIndex,
+      };
     });
   },
 
@@ -457,34 +565,57 @@ const handlers: HandlerRegistry = {
     // Single atomic update: stream state + tab metadata in one setState call,
     // avoiding two Map copies and two Lit re-render triggers.
     ctx.setState((prev) => {
-      const streamInfo = prev.streams.find((s) => s.name === stream);
-      const nextStates = new Map(prev.streamStates);
+      const streamInfoIndex = prev.streams.findIndex((s) => s.name === stream);
+      const streamInfo =
+        streamInfoIndex >= 0 ? prev.streams[streamInfoIndex] : undefined;
 
+      let nextStates = prev.streamStates;
       if (streamInfo) {
         const current = getStreamState(prev, stream, streamInfo.agentCategory);
-        const updatedState =
-          isToolUseState(current) && shouldFocus
-            ? {
-                ...current,
-                status,
-                ui: { ...current.ui, shouldFocusFollowUp: true },
-              }
-            : { ...current, status };
-        nextStates.set(stream, updatedState);
+        let updatedState = current;
+
+        if (isToolUseState(current) && shouldFocus) {
+          if (current.status !== status || !current.ui.shouldFocusFollowUp) {
+            updatedState = {
+              ...current,
+              status,
+              ui: { ...current.ui, shouldFocusFollowUp: true },
+            };
+          }
+        } else if (current.status !== status) {
+          updatedState = { ...current, status };
+        }
+
+        if (updatedState !== current) {
+          nextStates = new Map(prev.streamStates);
+          nextStates.set(stream, updatedState);
+        }
+      }
+
+      let nextStreams = prev.streams;
+      if (streamInfo) {
+        const nextLastTimestamp = lastTimestamp ?? streamInfo.lastTimestamp;
+        if (
+          streamInfo.status !== status ||
+          streamInfo.lastTimestamp !== nextLastTimestamp
+        ) {
+          nextStreams = [...prev.streams];
+          nextStreams[streamInfoIndex] = {
+            ...streamInfo,
+            status,
+            lastTimestamp: nextLastTimestamp,
+          };
+        }
+      }
+
+      if (nextStates === prev.streamStates && nextStreams === prev.streams) {
+        return prev;
       }
 
       return {
         ...prev,
         streamStates: nextStates,
-        streams: prev.streams.map((item) =>
-          item.name === stream
-            ? {
-                ...item,
-                status,
-                lastTimestamp: lastTimestamp ?? item.lastTimestamp,
-              }
-            : item,
-        ),
+        streams: nextStreams,
       };
     });
   },

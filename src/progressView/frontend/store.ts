@@ -43,9 +43,17 @@ export type FollowupOptionsState = Omit<
  */
 export interface StreamLogs {
   logs: LogMessageData[];
+  /** ID of the most recently updated/appended log entry (if known). */
+  lastUpdatedLogId: string | null;
+  /** Array index of the most recently updated/appended log entry (if known). */
+  lastUpdatedLogIndex: number | null;
 }
 
-export const EMPTY_STREAM_LOGS: StreamLogs = { logs: [] };
+export const EMPTY_STREAM_LOGS: StreamLogs = {
+  logs: [],
+  lastUpdatedLogId: null,
+  lastUpdatedLogIndex: null,
+};
 
 export interface ProgressState {
   activeStreamId: StreamTabId | null;

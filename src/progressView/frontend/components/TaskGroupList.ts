@@ -21,10 +21,10 @@ import { STREAM_STATUS } from '@shared/schemas';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';
 import { getGettingStartedHtml } from '@shared/utils/uiConstants';
-import { formatDuration } from '@utils/core';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
+import { formatDuration } from '@utils/core';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';
@@ -46,6 +46,10 @@ interface GroupTree {
   children: GroupTree[];
   messages: LogMessageData[];
 }
+
+type ToolUseTimelineItem =
+  | { key: string; time: number; msg: LogMessageData }
+  | { key: string; time: number; tree: GroupTree };
 
 const PLACEHOLDER_HTML = getGettingStartedHtml(
   'No runs yet—use TeXRA commands to start. Try ',
@@ -80,6 +84,10 @@ export class TaskGroupList extends LitElement {
   /** All log messages to render */
   @property({ attribute: false }) messages: LogMessageData[] = [];
 
+  /** Metadata for the latest message update (when provided by stream context). */
+  @property({ attribute: false }) lastUpdatedLogId: string | null = null;
+  @property({ attribute: false }) lastUpdatedLogIndex: number | null = null;
+
   /** Currently visible run ID (null = show all) */
   @property({ attribute: false }) activeRunId: string | null = null;
 
@@ -98,12 +106,21 @@ export class TaskGroupList extends LitElement {
   /** Memoized tree output from buildGroupTree() - recomputed only when inputs change */
   private cachedTree: GroupTree[] = [];
   private cachedUngrouped: LogMessageData[] = [];
+  private cachedToolUseTimeline: ToolUseTimelineItem[] = [];
 
   /** O(1) lookup from groupId → tree node. Built during buildGroupTree(). */
   private groupNodeIndex = new Map<string, GroupTree>();
 
   /** Memoized set of root group IDs for isGroupVisible() */
   private cachedRootGroupIds: Set<string> = new Set();
+
+  /** Expanded scopes for "show older entries" progressive rendering. */
+  private expandedMessageScopes = new Set<string>();
+
+  private static readonly DEFAULT_VISIBLE_MESSAGES = 300;
+  private static readonly DEFAULT_VISIBLE_TIMELINE_ITEMS = 500;
+  private static readonly TOOLUSE_TIMELINE_SCOPE = 'tooluse-timeline';
+  private static readonly WORKFLOW_UNGROUPED_SCOPE = 'workflow-ungrouped';
 
   /** Reference to the scroll container */
   @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
@@ -124,34 +141,65 @@ export class TaskGroupList extends LitElement {
   }
 
   override willUpdate(changedProperties: Map<string, unknown>): void {
+    if (!this.hasStreams && this.expandedMessageScopes.size > 0) {
+      this.expandedMessageScopes.clear();
+    }
+
     if (changedProperties.has('groups')) {
       this.checkForCompletedRuns();
     }
 
     const groupsChanged = changedProperties.has('groups');
     const messagesChanged = changedProperties.has('messages');
+    const modeChanged = changedProperties.has('isToolUse');
+    const prevMessages = messagesChanged
+      ? ((changedProperties.get('messages') as LogMessageData[] | undefined) ??
+        [])
+      : [];
+    const prevCount = prevMessages.length;
 
     if (groupsChanged) {
       // Structural change — always full rebuild
       [this.cachedTree, this.cachedUngrouped] = this.buildGroupTree();
     } else if (messagesChanged) {
-      // Only messages changed — use Lit's old value to pick incremental path
-      const prevMessages = changedProperties.get('messages') as
-        | LogMessageData[]
-        | undefined;
-      const prevCount = prevMessages?.length ?? 0;
-
-      if (this.messages.length === prevCount && prevMessages) {
+      if (this.messages.length === prevCount) {
         // Same length: text-only update (e.g. streaming UPDATE_LOG).
-        // Propagate fresh message references to cached structures so
-        // render() passes updated objects to repeat()/guard().
-        this.updateCachedMessageRefs(prevMessages);
+        // Prefer direct replacement via provided update index.
+        const updateIndex = this.lastUpdatedLogIndex;
+        const updateId = this.lastUpdatedLogId;
+        const canUseDirectUpdate =
+          updateIndex !== null &&
+          updateIndex >= 0 &&
+          updateIndex < this.messages.length &&
+          this.messages[updateIndex] !== prevMessages[updateIndex] &&
+          (updateId === null || this.messages[updateIndex].id === updateId);
+
+        if (canUseDirectUpdate) {
+          this.replaceSingleMessage(this.messages[updateIndex]);
+        } else {
+          // Fallback for snapshot-style updates that don't provide focused metadata.
+          this.updateCachedMessageRefs(prevMessages);
+        }
       } else if (this.messages.length > prevCount) {
         // Append-only: classify only the new messages incrementally.
         this.appendNewMessages(prevCount);
       } else {
         // Messages shrunk (e.g. clear) — full rebuild
         [this.cachedTree, this.cachedUngrouped] = this.buildGroupTree();
+      }
+    }
+
+    if (modeChanged) {
+      if (this.isToolUse) {
+        this.rebuildToolUseTimeline();
+      } else {
+        this.cachedToolUseTimeline = [];
+      }
+    } else if (this.isToolUse) {
+      if (groupsChanged || this.messages.length < prevCount) {
+        this.rebuildToolUseTimeline();
+      } else if (messagesChanged && this.messages.length > prevCount) {
+        this.appendNewUngroupedTimelineItems(prevCount);
       }
     }
 
@@ -175,31 +223,39 @@ export class TaskGroupList extends LitElement {
       const msg = this.messages[i];
       const node = msg.groupId ? this.groupNodeIndex.get(msg.groupId) : null;
       if (node) {
-        node.messages = this.insertMessageSorted(node.messages, msg);
+        this.insertMessageSortedInPlace(node.messages, msg);
       } else {
-        this.cachedUngrouped = this.insertMessageSorted(
-          this.cachedUngrouped,
-          msg,
-        );
+        this.insertMessageSortedInPlace(this.cachedUngrouped, msg);
       }
     }
   }
 
-  private insertMessageSorted(
+  private insertMessageSortedInPlace(
     target: LogMessageData[],
     message: LogMessageData,
-  ): LogMessageData[] {
-    const insertIndex = target.findIndex(
-      (entry) => entry.timestamp > message.timestamp,
-    );
-    if (insertIndex < 0) {
-      return [...target, message];
+  ): void {
+    const messageTime = message.timestamp ?? Number.MAX_SAFE_INTEGER;
+    const lastTime = target.at(-1)?.timestamp ?? Number.MAX_SAFE_INTEGER;
+
+    // Common case: append in chronological order.
+    if (target.length === 0 || lastTime <= messageTime) {
+      target.push(message);
+      return;
     }
-    return [
-      ...target.slice(0, insertIndex),
-      message,
-      ...target.slice(insertIndex),
-    ];
+
+    // Out-of-order insert: upper bound by timestamp to preserve stable order.
+    let low = 0;
+    let high = target.length;
+    while (low < high) {
+      const mid = (low + high) >>> 1;
+      const midTime = target[mid].timestamp ?? Number.MAX_SAFE_INTEGER;
+      if (midTime <= messageTime) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    target.splice(low, 0, message);
   }
 
   /**
@@ -233,22 +289,219 @@ export class TaskGroupList extends LitElement {
     if (msg.groupId) {
       const node = this.groupNodeIndex.get(msg.groupId);
       if (node) {
-        const idx = node.messages.findIndex((m) => m.id === msg.id);
-        if (idx >= 0) {
-          const updated = [...node.messages];
-          updated[idx] = msg;
-          node.messages = updated;
+        for (let i = node.messages.length - 1; i >= 0; i--) {
+          if (node.messages[i].id !== msg.id) continue;
+          node.messages[i] = msg;
           return;
         }
       }
     }
 
-    const idx = this.cachedUngrouped.findIndex((m) => m.id === msg.id);
-    if (idx >= 0) {
-      const updated = [...this.cachedUngrouped];
-      updated[idx] = msg;
-      this.cachedUngrouped = updated;
+    for (let i = this.cachedUngrouped.length - 1; i >= 0; i--) {
+      if (this.cachedUngrouped[i].id !== msg.id) continue;
+      this.cachedUngrouped[i] = msg;
+      this.replaceTimelineMessageRef(msg);
+      return;
     }
+  }
+
+  private rebuildToolUseTimeline(): void {
+    if (!this.isMessageScopeExpanded(TaskGroupList.TOOLUSE_TIMELINE_SCOPE)) {
+      this.cachedToolUseTimeline = this.buildToolUseTimelineWindow(
+        TaskGroupList.DEFAULT_VISIBLE_TIMELINE_ITEMS,
+      );
+      return;
+    }
+
+    const timeline: ToolUseTimelineItem[] = [];
+
+    for (const message of this.cachedUngrouped) {
+      timeline.push({
+        key: `msg:${message.id}`,
+        time: message.timestamp ?? 0,
+        msg: message,
+      });
+    }
+
+    for (const tree of this.cachedTree) {
+      timeline.push({
+        key: `group:${tree.group.id}`,
+        time: tree.group.startTime ?? 0,
+        tree,
+      });
+    }
+
+    timeline.sort((a, b) => a.time - b.time);
+    this.cachedToolUseTimeline = timeline;
+  }
+
+  private appendNewUngroupedTimelineItems(startIndex: number): void {
+    for (let i = startIndex; i < this.messages.length; i++) {
+      const message = this.messages[i];
+      if (message.groupId && this.groupNodeIndex.has(message.groupId)) {
+        continue;
+      }
+      this.insertTimelineItem({
+        key: `msg:${message.id}`,
+        time: message.timestamp ?? 0,
+        msg: message,
+      });
+    }
+    this.trimToolUseTimelineWindow();
+  }
+
+  private insertTimelineItem(item: ToolUseTimelineItem): void {
+    if (this.cachedToolUseTimeline.length === 0) {
+      this.cachedToolUseTimeline.push(item);
+      return;
+    }
+
+    const last = this.cachedToolUseTimeline.at(-1);
+    if (last && last.time <= item.time) {
+      this.cachedToolUseTimeline.push(item);
+      return;
+    }
+
+    let low = 0;
+    let high = this.cachedToolUseTimeline.length;
+    while (low < high) {
+      const mid = (low + high) >>> 1;
+      if (this.cachedToolUseTimeline[mid].time <= item.time) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    this.cachedToolUseTimeline.splice(low, 0, item);
+  }
+
+  private replaceTimelineMessageRef(message: LogMessageData): void {
+    const key = `msg:${message.id}`;
+    const index = this.cachedToolUseTimeline.findIndex(
+      (item) => item.key === key,
+    );
+    if (index < 0) return;
+
+    const item = this.cachedToolUseTimeline[index];
+    if (!('msg' in item)) return;
+
+    const nextTime = message.timestamp ?? 0;
+    if (item.time === nextTime) {
+      item.msg = message;
+      return;
+    }
+
+    this.cachedToolUseTimeline.splice(index, 1);
+    this.insertTimelineItem({ key, time: nextTime, msg: message });
+    this.trimToolUseTimelineWindow();
+  }
+
+  /**
+   * Build a bounded tail window for tool-use timeline by reverse-merging two
+   * sorted sources: ungrouped messages and root groups.
+   */
+  private buildToolUseTimelineWindow(limit: number): ToolUseTimelineItem[] {
+    const items: ToolUseTimelineItem[] = [];
+    let msgIndex = this.cachedUngrouped.length - 1;
+    let groupIndex = this.cachedTree.length - 1;
+
+    while (items.length < limit && (msgIndex >= 0 || groupIndex >= 0)) {
+      const msg = msgIndex >= 0 ? this.cachedUngrouped[msgIndex] : null;
+      const group = groupIndex >= 0 ? this.cachedTree[groupIndex] : null;
+      const msgTime = msg?.timestamp ?? Number.MIN_SAFE_INTEGER;
+      const groupTime = group?.group.startTime ?? Number.MIN_SAFE_INTEGER;
+
+      if (msg && (!group || msgTime >= groupTime)) {
+        items.push({
+          key: `msg:${msg.id}`,
+          time: msgTime,
+          msg,
+        });
+        msgIndex--;
+      } else if (group) {
+        items.push({
+          key: `group:${group.group.id}`,
+          time: groupTime,
+          tree: group,
+        });
+        groupIndex--;
+      } else {
+        break;
+      }
+    }
+
+    items.reverse();
+    return items;
+  }
+
+  private trimToolUseTimelineWindow(): void {
+    if (this.isMessageScopeExpanded(TaskGroupList.TOOLUSE_TIMELINE_SCOPE)) {
+      return;
+    }
+    const overshoot =
+      this.cachedToolUseTimeline.length -
+      TaskGroupList.DEFAULT_VISIBLE_TIMELINE_ITEMS;
+    if (overshoot > 0) {
+      this.cachedToolUseTimeline.splice(0, overshoot);
+    }
+  }
+
+  private isMessageScopeExpanded(scope: string): boolean {
+    return this.expandedMessageScopes.has(scope);
+  }
+
+  private renderMessageList(
+    messages: LogMessageData[],
+    scope: string,
+  ): TemplateResult {
+    const expanded = this.isMessageScopeExpanded(scope);
+    const visibleMessages =
+      !expanded && messages.length > TaskGroupList.DEFAULT_VISIBLE_MESSAGES
+        ? messages.slice(-TaskGroupList.DEFAULT_VISIBLE_MESSAGES)
+        : messages;
+    const hiddenCount = messages.length - visibleMessages.length;
+
+    return html`${this.renderShowOlderControl(scope, hiddenCount)}${repeat(
+      visibleMessages,
+      (m) => m.id,
+      (m) => guard([m], () => formatLogEntry(m)),
+    )}`;
+  }
+
+  private renderShowOlderControl(
+    scope: string,
+    hiddenCount: number,
+  ): TemplateResult | typeof nothing {
+    if (hiddenCount <= 0) return nothing;
+    return html`<div class="log-history-control">
+      <button
+        type="button"
+        class="show-older-logs file-link"
+        data-action="show-older"
+        data-scope=${scope}
+      >
+        Show ${hiddenCount} older ${hiddenCount === 1 ? 'entry' : 'entries'}
+      </button>
+    </div>`;
+  }
+
+  private handleShowOlderClick(event: MouseEvent): void {
+    const target = event
+      .composedPath()
+      .find(
+        (node): node is HTMLElement =>
+          node instanceof HTMLElement && node.dataset.action === 'show-older',
+      );
+    if (!target) return;
+
+    const scope = target.dataset.scope;
+    if (!scope || this.expandedMessageScopes.has(scope)) return;
+
+    this.expandedMessageScopes.add(scope);
+    if (scope === TaskGroupList.TOOLUSE_TIMELINE_SCOPE) {
+      this.rebuildToolUseTimeline();
+    }
+    this.requestUpdate();
   }
 
   /** Play sound when a run group completes */
@@ -440,11 +693,7 @@ export class TaskGroupList extends LitElement {
       return html`
         <div id=${detailsId} class="log-group log-run" data-run-id=${group.id}>
           <div id=${contentId} class="log-group-content">
-            ${repeat(
-              messages,
-              (m) => m.id,
-              (m) => guard([m], () => formatLogEntry(m)),
-            )}
+            ${this.renderMessageList(messages, `group:${group.id}`)}
             ${repeat(
               children,
               (c) => c.group.id,
@@ -477,10 +726,9 @@ export class TaskGroupList extends LitElement {
         </summary>
         <div id=${contentId} class="log-group-content">
           ${expanded
-            ? html`${repeat(
+            ? html`${this.renderMessageList(
                 messages,
-                (m) => m.id,
-                (m) => guard([m], () => formatLogEntry(m)),
+                `group:${group.id}`,
               )}${repeat(
                 children,
                 (c) => c.group.id,
@@ -496,37 +744,40 @@ export class TaskGroupList extends LitElement {
     // Show placeholder only when there are no streams in the current filter
     if (!this.hasStreams) {
       return html`
-        <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
+        <vscode-scrollable
+          id=${ELEMENT_IDS.LOG_CONTENT}
+          class="log-container"
+          @click=${this.handleShowOlderClick}
+        >
           <div class="log-placeholder">${unsafeHTML(PLACEHOLDER_HTML)}</div>
         </vscode-scrollable>
       `;
     }
 
     if (this.isToolUse) {
-      // Tool-use: interleave ungrouped messages (user input, follow-ups, errors)
-      // with groups chronologically so the conversation reads top-to-bottom.
-      const timeline = [
-        ...this.cachedUngrouped.map((m) => ({
-          key: m.id,
-          time: m.timestamp ?? 0,
-          msg: m,
-        })),
-        ...this.cachedTree.map((t) => ({
-          key: t.group.id,
-          time: t.group.startTime ?? 0,
-          tree: t,
-        })),
-      ].sort((a, b) => a.time - b.time);
-
+      const totalTimelineItems =
+        this.cachedUngrouped.length + this.cachedTree.length;
+      const hiddenCount = Math.max(
+        0,
+        totalTimelineItems - this.cachedToolUseTimeline.length,
+      );
       return html`
-        <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
+        <vscode-scrollable
+          id=${ELEMENT_IDS.LOG_CONTENT}
+          class="log-container"
+          @click=${this.handleShowOlderClick}
+        >
+          ${this.renderShowOlderControl(
+            TaskGroupList.TOOLUSE_TIMELINE_SCOPE,
+            hiddenCount,
+          )}
           ${repeat(
-            timeline,
+            this.cachedToolUseTimeline,
             (item) => item.key,
             (item) =>
               'msg' in item
                 ? guard([item.msg], () => formatLogEntry(item.msg))
-                : this.renderGroupNode(item.tree!),
+                : this.renderGroupNode(item.tree),
           )}
         </vscode-scrollable>
       `;
@@ -536,16 +787,19 @@ export class TaskGroupList extends LitElement {
     // Workflow stages are hierarchical (not conversational), so structure-first
     // ordering keeps stage execution visually separate from stray messages.
     return html`
-      <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
+      <vscode-scrollable
+        id=${ELEMENT_IDS.LOG_CONTENT}
+        class="log-container"
+        @click=${this.handleShowOlderClick}
+      >
         ${repeat(
           this.cachedTree,
           (t) => t.group.id,
           (t) => this.renderGroupNode(t),
         )}
-        ${repeat(
+        ${this.renderMessageList(
           this.cachedUngrouped,
-          (m) => m.id,
-          (m) => guard([m], () => formatLogEntry(m)),
+          TaskGroupList.WORKFLOW_UNGROUPED_SCOPE,
         )}
       </vscode-scrollable>
     `;

@@ -150,6 +150,19 @@ export const logEntryStyles = css`
     font-size: 0.85em;
   }
 
+  .log-history-control {
+    margin: var(--spacing-small) 0;
+  }
+
+  .show-older-logs {
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
   /* Web search result styles */
   .detail-list {
     list-style: none;

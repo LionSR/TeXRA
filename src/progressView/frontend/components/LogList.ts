@@ -1,9 +1,8 @@
 /**
- * LogList component - declarative log rendering with per-stream DOM caching.
+ * LogList component - declarative log rendering for the active stream.
  *
  * Consumes streamLogContext to get groups, messages, activeRunId, and isToolUse.
- * Renders one TaskGroupList per visited stream, hiding inactive ones with
- * display:none. Tab switching toggles visibility — zero DOM re-creation.
+ * Renders a single TaskGroupList for the active stream only.
  *
  * Handles event delegation for clicks, toggles, and file links.
  *
@@ -14,8 +13,7 @@
 import { LitElement, html, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
-import { createRef, ref, type Ref } from 'lit/directives/ref.js';
-import { repeat } from 'lit/directives/repeat.js';
+import { createRef, ref } from 'lit/directives/ref.js';
 import { z } from 'zod';
 
 // Local imports - side-effect: register component
@@ -60,16 +58,6 @@ const LogListStateSchema = z
   })
   .catch({ groupToggleStates: [] });
 
-/** Cached per-stream data and DOM state */
-interface CachedStream {
-  groups: TaskGroup[];
-  messages: LogMessageData[];
-  activeRunId: string | null;
-  isToolUse: boolean;
-  toggleStates: ToggleStateStore;
-  ref: Ref<TaskGroupList>;
-}
-
 @customElement('log-list')
 export class LogList extends LitElement {
   static override styles = [
@@ -96,6 +84,14 @@ export class LogList extends LitElement {
     return this.streamContext?.runId ?? null;
   }
 
+  private get lastUpdatedLogId(): string | null {
+    return this.streamContext?.lastUpdatedLogId ?? null;
+  }
+
+  private get lastUpdatedLogIndex(): number | null {
+    return this.streamContext?.lastUpdatedLogIndex ?? null;
+  }
+
   private get isToolUse(): boolean {
     return this.streamContext?.isToolUse ?? false;
   }
@@ -104,13 +100,10 @@ export class LogList extends LitElement {
     return this.streamContext?.hasStreams ?? false;
   }
 
-  /** Max cached stream DOM trees. Oldest non-active entries are evicted beyond this. */
-  private static readonly MAX_CACHED_STREAMS = 5;
-
-  /** Per-stream DOM cache: one TaskGroupList per visited stream */
-  private streamCache = new Map<string, CachedStream>();
   private storage = createWebviewStorage(vscode);
   private activeStreamId: string | null = null;
+  private activeToggleStates: ToggleStateStore | null = null;
+  private taskGroupListRef = createRef<TaskGroupList>();
   private shouldScrollToBottom = false;
 
   override connectedCallback(): void {
@@ -130,58 +123,26 @@ export class LogList extends LitElement {
 
     // Detect stream switch
     if (streamId !== this.activeStreamId) {
-      this.activeStreamId = streamId;
-      this.shouldScrollToBottom = true;
-    }
-
-    // All streams removed — drop the entire cache
-    if (!this.hasStreams && this.streamCache.size > 0) {
-      this.streamCache.clear();
-      return;
-    }
-
-    // Update cache for active stream with latest context data
-    if (streamId) {
-      const entry = this.getOrCreateEntry(streamId);
-      entry.groups = this.groups;
-      entry.messages = this.messages;
-      entry.activeRunId = this.activeRunId;
-      entry.isToolUse = this.isToolUse;
-
-      // Evict oldest non-active entries when cache exceeds cap
-      this.evictStaleCacheEntries();
+      this.switchActiveStream(streamId);
     }
   }
 
   override render(): TemplateResult {
-    if (this.streamCache.size === 0 || !this.hasStreams) {
-      return html`<task-group-list
-        .hasStreams=${this.hasStreams}
-      ></task-group-list>`;
-    }
-
-    return html`${repeat(
-      this.streamCache,
-      ([id]) => id,
-      ([id, data]) => html`
-        <task-group-list
-          ${ref(data.ref)}
-          style=${id === this.activeStreamId ? '' : 'display:none'}
-          .groups=${data.groups}
-          .messages=${data.messages}
-          .activeRunId=${data.activeRunId}
-          .isToolUse=${data.isToolUse}
-          .hasStreams=${this.hasStreams}
-          .toggleStates=${data.toggleStates}
-        ></task-group-list>
-      `,
-    )}`;
+    return html`<task-group-list
+      ${ref(this.taskGroupListRef)}
+      .groups=${this.groups}
+      .messages=${this.messages}
+      .lastUpdatedLogId=${this.lastUpdatedLogId}
+      .lastUpdatedLogIndex=${this.lastUpdatedLogIndex}
+      .activeRunId=${this.activeRunId}
+      .isToolUse=${this.isToolUse}
+      .hasStreams=${this.hasStreams}
+      .toggleStates=${this.activeToggleStates}
+    ></task-group-list>`;
   }
 
   override updated(): void {
-    const activeEl = this.activeStreamId
-      ? this.streamCache.get(this.activeStreamId)?.ref.value
-      : undefined;
+    const activeEl = this.taskGroupListRef.value;
 
     if (this.shouldScrollToBottom) {
       // Force scroll to bottom when switching to a different stream tab.
@@ -204,26 +165,16 @@ export class LogList extends LitElement {
   // Private methods
   // ============================================================
 
-  /** Evict oldest non-active cache entries when over the cap */
-  private evictStaleCacheEntries(): void {
-    if (this.streamCache.size <= LogList.MAX_CACHED_STREAMS) return;
-    for (const [id] of this.streamCache) {
-      if (id === this.activeStreamId) continue;
-      this.streamCache.delete(id);
-      if (this.streamCache.size <= LogList.MAX_CACHED_STREAMS) break;
-    }
+  private switchActiveStream(streamId: string | null): void {
+    this.activeStreamId = streamId;
+    this.shouldScrollToBottom = true;
+    this.activeToggleStates = streamId
+      ? this.createToggleStateStore(streamId)
+      : null;
   }
 
-  /** Get or create a cached entry for a stream, loading persisted toggle states */
-  private getOrCreateEntry(streamId: string): CachedStream {
-    let entry = this.streamCache.get(streamId);
-    if (entry) {
-      // Move to end of Map iteration order so LRU eviction works correctly
-      this.streamCache.delete(streamId);
-      this.streamCache.set(streamId, entry);
-      return entry;
-    }
-
+  /** Create toggle state store for active stream from persisted state. */
+  private createToggleStateStore(streamId: string): ToggleStateStore {
     const stateManager = new PersistedState(
       this.storage,
       `logListState:${streamId}`,
@@ -240,17 +191,7 @@ export class LogList extends LitElement {
     if (previous.groupToggleStates.length > 0) {
       toggleStates.load(previous.groupToggleStates);
     }
-
-    entry = {
-      groups: [],
-      messages: [],
-      activeRunId: null,
-      isToolUse: false,
-      toggleStates,
-      ref: createRef<TaskGroupList>(),
-    };
-    this.streamCache.set(streamId, entry);
-    return entry;
+    return toggleStates;
   }
 
   /** Handle click events for file links, copy buttons, etc. */

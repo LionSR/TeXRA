@@ -49,6 +49,8 @@ export const streamStateContext = createContext<StreamContextValue>(
 export interface StreamLogContextValue {
   logs: LogMessageData[];
   taskGroups: TaskGroup[];
+  lastUpdatedLogId: string | null;
+  lastUpdatedLogIndex: number | null;
   runId: string | null;
   isToolUse: boolean;
   hasStreams: boolean;
@@ -59,6 +61,8 @@ export interface StreamLogContextValue {
 export const EMPTY_LOG_CONTEXT: StreamLogContextValue = {
   logs: [],
   taskGroups: [],
+  lastUpdatedLogId: null,
+  lastUpdatedLogIndex: null,
   runId: null,
   isToolUse: false,
   hasStreams: false,

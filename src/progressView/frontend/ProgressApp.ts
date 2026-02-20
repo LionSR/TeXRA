@@ -310,6 +310,8 @@ export class ProgressApp extends BaseWebviewApp {
     if (
       prevLog.logs !== streamLogs.logs ||
       prevLog.taskGroups !== streamState.taskGroups ||
+      prevLog.lastUpdatedLogId !== streamLogs.lastUpdatedLogId ||
+      prevLog.lastUpdatedLogIndex !== streamLogs.lastUpdatedLogIndex ||
       prevLog.runId !== runId ||
       prevLog.isToolUse !== isToolUse ||
       prevLog.hasStreams !== hasStreams ||
@@ -318,6 +320,8 @@ export class ProgressApp extends BaseWebviewApp {
       this.streamLogContextValue = {
         logs: streamLogs.logs,
         taskGroups: streamState.taskGroups,
+        lastUpdatedLogId: streamLogs.lastUpdatedLogId,
+        lastUpdatedLogIndex: streamLogs.lastUpdatedLogIndex,
         runId,
         isToolUse,
         hasStreams,
