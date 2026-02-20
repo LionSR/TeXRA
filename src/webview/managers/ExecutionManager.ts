@@ -77,9 +77,10 @@ export class ExecutionManager {
     // Tool-use agents don't produce output files
     const outputFiles: string[] = isToolUse ? [] : (message.outputFiles ?? []);
 
-    // Tool config: tool-use uses defaults, workflow agents use message values (schema provides defaults)
+    // Tool config: tool-use uses defaults, workflow agents use message values (schema provides defaults).
+    // worktreeIsolation is an execution-level concern, so preserve it for both agent types.
     const toolConfig = isToolUse
-      ? DEFAULT_TOOL_CONFIG
+      ? { ...DEFAULT_TOOL_CONFIG, worktreeIsolation: Boolean(message.worktreeIsolation) }
       : ToolConfigSchema.parse(message);
 
     // Schema provides defaults via .prefault(), we only override conditional fields
