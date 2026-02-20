@@ -9,7 +9,9 @@ export const WOLFRAM_CODE_TIMEOUT_MS = 30_000; // 30 s
 export const WOLFRAM_FILE_TIMEOUT_MS = 60_000; // 60 s
 
 const WOLFRAM_NOT_INSTALLED_ERROR =
-  'Mathematica/wolframscript is not installed or not in your PATH.';
+  '"wolframscript" is not installed or not in your PATH. ' +
+  'Having Mathematica installed is not enough — install the free ' +
+  'Wolfram Engine (https://www.wolfram.com/engine/) which includes WolframScript.';
 const WOLFRAM_CHANNEL = 'WolframTool';
 
 // Interface for execution result
