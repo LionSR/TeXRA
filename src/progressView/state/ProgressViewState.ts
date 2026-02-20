@@ -294,6 +294,10 @@ export class ProgressViewState {
     }
   }
 
+  getStreamState(stream: StreamTabId): StreamState | undefined {
+    return this._streamStates.get(stream);
+  }
+
   getAllStreamStates(): Record<StreamTabId, StreamState> {
     return Object.fromEntries(this._streamStates.entries());
   }

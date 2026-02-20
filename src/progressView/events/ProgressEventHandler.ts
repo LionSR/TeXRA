@@ -38,6 +38,13 @@ export type { UICallbacks };
 /** Throttle interval for conversation progress webview pushes (ms). */
 const PROGRESS_THROTTLE_MS = 500;
 
+type StreamBadgeSnapshot = {
+  activeSubagents: StreamState['activeSubagents'];
+  finishedSubagentCount: StreamState['finishedSubagentCount'];
+  activeProcesses: StreamState['activeProcesses'];
+  finishedProcessCount: StreamState['finishedProcessCount'];
+};
+
 /** Handles progress event bus subscriptions for the progress view. */
 export class ProgressEventHandler {
   private readonly logger: AgentLogger;
@@ -156,7 +163,7 @@ export class ProgressEventHandler {
   };
 
   private syncActiveStreamState(streamId: StreamTabId): void {
-    const streamState = this.state.getAllStreamStates()[streamId];
+    const streamState = this.state.getStreamState(streamId);
     if (!streamState) {
       return;
     }
@@ -364,12 +371,7 @@ export class ProgressEventHandler {
       'failed to handle updateActiveSubagents',
       () => {
         const { parentStreamId, children } = data;
-        let nextBadges: {
-          activeSubagents: StreamState['activeSubagents'];
-          finishedSubagentCount: StreamState['finishedSubagentCount'];
-          activeProcesses: StreamState['activeProcesses'];
-          finishedProcessCount: StreamState['finishedProcessCount'];
-        } | null = null;
+        let nextBadges: StreamBadgeSnapshot | null = null;
 
         // Update active list and accumulate finished count
         this.state.updateStreamState(parentStreamId, (prev) => {
@@ -414,12 +416,7 @@ export class ProgressEventHandler {
       'failed to handle updateActiveProcesses',
       () => {
         const { parentStreamId, processes } = data;
-        let nextBadges: {
-          activeSubagents: StreamState['activeSubagents'];
-          finishedSubagentCount: StreamState['finishedSubagentCount'];
-          activeProcesses: StreamState['activeProcesses'];
-          finishedProcessCount: StreamState['finishedProcessCount'];
-        } | null = null;
+        let nextBadges: StreamBadgeSnapshot | null = null;
 
         this.state.updateStreamState(parentStreamId, (prev) => {
           const prevIds = new Set(
