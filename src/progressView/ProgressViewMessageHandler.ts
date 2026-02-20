@@ -321,7 +321,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.clearModelOutputBackups(streamId);
     await this.provider.state.clearStream(streamId);
     // Force rebuild since we deleted a stream
-    this.provider.updateWebview({ forceRebuild: true });
+    this.provider.syncFullView({ forceRebuild: true });
   }
 
   private async handleDeleteAll(): Promise<void> {
@@ -346,7 +346,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.modelOutputBackups.clear();
     await this.provider.state.clearAll();
     // Force rebuild since we deleted all streams
-    this.provider.updateWebview({ forceRebuild: true });
+    this.provider.syncFullView({ forceRebuild: true });
   }
 
   // ============================================================
@@ -437,14 +437,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.SORT_STREAMS>,
   ): void {
     this.provider.state.streamSortOrder = data.sortBy;
-    this.provider.updateWebview();
+    this.provider.syncFullView();
   }
 
   private handleFilterStreams(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.FILTER_STREAMS>,
   ): void {
     this.provider.state.agentCategoryFilter = data.filter;
-    this.provider.updateWebview();
+    this.provider.syncFullView();
   }
 
   private async handleRestoreState(

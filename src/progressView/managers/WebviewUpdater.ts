@@ -197,87 +197,73 @@ export class WebviewUpdater {
     });
   }
 
-  showToolEditPermission(permission: ToolEditPermission): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL,
-      request: permission,
-    });
-  }
-
-  resolveToolEditPermission(requestId: string): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL,
-      requestId,
-    });
-  }
-
-  updateToolEditApprovalState(
-    stream: StreamTabId,
-    bypassActive: boolean,
+  updatePermission(
+    kind: 'toolEdit' | 'bash' | 'retry',
+    action: 'show' | 'resolve',
+    data:
+      | ToolEditPermission
+      | BashPermission
+      | RetryPermission
+      | { requestId: string }
+      | { streamId: string },
   ): void {
     this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE,
-      stream,
-      bypassActive,
+      command: PROGRESS_VIEW_COMMANDS.PERMISSION_UPDATE,
+      kind,
+      action,
+      data,
     });
   }
 
-  updateSuperYoloBypassState(
-    stream: StreamTabId,
-    bypassActive: boolean,
-    featureEnabled: boolean,
-  ): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_BYPASS_STATE,
-      stream,
-      bypassActive,
-      featureEnabled,
-    });
-  }
-
-  showBashPermission(permission: BashPermission): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL,
-      request: permission,
-    });
-  }
-
-  resolveBashPermission(requestId: string): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.RESOLVE_BASH_APPROVAL,
-      requestId,
-    });
-  }
-
-  showRetryRequest(request: RetryPermission): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.SHOW_RETRY_REQUEST,
-      request,
-    });
-  }
-
-  resolveRetryRequest(streamId: string): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.RESOLVE_RETRY_REQUEST,
-      streamId,
-    });
-  }
-
-  showAgentProposal(
-    proposal: AgentProposalPermission,
+  updateProposal(
+    action: 'show' | 'resolve',
+    proposal?: AgentProposalPermission,
+    proposalId?: string,
     modelOptionsData?: ModelOptionData[],
   ): void {
     this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL,
+      command: PROGRESS_VIEW_COMMANDS.PROPOSAL_UPDATE,
+      action,
       proposal,
+      proposalId,
       modelOptionsData,
     });
   }
 
-  resolveAgentProposal(proposalId: string): void {
+  updateBypass(
+    stream: StreamTabId,
+    bypassType: 'toolEdit' | 'superYolo',
+    active: boolean,
+    featureEnabled?: boolean,
+  ): void {
     this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.RESOLVE_AGENT_PROPOSAL,
-      proposalId,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
+      stream,
+      bypassType,
+      active,
+      featureEnabled,
+    });
+  }
+
+  updateRecording(status: 'started' | 'stopped' | 'error'): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING,
+      status,
+    });
+  }
+
+  updateFollowUpText(
+    kind: 'polished' | 'polishError' | 'transcribed',
+    stream: StreamTabId,
+    text?: string,
+    error?: string,
+  ): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+      kind,
+      stream,
+      text,
+      error,
     });
   }
 
@@ -405,6 +391,48 @@ export class WebviewUpdater {
     });
   }
 
+  setActiveStream(activeStreamId: StreamTabId): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStreamId,
+    });
+  }
+
+  updateConversationProgress(
+    stream: StreamTabId,
+    progress: { conversationTurns: number; toolCallCount: number },
+  ): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS,
+      stream,
+      progress,
+    });
+  }
+
+  updateStreamBadges(
+    stream: StreamTabId,
+    payload: {
+      activeSubagents?: StreamState['activeSubagents'];
+      finishedSubagentCount?: number;
+      activeProcesses?: StreamState['activeProcesses'];
+      finishedProcessCount?: number;
+    },
+  ): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
+      stream,
+      ...payload,
+    });
+  }
+
+  updateParentStream(stream: StreamTabId, parentStreamId: StreamTabId): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM,
+      stream,
+      parentStreamId,
+    });
+  }
+
   /**
    * Update stream metadata and theme for the webview.
    * Returns the active stream after applying the update.
@@ -412,16 +440,11 @@ export class WebviewUpdater {
    * Note: This method computes valid active stream via ProgressViewState
    * (single source of truth) and explicitly persists if changed.
    */
-  updateAll(
+  sendStreamMetadata(
     state: ProgressViewState,
-    statuses?: Map<string, StreamStatus>,
     theme?: 'dark' | 'light',
   ): StreamTabId {
-    const streams = buildStreamInfos(
-      state,
-      statuses,
-      state.agentCategoryFilter,
-    );
+    const streams = buildStreamInfos(state, state.agentCategoryFilter);
     const streamNames = streams.map((info) => info.name);
 
     // Compute valid active stream (pure query) and persist if changed

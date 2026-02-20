@@ -55,10 +55,23 @@ export function updateNestedRounds<T>(
 /**
  * Get filtered streams based on current filter setting.
  */
-export function getFilteredStreams(state: ProgressState): StreamTabInfo[] {
-  const sorted = sortStreams(state.streams, state.streamSort);
-  if (state.streamFilter === 'all') return sorted;
-  return sorted.filter((stream) => stream.agentCategory === state.streamFilter);
+export function getFilteredStreams(state: ProgressState): {
+  list: StreamTabInfo[];
+  map: Map<StreamTabId, StreamTabInfo>;
+} {
+  const sorted = sortStreams(
+    state.streams,
+    state.streamSort,
+    state.streamStates,
+  );
+  const list =
+    state.streamFilter === 'all'
+      ? sorted
+      : sorted.filter((stream) => stream.agentCategory === state.streamFilter);
+  return {
+    list,
+    map: new Map(list.map((stream) => [stream.name as StreamTabId, stream])),
+  };
 }
 
 /** Run group info for the run selector */

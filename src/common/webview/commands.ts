@@ -161,6 +161,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   CLEAN_STREAM: 'cleanStream',
   STOP_STREAM: 'stopStream',
   UPDATE_STREAMS: 'updateStreams',
+  SET_ACTIVE_STREAM: 'setActiveStream',
   DELETE_ALL: 'deleteAll',
 
   // Logging
@@ -183,17 +184,13 @@ export const PROGRESS_VIEW_COMMANDS = {
 
   // Status and files
   UPDATE_STREAM_STATUS: 'updateStreamStatus', // Update single stream's status in tabs
+  UPDATE_STREAM_BADGES: 'updateStreamBadges',
+  UPDATE_CONVERSATION_PROGRESS: 'updateConversationProgress',
+  UPDATE_PARENT_STREAM: 'updateParentStream',
   UPDATE_FILES: 'updateFiles',
   UPDATE_MISSING_OUTPUTS: 'updateMissingOutputs',
-  SHOW_TOOL_EDIT_APPROVAL: 'showToolEditApproval',
-  RESOLVE_TOOL_EDIT_APPROVAL: 'resolveToolEditApproval',
-  UPDATE_TOOL_EDIT_APPROVAL_STATE: 'updateToolEditApprovalState',
-  SHOW_BASH_APPROVAL: 'showBashApproval',
-  RESOLVE_BASH_APPROVAL: 'resolveBashApproval',
-  SHOW_RETRY_REQUEST: 'showRetryRequest',
-  RESOLVE_RETRY_REQUEST: 'resolveRetryRequest',
-  SHOW_AGENT_PROPOSAL: 'showAgentProposal',
-  RESOLVE_AGENT_PROPOSAL: 'resolveAgentProposal',
+  PERMISSION_UPDATE: 'permissionUpdate',
+  PROPOSAL_UPDATE: 'proposalUpdate',
 
   // Usage
   UPDATE_RUN_USAGE: 'updateRunUsage', // Update single run's usage (incremental)
@@ -212,14 +209,28 @@ export const PROGRESS_VIEW_COMMANDS = {
   RESTORE_STATE: 'restoreState',
   SEND_FOLLOW_UP: 'sendFollowUp',
   POLISH_FOLLOW_UP: 'polishFollowUp',
+  UPDATE_FOLLOW_UP_TEXT: 'updateFollowUpText',
+  START_RECORDING: 'startRecording',
+  STOP_RECORDING: 'stopRecording',
+  UPDATE_RECORDING: 'updateRecording',
+
+  // Legacy aliases kept for internal callers
+  SHOW_TOOL_EDIT_APPROVAL: 'showToolEditApproval',
+  RESOLVE_TOOL_EDIT_APPROVAL: 'resolveToolEditApproval',
+  UPDATE_TOOL_EDIT_APPROVAL_STATE: 'updateToolEditApprovalState',
+  SHOW_BASH_APPROVAL: 'showBashApproval',
+  RESOLVE_BASH_APPROVAL: 'resolveBashApproval',
+  SHOW_RETRY_REQUEST: 'showRetryRequest',
+  RESOLVE_RETRY_REQUEST: 'resolveRetryRequest',
+  SHOW_AGENT_PROPOSAL: 'showAgentProposal',
+  RESOLVE_AGENT_PROPOSAL: 'resolveAgentProposal',
   FOLLOW_UP_TEXT_POLISHED: 'followUpTextPolished',
   FOLLOW_UP_TEXT_POLISH_ERROR: 'followUpTextPolishError',
   FOLLOW_UP_TEXT_TRANSCRIBED: 'followUpTextTranscribed',
-  START_RECORDING: 'startRecording',
-  STOP_RECORDING: 'stopRecording',
   RECORDING_STOPPED: 'recordingStopped',
   RECORDING_STARTED: 'recordingStarted',
   RECORDING_ERROR: 'recordingError',
+  UPDATE_SUPER_YOLO_BYPASS_STATE: 'updateSuperYoloBypassState',
   SHOW_INFORMATION_MESSAGE: 'showInformationMessage',
   OPEN_TASK_STORAGE: 'openTaskStorage',
   TOOL_EDIT_APPROVAL_ACTION: 'toolEditApprovalAction',
@@ -228,7 +239,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   BASH_APPROVAL_ACTION: 'bashApprovalAction',
   RESTORE_PROPOSAL_CONFIG: 'restoreProposalConfig',
   TOGGLE_SUPER_YOLO_BYPASS: 'toggleSuperYoloBypass',
-  UPDATE_SUPER_YOLO_BYPASS_STATE: 'updateSuperYoloBypassState',
+  UPDATE_BYPASS: 'updateBypass',
 
   // Memory
   OPEN_MEMORY_VIEW: 'openMemoryView',

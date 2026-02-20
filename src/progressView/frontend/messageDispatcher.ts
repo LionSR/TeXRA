@@ -70,6 +70,17 @@ const pendingLogUpdates = new Map<string, Partial<LogMessageData>>();
  */
 const resolvedBeforeShown = new Set<string>();
 
+const BACKEND_OWNED_FIELDS = [
+  'kind',
+  'status',
+  'lastTimestamp',
+  'conversationProgress',
+  'activeSubagents',
+  'finishedSubagentCount',
+  'activeProcesses',
+  'finishedProcessCount',
+] as const;
+
 // ============================================================
 // Helper functions
 // ============================================================
@@ -167,37 +178,21 @@ function updateStreamInfo(
     const backendState = backendStates?.[stream.name];
     if (backendState) {
       const existing = nextStates.get(stream.name);
-      // Seed streamLogs from backend state when no frontend logs exist yet
-      if (!nextLogs.has(stream.name) && backendState.logs.length > 0) {
-        nextLogs.set(stream.name, { logs: backendState.logs });
+      if (existing) {
+        const patch: Partial<StreamState> = {};
+        for (const key of BACKEND_OWNED_FIELDS) {
+          if (key in backendState) {
+            patch[key] = backendState[key];
+          }
+        }
+        nextStates.set(stream.name, { ...existing, ...patch } as StreamState);
+      } else {
+        nextStates.set(stream.name, backendState);
       }
-      // Preserve frontend-owned properties that backend _streamStates never populates:
-      // - 'ui': frontend UI state (follow-up text, polish state, etc.)
-      // - 'taskGroups': managed by ADD_TASK_GROUP/UPDATE_TASK_GROUP
-      // - Workflow run-scoped fields: managed by UPDATE_INSTRUCTION, UPDATE_RUN_USAGE,
-      //   UPDATE_FILES, UPDATE_MISSING_OUTPUTS, and UPDATE_LOGS (not UPDATE_STREAMS)
-      // Note: logs are managed by streamLogs Map (via APPEND_LOG/UPDATE_LOG/UPDATE_LOGS)
-      const preserveUI = existing && existing.kind === backendState.kind;
-      const preserveWorkflow =
-        existing && isWorkflowState(existing) && isWorkflowState(backendState);
-      nextStates.set(stream.name, {
-        ...backendState,
-        taskGroups: existing?.taskGroups ?? backendState.taskGroups,
-        ...(preserveWorkflow && {
-          runInstructions: existing.runInstructions,
-          runUsage: existing.runUsage,
-          runFiles: existing.runFiles,
-          runMissingOutputs: existing.runMissingOutputs,
-          activeRunId: existing.activeRunId,
-          followupMode: existing.followupMode,
-        }),
-        ...(preserveUI && { ui: existing.ui }),
-        info: stream,
-      } as StreamState);
     } else {
       const existing =
         nextStates.get(stream.name) ?? createStreamState(stream.agentCategory);
-      nextStates.set(stream.name, { ...existing, info: stream });
+      nextStates.set(stream.name, existing);
     }
   }
 
@@ -253,6 +248,40 @@ const handlers: HandlerRegistry = {
       activeStreamId: nextActiveStreamId,
       streamFilter: data.agentFilter,
       followupOptionsByStream: nextFollowupOptions,
+    }));
+  },
+
+  [PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM]: (data, ctx) => {
+    ctx.setState((prev) => ({ ...prev, activeStreamId: data.activeStreamId }));
+  },
+
+  [PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS]: (data, ctx) => {
+    ctx.setStreamState(data.stream, (prev) => ({
+      ...prev,
+      conversationProgress: data.progress,
+    }));
+  },
+
+  [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES]: (data, ctx) => {
+    ctx.setStreamState(data.stream, (prev) => ({
+      ...prev,
+      activeSubagents: data.activeSubagents ?? prev.activeSubagents,
+      finishedSubagentCount:
+        data.finishedSubagentCount ?? prev.finishedSubagentCount,
+      activeProcesses: data.activeProcesses ?? prev.activeProcesses,
+      finishedProcessCount:
+        data.finishedProcessCount ?? prev.finishedProcessCount,
+    }));
+  },
+
+  [PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM]: (data, ctx) => {
+    ctx.setState((prev) => ({
+      ...prev,
+      streams: prev.streams.map((stream) =>
+        stream.name === data.stream
+          ? { ...stream, parentStreamId: data.parentStreamId }
+          : stream,
+      ),
     }));
   },
 
@@ -386,10 +415,17 @@ const handlers: HandlerRegistry = {
       return { ...prev, ...base };
     });
 
+    if (isClear) {
+      ctx.setState((prev) => {
+        const nextLogs = new Map(prev.streamLogs);
+        nextLogs.delete(stream);
+        return { ...prev, streamLogs: nextLogs };
+      });
+      return;
+    }
+
     // Update logs in the separate streamLogs Map (after setStreamState so the entry exists)
-    ctx.setStreamLogs(stream, () => ({
-      logs: isClear ? [] : messages,
-    }));
+    ctx.setStreamLogs(stream, () => ({ logs: messages }));
   },
 
   // --- Log updates ---
@@ -467,25 +503,18 @@ const handlers: HandlerRegistry = {
             ? {
                 ...current,
                 status,
+                lastTimestamp: lastTimestamp ?? current.lastTimestamp,
                 ui: { ...current.ui, shouldFocusFollowUp: true },
               }
-            : { ...current, status };
+            : {
+                ...current,
+                status,
+                lastTimestamp: lastTimestamp ?? current.lastTimestamp,
+              };
         nextStates.set(stream, updatedState);
       }
 
-      return {
-        ...prev,
-        streamStates: nextStates,
-        streams: prev.streams.map((item) =>
-          item.name === stream
-            ? {
-                ...item,
-                status,
-                lastTimestamp: lastTimestamp ?? item.lastTimestamp,
-              }
-            : item,
-        ),
-      };
+      return { ...prev, streamStates: nextStates };
     });
   },
 
@@ -588,109 +617,161 @@ const handlers: HandlerRegistry = {
   },
 
   // Approval requests
-  [PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL]: (data, ctx) => {
-    addPermission(ctx, { kind: PERMISSION_KIND.TOOL_EDIT, data: data.request });
+
+  [PROGRESS_VIEW_COMMANDS.PERMISSION_UPDATE]: (data, ctx) => {
+    if (data.kind === 'toolEdit') {
+      if (data.action === 'show')
+        addPermission(ctx, {
+          kind: PERMISSION_KIND.TOOL_EDIT,
+          data: data.data as PermissionState['data'],
+        });
+      else
+        removePrompt(
+          ctx,
+          PERMISSION_KIND.TOOL_EDIT,
+          'requestId',
+          (data.data as { requestId: string }).requestId,
+        );
+      return;
+    }
+    if (data.kind === 'bash') {
+      if (data.action === 'show')
+        addPermission(ctx, {
+          kind: PERMISSION_KIND.BASH,
+          data: data.data as PermissionState['data'],
+        });
+      else
+        removePrompt(
+          ctx,
+          PERMISSION_KIND.BASH,
+          'requestId',
+          (data.data as { requestId: string }).requestId,
+        );
+      return;
+    }
+    if (data.action === 'show')
+      addPermission(ctx, {
+        kind: PERMISSION_KIND.RETRY,
+        data: data.data as PermissionState['data'],
+      });
+    else
+      removePrompt(
+        ctx,
+        PERMISSION_KIND.RETRY,
+        'streamId',
+        (data.data as { streamId: string }).streamId,
+      );
   },
 
-  [PROGRESS_VIEW_COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL]: (data, ctx) => {
-    removePrompt(ctx, PERMISSION_KIND.TOOL_EDIT, 'requestId', data.requestId);
-  },
-
-  [PROGRESS_VIEW_COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE]: (data, ctx) => {
-    updateToolUseState(ctx, data.stream, (prev) => ({
-      ...prev,
-      toolEditBypass: data.bypassActive,
-    }));
-  },
-
-  [PROGRESS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_BYPASS_STATE]: (data, ctx) => {
-    updateToolUseState(ctx, data.stream, (prev) => ({
-      ...prev,
-      superYoloBypass: data.bypassActive,
-    }));
-  },
-
-  [PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL]: (data, ctx) => {
-    addPermission(ctx, { kind: PERMISSION_KIND.BASH, data: data.request });
-  },
-
-  [PROGRESS_VIEW_COMMANDS.RESOLVE_BASH_APPROVAL]: (data, ctx) => {
-    removePrompt(ctx, PERMISSION_KIND.BASH, 'requestId', data.requestId);
-  },
-
-  [PROGRESS_VIEW_COMMANDS.SHOW_RETRY_REQUEST]: (data, ctx) => {
-    addPermission(ctx, { kind: PERMISSION_KIND.RETRY, data: data.request });
-  },
-
-  [PROGRESS_VIEW_COMMANDS.RESOLVE_RETRY_REQUEST]: (data, ctx) => {
-    removePrompt(ctx, PERMISSION_KIND.RETRY, 'streamId', data.streamId);
-  },
-
-  [PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL]: (data, ctx) => {
-    // Drop if this proposal was already resolved (out-of-order messages)
+  [PROGRESS_VIEW_COMMANDS.PROPOSAL_UPDATE]: (data, ctx) => {
+    if (data.action === 'resolve' && data.proposalId) {
+      const before = ctx.getPermissions().length;
+      removePrompt(
+        ctx,
+        PERMISSION_KIND.PROPOSAL,
+        'proposalId',
+        data.proposalId,
+      );
+      if (ctx.getPermissions().length === before)
+        resolvedBeforeShown.add(data.proposalId);
+      return;
+    }
+    if (!data.proposal) return;
     if (resolvedBeforeShown.delete(data.proposal.proposalId)) return;
     upsertProposalPermission(ctx, {
       kind: PERMISSION_KIND.PROPOSAL,
       data: data.proposal,
-      modelOptions: data.modelOptionsData,
+      modelOptions: data.modelOptionsData ?? undefined,
     });
   },
 
-  [PROGRESS_VIEW_COMMANDS.RESOLVE_AGENT_PROPOSAL]: (data, ctx) => {
-    const before = ctx.getPermissions().length;
-    removePrompt(ctx, PERMISSION_KIND.PROPOSAL, 'proposalId', data.proposalId);
-    // If nothing was removed, RESOLVE arrived before SHOW — stash the ID
-    if (ctx.getPermissions().length === before) {
-      resolvedBeforeShown.add(data.proposalId);
-    }
+  [PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS]: (data, ctx) => {
+    updateToolUseState(ctx, data.stream, (prev) => ({
+      ...prev,
+      toolEditBypass:
+        data.bypassType === 'toolEdit' ? data.active : prev.toolEditBypass,
+      superYoloBypass:
+        data.bypassType === 'superYolo' ? data.active : prev.superYoloBypass,
+    }));
   },
 
-  // Follow-up and recording
-  [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED]: (data, ctx) => {
+  [PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT]: (data, ctx) => {
     const streamId = data.stream;
-    // Guard: ignore late-arriving messages for deleted streams
     if (!ctx.getState().streamStates.has(streamId)) return;
+    updateToolUseState(ctx, streamId, (prev) => {
+      if (data.kind === 'polished') {
+        return {
+          ...prev,
+          ui: {
+            ...prev.ui,
+            followUpText: data.text ?? '',
+            polishedText: data.text ?? '',
+            polishRevision: prev.ui.polishRevision + 1,
+            shouldFocusFollowUp: true,
+          },
+        };
+      }
+      if (data.kind === 'polishError') {
+        return {
+          ...prev,
+          ui: {
+            ...prev.ui,
+            polishedText: prev.ui.followUpText,
+            polishRevision: prev.ui.polishRevision + 1,
+            shouldFocusFollowUp: true,
+          },
+        };
+      }
+      return {
+        ...prev,
+        ui: {
+          ...prev.ui,
+          transcribedText: data.text ?? '',
+          shouldFocusFollowUp: true,
+        },
+      };
+    });
+  },
 
-    updateToolUseState(ctx, streamId, (prev) => ({
-      ...prev,
-      ui: {
-        ...prev.ui,
-        followUpText: data.text,
-        polishedText: data.text,
-        polishRevision: (prev.ui.polishRevision ?? 0) + 1,
-        shouldFocusFollowUp: true,
-      },
-    }));
+  [PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING]: (data, ctx) =>
+    setActiveStreamRecording(ctx, data.status === 'started'),
+
+  [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED]: (data, ctx) => {
+    handlers[PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT]?.(
+      {
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+        kind: 'polished',
+        stream: data.stream,
+        text: data.text,
+      } as never,
+      ctx,
+    );
   },
 
   [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR]: (data, ctx) => {
-    const streamId = data.stream;
-    // Guard: ignore late-arriving messages for deleted streams
-    if (!ctx.getState().streamStates.has(streamId)) return;
-
-    updateToolUseState(ctx, streamId, (prev) => ({
-      ...prev,
-      ui: {
-        ...prev.ui,
-        polishedText: prev.ui.followUpText ?? '',
-        polishRevision: (prev.ui.polishRevision ?? 0) + 1,
-        shouldFocusFollowUp: true,
-      },
-    }));
+    handlers[PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT]?.(
+      {
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+        kind: 'polishError',
+        stream: data.stream,
+        error: data.error,
+      } as never,
+      ctx,
+    );
   },
 
   [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED]: (data, ctx) => {
     const streamId = ctx.getState().activeStreamId;
     if (!streamId) return;
-
-    updateToolUseState(ctx, streamId, (prev) => ({
-      ...prev,
-      ui: {
-        ...prev.ui,
-        transcribedText: data.text,
-        shouldFocusFollowUp: true,
-      },
-    }));
+    handlers[PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT]?.(
+      {
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+        kind: 'transcribed',
+        stream: streamId,
+        text: data.text,
+      } as never,
+      ctx,
+    );
   },
 
   [PROGRESS_VIEW_COMMANDS.RECORDING_STARTED]: (_data, ctx) =>
@@ -699,7 +780,6 @@ const handlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED]: (_data, ctx) =>
     setActiveStreamRecording(ctx, false),
 
-  // Recording errors also stop recording
   [PROGRESS_VIEW_COMMANDS.RECORDING_ERROR]: (_data, ctx) =>
     setActiveStreamRecording(ctx, false),
 

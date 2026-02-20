@@ -34,6 +34,7 @@ import {
   type StreamState,
 } from './store';
 import { getFilteredStreams } from './stateUtils';
+import { STREAM_STATUS } from './constants';
 
 /** Schema for persisted preferences. */
 const ProgressViewPrefsSchema = z.object({
@@ -115,6 +116,7 @@ export class ProgressApp extends BaseWebviewApp {
     }
 
     .content-area {
+      contain: layout style;
       display: flex;
       flex-direction: column;
       flex: 1;
@@ -154,6 +156,8 @@ export class ProgressApp extends BaseWebviewApp {
    * redundant sort/filter on every call.
    */
   private cachedFilteredStreams: StreamTabInfo[] = [];
+  private cachedFilteredStreamMap = new Map<StreamTabId, StreamTabInfo>();
+  private cachedStatusByStream = new Map<StreamTabId, string>();
 
   private prefsManager = new PersistedState(
     createWebviewStorage(vscode),
@@ -189,7 +193,19 @@ export class ProgressApp extends BaseWebviewApp {
         prevAppState.streamFilter !== this.appState.streamFilter ||
         prevAppState.streamSort !== this.appState.streamSort)
     ) {
-      this.cachedFilteredStreams = getFilteredStreams(this.appState);
+      const { list, map } = getFilteredStreams(this.appState);
+      this.cachedFilteredStreams = list;
+      this.cachedFilteredStreamMap = map;
+    }
+
+    if (changed.has('appState')) {
+      this.cachedStatusByStream = new Map(
+        this.appState.streams.map((stream) => [
+          stream.name,
+          this.appState.streamStates.get(stream.name)?.status ??
+            STREAM_STATUS.READY,
+        ]),
+      );
     }
 
     this.updateContexts();
@@ -213,6 +229,7 @@ export class ProgressApp extends BaseWebviewApp {
             .activeStreamId=${this.appState.activeStreamId}
             .filter=${this.appState.streamFilter}
             .sort=${this.appState.streamSort}
+            .statusByStream=${this.cachedStatusByStream}
             @stream-switch=${this.onStreamSwitch}
             @stream-delete=${this.onStreamDelete}
             @filter-change=${this.onFilterChange}
@@ -283,9 +300,7 @@ export class ProgressApp extends BaseWebviewApp {
   private updateContexts(): void {
     const hasStreams = this.cachedFilteredStreams.length > 0;
     const activeStreamInfo = this.appState.activeStreamId
-      ? (this.cachedFilteredStreams.find(
-          (s) => s.name === this.appState.activeStreamId,
-        ) ?? null)
+      ? (this.cachedFilteredStreamMap.get(this.appState.activeStreamId) ?? null)
       : null;
 
     if (!activeStreamInfo) {

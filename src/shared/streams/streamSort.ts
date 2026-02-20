@@ -2,12 +2,16 @@
 import { z } from 'zod';
 
 // Local imports - shared schemas
-import type { StreamTabInfo } from '@shared/schemas';
+import type { StreamState, StreamTabInfo } from '@shared/schemas';
 
 export const StreamSortSchema = z.enum(['time', 'agent', 'inputFile']);
 export type StreamSort = z.infer<typeof StreamSortSchema>;
 
-export type StreamComparator = (a: StreamTabInfo, b: StreamTabInfo) => number;
+export type StreamComparator = (
+  a: StreamTabInfo,
+  b: StreamTabInfo,
+  streamStates?: Map<string, StreamState>,
+) => number;
 
 function compareByAgent(a: StreamTabInfo, b: StreamTabInfo): number {
   return (a.agent ?? '').localeCompare(b.agent ?? '');
@@ -17,11 +21,16 @@ function compareByInputFile(a: StreamTabInfo, b: StreamTabInfo): number {
   return (a.inputFile ?? '').localeCompare(b.inputFile ?? '');
 }
 
-function compareByTime(a: StreamTabInfo, b: StreamTabInfo): number {
-  // Treat streams without timestamps as newest (sort to top)
+function compareByTime(
+  a: StreamTabInfo,
+  b: StreamTabInfo,
+  streamStates?: Map<string, StreamState>,
+): number {
   const now = Date.now();
-  const aTime = a.lastTimestamp ?? a.creationTimestamp ?? now;
-  const bTime = b.lastTimestamp ?? b.creationTimestamp ?? now;
+  const aTime =
+    streamStates?.get(a.name)?.lastTimestamp ?? a.creationTimestamp ?? now;
+  const bTime =
+    streamStates?.get(b.name)?.lastTimestamp ?? b.creationTimestamp ?? now;
   return bTime - aTime;
 }
 
@@ -38,7 +47,8 @@ export const streamComparators: Record<StreamSort, StreamComparator> = {
 export function sortStreams(
   streams: StreamTabInfo[],
   sort: StreamSort,
+  streamStates?: Map<string, StreamState>,
 ): StreamTabInfo[] {
   const comparator = streamComparators[sort] ?? streamComparators.time;
-  return [...streams].sort(comparator);
+  return [...streams].sort((a, b) => comparator(a, b, streamStates));
 }

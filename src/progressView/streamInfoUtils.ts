@@ -7,11 +7,7 @@ import { sortStreams } from '@shared/streams/streamSort';
 // Local imports - progress view
 import { getCleanAgentName, isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import type {
-  AgentCategoryFilter,
-  StreamStatus,
-  StreamTabInfo,
-} from '@shared/schemas';
+import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
 
 // Type imports
 import type { ProgressViewState } from './state/ProgressViewState';
@@ -43,7 +39,6 @@ function matchesFilter(
 function buildStreamInfo(
   state: ProgressViewState,
   id: string,
-  statuses: Map<string, StreamStatus> | undefined,
   filter: AgentCategoryFilter,
 ): StreamTabInfo | null {
   const taskState = state.getTaskState(id);
@@ -55,9 +50,6 @@ function buildStreamInfo(
   const category = matchesFilter(rawCategory, filter);
   if (category === null) return null;
 
-  // Extract timestamps directly (avoids copying entire messages array)
-  // Use hints.creationTimestamp as fallback for newly created streams without messages
-  const lastTimestamp = state.streamTabs.getLastTimestamp(id);
   const creationTimestamp =
     state.streamTabs.getFirstTimestamp(id) ?? hints.creationTimestamp;
 
@@ -83,10 +75,8 @@ function buildStreamInfo(
     isRemote: taskState
       ? isRemoteAgent(rawAgentName)
       : (hints.isRemote ?? false),
-    lastTimestamp,
     inputFile,
     creationTimestamp,
-    status: statuses?.get(id),
     executionId: state.getExecutionId(id),
     parentStreamId: state.getParentStreamId(id),
   };
@@ -97,13 +87,16 @@ function buildStreamInfo(
  */
 export function buildStreamInfos(
   state: ProgressViewState,
-  statuses?: Map<string, StreamStatus>,
   filter: AgentCategoryFilter = 'all',
 ): StreamTabInfo[] {
   const infos = state.streamTabs
     .keys()
-    .map((id) => buildStreamInfo(state, id, statuses, filter))
+    .map((id) => buildStreamInfo(state, id, filter))
     .filter((info): info is StreamTabInfo => info !== null);
 
-  return sortStreams(infos, state.streamSortOrder);
+  return sortStreams(
+    infos,
+    state.streamSortOrder,
+    new Map(Object.entries(state.getAllStreamStates())),
+  );
 }

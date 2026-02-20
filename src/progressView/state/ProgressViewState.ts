@@ -34,10 +34,15 @@ import {
   TaskStateSchema,
   isToolUseTaskState,
 } from '@logger/TaskState';
+import {
+  STREAM_STATUS,
+  TaskGroupSchema,
+  type TaskGroup,
+  type UpdateTaskGroupPayload,
+} from '@shared/schemas';
+import { createRecordToMapSchema } from '@progressView/persistence/schemaUtils';
 import { OutputFilesManager } from '@progressView/managers/OutputFilesManager';
-import { RunInstructionManager } from '@progressView/managers/RunInstructionManager';
 import { StreamTabsManager } from '@progressView/managers/StreamTabsManager';
-import { TaskGroupManager } from '@progressView/managers/TaskGroupManager';
 import { UsageStatsManager } from '@progressView/managers/UsageStatsManager';
 import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
@@ -78,14 +83,17 @@ type ProgressViewPrefs = z.infer<typeof ProgressViewPrefsSchema>;
 /** Core state management for the progress view. */
 export class ProgressViewState {
   private _streamTabs: StreamTabsManager;
-  private _taskGroups: TaskGroupManager;
   private _outputFiles: OutputFilesManager;
   private _usageStats: UsageStatsManager;
-  private _runInstructions: RunInstructionManager;
   private _prefs!: PersistedState<ProgressViewPrefs>;
   private readonly taskStates = new Map<StreamTabId, TaskState>();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
   private _streamStates = new Map<StreamTabId, StreamState>();
+  private _taskGroups = new Map<StreamTabId, Map<string, TaskGroup>>();
+  private _runInstructions = new Map<
+    StreamTabId,
+    Map<string, InstructionUpdate>
+  >();
   private _sessionState = new Map<StreamTabId, StreamSessionState>();
 
   private readonly storage: MementoStorage;
@@ -105,18 +113,12 @@ export class ProgressViewState {
       ProgressViewPrefsSchema,
     );
     this._streamTabs = new StreamTabsManager(resolvedStorage);
-    this._taskGroups = new TaskGroupManager(resolvedStorage);
     this._outputFiles = new OutputFilesManager(resolvedStorage);
     this._usageStats = new UsageStatsManager(resolvedStorage);
-    this._runInstructions = new RunInstructionManager(resolvedStorage);
   }
 
   get streamTabs(): StreamTabsManager {
     return this._streamTabs;
-  }
-
-  get taskGroups(): TaskGroupManager {
-    return this._taskGroups;
   }
 
   get outputFiles(): OutputFilesManager {
@@ -291,14 +293,14 @@ export class ProgressViewState {
   }
 
   getRunInstructions(stream: StreamTabId): Map<string, InstructionUpdate> {
-    return this._runInstructions.getInstructions(stream);
+    return new Map(this._runInstructions.get(stream) ?? []);
   }
 
   getRunInstruction(
     stream: StreamTabId,
     runId: StorageKey,
   ): InstructionUpdate | undefined {
-    return this._runInstructions.getInstructions(stream).get(runId);
+    return this._runInstructions.get(stream)?.get(runId);
   }
 
   async setRunInstruction(
@@ -306,14 +308,71 @@ export class ProgressViewState {
     runId: StorageKey,
     instruction: InstructionUpdate | null,
   ): Promise<void> {
-    await this._runInstructions.setInstruction(stream, runId, instruction);
+    const existing =
+      this._runInstructions.get(stream) ?? new Map<string, InstructionUpdate>();
+    if (instruction) {
+      existing.set(runId, instruction);
+      this._runInstructions.set(stream, existing);
+    } else {
+      existing.delete(runId);
+      if (existing.size === 0) {
+        this._runInstructions.delete(stream);
+      } else {
+        this._runInstructions.set(stream, existing);
+      }
+    }
+    await this.saveRunInstructions();
   }
 
   async deleteRunInstruction(
     stream: StreamTabId,
     runId: StorageKey,
   ): Promise<void> {
-    await this._runInstructions.deleteRun(stream, runId);
+    const existing = this._runInstructions.get(stream);
+    if (!existing) return;
+    existing.delete(runId);
+    if (existing.size === 0) this._runInstructions.delete(stream);
+    await this.saveRunInstructions();
+  }
+
+  getTaskGroups(stream: StreamTabId): Map<string, TaskGroup> {
+    return this._taskGroups.get(stream) ?? new Map();
+  }
+
+  async addTaskGroup(stream: StreamTabId, group: TaskGroup): Promise<void> {
+    const streamGroups =
+      this._taskGroups.get(stream) ?? new Map<string, TaskGroup>();
+    streamGroups.set(group.id, { ...group });
+    this._taskGroups.set(stream, streamGroups);
+    await this.saveTaskGroups();
+  }
+
+  async updateTaskGroup(payload: UpdateTaskGroupPayload): Promise<boolean> {
+    const streamGroups = this._taskGroups.get(payload.streamId);
+    if (!streamGroups) return false;
+    const group = streamGroups.get(payload.id);
+    if (!group) return false;
+    group.status = payload.status;
+    if (payload.endTime !== undefined) group.endTime = payload.endTime;
+    await this.saveTaskGroups();
+    return true;
+  }
+
+  async endRunningTaskGroups(now: number = Date.now()): Promise<StreamTabId[]> {
+    const affected: StreamTabId[] = [];
+    for (const [streamId, groups] of this._taskGroups) {
+      let count = 0;
+      for (const group of groups.values()) {
+        if (group.status === STREAM_STATUS.RUNNING) {
+          group.status = STREAM_STATUS.ERROR;
+          group.endTime = now;
+          count += 1;
+        }
+      }
+      if (count > 0) affected.push(streamId);
+    }
+    if (affected.length > 0) await this.saveTaskGroups();
+    return affected;
   }
 
   private loadActiveRunIds(): void {
@@ -399,10 +458,10 @@ export class ProgressViewState {
   async clearStream(stream: StreamTabId): Promise<void> {
     await Promise.all([
       this._streamTabs.delete(stream),
-      this._taskGroups.delete(stream),
+      this.deleteTaskGroups(stream),
       this._outputFiles.deleteStream(stream),
       this._usageStats.delete(stream),
-      this._runInstructions.clearStream(stream),
+      this.deleteRunInstructions(stream),
     ]);
 
     const removedState = this.taskStates.delete(stream);
@@ -433,10 +492,10 @@ export class ProgressViewState {
 
     await Promise.all([
       this._streamTabs.clear(),
-      this._taskGroups.clear(),
+      this.clearTaskGroups(),
       this._outputFiles.clear(),
       this._usageStats.clear(),
-      this._runInstructions.clear(),
+      this.clearRunInstructions(),
     ]);
     this.taskStates.clear();
     this._executionIds.clear();
@@ -457,10 +516,10 @@ export class ProgressViewState {
 
     await Promise.all([
       this._streamTabs.load(),
-      this._taskGroups.load(),
+      this.loadTaskGroups(),
       this._outputFiles.load(),
       this._usageStats.load(),
-      this._runInstructions.load(),
+      this.loadRunInstructions(),
     ]);
 
     this.logger.info('[Persistence] Managers loaded');
@@ -494,6 +553,72 @@ export class ProgressViewState {
         this._prefs.update({ activeStream: fallback });
       }
     }
+  }
+
+  private async loadTaskGroups(): Promise<void> {
+    const raw = StorageRecordSchema.parse(
+      this.storage.get(WorkspaceStateKey.TASK_GROUPS),
+    );
+    const schema = createRecordToMapSchema(TaskGroupSchema);
+    this._taskGroups.clear();
+    for (const [stream, value] of Object.entries(raw)) {
+      this._taskGroups.set(stream as StreamTabId, schema.parse(value));
+    }
+  }
+
+  private async saveTaskGroups(): Promise<void> {
+    const record = mapToRecord(
+      new Map(
+        [...this._taskGroups].map(([stream, groups]) => [
+          stream,
+          mapToRecord(groups),
+        ]),
+      ),
+    );
+    void this.storage.update(WorkspaceStateKey.TASK_GROUPS, record);
+  }
+
+  private async deleteTaskGroups(stream: StreamTabId): Promise<void> {
+    if (!this._taskGroups.delete(stream)) return;
+    await this.saveTaskGroups();
+  }
+
+  private async clearTaskGroups(): Promise<void> {
+    this._taskGroups.clear();
+    await this.saveTaskGroups();
+  }
+
+  private async loadRunInstructions(): Promise<void> {
+    const raw = StorageRecordSchema.parse(
+      this.storage.get(WorkspaceStateKey.RUN_INSTRUCTIONS),
+    );
+    const schema = createRecordToMapSchema(InstructionUpdateSchema);
+    this._runInstructions.clear();
+    for (const [stream, value] of Object.entries(raw)) {
+      this._runInstructions.set(stream as StreamTabId, schema.parse(value));
+    }
+  }
+
+  private async saveRunInstructions(): Promise<void> {
+    const record = mapToRecord(
+      new Map(
+        [...this._runInstructions].map(([stream, instructions]) => [
+          stream,
+          mapToRecord(instructions),
+        ]),
+      ),
+    );
+    void this.storage.update(WorkspaceStateKey.RUN_INSTRUCTIONS, record);
+  }
+
+  private async deleteRunInstructions(stream: StreamTabId): Promise<void> {
+    if (!this._runInstructions.delete(stream)) return;
+    await this.saveRunInstructions();
+  }
+
+  private async clearRunInstructions(): Promise<void> {
+    this._runInstructions.clear();
+    await this.saveRunInstructions();
   }
 
   private loadTaskStates(): void {

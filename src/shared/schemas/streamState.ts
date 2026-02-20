@@ -1,13 +1,8 @@
 import { z } from 'zod';
 
 import { AGENT_CATEGORY, type AgentCategory } from './agent';
-import { LogMessageDataSchema } from './log';
 import { OutputFileInfoSchema } from './output';
-import {
-  InstructionUpdateSchema,
-  StreamStatusSchema,
-  StreamTabInfoSchema,
-} from './stream';
+import { InstructionUpdateSchema, StreamStatusSchema } from './stream';
 import { TaskGroupSchema } from './taskGroup';
 import { TodoItemSchema } from './todo';
 import { ContextStateSchema, TokenUsageStatsSchema } from './usage';
@@ -51,9 +46,10 @@ export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
 // Base Stream State
 
 const BaseStreamStateSchema = z.object({
-  info: StreamTabInfoSchema.optional(),
+  /** Backend-owned status for stream lifecycle. */
   status: StreamStatusSchema.optional(),
-  logs: z.array(LogMessageDataSchema).prefault([]),
+  /** Backend-owned last activity timestamp used for sorting/render metadata. */
+  lastTimestamp: z.number().optional(),
   taskGroups: z.array(TaskGroupSchema).prefault([]),
   contextState: ContextStateSchema.optional(),
   /** Active subagents running under this stream (ephemeral, not persisted). */

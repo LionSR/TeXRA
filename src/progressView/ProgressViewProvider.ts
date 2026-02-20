@@ -103,31 +103,31 @@ export class ProgressViewProvider
     const u = this.webviewUpdater;
     this.toolEditHandler = new ApprovalRequestHandler(
       'requestId',
-      (p) => u.showToolEditPermission(p),
-      (id) => u.resolveToolEditPermission(id),
+      (p) => u.updatePermission('toolEdit', 'show', p),
+      (id) => u.updatePermission('toolEdit', 'resolve', { requestId: id }),
       canSend,
     );
     this.bashApprovalHandler = new ApprovalRequestHandler(
       'requestId',
-      (p) => u.showBashPermission(p),
-      (id) => u.resolveBashPermission(id),
+      (p) => u.updatePermission('bash', 'show', p),
+      (id) => u.updatePermission('bash', 'resolve', { requestId: id }),
       canSend,
     );
     this.retryRequestHandler = new ApprovalRequestHandler(
       'streamId',
-      (p) => u.showRetryRequest(p),
-      (id) => u.resolveRetryRequest(id),
+      (p) => u.updatePermission('retry', 'show', p),
+      (id) => u.updatePermission('retry', 'resolve', { streamId: id }),
       canSend,
     );
     this.agentProposalHandler = new ApprovalRequestHandler(
       'proposalId',
       (p) => {
         // Show proposal immediately with basic model dropdown (synchronous)
-        u.showAgentProposal(p, buildBasicModelOptionsData());
+        u.updateProposal('show', p, undefined, buildBasicModelOptionsData());
         // Then upgrade with availability metadata if possible
         void this.sendProposalModelOptions(p);
       },
-      (id) => u.resolveAgentProposal(id),
+      (id) => u.updateProposal('resolve', undefined, id),
       canSend,
     );
 
@@ -141,10 +141,7 @@ export class ProgressViewProvider
         resolveToolEditPermission: (id) => this.toolEditHandler.resolve(id),
         updateToolEditApprovalBypassState: (streamId, bypassActive) => {
           if (canSend())
-            u.updateToolEditApprovalState(
-              streamId as StreamTabId,
-              bypassActive,
-            );
+            u.updateBypass(streamId as StreamTabId, 'toolEdit', bypassActive);
         },
         updateSuperYoloBypassState: (
           streamId,
@@ -152,8 +149,9 @@ export class ProgressViewProvider
           featureEnabled,
         ) => {
           if (canSend())
-            u.updateSuperYoloBypassState(
+            u.updateBypass(
               streamId as StreamTabId,
+              'superYolo',
               bypassActive,
               featureEnabled,
             );
@@ -174,11 +172,11 @@ export class ProgressViewProvider
     this._disposables.push(
       vscode.workspace.onDidChangeWorkspaceFolders(async () => {
         await this.state.load();
-        this.updateWebview({ forceRebuild: true });
+        this.syncFullView({ forceRebuild: true });
       }),
       vscode.window.onDidChangeActiveColorTheme(() => {
         if (this.isViewVisible()) {
-          this.updateWebview();
+          this.syncFullView();
         }
       }),
     );
@@ -215,7 +213,12 @@ export class ProgressViewProvider
       modelOptions = buildBasicModelOptionsData();
     }
     if (!this.agentProposalHandler.get(proposal.proposalId)) return;
-    this.webviewUpdater.showAgentProposal(proposal, modelOptions);
+    this.webviewUpdater.updateProposal(
+      'show',
+      proposal,
+      undefined,
+      modelOptions,
+    );
   }
 
   private async getCachedModelOptions(): Promise<ModelOptionData[]> {
@@ -285,16 +288,16 @@ export class ProgressViewProvider
     this._viewDisposables.push(
       webviewView.onDidChangeVisibility(() => {
         if (webviewView.visible) {
-          this.updateWebview();
+          this.syncFullView();
         }
       }),
       webviewView.onDidDispose(this.cleanupView.bind(this)),
     );
 
-    this.updateWebview();
+    this.syncFullView();
   }
 
-  public updateWebview(options?: { forceRebuild?: boolean }): void {
+  public syncFullView(options?: { forceRebuild?: boolean }): void {
     if (!this._view && !this._panelView) return;
 
     if (!this.isAnyViewReady()) {
@@ -309,16 +312,15 @@ export class ProgressViewProvider
       vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark;
     const theme = isDarkTheme ? 'dark' : 'light';
 
-    const activeStream = this.webviewUpdater.updateAll(
+    const activeStream = this.webviewUpdater.sendStreamMetadata(
       this.state,
-      this.eventHandler.getAllStreamStatuses(),
       theme,
     );
 
     const hasStreams = this.state.streamTabs.keys().length > 0;
     const isFilterMismatch = !activeStream && hasStreams;
     if (!isFilterMismatch) {
-      this.eventHandler.refreshStreamSurface(activeStream);
+      this.eventHandler.hydrateStreamContent(activeStream);
     }
 
     this._pendingUpdateOptions = null;
@@ -326,12 +328,14 @@ export class ProgressViewProvider
     // Send YOLO/Super YOLO bypass state for the active stream
     if (this.canSendToWebview()) {
       const bypassStreamId = activeStream || ('' as StreamTabId);
-      this.webviewUpdater.updateToolEditApprovalState(
+      this.webviewUpdater.updateBypass(
         bypassStreamId,
+        'toolEdit',
         activeStream ? isApprovalBypassedForStream(activeStream) : false,
       );
-      this.webviewUpdater.updateSuperYoloBypassState(
+      this.webviewUpdater.updateBypass(
         bypassStreamId,
+        'superYolo',
         activeStream ? isProposalBypassedForStream(activeStream) : false,
         isSuperYoloFeatureEnabled(),
       );
@@ -348,7 +352,7 @@ export class ProgressViewProvider
     }
 
     this._pendingUpdateOptions = null;
-    this.updateWebview({ forceRebuild: true });
+    this.syncFullView({ forceRebuild: true });
     this.replayPendingPrompts();
   }
 
@@ -359,7 +363,7 @@ export class ProgressViewProvider
 
     this.toolEditHandler.replay();
     this.bashApprovalHandler.replay();
-    // YOLO / Super YOLO state is already sent by updateWebview() which is
+    // YOLO / Super YOLO state is already sent by syncFullView() which is
     // always called before replayPendingPrompts() in markWebviewReady().
 
     this.retryRequestHandler.replay();
@@ -380,7 +384,7 @@ export class ProgressViewProvider
     waitingStreams?: Set<StreamTabId>,
   ): Promise<void> {
     await this.resetRunningStreamStatuses(waitingStreams);
-    this.updateWebview({ forceRebuild: true });
+    this.syncFullView({ forceRebuild: true });
   }
 
   public isViewVisible(): boolean {
@@ -404,8 +408,9 @@ export class ProgressViewProvider
     const affectedStreams =
       this.eventHandler.resetRunningTasksToError(waitingStreams);
 
-    const streamsWithRunningGroups =
-      await this.state.taskGroups.endRunningGroups(Date.now());
+    const streamsWithRunningGroups = await this.state.endRunningTaskGroups(
+      Date.now(),
+    );
 
     for (const streamId of streamsWithRunningGroups) {
       if (!affectedStreams.includes(streamId)) {
@@ -418,13 +423,13 @@ export class ProgressViewProvider
 
   public setActiveStream(streamId: StreamTabId): void {
     this.state.activeStream = streamId;
-    this.updateWebview();
+    this.syncFullView();
   }
 
   public showProgressViewAsPanel(): void {
     if (this._panelView) {
       this._panelView.reveal(vscode.ViewColumn.One);
-      this.updateWebview({ forceRebuild: true });
+      this.syncFullView({ forceRebuild: true });
       return;
     }
 
@@ -449,7 +454,7 @@ export class ProgressViewProvider
     this._panelDisposables.push(
       this._panelView.onDidChangeViewState((e) => {
         if (e.webviewPanel.visible) {
-          this.updateWebview();
+          this.syncFullView();
         }
       }),
     );
@@ -460,7 +465,7 @@ export class ProgressViewProvider
       }),
     );
 
-    this.updateWebview();
+    this.syncFullView();
   }
 
   public async flushState(): Promise<void> {

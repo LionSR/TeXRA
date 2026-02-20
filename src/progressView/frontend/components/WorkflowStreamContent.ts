@@ -206,7 +206,7 @@ export class WorkflowStreamContent extends LitElement {
 
       <followup-section
         .agentCategory=${streamInfo.agentCategory}
-        .status=${state.status ?? streamInfo.status ?? ''}
+        .status=${state.status ?? ''}
         .hasOutputFiles=${hasFiles}
         .options=${this.currentFollowupOptions}
         .mode=${state.followupMode}

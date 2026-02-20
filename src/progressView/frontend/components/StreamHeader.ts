@@ -404,10 +404,10 @@ export class StreamHeader extends LitElement {
     const agentCategory = this.stream.agentCategory;
     const toolbarButtons =
       TOOLBAR_BUTTONS[agentCategory] ?? TOOLBAR_BUTTONS.workflow;
-    const activeSubagents = this.streamState?.activeSubagents ?? [];
-    const finishedSubagentCount = this.streamState?.finishedSubagentCount ?? 0;
-    const activeProcesses = this.streamState?.activeProcesses ?? [];
-    const finishedProcessCount = this.streamState?.finishedProcessCount ?? 0;
+    const activeSubagents = this.streamState?.activeSubagents || [];
+    const finishedSubagentCount = this.streamState?.finishedSubagentCount || 0;
+    const activeProcesses = this.streamState?.activeProcesses || [];
+    const finishedProcessCount = this.streamState?.finishedProcessCount || 0;
     const totalSubagents = activeSubagents.length + finishedSubagentCount;
     const totalProcesses = activeProcesses.length + finishedProcessCount;
     const progress = this.streamState?.conversationProgress;
@@ -554,9 +554,7 @@ export class StreamHeader extends LitElement {
   }
 
   private getCurrentStatus(): string {
-    return (
-      this.streamState?.status || this.stream?.status || STREAM_STATUS.READY
-    );
+    return this.streamState?.status || STREAM_STATUS.READY;
   }
 
   private getStatusLabel(status: string): string {

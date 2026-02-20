@@ -119,6 +119,39 @@ export const UpdateStreamStatusMessageSchema = z.object({
   lastTimestamp: z.number().optional(),
 });
 
+export const SetActiveStreamMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM),
+  activeStreamId: StreamTabIdSchema,
+});
+
+export const UpdateConversationProgressMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS),
+  stream: StreamTabIdSchema,
+  progress: z.object({
+    conversationTurns: z.int(),
+    toolCallCount: z.int(),
+  }),
+});
+
+export const UpdateStreamBadgesMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES),
+  stream: StreamTabIdSchema,
+  activeSubagents: z
+    .array(z.object({ executionId: z.string(), agentName: z.string() }))
+    .nullish(),
+  finishedSubagentCount: z.int().nullish(),
+  activeProcesses: z
+    .array(z.object({ executionId: z.string(), agentName: z.string() }))
+    .nullish(),
+  finishedProcessCount: z.int().nullish(),
+});
+
+export const UpdateParentStreamMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM),
+  stream: StreamTabIdSchema,
+  parentStreamId: StreamTabIdSchema,
+});
+
 export const UpdateLogsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_LOGS),
   stream: z.union([StreamTabIdSchema, z.literal('')]),
@@ -209,87 +242,70 @@ export const UpdateQueuedFollowUpsMessageSchema = z.object({
   messages: z.array(z.string()),
 });
 
-export const ShowToolEditApprovalMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL),
-  request: ToolEditPermissionSchema,
+export const PermissionUpdateMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.PERMISSION_UPDATE),
+  kind: z.enum(['toolEdit', 'bash', 'retry']),
+  action: z.enum(['show', 'resolve']),
+  data: z.unknown(),
 });
 
-export const ResolveToolEditApprovalMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL),
-  requestId: z.string(),
+export const ProposalUpdateMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.PROPOSAL_UPDATE),
+  action: z.enum(['show', 'resolve']),
+  proposal: AgentProposalPermissionSchema.nullish(),
+  proposalId: z.string().nullish(),
+  modelOptionsData: z.array(ModelOptionDataSchema).nullish(),
 });
 
-export const UpdateToolEditApprovalStateMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE),
+export const UpdateBypassMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS),
   stream: StreamTabIdSchema,
-  bypassActive: z.boolean(),
+  bypassType: z.enum(['toolEdit', 'superYolo']),
+  active: z.boolean(),
+  featureEnabled: z.boolean().nullish(),
 });
 
-export const ShowBashApprovalMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL),
-  request: BashPermissionSchema,
-});
-
-export const ResolveBashApprovalMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.RESOLVE_BASH_APPROVAL),
-  requestId: z.string(),
-});
-
-export const ShowRetryRequestMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_RETRY_REQUEST),
-  request: RetryPermissionSchema,
-});
-
-export const ResolveRetryRequestMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.RESOLVE_RETRY_REQUEST),
-  streamId: StreamTabIdSchema,
-});
-
-export const ShowAgentProposalMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL),
-  proposal: AgentProposalPermissionSchema,
-  modelOptionsData: z.array(ModelOptionDataSchema).optional(),
-});
-
-export const ResolveAgentProposalMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.RESOLVE_AGENT_PROPOSAL),
-  proposalId: z.string(),
-});
-
-export const UpdateSuperYoloBypassStateMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_BYPASS_STATE),
+export const UpdateFollowUpTextMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT),
+  kind: z.enum(['polished', 'polishError', 'transcribed']),
   stream: StreamTabIdSchema,
-  bypassActive: z.boolean(),
-  featureEnabled: z.boolean(),
+  text: z.string().nullish(),
+  error: z.string().nullish(),
 });
 
-export const FollowUpTextPolishedMessageSchema = z.object({
+export const UpdateRecordingMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING),
+  status: z.enum(['started', 'stopped', 'error']),
+});
+
+export const LegacyFollowUpTextPolishedMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED),
   stream: StreamTabIdSchema,
   text: z.string(),
 });
 
-export const FollowUpTextPolishErrorMessageSchema = z.object({
+export const LegacyFollowUpTextPolishErrorMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR),
   stream: StreamTabIdSchema,
   error: z.string().optional(),
 });
 
-export const FollowUpTextTranscribedMessageSchema = z.object({
+export const LegacyFollowUpTextTranscribedMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED),
   text: z.string(),
 });
 
-export const ProgressRecordingStartedMessageSchema = z.object({
+export const LegacyRecordingStartedMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RECORDING_STARTED),
 });
 
-export const ProgressRecordingStoppedMessageSchema = z.object({
+export const LegacyRecordingStoppedMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED),
 });
 
-export const ProgressRecordingErrorMessageSchema = z.object({
+export const LegacyRecordingErrorMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RECORDING_ERROR),
+  error: z.string().optional(),
 });
 
 export const SetFollowupOptionsMessageSchema = z.object({
@@ -320,6 +336,10 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
   [
     UpdateStreamsMessageSchema,
     UpdateStreamStatusMessageSchema,
+    SetActiveStreamMessageSchema,
+    UpdateConversationProgressMessageSchema,
+    UpdateStreamBadgesMessageSchema,
+    UpdateParentStreamMessageSchema,
     UpdateLogsMessageSchema,
     AppendLogMessageSchema,
     UpdateLogMessageSchema,
@@ -332,22 +352,17 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateRunUsageMessageSchema,
     UpdateContextStateMessageSchema,
     UpdateQueuedFollowUpsMessageSchema,
-    ShowToolEditApprovalMessageSchema,
-    ResolveToolEditApprovalMessageSchema,
-    UpdateToolEditApprovalStateMessageSchema,
-    UpdateSuperYoloBypassStateMessageSchema,
-    ShowBashApprovalMessageSchema,
-    ResolveBashApprovalMessageSchema,
-    ShowRetryRequestMessageSchema,
-    ResolveRetryRequestMessageSchema,
-    ShowAgentProposalMessageSchema,
-    ResolveAgentProposalMessageSchema,
-    FollowUpTextPolishedMessageSchema,
-    FollowUpTextPolishErrorMessageSchema,
-    FollowUpTextTranscribedMessageSchema,
-    ProgressRecordingStartedMessageSchema,
-    ProgressRecordingStoppedMessageSchema,
-    ProgressRecordingErrorMessageSchema,
+    PermissionUpdateMessageSchema,
+    ProposalUpdateMessageSchema,
+    UpdateBypassMessageSchema,
+    UpdateFollowUpTextMessageSchema,
+    UpdateRecordingMessageSchema,
+    LegacyFollowUpTextPolishedMessageSchema,
+    LegacyFollowUpTextPolishErrorMessageSchema,
+    LegacyFollowUpTextTranscribedMessageSchema,
+    LegacyRecordingStartedMessageSchema,
+    LegacyRecordingStoppedMessageSchema,
+    LegacyRecordingErrorMessageSchema,
     SetFollowupOptionsMessageSchema,
     ProgressSetThemeMessageSchema,
     ProgressDeleteStreamMessageSchema,

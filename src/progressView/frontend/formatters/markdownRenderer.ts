@@ -27,6 +27,7 @@ let markdownRenderer: MarkdownIt | null = null;
 
 // LRU cache for rendered markdown (content hash → HTML)
 const CACHE_MAX_SIZE = 2000;
+const CACHE_MAX_CONTENT_BYTES = 64_000;
 const markdownCache = new Map<string, string>();
 
 /**
@@ -154,8 +155,8 @@ export const processMarkdownContent = (
   // Post-process to restore and style LaTeX references
   const result = restoreLatexReferences(parsedMarkdown);
 
-  // Store in cache with LRU eviction
-  if (useCache && cacheKey) {
+  // Store in cache with LRU eviction (skip very large entries)
+  if (useCache && cacheKey && content.length <= CACHE_MAX_CONTENT_BYTES) {
     if (markdownCache.size >= CACHE_MAX_SIZE) {
       // Delete oldest entry (first key)
       const firstKey = markdownCache.keys().next().value;

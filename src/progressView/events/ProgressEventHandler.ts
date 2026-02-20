@@ -131,14 +131,22 @@ export class ProgressEventHandler {
         if (agentCategory) {
           this.state.getOrCreateStreamState(streamId, agentCategory);
         }
+        const previousFilter = this.state.agentCategoryFilter;
         this.maybeUpdateFilterForCategory(agentCategory);
+        const filterChanged = previousFilter !== this.state.agentCategoryFilter;
         this.state.activeStream = streamId;
         this.replayPendingTaskGroups(streamId);
 
         if (!this.webviewUpdater.isAvailable()) return;
 
-        this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
-        this.refreshStreamSurface(streamId, { updateInstruction: true });
+        if (filterChanged) {
+          this.webviewUpdater.sendStreamMetadata(this.state);
+          this.hydrateStreamContent(streamId, { updateInstruction: true });
+          return;
+        }
+
+        this.webviewUpdater.setActiveStream(streamId);
+        this.hydrateStreamContent(streamId, { updateInstruction: true });
       },
     );
   };
@@ -188,7 +196,7 @@ export class ProgressEventHandler {
           const filterChanged =
             this.state.agentCategoryFilter !== previousFilter;
           if (filterChanged || isActiveStream) {
-            this.webviewUpdater.updateAll(
+            this.webviewUpdater.sendStreamMetadata(
               this.state,
               StreamStatusService.getAll(),
             );
@@ -215,7 +223,7 @@ export class ProgressEventHandler {
     const { id, parentGroupId } = group;
 
     const hasStream = this.state.streamTabs.has(streamId);
-    const addGroupPromise = this.state.taskGroups.addGroup(streamId, id, group);
+    const addGroupPromise = this.state.addTaskGroup(streamId, group);
 
     if (!parentGroupId) {
       this.state.setActiveRunId(streamId, id);
@@ -253,7 +261,7 @@ export class ProgressEventHandler {
   private async processUpdateTaskGroup(
     data: ProgressEventPayloads['updateTaskGroup'],
   ): Promise<void> {
-    const groups = this.state.taskGroups.getStreamGroups(data.streamId);
+    const groups = this.state.getTaskGroups(data.streamId);
     if (!groups.has(data.id)) {
       // StreamEventQueue serializes events per stream, so addTaskGroup always
       // completes before updateTaskGroup. If we hit this, there's a bug.
@@ -263,7 +271,7 @@ export class ProgressEventHandler {
       return;
     }
 
-    await this.state.taskGroups.updateGroup(data);
+    await this.state.updateTaskGroup(data);
 
     const isActive = data.streamId === this.state.activeStream;
     if (this.webviewUpdater.isAvailable() && isActive) {
@@ -307,10 +315,12 @@ export class ProgressEventHandler {
       return;
     }
 
-    // Only push a full update if the active stream has pending progress
     const activeStream = this.state.activeStream;
     if (activeStream && this.pendingProgressUpdates.has(activeStream)) {
-      this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
+      const progress = this.pendingProgressUpdates.get(activeStream);
+      if (progress) {
+        this.webviewUpdater.updateConversationProgress(activeStream, progress);
+      }
     }
     this.pendingProgressUpdates.clear();
   }
@@ -336,8 +346,7 @@ export class ProgressEventHandler {
           return {
             ...prev,
             activeSubagents: children,
-            finishedSubagentCount:
-              (prev.finishedSubagentCount ?? 0) + newlyFinished,
+            finishedSubagentCount: prev.finishedSubagentCount + newlyFinished,
           };
         });
 
@@ -346,10 +355,12 @@ export class ProgressEventHandler {
           this.webviewUpdater.isAvailable() &&
           parentStreamId === this.state.activeStream
         ) {
-          this.webviewUpdater.updateAll(
-            this.state,
-            StreamStatusService.getAll(),
-          );
+          const streamState = this.state.getAllStreamStates()[parentStreamId];
+          if (!streamState) return;
+          this.webviewUpdater.updateStreamBadges(parentStreamId, {
+            activeProcesses: processes,
+            finishedProcessCount: streamState.finishedProcessCount,
+          });
         }
       },
     );
@@ -375,8 +386,7 @@ export class ProgressEventHandler {
           return {
             ...prev,
             activeProcesses: processes,
-            finishedProcessCount:
-              (prev.finishedProcessCount ?? 0) + newlyFinished,
+            finishedProcessCount: prev.finishedProcessCount + newlyFinished,
           };
         });
 
@@ -384,10 +394,12 @@ export class ProgressEventHandler {
           this.webviewUpdater.isAvailable() &&
           parentStreamId === this.state.activeStream
         ) {
-          this.webviewUpdater.updateAll(
-            this.state,
-            StreamStatusService.getAll(),
-          );
+          const streamState = this.state.getAllStreamStates()[parentStreamId];
+          if (!streamState) return;
+          this.webviewUpdater.updateStreamBadges(parentStreamId, {
+            activeSubagents: children,
+            finishedSubagentCount: streamState.finishedSubagentCount,
+          });
         }
       },
     );
@@ -403,10 +415,12 @@ export class ProgressEventHandler {
         this.state.setParentStream(data.childStreamId, data.parentStreamId);
 
         if (this.webviewUpdater.isAvailable()) {
-          this.webviewUpdater.updateAll(
-            this.state,
-            StreamStatusService.getAll(),
-          );
+          const streamState = this.state.getAllStreamStates()[parentStreamId];
+          if (!streamState) return;
+          this.webviewUpdater.updateStreamBadges(parentStreamId, {
+            activeSubagents: children,
+            finishedSubagentCount: streamState.finishedSubagentCount,
+          });
         }
       },
     );
@@ -465,7 +479,7 @@ export class ProgressEventHandler {
     );
   }
 
-  public refreshStreamSurface(
+  public hydrateStreamContent(
     stream: ActiveStreamId,
     options: { updateInstruction?: boolean } = {},
   ): StorageKey | null {
@@ -484,7 +498,7 @@ export class ProgressEventHandler {
     }
 
     let messages = this.state.streamTabs.getMessages(stream);
-    const groups = [...this.state.taskGroups.getStreamGroups(stream).values()];
+    const groups = [...this.state.getTaskGroups(stream).values()];
     const activeRunId = this.state.getActiveRunId(stream);
 
     const runInstructions = Object.fromEntries(
@@ -572,6 +586,12 @@ export class ProgressEventHandler {
 
     const streamExists = this.state.streamTabs.has(streamId);
 
+    this.state.updateStreamState(streamId, (prev) => ({
+      ...prev,
+      status,
+      lastTimestamp: this.state.streamTabs.getLastTimestamp(streamId),
+    }));
+
     if (!streamExists) {
       const streamCategory = this.getStreamCategory(streamId);
       if (streamCategory) {
@@ -579,7 +599,7 @@ export class ProgressEventHandler {
       }
       const statusesForRefresh = StreamStatusService.getAll();
       statusesForRefresh.set(streamId, status);
-      this.webviewUpdater.updateAll(this.state, statusesForRefresh);
+      this.webviewUpdater.sendStreamMetadata(this.state);
     } else {
       const lastTimestamp = this.state.streamTabs.getLastTimestamp(streamId);
       this.webviewUpdater.updateStreamStatus(streamId, status, lastTimestamp);
@@ -638,8 +658,8 @@ export class ProgressEventHandler {
       return;
     }
 
-    this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
-    this.refreshStreamSurface(streamId, { updateInstruction: true });
+    this.webviewUpdater.sendStreamMetadata(this.state);
+    this.hydrateStreamContent(streamId, { updateInstruction: true });
   }
 
   clearPendingTaskGroups(streamId: StreamTabId): void {
