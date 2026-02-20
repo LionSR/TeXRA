@@ -251,92 +251,149 @@ export const IMAGE_PROCESSING_INSTALL_GUIDE = combineGuides(
  * Used by the LaTeX tab to power "Copy command" and "Run in Terminal" buttons.
  */
 export interface InstallCommand {
+  /** Human-readable label (e.g. "Homebrew", "APT", "Scoop"). */
+  readonly label: string;
   /** The full shell command (e.g. "brew install ghostscript"). */
   readonly command: string;
   /** Whether the command requires sudo (used to decide button behaviour). */
   readonly requiresSudo: boolean;
-  /** The package manager the command targets (null = direct download / manual). */
-  readonly packageManager: 'brew' | 'apt' | null;
+  /**
+   * The package manager the command targets.
+   * `null` means the command is always available (e.g. a direct download URL).
+   */
+  readonly packageManager: 'brew' | 'apt' | 'scoop' | null;
 }
 
 /** Official Homebrew one-liner install script. */
 export const HOMEBREW_INSTALL_COMMAND =
   '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"';
 
+/** Official Scoop install commands (PowerShell). */
+export const SCOOP_INSTALL_COMMAND =
+  'Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser; irm get.scoop.sh | iex';
+
 /**
  * Per-dependency install commands keyed by `DependencyInfo.key`.
  *
- * A `null` entry means there is no single-command install for that
- * platform (e.g. Windows usually requires a manual download).
+ * Each platform maps to an **ordered** list of install options, ranked by
+ * recommendation priority. The frontend picks the first option whose
+ * `packageManager` matches the detected system package manager (or whose
+ * `packageManager` is `null`, meaning always available).
+ *
+ * An empty array means there is no automatable install for that platform.
  */
 export const DEPENDENCY_INSTALL_COMMANDS: Record<
   string,
-  Record<Platform, InstallCommand | null>
+  Record<Platform, readonly InstallCommand[]>
 > = {
   texDistributionInstalled: {
-    darwin: {
-      command: 'brew install --cask mactex',
-      requiresSudo: false,
-      packageManager: 'brew',
-    },
-    linux: {
-      command: 'sudo apt-get install -y texlive-full',
-      requiresSudo: true,
-      packageManager: 'apt',
-    },
-    win32: null,
+    darwin: [
+      {
+        label: 'Homebrew',
+        command: 'brew install --cask mactex',
+        requiresSudo: false,
+        packageManager: 'brew',
+      },
+    ],
+    linux: [
+      {
+        label: 'APT',
+        command: 'sudo apt-get install -y texlive-full',
+        requiresSudo: true,
+        packageManager: 'apt',
+      },
+    ],
+    win32: [
+      {
+        label: 'Scoop',
+        command: 'scoop install miktex',
+        requiresSudo: false,
+        packageManager: 'scoop',
+      },
+    ],
   },
   latexdiffInstalled: {
-    darwin: {
-      command: 'brew install latexdiff',
-      requiresSudo: false,
-      packageManager: 'brew',
-    },
-    linux: {
-      command: 'sudo apt-get install -y latexdiff',
-      requiresSudo: true,
-      packageManager: 'apt',
-    },
-    win32: null,
+    darwin: [
+      {
+        label: 'Homebrew',
+        command: 'brew install latexdiff',
+        requiresSudo: false,
+        packageManager: 'brew',
+      },
+    ],
+    linux: [
+      {
+        label: 'APT',
+        command: 'sudo apt-get install -y latexdiff',
+        requiresSudo: true,
+        packageManager: 'apt',
+      },
+    ],
+    win32: [],
   },
   latexindentInstalled: {
-    darwin: {
-      command: 'brew install latexindent',
-      requiresSudo: false,
-      packageManager: 'brew',
-    },
-    linux: {
-      command: 'sudo apt-get install -y texlive-extra-utils perl',
-      requiresSudo: true,
-      packageManager: 'apt',
-    },
-    win32: null,
+    darwin: [
+      {
+        label: 'Homebrew',
+        command: 'brew install latexindent',
+        requiresSudo: false,
+        packageManager: 'brew',
+      },
+    ],
+    linux: [
+      {
+        label: 'APT',
+        command: 'sudo apt-get install -y texlive-extra-utils perl',
+        requiresSudo: true,
+        packageManager: 'apt',
+      },
+    ],
+    win32: [],
   },
   texcountInstalled: {
-    darwin: {
-      command: 'brew install texcount',
-      requiresSudo: false,
-      packageManager: 'brew',
-    },
-    linux: {
-      command: 'sudo apt-get install -y texlive-extra-utils',
-      requiresSudo: true,
-      packageManager: 'apt',
-    },
-    win32: null,
+    darwin: [
+      {
+        label: 'Homebrew',
+        command: 'brew install texcount',
+        requiresSudo: false,
+        packageManager: 'brew',
+      },
+    ],
+    linux: [
+      {
+        label: 'APT',
+        command: 'sudo apt-get install -y texlive-extra-utils',
+        requiresSudo: true,
+        packageManager: 'apt',
+      },
+    ],
+    win32: [],
   },
   imageProcessingInstalled: {
-    darwin: {
-      command: 'brew install ghostscript graphicsmagick',
-      requiresSudo: false,
-      packageManager: 'brew',
-    },
-    linux: {
-      command: 'sudo apt-get install -y ghostscript graphicsmagick',
-      requiresSudo: true,
-      packageManager: 'apt',
-    },
-    win32: null,
+    darwin: [
+      {
+        label: 'Homebrew',
+        command: 'brew install ghostscript graphicsmagick',
+        requiresSudo: false,
+        packageManager: 'brew',
+      },
+    ],
+    linux: [
+      {
+        label: 'APT',
+        command: 'sudo apt-get install -y ghostscript graphicsmagick',
+        requiresSudo: true,
+        packageManager: 'apt',
+      },
+    ],
+    win32: [
+      {
+        label: 'Scoop',
+        command: 'scoop install ghostscript graphicsmagick',
+        requiresSudo: false,
+        packageManager: 'scoop',
+      },
+    ],
   },
 };
 
