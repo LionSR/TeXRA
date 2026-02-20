@@ -1,5 +1,3 @@
-import * as vscode from 'vscode';
-
 import {
   END_GROUP_STATUS,
   EXECUTION_STATUS,
@@ -22,10 +20,8 @@ import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
-import {
-  getUnavailableToolNamesCached,
-  mapToolNamesToGroupNames,
-} from '@tools/toolAvailability';
+import { getUnavailableToolNamesCached } from '@tools/toolAvailability';
+import { notifyUnavailableTools } from '@tools/toolUnavailableNotification';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
@@ -66,35 +62,6 @@ export interface ToolUseFlowContext {
 }
 
 export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
-
-/** Groups already surfaced in a notification this session — avoids repeat popups. */
-const notifiedGroups = new Set<string>();
-
-/**
- * Show a single notification listing tool *groups* that were excluded due to
- * missing dependencies, with a button to open the Tools dashboard.
- * Each group is only notified once per session.
- */
-function notifyUnavailableTools(excludedToolNames: string[]): void {
-  const groups = mapToolNamesToGroupNames(excludedToolNames);
-  const fresh = groups.filter((g) => !notifiedGroups.has(g));
-  if (fresh.length === 0) return;
-  for (const g of fresh) notifiedGroups.add(g);
-
-  const label =
-    fresh.length === 1 ? `"${fresh[0]}" tools were` : `${fresh.map((g) => `"${g}"`).join(', ')} tools were`;
-
-  void vscode.window
-    .showInformationMessage(
-      `${label} excluded — external dependencies not installed.`,
-      'Open Tools Dashboard',
-    )
-    .then((choice) => {
-      if (choice === 'Open Tools Dashboard') {
-        void vscode.commands.executeCommand('texra.showTools');
-      }
-    });
-}
 
 function resolveTools(
   tools: AgentToolUseSetting['tools'],
