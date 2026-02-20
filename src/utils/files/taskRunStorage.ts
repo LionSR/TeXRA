@@ -220,13 +220,24 @@ export class TaskRunFileService {
   private hasPreparedSnapshot = false;
   private readonly mirroredDependencies = new Set<string>();
 
-  constructor(executionId?: ExecutionId) {
+  /**
+   * When true, the service always uses task-run storage regardless of user
+   * config. Set for subagent workflows so their outputs don't overcrowd the
+   * workspace.
+   */
+  private readonly forceRunStorage: boolean;
+
+  constructor(
+    executionId?: ExecutionId,
+    options?: { forceRunStorage?: boolean },
+  ) {
     this.metadata = {
       mode: 'workspace',
       executionId: undefined,
       runDirectory: undefined,
     };
     this.useRunStorage = false;
+    this.forceRunStorage = options?.forceRunStorage ?? false;
     this.updateRunContext(executionId);
   }
 
@@ -236,7 +247,8 @@ export class TaskRunFileService {
       'workspace',
     );
     const shouldUseRunStorage =
-      storageMode === 'taskRunStorage' && Boolean(executionId);
+      (storageMode === 'taskRunStorage' || this.forceRunStorage) &&
+      Boolean(executionId);
 
     const nextMode: 'workspace' | 'taskRunStorage' = shouldUseRunStorage
       ? 'taskRunStorage'
