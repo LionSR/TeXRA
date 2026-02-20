@@ -38,6 +38,39 @@ import type {
 // ============================================================================
 
 /**
+ * Remap snake_case keys in a content part to SDK camelCase.
+ *
+ * The SDK's outbound Zod schemas expect camelCase fields and remap them to
+ * snake_case for the HTTP wire format. Passing OpenAI's snake_case directly
+ * causes the SDK to strip the fields during validation.
+ *
+ * Remapped: image_url → imageUrl, input_audio → inputAudio, video_url → videoUrl
+ */
+function toOpenRouterContentPart(
+  part: Record<string, unknown>,
+): Record<string, unknown> {
+  const { image_url, input_audio, video_url, ...rest } = part;
+  const out: Record<string, unknown> = { ...rest };
+  if (image_url !== undefined) out.imageUrl = image_url;
+  if (input_audio !== undefined) out.inputAudio = input_audio;
+  if (video_url !== undefined) out.videoUrl = video_url;
+  return out;
+}
+
+/**
+ * Remap content parts in a message when the content is an array.
+ * Strings are passed through unchanged.
+ */
+function toOpenRouterContent(content: unknown): unknown {
+  if (!Array.isArray(content)) return content;
+  return content.map((part: unknown) =>
+    typeof part === 'object' && part !== null
+      ? toOpenRouterContentPart(part as Record<string, unknown>)
+      : part,
+  );
+}
+
+/**
  * Convert OpenAI-format messages (snake_case) to OpenRouter SDK format (camelCase).
  *
  * The SDK's Zod schemas validate camelCase fields and remap them to snake_case
@@ -47,23 +80,34 @@ import type {
  * Fields remapped:
  * - assistant.tool_calls → toolCalls
  * - tool.tool_call_id → toolCallId
+ * - content part: image_url → imageUrl, input_audio → inputAudio, video_url → videoUrl
  */
 function toOpenRouterMessages(
   messages: ChatCompletionMessageParam[],
 ): unknown[] {
   return messages.map((msg) => {
+    const raw = msg as unknown as Record<string, unknown>;
+
     if (msg.role === 'assistant') {
-      const assistantMsg = msg as unknown as Record<string, unknown>;
-      if (assistantMsg.tool_calls) {
-        const { tool_calls, ...rest } = assistantMsg;
-        return { ...rest, toolCalls: tool_calls };
+      const result: Record<string, unknown> = {
+        ...raw,
+        content: toOpenRouterContent(raw.content),
+      };
+      if (raw.tool_calls) {
+        result.toolCalls = raw.tool_calls;
+        delete result.tool_calls;
       }
-      return msg;
+      return result;
     }
+
     if (msg.role === 'tool') {
-      const toolMsg = msg as unknown as Record<string, unknown>;
-      const { tool_call_id, ...rest } = toolMsg;
+      const { tool_call_id, ...rest } = raw;
       return { ...rest, toolCallId: tool_call_id };
+    }
+
+    // system / user / developer - only need content part remapping
+    if (Array.isArray(raw.content)) {
+      return { ...raw, content: toOpenRouterContent(raw.content) };
     }
     return msg;
   });
@@ -321,21 +365,21 @@ interface NonSDKParams {
 /**
  * Creates a beforeRequest hook that injects extra body parameters the SDK
  * doesn't natively support. Deep-merges nested objects (e.g., reasoning).
+ *
+ * The `nonSDKParams` are captured by reference from the caller, so the
+ * same value is applied on every invocation (including SDK retries).
  */
-function createParamInjectionHook(getNonSDKParams: () => NonSDKParams | null) {
+function createParamInjectionHook(nonSDKParams: NonSDKParams) {
   return {
     beforeRequest: async (
       _ctx: unknown,
       request: Request,
     ): Promise<Request> => {
-      const extras = getNonSDKParams();
-      if (!extras) return request;
-
       const cloned = request.clone();
       const bodyText = await cloned.text();
       try {
         const parsed = JSON.parse(bodyText) as Record<string, unknown>;
-        for (const [key, value] of Object.entries(extras)) {
+        for (const [key, value] of Object.entries(nonSDKParams)) {
           // Deep merge for nested objects (e.g., reasoning)
           if (
             typeof value === 'object' &&
@@ -373,12 +417,6 @@ function createParamInjectionHook(getNonSDKParams: () => NonSDKParams | null) {
  * OpenRouter SDK's `chat.send()` with proper type-safe parameters.
  */
 export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
-  /**
-   * Pending non-SDK parameters to inject via the beforeRequest hook.
-   * Set before each SDK call and consumed (cleared) by the hook.
-   */
-  private pendingNonSDKParams: NonSDKParams | null = null;
-
   protected override get usageProvider(): NormalizedUsage['provider'] {
     return 'openrouter';
   }
@@ -391,25 +429,26 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
    * - X-Title header (app identification)
    * - Base URL (with optional override for proxies/relays)
    * - A beforeRequest hook to inject parameters the SDK doesn't yet support
+   *
+   * @param nonSDKParams - Extra body parameters to inject via beforeRequest hook.
+   *   Captured by the hook closure so retries re-apply the same values.
    */
-  private async createNativeClient(): Promise<OpenRouter> {
+  private async createNativeClient(
+    nonSDKParams?: NonSDKParams,
+  ): Promise<OpenRouter> {
     const apiKey = await this.getApiKey();
     const baseURL = this.getBaseUrl();
     this.logger.debug(
       `Creating native OpenRouter SDK client. Base URL: ${baseURL ?? 'default'}`,
     );
 
+    const hooks = nonSDKParams ? [createParamInjectionHook(nonSDKParams)] : [];
+
     return new OpenRouter({
       apiKey,
       xTitle: 'TeXRA.ai',
       ...(baseURL && { serverURL: baseURL }),
-      hooks: [
-        createParamInjectionHook(() => {
-          const params = this.pendingNonSDKParams;
-          this.pendingNonSDKParams = null;
-          return params;
-        }),
-      ],
+      hooks,
     });
   }
 
@@ -425,7 +464,6 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
   ): Promise<CreateResponseResult<ChatCompletion, ChatCompletionMessageParam>> {
     const { messages, temperature, endTag, signal, tools } = options;
     const useStreaming = this.getStreamingConfig();
-    const nativeClient = await this.createNativeClient();
 
     // Build SDK request parameters (camelCase for SDK validation)
     const chatParams: Record<string, unknown> = {
@@ -436,7 +474,10 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     };
 
     // Reasoning parameters - use SDK's `reasoning` field where possible,
-    // inject unsupported params via the beforeRequest hook
+    // inject unsupported params via the beforeRequest hook.
+    // nonSDKParams is computed upfront and captured by the hook closure
+    // so retries re-apply the same values.
+    let nonSDKParams: NonSDKParams | undefined;
     if (this.capabilities.supportsReasoning) {
       if (
         this.capabilities.supportsReasoningEffort &&
@@ -449,14 +490,16 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
           ),
         };
         // SDK doesn't support include_reasoning yet - inject via hook
-        this.pendingNonSDKParams = { include_reasoning: true };
+        nonSDKParams = { include_reasoning: true };
       } else {
         // DeepSeek V3.2 and similar: SDK doesn't support reasoning.enabled
         // Send empty reasoning object to SDK, inject enabled via hook
         chatParams.reasoning = {};
-        this.pendingNonSDKParams = { reasoning: { enabled: true } };
+        nonSDKParams = { reasoning: { enabled: true } };
       }
     }
+
+    const nativeClient = await this.createNativeClient(nonSDKParams);
 
     if (tools && tools.length > 0) {
       chatParams.tools = toOpenAITools(tools);
