@@ -43,6 +43,7 @@ export class ProgressViewProvider
   implements vscode.WebviewViewProvider, IRunStorageService
 {
   public static readonly viewType = 'texra.progressView';
+  public static readonly secondaryViewType = 'texra.progressViewSecondary';
   private static _instance: ProgressViewProvider | undefined;
 
   public readonly state: ProgressViewState;
@@ -55,7 +56,10 @@ export class ProgressViewProvider
   private readonly _viewTitle: string;
   private _sidebarReady = false;
   private _panelReady = false;
+  private _secondaryReady = false;
   private _panelView?: vscode.WebviewPanel;
+  private _secondaryView?: vscode.WebviewView;
+  private _secondaryDisposables: vscode.Disposable[] = [];
   private _panelDisposables: vscode.Disposable[] = [];
   private _pendingUpdateOptions: { forceRebuild: boolean } | null = null;
   private _hasResolved = false;
@@ -97,6 +101,7 @@ export class ProgressViewProvider
     this.webviewUpdater = new WebviewUpdater(() => [
       this._view?.webview,
       this._panelView?.webview,
+      this._secondaryView?.webview,
     ]);
 
     const canSend = () => this.canSendToWebview();
@@ -258,6 +263,17 @@ export class ProgressViewProvider
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
+    const isSecondary =
+      webviewView.viewType === ProgressViewProvider.secondaryViewType;
+
+    if (isSecondary) {
+      this.resolveSecondaryView(webviewView);
+    } else {
+      this.resolvePrimaryView(webviewView);
+    }
+  }
+
+  private resolvePrimaryView(webviewView: vscode.WebviewView): void {
     if (this._hasResolved) {
       this.resetRunningStreamStatuses();
     }
@@ -294,8 +310,46 @@ export class ProgressViewProvider
     this.updateWebview();
   }
 
+  private resolveSecondaryView(webviewView: vscode.WebviewView): void {
+    this.cleanupSecondaryView();
+    this._secondaryReady = false;
+
+    webviewView.webview.options = {
+      enableScripts: true,
+      enableCommandUris: true,
+      localResourceRoots: getSharedLocalResourceRoots(
+        this.context,
+        'progressView',
+      ),
+    };
+    webviewView.title = this._viewTitle;
+
+    this._secondaryView = webviewView;
+
+    const disposables = this.setupWebviewContent(webviewView);
+    this._secondaryDisposables.push(...disposables);
+
+    this._secondaryDisposables.push(
+      webviewView.onDidChangeVisibility(() => {
+        if (webviewView.visible) {
+          this.updateWebview();
+        }
+      }),
+      webviewView.onDidDispose(this.cleanupSecondaryView.bind(this)),
+    );
+
+    this.updateWebview();
+  }
+
+  private cleanupSecondaryView(): void {
+    for (const d of this._secondaryDisposables) d.dispose();
+    this._secondaryDisposables = [];
+    this._secondaryView = undefined;
+    this._secondaryReady = false;
+  }
+
   public updateWebview(options?: { forceRebuild?: boolean }): void {
-    if (!this._view && !this._panelView) return;
+    if (!this._view && !this._panelView && !this._secondaryView) return;
 
     if (!this.isAnyViewReady()) {
       const currentForce = this._pendingUpdateOptions?.forceRebuild ?? false;
@@ -343,6 +397,8 @@ export class ProgressViewProvider
   ): void {
     if (this.isPanelView(view)) {
       this._panelReady = true;
+    } else if (this.isSecondaryView(view)) {
+      this._secondaryReady = true;
     } else {
       this._sidebarReady = true;
     }
@@ -384,7 +440,11 @@ export class ProgressViewProvider
   }
 
   public isViewVisible(): boolean {
-    return this._view?.visible === true || this._panelView?.visible === true;
+    return (
+      this._view?.visible === true ||
+      this._panelView?.visible === true ||
+      this._secondaryView?.visible === true
+    );
   }
 
   public getActiveRunId(stream: StreamTabId): StorageKey | null {
@@ -469,17 +529,26 @@ export class ProgressViewProvider
 
   public override dispose(): void {
     this.disposePanelResources(true);
+    this.cleanupSecondaryView();
     super.dispose();
   }
 
   private isAnyViewReady(): boolean {
-    return this._sidebarReady || this._panelReady;
+    return this._sidebarReady || this._panelReady || this._secondaryReady;
   }
 
   private isPanelView(
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): view is vscode.WebviewPanel {
     return 'viewColumn' in view;
+  }
+
+  private isSecondaryView(view: vscode.WebviewView | vscode.WebviewPanel): boolean {
+    return (
+      !this.isPanelView(view) &&
+      (view as vscode.WebviewView).viewType ===
+        ProgressViewProvider.secondaryViewType
+    );
   }
 
   private disposePanelResources(disposeView = false): void {
