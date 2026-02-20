@@ -47,6 +47,11 @@ interface GroupTree {
   messages: LogMessageData[];
 }
 
+/** Union type for chronologically merged user messages and group trees */
+type TimelineItem =
+  | { key: string; time: number; kind: 'message'; message: LogMessageData }
+  | { key: string; time: number; kind: 'group'; tree: GroupTree };
+
 const PLACEHOLDER_HTML = getGettingStartedHtml(
   'No runs yet—use TeXRA commands to start. Try ',
 );
@@ -432,6 +437,61 @@ export class TaskGroupList extends LitElement {
     this.requestUpdate();
   }
 
+  /**
+   * Merge user messages and group trees into chronological order.
+   * Both inputs are already sorted, so this is an O(n+m) merge.
+   * User messages with equal timestamps sort before groups (user sends, then agent starts).
+   */
+  private mergeTimelineItems(): TimelineItem[] {
+    const items: TimelineItem[] = [];
+    let mi = 0;
+    let gi = 0;
+    const messages = this.cachedUserMessages;
+    const groups = this.cachedTree;
+
+    while (mi < messages.length && gi < groups.length) {
+      const mTime = messages[mi].timestamp ?? 0;
+      const gTime = groups[gi].group.startTime ?? 0;
+      if (mTime <= gTime) {
+        items.push({
+          key: messages[mi].id,
+          time: mTime,
+          kind: 'message',
+          message: messages[mi],
+        });
+        mi++;
+      } else {
+        items.push({
+          key: groups[gi].group.id,
+          time: gTime,
+          kind: 'group',
+          tree: groups[gi],
+        });
+        gi++;
+      }
+    }
+    while (mi < messages.length) {
+      items.push({
+        key: messages[mi].id,
+        time: messages[mi].timestamp ?? 0,
+        kind: 'message',
+        message: messages[mi],
+      });
+      mi++;
+    }
+    while (gi < groups.length) {
+      items.push({
+        key: groups[gi].group.id,
+        time: groups[gi].group.startTime ?? 0,
+        kind: 'group',
+        tree: groups[gi],
+      });
+      gi++;
+    }
+
+    return items;
+  }
+
   /** Render ungrouped messages as log entries with guard() for change detection */
   private renderUngroupedMessages(messages: LogMessageData[]) {
     if (messages.length === 0) return nothing;
@@ -546,21 +606,36 @@ export class TaskGroupList extends LitElement {
       `;
     }
 
-    // Tool-use: user messages first, then tree, then other ungrouped (errors etc)
-    // Workflow: tree first, then all ungrouped messages
-    const [ungroupedBefore, ungroupedAfter] = this.isToolUse
-      ? [this.cachedUserMessages, this.cachedOtherUngrouped]
-      : [[], [...this.cachedUserMessages, ...this.cachedOtherUngrouped]];
+    if (this.isToolUse) {
+      // Tool-use: interleave user messages and groups chronologically,
+      // then render other ungrouped messages (errors etc) at the end
+      return html`
+        <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
+          ${repeat(
+            this.mergeTimelineItems(),
+            (item) => item.key,
+            (item) =>
+              item.kind === 'message'
+                ? guard([item.message], () => formatLogEntry(item.message))
+                : this.renderGroupNode(item.tree),
+          )}
+          ${this.renderUngroupedMessages(this.cachedOtherUngrouped)}
+        </vscode-scrollable>
+      `;
+    }
 
+    // Workflow: tree first, then all ungrouped messages
     return html`
       <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
-        ${this.renderUngroupedMessages(ungroupedBefore)}
         ${repeat(
           this.cachedTree,
           (t) => t.group.id,
           (t) => this.renderGroupNode(t),
         )}
-        ${this.renderUngroupedMessages(ungroupedAfter)}
+        ${this.renderUngroupedMessages([
+          ...this.cachedUserMessages,
+          ...this.cachedOtherUngrouped,
+        ])}
       </vscode-scrollable>
     `;
   }
