@@ -102,9 +102,6 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
     command: 'wolframscript -version',
     errorMessage:
       '"wolframscript" is not installed or not in your PATH.\n' +
-      'Note: Having Mathematica installed is not enough — you need\n' +
-      'WolframScript on your PATH. Install the free Wolfram Engine\n' +
-      '(https://www.wolfram.com/engine/) which includes it.\n' +
       WOLFRAM_INSTRUCTIONS,
   },
 
