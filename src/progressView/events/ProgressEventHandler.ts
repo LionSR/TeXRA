@@ -4,6 +4,7 @@ import {
   STREAM_STATUS,
   type ConversationProgress,
   type StorageKey,
+  type StreamState,
   type StreamStatus,
   type StreamTabId,
   type TokenUsageStats,
