@@ -597,8 +597,6 @@ export class ProgressEventHandler {
       if (streamCategory) {
         this.maybeUpdateFilterForCategory(streamCategory);
       }
-      const statusesForRefresh = StreamStatusService.getAll();
-      statusesForRefresh.set(streamId, status);
       this.webviewUpdater.sendStreamMetadata(this.state);
     } else {
       const lastTimestamp = this.state.streamTabs.getLastTimestamp(streamId);

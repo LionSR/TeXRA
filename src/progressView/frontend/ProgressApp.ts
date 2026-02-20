@@ -158,6 +158,10 @@ export class ProgressApp extends BaseWebviewApp {
   private cachedFilteredStreams: StreamTabInfo[] = [];
   private cachedFilteredStreamMap = new Map<StreamTabId, StreamTabInfo>();
   private cachedStatusByStream = new Map<StreamTabId, string>();
+  private cachedLastTimestampByStream = new Map<
+    StreamTabId,
+    number | undefined
+  >();
 
   private prefsManager = new PersistedState(
     createWebviewStorage(vscode),
@@ -206,6 +210,12 @@ export class ProgressApp extends BaseWebviewApp {
             STREAM_STATUS.READY,
         ]),
       );
+      this.cachedLastTimestampByStream = new Map(
+        this.appState.streams.map((stream) => [
+          stream.name,
+          this.appState.streamStates.get(stream.name)?.lastTimestamp,
+        ]),
+      );
     }
 
     this.updateContexts();
@@ -230,6 +240,7 @@ export class ProgressApp extends BaseWebviewApp {
             .filter=${this.appState.streamFilter}
             .sort=${this.appState.streamSort}
             .statusByStream=${this.cachedStatusByStream}
+            .lastTimestampByStream=${this.cachedLastTimestampByStream}
             @stream-switch=${this.onStreamSwitch}
             @stream-delete=${this.onStreamDelete}
             @filter-change=${this.onFilterChange}

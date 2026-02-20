@@ -493,13 +493,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
           if (result.success) {
             this.postToActiveView({
-              command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED,
+              command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+              kind: 'polished',
               stream: data.stream,
               text: result.text,
             });
           } else if (result.error) {
             this.postToActiveView({
-              command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR,
+              command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+              kind: 'polishError',
               stream: data.stream,
               error: result.error,
             });
@@ -508,7 +510,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         } catch (error) {
           const messageText = toErrorMessage(error);
           this.postToActiveView({
-            command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR,
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+            kind: 'polishError',
             stream: data.stream,
             error: messageText,
           });

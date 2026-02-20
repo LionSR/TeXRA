@@ -736,30 +736,6 @@ const handlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING]: (data, ctx) =>
     setActiveStreamRecording(ctx, data.status === 'started'),
 
-  [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED]: (data, ctx) => {
-    handlers[PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT]?.(
-      {
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
-        kind: 'polished',
-        stream: data.stream,
-        text: data.text,
-      } as never,
-      ctx,
-    );
-  },
-
-  [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR]: (data, ctx) => {
-    handlers[PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT]?.(
-      {
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
-        kind: 'polishError',
-        stream: data.stream,
-        error: data.error,
-      } as never,
-      ctx,
-    );
-  },
-
   [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED]: (data, ctx) => {
     const streamId = ctx.getState().activeStreamId;
     if (!streamId) return;

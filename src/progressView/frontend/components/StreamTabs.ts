@@ -41,14 +41,20 @@ function formatStatusLabel(status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-function buildTooltip(info: StreamTabInfo): string {
-  return [
+function buildTooltip(info: StreamTabInfo, lastTimestamp?: number): string {
+  const mainLine = [
     info.label,
     info.model && `Model: ${info.model}`,
     info.inputFile && `Input: ${info.inputFile}`,
   ]
     .filter(Boolean)
     .join(' • ');
+  if (!lastTimestamp) return mainLine;
+  const lastSeen = formatRelativeTime(lastTimestamp);
+  return lastSeen && mainLine
+    ? `${mainLine}
+Last activity ${lastSeen}`
+    : mainLine;
 }
 
 // =============================================================================
@@ -186,10 +192,11 @@ export class StreamTab extends LitElement {
   @property({ attribute: false }) info!: StreamTabInfo;
   @property({ type: Boolean }) active = false;
   @property() status: string = STREAM_STATUS.READY;
+  @property({ type: Number }) lastTimestamp?: number;
 
   override render(): TemplateResult {
     const stream = this.info;
-    const tooltip = buildTooltip(stream);
+    const tooltip = buildTooltip(stream, this.lastTimestamp);
     const status = this.status || STREAM_STATUS.READY;
     const statusLabel = formatStatusLabel(status);
     const agentDecorator = getAgentCategoryDecorator(stream.agentCategory);
@@ -348,6 +355,10 @@ export class StreamTabs extends LitElement {
   @property({ attribute: false }) filter: StreamFilter = 'all';
   @property({ attribute: false }) sort: StreamSort = 'time';
   @property({ attribute: false }) statusByStream = new Map<string, string>();
+  @property({ attribute: false }) lastTimestampByStream = new Map<
+    string,
+    number | undefined
+  >();
 
   override render(): TemplateResult {
     return html`
@@ -362,6 +373,7 @@ export class StreamTabs extends LitElement {
                   .info=${stream}
                   .status=${this.statusByStream.get(stream.name) ??
                   STREAM_STATUS.READY}
+                  .lastTimestamp=${this.lastTimestampByStream.get(stream.name)}
                   ?active=${stream.name === this.activeStreamId}
                 ></stream-tab>
               `,

@@ -278,18 +278,6 @@ export const UpdateRecordingMessageSchema = z.object({
   status: z.enum(['started', 'stopped', 'error']),
 });
 
-export const LegacyFollowUpTextPolishedMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED),
-  stream: StreamTabIdSchema,
-  text: z.string(),
-});
-
-export const LegacyFollowUpTextPolishErrorMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR),
-  stream: StreamTabIdSchema,
-  error: z.string().optional(),
-});
-
 export const LegacyFollowUpTextTranscribedMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED),
   text: z.string(),
@@ -357,8 +345,6 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateBypassMessageSchema,
     UpdateFollowUpTextMessageSchema,
     UpdateRecordingMessageSchema,
-    LegacyFollowUpTextPolishedMessageSchema,
-    LegacyFollowUpTextPolishErrorMessageSchema,
     LegacyFollowUpTextTranscribedMessageSchema,
     LegacyRecordingStartedMessageSchema,
     LegacyRecordingStoppedMessageSchema,
