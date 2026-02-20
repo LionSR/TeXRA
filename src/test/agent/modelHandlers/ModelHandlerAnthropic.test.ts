@@ -601,6 +601,114 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.deepEqual(options.system[0].cache_control, { type: 'ephemeral' });
   });
 
+  it('returns same cached system prompt object when source string is identical', () => {
+    const handler = createAnthropicHandler();
+
+    const result1 = (handler as any).buildCachedSystemPrompt(
+      'You are a helpful assistant.',
+    );
+    const result2 = (handler as any).buildCachedSystemPrompt(
+      'You are a helpful assistant.',
+    );
+
+    assert.ok(Array.isArray(result1));
+    assert.strictEqual(
+      result1,
+      result2,
+      'should return the exact same object reference for identical source',
+    );
+  });
+
+  it('rebuilds cached system prompt when source string changes', () => {
+    const handler = createAnthropicHandler();
+
+    const result1 = (handler as any).buildCachedSystemPrompt('prompt A');
+    const result2 = (handler as any).buildCachedSystemPrompt('prompt B');
+
+    assert.ok(Array.isArray(result1));
+    assert.ok(Array.isArray(result2));
+    assert.notStrictEqual(
+      result1,
+      result2,
+      'should return different objects when source changes',
+    );
+    assert.equal(result1[0].text, 'prompt A');
+    assert.equal(result2[0].text, 'prompt B');
+  });
+
+  it('caches converted tool definitions across calls with same tools', () => {
+    const handler = createAnthropicHandler();
+
+    const tools = [
+      {
+        name: 'tool_a',
+        description: 'Tool A',
+        input_schema: { type: 'object' as const, properties: {} },
+      },
+      {
+        name: 'tool_b',
+        description: 'Tool B',
+        input_schema: { type: 'object' as const, properties: {} },
+      },
+    ];
+
+    const result1 = (handler as any).getOrBuildCachedTools(tools);
+    const result2 = (handler as any).getOrBuildCachedTools(tools);
+
+    assert.ok(Array.isArray(result1));
+    assert.strictEqual(
+      result1,
+      result2,
+      'should return the exact same object reference for identical tools',
+    );
+    // Verify cache_control is applied to last tool
+    assert.deepEqual(
+      (result1.at(-1) as any).cache_control,
+      { type: 'ephemeral' },
+      'last tool should have cache control',
+    );
+    assert.equal(
+      (result1[0] as any).cache_control,
+      undefined,
+      'first tool should not have cache control',
+    );
+  });
+
+  it('rebuilds cached tools when tool set changes', () => {
+    const handler = createAnthropicHandler();
+
+    const tools1 = [
+      {
+        name: 'tool_a',
+        description: 'Tool A',
+        input_schema: { type: 'object' as const, properties: {} },
+      },
+    ];
+    const tools2 = [
+      {
+        name: 'tool_a',
+        description: 'Tool A',
+        input_schema: { type: 'object' as const, properties: {} },
+      },
+      {
+        name: 'tool_b',
+        description: 'Tool B',
+        input_schema: { type: 'object' as const, properties: {} },
+      },
+    ];
+
+    const result1 = (handler as any).getOrBuildCachedTools(tools1);
+    const result2 = (handler as any).getOrBuildCachedTools(tools2);
+
+    assert.notStrictEqual(
+      result1,
+      result2,
+      'should return different objects when tools change',
+    );
+    assert.equal(result1.length, 1);
+    assert.equal(result2.length, 2);
+  });
+
   it('trims follow-up text and rejects empty follow-ups', async () => {
     const handler = createAnthropicHandler();
     const baseMessages = await handler.initializeMessages('prefix', 'request');

@@ -37,6 +37,9 @@ import {
   attachStreamDiagnostics,
 } from '@common/errors/sdkErrorUtils';
 
+// Local imports - model
+import type { ToolDefinition } from '@model';
+
 // Local imports - replacement
 import replacementEngine from '@replacement/engine';
 
@@ -261,6 +264,25 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   /** Tracks PDF page counts for files uploaded to the Anthropic Files API. */
   private uploadedPdfPageCounts = new Map<string, number>();
+
+  /**
+   * Cached system prompt for API-level cache stability. Once the system prompt
+   * is resolved and wrapped as TextBlockParam[], we reuse the same object across
+   * API calls within this handler's lifetime. This guarantees byte-identical
+   * prefixes across requests, maximizing prompt cache hit rates even if the
+   * upstream regenerates the string (with identical content) each cycle.
+   */
+  private cachedSystemPromptBlocks?: BetaTextBlockParam[];
+  private cachedSystemPromptSource?: string;
+
+  /**
+   * Cached tool definitions for API-level cache stability. Tools are converted
+   * once via toAnthropicTools() and reused across cycles. Since tool definitions
+   * don't change within a session, this avoids redundant conversion and ensures
+   * the tools prefix is byte-identical across API calls.
+   */
+  private cachedToolBlocks?: BetaToolUnion[];
+  private cachedToolFingerprint?: string;
 
   /** Sum of all tracked PDF page counts across uploaded files. */
   private getTrackedPdfPageCount(): number {
@@ -505,13 +527,28 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return systemPrompt;
     }
 
-    return [
+    // Reuse cached blocks when the source string is identical across cycles.
+    // The upstream regenerates the system prompt every cycle (template + rules),
+    // but the content is stable within a session. Returning the same object
+    // guarantees byte-identical prefixes for Anthropic's prompt cache.
+    if (
+      this.cachedSystemPromptSource === systemPrompt &&
+      this.cachedSystemPromptBlocks
+    ) {
+      return this.cachedSystemPromptBlocks;
+    }
+
+    const blocks: BetaTextBlockParam[] = [
       {
         type: 'text' as const,
         text: systemPrompt,
         cache_control: EPHEMERAL_CACHE_CONTROL as BetaCacheControlEphemeral,
       },
     ];
+
+    this.cachedSystemPromptSource = systemPrompt;
+    this.cachedSystemPromptBlocks = blocks;
+    return blocks;
   }
 
   /**
@@ -531,6 +568,31 @@ export class ModelHandlerAnthropic extends ModelHandler<
       (lastTool as { cache_control?: BetaCacheControlEphemeral }).cache_control =
         EPHEMERAL_CACHE_CONTROL as BetaCacheControlEphemeral;
     }
+  }
+
+  /**
+   * Returns cached Anthropic tool definitions, converting and applying cache
+   * control only when the tool set changes. Uses a lightweight fingerprint
+   * (tool names joined) to detect changes — safe because tool definitions
+   * don't change within a session.
+   */
+  private getOrBuildCachedTools(
+    tools: ToolDefinition[],
+  ): BetaToolUnion[] {
+    const fingerprint = tools.map((t) => t.name).join(',');
+
+    if (this.cachedToolFingerprint === fingerprint && this.cachedToolBlocks) {
+      return this.cachedToolBlocks;
+    }
+
+    const converted = toAnthropicTools(tools, {
+      supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
+    });
+    this.applyCacheControlToLastTool(converted);
+
+    this.cachedToolFingerprint = fingerprint;
+    this.cachedToolBlocks = converted;
+    return converted;
   }
 
   async getClient(): Promise<Anthropic> {
@@ -688,10 +750,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
 
     if (tools && tools.length > 0) {
-      options.tools = toAnthropicTools(tools, {
-        supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
-      });
-      this.applyCacheControlToLastTool(options.tools);
+      options.tools = this.getOrBuildCachedTools(tools);
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
 
       // Models using adaptive thinking get interleaved thinking automatically.
