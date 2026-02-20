@@ -47,11 +47,6 @@ interface GroupTree {
   messages: LogMessageData[];
 }
 
-/** Union type for chronologically merged user messages and group trees */
-type TimelineItem =
-  | { key: string; time: number; kind: 'message'; message: LogMessageData }
-  | { key: string; time: number; kind: 'group'; tree: GroupTree };
-
 const PLACEHOLDER_HTML = getGettingStartedHtml(
   'No runs yet—use TeXRA commands to start. Try ',
 );
@@ -102,8 +97,7 @@ export class TaskGroupList extends LitElement {
 
   /** Memoized tree output from buildGroupTree() - recomputed only when inputs change */
   private cachedTree: GroupTree[] = [];
-  private cachedUserMessages: LogMessageData[] = [];
-  private cachedOtherUngrouped: LogMessageData[] = [];
+  private cachedUngrouped: LogMessageData[] = [];
 
   /** O(1) lookup from groupId → tree node. Built during buildGroupTree(). */
   private groupNodeIndex = new Map<string, GroupTree>();
@@ -139,8 +133,7 @@ export class TaskGroupList extends LitElement {
 
     if (groupsChanged) {
       // Structural change — always full rebuild
-      [this.cachedTree, this.cachedUserMessages, this.cachedOtherUngrouped] =
-        this.buildGroupTree();
+      [this.cachedTree, this.cachedUngrouped] = this.buildGroupTree();
     } else if (messagesChanged) {
       // Only messages changed — use Lit's old value to pick incremental path
       const prevMessages = changedProperties.get('messages') as
@@ -158,8 +151,7 @@ export class TaskGroupList extends LitElement {
         this.appendNewMessages(prevCount);
       } else {
         // Messages shrunk (e.g. clear) — full rebuild
-        [this.cachedTree, this.cachedUserMessages, this.cachedOtherUngrouped] =
-          this.buildGroupTree();
+        [this.cachedTree, this.cachedUngrouped] = this.buildGroupTree();
       }
     }
 
@@ -181,23 +173,14 @@ export class TaskGroupList extends LitElement {
   private appendNewMessages(startIndex: number): void {
     for (let i = startIndex; i < this.messages.length; i++) {
       const msg = this.messages[i];
-      if (msg.messageType === 'userMessage') {
-        // User messages always go to the dedicated list regardless of groupId.
-        // See buildGroupTree() for rationale.
-        this.cachedUserMessages = this.insertMessageSorted(
-          this.cachedUserMessages,
+      const node = msg.groupId ? this.groupNodeIndex.get(msg.groupId) : null;
+      if (node) {
+        node.messages = this.insertMessageSorted(node.messages, msg);
+      } else {
+        this.cachedUngrouped = this.insertMessageSorted(
+          this.cachedUngrouped,
           msg,
         );
-      } else {
-        const node = msg.groupId ? this.groupNodeIndex.get(msg.groupId) : null;
-        if (node) {
-          node.messages = this.insertMessageSorted(node.messages, msg);
-        } else {
-          this.cachedOtherUngrouped = this.insertMessageSorted(
-            this.cachedOtherUngrouped,
-            msg,
-          );
-        }
       }
     }
   }
@@ -244,20 +227,8 @@ export class TaskGroupList extends LitElement {
 
   /** Replace a single message ref in the cached tree. O(1) node lookup + O(k) findIndex. */
   private replaceSingleMessage(msg: LogMessageData): void {
-    // User messages are always in cachedUserMessages (never in group nodes),
-    // matching the classification order in buildGroupTree/appendNewMessages.
-    if (msg.messageType === 'userMessage') {
-      const idx = this.cachedUserMessages.findIndex((m) => m.id === msg.id);
-      if (idx >= 0) {
-        const updated = [...this.cachedUserMessages];
-        updated[idx] = msg;
-        this.cachedUserMessages = updated;
-      }
-      return;
-    }
-
     // Try group node first (O(1) lookup). A message with groupId may live in
-    // cachedOtherUngrouped if the group didn't exist at classification time,
+    // cachedUngrouped if the group didn't exist at classification time,
     // so fall through to ungrouped search on miss.
     if (msg.groupId) {
       const node = this.groupNodeIndex.get(msg.groupId);
@@ -272,12 +243,11 @@ export class TaskGroupList extends LitElement {
       }
     }
 
-    // Search other ungrouped
-    const idx = this.cachedOtherUngrouped.findIndex((m) => m.id === msg.id);
+    const idx = this.cachedUngrouped.findIndex((m) => m.id === msg.id);
     if (idx >= 0) {
-      const updated = [...this.cachedOtherUngrouped];
+      const updated = [...this.cachedUngrouped];
       updated[idx] = msg;
-      this.cachedOtherUngrouped = updated;
+      this.cachedUngrouped = updated;
     }
   }
 
@@ -303,13 +273,11 @@ export class TaskGroupList extends LitElement {
 
   /**
    * Build hierarchical tree from flat groups array.
-   * Returns [tree, userMessages, otherUngrouped] tuple.
-   *
-   * User messages are separated from other ungrouped messages to support
-   * the tool-use rendering order: user messages first, then groups, then
-   * other ungrouped messages (preserving chronological order for errors).
+   * Returns [tree, ungrouped] tuple. Messages are classified purely by
+   * groupId — the backend (AgentLogger) is responsible for ensuring user
+   * messages don't inherit run-group IDs via AsyncLocalStorage.
    */
-  private buildGroupTree(): [GroupTree[], LogMessageData[], LogMessageData[]] {
+  private buildGroupTree(): [GroupTree[], LogMessageData[]] {
     const groupMap = new Map<string, TaskGroup>();
     const childrenMap = new Map<string, TaskGroup[]>();
 
@@ -323,7 +291,7 @@ export class TaskGroupList extends LitElement {
       }
     }
 
-    // Sort messages by timestamp and index by groupId
+    // Sort messages by timestamp and classify by groupId
     const messageOrder = new Map(
       this.messages.map((message, index) => [message.id, index]),
     );
@@ -334,22 +302,15 @@ export class TaskGroupList extends LitElement {
       return (messageOrder.get(a.id) ?? 0) - (messageOrder.get(b.id) ?? 0);
     });
     const messagesByGroup = new Map<string, LogMessageData[]>();
-    const userMessages: LogMessageData[] = [];
-    const otherUngrouped: LogMessageData[] = [];
+    const ungrouped: LogMessageData[] = [];
 
     for (const msg of sortedMessages) {
-      if (msg.messageType === 'userMessage') {
-        // User messages always go to the dedicated list regardless of groupId.
-        // Follow-ups consumed during a run cycle inherit the run's groupId via
-        // AsyncLocalStorage, but should render in the top-level user section,
-        // not nested among progress entries inside the group.
-        userMessages.push(msg);
-      } else if (msg.groupId && groupMap.has(msg.groupId)) {
+      if (msg.groupId && groupMap.has(msg.groupId)) {
         const bucket = messagesByGroup.get(msg.groupId) ?? [];
         bucket.push(msg);
         messagesByGroup.set(msg.groupId, bucket);
       } else {
-        otherUngrouped.push(msg);
+        ungrouped.push(msg);
       }
     }
 
@@ -382,7 +343,7 @@ export class TaskGroupList extends LitElement {
       })
       .map(buildNode);
 
-    return [tree, userMessages, otherUngrouped];
+    return [tree, ungrouped];
   }
 
   /** Check if a root group should be visible */
@@ -435,61 +396,6 @@ export class TaskGroupList extends LitElement {
     }
     // Re-render to add/remove children from the DOM (lazy collapsed groups)
     this.requestUpdate();
-  }
-
-  /**
-   * Merge user messages and group trees into chronological order.
-   * Both inputs are already sorted, so this is an O(n+m) merge.
-   * User messages with equal timestamps sort before groups (user sends, then agent starts).
-   */
-  private mergeTimelineItems(): TimelineItem[] {
-    const items: TimelineItem[] = [];
-    let mi = 0;
-    let gi = 0;
-    const messages = this.cachedUserMessages;
-    const groups = this.cachedTree;
-
-    while (mi < messages.length && gi < groups.length) {
-      const mTime = messages[mi].timestamp ?? 0;
-      const gTime = groups[gi].group.startTime ?? 0;
-      if (mTime <= gTime) {
-        items.push({
-          key: messages[mi].id,
-          time: mTime,
-          kind: 'message',
-          message: messages[mi],
-        });
-        mi++;
-      } else {
-        items.push({
-          key: groups[gi].group.id,
-          time: gTime,
-          kind: 'group',
-          tree: groups[gi],
-        });
-        gi++;
-      }
-    }
-    while (mi < messages.length) {
-      items.push({
-        key: messages[mi].id,
-        time: messages[mi].timestamp ?? 0,
-        kind: 'message',
-        message: messages[mi],
-      });
-      mi++;
-    }
-    while (gi < groups.length) {
-      items.push({
-        key: groups[gi].group.id,
-        time: groups[gi].group.startTime ?? 0,
-        kind: 'group',
-        tree: groups[gi],
-      });
-      gi++;
-    }
-
-    return items;
   }
 
   /** Render ungrouped messages as log entries with guard() for change detection */
@@ -607,19 +513,31 @@ export class TaskGroupList extends LitElement {
     }
 
     if (this.isToolUse) {
-      // Tool-use: interleave user messages and groups chronologically,
-      // then render other ungrouped messages (errors etc) at the end
+      // Tool-use: interleave ungrouped messages (user input, errors, etc.)
+      // with groups chronologically so the conversation reads top-to-bottom.
+      const timeline = [
+        ...this.cachedUngrouped.map((m) => ({
+          key: m.id,
+          time: m.timestamp ?? 0,
+          msg: m,
+        })),
+        ...this.cachedTree.map((t) => ({
+          key: t.group.id,
+          time: t.group.startTime ?? 0,
+          tree: t,
+        })),
+      ].sort((a, b) => a.time - b.time);
+
       return html`
         <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
           ${repeat(
-            this.mergeTimelineItems(),
+            timeline,
             (item) => item.key,
             (item) =>
-              item.kind === 'message'
-                ? guard([item.message], () => formatLogEntry(item.message))
-                : this.renderGroupNode(item.tree),
+              'msg' in item
+                ? guard([item.msg], () => formatLogEntry(item.msg))
+                : this.renderGroupNode(item.tree!),
           )}
-          ${this.renderUngroupedMessages(this.cachedOtherUngrouped)}
         </vscode-scrollable>
       `;
     }
@@ -632,10 +550,7 @@ export class TaskGroupList extends LitElement {
           (t) => t.group.id,
           (t) => this.renderGroupNode(t),
         )}
-        ${this.renderUngroupedMessages([
-          ...this.cachedUserMessages,
-          ...this.cachedOtherUngrouped,
-        ])}
+        ${this.renderUngroupedMessages(this.cachedUngrouped)}
       </vscode-scrollable>
     `;
   }
