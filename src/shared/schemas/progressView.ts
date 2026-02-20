@@ -263,23 +263,13 @@ const PermissionPayloadSchema = z.discriminatedUnion('kind', [
 ]);
 export type PermissionPayload = z.infer<typeof PermissionPayloadSchema>;
 
-const UpdatePermissionShowMessageSchema = z.object({
+export const UpdatePermissionMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
-  action: z.literal('show'),
-  permission: PermissionPayloadSchema,
+  action: z.enum(['show', 'resolve']),
+  permission: PermissionPayloadSchema.optional(),
+  kind: PermissionKindSchema.optional(),
+  id: z.string().optional(),
 });
-
-const UpdatePermissionResolveMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
-  action: z.literal('resolve'),
-  kind: PermissionKindSchema,
-  id: z.string(),
-});
-
-export const UpdatePermissionMessageSchema = z.discriminatedUnion('action', [
-  UpdatePermissionShowMessageSchema,
-  UpdatePermissionResolveMessageSchema,
-]);
 export type UpdatePermissionMessage = z.infer<
   typeof UpdatePermissionMessageSchema
 >;
@@ -359,8 +349,7 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateRunUsageMessageSchema,
     UpdateContextStateMessageSchema,
     UpdateQueuedFollowUpsMessageSchema,
-    UpdatePermissionShowMessageSchema,
-    UpdatePermissionResolveMessageSchema,
+    UpdatePermissionMessageSchema,
     UpdateBypassMessageSchema,
     UpdateFollowUpTextMessageSchema,
     UpdateRecordingMessageSchema,
