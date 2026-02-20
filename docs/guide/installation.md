@@ -98,8 +98,8 @@ pdflatex --version
 
 Install **MacTeX**, which is the standard LaTeX distribution for macOS:
 
-- **Direct download** (no Homebrew needed): Go to [tug.org/mactex](https://www.tug.org/mactex/mactex-download.html), download the `.pkg` file (~4 GB), and double-click to run the installer
 - **Via [Homebrew](#homebrew)**: `brew install --cask mactex`
+- **Direct download** (no Homebrew needed): Go to [tug.org/mactex](https://www.tug.org/mactex/mactex-download.html), download the `.pkg` file (~4 GB), and double-click to run the installer
 
 After installing, **restart VS Code** so TeXRA can detect the new programs. You can verify by opening Terminal and running:
 

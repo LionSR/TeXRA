@@ -80,12 +80,11 @@ function combineGuides(
 
 export const PDFLATEX_INSTALL_GUIDE: Guide = {
   darwin:
-    'Install MacTeX, the standard LaTeX distribution for macOS:\n\n' +
-    'Download directly (no Homebrew needed):\n' +
-    '  https://www.tug.org/mactex/mactex-download.html\n' +
-    '  Download the .pkg file (~4 GB) and double-click to install.\n\n' +
-    'Or via Homebrew (https://brew.sh):\n' +
+    'Install MacTeX (recommended):\n' +
     '  brew install --cask mactex\n\n' +
+    '"brew" requires Homebrew (https://brew.sh), a free\n' +
+    'macOS package manager. Or download MacTeX directly from:\n' +
+    '  https://www.tug.org/mactex/mactex-download.html\n\n' +
     'After installing, restart VS Code and verify by running\n' +
     '"pdflatex --version" in Terminal.',
   linux:
