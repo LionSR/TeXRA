@@ -1,7 +1,7 @@
 /**
  * ProgressView schemas - messages and data.
  *
- * Outbound: Backend -> Frontend (UPDATE_*, SHOW_*, RESOLVE_*)
+ * Outbound: Backend -> Frontend (UPDATE_*)
  * Inbound: Frontend -> Backend (SWITCH_STREAM, SEND_FOLLOW_UP, etc.)
  */
 import { z } from 'zod';
@@ -29,7 +29,11 @@ import {
   StreamStatusSchema,
   StreamTabInfoSchema,
 } from './stream';
-import { StreamStateSchema } from './streamState';
+import {
+  ActiveChildInfoSchema,
+  ConversationProgressSchema,
+  StreamStateSchema,
+} from './streamState';
 import { TaskGroupSchema, UpdateTaskGroupPayloadSchema } from './taskGroup';
 import { TodoItemSchema } from './todo';
 import { ContextStateSchema, TokenUsageStatsSchema } from './usage';
@@ -110,6 +114,32 @@ export const UpdateStreamsMessageSchema = z.object({
   activeStream: z.union([StreamTabIdSchema, z.literal('')]),
   agentFilter: AgentCategoryFilterSchema,
   streamStates: z.record(z.string(), StreamStateSchema).optional(),
+});
+
+export const SetActiveStreamMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM),
+  activeStream: z.union([StreamTabIdSchema, z.literal('')]),
+});
+
+export const UpdateConversationProgressMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS),
+  stream: StreamTabIdSchema,
+  progress: ConversationProgressSchema,
+});
+
+export const UpdateStreamBadgesMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES),
+  stream: StreamTabIdSchema,
+  activeSubagents: z.array(ActiveChildInfoSchema),
+  finishedSubagentCount: z.number(),
+  activeProcesses: z.array(ActiveChildInfoSchema),
+  finishedProcessCount: z.number(),
+});
+
+export const UpdateParentStreamMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM),
+  stream: StreamTabIdSchema,
+  parentStreamId: StreamTabIdSchema.nullish(),
 });
 
 export const UpdateStreamStatusMessageSchema = z.object({
@@ -209,87 +239,80 @@ export const UpdateQueuedFollowUpsMessageSchema = z.object({
   messages: z.array(z.string()),
 });
 
-export const ShowToolEditApprovalMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL),
-  request: ToolEditPermissionSchema,
+const PermissionKindSchema = z.enum(['toolEdit', 'bash', 'retry', 'proposal']);
+export type ProgressPermissionKind = z.infer<typeof PermissionKindSchema>;
+
+const PermissionPayloadSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('toolEdit'),
+    data: ToolEditPermissionSchema,
+  }),
+  z.object({
+    kind: z.literal('bash'),
+    data: BashPermissionSchema,
+  }),
+  z.object({
+    kind: z.literal('retry'),
+    data: RetryPermissionSchema,
+  }),
+  z.object({
+    kind: z.literal('proposal'),
+    data: AgentProposalPermissionSchema,
+    modelOptionsData: z.array(ModelOptionDataSchema).optional(),
+  }),
+]);
+export type PermissionPayload = z.infer<typeof PermissionPayloadSchema>;
+
+const UpdatePermissionShowMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+  action: z.literal('show'),
+  permission: PermissionPayloadSchema,
 });
 
-export const ResolveToolEditApprovalMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL),
-  requestId: z.string(),
+const UpdatePermissionResolveMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+  action: z.literal('resolve'),
+  kind: PermissionKindSchema,
+  id: z.string(),
 });
 
-export const UpdateToolEditApprovalStateMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE),
+export const UpdatePermissionMessageSchema = z.discriminatedUnion('action', [
+  UpdatePermissionShowMessageSchema,
+  UpdatePermissionResolveMessageSchema,
+]);
+export type UpdatePermissionMessage = z.infer<
+  typeof UpdatePermissionMessageSchema
+>;
+
+const BypassTypeSchema = z.enum(['toolEdit', 'superYolo']);
+
+export const UpdateBypassMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS),
   stream: StreamTabIdSchema,
+  type: BypassTypeSchema,
   bypassActive: z.boolean(),
 });
 
-export const ShowBashApprovalMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL),
-  request: BashPermissionSchema,
-});
+const FollowUpTextKindSchema = z.enum([
+  'polished',
+  'polishError',
+  'transcribed',
+]);
 
-export const ResolveBashApprovalMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.RESOLVE_BASH_APPROVAL),
-  requestId: z.string(),
-});
-
-export const ShowRetryRequestMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_RETRY_REQUEST),
-  request: RetryPermissionSchema,
-});
-
-export const ResolveRetryRequestMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.RESOLVE_RETRY_REQUEST),
-  streamId: StreamTabIdSchema,
-});
-
-export const ShowAgentProposalMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL),
-  proposal: AgentProposalPermissionSchema,
-  modelOptionsData: z.array(ModelOptionDataSchema).optional(),
-});
-
-export const ResolveAgentProposalMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.RESOLVE_AGENT_PROPOSAL),
-  proposalId: z.string(),
-});
-
-export const UpdateSuperYoloBypassStateMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_BYPASS_STATE),
-  stream: StreamTabIdSchema,
-  bypassActive: z.boolean(),
-  featureEnabled: z.boolean(),
-});
-
-export const FollowUpTextPolishedMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED),
-  stream: StreamTabIdSchema,
-  text: z.string(),
-});
-
-export const FollowUpTextPolishErrorMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR),
-  stream: StreamTabIdSchema,
+export const UpdateFollowUpTextMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT),
+  stream: StreamTabIdSchema.nullish(),
+  kind: FollowUpTextKindSchema,
+  text: z.string().nullish(),
   error: z.string().optional(),
 });
 
-export const FollowUpTextTranscribedMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED),
-  text: z.string(),
-});
+const RecordingStatusSchema = z.enum(['started', 'stopped', 'error']);
 
-export const ProgressRecordingStartedMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.RECORDING_STARTED),
-});
-
-export const ProgressRecordingStoppedMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED),
-});
-
-export const ProgressRecordingErrorMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.RECORDING_ERROR),
+export const UpdateRecordingMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING),
+  status: RecordingStatusSchema,
+  error: z.string().optional(),
 });
 
 export const SetFollowupOptionsMessageSchema = z.object({
@@ -319,6 +342,10 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
   'command',
   [
     UpdateStreamsMessageSchema,
+    SetActiveStreamMessageSchema,
+    UpdateConversationProgressMessageSchema,
+    UpdateStreamBadgesMessageSchema,
+    UpdateParentStreamMessageSchema,
     UpdateStreamStatusMessageSchema,
     UpdateLogsMessageSchema,
     AppendLogMessageSchema,
@@ -332,22 +359,11 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateRunUsageMessageSchema,
     UpdateContextStateMessageSchema,
     UpdateQueuedFollowUpsMessageSchema,
-    ShowToolEditApprovalMessageSchema,
-    ResolveToolEditApprovalMessageSchema,
-    UpdateToolEditApprovalStateMessageSchema,
-    UpdateSuperYoloBypassStateMessageSchema,
-    ShowBashApprovalMessageSchema,
-    ResolveBashApprovalMessageSchema,
-    ShowRetryRequestMessageSchema,
-    ResolveRetryRequestMessageSchema,
-    ShowAgentProposalMessageSchema,
-    ResolveAgentProposalMessageSchema,
-    FollowUpTextPolishedMessageSchema,
-    FollowUpTextPolishErrorMessageSchema,
-    FollowUpTextTranscribedMessageSchema,
-    ProgressRecordingStartedMessageSchema,
-    ProgressRecordingStoppedMessageSchema,
-    ProgressRecordingErrorMessageSchema,
+    UpdatePermissionShowMessageSchema,
+    UpdatePermissionResolveMessageSchema,
+    UpdateBypassMessageSchema,
+    UpdateFollowUpTextMessageSchema,
+    UpdateRecordingMessageSchema,
     SetFollowupOptionsMessageSchema,
     ProgressSetThemeMessageSchema,
     ProgressDeleteStreamMessageSchema,

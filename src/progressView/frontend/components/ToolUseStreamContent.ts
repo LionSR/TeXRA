@@ -101,7 +101,10 @@ export class ToolUseStreamContent extends LitElement {
       changedProperties.has('permissionContext')
     ) {
       this.filteredPermissions = this.computeFilteredPermissions();
-      this.runGroups = getRunGroups(this.currentState?.taskGroups ?? []);
+      const currentState = this.currentState;
+      this.runGroups = currentState
+        ? getRunGroups(currentState.taskGroups)
+        : [];
     }
   }
 

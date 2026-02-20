@@ -1,20 +1,20 @@
 import * as vscode from 'vscode';
 
+import { createStreamState } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { TaskState } from '@logger/TaskState';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type {
   AgentCategoryFilter,
-  AgentProposalPermission,
-  BashPermission,
+  ConversationProgress,
   ContextState,
   InstructionUpdate,
   LogMessageData,
-  ModelOptionData,
   OutputFileInfo,
+  PermissionPayload,
+  ProgressPermissionKind,
   ProgressViewOutboundMessage,
-  RetryPermission,
   StreamState,
   StreamStatus,
   StreamTabId,
@@ -22,7 +22,6 @@ import type {
   TaskGroup,
   TodoItem,
   TokenUsageStats,
-  ToolEditPermission,
   UpdateTaskGroupPayload,
 } from '@shared/schemas';
 
@@ -197,87 +196,33 @@ export class WebviewUpdater {
     });
   }
 
-  showToolEditPermission(permission: ToolEditPermission): void {
+  showPermission(permission: PermissionPayload): void {
     this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL,
-      request: permission,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+      action: 'show',
+      permission,
     });
   }
 
-  resolveToolEditPermission(requestId: string): void {
+  resolvePermission(kind: ProgressPermissionKind, id: string): void {
     this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL,
-      requestId,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+      action: 'resolve',
+      kind,
+      id,
     });
   }
 
-  updateToolEditApprovalState(
+  updateBypassState(
     stream: StreamTabId,
+    type: 'toolEdit' | 'superYolo',
     bypassActive: boolean,
   ): void {
     this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
       stream,
+      type,
       bypassActive,
-    });
-  }
-
-  updateSuperYoloBypassState(
-    stream: StreamTabId,
-    bypassActive: boolean,
-    featureEnabled: boolean,
-  ): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_BYPASS_STATE,
-      stream,
-      bypassActive,
-      featureEnabled,
-    });
-  }
-
-  showBashPermission(permission: BashPermission): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL,
-      request: permission,
-    });
-  }
-
-  resolveBashPermission(requestId: string): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.RESOLVE_BASH_APPROVAL,
-      requestId,
-    });
-  }
-
-  showRetryRequest(request: RetryPermission): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.SHOW_RETRY_REQUEST,
-      request,
-    });
-  }
-
-  resolveRetryRequest(streamId: string): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.RESOLVE_RETRY_REQUEST,
-      streamId,
-    });
-  }
-
-  showAgentProposal(
-    proposal: AgentProposalPermission,
-    modelOptionsData?: ModelOptionData[],
-  ): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL,
-      proposal,
-      modelOptionsData,
-    });
-  }
-
-  resolveAgentProposal(proposalId: string): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.RESOLVE_AGENT_PROPOSAL,
-      proposalId,
     });
   }
 
@@ -362,6 +307,51 @@ export class WebviewUpdater {
     });
   }
 
+  setActiveStream(activeStream: StreamTabId): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream,
+    });
+  }
+
+  updateConversationProgress(
+    stream: StreamTabId,
+    progress: ConversationProgress,
+  ): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS,
+      stream,
+      progress,
+    });
+  }
+
+  updateStreamBadges(
+    stream: StreamTabId,
+    badges: {
+      activeSubagents: StreamState['activeSubagents'];
+      finishedSubagentCount: StreamState['finishedSubagentCount'];
+      activeProcesses: StreamState['activeProcesses'];
+      finishedProcessCount: StreamState['finishedProcessCount'];
+    },
+  ): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
+      stream,
+      ...badges,
+    });
+  }
+
+  updateParentStream(
+    stream: StreamTabId,
+    parentStreamId: StreamTabId | undefined,
+  ): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM,
+      stream,
+      parentStreamId,
+    });
+  }
+
   /**
    * Add a task group to the webview
    */
@@ -411,17 +401,18 @@ export class WebviewUpdater {
    *
    * Note: This method computes valid active stream via ProgressViewState
    * (single source of truth) and explicitly persists if changed.
+   *
+   * Use this for structural updates (initial sync, filter changes, stream add/remove).
+   * For incremental updates, prefer targeted messages like:
+   * setActiveStream(), updateConversationProgress(), updateStreamBadges(),
+   * updateParentStream(), updateStreamStatus().
    */
-  updateAll(
+  sendStreamMetadata(
     state: ProgressViewState,
     statuses?: Map<string, StreamStatus>,
     theme?: 'dark' | 'light',
   ): StreamTabId {
-    const streams = buildStreamInfos(
-      state,
-      statuses,
-      state.agentCategoryFilter,
-    );
+    const streams = buildStreamInfos(state, state.agentCategoryFilter);
     const streamNames = streams.map((info) => info.name);
 
     // Compute valid active stream (pure query) and persist if changed
@@ -440,6 +431,18 @@ export class WebviewUpdater {
 
     // Send stream states - backend is the source of truth
     const streamStates = state.getAllStreamStates();
+    for (const streamInfo of streams) {
+      const current =
+        streamStates[streamInfo.name] ??
+        createStreamState(streamInfo.agentCategory);
+      const status = statuses?.get(streamInfo.name) ?? current.status;
+      const lastTimestamp = state.streamTabs.getLastTimestamp(streamInfo.name);
+      streamStates[streamInfo.name] = {
+        ...current,
+        status,
+        lastTimestamp,
+      };
+    }
 
     this.updateStreams(
       streams,

@@ -26,8 +26,11 @@ texmath.rules.brackets.inline.push({
 let markdownRenderer: MarkdownIt | null = null;
 
 // LRU cache for rendered markdown (content hash → HTML)
-const CACHE_MAX_SIZE = 2000;
+const CACHE_MAX_ENTRIES = 2000;
+const CACHE_MAX_ENTRY_CHARS = 200_000;
+const CACHE_MAX_TOTAL_CHARS = 2_000_000;
 const markdownCache = new Map<string, string>();
+let markdownCacheChars = 0;
 
 /**
  * Custom highlight function for markdown-it using optimized hljs.
@@ -156,13 +159,22 @@ export const processMarkdownContent = (
 
   // Store in cache with LRU eviction
   if (useCache && cacheKey) {
-    if (markdownCache.size >= CACHE_MAX_SIZE) {
-      // Delete oldest entry (first key)
-      const firstKey = markdownCache.keys().next().value;
-      if (firstKey) {
-        markdownCache.delete(firstKey);
-      }
+    if (result.length > CACHE_MAX_ENTRY_CHARS) {
+      return result;
     }
+
+    while (
+      markdownCache.size >= CACHE_MAX_ENTRIES ||
+      markdownCacheChars + result.length > CACHE_MAX_TOTAL_CHARS
+    ) {
+      // Delete oldest entry (first key) to preserve LRU order.
+      const firstKey = markdownCache.keys().next().value;
+      if (!firstKey) break;
+      const firstValue = markdownCache.get(firstKey);
+      markdownCache.delete(firstKey);
+      if (firstValue) markdownCacheChars -= firstValue.length;
+    }
+    markdownCacheChars += result.length;
     markdownCache.set(cacheKey, result);
   }
 

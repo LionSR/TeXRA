@@ -15,10 +15,15 @@ const CHANNEL = 'RecordingManager';
 logger.initialize(CHANNEL);
 
 export interface RecordingManagerConfig {
-  recordingStartedCommand: string;
-  recordingStoppedCommand: string;
-  recordingErrorCommand: string;
-  transcriptionCommand: string;
+  recordingStartedCommand?: string;
+  recordingStoppedCommand?: string;
+  recordingErrorCommand?: string;
+  transcriptionCommand?: string;
+  buildRecordingMessage?: (input: {
+    status: 'started' | 'stopped' | 'error';
+    error?: string;
+  }) => Record<string, unknown>;
+  buildTranscriptionMessage?: (text: string) => Record<string, unknown> | null;
   progressTitle?: string;
 }
 
@@ -28,12 +33,40 @@ export class RecordingManager {
     private readonly commandConfig: RecordingManagerConfig,
   ) {}
 
+  private buildRecordingMessage(
+    status: 'started' | 'stopped' | 'error',
+    error?: string,
+  ): Record<string, unknown> | null {
+    if (this.commandConfig.buildRecordingMessage) {
+      return this.commandConfig.buildRecordingMessage({ status, error });
+    }
+
+    const command =
+      status === 'started'
+        ? this.commandConfig.recordingStartedCommand
+        : status === 'stopped'
+          ? this.commandConfig.recordingStoppedCommand
+          : this.commandConfig.recordingErrorCommand;
+    if (!command) return null;
+
+    return error ? { command, error } : { command };
+  }
+
+  private buildTranscriptionMessage(
+    text: string,
+  ): Record<string, unknown> | null {
+    if (this.commandConfig.buildTranscriptionMessage) {
+      return this.commandConfig.buildTranscriptionMessage(text);
+    }
+
+    const command = this.commandConfig.transcriptionCommand;
+    return command ? { command, text } : null;
+  }
+
   private notifyError(webview: vscode.Webview, message: string): void {
     vscode.window.showErrorMessage(message);
-    webview.postMessage({
-      command: this.commandConfig.recordingErrorCommand,
-      error: message,
-    });
+    const payload = this.buildRecordingMessage('error', message);
+    if (payload) webview.postMessage(payload);
   }
 
   async start(
@@ -42,9 +75,8 @@ export class RecordingManager {
     try {
       const result = await startRecording(this.context);
       if (result.success) {
-        webviewView.webview.postMessage({
-          command: this.commandConfig.recordingStartedCommand,
-        });
+        const payload = this.buildRecordingMessage('started');
+        if (payload) webviewView.webview.postMessage(payload);
       } else if (result.error) {
         this.notifyError(webviewView.webview, result.error);
       }
@@ -62,9 +94,8 @@ export class RecordingManager {
     const acknowledgeStop = (): void => {
       if (stopAcknowledged) return;
       stopAcknowledged = true;
-      webviewView.webview.postMessage({
-        command: this.commandConfig.recordingStoppedCommand,
-      });
+      const payload = this.buildRecordingMessage('stopped');
+      if (payload) webviewView.webview.postMessage(payload);
     };
 
     try {
@@ -79,10 +110,8 @@ export class RecordingManager {
           acknowledgeStop();
           const result = await transcriptionPromise;
           if (result.success) {
-            webviewView.webview.postMessage({
-              command: this.commandConfig.transcriptionCommand,
-              text: result.text,
-            });
+            const payload = this.buildTranscriptionMessage(result.text);
+            if (payload) webviewView.webview.postMessage(payload);
           } else if (result.error) {
             this.notifyError(webviewView.webview, result.error);
           }

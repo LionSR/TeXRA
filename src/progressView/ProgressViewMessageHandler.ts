@@ -100,10 +100,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     super('ProgressView', { trackActiveView: true });
 
     this.recordingManager = new RecordingManager(context, {
-      recordingStartedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STARTED,
-      recordingStoppedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED,
-      recordingErrorCommand: PROGRESS_VIEW_COMMANDS.RECORDING_ERROR,
-      transcriptionCommand: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED,
+      buildRecordingMessage: ({ status, error }) => ({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING,
+        status,
+        ...(error ? { error } : {}),
+      }),
+      buildTranscriptionMessage: (text) => ({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+        kind: 'transcribed',
+        text,
+      }),
       progressTitle: 'Transcribing follow-up message',
     });
 
@@ -321,7 +327,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.clearModelOutputBackups(streamId);
     await this.provider.state.clearStream(streamId);
     // Force rebuild since we deleted a stream
-    this.provider.updateWebview({ forceRebuild: true });
+    this.provider.syncFullView({ forceRebuild: true });
   }
 
   private async handleDeleteAll(): Promise<void> {
@@ -346,7 +352,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.modelOutputBackups.clear();
     await this.provider.state.clearAll();
     // Force rebuild since we deleted all streams
-    this.provider.updateWebview({ forceRebuild: true });
+    this.provider.syncFullView({ forceRebuild: true });
   }
 
   // ============================================================
@@ -437,14 +443,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.SORT_STREAMS>,
   ): void {
     this.provider.state.streamSortOrder = data.sortBy;
-    this.provider.updateWebview();
+    this.provider.syncFullView();
   }
 
   private handleFilterStreams(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.FILTER_STREAMS>,
   ): void {
     this.provider.state.agentCategoryFilter = data.filter;
-    this.provider.updateWebview();
+    this.provider.syncFullView();
   }
 
   private async handleRestoreState(
@@ -493,14 +499,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
           if (result.success) {
             this.postToActiveView({
-              command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED,
+              command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
               stream: data.stream,
+              kind: 'polished',
               text: result.text,
             });
           } else if (result.error) {
             this.postToActiveView({
-              command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR,
+              command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
               stream: data.stream,
+              kind: 'polishError',
+              text: null,
               error: result.error,
             });
             await vscode.window.showErrorMessage(result.error);
@@ -508,8 +517,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         } catch (error) {
           const messageText = toErrorMessage(error);
           this.postToActiveView({
-            command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR,
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
             stream: data.stream,
+            kind: 'polishError',
+            text: null,
             error: messageText,
           });
           await vscode.window.showErrorMessage(

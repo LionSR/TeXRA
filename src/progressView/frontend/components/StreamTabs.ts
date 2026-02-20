@@ -41,7 +41,10 @@ function formatStatusLabel(status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-function buildTooltip(info: StreamTabInfo): string {
+function buildTooltip(
+  info: StreamTabInfo,
+  lastTimestamp: number | undefined,
+): string {
   const mainLine = [
     info.label,
     info.model && `Model: ${info.model}`,
@@ -49,8 +52,8 @@ function buildTooltip(info: StreamTabInfo): string {
   ]
     .filter(Boolean)
     .join(' • ');
-  if (!info.lastTimestamp) return mainLine;
-  const lastSeen = formatRelativeTime(info.lastTimestamp);
+  if (!lastTimestamp) return mainLine;
+  const lastSeen = formatRelativeTime(lastTimestamp);
   return lastSeen && mainLine
     ? `${mainLine}\nLast activity ${lastSeen}`
     : mainLine;
@@ -189,12 +192,14 @@ export class StreamTab extends LitElement {
   ];
 
   @property({ attribute: false }) info!: StreamTabInfo;
+  @property({ type: String }) status: string = STREAM_STATUS.READY;
+  @property({ attribute: false }) lastTimestamp: number | undefined = undefined;
   @property({ type: Boolean }) active = false;
 
   override render(): TemplateResult {
     const stream = this.info;
-    const tooltip = buildTooltip(stream);
-    const status = stream.status ?? STREAM_STATUS.READY;
+    const tooltip = buildTooltip(stream, this.lastTimestamp);
+    const status = this.status || STREAM_STATUS.READY;
     const statusLabel = formatStatusLabel(status);
     const agentDecorator = getAgentCategoryDecorator(stream.agentCategory);
 
@@ -227,8 +232,8 @@ export class StreamTab extends LitElement {
           </div>
           <div class="tab-meta">
             <span class="last-active"
-              >${stream.lastTimestamp
-                ? formatRelativeTime(stream.lastTimestamp)
+              >${this.lastTimestamp
+                ? formatRelativeTime(this.lastTimestamp)
                 : ''}</span
             >
             <span class="model">${stream.model ?? ''}</span>
@@ -355,6 +360,10 @@ export class StreamTabs extends LitElement {
   @property({ attribute: false }) activeStreamId: string | null = null;
   @property({ attribute: false }) filter: StreamFilter = 'all';
   @property({ attribute: false }) sort: StreamSort = 'time';
+  @property({ attribute: false })
+  streamStatusById: Map<string, string> = new Map();
+  @property({ attribute: false })
+  streamLastTimestampById: Map<string, number | undefined> = new Map();
 
   override render(): TemplateResult {
     return html`
@@ -367,6 +376,11 @@ export class StreamTabs extends LitElement {
               (stream) => html`
                 <stream-tab
                   .info=${stream}
+                  .status=${this.streamStatusById.get(stream.name) ??
+                  STREAM_STATUS.READY}
+                  .lastTimestamp=${this.streamLastTimestampById.get(
+                    stream.name,
+                  )}
                   ?active=${stream.name === this.activeStreamId}
                 ></stream-tab>
               `,

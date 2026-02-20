@@ -113,7 +113,9 @@ export class WorkflowStreamContent extends LitElement {
     if (changedProperties.has('streamContext')) {
       const currentState = this.currentState;
       // Recompute run groups when state changes (taskGroups is inside state)
-      this.runGroups = getRunGroups(currentState?.taskGroups ?? []);
+      this.runGroups = currentState
+        ? getRunGroups(currentState.taskGroups)
+        : [];
 
       // Recompute run-specific values when runId or state changes
       this.runValues = this.computeRunValues();
@@ -206,7 +208,7 @@ export class WorkflowStreamContent extends LitElement {
 
       <followup-section
         .agentCategory=${streamInfo.agentCategory}
-        .status=${state.status ?? streamInfo.status ?? ''}
+        .status=${state.status ?? ''}
         .hasOutputFiles=${hasFiles}
         .options=${this.currentFollowupOptions}
         .mode=${state.followupMode}

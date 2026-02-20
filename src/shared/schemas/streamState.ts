@@ -1,13 +1,8 @@
 import { z } from 'zod';
 
 import { AGENT_CATEGORY, type AgentCategory } from './agent';
-import { LogMessageDataSchema } from './log';
 import { OutputFileInfoSchema } from './output';
-import {
-  InstructionUpdateSchema,
-  StreamStatusSchema,
-  StreamTabInfoSchema,
-} from './stream';
+import { InstructionUpdateSchema, StreamStatusSchema } from './stream';
 import { TaskGroupSchema } from './taskGroup';
 import { TodoItemSchema } from './todo';
 import { ContextStateSchema, TokenUsageStatsSchema } from './usage';
@@ -51,9 +46,9 @@ export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
 // Base Stream State
 
 const BaseStreamStateSchema = z.object({
-  info: StreamTabInfoSchema.optional(),
+  // Shared stream fields with schema defaults.
   status: StreamStatusSchema.optional(),
-  logs: z.array(LogMessageDataSchema).prefault([]),
+  lastTimestamp: z.number().optional(),
   taskGroups: z.array(TaskGroupSchema).prefault([]),
   contextState: ContextStateSchema.optional(),
   /** Active subagents running under this stream (ephemeral, not persisted). */
@@ -85,7 +80,7 @@ export type ToolUseUIState = z.infer<typeof ToolUseUIStateSchema>;
 
 export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   kind: z.literal(AGENT_CATEGORY.TOOL_USE),
-  // Backend-owned fields
+  // Frontend-owned fields updated by targeted progress-view messages
   todos: z.array(TodoItemSchema).prefault([]),
   queuedFollowUps: z.array(z.string()).prefault([]),
   toolEditBypass: z.boolean().optional(),
@@ -119,7 +114,7 @@ function RoundScopedRecord<T extends z.ZodType>(valueSchema: T) {
 
 export const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
   kind: z.literal(AGENT_CATEGORY.WORKFLOW),
-  // Backend-owned fields
+  // Frontend-owned fields updated by targeted progress-view messages
   runInstructions: RunScopedRecord(InstructionUpdateSchema),
   runUsage: RunScopedRecord(TokenUsageStatsSchema),
   runFiles: RoundScopedRecord(OutputFileInfoSchema),
