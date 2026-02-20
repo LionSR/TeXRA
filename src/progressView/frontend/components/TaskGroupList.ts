@@ -502,30 +502,50 @@ export class TaskGroupList extends LitElement {
       `;
     }
 
-    // Interleave ungrouped messages with groups chronologically.
-    // isGroupVisible() inside renderGroupNode() handles per-mode filtering.
-    const timeline = [
-      ...this.cachedUngrouped.map((m) => ({
-        key: m.id,
-        time: m.timestamp ?? 0,
-        msg: m,
-      })),
-      ...this.cachedTree.map((t) => ({
-        key: t.group.id,
-        time: t.group.startTime ?? 0,
-        tree: t,
-      })),
-    ].sort((a, b) => a.time - b.time);
+    if (this.isToolUse) {
+      // Tool-use: interleave ungrouped messages (user input, follow-ups, errors)
+      // with groups chronologically so the conversation reads top-to-bottom.
+      const timeline = [
+        ...this.cachedUngrouped.map((m) => ({
+          key: m.id,
+          time: m.timestamp ?? 0,
+          msg: m,
+        })),
+        ...this.cachedTree.map((t) => ({
+          key: t.group.id,
+          time: t.group.startTime ?? 0,
+          tree: t,
+        })),
+      ].sort((a, b) => a.time - b.time);
 
+      return html`
+        <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
+          ${repeat(
+            timeline,
+            (item) => item.key,
+            (item) =>
+              'msg' in item
+                ? guard([item.msg], () => formatLogEntry(item.msg))
+                : this.renderGroupNode(item.tree!),
+          )}
+        </vscode-scrollable>
+      `;
+    }
+
+    // Workflow: groups first, then ungrouped messages.
+    // Workflow stages are hierarchical (not conversational), so structure-first
+    // ordering keeps stage execution visually separate from stray messages.
     return html`
       <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
         ${repeat(
-          timeline,
-          (item) => item.key,
-          (item) =>
-            'msg' in item
-              ? guard([item.msg], () => formatLogEntry(item.msg))
-              : this.renderGroupNode(item.tree!),
+          this.cachedTree,
+          (t) => t.group.id,
+          (t) => this.renderGroupNode(t),
+        )}
+        ${repeat(
+          this.cachedUngrouped,
+          (m) => m.id,
+          (m) => guard([m], () => formatLogEntry(m)),
         )}
       </vscode-scrollable>
     `;

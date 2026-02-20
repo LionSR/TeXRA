@@ -494,15 +494,21 @@ export class ProgressEventHandler {
     // Legacy fallback: old tool-use sessions saved before beginRunStage()
     // started emitting logger.userMessage() won't have a userMessage log entry.
     // Synthesise one from runInstructions so the instruction still renders.
-    // Check ALL messages (not just [0]) to avoid duplicates with data from
-    // intermediate versions that logged userMessage inside the group context.
+    // Scope the check to the active run's instruction text so follow-up
+    // userMessages from other turns don't suppress the fallback.
     if (
       activeRunId &&
-      this.getStreamCategory(stream) === AgentCategory.ToolUse &&
-      !messages.some((m) => m.messageType === 'userMessage')
+      this.getStreamCategory(stream) === AgentCategory.ToolUse
     ) {
       const instructionText = runInstructions[activeRunId]?.text?.trim();
-      if (instructionText) {
+      if (
+        instructionText &&
+        !messages.some(
+          (m) =>
+            m.messageType === 'userMessage' &&
+            m.text?.trim() === instructionText,
+        )
+      ) {
         messages = [
           {
             id: `tool-use-instruction:${activeRunId}`,
