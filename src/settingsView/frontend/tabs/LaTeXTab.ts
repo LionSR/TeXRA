@@ -23,8 +23,15 @@ import {
   LATEXINDENT_INSTALL_GUIDE,
   TEXCOUNT_INSTALL_GUIDE,
   IMAGE_PROCESSING_INSTALL_GUIDE,
+  DEPENDENCY_INSTALL_COMMANDS,
+  HOMEBREW_INSTALL_COMMAND,
+  SCOOP_INSTALL_COMMAND,
+  type InstallCommand,
   type Platform,
 } from '@shared/constants/latex';
+
+// Local imports - shared utilities
+import { copyTextToClipboard } from '@shared/utils/clipboard';
 
 /** Path keys in LatexSettingsStatus for tool paths. */
 type ToolPathKey =
@@ -260,6 +267,76 @@ export class LaTeXTab extends LitElement {
         color: var(--color-text-secondary);
       }
 
+      .dependency-install-actions {
+        display: flex;
+        gap: var(--spacing-small);
+        margin-top: var(--spacing-small);
+      }
+
+      .install-command-text {
+        flex: 1;
+        min-width: 0;
+        padding: 4px 8px;
+        background: var(
+          --vscode-textCodeBlock-background,
+          rgba(128, 128, 128, 0.08)
+        );
+        border-radius: var(--radius-small, 3px);
+        font-family: var(--vscode-editor-font-family, monospace);
+        font-size: var(--font-size-sm);
+        color: var(--vscode-foreground);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .copy-success {
+        color: var(--vscode-testing-iconPassed, #73c991) !important;
+        border-color: var(--vscode-testing-iconPassed, #73c991) !important;
+      }
+
+      .prerequisite-hint {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--spacing-medium);
+        padding: var(--spacing-medium);
+        margin-bottom: var(--spacing-medium);
+        border: var(--border-thin) solid
+          var(--vscode-editorInfo-foreground, #3794ff);
+        border-radius: var(--radius-medium);
+        background: var(--vscode-editor-background);
+      }
+
+      .prerequisite-hint .hint-icon {
+        flex-shrink: 0;
+        font-size: var(--font-size-lg);
+        color: var(--vscode-editorInfo-foreground, #3794ff);
+      }
+
+      .prerequisite-hint .hint-body {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .prerequisite-hint .hint-title {
+        font-weight: 500;
+        color: var(--vscode-foreground);
+        margin-bottom: 2px;
+      }
+
+      .prerequisite-hint .hint-description {
+        font-size: var(--font-size-sm);
+        color: var(--color-text-secondary);
+        line-height: 1.4;
+      }
+
+      .prerequisite-hint .hint-actions {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        margin-top: var(--spacing-small);
+      }
+
       .section-header {
         display: flex;
         align-items: center;
@@ -378,6 +455,51 @@ export class LaTeXTab extends LitElement {
     return this.settings.outDir && this.settings.autoRevealExclude;
   }
 
+  /**
+   * Return the best install command for a missing dependency, or null if no
+   * usable option exists (e.g. required package manager is not installed,
+   * or no commands are defined for this platform).
+   *
+   * Iterates the ranked option list and picks the first whose package
+   * manager is either detected on the system or is `null` (always available).
+   */
+  private getInstallCommand(dep: DependencyInfo): InstallCommand | null {
+    const platform = this.settings.platform as Platform;
+    const commands = DEPENDENCY_INSTALL_COMMANDS[dep.key];
+    if (!commands) return null;
+    const options = commands[platform];
+    if (!options?.length) return null;
+    const pm = this.settings.packageManager;
+    return (
+      options.find(
+        (cmd) => !cmd.packageManager || cmd.packageManager === pm,
+      ) ?? null
+    );
+  }
+
+  private async handleCopyCommand(e: Event, command: string): Promise<void> {
+    const button = (e.currentTarget ?? e.target) as HTMLElement;
+    const ok = await copyTextToClipboard(command);
+    if (ok) {
+      button.classList.add('copy-success');
+      button.setAttribute('title', 'Copied!');
+      setTimeout(() => {
+        button.classList.remove('copy-success');
+        button.setAttribute('title', 'Copy command');
+      }, 2000);
+    }
+  }
+
+  private handleRunInTerminal(command: string): void {
+    this.dispatchEvent(
+      new CustomEvent('latex-run-install-command', {
+        bubbles: true,
+        composed: true,
+        detail: { installCommand: command },
+      }),
+    );
+  }
+
   /** Collect detected tool paths for a dependency. */
   private getDetectedPaths(dep: DependencyInfo): string[] {
     if (!dep.pathKeys) return [];
@@ -392,6 +514,7 @@ export class LaTeXTab extends LitElement {
     const platform = this.settings.platform as Platform;
     const guideText = dep.installGuide?.[platform] ?? dep.installGuide?.linux;
     const detectedPaths = installed ? this.getDetectedPaths(dep) : [];
+    const installCmd = !installed ? this.getInstallCommand(dep) : null;
 
     return html`
       <div class="dependency-card">
@@ -431,6 +554,29 @@ export class LaTeXTab extends LitElement {
                 `
               : html`<span class="setting-badge not-set">Not found</span>`}
         </div>
+        ${!installed && installCmd
+          ? html`
+              <div class="dependency-install-actions">
+                <button
+                  class="tab-action-btn"
+                  title="Copy: ${installCmd.command}"
+                  @click=${(e: Event) =>
+                    this.handleCopyCommand(e, installCmd.command)}
+                >
+                  <span class="codicon codicon-copy"></span>
+                  Copy
+                </button>
+                <button
+                  class="tab-action-btn"
+                  title="Run: ${installCmd.command}"
+                  @click=${() => this.handleRunInTerminal(installCmd.command)}
+                >
+                  <span class="codicon codicon-terminal"></span>
+                  Run in Terminal
+                </button>
+              </div>
+            `
+          : nothing}
         ${!installed && guideText
           ? html`
               <button
@@ -453,12 +599,82 @@ export class LaTeXTab extends LitElement {
     `;
   }
 
+  /**
+   * Show a hint when the platform has a recommended package manager
+   * that isn't installed yet (e.g. Homebrew on macOS, Scoop on Windows).
+   */
+  private renderPrerequisiteHint(): TemplateResult | typeof nothing {
+    const platform = this.settings.platform as Platform;
+    const pm = this.settings.packageManager;
+
+    // macOS without Homebrew — installing it unlocks every brew command
+    if (platform === 'darwin' && pm !== 'brew') {
+      return this.renderPmHint(
+        'Homebrew not detected',
+        'Most dependencies below can be installed with a single brew install command. Install Homebrew first to enable quick-install buttons.',
+        HOMEBREW_INSTALL_COMMAND,
+        'Homebrew',
+      );
+    }
+
+    // Windows without Scoop — installing it unlocks scoop commands
+    if (platform === 'win32' && pm !== 'scoop') {
+      return this.renderPmHint(
+        'Scoop not detected',
+        'Some dependencies below can be installed with a single scoop install command. Install Scoop first to enable quick-install buttons.',
+        SCOOP_INSTALL_COMMAND,
+        'Scoop',
+      );
+    }
+
+    return nothing;
+  }
+
+  /** Render a package-manager prerequisite hint banner. */
+  private renderPmHint(
+    title: string,
+    description: string,
+    installCommand: string,
+    pmName: string,
+  ): TemplateResult {
+    return html`
+      <div class="prerequisite-hint">
+        <span class="codicon codicon-info hint-icon"></span>
+        <div class="hint-body">
+          <div class="hint-title">${title}</div>
+          <div class="hint-description">${description}</div>
+          <div class="hint-actions">
+            <code class="install-command-text">${installCommand}</code>
+            <button
+              class="tab-action-btn"
+              title="Copy ${pmName} install command"
+              @click=${(e: Event) =>
+                this.handleCopyCommand(e, installCommand)}
+            >
+              <span class="codicon codicon-copy"></span>
+              Copy
+            </button>
+            <button
+              class="tab-action-btn"
+              title="Run ${pmName} installer in VS Code terminal"
+              @click=${() => this.handleRunInTerminal(installCommand)}
+            >
+              <span class="codicon codicon-terminal"></span>
+              Run in Terminal
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   private renderDependencies(): TemplateResult {
     return html`
       <div class="section-header">
         <span class="codicon codicon-package"></span>
         Dependencies
       </div>
+      ${this.renderPrerequisiteHint()}
       ${DEPENDENCIES.map((dep) => this.renderDependencyCard(dep))}
     `;
   }

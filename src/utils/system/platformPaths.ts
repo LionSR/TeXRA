@@ -78,6 +78,8 @@ function getExtraDirs(): string[] {
       'C:\\Program Files (x86)\\gs\\gs9.56.1\\bin',
       'C:\\Program Files (x86)\\gs\\gs9.55.0\\bin',
       'C:\\Program Files (x86)\\gs\\gs9.54.0\\bin',
+      // Strawberry Perl (recommended Perl distribution for Windows)
+      'C:\\Strawberry\\perl\\bin',
     );
     const localAppData =
       process.env.LOCALAPPDATA ||
