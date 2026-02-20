@@ -575,7 +575,7 @@ export class ProgressViewState {
         ]),
       ),
     );
-    void this.storage.update(WorkspaceStateKey.TASK_GROUPS, record);
+    await this.storage.update(WorkspaceStateKey.TASK_GROUPS, record);
   }
 
   private async deleteTaskGroups(stream: StreamTabId): Promise<void> {
@@ -608,7 +608,7 @@ export class ProgressViewState {
         ]),
       ),
     );
-    void this.storage.update(WorkspaceStateKey.RUN_INSTRUCTIONS, record);
+    await this.storage.update(WorkspaceStateKey.RUN_INSTRUCTIONS, record);
   }
 
   private async deleteRunInstructions(stream: StreamTabId): Promise<void> {

@@ -79,7 +79,7 @@ const BACKEND_OWNED_FIELDS = [
   'finishedSubagentCount',
   'activeProcesses',
   'finishedProcessCount',
-] as const;
+] as const satisfies readonly (keyof StreamState)[];
 
 // ============================================================
 // Helper functions
@@ -178,7 +178,7 @@ function updateStreamInfo(
     const backendState = backendStates?.[stream.name];
     if (backendState) {
       const existing = nextStates.get(stream.name);
-      if (existing) {
+      if (existing && existing.kind === backendState.kind) {
         const patch: Partial<StreamState> = {};
         for (const key of BACKEND_OWNED_FIELDS) {
           if (key in backendState) {
