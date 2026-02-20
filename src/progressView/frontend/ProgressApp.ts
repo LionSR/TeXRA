@@ -161,6 +161,9 @@ export class ProgressApp extends BaseWebviewApp {
    */
   private cachedStreamIndex = new Map<string, StreamTabInfo>();
 
+  /** Last stream touched by setStreamState — used for O(1) sort skip. */
+  private lastUpdatedStreamId: string | null = null;
+
   private prefsManager = new PersistedState(
     createWebviewStorage(vscode),
     'progressViewPrefs',
@@ -215,18 +218,39 @@ export class ProgressApp extends BaseWebviewApp {
   /**
    * Re-sort and filter the stream list.
    *
-   * When `checkStability` is true (status-only update with time sort), we
-   * compare the resulting order with the cached list.  If the order didn't
-   * change, we keep the old array reference so downstream components
-   * (StreamTabs repeat()) skip re-evaluation.
+   * When `checkStability` is true (streamStates-only update with time sort),
+   * we first try an O(1) check: if the stream that just changed is already at
+   * position 0 it's still the newest, so order can't change.  This is the
+   * common case during streaming (one active stream getting rapid updates).
+   *
+   * Only when the O(1) check fails (a different stream became active) do we
+   * fall through to the full O(N log N) sort + O(N) order comparison.
    */
   private recomputeFilteredStreams(checkStability: boolean): void {
-    const next = getFilteredStreams(this.appState);
-    if (checkStability && this.isSameOrder(this.cachedFilteredStreams, next)) {
-      return; // Order unchanged — keep old reference.
+    if (checkStability) {
+      // O(1) fast path: updated stream already at top → order is stable.
+      const cached = this.cachedFilteredStreams;
+      if (
+        cached.length > 0 &&
+        this.lastUpdatedStreamId &&
+        cached[0].name === this.lastUpdatedStreamId
+      ) {
+        return;
+      }
+      // O(N log N) slow path: different stream updated — sort and check.
+      const next = getFilteredStreams(this.appState);
+      if (this.isSameOrder(cached, next)) {
+        return; // Order unchanged — keep old reference.
+      }
+      this.cachedFilteredStreams = next;
+      this.cachedStreamIndex = new Map(next.map((s) => [s.name, s]));
+      return;
     }
-    this.cachedFilteredStreams = next;
-    this.cachedStreamIndex = new Map(next.map((s) => [s.name, s]));
+    // Structural change — unconditional sort.
+    this.cachedFilteredStreams = getFilteredStreams(this.appState);
+    this.cachedStreamIndex = new Map(
+      this.cachedFilteredStreams.map((s) => [s.name, s]),
+    );
   }
 
   /** O(n) name-sequence comparison — cheap relative to sort. */
@@ -417,6 +441,7 @@ export class ProgressApp extends BaseWebviewApp {
     const updated = updater(current);
     // Skip no-op updates: avoid Map copy + appState spread + willUpdate cycle
     if (updated === current) return;
+    this.lastUpdatedStreamId = streamId;
     const nextStates = new Map(this.appState.streamStates);
     nextStates.set(streamId, updated);
     this.appState = { ...this.appState, streamStates: nextStates };
