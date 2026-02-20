@@ -229,7 +229,11 @@ export class StreamTab extends LitElement {
             >
           </div>
           <div class="tab-meta">
-            <span class="last-active">$</span>
+            <span class="last-active"
+              >${this.lastTimestamp
+                ? formatRelativeTime(this.lastTimestamp)
+                : ''}</span
+            >
             <span class="model">${stream.model ?? ''}</span>
             <i
               class=${`codicon codicon-${agentDecorator.icon} agent-category`}

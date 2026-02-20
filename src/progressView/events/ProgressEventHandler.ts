@@ -121,6 +121,7 @@ export class ProgressEventHandler {
           payload;
         if (!streamId) return;
 
+        const hadStream = this.state.streamTabs.has(streamId);
         this.state.streamTabs.ensureStream(streamId);
         this.state.updateStreamHints(streamId, {
           agentCategory,
@@ -139,7 +140,7 @@ export class ProgressEventHandler {
 
         if (!this.webviewUpdater.isAvailable()) return;
 
-        if (filterChanged) {
+        if (filterChanged || !hadStream) {
           this.webviewUpdater.sendStreamMetadata(this.state);
           this.hydrateStreamContent(streamId, { updateInstruction: true });
           return;
@@ -196,10 +197,7 @@ export class ProgressEventHandler {
           const filterChanged =
             this.state.agentCategoryFilter !== previousFilter;
           if (filterChanged || isActiveStream) {
-            this.webviewUpdater.sendStreamMetadata(
-              this.state,
-              StreamStatusService.getAll(),
-            );
+            this.webviewUpdater.sendStreamMetadata(this.state);
           }
         }
       },
@@ -358,8 +356,8 @@ export class ProgressEventHandler {
           const streamState = this.state.getAllStreamStates()[parentStreamId];
           if (!streamState) return;
           this.webviewUpdater.updateStreamBadges(parentStreamId, {
-            activeProcesses: processes,
-            finishedProcessCount: streamState.finishedProcessCount,
+            activeSubagents: children,
+            finishedSubagentCount: streamState.finishedSubagentCount,
           });
         }
       },
@@ -397,8 +395,8 @@ export class ProgressEventHandler {
           const streamState = this.state.getAllStreamStates()[parentStreamId];
           if (!streamState) return;
           this.webviewUpdater.updateStreamBadges(parentStreamId, {
-            activeSubagents: children,
-            finishedSubagentCount: streamState.finishedSubagentCount,
+            activeProcesses: processes,
+            finishedProcessCount: streamState.finishedProcessCount,
           });
         }
       },
@@ -415,12 +413,10 @@ export class ProgressEventHandler {
         this.state.setParentStream(data.childStreamId, data.parentStreamId);
 
         if (this.webviewUpdater.isAvailable()) {
-          const streamState = this.state.getAllStreamStates()[parentStreamId];
-          if (!streamState) return;
-          this.webviewUpdater.updateStreamBadges(parentStreamId, {
-            activeSubagents: children,
-            finishedSubagentCount: streamState.finishedSubagentCount,
-          });
+          this.webviewUpdater.updateParentStream(
+            data.childStreamId,
+            data.parentStreamId,
+          );
         }
       },
     );
