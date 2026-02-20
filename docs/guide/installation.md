@@ -47,6 +47,24 @@ You can also install TeXRA directly in your preferred editor using protocol-base
 
 Now for the slightly less fun part – making sure TeXRA has all the tools it needs to work its magic. TeXRA relies on several external tools to function properly. Follow the instructions for your operating system.
 
+### Homebrew (macOS only) {#homebrew}
+
+::: info WHAT IS HOMEBREW?
+[Homebrew](https://brew.sh/) is a free package manager for macOS that makes it easy to install command-line tools and applications from the terminal. Many of the macOS instructions below use `brew install` commands, which require Homebrew to be installed first.
+:::
+
+If you're on macOS and don't have Homebrew yet, open the **Terminal** app (found in Applications → Utilities) and paste this command:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Follow the on-screen prompts to complete the installation. Once finished, you can use any of the `brew install` commands in the sections below.
+
+::: tip
+If you prefer not to use Homebrew, each section also links to the tool's official website where you can download a traditional installer.
+:::
+
 ### LaTeX Distribution
 
 ::: tip IMPORTANT
@@ -55,17 +73,39 @@ A LaTeX distribution is required for TeXRA to properly process LaTeX documents.
 
 #### Windows
 
-Install either:
+Install either **MiKTeX** or **TeX Live** (MiKTeX is easier for beginners):
 
-- **MiKTeX**: Download and install from [miktex.org](https://miktex.org/download)
-- **TeX Live**: Download and install from [tug.org/texlive/windows.html](https://tug.org/texlive/windows.html)
+**MiKTeX (recommended for Windows)**:
+
+1. Go to [miktex.org/download](https://miktex.org/download)
+2. Click the download button for the Windows installer
+3. Run the downloaded `.exe` file and follow the setup wizard
+4. When prompted, choose "Install missing packages on the fly" — this lets MiKTeX automatically download LaTeX packages as you need them
+
+**TeX Live (alternative)**:
+
+1. Go to [tug.org/texlive/windows.html](https://tug.org/texlive/windows.html)
+2. Download the `install-tl-windows.exe` installer
+3. Run the installer — the full installation may take a while as TeX Live downloads all packages upfront
+
+After installing either distribution, **restart VS Code** so TeXRA can detect the new programs. You can verify the installation by opening a terminal (Command Prompt or PowerShell) and running:
+
+```bash
+pdflatex --version
+```
 
 #### macOS
 
-Install MacTeX:
+Install **MacTeX**, which is the standard LaTeX distribution for macOS:
 
-- Download from [tug.org/mactex/mactex-download.html](https://www.tug.org/mactex/mactex-download.html)
-- Or use Homebrew: `brew install --cask mactex`
+- **Via [Homebrew](#homebrew)**: `brew install --cask mactex`
+- **Direct download** (no Homebrew needed): Go to [tug.org/mactex](https://www.tug.org/mactex/mactex-download.html), download the `.pkg` file (~4 GB), and double-click to run the installer
+
+After installing, **restart VS Code** so TeXRA can detect the new programs. You can verify by opening Terminal and running:
+
+```bash
+pdflatex --version
+```
 
 #### Linux (Ubuntu/Debian)
 
@@ -74,6 +114,12 @@ Install TeX Live:
 ```bash
 sudo apt-get update
 sudo apt-get install texlive-full
+```
+
+After installing, **restart VS Code** and verify with:
+
+```bash
+pdflatex --version
 ```
 
 ### Perl

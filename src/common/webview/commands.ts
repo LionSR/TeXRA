@@ -361,6 +361,7 @@ export const SETTINGS_VIEW_CMD = {
   GET_LATEX_SETTINGS_STATUS: 'getLatexSettingsStatus',
   APPLY_LATEX_SETTINGS: 'applyLatexSettings',
   INSTALL_LATEX_WORKSHOP: 'installLatexWorkshop',
+  RUN_INSTALL_COMMAND: 'runInstallCommand',
 } as const;
 
 // Settings view specific commands (combines Memory, History, and Profile views)

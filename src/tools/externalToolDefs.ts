@@ -115,15 +115,17 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     description:
       'Execute Wolfram Language code for symbolic math, computation, and data analysis.',
     installGuide:
-      'Requires WolframScript or the Wolfram Engine.\n\n' +
-      'Installation:\n' +
-      '  Mac:     brew install wolfram-engine\n' +
-      '  Ubuntu:  sudo apt-get install wolfram-engine\n' +
+      'Requires the "wolframscript" command-line tool.\n\n' +
+      'Install the free Wolfram Engine:\n' +
+      '  Mac:     brew install --cask wolfram-engine\n' +
+      '  Ubuntu:  Download from wolfram.com/engine\n' +
       '  Windows: Download from wolfram.com/engine\n\n' +
-      'Free Wolfram Engine licenses are available for development use.',
+      'Note: A Mathematica installation alone is not enough — you\n' +
+      'need WolframScript on your PATH. The Wolfram Engine includes\n' +
+      'it automatically. Free licenses are available for development use.',
     installUrl: 'https://www.wolfram.com/engine/',
     configNotes:
-      'Requires a free Wolfram Engine license or Mathematica installation.',
+      'Requires the free Wolfram Engine (provides wolframscript).',
     check: () => checkToolInstalled('wolframscript', false),
   },
   {

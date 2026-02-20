@@ -10,17 +10,20 @@ export type Platform = 'darwin' | 'win32' | 'linux';
 
 type Guide = Record<Platform, string>;
 
-/** Tool installable via brew, apt, and a Windows download URL. */
+/** Tool installable via brew, apt, and a download URL. */
 function brewAptUrl(
   label: string,
   brew: string,
   apt: string,
-  winUrl: string,
+  url: string,
 ): Guide {
   return {
-    darwin: `Install ${label}:\n  brew install ${brew}`,
+    darwin:
+      `Install ${label}:\n  brew install ${brew}\n\n` +
+      `"brew" requires Homebrew (https://brew.sh).\n` +
+      `Or download directly:\n  ${url}`,
     linux: `Install ${label}:\n  sudo apt-get install ${apt}`,
-    win32: `Install ${label}:\n  ${winUrl}`,
+    win32: `Install ${label}:\n  ${url}`,
   };
 }
 
@@ -39,7 +42,9 @@ function texLiveGuide(
   opts: { brew: string; apt: string; notes?: Partial<Guide> },
 ): Guide {
   const base: Guide = {
-    darwin: `Install ${tool}:\n  brew install ${opts.brew}`,
+    darwin:
+      `Install ${tool}:\n  brew install ${opts.brew}\n\n` +
+      `"brew" requires Homebrew (https://brew.sh).`,
     linux: `Install ${tool}:\n  sudo apt-get install ${opts.apt}`,
     win32:
       `MiKTeX: Open MiKTeX Console → Packages → search "${tool}" → Install\n\n` +
@@ -54,12 +59,22 @@ function combineGuides(
 ): Guide {
   const platforms: Platform[] = ['darwin', 'linux', 'win32'];
   return Object.fromEntries(
-    platforms.map((p) => [
-      p,
-      sections
-        .map(([label, g]) => `${label}:\n  ${g[p].split('\n  ')[1]}`)
-        .join('\n\n'),
-    ]),
+    platforms.map((p) => {
+      // Extract just the install command (first paragraph) from each guide
+      const body = sections
+        .map(([label, g]) => {
+          const command = g[p].split('\n\n')[0].split('\n  ')[1];
+          return `${label}:\n  ${command}`;
+        })
+        .join('\n\n');
+      // Append a single Homebrew note for macOS instead of repeating per-section
+      return [
+        p,
+        p === 'darwin'
+          ? body + '\n\n"brew" requires Homebrew (https://brew.sh).'
+          : body,
+      ];
+    }),
   ) as Guide;
 }
 
@@ -77,29 +92,33 @@ export const PDFLATEX_INSTALL_GUIDE: Guide = {
   darwin:
     'Install MacTeX (recommended):\n' +
     '  brew install --cask mactex\n\n' +
-    'Or lightweight alternative:\n' +
-    '  brew install texlive\n\n' +
-    'After installing, restart VS Code so TeXRA can detect\n' +
-    'the new binaries on your PATH.',
+    '"brew" requires Homebrew (https://brew.sh), a free\n' +
+    'macOS package manager. Or download MacTeX directly from:\n' +
+    '  https://www.tug.org/mactex/mactex-download.html\n\n' +
+    'After installing, restart VS Code and verify by running\n' +
+    '"pdflatex --version" in Terminal.',
   linux:
     'Install TeX Live:\n' +
     '  sudo apt-get install texlive-full\n\n' +
-    'After installing, restart VS Code so TeXRA can detect\n' +
-    'the new binaries on your PATH.',
+    'After installing, restart VS Code and verify by running\n' +
+    '"pdflatex --version" in a terminal.',
   win32:
-    'Install MiKTeX:\n' +
-    '  https://miktex.org/download\n\n' +
+    'Install MiKTeX (recommended for Windows):\n' +
+    '  https://miktex.org/download\n' +
+    '  Download the installer, run it, and choose "Install\n' +
+    '  missing packages on the fly" when prompted.\n\n' +
     'Or TeX Live:\n' +
     '  https://tug.org/texlive/\n\n' +
-    'After installing, restart VS Code so TeXRA can detect\n' +
-    'the new binaries on your PATH.',
+    'After installing, restart VS Code and verify by running\n' +
+    '"pdflatex --version" in Command Prompt.',
 };
 
 export const PERL_INSTALL_GUIDE: Guide = {
   darwin:
     'Perl is pre-installed on macOS.\n' +
     'If missing, reinstall via:\n' +
-    '  brew install perl',
+    '  brew install perl\n\n' +
+    '"brew" requires Homebrew (https://brew.sh).',
   linux: 'Install Perl:\n  sudo apt-get install perl',
   win32:
     'Install Strawberry Perl (recommended):\n  https://strawberryperl.com/',
@@ -108,6 +127,7 @@ export const PERL_INSTALL_GUIDE: Guide = {
 export const TEXFMT_INSTALL_GUIDE: Guide = {
   darwin:
     'Install tex-fmt:\n  brew install tex-fmt\n\n' +
+    '"brew" requires Homebrew (https://brew.sh).\n\n' +
     'Or via Cargo:\n  cargo install tex-fmt',
   linux:
     'Install tex-fmt:\n  apt install tex-fmt\n\n' +
@@ -117,12 +137,28 @@ export const TEXFMT_INSTALL_GUIDE: Guide = {
 
 export const WOLFRAM_INSTALL_GUIDE: Guide = {
   darwin:
-    'Install Wolfram Engine:\n  brew install --cask wolfram-engine\n\n' +
-    'Or download from:\n  https://www.wolfram.com/engine/',
+    'TeXRA requires the "wolframscript" command-line tool.\n\n' +
+    'Install the free Wolfram Engine:\n' +
+    '  brew install --cask wolfram-engine\n\n' +
+    '"brew" requires Homebrew (https://brew.sh).\n' +
+    'Or download from:\n  https://www.wolfram.com/engine/\n\n' +
+    'Note: A Mathematica installation alone is not enough.\n' +
+    'You need WolframScript on your PATH. The Wolfram Engine\n' +
+    'includes it automatically.',
   linux:
-    'Install Wolfram Engine:\n  https://www.wolfram.com/engine/\n\n' +
-    'Follow the Linux installation guide on the Wolfram site.',
-  win32: 'Install Wolfram Engine:\n  https://www.wolfram.com/engine/',
+    'TeXRA requires the "wolframscript" command-line tool.\n\n' +
+    'Install the free Wolfram Engine:\n' +
+    '  https://www.wolfram.com/engine/\n\n' +
+    'Note: A Mathematica installation alone is not enough.\n' +
+    'You need WolframScript on your PATH. The Wolfram Engine\n' +
+    'includes it automatically.',
+  win32:
+    'TeXRA requires the "wolframscript" command-line tool.\n\n' +
+    'Install the free Wolfram Engine:\n' +
+    '  https://www.wolfram.com/engine/\n\n' +
+    'Note: A Mathematica installation alone is not enough.\n' +
+    'You need WolframScript on your PATH. The Wolfram Engine\n' +
+    'includes it automatically.',
 };
 
 // ── Simple brew / apt / URL tools ──────────────────────────
@@ -205,6 +241,133 @@ export const IMAGE_PROCESSING_INSTALL_GUIDE = combineGuides(
   ['GraphicsMagick (recommended)', GRAPHICSMAGICK_INSTALL_GUIDE],
   ['Or ImageMagick', IMAGEMAGICK_INSTALL_GUIDE],
 );
+
+// ============================================================
+// Structured install commands (for Copy / Run in Terminal)
+// ============================================================
+
+/**
+ * A concrete install command for a dependency on a given platform.
+ * Used by the LaTeX tab to power "Copy command" and "Run in Terminal" buttons.
+ */
+export interface InstallCommand {
+  /** The full shell command (e.g. "brew install ghostscript"). */
+  readonly command: string;
+  /**
+   * The package manager the command targets.
+   * `null` means the command is always available (e.g. a direct download URL).
+   */
+  readonly packageManager: 'brew' | 'apt' | 'scoop' | null;
+}
+
+/** Official Homebrew one-liner install script. */
+export const HOMEBREW_INSTALL_COMMAND =
+  '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"';
+
+/** Official Scoop install commands (PowerShell). */
+export const SCOOP_INSTALL_COMMAND =
+  'Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser; irm get.scoop.sh | iex';
+
+/**
+ * Per-dependency install commands keyed by `DependencyInfo.key`.
+ *
+ * Each platform maps to an **ordered** list of install options, ranked by
+ * recommendation priority. The frontend picks the first option whose
+ * `packageManager` matches the detected system package manager (or whose
+ * `packageManager` is `null`, meaning always available).
+ *
+ * An empty array means there is no automatable install for that platform.
+ */
+export const DEPENDENCY_INSTALL_COMMANDS: Record<
+  string,
+  Record<Platform, readonly InstallCommand[]>
+> = {
+  texDistributionInstalled: {
+    darwin: [
+      {
+        command: 'brew install --cask mactex',
+        packageManager: 'brew',
+      },
+    ],
+    linux: [
+      {
+        command: 'sudo apt-get install -y texlive-full',
+        packageManager: 'apt',
+      },
+    ],
+    win32: [
+      {
+        command: 'scoop install miktex',
+        packageManager: 'scoop',
+      },
+    ],
+  },
+  latexdiffInstalled: {
+    darwin: [
+      {
+        command: 'brew install latexdiff',
+        packageManager: 'brew',
+      },
+    ],
+    linux: [
+      {
+        command: 'sudo apt-get install -y latexdiff',
+        packageManager: 'apt',
+      },
+    ],
+    win32: [],
+  },
+  latexindentInstalled: {
+    darwin: [
+      {
+        command: 'brew install latexindent',
+        packageManager: 'brew',
+      },
+    ],
+    linux: [
+      {
+        command: 'sudo apt-get install -y texlive-extra-utils perl',
+        packageManager: 'apt',
+      },
+    ],
+    win32: [],
+  },
+  texcountInstalled: {
+    darwin: [
+      {
+        command: 'brew install texcount',
+        packageManager: 'brew',
+      },
+    ],
+    linux: [
+      {
+        command: 'sudo apt-get install -y texlive-extra-utils',
+        packageManager: 'apt',
+      },
+    ],
+    win32: [],
+  },
+  imageProcessingInstalled: {
+    darwin: [
+      {
+        command: 'brew install ghostscript graphicsmagick',
+        packageManager: 'brew',
+      },
+    ],
+    linux: [
+      {
+        command: 'sudo apt-get install -y ghostscript graphicsmagick',
+        packageManager: 'apt',
+      },
+    ],
+    win32: [
+      {
+        command: 'scoop install ghostscript graphicsmagick',
+        packageManager: 'scoop',
+      },
+    ],
+  },
+};
 
 // ============================================================
 // Utility functions

@@ -283,6 +283,8 @@ export const LatexSettingsStatusSchema = z.object({
   texcountPath: z.string().nullable(),
   ghostscriptPath: z.string().nullable(),
   graphicsmagickPath: z.string().nullable(),
+  /** Detected package manager available on the system (null = none found). */
+  packageManager: z.enum(['brew', 'apt', 'scoop']).nullable(),
 });
 export type LatexSettingsStatus = z.infer<typeof LatexSettingsStatusSchema>;
 
@@ -304,6 +306,7 @@ export const DEFAULT_LATEX_SETTINGS_STATUS: LatexSettingsStatus = {
   texcountPath: null,
   ghostscriptPath: null,
   graphicsmagickPath: null,
+  packageManager: null,
 };
 
 /** Outbound: backend → frontend LaTeX settings status */
@@ -505,6 +508,10 @@ const ApplyLatexSettingsMessageSchema = z.object({
 const InstallLatexWorkshopMessageSchema = commandOnly(
   CMD.INSTALL_LATEX_WORKSHOP,
 );
+const RunInstallCommandMessageSchema = z.object({
+  command: z.literal(CMD.RUN_INSTALL_COMMAND),
+  installCommand: z.string().min(1),
+});
 
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);
@@ -527,6 +534,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     GetLatexSettingsStatusMessageSchema,
     ApplyLatexSettingsMessageSchema,
     InstallLatexWorkshopMessageSchema,
+    RunInstallCommandMessageSchema,
     // Memory messages
     GetMemoryDataMessageSchema,
     OpenMemoryFileMessageSchema,
