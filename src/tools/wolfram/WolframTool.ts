@@ -4,7 +4,6 @@ import { z } from 'zod';
 // Local imports - tools
 import { ToolResult, ToolError } from '@tools/result';
 import { defineTool } from '@tools/core/define';
-import { checkToolInstalled } from '@utils/system';
 
 // Local file imports
 import {
@@ -31,14 +30,6 @@ export class WolframTool extends defineTool({
   description: `Execute Wolfram Language code. Use this tool for quick calculations, symbolic math, and one-off evaluations. Sessions do NOT persist between calls - each execution starts fresh with no memory of previous variables or definitions. For complex scripts requiring session persistence, iterative development, or saving intermediate results, write to a .wl file and run via bash instead. IMPORTANT: Never hardcode expected values in Print statements - always compute and display actual results dynamically. Write tests using VerificationTest or assertions to verify properties, printing computed values rather than predetermined strings.`,
   schema: WolframInputSchema,
 }) {
-  private _availableCache: boolean | null = null;
-
-  async isAvailable(): Promise<boolean> {
-    if (this._availableCache !== null) return this._availableCache;
-    this._availableCache = await checkToolInstalled('wolframscript', false);
-    return this._availableCache;
-  }
-
   protected async execute(input: WolframInput): Promise<ToolResult> {
     const effectiveTimeout = input.timeout ?? WOLFRAM_CODE_TIMEOUT_MS;
     const result = await executeWolframCode(input.code, {

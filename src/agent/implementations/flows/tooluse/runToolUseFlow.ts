@@ -1,3 +1,5 @@
+import * as vscode from 'vscode';
+
 import {
   END_GROUP_STATUS,
   EXECUTION_STATUS,
@@ -62,6 +64,36 @@ export interface ToolUseFlowContext {
 
 export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
 
+/** Tools already surfaced in a notification this session — avoids repeat popups. */
+const notifiedTools = new Set<string>();
+
+/**
+ * Show a single notification listing tools that were excluded due to missing
+ * dependencies, with a button to open the Tools dashboard for install guidance.
+ * Each tool name is only notified once per session.
+ */
+function notifyUnavailableTools(excluded: string[]): void {
+  const fresh = excluded.filter((n) => !notifiedTools.has(n));
+  if (fresh.length === 0) return;
+  for (const n of fresh) notifiedTools.add(n);
+
+  const label =
+    fresh.length === 1
+      ? `Tool "${fresh[0]}" was`
+      : `Tools ${fresh.map((n) => `"${n}"`).join(', ')} were`;
+
+  void vscode.window
+    .showInformationMessage(
+      `${label} excluded — external dependencies not installed.`,
+      'Open Tools Dashboard',
+    )
+    .then((choice) => {
+      if (choice === 'Open Tools Dashboard') {
+        void vscode.commands.executeCommand('texra.showTools');
+      }
+    });
+}
+
 function resolveTools(
   tools: AgentToolUseSetting['tools'],
   registry: IToolRegistry,
@@ -69,6 +101,7 @@ function resolveTools(
   options?: { isSubagent?: boolean },
 ): ToolDefinition[] {
   const unavailable = getUnavailableToolNamesCached();
+  const excluded: string[] = [];
 
   const toolConfigs = Array.isArray(tools) ? tools : [];
   const resolved = toolConfigs
@@ -79,6 +112,7 @@ function resolveTools(
         logger.warn(
           `Tool "${def.name}" excluded: external dependency not installed`,
         );
+        excluded.push(def.name);
         return false;
       }
       if (!registry.has(def.name)) {
@@ -97,6 +131,10 @@ function resolveTools(
     } else {
       logger.warn('Memory tool not found in registry');
     }
+  }
+
+  if (excluded.length > 0) {
+    notifyUnavailableTools(excluded);
   }
 
   return resolved;

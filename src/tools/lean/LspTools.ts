@@ -192,10 +192,6 @@ Tips:
 - Import/dependency errors may not surface as diagnostics — check imports manually`,
   schema: LeanDiagnosticsInputSchema,
 }) {
-  isAvailable(): boolean {
-    return vscodeIntegration.isLean4ExtensionInstalled();
-  }
-
   protected async execute(input: LeanDiagnosticsInput): Promise<ToolResult> {
     const { command, file } = input;
 
@@ -268,10 +264,6 @@ Commands:
 Requires: Lean 4 VS Code extension installed and active.`,
   schema: LeanFileInputSchema,
 }) {
-  isAvailable(): boolean {
-    return vscodeIntegration.isLean4ExtensionInstalled();
-  }
-
   protected async execute(input: LeanFileInput): Promise<ToolResult> {
     const { command, file } = input;
     const config = FILE_COMMAND_CONFIG[command];
@@ -327,10 +319,6 @@ Note: These commands do not capture output. For build output or other cases wher
 Requires: Lean 4 VS Code extension installed.`,
   schema: LeanProjectInputSchema,
 }) {
-  isAvailable(): boolean {
-    return vscodeIntegration.isLean4ExtensionInstalled();
-  }
-
   protected async execute(input: LeanProjectInput): Promise<ToolResult> {
     const { command } = input;
     const config = PROJECT_COMMAND_CONFIG[command];
@@ -378,10 +366,6 @@ Line and column are 1-indexed.
 Requires: Lean 4 VS Code extension installed and active.`,
   schema: LeanInspectInputSchema,
 }) {
-  isAvailable(): boolean {
-    return vscodeIntegration.isLean4ExtensionInstalled();
-  }
-
   protected async execute(input: LeanInspectInput): Promise<ToolResult> {
     const { type, file, line, column } = input;
     // Convert to 0-indexed for LSP
