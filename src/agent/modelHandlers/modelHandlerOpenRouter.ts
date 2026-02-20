@@ -219,9 +219,7 @@ class OpenRouterStreamAggregator {
     if (chunk.created) this.created = chunk.created as number;
     if (chunk.usage) this.usage = chunk.usage as Record<string, unknown>;
 
-    const choices = chunk.choices as
-      | Array<Record<string, unknown>>
-      | undefined;
+    const choices = chunk.choices as Array<Record<string, unknown>> | undefined;
     const choice = choices?.[0];
     if (!choice) return { contentDelta: '', reasoningDelta: '' };
 
