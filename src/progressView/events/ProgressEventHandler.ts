@@ -148,11 +148,34 @@ export class ProgressEventHandler {
           );
         } else {
           this.webviewUpdater.setActiveStream(streamId);
+          this.syncActiveStreamState(streamId);
         }
         this.hydrateStreamContent(streamId, { updateInstruction: true });
       },
     );
   };
+
+  private syncActiveStreamState(streamId: StreamTabId): void {
+    const streamState = this.state.getAllStreamStates()[streamId];
+    if (!streamState) {
+      return;
+    }
+
+    this.webviewUpdater.updateConversationProgress(
+      streamId,
+      streamState.conversationProgress,
+    );
+    this.webviewUpdater.updateStreamBadges(streamId, {
+      activeSubagents: streamState.activeSubagents,
+      finishedSubagentCount: streamState.finishedSubagentCount,
+      activeProcesses: streamState.activeProcesses,
+      finishedProcessCount: streamState.finishedProcessCount,
+    });
+    this.webviewUpdater.updateParentStream(
+      streamId,
+      this.state.getParentStreamId(streamId),
+    );
+  }
 
   private handleUpdateStreamStatus = (
     payload: ProgressEventPayloads['updateStreamStatus'],

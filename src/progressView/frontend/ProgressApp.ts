@@ -193,6 +193,7 @@ export class ProgressApp extends BaseWebviewApp {
       changed.has('appState') &&
       (!prevAppState ||
         prevAppState.streams !== this.appState.streams ||
+        prevAppState.streamStates !== this.appState.streamStates ||
         prevAppState.streamFilter !== this.appState.streamFilter ||
         prevAppState.streamSort !== this.appState.streamSort)
     ) {
