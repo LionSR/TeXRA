@@ -21,6 +21,7 @@ import type { ToolDefinition } from '@model';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { getUnavailableToolNamesCached } from '@tools/toolAvailability';
+import { notifyUnavailableTools } from '@tools/toolUnavailableNotification';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
@@ -69,6 +70,7 @@ function resolveTools(
   options?: { isSubagent?: boolean },
 ): ToolDefinition[] {
   const unavailable = getUnavailableToolNamesCached();
+  const excluded: string[] = [];
 
   const toolConfigs = Array.isArray(tools) ? tools : [];
   const resolved = toolConfigs
@@ -79,6 +81,7 @@ function resolveTools(
         logger.warn(
           `Tool "${def.name}" excluded: external dependency not installed`,
         );
+        excluded.push(def.name);
         return false;
       }
       if (!registry.has(def.name)) {
@@ -98,6 +101,11 @@ function resolveTools(
       logger.warn('Memory tool not found in registry');
     }
   }
+
+  if (excluded.length > 0) {
+    notifyUnavailableTools(excluded);
+  }
+
   return resolved;
 }
 
