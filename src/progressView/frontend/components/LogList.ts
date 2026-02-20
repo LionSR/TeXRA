@@ -37,6 +37,7 @@ import { COMMANDS } from '../constants';
 
 // Local imports - progress view contexts
 import {
+  EMPTY_LOG_CONTEXT,
   streamLogContext,
   type StreamLogContextValue,
 } from '../contexts/streamContexts';
@@ -82,26 +83,26 @@ export class LogList extends LitElement {
   // Log context - only updates when logs/groups change (not on metadata-only changes)
   @consume({ context: streamLogContext, subscribe: true })
   @state()
-  private streamContext?: StreamLogContextValue;
+  private streamContext: StreamLogContextValue = EMPTY_LOG_CONTEXT;
 
   private get groups(): TaskGroup[] {
-    return this.streamContext?.taskGroups ?? [];
+    return this.streamContext.taskGroups;
   }
 
   private get messages(): LogMessageData[] {
-    return this.streamContext?.logs ?? [];
+    return this.streamContext.logs;
   }
 
   private get activeRunId(): string | null {
-    return this.streamContext?.runId ?? null;
+    return this.streamContext.runId;
   }
 
   private get isToolUse(): boolean {
-    return this.streamContext?.isToolUse ?? false;
+    return this.streamContext.isToolUse;
   }
 
   private get hasStreams(): boolean {
-    return this.streamContext?.hasStreams ?? false;
+    return this.streamContext.hasStreams;
   }
 
   /** Max cached stream DOM trees. Oldest non-active entries are evicted beyond this. */
@@ -126,7 +127,7 @@ export class LogList extends LitElement {
   }
 
   protected willUpdate(): void {
-    const streamId = this.streamContext?.streamName ?? null;
+    const streamId = this.streamContext.streamName;
 
     // Detect stream switch
     if (streamId !== this.activeStreamId) {

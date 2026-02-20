@@ -43,6 +43,7 @@ import {
 
 // Local imports - progress view contexts
 import {
+  EMPTY_STREAM_CONTEXT,
   permissionsContext,
   streamStateContext,
   type StreamContextValue,
@@ -80,11 +81,11 @@ export class ToolUseStreamContent extends LitElement {
 
   @consume({ context: streamStateContext, subscribe: true })
   @state()
-  private streamContext?: StreamContextValue;
+  private streamContext: StreamContextValue = EMPTY_STREAM_CONTEXT;
 
   @consume({ context: permissionsContext, subscribe: true })
   @state()
-  private permissionContext?: PermissionState[];
+  private permissionContext: PermissionState[] = [];
 
   // Memoized derived values - updated in willUpdate() before render().
   // Not @state(): these are always recomputed when streamContext/permissionContext
@@ -109,18 +110,18 @@ export class ToolUseStreamContent extends LitElement {
   }
 
   private get currentStreamInfo(): StreamTabInfo | null {
-    return this.streamContext?.streamInfo ?? null;
+    return this.streamContext.streamInfo;
   }
 
   private get currentState(): ToolUseStreamState | null {
     const ctx = this.streamContext;
-    if (!ctx || !ctx.isToolUse || !ctx.streamState) return null;
+    if (!ctx.isToolUse || !ctx.streamState) return null;
     return ctx.streamState as ToolUseStreamState;
   }
 
   private computeFilteredPermissions(): PermissionState[] {
     return filterPermissionsForStream(
-      this.permissionContext ?? [],
+      this.permissionContext,
       this.currentStreamInfo?.name,
     );
   }

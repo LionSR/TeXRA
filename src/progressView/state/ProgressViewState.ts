@@ -216,7 +216,7 @@ export class ProgressViewState {
   }
 
   getTodos(stream: StreamTabId): TodoItem[] {
-    return this.getOrCreateSession(stream).todos;
+    return this._sessionState.get(stream)?.todos ?? [];
   }
 
   setContextState(stream: StreamTabId, contextState: ContextStateData): void {
