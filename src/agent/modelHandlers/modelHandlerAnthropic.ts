@@ -56,7 +56,7 @@ import {
   TOOL_USE_SAFETY_BUFFER,
 } from './contextManagementConstants';
 import { AnthropicStreamHandler } from './support/AnthropicStreamHandler';
-import { toAnthropicTools } from './toolConversion';
+import { toAnthropicTools, type WebSearchConfig } from './toolConversion';
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 import {
   extractAnthropicWebSearchResults,
@@ -252,6 +252,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
   BetaMessage
 > {
   private cacheControlledBlock?: CacheControlEligibleBlock;
+
+  /** Optional web search configuration for domain filtering, max uses, and localization. */
+  webSearchConfig?: WebSearchConfig;
 
   /** Flag to force compaction on the next API call, set by requestCompaction(). */
   private compactionRequested = false;
@@ -631,6 +634,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (tools && tools.length > 0) {
       options.tools = toAnthropicTools(tools, {
         supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
+        supportsDynamicFilteringWebSearch:
+          this.capabilities.supportsDynamicFilteringWebSearch,
+        webSearchConfig: this.webSearchConfig,
       });
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
 
@@ -1957,6 +1963,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
         'Model refused to generate content - stopping generation',
       );
       return false;
+    }
+
+    // pause_turn: the API paused a long-running turn (e.g. during web search).
+    // Always continue to let the model finish its turn.
+    if (stopReason === ANTHROPIC_STOP.PAUSE_TURN) {
+      this.logger.info('Continuing after pause_turn (long-running web search turn)');
+      return true;
     }
 
     // Continue if we hit max tokens OR stop sequence without an end tag

@@ -38,14 +38,17 @@ function convertToolSchema(
   return (def.parameters ?? null) as Record<string, unknown> | null;
 }
 
-// Map local tool names to Anthropic remote tool types
+// Map local tool names to Anthropic remote tool types (excluding web_search, handled separately)
 const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
   bash: 'bash_20250124',
   str_replace_editor: 'text_editor_20250429',
   str_replace_based_edit_tool: 'text_editor_20250429',
-  web_search: 'web_search_20250305',
   memory: 'memory_20250818',
 };
+
+/** Web search tool type versions */
+const WEB_SEARCH_BASIC = 'web_search_20250305' as const;
+const WEB_SEARCH_DYNAMIC_FILTERING = 'web_search_20260209' as const;
 
 /**
  * Convert generic ToolDefinition objects to OpenAI ChatCompletionTool format.
@@ -118,11 +121,36 @@ export function toOpenAIResponseTools(
 }
 
 /**
+ * Web search configuration options for Anthropic API.
+ * Controls domain filtering, usage limits, and result localization.
+ */
+export interface WebSearchConfig {
+  /** Only include results from these domains (cannot be used with blockedDomains). */
+  allowedDomains?: string[];
+  /** Never include results from these domains (cannot be used with allowedDomains). */
+  blockedDomains?: string[];
+  /** Maximum number of searches per request. */
+  maxUses?: number;
+  /** User location for localizing search results. */
+  userLocation?: {
+    type: 'approximate';
+    city?: string;
+    region?: string;
+    country?: string;
+    timezone?: string;
+  };
+}
+
+/**
  * Options for Anthropic tool conversion.
  */
-interface AnthropicToolOptions {
+export interface AnthropicToolOptions {
   /** Whether the model supports native web search. Defaults to false. */
   supportsNativeWebSearch?: boolean;
+  /** Whether the model supports dynamic filtering web search (web_search_20260209). Defaults to false. */
+  supportsDynamicFilteringWebSearch?: boolean;
+  /** Web search configuration (domain filtering, max uses, localization). */
+  webSearchConfig?: WebSearchConfig;
 }
 
 /**
@@ -132,12 +160,24 @@ export function toAnthropicTools(
   defs: ToolDefinition[],
   options: AnthropicToolOptions = {},
 ): ToolUnion[] {
-  const { supportsNativeWebSearch = false } = options;
+  const {
+    supportsNativeWebSearch = false,
+    supportsDynamicFilteringWebSearch = false,
+    webSearchConfig,
+  } = options;
 
   return defs.map<ToolUnion>((d) => {
-    // Check for native/server tools
+    // Handle native web search tool with version selection
+    if (d.name === 'web_search' && supportsNativeWebSearch) {
+      return buildAnthropicWebSearchTool(
+        supportsDynamicFilteringWebSearch,
+        webSearchConfig,
+      );
+    }
+
+    // Check for other native/server tools
     const remoteType = ANTHROPIC_TOOL_TYPE_MAP[d.name];
-    if (remoteType && (d.name !== 'web_search' || supportsNativeWebSearch)) {
+    if (remoteType) {
       return { name: d.name, type: remoteType } as ToolUnion;
     }
 
@@ -155,6 +195,41 @@ export function toAnthropicTools(
       ...(params ? { input_schema: params } : {}),
     } as ToolUnion;
   });
+}
+
+/**
+ * Build the Anthropic web search server tool with the appropriate version
+ * and optional configuration (domain filtering, max uses, localization).
+ */
+function buildAnthropicWebSearchTool(
+  supportsDynamicFiltering: boolean,
+  config?: WebSearchConfig,
+): ToolUnion {
+  const toolType = supportsDynamicFiltering
+    ? WEB_SEARCH_DYNAMIC_FILTERING
+    : WEB_SEARCH_BASIC;
+
+  const tool: Record<string, unknown> = {
+    name: 'web_search',
+    type: toolType,
+  };
+
+  if (config) {
+    if (config.allowedDomains && config.allowedDomains.length > 0) {
+      tool.allowed_domains = config.allowedDomains;
+    }
+    if (config.blockedDomains && config.blockedDomains.length > 0) {
+      tool.blocked_domains = config.blockedDomains;
+    }
+    if (config.maxUses !== undefined && config.maxUses !== null) {
+      tool.max_uses = config.maxUses;
+    }
+    if (config.userLocation) {
+      tool.user_location = config.userLocation;
+    }
+  }
+
+  return tool as unknown as ToolUnion;
 }
 
 /**

@@ -15,7 +15,10 @@ import {
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
-import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+import {
+  ANTHROPIC_STOP,
+  type ProviderStopReason,
+} from '@agent/modelHandlers/types/StopReasonTypes';
 import {
   NormalizedUsageSchema,
   type NormalizedUsage,
@@ -452,6 +455,29 @@ class ToolUseProcessNode<C> extends BaseNode<
     run.totalRounds += 1;
 
     shared.stopReason = execRes.stopReason;
+
+    // Handle pause_turn: the API paused a long-running turn (e.g. during web search).
+    // Send the response back as-is to let the model continue its turn.
+    if (execRes.stopReason === ANTHROPIC_STOP.PAUSE_TURN) {
+      this.services.logger.info(
+        'API paused long-running turn (pause_turn) — resuming',
+      );
+      // Reconstruct the assistant message from the full content blocks
+      // so the API can resume from where it left off.
+      if (execRes.lastAssistantContent?.length) {
+        shared.messages.push({
+          role: 'assistant',
+          content: execRes.lastAssistantContent,
+        } as ProviderMessage);
+      } else if (execRes.text) {
+        shared.messages.push(modelHandler.createAssistantMessage(execRes.text));
+      }
+      workspace.resetServerToolContent();
+      shared.cycleIndex += 1;
+      shared.cycleResponseTimeMs = 0;
+      shared.cycleNormalizedUsage = undefined;
+      return FlowTransition.CONTINUE;
+    }
 
     if (execRes.endTurn) {
       shared.toolCalls = undefined;
@@ -935,6 +961,7 @@ export function createToolUseCycleFlow<C>(): Flow<
   prepNode.next(callNode);
   callNode.next(processNode);
   processNode.next(dispatchNode);
+  processNode.on(FlowTransition.CONTINUE, prepNode); // pause_turn: re-invoke model
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
 
   return new Flow<ToolUseCycleShared, CycleParams>(prepNode);
