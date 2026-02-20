@@ -491,7 +491,7 @@ export class ProgressEventHandler {
       this.state.getRunInstructions(stream).entries(),
     );
 
-    // Legacy fallback: old tool-use sessions saved before ToolUsePrepareNode
+    // Legacy fallback: old tool-use sessions saved before beginRunStage()
     // started emitting logger.userMessage() won't have a userMessage log entry.
     // Synthesise one from runInstructions so the instruction still renders.
     if (

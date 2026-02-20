@@ -274,8 +274,8 @@ export class TaskGroupList extends LitElement {
   /**
    * Build hierarchical tree from flat groups array.
    * Returns [tree, ungrouped] tuple. Messages are classified purely by
-   * groupId — the backend (AgentLogger) is responsible for ensuring user
-   * messages don't inherit run-group IDs via AsyncLocalStorage.
+   * groupId — initial user messages have no groupId (logged before the
+   * run stage via beginRunStage), while follow-ups inherit their group.
    */
   private buildGroupTree(): [GroupTree[], LogMessageData[]] {
     const groupMap = new Map<string, TaskGroup>();
