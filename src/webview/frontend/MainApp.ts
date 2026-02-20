@@ -452,6 +452,7 @@ export class MainApp extends BaseWebviewApp {
       autoCompileInputPdf: this.checkboxValues.autoCompileInputPdf,
       attachTeXCount: this.checkboxValues.attachTeXCount,
       attachDiagnostics: this.checkboxValues.attachDiagnostics,
+      worktreeIsolation: this.checkboxValues.worktreeIsolation,
     };
 
     this.stateManager.setState(persisted);
@@ -498,6 +499,7 @@ export class MainApp extends BaseWebviewApp {
       autoCompileInputPdf: state.autoCompileInputPdf,
       attachTeXCount: state.attachTeXCount,
       attachDiagnostics: state.attachDiagnostics,
+      worktreeIsolation: state.worktreeIsolation,
     };
   }
 
@@ -895,6 +897,7 @@ export class MainApp extends BaseWebviewApp {
         autoCompileInputPdf: state.autoCompileInputPdf,
         attachTeXCount: state.attachTeXCount,
         attachDiagnostics: state.attachDiagnostics,
+        worktreeIsolation: state.worktreeIsolation,
       };
       this.outputFilesActive = state.outputFilesActive;
       this.latexdiffsVisible = state.latexdiffsVisible;
@@ -1235,7 +1238,7 @@ export class MainApp extends BaseWebviewApp {
     }
   }
 
-  private executeAgent(): void {
+  private executeAgent(useWorktree = false): void {
     const {
       agent,
       isToolUseAgent,
@@ -1251,6 +1254,7 @@ export class MainApp extends BaseWebviewApp {
       ...singleFileSelections,
       ...multipleFileSelections,
       ...checkboxValues,
+      worktreeIsolation: useWorktree || checkboxValues.worktreeIsolation,
     });
   }
 
@@ -1707,6 +1711,10 @@ export class MainApp extends BaseWebviewApp {
     this.executeAgent();
   }
 
+  private handleComponentExecuteInWorktree(): void {
+    this.executeAgent(true);
+  }
+
   private handleComponentAgentSettings(): void {
     this.handleAgentConfigAction('edit');
   }
@@ -1877,7 +1885,8 @@ export class MainApp extends BaseWebviewApp {
       current.autoExtractTikzFigure === next.autoExtractTikzFigure &&
       current.autoCompileInputPdf === next.autoCompileInputPdf &&
       current.attachTeXCount === next.attachTeXCount &&
-      current.attachDiagnostics === next.attachDiagnostics
+      current.attachDiagnostics === next.attachDiagnostics &&
+      current.worktreeIsolation === next.worktreeIsolation
     );
   }
 
@@ -1952,6 +1961,7 @@ export class MainApp extends BaseWebviewApp {
             @instruction-paste=${this.handleComponentInstructionPaste}
             @panel-action=${this.handleComponentPanelAction}
             @execute=${this.handleComponentExecute}
+            @execute-in-worktree=${this.handleComponentExecuteInWorktree}
             @agent-settings=${this.handleComponentAgentSettings}
             @model-settings=${this.handleComponentModelSettings}
             @focus-instruction=${this.handleComponentFocusInstruction}

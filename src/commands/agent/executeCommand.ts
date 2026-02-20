@@ -6,6 +6,7 @@ import { ZodError } from 'zod';
 import { AgentConfigSchema } from '@agent/core';
 import { registerExecution } from '@agent/storage';
 import { executeAgent } from '@agent/runtime/executeAgent';
+import { createWorktree, removeWorktree } from '@agent/worktree';
 import { formatZodError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { generateExecutionId } from '@utils/core/executionId';
@@ -51,7 +52,31 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     if (!isResume) {
       await registerExecution(executionId, config, config.agent);
     }
-    await executeAgent(config, executionId);
+
+    // Worktree isolation: create a separate git worktree for the agent
+    const useWorktree = config.toolConfig?.worktreeIsolation === true;
+    let worktreePath: string | undefined;
+    try {
+      if (useWorktree && !isResume) {
+        const info = await createWorktree({
+          executionId,
+          agentName: config.agent,
+        });
+        worktreePath = info.path;
+        logger.info(
+          CHANNEL,
+          `Created worktree for agent "${config.agent}" at ${worktreePath}`,
+        );
+      }
+      await executeAgent(config, executionId, {
+        workspacePath: worktreePath,
+      });
+    } finally {
+      if (worktreePath) {
+        await removeWorktree(worktreePath);
+        logger.info(CHANNEL, `Cleaned up worktree at ${worktreePath}`);
+      }
+    }
   } catch (error) {
     if (error instanceof ZodError) {
       const message = `Invalid agent configuration. ${formatZodError(error)}`;

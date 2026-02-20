@@ -13,7 +13,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
 // Local imports - shared styles
-import { designTokens } from '@shared/styles';
+import { designTokens, codiconStyles } from '@shared/styles';
 import { commonViewStyles } from '@shared/styles/commonViewStyles';
 import { selectStyles } from '@shared/styles/selectStyles';
 
@@ -39,6 +39,7 @@ export class InstructionPanel extends LitElement {
     designTokens,
     commonViewStyles,
     selectStyles,
+    codiconStyles,
     css`
       :host {
         display: block;
@@ -193,6 +194,82 @@ export class InstructionPanel extends LitElement {
           opacity: 0.5;
         }
       }
+
+      /* Split execute button */
+      .execute-split-button {
+        display: flex;
+        align-items: stretch;
+        position: relative;
+      }
+
+      .execute-split-button #executeButton {
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+      }
+
+      .execute-dropdown-trigger {
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+        padding: 0 4px;
+        min-width: unset;
+        border-left: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .execute-dropdown-trigger .codicon {
+        font-size: 12px;
+      }
+
+      .execute-dropdown-menu {
+        display: none;
+        position: absolute;
+        bottom: 100%;
+        right: 0;
+        margin-bottom: 4px;
+        background: var(--vscode-menu-background, var(--background-color));
+        border: 1px solid
+          var(--vscode-menu-border, var(--vscode-widget-border, #454545));
+        border-radius: var(--border-radius);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        z-index: 100;
+        min-width: 180px;
+        padding: 4px 0;
+      }
+
+      .execute-dropdown-menu.visible {
+        display: block;
+      }
+
+      .execute-dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 6px 12px;
+        border: none;
+        background: none;
+        color: var(--vscode-menu-foreground, var(--foreground-color));
+        font-size: var(--font-size-sm);
+        font-family: var(--vscode-font-family);
+        cursor: pointer;
+        white-space: nowrap;
+        text-align: left;
+      }
+
+      .execute-dropdown-item:hover {
+        background: var(
+          --vscode-menu-selectionBackground,
+          var(--vscode-list-hoverBackground)
+        );
+        color: var(
+          --vscode-menu-selectionForeground,
+          var(--foreground-color)
+        );
+      }
+
+      .execute-dropdown-item .codicon {
+        font-size: 14px;
+        flex-shrink: 0;
+      }
     `,
   ];
 
@@ -259,6 +336,29 @@ export class InstructionPanel extends LitElement {
 
   private handleExecute(): void {
     this.dispatchEvent(MainViewEvents.execute());
+  }
+
+  private handleExecuteInWorktree(): void {
+    this.dispatchEvent(MainViewEvents.executeInWorktree());
+  }
+
+  private handleExecuteDropdownClick(e: MouseEvent): void {
+    e.stopPropagation();
+    const menu = this.renderRoot?.querySelector(
+      '.execute-dropdown-menu',
+    ) as HTMLElement | null;
+    if (menu) {
+      menu.classList.toggle('visible');
+      // Close on next click anywhere
+      const close = () => {
+        menu.classList.remove('visible');
+        document.removeEventListener('click', close);
+      };
+      // Delay so this click event doesn't immediately close
+      requestAnimationFrame(() =>
+        document.addEventListener('click', close, { once: true }),
+      );
+    }
   }
 
   private handleAgentSettings(): void {
@@ -479,13 +579,39 @@ export class InstructionPanel extends LitElement {
               </vscode-single-select>
             </div>
           </div>
-          <vscode-button
-            id="executeButton"
-            icon="play"
-            title="Execute"
-            appearance="primary"
-            @click=${this.handleExecute}
-          ></vscode-button>
+          <div class="execute-split-button">
+            <vscode-button
+              id="executeButton"
+              icon="play"
+              title="Execute"
+              appearance="primary"
+              @click=${this.handleExecute}
+            ></vscode-button>
+            <vscode-button
+              class="execute-dropdown-trigger"
+              appearance="primary"
+              title="Execution options"
+              @click=${this.handleExecuteDropdownClick}
+            >
+              <span class="codicon codicon-chevron-up"></span>
+            </vscode-button>
+            <div class="execute-dropdown-menu">
+              <button
+                class="execute-dropdown-item"
+                @click=${this.handleExecute}
+              >
+                <span class="codicon codicon-play"></span>
+                Execute
+              </button>
+              <button
+                class="execute-dropdown-item"
+                @click=${this.handleExecuteInWorktree}
+              >
+                <span class="codicon codicon-git-branch"></span>
+                Execute in worktree
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     `;

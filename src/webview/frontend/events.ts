@@ -130,6 +130,8 @@ export const MainViewEvents = {
 
   execute: () => createEvent('execute', undefined),
 
+  executeInWorktree: () => createEvent('execute-in-worktree', undefined),
+
   agentSettings: () => createEvent('agent-settings', undefined),
 
   modelSettings: () => createEvent('model-settings', undefined),

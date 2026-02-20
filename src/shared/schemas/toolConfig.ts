@@ -9,6 +9,7 @@ export const DEFAULT_TOOL_CONFIG = {
   attachTeXCount: false,
   attachDiagnostics: false,
   autoCompileInputPdf: false,
+  worktreeIsolation: false,
 } as const;
 
 /**
@@ -29,6 +30,9 @@ export const ToolConfigFieldsSchema = z.object({
   autoCompileInputPdf: z
     .boolean()
     .prefault(DEFAULT_TOOL_CONFIG.autoCompileInputPdf),
+  worktreeIsolation: z
+    .boolean()
+    .prefault(DEFAULT_TOOL_CONFIG.worktreeIsolation),
 });
 
 /**

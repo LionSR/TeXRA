@@ -79,6 +79,7 @@ export const DEFAULT_CHECKBOX_VALUES: CheckboxValues = {
   autoCompileInputPdf: DEFAULT_STATE.autoCompileInputPdf,
   attachTeXCount: DEFAULT_STATE.attachTeXCount,
   attachDiagnostics: DEFAULT_STATE.attachDiagnostics,
+  worktreeIsolation: DEFAULT_STATE.worktreeIsolation,
 };
 
 // =========================================================================
