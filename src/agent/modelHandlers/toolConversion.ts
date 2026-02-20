@@ -38,13 +38,16 @@ function convertToolSchema(
   return (def.parameters ?? null) as Record<string, unknown> | null;
 }
 
-// Map local tool names to Anthropic remote tool types
+// Map local tool names to Anthropic remote tool types.
+// The 20260209 versions of web_search and web_fetch add dynamic filtering support
+// (Claude can write code to filter results before they enter context). These are
+// backward-compatible: models without dynamic filtering simply ignore the capability.
 const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
   bash: 'bash_20250124',
   str_replace_editor: 'text_editor_20250429',
   str_replace_based_edit_tool: 'text_editor_20250429',
-  web_search: 'web_search_20250305',
-  web_fetch: 'web_fetch_20250910',
+  web_search: 'web_search_20260209',
+  web_fetch: 'web_fetch_20260209',
   memory: 'memory_20250818',
 };
 
