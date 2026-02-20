@@ -259,6 +259,10 @@ export interface InstallCommand {
   readonly packageManager: 'brew' | 'apt' | null;
 }
 
+/** Official Homebrew one-liner install script. */
+export const HOMEBREW_INSTALL_COMMAND =
+  '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"';
+
 /**
  * Per-dependency install commands keyed by `DependencyInfo.key`.
  *

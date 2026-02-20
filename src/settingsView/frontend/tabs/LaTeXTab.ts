@@ -24,6 +24,7 @@ import {
   TEXCOUNT_INSTALL_GUIDE,
   IMAGE_PROCESSING_INSTALL_GUIDE,
   DEPENDENCY_INSTALL_COMMANDS,
+  HOMEBREW_INSTALL_COMMAND,
   type InstallCommand,
   type Platform,
 } from '@shared/constants/latex';
@@ -274,6 +275,47 @@ export class LaTeXTab extends LitElement {
       .copy-success {
         color: var(--vscode-testing-iconPassed, #73c991) !important;
         border-color: var(--vscode-testing-iconPassed, #73c991) !important;
+      }
+
+      .prerequisite-hint {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--spacing-medium);
+        padding: var(--spacing-medium);
+        margin-bottom: var(--spacing-medium);
+        border: var(--border-thin) solid
+          var(--vscode-editorInfo-foreground, #3794ff);
+        border-radius: var(--radius-medium);
+        background: var(--vscode-editor-background);
+      }
+
+      .prerequisite-hint .hint-icon {
+        flex-shrink: 0;
+        font-size: var(--font-size-lg);
+        color: var(--vscode-editorInfo-foreground, #3794ff);
+      }
+
+      .prerequisite-hint .hint-body {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .prerequisite-hint .hint-title {
+        font-weight: 500;
+        color: var(--vscode-foreground);
+        margin-bottom: 2px;
+      }
+
+      .prerequisite-hint .hint-description {
+        font-size: var(--font-size-sm);
+        color: var(--color-text-secondary);
+        line-height: 1.4;
+      }
+
+      .prerequisite-hint .hint-actions {
+        display: flex;
+        gap: var(--spacing-small);
+        margin-top: var(--spacing-small);
       }
 
       .section-header {
@@ -534,12 +576,61 @@ export class LaTeXTab extends LitElement {
     `;
   }
 
+  /**
+   * Show a hint when the platform has a recommended package manager
+   * that isn't installed yet (e.g. Homebrew on macOS).
+   */
+  private renderPrerequisiteHint(): TemplateResult | typeof nothing {
+    const platform = this.settings.platform as Platform;
+    const pm = this.settings.packageManager;
+
+    // macOS without Homebrew — installing it unlocks every brew command
+    if (platform === 'darwin' && pm !== 'brew') {
+      return html`
+        <div class="prerequisite-hint">
+          <span class="codicon codicon-info hint-icon"></span>
+          <div class="hint-body">
+            <div class="hint-title">Homebrew not detected</div>
+            <div class="hint-description">
+              Most dependencies below can be installed with a single
+              <code>brew install</code> command.
+              Install Homebrew first to enable quick-install buttons.
+            </div>
+            <div class="hint-actions">
+              <button
+                class="tab-action-btn"
+                title="Copy Homebrew install command"
+                @click=${(e: Event) =>
+                  this.handleCopyCommand(e, HOMEBREW_INSTALL_COMMAND)}
+              >
+                <span class="codicon codicon-copy"></span>
+                Copy
+              </button>
+              <button
+                class="tab-action-btn"
+                title="Run Homebrew installer in VS Code terminal"
+                @click=${() =>
+                  this.handleRunInTerminal(HOMEBREW_INSTALL_COMMAND)}
+              >
+                <span class="codicon codicon-terminal"></span>
+                Run in Terminal
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    return nothing;
+  }
+
   private renderDependencies(): TemplateResult {
     return html`
       <div class="section-header">
         <span class="codicon codicon-package"></span>
         Dependencies
       </div>
+      ${this.renderPrerequisiteHint()}
       ${DEPENDENCIES.map((dep) => this.renderDependencyCard(dep))}
     `;
   }
