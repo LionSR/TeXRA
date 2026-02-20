@@ -87,20 +87,22 @@ export const PDFLATEX_INSTALL_GUIDE: Guide = {
     'These commands require Homebrew (https://brew.sh), a free\n' +
     'macOS package manager. Or download MacTeX directly from:\n' +
     '  https://www.tug.org/mactex/mactex-download.html\n\n' +
-    'After installing, restart VS Code so TeXRA can detect\n' +
-    'the new binaries on your PATH.',
+    'After installing, restart VS Code and verify by running\n' +
+    '"pdflatex --version" in Terminal.',
   linux:
     'Install TeX Live:\n' +
     '  sudo apt-get install texlive-full\n\n' +
-    'After installing, restart VS Code so TeXRA can detect\n' +
-    'the new binaries on your PATH.',
+    'After installing, restart VS Code and verify by running\n' +
+    '"pdflatex --version" in a terminal.',
   win32:
-    'Install MiKTeX:\n' +
-    '  https://miktex.org/download\n\n' +
+    'Install MiKTeX (recommended for Windows):\n' +
+    '  https://miktex.org/download\n' +
+    '  Download the installer, run it, and choose "Install\n' +
+    '  missing packages on the fly" when prompted.\n\n' +
     'Or TeX Live:\n' +
     '  https://tug.org/texlive/\n\n' +
-    'After installing, restart VS Code so TeXRA can detect\n' +
-    'the new binaries on your PATH.',
+    'After installing, restart VS Code and verify by running\n' +
+    '"pdflatex --version" in Command Prompt.',
 };
 
 export const PERL_INSTALL_GUIDE: Guide = {
@@ -127,13 +129,28 @@ export const TEXFMT_INSTALL_GUIDE: Guide = {
 
 export const WOLFRAM_INSTALL_GUIDE: Guide = {
   darwin:
-    'Install Wolfram Engine:\n  brew install --cask wolfram-engine\n\n' +
+    'TeXRA requires the "wolframscript" command-line tool.\n\n' +
+    'Install the free Wolfram Engine:\n' +
+    '  brew install --cask wolfram-engine\n\n' +
     '"brew" requires Homebrew (https://brew.sh).\n' +
-    'Or download from:\n  https://www.wolfram.com/engine/',
+    'Or download from:\n  https://www.wolfram.com/engine/\n\n' +
+    'Note: A Mathematica installation alone is not enough.\n' +
+    'You need WolframScript on your PATH. The Wolfram Engine\n' +
+    'includes it automatically.',
   linux:
-    'Install Wolfram Engine:\n  https://www.wolfram.com/engine/\n\n' +
-    'Follow the Linux installation guide on the Wolfram site.',
-  win32: 'Install Wolfram Engine:\n  https://www.wolfram.com/engine/',
+    'TeXRA requires the "wolframscript" command-line tool.\n\n' +
+    'Install the free Wolfram Engine:\n' +
+    '  https://www.wolfram.com/engine/\n\n' +
+    'Note: A Mathematica installation alone is not enough.\n' +
+    'You need WolframScript on your PATH. The Wolfram Engine\n' +
+    'includes it automatically.',
+  win32:
+    'TeXRA requires the "wolframscript" command-line tool.\n\n' +
+    'Install the free Wolfram Engine:\n' +
+    '  https://www.wolfram.com/engine/\n\n' +
+    'Note: A Mathematica installation alone is not enough.\n' +
+    'You need WolframScript on your PATH. The Wolfram Engine\n' +
+    'includes it automatically.',
 };
 
 // ── Simple brew / apt / URL tools ──────────────────────────

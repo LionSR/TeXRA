@@ -73,17 +73,39 @@ A LaTeX distribution is required for TeXRA to properly process LaTeX documents.
 
 #### Windows
 
-Install either:
+Install either **MiKTeX** or **TeX Live** (MiKTeX is easier for beginners):
 
-- **MiKTeX**: Download and install from [miktex.org](https://miktex.org/download)
-- **TeX Live**: Download and install from [tug.org/texlive/windows.html](https://tug.org/texlive/windows.html)
+**MiKTeX (recommended for Windows)**:
+
+1. Go to [miktex.org/download](https://miktex.org/download)
+2. Click the download button for the Windows installer
+3. Run the downloaded `.exe` file and follow the setup wizard
+4. When prompted, choose "Install missing packages on the fly" — this lets MiKTeX automatically download LaTeX packages as you need them
+
+**TeX Live (alternative)**:
+
+1. Go to [tug.org/texlive/windows.html](https://tug.org/texlive/windows.html)
+2. Download the `install-tl-windows.exe` installer
+3. Run the installer — the full installation may take a while as TeX Live downloads all packages upfront
+
+After installing either distribution, **restart VS Code** so TeXRA can detect the new programs. You can verify the installation by opening a terminal (Command Prompt or PowerShell) and running:
+
+```bash
+pdflatex --version
+```
 
 #### macOS
 
-Install MacTeX:
+Install **MacTeX**, which is the standard LaTeX distribution for macOS:
 
-- Download from [tug.org/mactex/mactex-download.html](https://www.tug.org/mactex/mactex-download.html)
-- Or use [Homebrew](#homebrew): `brew install --cask mactex`
+- **Direct download** (no Homebrew needed): Go to [tug.org/mactex](https://www.tug.org/mactex/mactex-download.html), download the `.pkg` file (~4 GB), and double-click to run the installer
+- **Via [Homebrew](#homebrew)**: `brew install --cask mactex`
+
+After installing, **restart VS Code** so TeXRA can detect the new programs. You can verify by opening Terminal and running:
+
+```bash
+pdflatex --version
+```
 
 #### Linux (Ubuntu/Debian)
 
@@ -92,6 +114,12 @@ Install TeX Live:
 ```bash
 sudo apt-get update
 sudo apt-get install texlive-full
+```
+
+After installing, **restart VS Code** and verify with:
+
+```bash
+pdflatex --version
 ```
 
 ### Perl
