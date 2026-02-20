@@ -245,11 +245,24 @@ function isPathSafe(filepath: string): boolean {
   return !normalized.includes('..');
 }
 
+const findToolCache = new Map<string, string>();
+
 /**
  * Locate a tool in the common directories.
  * Performs basic security validation on tool names.
+ * Found paths are cached for the session; misses are always re-checked
+ * so that tools installed mid-session are picked up without a reload.
  */
 export function findToolInCommonPaths(tool: string): string | null {
+  const cached = findToolCache.get(tool);
+  if (cached !== undefined) return cached;
+
+  const result = findToolInCommonPathsUncached(tool);
+  if (result !== null) findToolCache.set(tool, result);
+  return result;
+}
+
+function findToolInCommonPathsUncached(tool: string): string | null {
   // Basic security validation
   if (!isPathSafe(tool)) {
     logger.warn(CHANNEL, `Unsafe tool name rejected: ${tool}`);

@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Third-party imports
-import { execaSync } from 'execa';
+import { execa, execaSync } from 'execa';
 import { parse as shellParse } from 'shell-quote';
 import * as vscode from 'vscode';
 
@@ -195,6 +195,7 @@ export async function checkToolInstalled(
     const execOptions = {
       env: { ...process.env, PATH: extendedPath },
       reject: false,
+      timeout: 5000,
     };
 
     // Log PATH info once (not per-command)
@@ -208,8 +209,10 @@ export async function checkToolInstalled(
     const hasVersionOutput = (result: { stdout?: string; stderr?: string }) =>
       result.stdout?.match(/\d+\.\d+/) || result.stderr?.match(/\d+\.\d+/);
 
-    // Helper function to execute a command with fallback
-    const executeWithFallback = (cmd: string, args: string[]): boolean => {
+    const executeWithFallback = async (
+      cmd: string,
+      args: string[],
+    ): Promise<boolean> => {
       logger.debug(
         CHANNEL,
         `Checking tool '${cmd}' with args [${args.join(', ')}]`,
@@ -217,7 +220,7 @@ export async function checkToolInstalled(
 
       let result;
       try {
-        result = execaSync(cmd, args, execOptions);
+        result = await execa(cmd, args, execOptions);
       } catch (execErr) {
         logger.info(
           CHANNEL,
@@ -255,8 +258,8 @@ export async function checkToolInstalled(
         );
         try {
           result = needsPerl
-            ? execaSync('perl', [fallback, ...args], execOptions)
-            : execaSync(fallback, args, execOptions);
+            ? await execa('perl', [fallback, ...args], execOptions)
+            : await execa(fallback, args, execOptions);
         } catch (fallbackErr) {
           logger.info(
             CHANNEL,
@@ -300,7 +303,7 @@ export async function checkToolInstalled(
       for (const cmd of command) {
         const parsed = parseCommand(cmd);
         if (!parsed) continue;
-        if (executeWithFallback(parsed.cmdName, parsed.args)) {
+        if (await executeWithFallback(parsed.cmdName, parsed.args)) {
           isInstalled = true;
           break;
         }
@@ -311,7 +314,7 @@ export async function checkToolInstalled(
       if (!parsed) {
         throw new Error('Invalid command: no executable found');
       }
-      isInstalled = executeWithFallback(parsed.cmdName, parsed.args);
+      isInstalled = await executeWithFallback(parsed.cmdName, parsed.args);
     }
 
     if (!isInstalled && showError) {
@@ -444,7 +447,11 @@ export async function checkCoreDependencies(
  * Detect the first available package manager on the system.
  * Returns 'brew', 'apt', 'scoop', or null if none found.
  */
+let cachedPackageManager: 'brew' | 'apt' | 'scoop' | undefined;
+
 export function detectPackageManager(): 'brew' | 'apt' | 'scoop' | null {
+  if (cachedPackageManager !== undefined) return cachedPackageManager;
+
   const extendedPath = extendEnvPath();
   const execOptions = {
     env: { ...process.env, PATH: extendedPath },
@@ -478,6 +485,7 @@ export function detectPackageManager(): 'brew' | 'apt' | 'scoop' | null {
       const result = execaSync(name, args, execOptions);
       if (result.exitCode === 0) {
         logger.debug(CHANNEL, `Package manager detected: ${name}`);
+        cachedPackageManager = name;
         return name;
       }
     } catch {
