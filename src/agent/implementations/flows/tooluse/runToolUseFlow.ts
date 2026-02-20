@@ -22,7 +22,10 @@ import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
-import { getUnavailableToolNamesCached } from '@tools/toolAvailability';
+import {
+  getUnavailableToolNamesCached,
+  getUnavailableGroupNamesCached,
+} from '@tools/toolAvailability';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
@@ -64,23 +67,22 @@ export interface ToolUseFlowContext {
 
 export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
 
-/** Tools already surfaced in a notification this session — avoids repeat popups. */
-const notifiedTools = new Set<string>();
+/** Groups already surfaced in a notification this session — avoids repeat popups. */
+const notifiedGroups = new Set<string>();
 
 /**
- * Show a single notification listing tools that were excluded due to missing
- * dependencies, with a button to open the Tools dashboard for install guidance.
- * Each tool name is only notified once per session.
+ * Show a single notification listing tool *groups* that were excluded due to
+ * missing dependencies, with a button to open the Tools dashboard.
+ * Each group is only notified once per session.
  */
-function notifyUnavailableTools(excluded: string[]): void {
-  const fresh = excluded.filter((n) => !notifiedTools.has(n));
+function notifyUnavailableTools(excludedToolNames: string[]): void {
+  const groups = getUnavailableGroupNamesCached(excludedToolNames);
+  const fresh = groups.filter((g) => !notifiedGroups.has(g));
   if (fresh.length === 0) return;
-  for (const n of fresh) notifiedTools.add(n);
+  for (const g of fresh) notifiedGroups.add(g);
 
   const label =
-    fresh.length === 1
-      ? `Tool "${fresh[0]}" was`
-      : `Tools ${fresh.map((n) => `"${n}"`).join(', ')} were`;
+    fresh.length === 1 ? `"${fresh[0]}" tools were` : `${fresh.map((g) => `"${g}"`).join(', ')} tools were`;
 
   void vscode.window
     .showInformationMessage(

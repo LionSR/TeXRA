@@ -89,3 +89,24 @@ export async function runExternalToolChecks(): Promise<
 export function getUnavailableToolNamesCached(): ReadonlySet<string> {
   return cached ?? new Set();
 }
+
+/**
+ * Map a list of unavailable tool names to their human-readable group names
+ * (e.g. `["lean_diagnostics", "lean_file"]` → `["Lean 4 Proof Assistant"]`).
+ * Returns deduplicated group names in definition order.
+ */
+export function getUnavailableGroupNamesCached(
+  toolNames: readonly string[],
+): string[] {
+  const nameSet = new Set(toolNames);
+  const seen = new Set<string>();
+  const groups: string[] = [];
+  for (const def of EXTERNAL_TOOL_DEFS) {
+    if (seen.has(def.id)) continue;
+    if (def.tools.some((t) => nameSet.has(t))) {
+      seen.add(def.id);
+      groups.push(def.name);
+    }
+  }
+  return groups;
+}
