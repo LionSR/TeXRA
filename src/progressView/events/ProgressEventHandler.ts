@@ -131,6 +131,14 @@ export class ProgressEventHandler {
         // Ensure stream state exists so it's included in getAllStreamStates()
         if (agentCategory) {
           this.state.getOrCreateStreamState(streamId, agentCategory);
+          this.state.updateStreamState(streamId, (prev) => ({
+            ...prev,
+            status:
+              StreamStatusService.get(streamId) ??
+              prev.status ??
+              STREAM_STATUS.READY,
+            lastTimestamp: this.state.streamTabs.getLastTimestamp(streamId),
+          }));
         }
         const previousFilter = this.state.agentCategoryFilter;
         this.maybeUpdateFilterForCategory(agentCategory);

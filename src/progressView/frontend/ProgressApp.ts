@@ -203,7 +203,12 @@ export class ProgressApp extends BaseWebviewApp {
       this.cachedFilteredStreamMap = map;
     }
 
-    if (changed.has('appState')) {
+    if (
+      changed.has('appState') &&
+      (!prevAppState ||
+        prevAppState.streams !== this.appState.streams ||
+        prevAppState.streamStates !== this.appState.streamStates)
+    ) {
       this.cachedStatusByStream = new Map(
         this.appState.streams.map((stream) => [
           stream.name,
