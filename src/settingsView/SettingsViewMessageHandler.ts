@@ -16,6 +16,8 @@ import {
   SETTINGS_VIEW_CMD,
   type ModelSelectionItem,
   type AgentSelectionItem,
+  type LatexSettingsStatus,
+  DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/schemas/settingsViewMessages';
 import {
   PROVIDER_DISPLAY_NAMES,
@@ -323,10 +325,19 @@ function buildAgentSelectionItems(): {
   return { workflow, toolUse };
 }
 
+/** How long cached LaTeX settings remain valid (ms). */
+const LATEX_SETTINGS_CACHE_TTL = 60_000;
+
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
   private readonly handlerRegistry: SettingsViewInboundHandlerRegistry;
+
+  /** Cached LaTeX settings to avoid redundant tool detection on repeat opens. */
+  private latexSettingsCache: {
+    settings: LatexSettingsStatus;
+    timestamp: number;
+  } | null = null;
 
   constructor(_context: vscode.ExtensionContext) {
     super('SettingsView', { trackActiveView: true });
@@ -1791,56 +1802,83 @@ prompts:
   }
 
   public async sendLatexSettingsStatus(webview: vscode.Webview): Promise<void> {
-    const [
-      pdflatexOk,
-      latexmkOk,
-      latexdiffOk,
-      latexindentOk,
-      perlOk,
-      texcountOk,
-      gsOk,
-      gmOk,
-      magickOk,
-    ] = await Promise.all([
-      checkToolInstalled('pdflatex', false),
-      checkToolInstalled('latexmk', false),
-      checkToolInstalled('latexdiff', false),
-      checkToolInstalled('latexindent', false),
-      checkToolInstalled('perl', false),
-      checkToolInstalled('texcount', false),
-      checkToolInstalled('gs', false),
-      checkToolInstalled('gm', false),
-      checkToolInstalled('magick', false),
-    ]);
+    const now = Date.now();
+    if (
+      !this.latexSettingsCache ||
+      now - this.latexSettingsCache.timestamp >= LATEX_SETTINGS_CACHE_TTL
+    ) {
+      this.latexSettingsCache = {
+        settings: await this.detectLatexSettings(),
+        timestamp: now,
+      };
+    }
 
-    const platform = normalizePlatform(process.platform);
-
-    const settings = {
-      outDir: this.isRecommendedValueSet('outDir'),
-      autoRevealExclude: this.isRecommendedValueSet('autoRevealExclude'),
-      texDistributionInstalled: pdflatexOk || latexmkOk,
-      latexWorkshopInstalled: Boolean(
-        vscode.extensions.getExtension(LATEX_WORKSHOP_EXT_ID),
-      ),
-      latexdiffInstalled: latexdiffOk,
-      latexindentInstalled: latexindentOk && perlOk,
-      texcountInstalled: texcountOk,
-      imageProcessingInstalled: gsOk && (gmOk || magickOk),
-      platform,
-      pdflatexPath: findToolInCommonPaths('pdflatex'),
-      latexmkPath: findToolInCommonPaths('latexmk'),
-      latexdiffPath: findToolInCommonPaths('latexdiff'),
-      latexindentPath: findToolInCommonPaths('latexindent'),
-      texcountPath: findToolInCommonPaths('texcount'),
-      ghostscriptPath: findToolInCommonPaths('gs'),
-      graphicsmagickPath:
-        findToolInCommonPaths('gm') ?? findToolInCommonPaths('magick'),
-      packageManager: detectPackageManager(),
-    };
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
-      settings,
+      settings: this.latexSettingsCache.settings,
     });
+  }
+
+  /** Run all tool checks and build the LaTeX settings status object.
+   *  Returns defaults on failure so the webview spinner always dismisses. */
+  private async detectLatexSettings(): Promise<LatexSettingsStatus> {
+    try {
+      const [
+        pdflatexOk,
+        latexmkOk,
+        latexdiffOk,
+        latexindentOk,
+        perlOk,
+        texcountOk,
+        gsOk,
+        gmOk,
+        magickOk,
+      ] = await Promise.all([
+        checkToolInstalled('pdflatex', false),
+        checkToolInstalled('latexmk', false),
+        checkToolInstalled('latexdiff', false),
+        checkToolInstalled('latexindent', false),
+        checkToolInstalled('perl', false),
+        checkToolInstalled('texcount', false),
+        checkToolInstalled('gs', false),
+        checkToolInstalled('gm', false),
+        checkToolInstalled('magick', false),
+      ]);
+
+      const platform = normalizePlatform(process.platform);
+
+      return {
+        outDir: this.isRecommendedValueSet('outDir'),
+        autoRevealExclude: this.isRecommendedValueSet('autoRevealExclude'),
+        texDistributionInstalled: pdflatexOk || latexmkOk,
+        latexWorkshopInstalled: Boolean(
+          vscode.extensions.getExtension(LATEX_WORKSHOP_EXT_ID),
+        ),
+        latexdiffInstalled: latexdiffOk,
+        latexindentInstalled: latexindentOk && perlOk,
+        texcountInstalled: texcountOk,
+        imageProcessingInstalled: gsOk && (gmOk || magickOk),
+        platform,
+        pdflatexPath: findToolInCommonPaths('pdflatex'),
+        latexmkPath: findToolInCommonPaths('latexmk'),
+        latexdiffPath: findToolInCommonPaths('latexdiff'),
+        latexindentPath: findToolInCommonPaths('latexindent'),
+        texcountPath: findToolInCommonPaths('texcount'),
+        ghostscriptPath: findToolInCommonPaths('gs'),
+        graphicsmagickPath:
+          findToolInCommonPaths('gm') ?? findToolInCommonPaths('magick'),
+        packageManager: detectPackageManager(),
+      };
+    } catch (err) {
+      this.logger.error(
+        this.channel,
+        `LaTeX settings detection failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return {
+        ...DEFAULT_LATEX_SETTINGS_STATUS,
+        platform: normalizePlatform(process.platform),
+      };
+    }
   }
 
   /** Install a VS Code extension and refresh the given view data. */
