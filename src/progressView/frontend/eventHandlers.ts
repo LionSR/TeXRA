@@ -32,6 +32,13 @@ import type {
 // Local imports - shared schemas (types)
 import type { StreamTabId } from '@shared/schemas';
 
+// Local imports - message dispatcher
+import {
+  removePrompt,
+  resolvedProposalIds,
+  type MessageHandlerContext,
+} from './messageDispatcher';
+
 // Local imports - component types
 import type { FollowUpInput } from './components/FollowUpInput';
 
@@ -62,18 +69,48 @@ export interface FrontendEventHandlerContext {
 
 export function handleStreamSwitch(
   event: CustomEvent<StreamEventDetail>,
+  ctx: FrontendEventHandlerContext,
 ): void {
-  postMessage(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, {
-    stream: event.detail.streamId,
-  });
+  const streamId = event.detail.streamId;
+  // Optimistic: highlight tab immediately
+  ctx.setState((prev) => ({ ...prev, activeStreamId: streamId }));
+  postMessage(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, { stream: streamId });
 }
 
 export function handleStreamDelete(
   event: CustomEvent<StreamEventDetail>,
+  ctx: FrontendEventHandlerContext,
 ): void {
-  postMessage(PROGRESS_VIEW_COMMANDS.DELETE_STREAM, {
-    stream: event.detail.streamId,
+  const streamId = event.detail.streamId;
+
+  // Optimistic removal: apply delete locally before notifying backend
+  ctx.setState((prev) => {
+    const nextStates = new Map(prev.streamStates);
+    nextStates.delete(streamId);
+
+    const nextLogs = new Map(prev.streamLogs);
+    nextLogs.delete(streamId);
+
+    const nextStreams = prev.streams.filter((s) => s.name !== streamId);
+    const nextActiveStreamId =
+      prev.activeStreamId === streamId
+        ? (nextStreams.at(0)?.name ?? null)
+        : prev.activeStreamId;
+
+    return {
+      ...prev,
+      streams: nextStreams,
+      streamStates: nextStates,
+      streamLogs: nextLogs,
+      activeStreamId: nextActiveStreamId,
+      followupOptionsByStream: new Map(
+        [...prev.followupOptionsByStream].filter(([key]) => key !== streamId),
+      ),
+    };
   });
+
+  // Fire-and-forget to backend
+  postMessage(PROGRESS_VIEW_COMMANDS.DELETE_STREAM, { stream: streamId });
 }
 
 export function handleFilterChange(
@@ -253,6 +290,7 @@ export function sendFollowupCommand(
 
 export function handlePermissionAction(
   event: CustomEvent<PermissionActionDetail>,
+  ctx: MessageHandlerContext,
 ): void {
   const { permission, action, feedback, modelOverride } = event.detail;
 
@@ -268,6 +306,13 @@ export function handlePermissionAction(
         action,
         feedback,
       });
+      // Optimistic removal — backend RESOLVE will be a no-op
+      removePrompt(
+        ctx,
+        permission.kind,
+        'requestId',
+        permission.data.requestId,
+      );
       break;
     }
     case PERMISSION_KIND.RETRY:
@@ -281,6 +326,13 @@ export function handlePermissionAction(
           stream: permission.data.streamId,
         });
       }
+      // Optimistic removal
+      removePrompt(
+        ctx,
+        PERMISSION_KIND.RETRY,
+        'streamId',
+        permission.data.streamId,
+      );
       break;
     case PERMISSION_KIND.PROPOSAL:
       postMessage(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION, {
@@ -289,6 +341,16 @@ export function handlePermissionAction(
         feedback,
         model: modelOverride,
       });
+      // Optimistic removal — track resolved ID so late SHOW is a no-op
+      const removed = removePrompt(
+        ctx,
+        PERMISSION_KIND.PROPOSAL,
+        'proposalId',
+        permission.data.proposalId,
+      );
+      if (!removed) {
+        resolvedProposalIds.add(permission.data.proposalId);
+      }
       break;
   }
 }

@@ -325,7 +325,7 @@ export class ProgressViewProvider
     const hasStreams = this.state.streamTabs.keys().length > 0;
     const isFilterMismatch = !activeStream && hasStreams;
     if (!isFilterMismatch) {
-      this.eventHandler.hydrateStreamContent(activeStream);
+      this.eventHandler.syncStreamContent(activeStream);
     }
 
     this._pendingUpdateOptions = null;
@@ -427,7 +427,24 @@ export class ProgressViewProvider
 
   public setActiveStream(streamId: StreamTabId): void {
     this.state.activeStream = streamId;
-    this.syncFullView();
+
+    if (!this.canSendToWebview()) return;
+
+    // Lightweight sync for dual-webview: notify the other webview of the switch
+    this.webviewUpdater.setActiveStream(streamId);
+    // Send bypass states for the new active stream
+    this.webviewUpdater.updateBypassState(
+      streamId,
+      'toolEdit',
+      isApprovalBypassedForStream(streamId),
+    );
+    this.webviewUpdater.updateBypassState(
+      streamId,
+      'superYolo',
+      isProposalBypassedForStream(streamId),
+    );
+    // Hydrate content (logs, todos, follow-ups, instruction)
+    this.eventHandler.syncStreamContent(streamId);
   }
 
   public showProgressViewAsPanel(): void {

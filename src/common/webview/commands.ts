@@ -181,6 +181,9 @@ export const PROGRESS_VIEW_COMMANDS = {
   // Queued follow-ups
   UPDATE_QUEUED_FOLLOW_UPS: 'updateQueuedFollowUps',
 
+  // Batched content sync (replaces individual UPDATE_LOGS + UPDATE_TODOS + UPDATE_QUEUED_FOLLOW_UPS + UPDATE_INSTRUCTION on tab switch)
+  SYNC_STREAM_CONTENT: 'syncStreamContent',
+
   // Status and files
   UPDATE_STREAM_STATUS: 'updateStreamStatus', // Update single stream's status in tabs
   SET_ACTIVE_STREAM: 'setActiveStream',

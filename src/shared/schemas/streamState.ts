@@ -46,21 +46,21 @@ export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
 // Base Stream State
 
 const BaseStreamStateSchema = z.object({
-  // Shared stream fields with schema defaults.
+  // Backend-owned fields — set by backend, frontend reads only.
+  // Updated via targeted messages (UPDATE_STREAM_STATUS, UPDATE_STREAM_BADGES,
+  // UPDATE_CONVERSATION_PROGRESS) or full UPDATE_STREAMS on structural changes.
+  // See mergeBackendOwnedState() in messageDispatcher.ts for merge semantics.
   status: StreamStatusSchema.optional(),
   lastTimestamp: z.number().optional(),
+  conversationProgress: ConversationProgressSchema.prefault({}),
+  activeSubagents: z.array(ActiveChildInfoSchema).prefault([]),
+  finishedSubagentCount: z.number().prefault(0),
+  activeProcesses: z.array(ActiveChildInfoSchema).prefault([]),
+  finishedProcessCount: z.number().prefault(0),
+
+  // Frontend-owned fields — set by frontend handlers, preserved during backend merges.
   taskGroups: z.array(TaskGroupSchema).prefault([]),
   contextState: ContextStateSchema.optional(),
-  /** Active subagents running under this stream (ephemeral, not persisted). */
-  activeSubagents: z.array(ActiveChildInfoSchema).prefault([]),
-  /** Cumulative count of subagents that have finished (ephemeral, not persisted). */
-  finishedSubagentCount: z.number().prefault(0),
-  /** Active background processes running under this stream (ephemeral, not persisted). */
-  activeProcesses: z.array(ActiveChildInfoSchema).prefault([]),
-  /** Cumulative count of processes that have finished (ephemeral, not persisted). */
-  finishedProcessCount: z.number().prefault(0),
-  /** Conversation progress counters (ephemeral, updated during execution). */
-  conversationProgress: ConversationProgressSchema.prefault({}),
 });
 
 // Tool-Use UI State (frontend-only, preserved during backend updates)

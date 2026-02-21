@@ -71,6 +71,11 @@ export const groupStyles = css`
     margin-right: var(--spacing-small);
   }
 
+  .log-group {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 200px;
+  }
+
   /* Note: .spin class and @keyframes spin are in @shared/styles/litStyles.ts */
 
   :is(.log-line, .banner-details)[data-group-id] {

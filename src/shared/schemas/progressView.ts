@@ -314,6 +314,33 @@ export const SetFollowupOptionsMessageSchema = z.object({
   defaultMergeModel: z.string().optional(),
 });
 
+export const SyncStreamContentMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT),
+  stream: z.union([StreamTabIdSchema, z.literal('')]),
+  // Logs payload (same fields as UPDATE_LOGS)
+  messages: z.array(LogMessageDataSchema),
+  groups: z.array(TaskGroupSchema).optional(),
+  action: z.enum(['render', 'clear']).optional(),
+  runInstructions: z.record(z.string(), InstructionUpdateSchema).optional(),
+  activeRunId: z.string().nullable().optional(),
+  runUsage: z.record(z.string(), TokenUsageStatsSchema).optional(),
+  runFiles: z
+    .record(z.string(), z.record(z.string(), z.array(OutputFileInfoSchema)))
+    .optional(),
+  runMissingOutputs: z
+    .record(z.string(), z.record(z.string(), z.array(z.string())))
+    .optional(),
+  contextState: ContextStateSchema.optional(),
+  // Todos payload
+  todos: z.array(TodoItemSchema).optional(),
+  // Queued follow-ups payload
+  queuedFollowUps: z.array(z.string()).optional(),
+  // Instruction payload
+  instruction: InstructionUpdateSchema.nullable().optional(),
+  agentCategory: z.string().optional(),
+  runId: z.string().nullish(),
+});
+
 export const ProgressSetThemeMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.THEME_SET),
   theme: z.enum(['dark', 'light']),
@@ -349,6 +376,7 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateRunUsageMessageSchema,
     UpdateContextStateMessageSchema,
     UpdateQueuedFollowUpsMessageSchema,
+    SyncStreamContentMessageSchema,
     UpdatePermissionMessageSchema,
     UpdateBypassMessageSchema,
     UpdateFollowUpTextMessageSchema,

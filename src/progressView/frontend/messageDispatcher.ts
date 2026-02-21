@@ -63,7 +63,7 @@ export interface MessageHandlerContext extends FrontendEventHandlerContext {
 const pendingLogUpdates = new Map<string, Partial<LogMessageData>>();
 
 /** Proposal IDs resolved before a show message arrives (out-of-order guard). */
-const resolvedProposalIds = new Set<string>();
+export const resolvedProposalIds = new Set<string>();
 
 // ============================================================
 // Helper functions
@@ -114,7 +114,7 @@ function upsertProposalPermission(
   }
 }
 
-function removePrompt(
+export function removePrompt(
   ctx: MessageHandlerContext,
   kind: PermissionState['kind'],
   idField: string,
@@ -642,6 +642,8 @@ const handlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION]: (data, ctx) => {
     if (data.action === 'show') {
       const { permission } = data;
+      if (!permission) return;
+
       if (permission.kind === PERMISSION_KIND.PROPOSAL) {
         // Drop if this proposal was already resolved (out-of-order messages)
         if (resolvedProposalIds.delete(permission.data.proposalId)) return;
@@ -676,16 +678,19 @@ const handlers: HandlerRegistry = {
       return;
     }
 
-    if (data.kind === PERMISSION_KIND.TOOL_EDIT) {
-      removePrompt(ctx, PERMISSION_KIND.TOOL_EDIT, 'requestId', data.id);
+    const { kind, id } = data;
+    if (!kind || !id) return;
+
+    if (kind === PERMISSION_KIND.TOOL_EDIT) {
+      removePrompt(ctx, PERMISSION_KIND.TOOL_EDIT, 'requestId', id);
       return;
     }
-    if (data.kind === PERMISSION_KIND.BASH) {
-      removePrompt(ctx, PERMISSION_KIND.BASH, 'requestId', data.id);
+    if (kind === PERMISSION_KIND.BASH) {
+      removePrompt(ctx, PERMISSION_KIND.BASH, 'requestId', id);
       return;
     }
-    if (data.kind === PERMISSION_KIND.RETRY) {
-      removePrompt(ctx, PERMISSION_KIND.RETRY, 'streamId', data.id);
+    if (kind === PERMISSION_KIND.RETRY) {
+      removePrompt(ctx, PERMISSION_KIND.RETRY, 'streamId', id);
       return;
     }
 
@@ -693,10 +698,68 @@ const handlers: HandlerRegistry = {
       ctx,
       PERMISSION_KIND.PROPOSAL,
       'proposalId',
-      data.id,
+      id,
     );
     if (!removed) {
-      resolvedProposalIds.add(data.id);
+      resolvedProposalIds.add(id);
+    }
+  },
+
+  // Batched content sync (tab switch: logs + todos + follow-ups + instruction in one message)
+  [PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT]: (data, ctx) => {
+    // Delegate to individual handlers — Lit batches synchronous property
+    // changes into a single microtask update, so multiple setState calls
+    // still result in one render cycle. The main win is reducing 4 postMessage
+    // round-trips to 1.
+
+    // 1. Logs (same logic as UPDATE_LOGS handler)
+    handlers[PROGRESS_VIEW_COMMANDS.UPDATE_LOGS]?.(
+      {
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_LOGS,
+        stream: data.stream,
+        messages: data.messages,
+        groups: data.groups,
+        action: data.action,
+        runInstructions: data.runInstructions,
+        activeRunId: data.activeRunId,
+        runUsage: data.runUsage,
+        runFiles: data.runFiles,
+        runMissingOutputs: data.runMissingOutputs,
+        contextState: data.contextState,
+      },
+      ctx,
+    );
+
+    if (!data.stream || data.action === 'clear') return;
+
+    // 2. Todos
+    if (data.todos) {
+      updateToolUseState(ctx, data.stream, (prev) => ({
+        ...prev,
+        todos: data.todos!,
+      }));
+    }
+
+    // 3. Queued follow-ups
+    if (data.queuedFollowUps) {
+      updateToolUseState(ctx, data.stream, (prev) => ({
+        ...prev,
+        queuedFollowUps: data.queuedFollowUps!,
+      }));
+    }
+
+    // 4. Instruction
+    if (data.instruction !== undefined && data.runId) {
+      updateWorkflowState(ctx, data.stream, (prev) => {
+        const runId = data.runId as string;
+        const { [runId]: _, ...rest } = prev.runInstructions;
+        return {
+          ...prev,
+          runInstructions: data.instruction
+            ? { ...rest, [runId]: data.instruction }
+            : rest,
+        };
+      });
     }
   },
 

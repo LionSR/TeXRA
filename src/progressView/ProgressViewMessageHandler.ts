@@ -325,9 +325,20 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     cleanupApprovalsForStream(streamId);
     ToolUseFollowUpQueue.release(streamId);
     this.clearModelOutputBackups(streamId);
+
+    // Handle active stream rotation if the deleted stream was active
+    const wasActive = this.provider.state.activeStream === streamId;
     await this.provider.state.clearStream(streamId);
-    // Force rebuild since we deleted a stream
-    this.provider.syncFullView({ forceRebuild: true });
+
+    if (wasActive) {
+      // Pick next active from remaining streams
+      const remainingStreams = [...this.provider.state.streamTabs.keys()];
+      this.provider.state.activeStream =
+        (remainingStreams[0] as StreamTabId) ?? ('' as StreamTabId);
+    }
+
+    // Lightweight sync for dual-webview (frontend DELETE_STREAM handler is idempotent)
+    this.provider.webviewUpdater.deleteStream(streamId);
   }
 
   private async handleDeleteAll(): Promise<void> {
@@ -443,14 +454,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.SORT_STREAMS>,
   ): void {
     this.provider.state.streamSortOrder = data.sortBy;
-    this.provider.syncFullView();
   }
 
   private handleFilterStreams(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.FILTER_STREAMS>,
   ): void {
     this.provider.state.agentCategoryFilter = data.filter;
-    this.provider.syncFullView();
   }
 
   private async handleRestoreState(

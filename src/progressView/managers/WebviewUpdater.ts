@@ -23,6 +23,7 @@ import type {
   TodoItem,
   TokenUsageStats,
   UpdateTaskGroupPayload,
+  StorageKey,
 } from '@shared/schemas';
 
 /**
@@ -46,6 +47,20 @@ export interface LogContentExtras {
   runMissingOutputs?: Record<string, { [key: number]: string[] }>;
   /** Context window utilization state */
   contextState?: ContextState;
+}
+
+/** Payload for batched stream content hydration (tab switch). */
+export interface SyncStreamContentPayload {
+  stream: StreamTabId | '';
+  messages: LogMessageData[];
+  groups: TaskGroup[];
+  extras?: LogContentExtras;
+  action?: 'render' | 'clear';
+  todos: TodoItem[];
+  queuedFollowUps: string[];
+  instruction: InstructionUpdate | null;
+  agentCategory?: string;
+  runId?: StorageKey | null;
 }
 
 /**
@@ -314,6 +329,14 @@ export class WebviewUpdater {
     });
   }
 
+  /** Send lightweight delete notification to all webviews (dual-webview sync). */
+  deleteStream(stream: StreamTabId): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+      stream,
+    });
+  }
+
   updateConversationProgress(
     stream: StreamTabId,
     progress: ConversationProgress,
@@ -392,6 +415,26 @@ export class WebviewUpdater {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS,
       stream,
       messages,
+    });
+  }
+
+  /**
+   * Send a single batched content sync message combining logs, todos, follow-ups,
+   * and instruction. Used on tab switch to replace 4 separate messages with 1.
+   */
+  sendSyncStreamContent(payload: SyncStreamContentPayload): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+      stream: payload.stream,
+      messages: payload.messages,
+      groups: payload.groups,
+      action: payload.action,
+      ...payload.extras,
+      todos: payload.todos,
+      queuedFollowUps: payload.queuedFollowUps,
+      instruction: payload.instruction,
+      agentCategory: payload.agentCategory,
+      runId: payload.runId,
     });
   }
 

@@ -457,12 +457,14 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   // Event handler wrappers - delegate to extracted handlers
-  private onStreamSwitch = (e: CustomEvent): void => handleStreamSwitch(e);
-  private onStreamDelete = (e: CustomEvent): void => handleStreamDelete(e);
+  private onStreamSwitch = (e: CustomEvent): void =>
+    handleStreamSwitch(e, this.getEventHandlerContext());
+  private onStreamDelete = (e: CustomEvent): void =>
+    handleStreamDelete(e, this.getEventHandlerContext());
   private onDeleteAll = (): void => handleDeleteAll();
   private onFileAction = (e: CustomEvent): void => handleFileAction(e);
   private onPermissionAction = (e: CustomEvent): void =>
-    handlePermissionAction(e);
+    handlePermissionAction(e, this.createMessageHandlerContext());
 
   // Event handlers requiring context
   private onFilterChange = (e: CustomEvent): void =>

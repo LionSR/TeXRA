@@ -830,6 +830,28 @@ Recommendation: Option 2. The type safety is valuable, but 28 near-identical met
 
 ---
 
+## Implementation Status (as of 2026-02-20)
+
+All 6 phases have been implemented on branch `codex/progress-view-prd-refactor`.
+
+| Phase | Description                                        | Status   | Notes                                                                                                                                                                                                                                                                                               |
+| ----- | -------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | Remove Dead Weight (P2 + P6)                       | **DONE** | All 6 sub-items complete. Dead fields (`info`, `logs`) removed from schema. `RunInstructionManager` inlined. `find()` → `Map.get()`. `refreshStreamSurface` → `hydrateStreamContent` with extracted methods. `updateAll` → `sendStreamMetadata`.                                                    |
+| **2** | Fix Field Ownership and Merge (P1 + P3)            | **DONE** | `mergeBackendOwnedState()` replaces clobber-then-recover pattern. `as StreamState` casts and `preserveUI`/`preserveWorkflow` conditionals deleted. Frontend-owned fields have ownership comments in schema (backend-owned field comments still missing).                                            |
+| **3** | Split updateAll() into Targeted Messages (P0)      | **DONE** | All 5 sites converted: `SET_ACTIVE_STREAM`, `UPDATE_CONVERSATION_PROGRESS`, `UPDATE_STREAM_BADGES` (shared by subagents + processes), `UPDATE_PARENT_STREAM`. Schemas, commands, WebviewUpdater methods, and frontend handlers all in place.                                                        |
+| **4** | Single Source of Truth for Status (P4)             | **DONE** | `status` and `lastTimestamp` moved to `BaseStreamStateSchema`, removed from `StreamTabInfoSchema`. Backend writes status to `_streamStates`. Fallback chains simplified. `StreamTab` receives status as primitive prop. Sort reads `lastTimestamp` from `StreamState` via callback.                 |
+| **5** | Consolidate Messages (P5)                          | **DONE** | Approvals (6→1 `UPDATE_PERMISSION`), Recording (3→1 `UPDATE_RECORDING`), Follow-up text (3→1 `UPDATE_FOLLOW_UP_TEXT`), Bypass (2→1 `UPDATE_BYPASS`), Proposals merged into `UPDATE_PERMISSION`. Current count: 26 outbound messages (vs target ~23; delta is 4 new targeted messages from Phase 3). |
+| **6** | Inline Thin Managers + Remove Noise + Memory Fixes | **DONE** | `TaskGroupManager` inlined. Unnecessary `?? []`/`?? 0` fallbacks removed. CSS `contain: layout style paint` added to log containers. `streamLogs` Map entry properly deleted on clear. Markdown cache has per-entry (200KB) and total (2MB) content-size caps.                                      |
+
+### Remaining Items (Minor)
+
+| Item                                                                                  | Status          | Notes                                                                                                                                                |
+| ------------------------------------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend-owned field comments in `BaseStreamStateSchema`                               | **NOT DONE**    | Frontend-owned fields are documented, but `status`, `lastTimestamp`, `conversationProgress`, etc. in `BaseStreamStateSchema` lack ownership comments |
+| Section 15 round-trip optimizations (fire-and-forget, optimistic UI, batched surface) | **NOT STARTED** | Lower priority post-refactoring items documented in Section 15                                                                                       |
+
+---
+
 ## 14. Implementation Plan (Internal Cleanup, Zero UI Regression)
 
 > **Guiding principle**: Cleaner = faster = less code. Every removed field, every inlined wrapper, every consolidated message is less surface area for bugs and less work for the runtime. We are not adding features. We are removing indirection until the code says exactly what it means.

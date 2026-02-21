@@ -27,6 +27,8 @@ export const logEntryStyles = css`
     white-space: pre-wrap;
     word-wrap: break-word;
     word-break: break-all;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 24px;
   }
 
   .log-line--render-error {
@@ -241,6 +243,8 @@ export const logEntryStyles = css`
 
   .banner-details {
     margin: var(--spacing-small) 0;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 40px;
   }
 
   .banner-content {
