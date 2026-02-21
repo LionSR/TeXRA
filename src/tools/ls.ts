@@ -2,11 +2,11 @@
 import * as path from 'path';
 
 // Third-party imports
-import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - tools
 import { toErrorMessage } from '@common/errors';
+import { isFile, isDirectory } from '@common/files/fsEntryType';
 import { ToolError, ToolResult } from '@tools/result';
 import {
   createGlobMatcher,
@@ -35,19 +35,14 @@ function isDefaultHiddenName(name: string): boolean {
   return DEFAULT_HIDDEN_NAMES.has(name);
 }
 
-const FILE_TYPE_LABELS: Record<vscode.FileType, string> = {
-  [vscode.FileType.Directory]: 'dir',
-  [vscode.FileType.SymbolicLink]: 'link',
-  [vscode.FileType.File]: 'file',
-  [vscode.FileType.Unknown]: 'other',
-};
-
-function getFileTypeLabel(type: vscode.FileType): string {
-  return FILE_TYPE_LABELS[type] ?? 'other';
+function getFileTypeLabel(type: number): string {
+  if (isDirectory(type)) return 'dir';
+  if (isFile(type)) return 'file';
+  return 'other';
 }
 
-function formatEntry(name: string, type: vscode.FileType): string {
-  const suffix = type === vscode.FileType.Directory ? '/' : '';
+function formatEntry(name: string, type: number): string {
+  const suffix = isDirectory(type) ? '/' : '';
   const label = getFileTypeLabel(type);
   return `${label.padEnd(4)} ${name}${suffix}`;
 }
@@ -73,9 +68,10 @@ export class LsTool extends defineTool({
       output: formatToolOutput(header, content, NO_ENTRIES_MESSAGE),
     });
 
-    let stats: vscode.FileStat | undefined;
+    let statType: number;
     try {
-      stats = await WorkspaceFS.stat(resolved.relative);
+      const stats = await WorkspaceFS.stat(resolved.relative);
+      statType = stats.type;
     } catch (err) {
       const message = toErrorMessage(err);
       throw new ToolError(
@@ -90,7 +86,7 @@ export class LsTool extends defineTool({
     const matchesCustomIgnore = (entryPath: string): boolean =>
       ignoreMatchers.some((matcher) => matcher(entryPath));
 
-    if (stats.type === vscode.FileType.File) {
+    if (isFile(statType)) {
       const relativePosix = toPosixPath(resolved.relative);
       const fileName = path.basename(resolved.relative);
       const isIgnored =
@@ -99,7 +95,7 @@ export class LsTool extends defineTool({
         matchesCustomIgnore(display) ||
         matchesCustomIgnore(relativePosix);
       return makeResult(
-        isIgnored ? null : formatEntry(display, vscode.FileType.File),
+        isIgnored ? null : formatEntry(display, statType),
       );
     }
 

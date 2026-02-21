@@ -1,6 +1,3 @@
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Local imports - system utilities
 import { toErrorMessage } from '@common/errors';
 import { executeCommand, checkToolInstalled } from '@utils/system';
@@ -64,12 +61,6 @@ async function runWolfram(
     };
   } catch (err) {
     const errorMessage = toErrorMessage(err);
-
-    if (opts.showErrorsToUser) {
-      vscode.window.showErrorMessage(
-        `Error executing Wolfram command: ${errorMessage}`,
-      );
-    }
 
     return {
       success: false,

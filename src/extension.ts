@@ -35,6 +35,7 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { registerAgentEventListeners } from '@frontend/events/agentEventListeners';
 import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
+import { setExtensionChecker } from '@tools/externalToolDefs';
 import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
@@ -224,6 +225,9 @@ export async function activate(context: vscode.ExtensionContext) {
   registerCommands(context);
 
   initializeToolEditApproval(context);
+
+  // Register VS Code extension checker for external tool availability
+  setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
 
   // Create a status bar item to show TeXRA progress
   statusBarItem = vscode.window.createStatusBarItem(
