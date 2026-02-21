@@ -45,7 +45,11 @@ interface SetTaskStatePayload {
   taskState: TaskState;
 }
 
-const MAX_BUFFER_SIZE = 1000;
+/**
+ * Per-event-type buffer limit. Prevents one noisy event type (e.g., addLogMessage)
+ * from evicting critical events of other types during the startup buffering window.
+ */
+const PER_TYPE_BUFFER_LIMIT = 200;
 
 export interface ProgressEventPayloads {
   addLogMessage: { streamId: StreamTabId; logMessage: LogMessageData };
@@ -128,23 +132,49 @@ export interface ProgressEventBusLike {
     event: K,
     payload: ProgressEventPayloads[K],
   ): void;
+  /** Remove all buffered events associated with a specific stream. */
+  clearStream(streamId: string): void;
+  /** Remove all buffered events. */
+  clear(): void;
+}
+
+/**
+ * Check whether a payload is scoped to a specific stream.
+ * Handles all stream-identifying fields used across event payloads.
+ */
+function isStreamPayload(payload: unknown, streamId: string): boolean {
+  if (payload === null || payload === undefined || typeof payload !== 'object') {
+    return false;
+  }
+  const p = payload as Record<string, unknown>;
+  return (
+    p.streamId === streamId ||
+    p.parentStreamId === streamId ||
+    p.childStreamId === streamId
+  );
 }
 
 class ProgressEventBus implements ProgressEventBusLike {
   private emitter = new EventEmitter();
-  private buffer: {
-    event: ProgressEvent;
-    payload: ProgressEventPayloads[ProgressEvent];
-  }[] = [];
+  /** Per-event-type buffer. Replaces the old flat array to prevent cross-type eviction. */
+  private eventStore = new Map<
+    ProgressEvent,
+    ProgressEventPayloads[ProgressEvent][]
+  >();
 
   emit<K extends ProgressEvent>(
     event: K,
     payload: ProgressEventPayloads[K],
   ): void {
     if (this.emitter.listenerCount(event) === 0) {
-      this.buffer.push({ event, payload });
-      if (this.buffer.length > MAX_BUFFER_SIZE) {
-        this.buffer.shift();
+      let entries = this.eventStore.get(event);
+      if (!entries) {
+        entries = [];
+        this.eventStore.set(event, entries);
+      }
+      entries.push(payload);
+      if (entries.length > PER_TYPE_BUFFER_LIMIT) {
+        entries.shift();
       }
     } else {
       this.emitter.emit(event, payload);
@@ -165,18 +195,33 @@ class ProgressEventBus implements ProgressEventBusLike {
     const cleanup = () => this.emitter.off(event, listener);
     options?.signal?.addEventListener('abort', cleanup, { once: true });
 
-    // Replay buffered events for this event type and remove them (single pass)
-    const remaining: typeof this.buffer = [];
-    for (const item of this.buffer) {
-      if (item.event === event) {
-        listener(item.payload as ProgressEventPayloads[K]);
-      } else {
-        remaining.push(item);
+    // Replay buffered events for this event type and remove them
+    const buffered = this.eventStore.get(event);
+    if (buffered?.length) {
+      this.eventStore.delete(event);
+      for (const payload of buffered) {
+        listener(payload as ProgressEventPayloads[K]);
       }
     }
-    this.buffer = remaining;
 
     return cleanup;
+  }
+
+  clearStream(streamId: string): void {
+    for (const [event, entries] of this.eventStore) {
+      const filtered = entries.filter(
+        (payload) => !isStreamPayload(payload, streamId),
+      );
+      if (filtered.length === 0) {
+        this.eventStore.delete(event);
+      } else if (filtered.length < entries.length) {
+        this.eventStore.set(event, filtered);
+      }
+    }
+  }
+
+  clear(): void {
+    this.eventStore.clear();
   }
 }
 

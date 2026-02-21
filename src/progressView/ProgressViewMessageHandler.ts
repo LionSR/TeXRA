@@ -314,8 +314,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Clear pending task groups, approvals, queued follow-ups, and YOLO state to prevent memory leaks
+    // Clear pending task groups, buffered events, approvals, queued follow-ups, and YOLO state to prevent memory leaks
     this.provider.eventHandler.clearPendingTaskGroups(streamId);
+    this.provider.eventHandler.clearBufferedEvents(streamId);
     cleanupApprovalsForStream(streamId);
     ToolUseFollowUpQueue.release(streamId);
     this.clearModelOutputBackups(streamId);
@@ -337,8 +338,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Clear all pending task groups, approvals, queued follow-ups, and YOLO state to prevent memory leaks
+    // Clear all pending task groups, buffered events, approvals, queued follow-ups, and YOLO state to prevent memory leaks
     this.provider.eventHandler.clearAllPendingTaskGroups();
+    this.provider.eventHandler.clearAllBufferedEvents();
     cleanupAllApprovals();
     for (const streamId of this.provider.state.streamTabs.keys()) {
       ToolUseFollowUpQueue.release(streamId);

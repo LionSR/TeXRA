@@ -650,6 +650,16 @@ export class ProgressEventHandler {
     this.pendingTaskGroups.clear();
   }
 
+  /** Remove buffered events for a deleted stream so they don't replay to the next subscriber. */
+  clearBufferedEvents(streamId: StreamTabId): void {
+    bus.clearStream(streamId);
+  }
+
+  /** Remove all buffered events (e.g., when all streams are deleted). */
+  clearAllBufferedEvents(): void {
+    bus.clear();
+  }
+
   resetRunningTasksToError(waitingStreams?: Set<StreamTabId>): StreamTabId[] {
     const affectedStreams: StreamTabId[] = [];
     const waitingSet = waitingStreams ?? new Set<StreamTabId>();
