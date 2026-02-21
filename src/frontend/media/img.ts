@@ -114,10 +114,13 @@ async function getImageDimensions(
   return { width, height };
 }
 
+/** Maximum image dimension (pixels) accepted by provider APIs. */
+const API_MAX_IMAGE_DIMENSION = 8000;
+
 /** Resize an image if it exceeds the maximum dimensions. Returns the original path if no resize needed. */
 async function resizeImageIfNeeded(imagePath: string): Promise<string> {
   const tool = await selectImageTool();
-  const maxDimension = getMaxImageDimension();
+  const maxDimension = Math.min(getMaxImageDimension(), API_MAX_IMAGE_DIMENSION);
   const { width, height } = await getImageDimensions(imagePath, tool);
 
   if (width <= maxDimension && height <= maxDimension) {
