@@ -14,6 +14,7 @@ import { PersistedState, createWebviewStorage } from '@shared/state';
 // Local imports - shared schemas
 import {
   AgentCategoryFilterSchema,
+  type ProgressViewOutboundMessage,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
@@ -93,7 +94,7 @@ import type { PermissionState } from './components/PermissionCard';
 import type { ToolUseStreamContent } from './components/ToolUseStreamContent';
 
 @customElement('progress-app')
-export class ProgressApp extends BaseWebviewApp {
+export class ProgressApp extends BaseWebviewApp<ProgressViewOutboundMessage> {
   static override styles = css`
     :host {
       display: flex;
@@ -337,10 +338,8 @@ export class ProgressApp extends BaseWebviewApp {
     `;
   }
 
-  protected handleMessage(raw: unknown): void {
-    // Schema-driven dispatch - parses once with discriminated union,
-    // then routes to typed handler
-    dispatchMessage(raw, this.createMessageHandlerContext());
+  protected handleMessage(message: ProgressViewOutboundMessage): void {
+    dispatchMessage(message, this.createMessageHandlerContext());
   }
 
   /**

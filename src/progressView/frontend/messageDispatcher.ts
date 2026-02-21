@@ -1,8 +1,8 @@
 /**
  * Schema-driven message dispatcher for ProgressView.
  *
- * Uses Zod's discriminated union to parse messages once, then dispatches
- * to type-safe handlers. Eliminates boilerplate safeParse calls in handlers.
+ * Routes typed backend messages to handlers via command lookup.
+ * Backend messages are trusted (TypeScript-enforced, structured clone IPC).
  *
  * @example
  * // In ProgressApp.handleMessage:
@@ -12,7 +12,6 @@
 // Local imports - shared schemas
 import {
   createStreamState,
-  ProgressViewOutboundMessageSchema,
   sumUsageStats,
   type LogMessageData,
   type LogsPayload,
@@ -819,25 +818,16 @@ const handlers: HandlerRegistry = {
 // ============================================================
 
 /**
- * Dispatch a message to its handler using schema-driven validation.
+ * Dispatch a typed backend message to its handler.
  *
- * Parses the raw message once with the discriminated union schema,
- * then routes to the appropriate typed handler.
- *
- * @param raw - Raw message from VS Code postMessage
- * @param ctx - Message handler context with state accessors
- * @returns true if message was handled, false otherwise
+ * The backend sends ProgressViewOutboundMessage objects via postMessage.
+ * TypeScript enforces the shape at compile time, and postMessage uses structured
+ * clone (lossless) — no Zod validation needed on the hot path.
  */
 export function dispatchMessage(
-  raw: unknown,
+  message: ProgressViewOutboundMessage,
   ctx: MessageHandlerContext,
 ): boolean {
-  const result = ProgressViewOutboundMessageSchema.safeParse(raw);
-  if (!result.success) {
-    return false;
-  }
-
-  const message = result.data;
   const handler = handlers[message.command] as
     | TypedHandler<typeof message>
     | undefined;
