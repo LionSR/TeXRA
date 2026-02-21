@@ -83,20 +83,21 @@ export class ProgressEventHandler {
       bus,
       this.ctx,
       {
-        // Stream lifecycle
-        setActiveStream: (_ctx, payload) => this.handleSetActiveStream(payload),
-        updateStreamStatus: (_ctx, payload) =>
+        // Stream lifecycle — these handlers use this.state/this.webviewUpdater
+        // (same objects as ctx), so ctx is unused but required by the signature.
+        setActiveStream: (_, payload) => this.handleSetActiveStream(payload),
+        updateStreamStatus: (_, payload) =>
           this.handleUpdateStreamStatus(payload),
-        setTaskState: (_ctx, data) => this.handleSetTaskState(data),
-        addTaskGroup: (_ctx, data) => this.handleAddTaskGroup(data),
-        updateTaskGroup: (_ctx, data) => this.handleUpdateTaskGroup(data),
-        updateConversationProgress: (_ctx, data) =>
+        setTaskState: (_, data) => this.handleSetTaskState(data),
+        addTaskGroup: (_, data) => this.handleAddTaskGroup(data),
+        updateTaskGroup: (_, data) => this.handleUpdateTaskGroup(data),
+        updateConversationProgress: (_, data) =>
           this.handleUpdateConversationProgress(data),
-        updateActiveSubagents: (_ctx, data) =>
+        updateActiveSubagents: (_, data) =>
           this.handleUpdateActiveSubagents(data),
-        updateActiveProcesses: (_ctx, data) =>
+        updateActiveProcesses: (_, data) =>
           this.handleUpdateActiveProcesses(data),
-        setParentStream: (_ctx, data) => this.handleSetParentStream(data),
+        setParentStream: (_, data) => this.handleSetParentStream(data),
         extensionDeactivating: () => this.markAllRunningTasksAsCancelled(),
 
         // Log events
@@ -647,7 +648,8 @@ export class ProgressEventHandler {
       activeRunId &&
       this.getStreamCategory(stream) === AgentCategory.ToolUse
     ) {
-      const instructionText = runInstructions[activeRunId]?.text?.trim();
+      const instruction = runInstructions[activeRunId];
+      const instructionText = instruction?.text?.trim();
       if (
         instructionText &&
         !messages.some(
@@ -656,12 +658,15 @@ export class ProgressEventHandler {
             m.text?.trim() === instructionText,
         )
       ) {
+        // Use stored instruction timestamp, fall back to first message timestamp.
+        // Avoids Date.now() which would produce unstable sort keys on each tab switch.
+        const ts = instruction.timestamp ?? messages[0]?.timestamp ?? 0;
         messages = [
           {
             id: `tool-use-instruction:${activeRunId}`,
             text: instructionText,
             level: 'info',
-            timestamp: (messages[0]?.timestamp ?? Date.now()) - 1,
+            timestamp: ts - 1,
             messageType: 'userMessage',
           },
           ...messages,

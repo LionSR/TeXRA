@@ -24,9 +24,22 @@ import type {
 /** Proposal IDs resolved before a show message arrives (out-of-order guard). */
 export const resolvedProposalIds = new Set<string>();
 
+/** Maximum entries before evicting oldest resolved IDs. */
+const RESOLVED_PROPOSAL_IDS_CAP = 200;
+
 /** Clear all resolved proposal IDs (called on stream delete / delete-all). */
 export function clearResolvedProposalIds(): void {
   resolvedProposalIds.clear();
+}
+
+/** Add a resolved proposal ID, evicting the oldest entry if over cap. */
+export function addResolvedProposalId(id: string): void {
+  resolvedProposalIds.add(id);
+  if (resolvedProposalIds.size > RESOLVED_PROPOSAL_IDS_CAP) {
+    // Set iteration order is insertion order — first value is oldest
+    const oldest = resolvedProposalIds.values().next().value;
+    if (oldest !== undefined) resolvedProposalIds.delete(oldest);
+  }
 }
 
 // ============================================================
@@ -128,7 +141,7 @@ export const permissionHandlers: HandlerRegistry = {
           'proposalId',
           id,
         );
-        if (!removed) resolvedProposalIds.add(id);
+        if (!removed) addResolvedProposalId(id);
       }
     }
   },
