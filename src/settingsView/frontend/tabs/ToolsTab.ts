@@ -86,9 +86,50 @@ export class ToolsTab extends LitElement {
 
       .tools-summary {
         display: flex;
+        align-items: center;
         gap: var(--spacing-large);
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
+      }
+
+      .tools-health-ring {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-medium);
+      }
+
+      .tools-health-ring svg {
+        width: 36px;
+        height: 36px;
+        transform: rotate(-90deg);
+      }
+
+      .tools-health-ring__track {
+        fill: none;
+        stroke: var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.25));
+        stroke-width: 4;
+      }
+
+      .tools-health-ring__available {
+        fill: none;
+        stroke: var(--vscode-testing-iconPassed, #73c991);
+        stroke-width: 4;
+        stroke-linecap: round;
+        transition: stroke-dashoffset var(--transition-slow);
+      }
+
+      .tools-health-ring__missing {
+        fill: none;
+        stroke: var(--vscode-testing-iconFailed, #f48771);
+        stroke-width: 4;
+        stroke-linecap: round;
+        transition: stroke-dashoffset var(--transition-slow);
+      }
+
+      .tools-health-labels {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
       }
 
       .tools-summary-stat {
@@ -185,20 +226,58 @@ export class ToolsTab extends LitElement {
       else if (item.status === 'not-found') missing++;
     }
 
+    const total = this.items.length;
+    const r = 14; // radius
+    const circ = 2 * Math.PI * r;
+    const availPct = total > 0 ? available / total : 0;
+    const missPct = total > 0 ? missing / total : 0;
+    const availLen = circ * availPct;
+    const missLen = circ * missPct;
+    const availOffset = circ - availLen;
+    // Missing arc starts after the available arc
+    const missOffset = circ - missLen;
+    const missRotation = availPct * 360;
+
     return html`
       <div class="tools-summary">
-        <span class="tools-summary-stat tools-stat-available">
-          <span class="codicon codicon-check"></span>
-          ${available} available
-        </span>
-        ${missing > 0
-          ? html`
-              <span class="tools-summary-stat tools-stat-missing">
-                <span class="codicon codicon-warning"></span>
-                ${missing} need setup
-              </span>
-            `
-          : nothing}
+        <div class="tools-health-ring">
+          <svg viewBox="0 0 36 36">
+            <circle class="tools-health-ring__track" cx="18" cy="18" r="${r}" />
+            <circle
+              class="tools-health-ring__available"
+              cx="18"
+              cy="18"
+              r="${r}"
+              stroke-dasharray="${circ}"
+              stroke-dashoffset="${availOffset}"
+            />
+            ${missing > 0
+              ? html`<circle
+                  class="tools-health-ring__missing"
+                  cx="18"
+                  cy="18"
+                  r="${r}"
+                  stroke-dasharray="${circ}"
+                  stroke-dashoffset="${missOffset}"
+                  style="transform: rotate(${missRotation}deg); transform-origin: 50% 50%"
+                />`
+              : nothing}
+          </svg>
+          <div class="tools-health-labels">
+            <span class="tools-summary-stat tools-stat-available">
+              <span class="codicon codicon-check"></span>
+              ${available} available
+            </span>
+            ${missing > 0
+              ? html`
+                  <span class="tools-summary-stat tools-stat-missing">
+                    <span class="codicon codicon-warning"></span>
+                    ${missing} need setup
+                  </span>
+                `
+              : nothing}
+          </div>
+        </div>
       </div>
     `;
   }

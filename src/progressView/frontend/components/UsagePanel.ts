@@ -54,12 +54,45 @@ export class UsagePanel extends LitElement {
         opacity: var(--opacity-subtle);
       }
 
+      /* Context gauge bar */
+      .context-gauge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-small);
+      }
+
+      .context-gauge__track {
+        width: 80px;
+        height: 6px;
+        background: var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.3));
+        border-radius: 3px;
+        overflow: hidden;
+      }
+
+      .context-gauge__fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width var(--transition-slow), background-color var(--transition-slow);
+      }
+
+      .context-gauge__fill--ok {
+        background-color: var(--color-success);
+      }
+
+      .context-gauge__fill--warn {
+        background-color: var(--color-warning);
+      }
+
+      .context-gauge__fill--critical {
+        background-color: var(--color-error);
+      }
+
       .run-summary {
         margin-left: auto;
       }
 
       .run-summary__label {
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         color: var(--color-text-secondary);
       }
 
@@ -154,16 +187,27 @@ export class UsagePanel extends LitElement {
     const { inputTokens, contextWindow, utilizationPercent } =
       this.contextState;
     const contextLeft = Math.max(0, 100 - utilizationPercent);
+    const clamped = Math.min(100, Math.max(0, utilizationPercent));
+    const level =
+      clamped >= 80 ? 'critical' : clamped >= 60 ? 'warn' : 'ok';
 
     return html`
-      <i class="codicon codicon-window" title="Context window"></i>
       <span
-        class="context-state__value"
+        class="context-gauge"
         title="${formatTokens(inputTokens)} / ${formatTokens(
           contextWindow,
         )} tokens used"
       >
-        ${contextLeft.toFixed(0)}% context left
+        <i class="codicon codicon-window"></i>
+        <span class="context-gauge__track">
+          <span
+            class="context-gauge__fill context-gauge__fill--${level}"
+            style="width: ${clamped}%"
+          ></span>
+        </span>
+        <span class="context-state__value">
+          ${contextLeft.toFixed(0)}% left
+        </span>
       </span>
     `;
   }

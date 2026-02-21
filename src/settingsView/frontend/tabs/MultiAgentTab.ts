@@ -87,6 +87,28 @@ export class MultiAgentTab extends LitElement {
 
       .preset-card.active {
         border-color: var(--vscode-focusBorder);
+        border-width: var(--border-medium);
+        background-color: color-mix(
+          in srgb,
+          var(--vscode-focusBorder) 8%,
+          var(--vscode-editor-inactiveSelectionBackground)
+        );
+      }
+
+      .preset-active-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-tiny);
+        padding: 1px 6px;
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-medium);
+        color: var(--vscode-focusBorder);
+        background: color-mix(in srgb, var(--vscode-focusBorder) 15%, transparent);
+        border-radius: var(--border-radius-medium, 4px);
+      }
+
+      .preset-active-badge .codicon {
+        font-size: var(--font-size-xs);
       }
 
       .preset-card-header {
@@ -268,6 +290,11 @@ export class MultiAgentTab extends LitElement {
         <div class="preset-card-header">
           <span class="codicon ${preset.icon} preset-card-icon"></span>
           <span class="preset-card-name">${preset.name}</span>
+          ${isActive
+            ? html`<span class="preset-active-badge">
+                <span class="codicon codicon-check"></span> Active
+              </span>`
+            : nothing}
         </div>
         <p class="preset-card-description">${preset.description}</p>
         <div class="preset-card-agents">
