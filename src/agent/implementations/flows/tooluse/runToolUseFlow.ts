@@ -1,21 +1,24 @@
 import {
   END_GROUP_STATUS,
   EXECUTION_STATUS,
+  STREAM_STATUS,
   type EndGroupStatus,
+  type ExecutionId,
 } from '@shared/schemas';
 import { getExecutionStore } from '@agent/storage';
+import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 import {
   registerInterruptible,
   unregisterInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 
-import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
+import type { FlowRecord } from '@agent/node/persisted-flow';
 
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
-import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
@@ -23,9 +26,12 @@ import { getDefaultToolRegistry } from '@tools/registry';
 import { getUnavailableToolNamesCached } from '@tools/toolAvailability';
 import { notifyUnavailableTools } from '@tools/toolUnavailableNotification';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
-import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
-import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
-import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
+
+import {
+  prepareToolUse,
+  runToolUseCycle,
+  waitForFollowUp,
+} from './toolUsePipeline';
 import {
   findLastAssistantText,
   migrateSharedState,
@@ -153,9 +159,12 @@ export async function runToolUseFlow<C = unknown>(
   try {
     registerInterruptible(streamId, flowContext);
     onSetup?.(flowContext);
+
+    // --- Resume from persistence ---
     let flowRecord: FlowRecord | null = null;
     try {
-      flowRecord = (await kv.read<FlowRecord>(`flow:${executionId}`)) ?? null;
+      flowRecord =
+        (await kv.read<FlowRecord>(`flow:${executionId}`)) ?? null;
     } catch {
       logger.debug('Resume parse failed, starting fresh');
     }
@@ -163,34 +172,77 @@ export async function runToolUseFlow<C = unknown>(
       logger.debug('Resuming tool-use flow from persistence');
       const migrationResult = migrateSharedState(flowRecord.shared);
       if (migrationResult === null) {
-        logger.warn('Failed to parse flow record shared state, starting fresh');
+        logger.warn(
+          'Failed to parse flow record shared state, starting fresh',
+        );
         await kv.delete(`flow:${executionId}`);
         flowRecord = null;
       } else if (migrationResult.migrated) {
         logger.debug('Migrated legacy shared state to flat format');
-        flowRecord.shared = migrationResult.data;
-        await kv.write(`flow:${executionId}`, flowRecord);
+        shared = migrationResult.data;
+      } else {
+        shared = migrationResult.data;
       }
     }
 
-    const prepareNode = new ToolUsePrepareNode<C>();
-    const cycleNode = new ToolUseCycleNode<C>();
-    const waitNode = new ToolUseWaitNode<C>();
-    prepareNode.next(cycleNode);
-    cycleNode.next(waitNode);
-    waitNode.on(FlowTransition.CONTINUE, cycleNode);
-    const pf = new PersistedFlow<
-      ToolUseRunShared,
-      Record<string, unknown>,
-      ToolUseServices<C>
-    >(prepareNode, kv);
-    pf.setServices(services);
-    await pf.run(shared);
-    // Re-read shared from the flow record — PersistedFlow deep-clones the
-    // initial shared via structuredClone, so nodes mutate the clone, not the
-    // original object.  Without this, reads of lastError, messages, etc. below
-    // would always see the stale initial values.
-    shared = (await pf.getShared()) ?? shared;
+    // Persist initial state so hasPersistedFlowRecord() can detect this flow
+    if (!flowRecord) {
+      await kv.write(`flow:${executionId}`, {
+        flowName: 'texra',
+        params: {},
+        shared: structuredClone(shared),
+        createdAt: new Date().toISOString(),
+        nodes: [],
+      } satisfies FlowRecord);
+    }
+
+    // --- Pipeline (replaces PersistedFlow + 3 node classes) ---
+
+    // Step 1: Prepare
+    await prepareToolUse(shared, services);
+
+    // Checkpoint after prepare
+    await persistCheckpoint(kv, executionId, shared);
+
+    // Step 2+3: Cycle → Wait loop
+    while (true) {
+      const cycleResult = await runToolUseCycle(shared, services);
+
+      // Checkpoint after cycle
+      await persistCheckpoint(kv, executionId, shared);
+
+      if (cycleResult.outcome === 'failed') {
+        shared.lastError = {
+          message: cycleResult.message,
+          retryable: cycleResult.retryable ?? false,
+        };
+        break;
+      }
+
+      if (cycleResult.outcome === 'cancelled') {
+        shared.userCancelledRetry = true;
+        break;
+      }
+
+      // 'completed' or 'skipped' — wait for follow-up
+      const waitResult = await waitForFollowUp(shared, services);
+
+      if (waitResult.kind === 'stop') {
+        break;
+      }
+
+      // Follow-up received — prepare messages and loop back to cycle
+      services.onFollowUpConsumed?.();
+      StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
+      logger.userMessage(waitResult.followUp);
+      shared.messages = await services.modelHandler.createUserFollowUpMessages(
+        shared.messages,
+        waitResult.followUp,
+      );
+
+      // Checkpoint after follow-up
+      await persistCheckpoint(kv, executionId, shared);
+    }
 
     if (shared.lastError) {
       status = END_GROUP_STATUS.ERROR;
@@ -242,4 +294,22 @@ export async function runToolUseFlow<C = unknown>(
   );
 
   return { status, lastResponse };
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+async function persistCheckpoint(
+  kv: ExecutionKVStore,
+  executionId: ExecutionId,
+  shared: ToolUseRunShared,
+): Promise<void> {
+  await kv.write(`flow:${executionId}`, {
+    flowName: 'texra',
+    params: {},
+    shared: structuredClone(shared),
+    createdAt: new Date().toISOString(),
+    nodes: [],
+  } satisfies FlowRecord);
 }

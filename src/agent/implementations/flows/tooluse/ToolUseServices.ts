@@ -3,10 +3,7 @@ import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ToolDefinition } from '@model';
 import type { SubagentProgressUpdate } from '@tools/subagentResults';
-import type {
-  BaseFlowContextInit,
-  FlowParams,
-} from '../common/BaseFlowServices';
+import type { BaseFlowContextInit } from '../common/BaseFlowServices';
 import type { IToolUseSession } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
@@ -25,5 +22,3 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   /** True when this agent was launched as a subagent by an orchestrator. */
   readonly isSubagent?: boolean;
 }
-
-export type { FlowParams as ToolUseFlowParams };

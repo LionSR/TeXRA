@@ -10,10 +10,7 @@ import type {
   WorkspaceFileLocation,
 } from '@utils/files';
 import type { LatexMediaManager } from '@latex';
-import type {
-  BaseFlowContextInit,
-  FlowParams,
-} from '../common/BaseFlowServices';
+import type { BaseFlowContextInit } from '../common/BaseFlowServices';
 
 export interface ReflectionServices<
   C = unknown,
@@ -30,5 +27,3 @@ export interface ReflectionServices<
   readonly baseFiles: WorkspaceFileLocation[];
   readonly onRoundFinalized: RoundFinalizedCallback;
 }
-
-export type { FlowParams as ReflectionFlowParams };

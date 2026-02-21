@@ -2,7 +2,9 @@ import * as path from 'path';
 
 import {
   END_GROUP_STATUS,
+  EXECUTION_STATUS,
   type EndGroupStatus,
+  type ExecutionStatus,
   type RoundOutput,
   type StorageKey,
 } from '@shared/schemas';
@@ -25,10 +27,10 @@ import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { createRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
+import { isRoundAtOrBeyondLimit } from '@agent/node/round-bounds';
 import type { FlowRecord } from '@agent/node/persisted-flow';
-import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
-import type { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { executionToEndStatus } from '@common/constants/streamStatus';
+import type { UsageMonitor } from '@agent/utils/UsageMonitor';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import {
   TaskRunFileService,
@@ -40,11 +42,7 @@ import {
 import { PromptBuilder } from '@utils/prompt';
 import { LatexMediaManager } from '@latex';
 
-import { TeXCountNode } from './nodes/TeXCountNode';
-import { MediaExtractionNode } from './nodes/MediaExtractionNode';
-import { PrepareContextNode } from './nodes/PrepareContextNode';
-import { ResponseCycleNode } from './nodes/ResponseCycleNode';
-import { OutputNode } from './nodes/OutputNode';
+import { executeReflectionRound } from './reflectionRoundPipeline';
 import {
   ReflectionFlowStateSchema,
   type ReflectionFlowShared,
@@ -133,7 +131,6 @@ export async function runReflectionFlow<C = unknown>(
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
   let shared: ReflectionFlowShared | undefined;
-  let services: ReflectionServices<C> | undefined;
 
   const fileService = new TaskRunFileService(executionId);
 
@@ -203,14 +200,28 @@ export async function runReflectionFlow<C = unknown>(
 
   const kv = getExecutionStore(executionId);
 
+  const services: ReflectionServices<C> = {
+    ...input,
+    onRoundFinalized,
+    outputState,
+    xmlManager,
+    diffManager,
+    latexMediaManager,
+    promptBuilder,
+    fileService,
+    getOutputFileLocation,
+    shouldEnsureXmlStructure,
+    baseFiles,
+  };
+
   try {
     registerInterruptible(streamId, interruptible);
 
+    // --- Resume or create fresh shared state ---
     const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
     const validated = flowRecord?.shared
       ? ReflectionFlowStateSchema.safeParse(flowRecord.shared)
       : null;
-    const isResume = validated?.success ?? false;
 
     if (validated?.success) {
       shared = validated.data as ReflectionFlowShared;
@@ -238,73 +249,75 @@ export async function runReflectionFlow<C = unknown>(
       };
     }
 
-    const prepContextNode = new PrepareContextNode<C>();
-    const texCountNode = new TeXCountNode<C>();
-    const mediaNode = new MediaExtractionNode<C>();
-    const responseCycleNode = new ResponseCycleNode<C>();
-    const outputNode = new OutputNode<C>();
-
-    prepContextNode.next(texCountNode);
-    texCountNode.next(mediaNode);
-    mediaNode.next(responseCycleNode);
-    responseCycleNode.next(outputNode);
-
-    const pf = new RoundPersistedFlow<
-      ReflectionFlowShared,
-      Record<string, unknown>,
-      ReflectionServices<C>
-    >(prepContextNode, kv, {
-      parentStage,
-      callbacks: {
-        createRoundStage: (roundIndex, parent) =>
-          logger.stage(`r${roundIndex}`, {
-            parent: parent ?? undefined,
-          }),
-        onStageCreated: (stage) => {
-          usageMonitor?.setActiveGroupId(stage.id);
-        },
-        resetForNextRound: (s) => {
-          s.workspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
-        },
-        checkInterruption,
-        onRoundCompleted: (roundIndex, s) => {
-          input.onRoundCompleted?.(roundIndex, s.totalRounds);
-        },
-      },
-    });
-
-    services = {
-      ...input,
-      onRoundFinalized,
-      outputState,
-      xmlManager,
-      diffManager,
-      latexMediaManager,
-      promptBuilder,
-      fileService,
-      getOutputFileLocation,
-      shouldEnsureXmlStructure,
-      baseFiles,
-    };
-    pf.setServices(services);
-
-    if (isResume) {
-      logger.debug('Resuming reflection flow from persistence');
-      // Persist the synced totalRounds into the flow record so that
-      // stepWithResult() picks up the current config, not the stale one.
-      await pf.setShared(shared);
+    // Persist initial state so hasPersistedFlowRecord() can detect this flow
+    if (!flowRecord) {
+      await kv.write(`flow:${executionId}`, {
+        flowName: 'texra',
+        params: {},
+        shared: structuredClone(shared),
+        createdAt: new Date().toISOString(),
+        nodes: [],
+      } satisfies FlowRecord);
     }
 
-    const flowStatus = await pf.run(shared);
-    shared = await pf.getShared();
+    // --- Round loop (replaces RoundPersistedFlow + 5 node classes) ---
+    let executionStatus: ExecutionStatus = EXECUTION_STATUS.COMPLETED;
 
-    if (shared?.lastError) {
+    while (true) {
+      // Create round stage for logging
+      const roundStage: AgentLogStage = await logger.stage(
+        `r${shared.currentRound}`,
+        { parent: parentStage ?? undefined },
+      );
+      usageMonitor?.setActiveGroupId(roundStage.id);
+
+      try {
+        await roundStage.within(() =>
+          executeReflectionRound(shared!, services),
+        );
+      } finally {
+        roundStage.end();
+      }
+
+      // Checkpoint at round boundary
+      await kv.write(`flow:${executionId}`, {
+        flowName: 'texra',
+        params: {},
+        shared: structuredClone(shared),
+        createdAt: new Date().toISOString(),
+        nodes: [],
+      } satisfies FlowRecord);
+
+      // Decide whether to continue
+      if (shared.lastError) {
+        executionStatus = EXECUTION_STATUS.ERROR;
+        break;
+      }
+      if (checkInterruption() || !shared.continueRounds) {
+        executionStatus = EXECUTION_STATUS.INTERRUPTED;
+        break;
+      }
+      if (
+        isRoundAtOrBeyondLimit(shared.currentRound + 1, shared.totalRounds)
+      ) {
+        // All rounds complete
+        input.onRoundCompleted?.(shared.currentRound, shared.totalRounds);
+        break;
+      }
+
+      // Transition to next round
+      input.onRoundCompleted?.(shared.currentRound, shared.totalRounds);
+      shared.currentRound += 1;
+      shared.workspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
+    }
+
+    if (shared.lastError) {
       status = END_GROUP_STATUS.ERROR;
       // Re-throw after state persistence (handled in finally) so
       // runFlowWithLifecycle logs the error and shows the user notification.
       throw new Error(shared.lastError.message);
     } else {
-      status = executionToEndStatus(flowStatus) as EndGroupStatus;
+      status = executionToEndStatus(executionStatus) as EndGroupStatus;
     }
   } catch (error) {
     status = END_GROUP_STATUS.ERROR;

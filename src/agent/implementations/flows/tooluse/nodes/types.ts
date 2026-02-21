@@ -1,10 +1,7 @@
 import { z } from 'zod';
 
 import type { AgentRunStateSnapshot } from '@agent/core/AgentState';
-import type {
-  AgentWorkspaceState,
-  AgentWorkspaceSnapshot,
-} from '@agent/core/AgentWorkspaceState';
+import type { AgentWorkspaceSnapshot } from '@agent/core/AgentWorkspaceState';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { RetryErrorInfo } from '@shared/schemas';
@@ -24,30 +21,6 @@ export interface ToolUseRunShared {
   lastError?: RetryErrorInfo;
 }
 
-interface NodeResultStateBase {
-  runState: AgentRunStateSnapshot;
-  workspaceState: AgentWorkspaceState;
-  userChannels: UserVariableChannels;
-}
-
-export interface PrepareResult extends NodeResultStateBase {
-  messages: ProviderMessage[];
-  shouldSkipCycle: boolean;
-}
-
-export type WaitExecResult =
-  | { kind: 'continue'; followUp: string }
-  | { kind: 'stop' };
-
-export interface CyclePrepResult extends NodeResultStateBase {
-  messages: ProviderMessage[];
-  shouldSkip: boolean;
-}
-
-export type PreparedShared = ToolUseRunShared & {
-  stateSlices: StateSlicesSnapshot;
-};
-
 export function findLastAssistantText(
   messages: ProviderMessage[],
   extractAssistantText: (message: ProviderMessage) => string | undefined,
@@ -57,14 +30,6 @@ export function findLastAssistantText(
     if (text !== undefined) return text;
   }
   return undefined;
-}
-
-export function assertPreparedShared(
-  shared: ToolUseRunShared,
-): asserts shared is PreparedShared {
-  if (shared.stateSlices === null) {
-    throw new Error('PrepareNode must run before CycleNode');
-  }
 }
 
 const MessagesSchema = z.looseObject({ messages: z.array(z.unknown()) });
