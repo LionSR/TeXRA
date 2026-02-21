@@ -36,11 +36,11 @@ The progress view is designed like a full application (its own navigation, inter
 
 As of VS Code 1.106 (October 2025), extensions can place view containers in three locations:
 
-| Location | `viewsContainers` key | Characteristics |
-|---|---|---|
-| **Primary Sidebar** (left) | `activitybar` | Full height, ~300-400px wide, activity bar icons |
-| **Bottom Panel** | `panel` | Full width, ~200px tall, tab-based |
-| **Secondary Sidebar** (right) | `secondarySidebar` | Full height, ~300-400px wide, independent from primary |
+| Location                      | `viewsContainers` key | Characteristics                                        |
+| ----------------------------- | --------------------- | ------------------------------------------------------ |
+| **Primary Sidebar** (left)    | `activitybar`         | Full height, ~300-400px wide, activity bar icons       |
+| **Bottom Panel**              | `panel`               | Full width, ~200px tall, tab-based                     |
+| **Secondary Sidebar** (right) | `secondarySidebar`    | Full height, ~300-400px wide, independent from primary |
 
 The `secondarySidebar` contribution point was finalized in VS Code 1.106 and is now stable. The secondary sidebar is where VS Code places agent/AI tools (Chat, Copilot), making it the natural home for an AI research assistant.
 
@@ -105,14 +105,30 @@ A toolbar button pops the progress view into the editor area as a tab. The sideb
 └──────────────────────────────────────────────────────┘
 ```
 
+### View Toggle
+
+Both views have a persistent toggle in their header that lets the user switch freely between main view and progress view at any time — not just on Execute or "Back." This is the primary navigation mechanism.
+
+```
+Main View header:                    Progress View header:
+┌──────────────────────────────┐     ┌──────────────────────────────┐
+│ [Setup ▾] [Progress]    [⧉] │     │ [Setup] [Progress ▾]   [⧉]  │
+└──────────────────────────────┘     └──────────────────────────────┘
+```
+
+The toggle is a pair of buttons (or a segmented control) in the view header. The active view is visually indicated (e.g., underlined, filled, or bolded). Clicking the inactive label swaps views. This works identically in sidebar and editor mode.
+
+**Keyboard shortcut**: A command `texra.toggleView` (bound to a keybinding, e.g., `Ctrl+Shift+T` / `Cmd+Shift+T`) toggles between the two views. This is registered in `package.json` as a `keybindings` contribution so users can rebind it.
+
 ### Automatic Behavior
 
-No user setting. Transitions are automatic and contextual:
+No user setting. Transitions are automatic and contextual. The toggle is always available for manual switching in addition to these automatic triggers:
 
 | Trigger | Action |
 |---|---|
 | User clicks Execute in main view | Sidebar swaps to progress view; auto-focuses the new stream |
-| User clicks "Back to setup" in progress (sidebar) | Sidebar swaps back to main view |
+| User clicks toggle (Setup ↔ Progress) | Sidebar swaps to the selected view |
+| User presses `Ctrl/Cmd+Shift+T` | Sidebar toggles between main and progress view |
 | User clicks pop-out button in progress (sidebar) | Progress opens as editor tab; sidebar reverts to main view; sidebar progress view deactivated |
 | User clicks pop-back button in editor progress | Editor tab closes; sidebar swaps to progress view; sidebar progress view reactivated |
 | User closes editor progress tab (via VS Code ×) | Sidebar remains on main view (no forced swap) |
@@ -129,31 +145,48 @@ At sidebar width (~300px), the stream tabs column adapts:
 
 At editor width (~800px+), stream tabs render at full width with status badges, timestamps, and action buttons (same as current design).
 
-### Pop-Out / Pop-Back UI
+### Header Toolbar Layout
 
-**Sidebar toolbar** (visible when progress is in the sidebar):
+The view toggle is the left-most element in both views' headers. Pop-out/pop-back buttons appear on the right.
 
-| Button | Codicon | Action |
-|---|---|---|
-| Back to setup | `$(arrow-left)` | Swaps sidebar back to main view |
-| Pop to editor | `$(link-external)` | Opens progress as editor tab; sidebar reverts to main view |
+**Main View header** (sidebar):
+```
+┌──────────────────────────────────┐
+│ [Setup ▾] [Progress]        [⧉] │
+│                              ↑   │
+│                         pop out  │
+└──────────────────────────────────┘
+```
 
-**Editor toolbar** (visible when progress is in editor area):
+The main view shows a pop-out button (`$(link-external)`) that opens the *progress view* in the editor area (shortcut for: switch to progress + pop out). This is useful when the user wants to monitor progress alongside the setup form.
 
-| Button | Codicon | Action |
-|---|---|---|
-| Pop back to sidebar | `$(layout-sidebar-right)` or `$(layout-sidebar-left)` | Closes editor tab; sidebar swaps to progress view |
+**Progress View header** (sidebar):
+```
+┌──────────────────────────────────┐
+│ [Setup] [Progress ▾]        [⧉] │
+└──────────────────────────────────┘
+```
+
+**Progress View header** (editor):
+```
+┌──────────────────────────────────────────────┐
+│ [Setup] [Progress ▾]        [← Back to bar] │
+└──────────────────────────────────────────────┘
+```
+
+In editor mode, clicking "Setup" in the toggle focuses the sidebar (which shows the main view). The pop-back button closes the editor tab and returns progress to the sidebar.
 
 These replace the current "Open in Tab" command — the behavior is now bidirectional.
 
 ### Default Sidebar Location
 
-| VS Code Version | `viewsContainers` key | Extension home |
-|---|---|---|
-| 1.106+ | `secondarySidebar` | Secondary sidebar (right side, alongside Chat/Copilot) |
-| < 1.106 | `activitybar` | Primary sidebar (left side, current behavior) |
+| VS Code Version | `viewsContainers` key | Extension home                                         |
+| --------------- | --------------------- | ------------------------------------------------------ |
+| 1.106+          | `secondarySidebar`    | Secondary sidebar (right side, alongside Chat/Copilot) |
+| < 1.106         | `activitybar`         | Primary sidebar (left side, current behavior)          |
 
 On 1.106+, the secondary sidebar is the preferred home because:
+
 - It's where VS Code places AI/agent tools — users expect agent UIs there
 - The primary sidebar stays free for file explorer, search, source control
 - The extension doesn't compete for primary sidebar attention with core VS Code views
@@ -232,24 +265,52 @@ Add a `when` clause to each view and toggle a context key:
 ```
 
 ```typescript
-// On Execute:
+// On Execute or toggle to progress:
 vscode.commands.executeCommand('setContext', 'texra.activeView', 'progress');
 
-// On "Back to setup":
+// On toggle to setup:
 vscode.commands.executeCommand('setContext', 'texra.activeView', 'main');
 ```
 
 This fully hides the inactive view (no collapsed section header visible).
 
+#### Toggle Command and Keybinding
+
+Register a `texra.toggleView` command that flips `texra.activeView` between `'main'` and `'progress'`:
+
+```typescript
+vscode.commands.registerCommand('texra.toggleView', () => {
+  const current = contextState.activeView; // track internally
+  const next = current === 'main' ? 'progress' : 'main';
+  vscode.commands.executeCommand('setContext', 'texra.activeView', next);
+});
+```
+
+**`package.json` keybinding**:
+
+```json
+{
+  "command": "texra.toggleView",
+  "key": "ctrl+shift+t",
+  "mac": "cmd+shift+t",
+  "when": "texra.activeView"
+}
+```
+
+Both frontends also post a `SWITCH_VIEW` message when the user clicks the toggle buttons in the header. The backend handles this identically to the keybinding.
+
 #### Files Modified
 
 | File | Change |
 |---|---|
-| `package.json` | Add `when` clauses to both view declarations |
-| `src/extension.ts` | Initialize `texra.activeView` context to `'main'` on activation |
+| `package.json` | Add `when` clauses to both view declarations; register `texra.toggleView` command and keybinding |
+| `src/extension.ts` | Initialize `texra.activeView` context to `'main'` on activation; register toggle command |
 | `src/commands/agent/executeCommands.ts` | Set context to `'progress'` after execution starts |
 | `src/progressView/ProgressViewProvider.ts` | Add `showInSidebar()` method that sets context to `'progress'` |
 | `src/MainViewProvider.ts` | Add `showInSidebar()` method that sets context to `'main'` |
+| `src/webview/frontend/MainApp.ts` | Add view toggle to header; post `SWITCH_VIEW` message |
+| `src/progressView/frontend/ProgressApp.ts` | Add view toggle to header; post `SWITCH_VIEW` message |
+| `src/shared/schemas/commonViewMessages.ts` | Add `SWITCH_VIEW` to shared inbound message schema |
 
 ### Phase 3: Pop-Out to Editor Area (Exclusive)
 
@@ -306,14 +367,14 @@ No state is lost because the provider is a singleton — it holds all state rega
 
 #### Files Modified
 
-| File | Change |
-|---|---|
-| `src/progressView/ProgressViewProvider.ts` | Add `popOutToEditor()` and `popBackToSidebar()` methods; exclusive webview targeting |
-| `src/progressView/WebviewUpdater.ts` | Switch from broadcast to exclusive-target mode |
-| `src/progressView/frontend/ProgressApp.ts` | Add pop-out/pop-back toolbar buttons; post `POP_OUT`/`POP_BACK` messages |
-| `src/progressView/ProgressViewMessageHandler.ts` | Handle `POP_OUT` and `POP_BACK` inbound messages |
-| `src/shared/schemas/progressView.ts` | Add `POP_OUT` and `POP_BACK` to inbound message schema |
-| `src/commands/progress/progressViewCommands.ts` | Update `openProgressViewInTab` to use `popOutToEditor()` |
+| File                                             | Change                                                                               |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `src/progressView/ProgressViewProvider.ts`       | Add `popOutToEditor()` and `popBackToSidebar()` methods; exclusive webview targeting |
+| `src/progressView/WebviewUpdater.ts`             | Switch from broadcast to exclusive-target mode                                       |
+| `src/progressView/frontend/ProgressApp.ts`       | Add pop-out/pop-back toolbar buttons; post `POP_OUT`/`POP_BACK` messages             |
+| `src/progressView/ProgressViewMessageHandler.ts` | Handle `POP_OUT` and `POP_BACK` inbound messages                                     |
+| `src/shared/schemas/progressView.ts`             | Add `POP_OUT` and `POP_BACK` to inbound message schema                               |
+| `src/commands/progress/progressViewCommands.ts`  | Update `openProgressViewInTab` to use `popOutToEditor()`                             |
 
 ### Phase 4: Responsive Stream Tabs
 
@@ -339,7 +400,9 @@ CSS adapts the stream tabs column:
 
 ```css
 /* Default: full-width tabs (editor mode) */
-stream-tabs { min-width: 180px; }
+stream-tabs {
+  min-width: 180px;
+}
 
 /* Narrow: compact icon strip (sidebar mode) */
 :host(.narrow) stream-tabs {
@@ -349,34 +412,50 @@ stream-tabs { min-width: 180px; }
 ```
 
 `StreamTabs` component renders a compact variant when narrow:
+
 - Status icon only (no text label)
 - Tooltip with full stream info on hover
 - Active stream highlighted with left border
 
 #### Files Modified
 
-| File | Change |
-|---|---|
-| `src/progressView/frontend/ProgressApp.ts` | Add `ResizeObserver`, `narrow` class toggle |
-| `src/progressView/frontend/components/StreamTabs.ts` | Compact rendering variant for narrow mode |
-| `src/progressView/frontend/styles/` | Responsive styles for stream tabs |
+| File                                                 | Change                                      |
+| ---------------------------------------------------- | ------------------------------------------- |
+| `src/progressView/frontend/ProgressApp.ts`           | Add `ResizeObserver`, `narrow` class toggle |
+| `src/progressView/frontend/components/StreamTabs.ts` | Compact rendering variant for narrow mode   |
+| `src/progressView/frontend/styles/`                  | Responsive styles for stream tabs           |
 
-### Phase 5: Header Toolbar with Navigation
+### Phase 5: Header Toolbar with View Toggle
 
-Add a header toolbar to the progress view with context-aware navigation and pop-out buttons.
+Add a unified header toolbar to both views with the view toggle and context-aware action buttons.
 
 #### UI
 
-The header renders differently based on current placement:
+Both views share the same toggle pattern — a segmented control (or button pair) with "Setup" and "Progress" labels. The active label is visually distinguished.
 
-**Sidebar mode:**
+**Main View header** (sidebar):
+
 ```html
-<div class="progress-header">
-  <vscode-button appearance="icon" @click=${this.onBackToSetup}
-    title="Back to setup">
-    <span class="codicon codicon-arrow-left"></span>
+<div class="view-header">
+  <div class="view-toggle">
+    <button class="active" disabled>Setup</button>
+    <button @click=${this.onSwitchToProgress}>Progress</button>
+  </div>
+  <vscode-button appearance="icon" @click=${this.onPopOutProgress}
+    title="Open progress in editor">
+    <span class="codicon codicon-link-external"></span>
   </vscode-button>
-  <span class="header-title">ProgressBoard</span>
+</div>
+```
+
+**Progress View header** (sidebar):
+
+```html
+<div class="view-header">
+  <div class="view-toggle">
+    <button @click=${this.onSwitchToSetup}>Setup</button>
+    <button class="active" disabled>Progress</button>
+  </div>
   <vscode-button appearance="icon" @click=${this.onPopOut}
     title="Open in editor">
     <span class="codicon codicon-link-external"></span>
@@ -384,67 +463,83 @@ The header renders differently based on current placement:
 </div>
 ```
 
-**Editor mode:**
+**Progress View header** (editor):
+
 ```html
-<div class="progress-header">
+<div class="view-header">
+  <div class="view-toggle">
+    <button @click=${this.onSwitchToSetup}>Setup</button>
+    <button class="active" disabled>Progress</button>
+  </div>
   <vscode-button appearance="icon" @click=${this.onPopBack}
     title="Back to sidebar">
     <span class="codicon codicon-layout-sidebar-right"></span>
   </vscode-button>
-  <span class="header-title">ProgressBoard</span>
 </div>
 ```
 
-The backend informs the frontend of its current placement via an outbound message (`SET_PLACEMENT`) so the correct buttons render. The "Back to setup" button only appears in sidebar mode (in editor mode, the sidebar already shows the main view).
+In editor mode, clicking "Setup" focuses the sidebar (which already shows the main view) rather than closing the editor tab.
+
+The backend informs the frontend of its current placement via an outbound message (`SET_PLACEMENT`) so the correct action buttons render (pop-out vs pop-back).
+
+#### Shared Toggle Component
+
+The view toggle is a shared Lit component (`<view-toggle>`) used by both `MainApp` and `ProgressApp`. It accepts the active view as a property and dispatches a `switch-view` event.
 
 #### Files Modified
 
 | File | Change |
 |---|---|
-| `src/progressView/frontend/ProgressApp.ts` | Add header bar with context-aware buttons |
-| `src/progressView/ProgressViewMessageHandler.ts` | Handle `BACK_TO_SETUP` message; send placement context |
+| `src/shared/components/ViewToggle.ts` | New shared toggle component |
+| `src/webview/frontend/MainApp.ts` | Add view header with toggle and pop-out button |
+| `src/progressView/frontend/ProgressApp.ts` | Add view header with toggle and pop-out/pop-back buttons |
+| `src/progressView/ProgressViewMessageHandler.ts` | Send placement context via `SET_PLACEMENT` |
 | `src/shared/schemas/progressView.ts` | Add placement enum and `SET_PLACEMENT` outbound message |
 
 ## Surface Area
 
 ### Removed
 
-| Component | Reason |
-|---|---|
+| Component                                     | Reason                                                    |
+| --------------------------------------------- | --------------------------------------------------------- |
 | `texra-panel` view container (`package.json`) | No longer needed; progress view co-locates with main view |
-| Bottom panel icon in activity bar | Replaced by sidebar co-location |
-| Broadcast mode in `WebviewUpdater` | Replaced by exclusive-target mode |
+| Bottom panel icon in activity bar             | Replaced by sidebar co-location                           |
+| Broadcast mode in `WebviewUpdater`            | Replaced by exclusive-target mode                         |
 
 ### Added
 
 | Component | Reason |
 |---|---|
 | `texra.activeView` context key | Controls sidebar view swapping |
+| `texra.toggleView` command + keybinding | Keyboard shortcut for switching views |
 | `SET_PLACEMENT` outbound message | Informs frontend of current location for toolbar rendering |
+| `SWITCH_VIEW` shared inbound message | Frontend toggle posts to backend to swap views |
+| `src/shared/components/ViewToggle.ts` | Shared segmented control component for both views |
 
 ### Modified
 
 | File | Nature of Change |
 |---|---|
-| `package.json` | View container restructuring (`secondarySidebar`), `when` clauses, engine version bump |
-| `src/extension.ts` | Context key initialization |
+| `package.json` | View container restructuring (`secondarySidebar`), `when` clauses, keybinding, engine version bump |
+| `src/extension.ts` | Context key initialization, toggle command registration |
 | `src/progressView/ProgressViewProvider.ts` | Exclusive webview targeting, pop-out/pop-back methods, sidebar swap helpers |
 | `src/progressView/WebviewUpdater.ts` | Exclusive-target mode (single active webview) |
-| `src/progressView/frontend/ProgressApp.ts` | Header toolbar, ResizeObserver, pop-out/pop-back messages |
+| `src/progressView/frontend/ProgressApp.ts` | View toggle header, ResizeObserver, pop-out/pop-back messages |
 | `src/progressView/frontend/components/StreamTabs.ts` | Responsive compact variant |
 | `src/progressView/ProgressViewMessageHandler.ts` | New inbound message handlers, placement context |
 | `src/shared/schemas/progressView.ts` | New message types, placement enum |
+| `src/shared/schemas/commonViewMessages.ts` | Add `SWITCH_VIEW` shared inbound message |
+| `src/webview/frontend/MainApp.ts` | View toggle header with pop-out button |
 | `src/commands/progress/progressViewCommands.ts` | Updated pop-out command |
 | `src/commands/agent/executeCommands.ts` | Auto-swap to progress on execute |
 | `src/MainViewProvider.ts` | Sidebar swap helper |
 
 ### Unchanged
 
-- All frontend components besides `ProgressApp` and `StreamTabs`
+- All frontend components besides `ProgressApp`, `MainApp`, and `StreamTabs`
 - All backend event handlers and state management
-- Main view components and state
 - Settings view (remains independent editor panel)
-- Shared styles and controllers (no changes)
+- Shared styles and controllers (no changes beyond new `ViewToggle` component)
 
 ## Non-Goals
 
