@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { createStreamState, STREAM_STATUS } from '@shared/schemas';
+import { STREAM_STATUS } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { TaskState } from '@logger/TaskState';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
@@ -15,6 +15,7 @@ import type {
   PermissionPayload,
   ProgressPermissionKind,
   ProgressViewOutboundMessage,
+  StreamMetadata,
   StreamState,
   StreamStatus,
   StreamTabId,
@@ -104,13 +105,13 @@ export class WebviewUpdater {
 
   /**
    * Update stream tabs in the webview.
-   * Optionally includes full stream states - backend is source of truth.
+   * Optionally includes lightweight stream metadata (backend-owned fields only).
    */
   updateStreams(
     streams: StreamTabInfo[],
     activeStream: StreamTabId,
     agentFilter: AgentCategoryFilter,
-    streamStates?: Record<StreamTabId, StreamState>,
+    streamStates?: Record<StreamTabId, StreamMetadata>,
   ): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
@@ -472,19 +473,24 @@ export class WebviewUpdater {
       this.updateTheme(theme);
     }
 
-    // Send stream states - backend is the source of truth
-    const streamStates = state.getAllStreamStates();
+    // Send lightweight metadata — only backend-owned fields the frontend merges.
+    // Full StreamState objects (taskGroups, runInstructions, runUsage, etc.) are
+    // never needed here; the frontend populates those via targeted messages.
+    const allStates = state.getAllStreamStates();
+    const streamMetadata: Record<StreamTabId, StreamMetadata> = {};
     for (const streamInfo of streams) {
-      const current =
-        streamStates[streamInfo.name] ??
-        createStreamState(streamInfo.agentCategory);
-      // StreamStatusService omits READY entries by design; default to READY.
+      const current = allStates[streamInfo.name];
       const status = statuses?.get(streamInfo.name) ?? STREAM_STATUS.READY;
       const lastTimestamp = state.streamTabs.getLastTimestamp(streamInfo.name);
-      streamStates[streamInfo.name] = {
-        ...current,
+      streamMetadata[streamInfo.name] = {
+        kind: streamInfo.agentCategory,
         status,
         lastTimestamp,
+        conversationProgress: current?.conversationProgress ?? { conversationTurns: 0, toolCallCount: 0 },
+        activeSubagents: current?.activeSubagents ?? [],
+        finishedSubagentCount: current?.finishedSubagentCount ?? 0,
+        activeProcesses: current?.activeProcesses ?? [],
+        finishedProcessCount: current?.finishedProcessCount ?? 0,
       };
     }
 
@@ -492,7 +498,7 @@ export class WebviewUpdater {
       streams,
       activeStream,
       state.agentCategoryFilter,
-      streamStates,
+      streamMetadata,
     );
 
     return activeStream;

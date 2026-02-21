@@ -16,6 +16,7 @@ import {
   sumUsageStats,
   type LogMessageData,
   type ProgressViewOutboundMessage,
+  type StreamMetadata,
   type StreamTabInfo,
 } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
@@ -145,29 +146,32 @@ function setActiveStreamRecording(
 
 function mergeBackendOwnedState(
   existing: StreamState,
-  backendState: StreamState,
+  metadata: StreamMetadata,
 ): StreamState {
-  if (existing.kind !== backendState.kind) {
-    // taskGroups is frontend-owned (populated via ADD_TASK_GROUP/UPDATE_TASK_GROUP,
-    // never included in metadata syncs), so preserve it across kind changes.
-    return { ...backendState, taskGroups: existing.taskGroups };
+  if (existing.kind !== metadata.kind) {
+    // Kind changed — create fresh state with new-kind defaults, overlay metadata,
+    // and preserve frontend-owned taskGroups.
+    return createStreamState(metadata.kind, {
+      ...metadata,
+      taskGroups: existing.taskGroups,
+    });
   }
   return {
     ...existing,
-    status: backendState.status,
-    lastTimestamp: backendState.lastTimestamp,
-    conversationProgress: backendState.conversationProgress,
-    activeSubagents: backendState.activeSubagents,
-    finishedSubagentCount: backendState.finishedSubagentCount,
-    activeProcesses: backendState.activeProcesses,
-    finishedProcessCount: backendState.finishedProcessCount,
+    status: metadata.status,
+    lastTimestamp: metadata.lastTimestamp,
+    conversationProgress: metadata.conversationProgress,
+    activeSubagents: metadata.activeSubagents,
+    finishedSubagentCount: metadata.finishedSubagentCount,
+    activeProcesses: metadata.activeProcesses,
+    finishedProcessCount: metadata.finishedProcessCount,
   };
 }
 
 function updateStreamInfo(
   state: ProgressState,
   streams: StreamTabInfo[],
-  backendStates?: Record<string, StreamState>,
+  backendMetadata?: Record<string, StreamMetadata>,
 ): ProgressState {
   const nextStates = new Map(state.streamStates);
   const nextLogs = new Map(state.streamLogs);
@@ -182,14 +186,14 @@ function updateStreamInfo(
   }
 
   for (const stream of streams) {
-    const backendState = backendStates?.[stream.name];
-    if (backendState) {
+    const metadata = backendMetadata?.[stream.name];
+    if (metadata) {
       const existing = nextStates.get(stream.name);
       nextStates.set(
         stream.name,
         existing
-          ? mergeBackendOwnedState(existing, backendState)
-          : backendState,
+          ? mergeBackendOwnedState(existing, metadata)
+          : createStreamState(stream.agentCategory, metadata),
       );
     } else {
       const existing =

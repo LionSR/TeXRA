@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { AGENT_CATEGORY, type AgentCategory } from './agent';
+import { AGENT_CATEGORY, AgentCategorySchema, type AgentCategory } from './agent';
 import { OutputFileInfoSchema } from './output';
 import { InstructionUpdateSchema, StreamStatusSchema } from './stream';
 import { TaskGroupSchema } from './taskGroup';
@@ -43,13 +43,10 @@ export const ConversationProgressSchema = z.object({
 
 export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
 
-// Base Stream State
+// Stream Metadata — the lightweight subset sent over postMessage in UPDATE_STREAMS.
+// Contains only backend-owned fields that mergeBackendOwnedState() actually reads.
 
-const BaseStreamStateSchema = z.object({
-  // Backend-owned fields — set by backend, frontend reads only.
-  // Updated via targeted messages (UPDATE_STREAM_STATUS, UPDATE_STREAM_BADGES,
-  // UPDATE_CONVERSATION_PROGRESS) or full UPDATE_STREAMS on structural changes.
-  // See mergeBackendOwnedState() in messageDispatcher.ts for merge semantics.
+const BackendOwnedFieldsSchema = z.object({
   status: StreamStatusSchema.optional(),
   lastTimestamp: z.number().optional(),
   conversationProgress: ConversationProgressSchema.prefault({}),
@@ -57,7 +54,17 @@ const BaseStreamStateSchema = z.object({
   finishedSubagentCount: z.number().prefault(0),
   activeProcesses: z.array(ActiveChildInfoSchema).prefault([]),
   finishedProcessCount: z.number().prefault(0),
+});
 
+export const StreamMetadataSchema = BackendOwnedFieldsSchema.extend({
+  kind: AgentCategorySchema,
+});
+
+export type StreamMetadata = z.infer<typeof StreamMetadataSchema>;
+
+// Base Stream State
+
+const BaseStreamStateSchema = BackendOwnedFieldsSchema.extend({
   // Frontend-owned fields — set by frontend handlers, preserved during backend merges.
   taskGroups: z.array(TaskGroupSchema).prefault([]),
   contextState: ContextStateSchema.optional(),

@@ -32,7 +32,7 @@ import {
 import {
   ActiveChildInfoSchema,
   ConversationProgressSchema,
-  StreamStateSchema,
+  StreamMetadataSchema,
 } from './streamState';
 import { TaskGroupSchema, UpdateTaskGroupPayloadSchema } from './taskGroup';
 import { TodoItemSchema } from './todo';
@@ -113,7 +113,7 @@ export const UpdateStreamsMessageSchema = z.object({
   streams: z.array(StreamTabInfoSchema),
   activeStream: z.union([StreamTabIdSchema, z.literal('')]),
   agentFilter: AgentCategoryFilterSchema,
-  streamStates: z.record(z.string(), StreamStateSchema).optional(),
+  streamStates: z.record(z.string(), StreamMetadataSchema).optional(),
 });
 
 export const SetActiveStreamMessageSchema = z.object({
