@@ -299,6 +299,11 @@ export class ProgressApp extends ProgressAppBase {
     const hasStreams = this.hasStreams$.get();
     if (!activeStreamInfo) return { ...EMPTY_STREAM_CONTEXT, hasStreams };
 
+    const streamState = this.activeStreamState$.get();
+    const isToolUse = streamState ? isToolUseState(streamState) : false;
+    const runId = streamState
+      ? getEffectiveRunId(streamState, { mode: 'fallback' })
+      : null;
     const followupOptions =
       this.followupOptions$.get().get(activeStreamInfo.name) ?? null;
 

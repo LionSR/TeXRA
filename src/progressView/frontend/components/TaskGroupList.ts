@@ -220,20 +220,20 @@ export class TaskGroupList extends LitElement {
       }
     }
 
-    // Recompute tool-use timeline only when inputs change
+    // Recompute tool-use timeline incrementally when possible
     if (this.isToolUse && (groupsChanged || messagesChanged)) {
-      this.cachedTimeline = [
-        ...this.cachedUngrouped.map((m) => ({
-          key: m.id,
-          time: m.timestamp ?? 0,
-          msg: m,
-        })),
-        ...this.cachedTree.map((t) => ({
-          key: t.group.id,
-          time: t.group.startTime ?? 0,
-          tree: t,
-        })),
-      ].sort((a, b) => a.time - b.time);
+      if (groupsChanged) {
+        // Structural change — full timeline rebuild (rare)
+        this.cachedTimeline = this.buildFullTimeline();
+      } else if (this.messages.length > prevCount) {
+        // Append-only: add new ungrouped entries to timeline.
+        // Grouped messages are already referenced via tree nodes in timeline entries.
+        this.appendToTimeline(prevUngroupedCount);
+      } else {
+        // Same-length (streaming update): update msg refs on timeline entries in-place.
+        // guard([item.msg]) in render() detects new refs.
+        this.updateTimelineMessageRefs();
+      }
     }
   }
 
