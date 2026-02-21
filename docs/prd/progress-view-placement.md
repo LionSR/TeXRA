@@ -107,16 +107,29 @@ A toolbar button pops the progress view into the editor area as a tab. The sideb
 
 ### View Toggle
 
-Both views have a persistent toggle in their header that lets the user switch freely between main view and progress view at any time — not just on Execute or "Back." This is the primary navigation mechanism.
+Both views share a `<vscode-tabs>` header (from `@vscode-elements/elements`, already used in the settings view) that lets the user switch freely between main view and progress view at any time — not just on Execute or "Back." This is the primary navigation mechanism.
 
 ```
-Main View header:                    Progress View header:
-┌──────────────────────────────┐     ┌──────────────────────────────┐
-│ [Setup ▾] [Progress]    [⧉] │     │ [Setup] [Progress ▾]   [⧉]  │
-└──────────────────────────────┘     └──────────────────────────────┘
+Sidebar (~300px):
+┌────────────────────────────────┐
+│ ◧ Setup │ ◨ Progress       [⧉]│  ← vscode-tabs with vscode-tab-header
+│ ────────┘                      │     (underline on active, codicon prefix)
+│                                │
+│  (active view content below)   │
+└────────────────────────────────┘
+
+Editor pop-out (~800px):
+┌──────────────────────────────────────────────────────┐
+│ ◧ Setup │ ◨ Progress                    [← sidebar] │
+│           ──────────                                 │
+│                                                      │
+│  (progress view content)                             │
+└──────────────────────────────────────────────────────┘
 ```
 
-The toggle is a pair of buttons (or a segmented control) in the view header. The active view is visually indicated (e.g., underlined, filled, or bolded). Clicking the inactive label swaps views. This works identically in sidebar and editor mode.
+The tab headers use codicons for visual clarity: `$(edit)` for Setup, `$(server-process)` for Progress. Clicking the inactive tab swaps views. In editor mode, clicking "Setup" focuses the sidebar (which already shows the main view) rather than closing the editor tab.
+
+This is **not** a full `<vscode-tabs>` with `<vscode-tab-panel>` children — the two views are separate webviews, not panels within a single tab container. The `<vscode-tabs>` is used purely as a navigation header; the `vsc-tabs-select` event triggers a `SWITCH_VIEW` message to the backend, which toggles the `texra.activeView` context key. No `<vscode-tab-panel>` elements are used.
 
 **Keyboard shortcut**: A command `texra.toggleView` (bound to a keybinding, e.g., `Ctrl+Shift+T` / `Cmd+Shift+T`) toggles between the two views. This is registered in `package.json` as a `keybindings` contribution so users can rebind it.
 
@@ -147,37 +160,66 @@ At editor width (~800px+), stream tabs render at full width with status badges, 
 
 ### Header Toolbar Layout
 
-The view toggle is the left-most element in both views' headers. Pop-out/pop-back buttons appear on the right.
+The `<vscode-tabs>` navigation is the left-most element. Action buttons (pop-out/pop-back) are positioned to the right of the tab headers, outside the tabs component.
 
-**Main View header** (sidebar):
-
-```
-┌──────────────────────────────────┐
-│ [Setup ▾] [Progress]        [⧉] │
-│                              ↑   │
-│                         pop out  │
-└──────────────────────────────────┘
-```
-
-The main view shows a pop-out button (`$(link-external)`) that opens the _progress view_ in the editor area (shortcut for: switch to progress + pop out). This is useful when the user wants to monitor progress alongside the setup form.
-
-**Progress View header** (sidebar):
+**Main View** (sidebar — Setup tab active):
 
 ```
-┌──────────────────────────────────┐
-│ [Setup] [Progress ▾]        [⧉] │
-└──────────────────────────────────┘
+┌────────────────────────────────┐
+│ ◧ Setup │ ◨ Progress       [⧉]│
+│ ────────┘                      │
+│                                │
+│  Input file  [▾]               │
+│  Ref file    [▾]               │
+│  ─────────────────             │
+│  [Workflow ▾]                  │
+│  ┌────────────────┐           │
+│  │  instruction   │           │
+│  └────────────────┘           │
+│  [Execute ▶]                  │
+└────────────────────────────────┘
 ```
 
-**Progress View header** (editor):
+The pop-out button (`$(link-external)`) opens the progress view directly in the editor area (shortcut for: switch to progress + pop out). Useful when the user wants to monitor progress alongside the setup form.
+
+**Progress View** (sidebar — Progress tab active):
 
 ```
-┌──────────────────────────────────────────────┐
-│ [Setup] [Progress ▾]        [← Back to bar] │
-└──────────────────────────────────────────────┘
+┌────────────────────────────────┐
+│ ◧ Setup │ ◨ Progress       [⧉]│
+│           ──────────           │
+│                                │
+│  ┌──────────────────────┬────┐ │
+│  │ > Analyzing...       │ s1 │ │
+│  │ > Reading refs       │ s2 │ │
+│  │──────────────────────│    │ │
+│  │ Tasks [2/5]          │    │ │
+│  │──────────────────────│    │ │
+│  │ [Follow-up...]       │    │ │
+│  └──────────────────────┴────┘ │
+└────────────────────────────────┘
 ```
 
-In editor mode, clicking "Setup" in the toggle focuses the sidebar (which shows the main view). The pop-back button closes the editor tab and returns progress to the sidebar.
+**Progress View** (editor — Progress tab active):
+
+```
+┌──────────────────────────────────────────────────────┐
+│ ◧ Setup │ ◨ Progress                    [← sidebar] │
+│           ──────────                                 │
+│                                                      │
+│  ┌────────────────────────────────┬────────────────┐ │
+│  │ > Analyzing input...          │ stream-1     ▶  │ │
+│  │ > Reading reference files     │ stream-2        │ │
+│  │ > Generating draft            │ stream-3        │ │
+│  │───────────────────────────────│                 │ │
+│  │ Tasks [2/5]                   │                 │ │
+│  │───────────────────────────────│                 │ │
+│  │ [Follow-up...]                │                 │ │
+│  └────────────────────────────────┴────────────────┘ │
+└──────────────────────────────────────────────────────┘
+```
+
+The pop-back button (`$(layout-sidebar-right)`) closes the editor tab and returns progress to the sidebar.
 
 These replace the current "Open in Tab" command — the behavior is now bidirectional.
 
@@ -428,85 +470,74 @@ stream-tabs {
 | `src/progressView/frontend/components/StreamTabs.ts` | Compact rendering variant for narrow mode   |
 | `src/progressView/frontend/styles/`                  | Responsive styles for stream tabs           |
 
-### Phase 5: Header Toolbar with View Toggle
+### Phase 5: Header Navigation with `vscode-tabs`
 
-Add a unified header toolbar to both views with the view toggle and context-aware action buttons.
+Add a `<vscode-tabs>` navigation header to both views using `@vscode-elements/elements` (already a dependency).
 
 #### UI
 
-Both views share the same toggle pattern — a segmented control (or button pair) with "Setup" and "Progress" labels. The active label is visually distinguished.
+Both views render the same two-tab `<vscode-tabs>` header. The `.selectedIndex` property reflects the active view. The `vsc-tabs-select` event triggers a `SWITCH_VIEW` message.
 
-**Main View header** (sidebar):
-
-```html
-<div class="view-header">
-  <div class="view-toggle">
-    <button class="active" disabled>Setup</button>
-    <button @click="${this.onSwitchToProgress}">Progress</button>
-  </div>
-  <vscode-button
-    appearance="icon"
-    @click="${this.onPopOutProgress}"
-    title="Open progress in editor"
-  >
-    <span class="codicon codicon-link-external"></span>
-  </vscode-button>
-</div>
-```
-
-**Progress View header** (sidebar):
+**Both views** (same markup, different `selectedIndex`):
 
 ```html
 <div class="view-header">
-  <div class="view-toggle">
-    <button @click="${this.onSwitchToSetup}">Setup</button>
-    <button class="active" disabled>Progress</button>
-  </div>
-  <vscode-button
-    appearance="icon"
-    @click="${this.onPopOut}"
-    title="Open in editor"
+  <vscode-tabs
+    .selectedIndex=${this.activeViewIndex}
+    @vsc-tabs-select=${this.onViewTabSelect}
   >
-    <span class="codicon codicon-link-external"></span>
-  </vscode-button>
+    <vscode-tab-header slot="header">
+      <span class="codicon codicon-edit"></span>
+      Setup
+    </vscode-tab-header>
+    <vscode-tab-header slot="header">
+      <span class="codicon codicon-server-process"></span>
+      Progress
+    </vscode-tab-header>
+  </vscode-tabs>
+
+  <!-- Action button: pop-out (sidebar) or pop-back (editor) -->
+  ${this.isEditorMode
+    ? html`<vscode-button appearance="icon" @click=${this.onPopBack}
+        title="Back to sidebar">
+        <span class="codicon codicon-layout-sidebar-right"></span>
+      </vscode-button>`
+    : html`<vscode-button appearance="icon" @click=${this.onPopOut}
+        title="Open in editor">
+        <span class="codicon codicon-link-external"></span>
+      </vscode-button>`}
 </div>
 ```
 
-**Progress View header** (editor):
+No `<vscode-tab-panel>` elements are used — the tabs are purely navigational. The `vsc-tabs-select` handler posts a `SWITCH_VIEW` message to the backend, which toggles the `texra.activeView` context key to swap the actual webview content.
 
-```html
-<div class="view-header">
-  <div class="view-toggle">
-    <button @click="${this.onSwitchToSetup}">Setup</button>
-    <button class="active" disabled>Progress</button>
-  </div>
-  <vscode-button
-    appearance="icon"
-    @click="${this.onPopBack}"
-    title="Back to sidebar"
-  >
-    <span class="codicon codicon-layout-sidebar-right"></span>
-  </vscode-button>
-</div>
+The backend informs the frontend of its current placement via an outbound message (`SET_PLACEMENT`) so the correct action button renders (pop-out vs pop-back).
+
+#### Implementation Note
+
+The `<vscode-tabs>` header CSS needs a small override to sit inline with the action button:
+
+```css
+.view-header {
+  display: flex;
+  align-items: center;
+}
+
+.view-header vscode-tabs {
+  flex: 1;
+  /* Override: no panel area, header-only mode */
+  --panel-display: none;
+}
 ```
-
-In editor mode, clicking "Setup" focuses the sidebar (which already shows the main view) rather than closing the editor tab.
-
-The backend informs the frontend of its current placement via an outbound message (`SET_PLACEMENT`) so the correct action buttons render (pop-out vs pop-back).
-
-#### Shared Toggle Component
-
-The view toggle is a shared Lit component (`<view-toggle>`) used by both `MainApp` and `ProgressApp`. It accepts the active view as a property and dispatches a `switch-view` event.
 
 #### Files Modified
 
-| File                                             | Change                                                   |
-| ------------------------------------------------ | -------------------------------------------------------- |
-| `src/shared/components/ViewToggle.ts`            | New shared toggle component                              |
-| `src/webview/frontend/MainApp.ts`                | Add view header with toggle and pop-out button           |
-| `src/progressView/frontend/ProgressApp.ts`       | Add view header with toggle and pop-out/pop-back buttons |
-| `src/progressView/ProgressViewMessageHandler.ts` | Send placement context via `SET_PLACEMENT`               |
-| `src/shared/schemas/progressView.ts`             | Add placement enum and `SET_PLACEMENT` outbound message  |
+| File | Change |
+|---|---|
+| `src/webview/frontend/MainApp.ts` | Add `vscode-tabs` header with toggle and pop-out button |
+| `src/progressView/frontend/ProgressApp.ts` | Add `vscode-tabs` header with toggle and pop-out/pop-back buttons |
+| `src/progressView/ProgressViewMessageHandler.ts` | Send placement context via `SET_PLACEMENT` |
+| `src/shared/schemas/progressView.ts` | Add placement enum and `SET_PLACEMENT` outbound message |
 
 ## Surface Area
 
@@ -526,7 +557,6 @@ The view toggle is a shared Lit component (`<view-toggle>`) used by both `MainAp
 | `texra.toggleView` command + keybinding | Keyboard shortcut for switching views                      |
 | `SET_PLACEMENT` outbound message        | Informs frontend of current location for toolbar rendering |
 | `SWITCH_VIEW` shared inbound message    | Frontend toggle posts to backend to swap views             |
-| `src/shared/components/ViewToggle.ts`   | Shared segmented control component for both views          |
 
 ### Modified
 
@@ -536,12 +566,12 @@ The view toggle is a shared Lit component (`<view-toggle>`) used by both `MainAp
 | `src/extension.ts`                                   | Context key initialization, toggle command registration                                            |
 | `src/progressView/ProgressViewProvider.ts`           | Exclusive webview targeting, pop-out/pop-back methods, sidebar swap helpers                        |
 | `src/progressView/WebviewUpdater.ts`                 | Exclusive-target mode (single active webview)                                                      |
-| `src/progressView/frontend/ProgressApp.ts`           | View toggle header, ResizeObserver, pop-out/pop-back messages                                      |
+| `src/progressView/frontend/ProgressApp.ts`           | `vscode-tabs` header, ResizeObserver, pop-out/pop-back messages                                    |
 | `src/progressView/frontend/components/StreamTabs.ts` | Responsive compact variant                                                                         |
 | `src/progressView/ProgressViewMessageHandler.ts`     | New inbound message handlers, placement context                                                    |
 | `src/shared/schemas/progressView.ts`                 | New message types, placement enum                                                                  |
 | `src/shared/schemas/commonViewMessages.ts`           | Add `SWITCH_VIEW` shared inbound message                                                           |
-| `src/webview/frontend/MainApp.ts`                    | View toggle header with pop-out button                                                             |
+| `src/webview/frontend/MainApp.ts`                    | `vscode-tabs` header with pop-out button                                                           |
 | `src/commands/progress/progressViewCommands.ts`      | Updated pop-out command                                                                            |
 | `src/commands/agent/executeCommands.ts`              | Auto-swap to progress on execute                                                                   |
 | `src/MainViewProvider.ts`                            | Sidebar swap helper                                                                                |
@@ -551,7 +581,7 @@ The view toggle is a shared Lit component (`<view-toggle>`) used by both `MainAp
 - All frontend components besides `ProgressApp`, `MainApp`, and `StreamTabs`
 - All backend event handlers and state management
 - Settings view (remains independent editor panel)
-- Shared styles and controllers (no changes beyond new `ViewToggle` component)
+- Shared styles and controllers (no changes; `vscode-tabs` is already a dependency)
 
 ## Non-Goals
 
