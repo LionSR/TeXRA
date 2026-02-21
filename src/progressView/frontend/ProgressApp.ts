@@ -365,6 +365,23 @@ export class ProgressApp extends ProgressAppBase {
     this.permissionsContextValue = this.permissions;
   }
 
+  /** Rebuild cached status and lastTimestamp Maps from current streamStates. */
+  private rebuildStreamMaps(): void {
+    this.cachedStreamStatusById = new Map();
+    this.cachedStreamLastTimestampById = new Map();
+    for (const stream of this.cachedFilteredStreams) {
+      const streamState = this.appState.streamStates.get(stream.name);
+      this.cachedStreamStatusById.set(
+        stream.name,
+        streamState?.status ?? STREAM_STATUS.READY,
+      );
+      this.cachedStreamLastTimestampById.set(
+        stream.name,
+        streamState?.lastTimestamp,
+      );
+    }
+  }
+
   render(): TemplateResult {
     return html`
       <div class="main-container">
