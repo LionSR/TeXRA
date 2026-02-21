@@ -188,45 +188,79 @@ export class ProgressApp extends BaseWebviewApp {
 
     const prevAppState = changed.get('appState') as ProgressState | undefined;
 
-    // Re-sort streams when the list or sort/filter criteria change.
-    if (
+    // Structural change: streams list, filter, or sort criteria changed.
+    const structuralChange =
       changed.has('appState') &&
       (!prevAppState ||
         prevAppState.streams !== this.appState.streams ||
-        prevAppState.streamStates !== this.appState.streamStates ||
         prevAppState.streamFilter !== this.appState.streamFilter ||
-        prevAppState.streamSort !== this.appState.streamSort)
-    ) {
+        prevAppState.streamSort !== this.appState.streamSort);
+
+    if (structuralChange) {
+      // Full rebuild: re-filter/sort and rebuild all cached maps.
       this.cachedFilteredStreams = getFilteredStreams(this.appState);
       this.cachedFilteredStreamMap = new Map(
         this.cachedFilteredStreams.map((stream) => [stream.name, stream]),
       );
-    }
-
-    if (
+      this.rebuildStreamMaps();
+    } else if (
       changed.has('appState') &&
-      (!prevAppState ||
-        prevAppState.streamStates !== this.appState.streamStates ||
-        prevAppState.streams !== this.appState.streams ||
-        prevAppState.streamFilter !== this.appState.streamFilter ||
-        prevAppState.streamSort !== this.appState.streamSort)
+      prevAppState &&
+      prevAppState.streamStates !== this.appState.streamStates
     ) {
-      this.cachedStreamStatusById = new Map();
-      this.cachedStreamLastTimestampById = new Map();
+      // streamStates identity changed without structural change.
+      // Compare against cached Maps to detect real value changes.
+      let anyStatusChanged = false;
+      let anyTimestampChanged = false;
       for (const stream of this.cachedFilteredStreams) {
-        const streamState = this.appState.streamStates.get(stream.name);
-        this.cachedStreamStatusById.set(
-          stream.name,
-          streamState?.status ?? STREAM_STATUS.READY,
+        const curr = this.appState.streamStates.get(stream.name);
+        if (
+          (curr?.status ?? STREAM_STATUS.READY) !==
+          this.cachedStreamStatusById.get(stream.name)
+        ) {
+          anyStatusChanged = true;
+        }
+        if (
+          curr?.lastTimestamp !==
+          this.cachedStreamLastTimestampById.get(stream.name)
+        ) {
+          anyTimestampChanged = true;
+        }
+        if (anyStatusChanged && anyTimestampChanged) break;
+      }
+
+      // Re-sort only when sorting by time and timestamps actually changed.
+      if (anyTimestampChanged && this.appState.streamSort === 'time') {
+        this.cachedFilteredStreams = getFilteredStreams(this.appState);
+        this.cachedFilteredStreamMap = new Map(
+          this.cachedFilteredStreams.map((stream) => [stream.name, stream]),
         );
-        this.cachedStreamLastTimestampById.set(
-          stream.name,
-          streamState?.lastTimestamp,
-        );
+      }
+
+      // Rebuild status/timestamp maps only when values actually differ.
+      if (anyStatusChanged || anyTimestampChanged) {
+        this.rebuildStreamMaps();
       }
     }
 
     this.updateContexts();
+  }
+
+  /** Rebuild cached status and lastTimestamp Maps from current streamStates. */
+  private rebuildStreamMaps(): void {
+    this.cachedStreamStatusById = new Map();
+    this.cachedStreamLastTimestampById = new Map();
+    for (const stream of this.cachedFilteredStreams) {
+      const streamState = this.appState.streamStates.get(stream.name);
+      this.cachedStreamStatusById.set(
+        stream.name,
+        streamState?.status ?? STREAM_STATUS.READY,
+      );
+      this.cachedStreamLastTimestampById.set(
+        stream.name,
+        streamState?.lastTimestamp,
+      );
+    }
   }
 
   render(): TemplateResult {

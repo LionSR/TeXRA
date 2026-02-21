@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { createStreamState } from '@shared/schemas';
+import { createStreamState, STREAM_STATUS } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { TaskState } from '@logger/TaskState';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
@@ -478,7 +478,8 @@ export class WebviewUpdater {
       const current =
         streamStates[streamInfo.name] ??
         createStreamState(streamInfo.agentCategory);
-      const status = statuses?.get(streamInfo.name) ?? current.status;
+      // StreamStatusService omits READY entries by design; default to READY.
+      const status = statuses?.get(streamInfo.name) ?? STREAM_STATUS.READY;
       const lastTimestamp = state.streamTabs.getLastTimestamp(streamInfo.name);
       streamStates[streamInfo.name] = {
         ...current,

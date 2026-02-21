@@ -303,10 +303,7 @@ export class ProgressViewState {
   }
 
   getStreamLastTimestamp(stream: StreamTabId): number | undefined {
-    return (
-      this._streamStates.get(stream)?.lastTimestamp ??
-      this._streamTabs.getLastTimestamp(stream)
-    );
+    return this._streamTabs.getLastTimestamp(stream);
   }
 
   getRunInstructions(stream: StreamTabId): Map<string, InstructionUpdate> {

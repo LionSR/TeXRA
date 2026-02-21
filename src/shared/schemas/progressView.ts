@@ -263,13 +263,19 @@ const PermissionPayloadSchema = z.discriminatedUnion('kind', [
 ]);
 export type PermissionPayload = z.infer<typeof PermissionPayloadSchema>;
 
-export const UpdatePermissionMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
-  action: z.enum(['show', 'resolve']),
-  permission: PermissionPayloadSchema.optional(),
-  kind: PermissionKindSchema.optional(),
-  id: z.string().optional(),
-});
+export const UpdatePermissionMessageSchema = z.discriminatedUnion('action', [
+  z.object({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+    action: z.literal('show'),
+    permission: PermissionPayloadSchema,
+  }),
+  z.object({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+    action: z.literal('resolve'),
+    kind: PermissionKindSchema,
+    id: z.string(),
+  }),
+]);
 export type UpdatePermissionMessage = z.infer<
   typeof UpdatePermissionMessageSchema
 >;

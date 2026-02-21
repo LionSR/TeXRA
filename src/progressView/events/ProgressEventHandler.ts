@@ -385,7 +385,8 @@ export class ProgressEventHandler {
           const updatedState = {
             ...prev,
             activeSubagents: children,
-            finishedSubagentCount: prev.finishedSubagentCount + newlyFinished,
+            finishedSubagentCount:
+              (prev.finishedSubagentCount ?? 0) + newlyFinished,
           };
           nextBadges = {
             activeSubagents: updatedState.activeSubagents,
@@ -429,7 +430,8 @@ export class ProgressEventHandler {
           const updatedState = {
             ...prev,
             activeProcesses: processes,
-            finishedProcessCount: prev.finishedProcessCount + newlyFinished,
+            finishedProcessCount:
+              (prev.finishedProcessCount ?? 0) + newlyFinished,
           };
           nextBadges = {
             activeSubagents: updatedState.activeSubagents,
@@ -726,12 +728,6 @@ export class ProgressEventHandler {
     // getOrCreateStreamState is idempotent so safe to call unconditionally.
     const category = this.getStreamCategory(streamId) ?? AgentCategory.Workflow;
     this.state.getOrCreateStreamState(streamId, category);
-    const lastTimestamp = this.state.streamTabs.getLastTimestamp(streamId);
-    this.state.updateStreamState(streamId, (prev) => ({
-      ...prev,
-      status,
-      lastTimestamp,
-    }));
 
     if (!streamExists) {
       const streamCategory = this.getStreamCategory(streamId);
@@ -742,6 +738,7 @@ export class ProgressEventHandler {
       statusesForRefresh.set(streamId, status);
       this.webviewUpdater.sendStreamMetadata(this.state, statusesForRefresh);
     } else {
+      const lastTimestamp = this.state.streamTabs.getLastTimestamp(streamId);
       this.webviewUpdater.updateStreamStatus(streamId, status, lastTimestamp);
     }
   }
