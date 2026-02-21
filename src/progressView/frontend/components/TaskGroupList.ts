@@ -424,18 +424,33 @@ export class TaskGroupList extends LitElement {
     }
   }
 
-  /** Update message refs on existing timeline entries for streaming updates. */
+  /**
+   * Update message refs on existing timeline entries for streaming updates.
+   * Scans from end with early exit — streaming only touches the tail.
+   * Uses reverse scan of cachedUngrouped for O(1) typical lookups.
+   */
   private updateTimelineMessageRefs(): void {
+    let consecutiveMatches = 0;
     for (let i = this.cachedTimeline.length - 1; i >= 0; i--) {
       const item = this.cachedTimeline[i];
-      if ('msg' in item) {
-        // Find the current ref in cachedUngrouped by key
-        const fresh = this.cachedUngrouped.find((m) => m.id === item.key);
-        if (fresh && fresh !== item.msg) {
-          (item as { msg: LogMessageData }).msg = fresh;
-        }
+      if (!('msg' in item)) continue;
+      // Reverse-scan cachedUngrouped: changed messages are near the end
+      const fresh = this.findUngroupedReverse(item.key);
+      if (fresh && fresh !== item.msg) {
+        (item as { msg: LogMessageData }).msg = fresh;
+        consecutiveMatches = 0;
+      } else if (++consecutiveMatches >= 4) {
+        break;
       }
     }
+  }
+
+  /** Find a message in cachedUngrouped by scanning from end (O(1) for tail changes). */
+  private findUngroupedReverse(id: string): LogMessageData | undefined {
+    for (let i = this.cachedUngrouped.length - 1; i >= 0; i--) {
+      if (this.cachedUngrouped[i].id === id) return this.cachedUngrouped[i];
+    }
+    return undefined;
   }
 
   /** Check if a root group should be visible */

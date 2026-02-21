@@ -19,6 +19,7 @@ import {
   createStreamState,
   type ProgressViewOutboundMessage,
   type StreamTabId,
+  type TaskGroup,
 } from '@shared/schemas';
 import { getEffectiveRunId } from '@shared/streams/runSelection';
 import { sortStreams, StreamSortSchema } from '@shared/streams/streamSort';
@@ -43,6 +44,9 @@ import {
   select,
   combine,
 } from '@shared/signals';
+
+/** Stable empty array for activeTaskGroups$ default (avoids new [] per read). */
+const EMPTY_TASK_GROUPS: TaskGroup[] = [];
 
 /** Schema for persisted preferences. */
 const ProgressViewPrefsSchema = z.object({
@@ -262,48 +266,62 @@ export class ProgressApp extends ProgressAppBase {
     return this.streamLogs$.get().get(info.name) ?? EMPTY_STREAM_LOGS;
   });
 
+  // --- Leaf selectors for logContext$ ---
+  // These extract the specific fields logContext$ needs from activeStreamState$,
+  // so logContext$ doesn't depend on the full state. When conversationProgress,
+  // badges, or status change, activeStreamState$ propagates but these return
+  // the same refs (Mutative structural sharing) → logContext$ stays cached →
+  // LogList doesn't re-render.
+
+  private activeTaskGroups$ = new Signal.Computed(
+    () => this.activeStreamState$.get()?.taskGroups ?? EMPTY_TASK_GROUPS,
+  );
+
+  private activeIsToolUse$ = new Signal.Computed(() => {
+    const state = this.activeStreamState$.get();
+    return state ? isToolUseState(state) : false;
+  });
+
+  private activeRunId$ = new Signal.Computed(() => {
+    const state = this.activeStreamState$.get();
+    return state ? getEffectiveRunId(state, { mode: 'fallback' }) : null;
+  });
+
   /** Stream context derived from active stream + state. */
   private streamContext$ = new Signal.Computed((): StreamContextValue => {
     const activeStreamInfo = this.activeStreamInfo$.get();
     const hasStreams = this.hasStreams$.get();
     if (!activeStreamInfo) return { ...EMPTY_STREAM_CONTEXT, hasStreams };
 
-    const streamState = this.activeStreamState$.get();
-    const isToolUse = streamState ? isToolUseState(streamState) : false;
-    const runId = streamState
-      ? getEffectiveRunId(streamState, { mode: 'fallback' })
-      : null;
     const followupOptions =
       this.followupOptions$.get().get(activeStreamInfo.name) ?? null;
 
     return {
       streamInfo: activeStreamInfo,
-      streamState,
-      runId,
+      streamState: this.activeStreamState$.get(),
+      runId: this.activeRunId$.get(),
       followupOptions,
-      isToolUse,
+      isToolUse: this.activeIsToolUse$.get(),
       hasStreams,
     };
   });
 
-  /** Log context derived from active stream + logs. */
+  /**
+   * Log context derived from active stream + logs.
+   * Depends on leaf selectors (activeTaskGroups$, activeRunId$, activeIsToolUse$)
+   * instead of activeStreamState$ directly, so status/badge/progress changes
+   * don't cause LogList re-renders.
+   */
   private logContext$ = new Signal.Computed((): StreamLogContextValue => {
     const activeStreamInfo = this.activeStreamInfo$.get();
     const hasStreams = this.hasStreams$.get();
     if (!activeStreamInfo) return { ...EMPTY_LOG_CONTEXT, hasStreams };
 
-    const streamState = this.activeStreamState$.get();
-    const streamLogs = this.activeStreamLogs$.get();
-    const isToolUse = streamState ? isToolUseState(streamState) : false;
-    const runId = streamState
-      ? getEffectiveRunId(streamState, { mode: 'fallback' })
-      : null;
-
     return {
-      logs: streamLogs.logs,
-      taskGroups: streamState!.taskGroups,
-      runId,
-      isToolUse,
+      logs: this.activeStreamLogs$.get().logs,
+      taskGroups: this.activeTaskGroups$.get(),
+      runId: this.activeRunId$.get(),
+      isToolUse: this.activeIsToolUse$.get(),
       hasStreams,
       streamName: activeStreamInfo.name,
     };
