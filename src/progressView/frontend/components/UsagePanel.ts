@@ -7,13 +7,32 @@ import { when } from 'lit/directives/when.js';
 import { designTokens } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
-// Local imports - progress view formatters
+// Local imports - progress view
 import { formatTokens } from '../formatters/timestampUtils';
-
-// Local imports - progress view constants and types
 import { ELEMENT_IDS } from '../constants';
 import type { TokenUsageStats } from '@shared/schemas';
 import type { ContextState } from '../store';
+
+/**
+ * Default compaction threshold (%) — must match
+ * DEFAULT_COMPACTION_THRESHOLD_PERCENT in contextManagementConstants.ts.
+ */
+const COMPACTION_THRESHOLD = 75;
+
+/**
+ * Build a CSS gradient that transitions smoothly from green → amber → red
+ * across the filled portion of the gauge, so the color shift feels gradual.
+ */
+function buildFillGradient(percent: number): string {
+  const green = 'var(--vscode-testing-iconPassed, #73c991)';
+  const amber = 'var(--vscode-editorWarning-foreground, #cca700)';
+  const red = 'var(--vscode-testing-iconFailed, #f48771)';
+
+  if (percent <= 50) return green;
+  if (percent <= 65) return `linear-gradient(90deg, ${green}, ${amber})`;
+  if (percent <= 80) return `linear-gradient(90deg, ${green} 20%, ${amber})`;
+  return `linear-gradient(90deg, ${green} 10%, ${amber} 50%, ${red})`;
+}
 
 @customElement('usage-panel')
 export class UsagePanel extends LitElement {
@@ -54,12 +73,44 @@ export class UsagePanel extends LitElement {
         opacity: var(--opacity-subtle);
       }
 
+      /* Context gauge bar */
+      .context-gauge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-small);
+      }
+
+      .context-gauge__track {
+        position: relative;
+        width: 80px;
+        height: 6px;
+        background: var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.3));
+        border-radius: 3px;
+        overflow: hidden;
+      }
+
+      .context-gauge__fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width var(--transition-slow);
+      }
+
+      /* Compaction threshold tick mark */
+      .context-gauge__tick {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: var(--vscode-foreground);
+        opacity: 0.35;
+      }
+
       .run-summary {
         margin-left: auto;
       }
 
       .run-summary__label {
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         color: var(--color-text-secondary);
       }
 
@@ -72,18 +123,28 @@ export class UsagePanel extends LitElement {
   @property({ attribute: false }) usage: TokenUsageStats | null = null;
   @property({ attribute: false }) contextState: ContextState | null = null;
 
-  override render(): TemplateResult | typeof nothing {
-    const hasUsage =
-      (this.usage?.inputTokens ?? 0) > 0 ||
-      (this.usage?.outputTokens ?? 0) > 0 ||
-      (this.usage?.cost ?? 0) > 0 ||
-      (this.usage?.cacheReadInputTokens ?? 0) > 0 ||
-      (this.usage?.cacheCreationInputTokens ?? 0) > 0;
-    const hasContext =
-      (this.contextState?.contextWindow ?? 0) > 0 &&
-      this.contextState?.utilizationPercent !== undefined;
+  /** Whether the usage stats have any non-zero values worth displaying. */
+  private get hasUsage(): boolean {
+    const u = this.usage;
+    if (!u) return false;
+    return (
+      u.inputTokens > 0 ||
+      u.outputTokens > 0 ||
+      u.cost > 0 ||
+      (u.cacheReadInputTokens ?? 0) > 0 ||
+      (u.cacheCreationInputTokens ?? 0) > 0
+    );
+  }
 
-    if (!hasUsage && !hasContext) {
+  private get hasContext(): boolean {
+    return (
+      (this.contextState?.contextWindow ?? 0) > 0 &&
+      this.contextState?.utilizationPercent !== undefined
+    );
+  }
+
+  override render(): TemplateResult | typeof nothing {
+    if (!this.hasUsage && !this.hasContext) {
       return nothing;
     }
 
@@ -92,7 +153,7 @@ export class UsagePanel extends LitElement {
         <span
           id=${ELEMENT_IDS.CONTEXT_STATE}
           class="context-state"
-          ?hidden=${!hasContext}
+          ?hidden=${!this.hasContext}
         >
           ${this.renderContext()}
         </span>
@@ -110,9 +171,7 @@ export class UsagePanel extends LitElement {
   private renderUsage(): TemplateResult | typeof nothing {
     if (!this.usage) return nothing;
 
-    const inputTokens = this.usage.inputTokens ?? 0;
-    const outputTokens = this.usage.outputTokens ?? 0;
-    const cost = this.usage.cost ?? 0;
+    const { inputTokens, outputTokens, cost } = this.usage;
     const cacheRead = this.usage.cacheReadInputTokens ?? 0;
     const cacheWrite = this.usage.cacheCreationInputTokens ?? 0;
 
@@ -153,28 +212,34 @@ export class UsagePanel extends LitElement {
     if (!this.contextState) return nothing;
     const { inputTokens, contextWindow, utilizationPercent } =
       this.contextState;
-    const contextLeft = Math.max(0, 100 - utilizationPercent);
+    const clamped = Math.min(100, Math.max(0, utilizationPercent));
 
     return html`
-      <i class="codicon codicon-window" title="Context window"></i>
-      <span
-        class="context-state__value"
-        title="${formatTokens(inputTokens)} / ${formatTokens(
-          contextWindow,
-        )} tokens used"
-      >
-        ${contextLeft.toFixed(0)}% context left
+      <span class="context-gauge" title="${clamped.toFixed(0)}% context used">
+        <i class="codicon codicon-window"></i>
+        <span class="context-gauge__track">
+          <span
+            class="context-gauge__fill"
+            style="width: ${clamped}%; background: ${buildFillGradient(
+              clamped,
+            )}"
+          ></span>
+          <span
+            class="context-gauge__tick"
+            style="left: ${COMPACTION_THRESHOLD}%"
+            title="Compaction at ${COMPACTION_THRESHOLD}%"
+          ></span>
+        </span>
+        <span class="context-state__value">
+          ${formatTokens(inputTokens)} / ${formatTokens(contextWindow)}
+        </span>
       </span>
     `;
   }
 
   private buildUsageLabel(): string {
     if (!this.usage) return '';
-    const inputTokens = this.usage.inputTokens ?? 0;
-    const outputTokens = this.usage.outputTokens ?? 0;
-    const cost = this.usage.cost ?? 0;
-    return `Total usage: ${formatTokens(inputTokens)} input tokens, ${formatTokens(
-      outputTokens,
-    )} output tokens, $${cost.toFixed(3)}`;
+    const { inputTokens, outputTokens, cost } = this.usage;
+    return `Total usage: ${formatTokens(inputTokens)} input tokens, ${formatTokens(outputTokens)} output tokens, $${cost.toFixed(3)}`;
   }
 }

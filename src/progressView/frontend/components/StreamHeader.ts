@@ -48,23 +48,23 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 /**
- * Buttons enabled per status - extracted as constant to avoid recreation.
- * Maps status to array of button IDs that should be enabled.
+ * Buttons enabled per status - pre-computed as Sets to avoid
+ * allocating a new Set on every getButtonState() call during render.
  */
-const ENABLED_BUTTONS_BY_STATUS: Record<string, string[]> = {
-  [STREAM_STATUS.INITIALIZING]: [
+const ENABLED_BUTTONS_BY_STATUS: Record<string, Set<string>> = {
+  [STREAM_STATUS.INITIALIZING]: new Set([
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.CLEAN_STREAM_BTN,
-  ],
-  [STREAM_STATUS.RUNNING]: [
+  ]),
+  [STREAM_STATUS.RUNNING]: new Set([
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
     ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
     ELEMENT_IDS.COMPACT_RESPONSE_BTN,
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-  ],
-  [STREAM_STATUS.ERROR]: [
+  ]),
+  [STREAM_STATUS.ERROR]: new Set([
     ELEMENT_IDS.RUN_NEW_BTN,
     ELEMENT_IDS.RESUME_BTN,
     ELEMENT_IDS.PACK_STREAM_BTN,
@@ -72,8 +72,8 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, string[]> = {
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.DIFF_STREAM_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-  ],
-  [STREAM_STATUS.STOPPED]: [
+  ]),
+  [STREAM_STATUS.STOPPED]: new Set([
     ELEMENT_IDS.RUN_NEW_BTN,
     ELEMENT_IDS.RESUME_BTN,
     ELEMENT_IDS.PACK_STREAM_BTN,
@@ -81,31 +81,31 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, string[]> = {
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.DIFF_STREAM_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-  ],
-  [STREAM_STATUS.READY]: [
+  ]),
+  [STREAM_STATUS.READY]: new Set([
     ELEMENT_IDS.RUN_NEW_BTN,
     ELEMENT_IDS.PACK_STREAM_BTN,
     ELEMENT_IDS.CLEAN_STREAM_BTN,
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.DIFF_STREAM_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-  ],
-  [STREAM_STATUS.WAITING]: [
+  ]),
+  [STREAM_STATUS.WAITING]: new Set([
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
     ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
     ELEMENT_IDS.COMPACT_RESPONSE_BTN,
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-  ],
-  [STREAM_STATUS.RESUMING]: [
+  ]),
+  [STREAM_STATUS.RESUMING]: new Set([
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
     ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
     ELEMENT_IDS.COMPACT_RESPONSE_BTN,
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-  ],
+  ]),
 };
 
 /** Buttons that depend on having an executionId */
@@ -404,12 +404,15 @@ export class StreamHeader extends LitElement {
     const agentCategory = this.stream.agentCategory;
     const toolbarButtons =
       TOOLBAR_BUTTONS[agentCategory] ?? TOOLBAR_BUTTONS.workflow;
-    const activeSubagents = this.streamState?.activeSubagents ?? [];
-    const finishedSubagentCount = this.streamState?.finishedSubagentCount ?? 0;
-    const activeProcesses = this.streamState?.activeProcesses ?? [];
-    const finishedProcessCount = this.streamState?.finishedProcessCount ?? 0;
-    const totalSubagents = activeSubagents.length + finishedSubagentCount;
-    const totalProcesses = activeProcesses.length + finishedProcessCount;
+    const streamState = this.streamState;
+    const activeSubagents = streamState ? streamState.activeSubagents : [];
+    const finishedSubagentCount = streamState
+      ? streamState.finishedSubagentCount
+      : 0;
+    const activeProcesses = streamState ? streamState.activeProcesses : [];
+    const finishedProcessCount = streamState
+      ? streamState.finishedProcessCount
+      : 0;
     const progress = this.streamState?.conversationProgress;
 
     return html`
@@ -434,38 +437,18 @@ export class StreamHeader extends LitElement {
               })}
               data-status=${statusLabel}
             ></span>
-            ${totalSubagents > 0
-              ? html`<span
-                  class="child-badge subagent-badge"
-                  title=${activeSubagents.map((s) => s.agentName).join(', ')}
-                >
-                  <i class="codicon codicon-server-process"></i>
-                  ${activeSubagents.length > 0
-                    ? html`${activeSubagents.length} running`
-                    : nothing}${activeSubagents.length > 0 &&
-                  finishedSubagentCount > 0
-                    ? html`, `
-                    : nothing}${finishedSubagentCount > 0
-                    ? html`${finishedSubagentCount} done`
-                    : nothing}
-                </span>`
-              : nothing}
-            ${totalProcesses > 0
-              ? html`<span
-                  class="child-badge process-badge"
-                  title=${activeProcesses.map((p) => p.agentName).join(', ')}
-                >
-                  <i class="codicon codicon-terminal"></i>
-                  ${activeProcesses.length > 0
-                    ? html`${activeProcesses.length} running`
-                    : nothing}${activeProcesses.length > 0 &&
-                  finishedProcessCount > 0
-                    ? html`, `
-                    : nothing}${finishedProcessCount > 0
-                    ? html`${finishedProcessCount} done`
-                    : nothing}
-                </span>`
-              : nothing}
+            ${this.renderChildBadge(
+              activeSubagents,
+              finishedSubagentCount,
+              'server-process',
+              'subagent-badge',
+            )}
+            ${this.renderChildBadge(
+              activeProcesses,
+              finishedProcessCount,
+              'terminal',
+              'process-badge',
+            )}
             ${progress && progress.conversationTurns > 0
               ? html`<span
                   class="child-badge progress-badge"
@@ -554,9 +537,7 @@ export class StreamHeader extends LitElement {
   }
 
   private getCurrentStatus(): string {
-    return (
-      this.streamState?.status || this.stream?.status || STREAM_STATUS.READY
-    );
+    return this.streamState?.status || STREAM_STATUS.READY;
   }
 
   private getStatusLabel(status: string): string {
@@ -568,10 +549,32 @@ export class StreamHeader extends LitElement {
     status: string,
     hasExecutionId: boolean,
   ): { disabled: boolean; hidden: boolean } {
-    const enabledButtons = new Set(ENABLED_BUTTONS_BY_STATUS[status] ?? []);
+    const enabledButtons = ENABLED_BUTTONS_BY_STATUS[status];
     const hidden = EXECUTION_DEPENDENT_BUTTONS.has(buttonId) && !hasExecutionId;
-    const disabled = hidden || !enabledButtons.has(buttonId);
+    const disabled = hidden || !enabledButtons?.has(buttonId);
     return { disabled, hidden };
+  }
+
+  /** Render a child-count badge (subagents or processes). */
+  private renderChildBadge(
+    active: { agentName: string }[],
+    finishedCount: number,
+    icon: string,
+    cssClass: string,
+  ): TemplateResult | typeof nothing {
+    const total = active.length + finishedCount;
+    if (total === 0) return nothing;
+    return html`<span
+      class="child-badge ${cssClass}"
+      title=${active.map((s) => s.agentName).join(', ')}
+    >
+      <i class="codicon codicon-${icon}"></i>
+      ${active.length > 0
+        ? html`${active.length} running`
+        : nothing}${active.length > 0 && finishedCount > 0
+        ? html`, `
+        : nothing}${finishedCount > 0 ? html`${finishedCount} done` : nothing}
+    </span>`;
   }
 
   private renderParentLink(): TemplateResult | typeof nothing {

@@ -1,13 +1,12 @@
 import { z } from 'zod';
 
-import { AGENT_CATEGORY, type AgentCategory } from './agent';
-import { LogMessageDataSchema } from './log';
-import { OutputFileInfoSchema } from './output';
 import {
-  InstructionUpdateSchema,
-  StreamStatusSchema,
-  StreamTabInfoSchema,
-} from './stream';
+  AGENT_CATEGORY,
+  AgentCategorySchema,
+  type AgentCategory,
+} from './agent';
+import { OutputFileInfoSchema } from './output';
+import { InstructionUpdateSchema, StreamStatusSchema } from './stream';
 import { TaskGroupSchema } from './taskGroup';
 import { TodoItemSchema } from './todo';
 import { ContextStateSchema, TokenUsageStatsSchema } from './usage';
@@ -48,24 +47,31 @@ export const ConversationProgressSchema = z.object({
 
 export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
 
+// Stream Metadata — the lightweight subset sent over postMessage in UPDATE_STREAMS.
+// Contains only backend-owned fields that mergeBackendOwnedState() actually reads.
+
+const BackendOwnedFieldsSchema = z.object({
+  status: StreamStatusSchema.optional(),
+  lastTimestamp: z.number().optional(),
+  conversationProgress: ConversationProgressSchema.prefault({}),
+  activeSubagents: z.array(ActiveChildInfoSchema).prefault([]),
+  finishedSubagentCount: z.number().prefault(0),
+  activeProcesses: z.array(ActiveChildInfoSchema).prefault([]),
+  finishedProcessCount: z.number().prefault(0),
+});
+
+export const StreamMetadataSchema = BackendOwnedFieldsSchema.extend({
+  kind: AgentCategorySchema,
+});
+
+export type StreamMetadata = z.infer<typeof StreamMetadataSchema>;
+
 // Base Stream State
 
-const BaseStreamStateSchema = z.object({
-  info: StreamTabInfoSchema.optional(),
-  status: StreamStatusSchema.optional(),
-  logs: z.array(LogMessageDataSchema).prefault([]),
+const BaseStreamStateSchema = BackendOwnedFieldsSchema.extend({
+  // Frontend-owned fields — set by frontend handlers, preserved during backend merges.
   taskGroups: z.array(TaskGroupSchema).prefault([]),
   contextState: ContextStateSchema.optional(),
-  /** Active subagents running under this stream (ephemeral, not persisted). */
-  activeSubagents: z.array(ActiveChildInfoSchema).prefault([]),
-  /** Cumulative count of subagents that have finished (ephemeral, not persisted). */
-  finishedSubagentCount: z.number().prefault(0),
-  /** Active background processes running under this stream (ephemeral, not persisted). */
-  activeProcesses: z.array(ActiveChildInfoSchema).prefault([]),
-  /** Cumulative count of processes that have finished (ephemeral, not persisted). */
-  finishedProcessCount: z.number().prefault(0),
-  /** Conversation progress counters (ephemeral, updated during execution). */
-  conversationProgress: ConversationProgressSchema.prefault({}),
 });
 
 // Tool-Use UI State (frontend-only, preserved during backend updates)
@@ -81,15 +87,23 @@ export const ToolUseUIStateSchema = z.object({
 
 export type ToolUseUIState = z.infer<typeof ToolUseUIStateSchema>;
 
+// Shared helper for run-keyed records
+
+function RunScopedRecord<T extends z.ZodType>(valueSchema: T) {
+  return z.record(z.string(), valueSchema).prefault({});
+}
+
 // Tool-Use Stream State
 
 export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   kind: z.literal(AGENT_CATEGORY.TOOL_USE),
-  // Backend-owned fields
+  // Frontend-owned fields updated by targeted progress-view messages
   todos: z.array(TodoItemSchema).prefault([]),
   queuedFollowUps: z.array(z.string()).prefault([]),
   toolEditBypass: z.boolean().optional(),
   superYoloBypass: z.boolean().optional(),
+  // Per-run usage for accumulation; sessionUsage is derived as their sum.
+  runUsage: RunScopedRecord(TokenUsageStatsSchema),
   sessionUsage: TokenUsageStatsSchema.nullable().prefault(null),
   // Frontend-owned (nested under ui)
   ui: ToolUseUIStateSchema.prefault({}),
@@ -107,10 +121,6 @@ export type WorkflowUIState = z.infer<typeof WorkflowUIStateSchema>;
 
 // Workflow Stream State
 
-function RunScopedRecord<T extends z.ZodType>(valueSchema: T) {
-  return z.record(z.string(), valueSchema).prefault({});
-}
-
 function RoundScopedRecord<T extends z.ZodType>(valueSchema: T) {
   return z
     .record(z.string(), z.record(z.string(), z.array(valueSchema)))
@@ -119,7 +129,7 @@ function RoundScopedRecord<T extends z.ZodType>(valueSchema: T) {
 
 export const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
   kind: z.literal(AGENT_CATEGORY.WORKFLOW),
-  // Backend-owned fields
+  // Frontend-owned fields updated by targeted progress-view messages
   runInstructions: RunScopedRecord(InstructionUpdateSchema),
   runUsage: RunScopedRecord(TokenUsageStatsSchema),
   runFiles: RoundScopedRecord(OutputFileInfoSchema),

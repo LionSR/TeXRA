@@ -24,7 +24,7 @@ import { getGettingStartedHtml } from '@shared/utils/uiConstants';
 import { formatDuration } from '@utils/core';
 
 // Local imports - shared styles
-import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
+import { designTokens, codiconStyles } from '@shared/styles';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';
@@ -67,12 +67,7 @@ function getStatusIcon(status: string): string {
 
 @customElement('task-group-list')
 export class TaskGroupList extends LitElement {
-  static override styles = [
-    designTokens,
-    commonViewStyles,
-    codiconStyles,
-    ...logStyles,
-  ];
+  static override styles = [designTokens, codiconStyles, ...logStyles];
 
   /** All task groups to render */
   @property({ attribute: false }) groups: TaskGroup[] = [];
@@ -105,9 +100,29 @@ export class TaskGroupList extends LitElement {
   /** Memoized set of root group IDs for isGroupVisible() */
   private cachedRootGroupIds: Set<string> = new Set();
 
+  /** Memoized tool-use timeline (ungrouped msgs + groups sorted chronologically) */
+  private cachedTimeline: Array<
+    | { key: string; time: number; msg: LogMessageData }
+    | { key: string; time: number; tree: GroupTree }
+  > = [];
+
   /** Reference to the scroll container */
   @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
   private scrollContainer?: HTMLElement;
+
+  /**
+   * Sticky scroll state: when true, new content auto-scrolls to bottom.
+   * Flips false when user scrolls away, true when user scrolls back to bottom.
+   */
+  private isSticky = true;
+
+  /** Threshold for detecting "near bottom" in scroll listener (px) */
+  private static readonly STICKY_THRESHOLD = 150;
+
+  /** Handle scroll events from vscode-scrollable to track user intent */
+  private handleVscScroll = (): void => {
+    this.isSticky = this.isNearBottom(TaskGroupList.STICKY_THRESHOLD);
+  };
 
   /** Public method to scroll to bottom - called by parent LogList */
   scrollToBottom(): void {
@@ -116,11 +131,31 @@ export class TaskGroupList extends LitElement {
     }
   }
 
-  /** Scroll to bottom only when the user is already near the end. */
-  scrollToBottomIfNearEnd(threshold = 32): void {
-    if (!this.scrollContainer) return;
-    if (!this.isNearBottom(threshold)) return;
-    scrollToBottom(this.scrollContainer);
+  /** Scroll to bottom only when sticky (user hasn't scrolled away). */
+  scrollToBottomIfSticky(): void {
+    if (!this.isSticky) return;
+    this.scrollToBottom();
+  }
+
+  /** Force sticky state — called by parent on tab switch */
+  setSticky(value: boolean): void {
+    this.isSticky = value;
+  }
+
+  override firstUpdated(): void {
+    this.scrollContainer?.addEventListener(
+      'vsc-scrollable-scroll',
+      this.handleVscScroll,
+      { passive: true },
+    );
+  }
+
+  override disconnectedCallback(): void {
+    this.scrollContainer?.removeEventListener(
+      'vsc-scrollable-scroll',
+      this.handleVscScroll,
+    );
+    super.disconnectedCallback();
   }
 
   override willUpdate(changedProperties: Map<string, unknown>): void {
@@ -130,17 +165,17 @@ export class TaskGroupList extends LitElement {
 
     const groupsChanged = changedProperties.has('groups');
     const messagesChanged = changedProperties.has('messages');
+    const prevMessages = messagesChanged
+      ? (changedProperties.get('messages') as LogMessageData[] | undefined)
+      : undefined;
+    const prevCount = prevMessages?.length ?? 0;
+    const prevUngroupedCount = this.cachedUngrouped.length;
 
     if (groupsChanged) {
       // Structural change — always full rebuild
       [this.cachedTree, this.cachedUngrouped] = this.buildGroupTree();
     } else if (messagesChanged) {
       // Only messages changed — use Lit's old value to pick incremental path
-      const prevMessages = changedProperties.get('messages') as
-        | LogMessageData[]
-        | undefined;
-      const prevCount = prevMessages?.length ?? 0;
-
       if (this.messages.length === prevCount && prevMessages) {
         // Same length: text-only update (e.g. streaming UPDATE_LOG).
         // Propagate fresh message references to cached structures so
@@ -155,14 +190,29 @@ export class TaskGroupList extends LitElement {
       }
     }
 
-    // Recompute root group IDs when groups or activeRunId change
+    // Recompute root group IDs when groups or activeRunId change.
+    // Derive from cachedTree (already contains only root groups) instead of re-filtering.
     if (
       changedProperties.has('groups') ||
       changedProperties.has('activeRunId')
     ) {
-      this.cachedRootGroupIds = new Set(
-        this.groups.filter((g) => !g.parentGroupId).map((g) => g.id),
-      );
+      this.cachedRootGroupIds = new Set(this.cachedTree.map((t) => t.group.id));
+    }
+
+    // Recompute tool-use timeline incrementally when possible
+    if (this.isToolUse && (groupsChanged || messagesChanged)) {
+      if (groupsChanged) {
+        // Structural change — full timeline rebuild (rare)
+        this.cachedTimeline = this.buildFullTimeline();
+      } else if (this.messages.length > prevCount) {
+        // Append-only: add new ungrouped entries to timeline.
+        // Grouped messages are already referenced via tree nodes in timeline entries.
+        this.appendToTimeline(prevUngroupedCount);
+      } else {
+        // Same-length (streaming update): update msg refs on timeline entries in-place.
+        // guard([item.msg]) in render() detects new refs.
+        this.updateTimelineMessageRefs();
+      }
     }
   }
 
@@ -175,57 +225,60 @@ export class TaskGroupList extends LitElement {
       const msg = this.messages[i];
       const node = msg.groupId ? this.groupNodeIndex.get(msg.groupId) : null;
       if (node) {
-        node.messages = this.insertMessageSorted(node.messages, msg);
+        this.insertMessageInPlace(node.messages, msg);
       } else {
-        this.cachedUngrouped = this.insertMessageSorted(
-          this.cachedUngrouped,
-          msg,
-        );
+        this.insertMessageInPlace(this.cachedUngrouped, msg);
       }
     }
   }
 
-  private insertMessageSorted(
+  /**
+   * Insert a message into a sorted array in-place.
+   * O(1) push when appending (common case — timestamps increase), O(n) splice otherwise.
+   */
+  private insertMessageInPlace(
     target: LogMessageData[],
     message: LogMessageData,
-  ): LogMessageData[] {
-    const insertIndex = target.findIndex(
-      (entry) => entry.timestamp > message.timestamp,
-    );
-    if (insertIndex < 0) {
-      return [...target, message];
+  ): void {
+    const msgTime = message.timestamp ?? 0;
+    const lastTs =
+      target.length > 0
+        ? (target[target.length - 1].timestamp ?? 0)
+        : -Infinity;
+    if (msgTime >= lastTs) {
+      target.push(message);
+    } else {
+      const idx = target.findIndex((e) => (e.timestamp ?? 0) > msgTime);
+      if (idx >= 0) target.splice(idx, 0, message);
+      else target.push(message);
     }
-    return [
-      ...target.slice(0, insertIndex),
-      message,
-      ...target.slice(insertIndex),
-    ];
   }
 
   /**
    * Replace stale message references in cached structures with fresh ones.
    *
    * Scans from end (O(1) typical — streaming targets the last message),
-   * then uses groupNodeIndex for O(1) node lookup per changed message.
+   * with early exit after consecutive unchanged refs (streaming only touches
+   * the tail). Uses groupNodeIndex for O(1) node lookup per changed message.
    */
   private updateCachedMessageRefs(prevMessages: LogMessageData[]): void {
-    // Find changed entries by comparing refs. Scan from end —
-    // streaming target is typically the last message.
-    const changed: LogMessageData[] = [];
+    let consecutiveMatches = 0;
     for (let i = this.messages.length - 1; i >= 0; i--) {
       if (this.messages[i] !== prevMessages[i]) {
-        changed.push(this.messages[i]);
+        this.replaceSingleMessage(this.messages[i]);
+        consecutiveMatches = 0;
+      } else if (++consecutiveMatches >= 4) {
+        break;
       }
-    }
-    if (changed.length === 0) return;
-
-    // Replace each changed message via O(1) groupNodeIndex lookup
-    for (const msg of changed) {
-      this.replaceSingleMessage(msg);
     }
   }
 
-  /** Replace a single message ref in the cached tree. O(1) node lookup + O(k) findIndex. */
+  /**
+   * Replace a single message ref in the cached tree. O(1) node lookup + O(k) findIndex.
+   * Mutates arrays in-place — safe because cachedTree/cachedUngrouped are private fields
+   * (not @property/@state), so Lit doesn't track their references. The render is already
+   * scheduled from the `messages` @property change, and guard([m]) detects updated refs.
+   */
   private replaceSingleMessage(msg: LogMessageData): void {
     // Try group node first (O(1) lookup). A message with groupId may live in
     // cachedUngrouped if the group didn't exist at classification time,
@@ -235,9 +288,7 @@ export class TaskGroupList extends LitElement {
       if (node) {
         const idx = node.messages.findIndex((m) => m.id === msg.id);
         if (idx >= 0) {
-          const updated = [...node.messages];
-          updated[idx] = msg;
-          node.messages = updated;
+          node.messages[idx] = msg;
           return;
         }
       }
@@ -245,9 +296,7 @@ export class TaskGroupList extends LitElement {
 
     const idx = this.cachedUngrouped.findIndex((m) => m.id === msg.id);
     if (idx >= 0) {
-      const updated = [...this.cachedUngrouped];
-      updated[idx] = msg;
-      this.cachedUngrouped = updated;
+      this.cachedUngrouped[idx] = msg;
     }
   }
 
@@ -291,16 +340,13 @@ export class TaskGroupList extends LitElement {
       }
     }
 
-    // Sort messages by timestamp and classify by groupId
-    const messageOrder = new Map(
-      this.messages.map((message, index) => [message.id, index]),
+    // Sort messages by timestamp and classify by groupId.
+    // JS engines use stable sort, so equal timestamps preserve original order.
+    const sortedMessages = [...this.messages].sort(
+      (a, b) =>
+        (a.timestamp ?? Number.MAX_SAFE_INTEGER) -
+        (b.timestamp ?? Number.MAX_SAFE_INTEGER),
     );
-    const sortedMessages = [...this.messages].sort((a, b) => {
-      const aTime = a.timestamp ?? Number.MAX_SAFE_INTEGER;
-      const bTime = b.timestamp ?? Number.MAX_SAFE_INTEGER;
-      if (aTime !== bTime) return aTime - bTime;
-      return (messageOrder.get(a.id) ?? 0) - (messageOrder.get(b.id) ?? 0);
-    });
     const messagesByGroup = new Map<string, LogMessageData[]>();
     const ungrouped: LogMessageData[] = [];
 
@@ -329,21 +375,82 @@ export class TaskGroupList extends LitElement {
       return node;
     }
 
-    // Get root groups (no parent), sorted by start time
-    const groupOrder = new Map(
-      this.groups.map((group, index) => [group.id, index]),
-    );
+    // Get root groups (no parent), sorted by start time.
+    // Stable sort preserves original order for equal timestamps.
     const tree = this.groups
       .filter((g) => !g.parentGroupId)
-      .sort((a, b) => {
-        const aTime = a.startTime ?? Number.MAX_SAFE_INTEGER;
-        const bTime = b.startTime ?? Number.MAX_SAFE_INTEGER;
-        if (aTime !== bTime) return aTime - bTime;
-        return (groupOrder.get(a.id) ?? 0) - (groupOrder.get(b.id) ?? 0);
-      })
+      .sort(
+        (a, b) =>
+          (a.startTime ?? Number.MAX_SAFE_INTEGER) -
+          (b.startTime ?? Number.MAX_SAFE_INTEGER),
+      )
       .map(buildNode);
 
     return [tree, ungrouped];
+  }
+
+  /** Build full chronological timeline from cached tree + ungrouped. */
+  private buildFullTimeline(): typeof this.cachedTimeline {
+    return [
+      ...this.cachedUngrouped.map((m) => ({
+        key: m.id,
+        time: m.timestamp ?? 0,
+        msg: m,
+      })),
+      ...this.cachedTree.map((t) => ({
+        key: t.group.id,
+        time: t.group.startTime ?? 0,
+        tree: t,
+      })),
+    ].sort((a, b) => a.time - b.time);
+  }
+
+  /** Append new ungrouped messages to the timeline in sorted order. */
+  private appendToTimeline(prevUngroupedCount: number): void {
+    for (let i = prevUngroupedCount; i < this.cachedUngrouped.length; i++) {
+      const m = this.cachedUngrouped[i];
+      const entry = { key: m.id, time: m.timestamp ?? 0, msg: m };
+      const lastTime =
+        this.cachedTimeline.length > 0
+          ? this.cachedTimeline[this.cachedTimeline.length - 1].time
+          : -Infinity;
+      if (entry.time >= lastTime) {
+        this.cachedTimeline.push(entry);
+      } else {
+        const idx = this.cachedTimeline.findIndex((e) => e.time > entry.time);
+        if (idx >= 0) this.cachedTimeline.splice(idx, 0, entry);
+        else this.cachedTimeline.push(entry);
+      }
+    }
+  }
+
+  /**
+   * Update message refs on existing timeline entries for streaming updates.
+   * Scans from end with early exit — streaming only touches the tail.
+   * Uses reverse scan of cachedUngrouped for O(1) typical lookups.
+   */
+  private updateTimelineMessageRefs(): void {
+    let consecutiveMatches = 0;
+    for (let i = this.cachedTimeline.length - 1; i >= 0; i--) {
+      const item = this.cachedTimeline[i];
+      if (!('msg' in item)) continue;
+      // Reverse-scan cachedUngrouped: changed messages are near the end
+      const fresh = this.findUngroupedReverse(item.key);
+      if (fresh && fresh !== item.msg) {
+        (item as { msg: LogMessageData }).msg = fresh;
+        consecutiveMatches = 0;
+      } else if (++consecutiveMatches >= 4) {
+        break;
+      }
+    }
+  }
+
+  /** Find a message in cachedUngrouped by scanning from end (O(1) for tail changes). */
+  private findUngroupedReverse(id: string): LogMessageData | undefined {
+    for (let i = this.cachedUngrouped.length - 1; i >= 0; i--) {
+      if (this.cachedUngrouped[i].id === id) return this.cachedUngrouped[i];
+    }
+    return undefined;
   }
 
   /** Check if a root group should be visible */
@@ -505,28 +612,16 @@ export class TaskGroupList extends LitElement {
     if (this.isToolUse) {
       // Tool-use: interleave ungrouped messages (user input, follow-ups, errors)
       // with groups chronologically so the conversation reads top-to-bottom.
-      const timeline = [
-        ...this.cachedUngrouped.map((m) => ({
-          key: m.id,
-          time: m.timestamp ?? 0,
-          msg: m,
-        })),
-        ...this.cachedTree.map((t) => ({
-          key: t.group.id,
-          time: t.group.startTime ?? 0,
-          tree: t,
-        })),
-      ].sort((a, b) => a.time - b.time);
-
+      // Timeline is memoized in willUpdate() — only rebuilt when inputs change.
       return html`
         <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
           ${repeat(
-            timeline,
+            this.cachedTimeline,
             (item) => item.key,
             (item) =>
               'msg' in item
                 ? guard([item.msg], () => formatLogEntry(item.msg))
-                : this.renderGroupNode(item.tree!),
+                : this.renderGroupNode(item.tree),
           )}
         </vscode-scrollable>
       `;

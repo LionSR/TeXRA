@@ -358,9 +358,15 @@ export class AgentWorkspaceState {
     );
   }
 
-  toSnapshot(): AgentWorkspaceSnapshot {
+  toSnapshot(options?: {
+    excludeAssemblyStrings?: boolean;
+  }): AgentWorkspaceSnapshot {
+    const exclude = options?.excludeAssemblyStrings ?? false;
     return {
-      assembly: { ...this.assembly },
+      assembly: {
+        lastResponse: exclude ? '' : this.assembly.lastResponse,
+        accumulatedOutput: exclude ? '' : this.assembly.accumulatedOutput,
+      },
       media: this.media.toSnapshot(),
       reasoning: {
         ...this.reasoning,

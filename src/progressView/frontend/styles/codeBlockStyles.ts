@@ -26,7 +26,7 @@ export const codeBlockStyles = css`
     color: var(--vscode-descriptionForeground, #888);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
   }
 
   .code-block pre {
@@ -53,8 +53,9 @@ export const codeBlockStyles = css`
     cursor: pointer;
     border-radius: var(--border-radius-small);
     transition:
-      background-color 0.15s ease,
-      color 0.15s ease;
+      background-color var(--transition-fast),
+      color var(--transition-fast),
+      transform var(--transition-fast);
 
     &:hover {
       background-color: var(
@@ -69,6 +70,7 @@ export const codeBlockStyles = css`
         --vscode-toolbar-activeBackground,
         rgba(99, 102, 103, 0.31)
       );
+      transform: scale(0.92);
     }
 
     &.copied {

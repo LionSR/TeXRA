@@ -39,6 +39,7 @@ export class MemoryList extends LitElement {
   override render(): TemplateResult {
     if (!this.items.length) {
       return html`<div class="empty-state">
+        <span class="codicon codicon-database"></span>
         <p>No saved memories yet.</p>
         <p class="text-secondary">
           Memories are created automatically when the assistant learns something

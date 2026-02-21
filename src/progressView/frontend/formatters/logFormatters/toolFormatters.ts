@@ -64,16 +64,10 @@ import type { WebSearchPayload, LogMessageData } from '@shared/schemas';
 import '../../components/ToolTimer';
 import '../../components/TerminalOutput';
 
-/** Default bash tool timeout (matches BASH_TIMEOUT_MS in src/tools/bash.ts). */
-const BASH_DEFAULT_TIMEOUT_MS = 120_000;
-
-/** Default executions tool timeout (matches code default in ExecutionsTool.ts). */
-const EXECUTIONS_DEFAULT_TIMEOUT_MS = 300_000;
-
 /** Known per-tool default timeouts (ms) for display in the running timer. */
 const TOOL_DEFAULT_TIMEOUTS: Record<string, number> = {
-  bash: BASH_DEFAULT_TIMEOUT_MS,
-  executions: EXECUTIONS_DEFAULT_TIMEOUT_MS,
+  bash: 120_000, // matches BASH_TIMEOUT_MS in src/tools/bash.ts
+  executions: 300_000, // matches code default in ExecutionsTool.ts
 };
 
 /**
@@ -150,6 +144,24 @@ const STATUS_ICONS: Record<string, string> = {
   in_progress: 'codicon codicon-sync spin',
 };
 
+/** Build the banner content wrapper shared by tool-use and web-search entries. */
+function buildBannerContent(
+  message: Pick<LogMessageData, 'id' | 'groupId' | 'timestamp'>,
+  contentTemplate: TemplateResult,
+): TemplateResult {
+  const fullTimestamp = new Date(message.timestamp).toISOString();
+  // prettier-ignore
+  return html`<div class="banner-content log-entry-content" data-log-id=${ifDefined(message.id)} data-group-id=${ifDefined(message.groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${contentTemplate}</div>`;
+}
+
+/** Extract typed edits array from parsed tool output, if present. */
+function getOutputEdits<T>(output: unknown): T[] | undefined {
+  if (output && typeof output === 'object' && 'edits' in output) {
+    return (output as { edits?: T[] }).edits;
+  }
+  return undefined;
+}
+
 type ToolSectionOptions = {
   toolName?: string;
   language?: string;
@@ -194,35 +206,12 @@ function buildTerminalSection(label: string, text: string): TemplateResult {
   );
 }
 
-/** Title prefix lookup based on tool state. */
-function getToolTitlePrefix(
-  isUserFeedback: boolean,
-  isError: boolean,
-  isInProgress: boolean,
-): string {
-  if (isUserFeedback) return 'User Feedback';
-  if (isError) return 'Tool Error';
-  if (isInProgress) return 'Running';
-  return 'Tool Use';
-}
-
-/** Build title base from tool name and prefix. */
-function buildTitleBase(
-  toolName: string,
-  titlePrefix: string,
-  isNormalToolUse: boolean,
-): string {
-  if (!toolName) return titlePrefix;
-  if (isNormalToolUse) return toolName;
-  return `${titlePrefix}: ${toolName}`;
-}
-
 /** Format tool use log entry as TemplateResult. */
 export function formatToolUseTemplate(
   message: LogMessageData,
   options?: { defaultOpen?: boolean },
 ): FormatResult {
-  const { id, groupId, timestamp, data } = message;
+  const { timestamp, data } = message;
   const normalizedToolLog = normalizeToolUseData(data);
   if (!normalizedToolLog) return null;
 
@@ -249,14 +238,7 @@ export function formatToolUseTemplate(
     iconClass = getToolIconClass(toolName, showAsError);
   }
 
-  // Build title
-  const titlePrefix = getToolTitlePrefix(
-    isUserFeedback,
-    showAsError,
-    isInProgress,
-  );
-  const isNormalToolUse = !isUserFeedback && !showAsError && !isInProgress;
-  const titleBase = buildTitleBase(toolName, titlePrefix, isNormalToolUse);
+  const titleBase = toolName || 'tool';
 
   // Surface action + path for executions tool so it's visible without expanding
   const headerSummary =
@@ -271,9 +253,8 @@ export function formatToolUseTemplate(
   // Build content sections
   const sections: TemplateResult[] = [];
 
-  // Get file path from input for specialized formatting
   const filePath =
-    typeof input === 'object' && input !== null && 'path' in input
+    isPlainObject(input) && 'path' in input
       ? String((input as { path?: string }).path ?? '')
       : '';
 
@@ -284,12 +265,7 @@ export function formatToolUseTemplate(
       typeof editInput.old_str === 'string' &&
       typeof editInput.new_str === 'string'
     ) {
-      // Extract startLine from output.edits[0] for file link navigation
-      const outputData = parsed.output;
-      const edits =
-        outputData && typeof outputData === 'object' && 'edits' in outputData
-          ? (outputData as { edits?: Array<{ startLine?: number }> }).edits
-          : undefined;
+      const edits = getOutputEdits<{ startLine?: number }>(parsed.output);
       const startLine = edits?.[0]?.startLine;
 
       if (filePath) {
@@ -302,7 +278,7 @@ export function formatToolUseTemplate(
       }
       sections.push(
         buildToolUseSection(
-          'Changes:',
+          '',
           buildEditDiffSection(editInput.old_str, editInput.new_str),
         ),
       );
@@ -329,18 +305,14 @@ export function formatToolUseTemplate(
     );
     const contentLanguage = getLanguageFromPath(filePath);
     sections.push(
-      buildToolSection('Content:', writeInput.content, {
+      buildToolSection('', writeInput.content, {
         toolName,
         language: contentLanguage,
       }),
     );
   }
   // Handle memory tool with specialized formatting based on command
-  else if (
-    toolName === 'memory' &&
-    typeof input === 'object' &&
-    input !== null
-  ) {
+  else if (toolName === 'memory' && isPlainObject(input)) {
     const memInput = input as MemoryToolInput;
     const command = memInput.command;
     const memPath = memInput.path ?? '';
@@ -360,7 +332,7 @@ export function formatToolUseTemplate(
       // str_replace: show diff (like edit_file)
       sections.push(
         buildToolUseSection(
-          'Changes:',
+          '',
           buildEditDiffSection(memInput.old_str, memInput.new_str),
         ),
       );
@@ -370,7 +342,7 @@ export function formatToolUseTemplate(
         ? getLanguageFromPath(memPath)
         : 'plaintext';
       sections.push(
-        buildToolSection('Content:', memInput.file_text, {
+        buildToolSection('', memInput.file_text, {
           language: contentLanguage,
         }),
       );
@@ -404,11 +376,7 @@ export function formatToolUseTemplate(
     // view and delete: file path section above is sufficient
   }
   // Handle executions tool with specialized formatting based on action
-  else if (
-    toolName === 'executions' &&
-    typeof input === 'object' &&
-    input !== null
-  ) {
+  else if (toolName === 'executions' && isPlainObject(input)) {
     const execInput = input as ExecutionsToolInput;
     const execPath = execInput.path ?? '';
     const action = execInput.action ?? EXECUTIONS_DEFAULT_ACTION;
@@ -444,11 +412,7 @@ export function formatToolUseTemplate(
     }
   }
   // Handle accept_run_files with file list display
-  else if (
-    toolName === 'accept_run_files' &&
-    typeof input === 'object' &&
-    input !== null
-  ) {
+  else if (toolName === 'accept_run_files' && isPlainObject(input)) {
     const acceptInput = input as AcceptRunFilesInput;
 
     // Show execution ID
@@ -460,19 +424,10 @@ export function formatToolUseTemplate(
     // Show file mappings as a list with file links
     const files = acceptInput.files;
     if (Array.isArray(files) && files.length > 0) {
-      // Extract per-file edits from output for diff stats
-      const outputData = parsed.output;
-      const edits =
-        outputData && typeof outputData === 'object' && 'edits' in outputData
-          ? (
-              outputData as {
-                edits?: Array<{
-                  path?: string;
-                  lineChanges?: { added: number; removed: number };
-                }>;
-              }
-            ).edits
-          : undefined;
+      const edits = getOutputEdits<{
+        path?: string;
+        lineChanges?: { added: number; removed: number };
+      }>(parsed.output);
       const editsByPath = new Map(
         (edits ?? []).filter((e) => e.path).map((e) => [e.path!, e] as const),
       );
@@ -494,11 +449,7 @@ export function formatToolUseTemplate(
     }
   }
   // Handle resume_agent separately — it has execution_id, not agent/model
-  else if (
-    toolName === 'resume_agent' &&
-    typeof input === 'object' &&
-    input !== null
-  ) {
+  else if (toolName === 'resume_agent' && isPlainObject(input)) {
     const resumeInput = input as ResumeAgentInput;
     // prettier-ignore
     sections.push(buildToolUseSection('Execution:', html`<code class="execution-id">${resumeInput.execution_id}</code>`));
@@ -509,11 +460,7 @@ export function formatToolUseTemplate(
     }
   }
   // Handle delegation tools with structured display
-  else if (
-    DELEGATION_TOOLS.has(toolName) &&
-    typeof input === 'object' &&
-    input !== null
-  ) {
+  else if (DELEGATION_TOOLS.has(toolName) && isPlainObject(input)) {
     const delegateInput = input as DelegateAgentInput | WorkflowAgentInput;
 
     // Agent and model on one line
@@ -555,14 +502,14 @@ export function formatToolUseTemplate(
 
     if (isCodeOnly) {
       sections.push(
-        buildToolSection('Input:', code, { toolName, language: codeLanguage }),
+        buildToolSection('', code, { toolName, language: codeLanguage }),
       );
     } else {
       const { text: inputValue, language: inputLanguage } =
         stringifyWithLanguage(input);
       if (inputValue) {
         sections.push(
-          buildToolSection('Input:', inputValue, {
+          buildToolSection('', inputValue, {
             toolName,
             language: inputLanguage,
           }),
@@ -582,8 +529,8 @@ export function formatToolUseTemplate(
   ) {
     sections.push(
       toolName === 'bash'
-        ? buildTerminalSection('Output:', outputText)
-        : buildToolSection('Output:', outputText, {
+        ? buildTerminalSection('', outputText)
+        : buildToolSection('', outputText, {
             toolName,
             extraClass: 'tool-output-full',
           }),
@@ -617,11 +564,9 @@ export function formatToolUseTemplate(
         })
       : joinWithSeparator(sections);
 
-  const fullTimestamp = new Date(timestamp).toISOString();
   // Auto-open in-progress tools so users see the command immediately
   const shouldOpen = options?.defaultOpen ?? isInProgress;
-  // prettier-ignore
-  const bannerContentTemplate = html`<div class="banner-content log-entry-content" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${contentTemplate}</div>`;
+  const bannerContentTemplate = buildBannerContent(message, contentTemplate);
 
   // Live timer for in-progress tools, with timeout limit when available
   const toolTimeoutMs = getToolTimeoutMs(toolName, input);
@@ -636,7 +581,7 @@ export function formatToolUseTemplate(
       : null;
 
   // prettier-ignore
-  const extraContent = html`${timerTemplate ?? nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Restore this proposal configuration"><i class="codicon codicon-reply"></i> Setup</span>` : nothing}`;
+  const extraContent = html`${timerTemplate ?? nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Setup this proposal configuration"><i class="codicon codicon-reply"></i> Setup</span>` : nothing}`;
 
   // prettier-ignore
   return html`<details class=${classMap({
@@ -659,7 +604,7 @@ export function formatWebSearchTemplate(
   message: LogMessageData,
   options?: { defaultOpen?: boolean },
 ): FormatResult {
-  const { id, groupId, timestamp, data } = message;
+  const { data } = message;
   if (!data || typeof data !== 'object') return null;
 
   const { query, results, provider, status } = data as WebSearchPayload;
@@ -675,12 +620,8 @@ export function formatWebSearchTemplate(
   if (query) titleText += `: "${query}"`;
   titleText += statusSuffix;
 
-  // Build content sections
+  // Build content sections — query is already in the title, only show sources
   const sections: TemplateResult[] = [];
-
-  if (query) {
-    sections.push(buildToolUseSection('Query:', wrapInPre(query)));
-  }
 
   if (resultCount > 0) {
     // prettier-ignore
@@ -704,10 +645,8 @@ export function formatWebSearchTemplate(
       ? html`<pre>Web search executed</pre>`
       : joinWithSeparator(sections);
 
-  const fullTimestamp = new Date(timestamp).toISOString();
   const shouldOpen = options?.defaultOpen ?? false;
-  // prettier-ignore
-  const bannerContentTemplate = html`<div class="banner-content log-entry-content" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${contentTemplate}</div>`;
+  const bannerContentTemplate = buildBannerContent(message, contentTemplate);
 
   // prettier-ignore
   return html`<details class=${classMap({

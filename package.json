@@ -755,14 +755,14 @@
         "title": "Clean All LLM Output Files (Workspace-wide)",
         "shortTitle": "Clean LLM Outputs",
         "category": "TeXRA",
-        "icon": "$(trash)"
+        "icon": "$(clear-all)"
       },
       {
         "command": "texra.cleanBuild",
         "title": "Clean All Build Files (Workspace-wide)",
         "shortTitle": "Clean Build Files",
         "category": "TeXRA",
-        "icon": "$(trash)"
+        "icon": "$(close-all)"
       },
       {
         "command": "texra.indentTeX",
@@ -1377,6 +1377,7 @@
     "@cantoo/pdf-lib": "^2.6.1",
     "@google/genai": "^1.42.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
+    "@lit-labs/signals": "^0.2.0",
     "@lit-labs/virtualizer": "^2.1.1",
     "@lit/context": "^1.1.6",
     "@modelcontextprotocol/sdk": "^1.26.0",
@@ -1411,6 +1412,7 @@
     "markdown-it-texmath": "^1.0.0",
     "mime-types": "^3.0.1",
     "minimatch": "^10.2.1",
+    "mutative": "^1.3.0",
     "nanoid": "^5.1.6",
     "node-pandoc": "^0.3.0",
     "openai": "^6.22.0",
@@ -1418,6 +1420,7 @@
     "pdf2pic": "^3.2.0",
     "perfect-debounce": "^2.1.0",
     "shell-quote": "^1.8.3",
+    "signal-polyfill": "^0.2.2",
     "sortablejs": "^1.15.7",
     "tar": "^7.5.9",
     "turndown": "^7.2.2",

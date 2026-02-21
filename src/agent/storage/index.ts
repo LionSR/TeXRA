@@ -10,6 +10,7 @@ export {
   type TodoEntry,
   type ChildRecord,
   getExecutionStore,
+  clearStoreCache,
 } from './ExecutionKVStore';
 export {
   detectWaitingStreams,

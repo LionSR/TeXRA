@@ -45,7 +45,7 @@ export const profileViewStyles: CSSResult = css`
 
   .tier-badge {
     text-transform: uppercase;
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
   }
 
   .tier-badge.free {
@@ -96,7 +96,7 @@ export const profileViewStyles: CSSResult = css`
 
   .provider-keys-table th {
     background: var(--vscode-editor-background);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     color: var(--vscode-foreground);
     position: sticky;
     top: 0;
@@ -178,7 +178,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .option-title {
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     color: var(--vscode-foreground);
   }
 
@@ -201,7 +201,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .provider-name {
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
     white-space: nowrap;
   }
 
@@ -249,7 +249,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .global-streaming-toggle vscode-checkbox {
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
   }
 
   .global-streaming-description {
@@ -269,7 +269,7 @@ export const profileViewStyles: CSSResult = css`
     border: none;
     color: var(--color-text-secondary);
     padding: 0;
-    transition: transform 0.15s ease;
+    transition: transform var(--transition-fast);
   }
 
   .provider-expand-btn:hover {
@@ -393,7 +393,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .helper-model-row label {
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
     color: var(--vscode-foreground);
     white-space: nowrap;
   }
@@ -441,7 +441,7 @@ export const profileViewStyles: CSSResult = css`
     width: 16px;
     height: 16px;
     margin-right: var(--spacing-small);
-    transition: transform 0.15s ease;
+    transition: transform var(--transition-fast);
     color: var(--color-text-secondary);
   }
 
@@ -450,7 +450,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .provider-group-name {
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
     flex: 1;
   }
 

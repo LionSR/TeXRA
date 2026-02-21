@@ -1,18 +1,12 @@
 // Shared imports
-import { sortStreams } from '@shared/streams/streamSort';
+import { create } from 'mutative';
 import {
   isToolUseState,
   isWorkflowState,
-  type ProgressState,
   type ToolUseStreamState,
   type WorkflowStreamState,
 } from './store';
-import type {
-  OutputFileInfo,
-  StreamTabId,
-  StreamTabInfo,
-  TaskGroup,
-} from '@shared/schemas';
+import type { OutputFileInfo, StreamTabId, TaskGroup } from '@shared/schemas';
 
 // Local imports
 import type { FrontendEventHandlerContext } from './eventHandlers';
@@ -50,15 +44,6 @@ export function updateNestedRounds<T>(
     ...base,
     [runId]: { ...existingRounds, ...rounds },
   };
-}
-
-/**
- * Get filtered streams based on current filter setting.
- */
-export function getFilteredStreams(state: ProgressState): StreamTabInfo[] {
-  const sorted = sortStreams(state.streams, state.streamSort);
-  if (state.streamFilter === 'all') return sorted;
-  return sorted.filter((stream) => stream.agentCategory === state.streamFilter);
 }
 
 /** Run group info for the run selector */
@@ -151,5 +136,24 @@ export function updateWorkflowState(
   ctx.setStreamState(stream, (prev) => {
     if (!isWorkflowState(prev)) return prev;
     return updater(prev);
+  });
+}
+
+/**
+ * Update a stream's parentStreamId in the streamById map.
+ * No-op if the stream doesn't exist or the parentStreamId hasn't changed.
+ */
+export function updateParentStreamId(
+  ctx: FrontendEventHandlerContext,
+  streamId: string,
+  parentStreamId: string | null | undefined,
+): void {
+  const resolved = parentStreamId ?? undefined;
+  ctx.setState((prev) => {
+    const target = prev.streamById.get(streamId);
+    if (!target || target.parentStreamId === resolved) return prev;
+    return create(prev, (draft) => {
+      draft.streamById.set(streamId, { ...target, parentStreamId: resolved });
+    });
   });
 }

@@ -47,7 +47,7 @@ export const markdownStyles = css`
   .markdown-content :is(h1, h2, h3, h4) {
     color: var(--vscode-textLink-foreground, #3794ff);
     font-size: var(--font-size-lg);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     line-height: 1.25;
     margin: 1em 0 0.5em;
   }
@@ -161,7 +161,7 @@ export const markdownStyles = css`
 
   .markdown-content strong {
     color: var(--vscode-editor-foreground);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
   }
 
   .markdown-content em {

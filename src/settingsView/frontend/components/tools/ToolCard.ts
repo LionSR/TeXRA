@@ -13,6 +13,9 @@ import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
 // Local imports - shared schemas
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 
+// Local imports - shared utilities
+import { createEvent } from '@shared/utils/events';
+
 @customElement('tool-card')
 export class ToolCard extends LitElement {
   static override styles = [
@@ -33,7 +36,7 @@ export class ToolCard extends LitElement {
           --vscode-editor-background,
           var(--vscode-sideBar-background)
         );
-        transition: border-color 0.15s ease;
+        transition: border-color var(--transition-fast);
       }
 
       .tool-card:hover {
@@ -130,7 +133,7 @@ export class ToolCard extends LitElement {
         background: none;
         border: none;
         cursor: pointer;
-        transition: opacity 0.15s ease;
+        transition: opacity var(--transition-fast);
       }
 
       .tool-guide-toggle:hover {
@@ -176,8 +179,8 @@ export class ToolCard extends LitElement {
         border-radius: var(--border-radius);
         cursor: pointer;
         transition:
-          background 0.15s ease,
-          opacity 0.15s ease;
+          background var(--transition-fast),
+          opacity var(--transition-fast);
       }
 
       .tool-action-btn:hover {
@@ -224,11 +227,7 @@ export class ToolCard extends LitElement {
   private handleInstallUrl(): void {
     if (this.item.installUrl) {
       this.dispatchEvent(
-        new CustomEvent('tool-open-url', {
-          detail: { url: this.item.installUrl },
-          bubbles: true,
-          composed: true,
-        }),
+        createEvent('tool-open-url', { url: this.item.installUrl }),
       );
     }
   }
@@ -236,17 +235,15 @@ export class ToolCard extends LitElement {
   private handleInstallExtension(): void {
     if (this.item.installExtensionId) {
       this.dispatchEvent(
-        new CustomEvent('tool-install-extension', {
-          detail: { extensionId: this.item.installExtensionId },
-          bubbles: true,
-          composed: true,
+        createEvent('tool-install-extension', {
+          extensionId: this.item.installExtensionId,
         }),
       );
     }
   }
 
   private static readonly STATUS_CONFIG: Record<
-    string,
+    ToolDashboardItem['status'],
     { icon: string; label: string }
   > = {
     available: { icon: 'codicon-check', label: 'Available' },
