@@ -474,19 +474,18 @@ export class WebviewUpdater {
     }
 
     // Send lightweight metadata — only backend-owned fields the frontend merges.
-    // Full StreamState objects (taskGroups, runInstructions, runUsage, etc.) are
-    // never needed here; the frontend populates those via targeted messages.
     const allStates = state.getAllStreamStates();
     const streamMetadata: Record<StreamTabId, StreamMetadata> = {};
-    for (const streamInfo of streams) {
-      const current = allStates[streamInfo.name];
-      const status = statuses?.get(streamInfo.name) ?? STREAM_STATUS.READY;
-      const lastTimestamp = state.streamTabs.getLastTimestamp(streamInfo.name);
-      streamMetadata[streamInfo.name] = {
-        kind: streamInfo.agentCategory,
-        status,
-        lastTimestamp,
-        conversationProgress: current?.conversationProgress ?? { conversationTurns: 0, toolCallCount: 0 },
+    for (const { name, agentCategory } of streams) {
+      const current = allStates[name];
+      streamMetadata[name] = {
+        kind: agentCategory,
+        status: statuses?.get(name) ?? STREAM_STATUS.READY,
+        lastTimestamp: state.streamTabs.getLastTimestamp(name),
+        conversationProgress: current?.conversationProgress ?? {
+          conversationTurns: 0,
+          toolCallCount: 0,
+        },
         activeSubagents: current?.activeSubagents ?? [],
         finishedSubagentCount: current?.finishedSubagentCount ?? 0,
         activeProcesses: current?.activeProcesses ?? [],

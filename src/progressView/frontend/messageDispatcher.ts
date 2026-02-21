@@ -186,19 +186,17 @@ function updateStreamInfo(
   }
 
   for (const stream of streams) {
+    const existing = nextStates.get(stream.name);
     const metadata = backendMetadata?.[stream.name];
     if (metadata) {
-      const existing = nextStates.get(stream.name);
       nextStates.set(
         stream.name,
         existing
           ? mergeBackendOwnedState(existing, metadata)
           : createStreamState(stream.agentCategory, metadata),
       );
-    } else {
-      const existing =
-        nextStates.get(stream.name) ?? createStreamState(stream.agentCategory);
-      nextStates.set(stream.name, existing);
+    } else if (!existing) {
+      nextStates.set(stream.name, createStreamState(stream.agentCategory));
     }
   }
 
@@ -520,19 +518,16 @@ const handlers: HandlerRegistry = {
 
       if (streamInfo) {
         const current = getStreamState(prev, stream, streamInfo.agentCategory);
+        const resolvedTimestamp = lastTimestamp ?? current.lastTimestamp;
         const updatedState =
           isToolUseState(current) && shouldFocus
             ? {
                 ...current,
                 status,
-                lastTimestamp: lastTimestamp ?? current.lastTimestamp,
+                lastTimestamp: resolvedTimestamp,
                 ui: { ...current.ui, shouldFocusFollowUp: true },
               }
-            : {
-                ...current,
-                status,
-                lastTimestamp: lastTimestamp ?? current.lastTimestamp,
-              };
+            : { ...current, status, lastTimestamp: resolvedTimestamp };
         nextStates.set(stream, updatedState);
       }
 
@@ -661,39 +656,18 @@ const handlers: HandlerRegistry = {
           data: permission.data,
           modelOptions: permission.modelOptionsData,
         });
-        return;
-      }
-
-      if (permission.kind === PERMISSION_KIND.TOOL_EDIT) {
+      } else {
         addPermission(ctx, {
-          kind: PERMISSION_KIND.TOOL_EDIT,
+          kind: permission.kind,
           data: permission.data,
-        });
-        return;
+        } as PermissionState);
       }
-
-      if (permission.kind === PERMISSION_KIND.BASH) {
-        addPermission(ctx, {
-          kind: PERMISSION_KIND.BASH,
-          data: permission.data,
-        });
-        return;
-      }
-
-      addPermission(ctx, {
-        kind: PERMISSION_KIND.RETRY,
-        data: permission.data,
-      });
       return;
     }
 
     const { kind, id } = data;
-    if (kind === PERMISSION_KIND.TOOL_EDIT) {
-      removePrompt(ctx, PERMISSION_KIND.TOOL_EDIT, 'requestId', id);
-      return;
-    }
-    if (kind === PERMISSION_KIND.BASH) {
-      removePrompt(ctx, PERMISSION_KIND.BASH, 'requestId', id);
+    if (kind === PERMISSION_KIND.TOOL_EDIT || kind === PERMISSION_KIND.BASH) {
+      removePrompt(ctx, kind, 'requestId', id);
       return;
     }
     if (kind === PERMISSION_KIND.RETRY) {
@@ -739,19 +713,12 @@ const handlers: HandlerRegistry = {
 
     if (!data.stream || data.action === 'clear') return;
 
-    // 2. Todos
-    if (data.todos) {
+    // 2. Todos and queued follow-ups
+    if (data.todos || data.queuedFollowUps) {
       updateToolUseState(ctx, data.stream, (prev) => ({
         ...prev,
-        todos: data.todos!,
-      }));
-    }
-
-    // 3. Queued follow-ups
-    if (data.queuedFollowUps) {
-      updateToolUseState(ctx, data.stream, (prev) => ({
-        ...prev,
-        queuedFollowUps: data.queuedFollowUps!,
+        ...(data.todos && { todos: data.todos }),
+        ...(data.queuedFollowUps && { queuedFollowUps: data.queuedFollowUps }),
       }));
     }
 

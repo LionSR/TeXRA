@@ -351,14 +351,11 @@ export class ProgressEventHandler {
 
     // Push a targeted update only for the active stream.
     const activeStream = this.state.activeStream;
-    if (activeStream && this.pendingProgressUpdates.has(activeStream)) {
-      this.webviewUpdater.updateConversationProgress(
-        activeStream,
-        this.pendingProgressUpdates.get(activeStream) ?? {
-          conversationTurns: 0,
-          toolCallCount: 0,
-        },
-      );
+    const progress = activeStream
+      ? this.pendingProgressUpdates.get(activeStream)
+      : undefined;
+    if (activeStream && progress) {
+      this.webviewUpdater.updateConversationProgress(activeStream, progress);
     }
     this.pendingProgressUpdates.clear();
   }
@@ -369,43 +366,12 @@ export class ProgressEventHandler {
     withEventErrorHandling(
       'ActiveSubagents',
       'failed to handle updateActiveSubagents',
-      () => {
-        const { parentStreamId, children } = data;
-        let nextBadges: StreamBadgeSnapshot | null = null;
-
-        // Update active list and accumulate finished count
-        this.state.updateStreamState(parentStreamId, (prev) => {
-          const prevIds = new Set(
-            prev.activeSubagents.map((s) => s.executionId),
-          );
-          const nextIds = new Set(children.map((s) => s.executionId));
-          const newlyFinished = [...prevIds].filter(
-            (id) => !nextIds.has(id),
-          ).length;
-          const updatedState = {
-            ...prev,
-            activeSubagents: children,
-            finishedSubagentCount:
-              (prev.finishedSubagentCount ?? 0) + newlyFinished,
-          };
-          nextBadges = {
-            activeSubagents: updatedState.activeSubagents,
-            finishedSubagentCount: updatedState.finishedSubagentCount,
-            activeProcesses: updatedState.activeProcesses,
-            finishedProcessCount: updatedState.finishedProcessCount,
-          };
-          return updatedState;
-        });
-
-        // Only push to webview if the orchestrator is the active stream.
-        if (
-          this.webviewUpdater.isAvailable() &&
-          parentStreamId === this.state.activeStream &&
-          nextBadges
-        ) {
-          this.webviewUpdater.updateStreamBadges(parentStreamId, nextBadges);
-        }
-      },
+      () =>
+        this.updateActiveChildren(data.parentStreamId, {
+          activeField: 'activeSubagents',
+          countField: 'finishedSubagentCount',
+          next: data.children,
+        }),
     );
   };
 
@@ -415,43 +381,53 @@ export class ProgressEventHandler {
     withEventErrorHandling(
       'ActiveProcesses',
       'failed to handle updateActiveProcesses',
-      () => {
-        const { parentStreamId, processes } = data;
-        let nextBadges: StreamBadgeSnapshot | null = null;
-
-        this.state.updateStreamState(parentStreamId, (prev) => {
-          const prevIds = new Set(
-            prev.activeProcesses.map((p) => p.executionId),
-          );
-          const nextIds = new Set(processes.map((p) => p.executionId));
-          const newlyFinished = [...prevIds].filter(
-            (id) => !nextIds.has(id),
-          ).length;
-          const updatedState = {
-            ...prev,
-            activeProcesses: processes,
-            finishedProcessCount:
-              (prev.finishedProcessCount ?? 0) + newlyFinished,
-          };
-          nextBadges = {
-            activeSubagents: updatedState.activeSubagents,
-            finishedSubagentCount: updatedState.finishedSubagentCount,
-            activeProcesses: updatedState.activeProcesses,
-            finishedProcessCount: updatedState.finishedProcessCount,
-          };
-          return updatedState;
-        });
-
-        if (
-          this.webviewUpdater.isAvailable() &&
-          parentStreamId === this.state.activeStream &&
-          nextBadges
-        ) {
-          this.webviewUpdater.updateStreamBadges(parentStreamId, nextBadges);
-        }
-      },
+      () =>
+        this.updateActiveChildren(data.parentStreamId, {
+          activeField: 'activeProcesses',
+          countField: 'finishedProcessCount',
+          next: data.processes,
+        }),
     );
   };
+
+  private updateActiveChildren(
+    parentStreamId: StreamTabId,
+    opts: {
+      activeField: 'activeSubagents' | 'activeProcesses';
+      countField: 'finishedSubagentCount' | 'finishedProcessCount';
+      next: StreamState['activeSubagents'];
+    },
+  ): void {
+    let nextBadges: StreamBadgeSnapshot | null = null;
+
+    this.state.updateStreamState(parentStreamId, (prev) => {
+      const prevIds = new Set(prev[opts.activeField].map((c) => c.executionId));
+      const nextIds = new Set(opts.next.map((c) => c.executionId));
+      const newlyFinished = [...prevIds].filter(
+        (id) => !nextIds.has(id),
+      ).length;
+      const updatedState = {
+        ...prev,
+        [opts.activeField]: opts.next,
+        [opts.countField]: (prev[opts.countField] ?? 0) + newlyFinished,
+      };
+      nextBadges = {
+        activeSubagents: updatedState.activeSubagents,
+        finishedSubagentCount: updatedState.finishedSubagentCount,
+        activeProcesses: updatedState.activeProcesses,
+        finishedProcessCount: updatedState.finishedProcessCount,
+      };
+      return updatedState;
+    });
+
+    if (
+      this.webviewUpdater.isAvailable() &&
+      parentStreamId === this.state.activeStream &&
+      nextBadges
+    ) {
+      this.webviewUpdater.updateStreamBadges(parentStreamId, nextBadges);
+    }
+  }
 
   private handleSetParentStream = (
     data: ProgressEventPayloads['setParentStream'],
@@ -484,43 +460,23 @@ export class ProgressEventHandler {
     stream: StreamTabId | '',
     runIdHint?: StorageKey | null,
   ): void {
-    if (!this.webviewUpdater.isAvailable()) {
-      return;
-    }
+    if (!this.webviewUpdater.isAvailable()) return;
 
     if (!stream) {
       this.webviewUpdater.updateInstruction('', null);
       return;
     }
 
-    const taskState = this.state.getTaskState(stream);
-    const category = this.getStreamCategory(stream);
-
-    const runId =
-      runIdHint === undefined ? this.state.getActiveRunId(stream) : runIdHint;
-
-    // Skip update if no runId - frontend can't store instruction without it
-    if (!runId) {
-      return;
-    }
-
-    const existingInstruction = this.state.getRunInstruction(stream, runId);
-    const instructionUpdate = WebviewUpdater.createInstructionUpdate(
-      taskState,
-      existingInstruction?.timestamp,
+    const { instruction, agentCategory, runId } = this.prepareInstructionUpdate(
+      stream,
+      runIdHint,
     );
-
-    // Persist instruction if both runId and instruction exist
-    if (instructionUpdate) {
-      void this.state.setRunInstruction(stream, runId, instructionUpdate);
-    } else {
-      void this.state.deleteRunInstruction(stream, runId);
-    }
+    if (!runId) return;
 
     this.webviewUpdater.updateInstruction(
       stream,
-      instructionUpdate ?? null,
-      category,
+      instruction,
+      agentCategory,
       runId,
     );
   }

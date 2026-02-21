@@ -141,7 +141,7 @@ Stream status previously lived in three places:
 | Copy | Location                                         | Role                                                                                       |
 | ---- | ------------------------------------------------ | ------------------------------------------------------------------------------------------ |
 | 1    | `StreamStatusService.statusMemory`               | Runtime truth. Agent execution writes here. Concurrency control (`tryAcquire`) reads here. |
-| 2    | `ProgressViewState._streamStates[stream].status` | Backend view state. **Was a dead write — never authoritatively consumed.**                  |
+| 2    | `ProgressViewState._streamStates[stream].status` | Backend view state. **Was a dead write — never authoritatively consumed.**                 |
 | 3    | Frontend `streamStates.get(stream).status`       | Rendering state. Necessary (postMessage boundary).                                         |
 
 **Copy 2 was redundant** and has been removed. `setStreamStatus()` no longer writes status into `_streamStates`. Status is read exclusively from `StreamStatusService` at message-sending time.
@@ -152,13 +152,13 @@ Stream status previously lived in three places:
 
 ### By the refactor (committed)
 
-| Problem                                        | Fix                                                                          |
-| ---------------------------------------------- | ---------------------------------------------------------------------------- |
-| Single context triggers all components         | Split into 3 contexts (meta, log, permissions)                               |
-| Tab switch recreates entire DOM                | Per-stream DOM cache in LogList (LRU, max 5)                                 |
-| Every metadata update re-renders logs          | `streamStates` vs `streamLogs` split in store                                |
-| Full tree rebuild on every message             | Incremental append + ref-update paths in TaskGroupList                       |
-| No CSS containment                             | `contain: layout style paint` on host, `contain: layout paint` on scrollable |
+| Problem                                | Fix                                                                          |
+| -------------------------------------- | ---------------------------------------------------------------------------- |
+| Single context triggers all components | Split into 3 contexts (meta, log, permissions)                               |
+| Tab switch recreates entire DOM        | Per-stream DOM cache in LogList (LRU, max 5)                                 |
+| Every metadata update re-renders logs  | `streamStates` vs `streamLogs` split in store                                |
+| Full tree rebuild on every message     | Incremental append + ref-update paths in TaskGroupList                       |
+| No CSS containment                     | `contain: layout style paint` on host, `contain: layout paint` on scrollable |
 
 ### By performance commits
 
@@ -202,6 +202,7 @@ Stream status previously lived in three places:
 **Fix:** Introduced `StreamMetadataSchema` — a lightweight schema containing only `kind` + the 7 backend-owned fields. `sendStreamMetadata()` now builds `StreamMetadata` objects directly instead of passing through full `StreamState` records. The `UPDATE_STREAMS` message schema uses `StreamMetadataSchema` instead of `StreamStateSchema`.
 
 **Files changed:**
+
 - `src/shared/schemas/streamState.ts` — Added `StreamMetadataSchema` (extracted `BackendOwnedFieldsSchema` from `BaseStreamStateSchema`)
 - `src/shared/schemas/progressView.ts` — `UpdateStreamsMessageSchema.streamStates` uses `StreamMetadataSchema`
 - `src/progressView/managers/WebviewUpdater.ts` — `sendStreamMetadata()` builds trimmed metadata; `updateStreams()` accepts `StreamMetadata`

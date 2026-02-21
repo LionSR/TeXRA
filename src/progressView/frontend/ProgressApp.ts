@@ -198,10 +198,7 @@ export class ProgressApp extends BaseWebviewApp {
 
     if (structuralChange) {
       // Full rebuild: re-filter/sort and rebuild all cached maps.
-      this.cachedFilteredStreams = getFilteredStreams(this.appState);
-      this.cachedFilteredStreamMap = new Map(
-        this.cachedFilteredStreams.map((stream) => [stream.name, stream]),
-      );
+      this.rebuildFilteredStreams();
       this.rebuildStreamMaps();
     } else if (
       changed.has('appState') &&
@@ -231,10 +228,7 @@ export class ProgressApp extends BaseWebviewApp {
 
       // Re-sort only when sorting by time and timestamps actually changed.
       if (anyTimestampChanged && this.appState.streamSort === 'time') {
-        this.cachedFilteredStreams = getFilteredStreams(this.appState);
-        this.cachedFilteredStreamMap = new Map(
-          this.cachedFilteredStreams.map((stream) => [stream.name, stream]),
-        );
+        this.rebuildFilteredStreams();
       }
 
       // Rebuild status/timestamp maps only when values actually differ.
@@ -244,6 +238,13 @@ export class ProgressApp extends BaseWebviewApp {
     }
 
     this.updateContexts();
+  }
+
+  private rebuildFilteredStreams(): void {
+    this.cachedFilteredStreams = getFilteredStreams(this.appState);
+    this.cachedFilteredStreamMap = new Map(
+      this.cachedFilteredStreams.map((stream) => [stream.name, stream]),
+    );
   }
 
   /** Rebuild cached status and lastTimestamp Maps from current streamStates. */

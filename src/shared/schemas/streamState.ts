@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-import { AGENT_CATEGORY, AgentCategorySchema, type AgentCategory } from './agent';
+import {
+  AGENT_CATEGORY,
+  AgentCategorySchema,
+  type AgentCategory,
+} from './agent';
 import { OutputFileInfoSchema } from './output';
 import { InstructionUpdateSchema, StreamStatusSchema } from './stream';
 import { TaskGroupSchema } from './taskGroup';
