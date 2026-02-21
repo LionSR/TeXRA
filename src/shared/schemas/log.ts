@@ -73,6 +73,20 @@ export const MessageTypeSchema = z.enum([
 
 export type MessageType = z.infer<typeof MessageTypeSchema>;
 
+export const STREAM_LOG_ENTRY_TYPES = {
+  LOG: 'log',
+  GROUP_START: 'group-start',
+  GROUP_END: 'group-end',
+} as const;
+
+export const StreamLogEntryTypeSchema = z.enum([
+  STREAM_LOG_ENTRY_TYPES.LOG,
+  STREAM_LOG_ENTRY_TYPES.GROUP_START,
+  STREAM_LOG_ENTRY_TYPES.GROUP_END,
+]);
+
+export type StreamLogEntryType = z.infer<typeof StreamLogEntryTypeSchema>;
+
 export const FileListEntrySchema = z.object({
   path: z.string(),
   ok: z.boolean(),
@@ -83,6 +97,21 @@ export const FileListEntrySchema = z.object({
 });
 
 export type FileListEntry = z.infer<typeof FileListEntrySchema>;
+
+export const StreamLogEntrySchema = z.strictObject({
+  seqNo: z.int().positive(),
+  id: z.string().min(1),
+  type: StreamLogEntryTypeSchema,
+  level: LogLevelSchema,
+  timestamp: z.number(),
+  groupId: z.string().optional(),
+  messageType: MessageTypeSchema.optional(),
+  text: z.string().optional(),
+  verbose: z.boolean().optional(),
+  data: z.unknown().optional(),
+});
+
+export type StreamLogEntry = z.infer<typeof StreamLogEntrySchema>;
 
 export const LogMessageDataSchema = z.strictObject({
   id: z.string().min(1),

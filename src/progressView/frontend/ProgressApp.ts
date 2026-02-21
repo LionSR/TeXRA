@@ -452,7 +452,7 @@ export class ProgressApp extends ProgressAppBase {
     let current = state.streamStates.get(streamId);
     if (!current) {
       const streamInfo = state.streamById.get(streamId);
-      // Skip unknown streams - they'll receive full state via UPDATE_LOGS after initialization
+      // Skip unknown streams - they'll receive full state via LOG_DELTA after initialization
       if (!streamInfo) return;
       current = getStreamState(state, streamId, streamInfo.agentCategory);
     }

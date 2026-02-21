@@ -1,222 +1,206 @@
-/**
- * Log message handlers: APPEND_LOG, UPDATE_LOG, UPDATE_LOGS.
- *
- * Owns the pendingLogUpdates Map and associated helpers.
- */
-
 import { create } from 'mutative';
 
 import {
-  sumUsageStats,
+  MESSAGE_TYPES,
+  STREAM_LOG_ENTRY_TYPES,
+  STREAM_STATUS,
+  type ContextState,
   type LogMessageData,
-  type LogsPayload,
+  type StreamLogEntry,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
-import {
-  createStreamLogs,
-  isToolUseState,
-  isWorkflowState,
-  type StreamState,
-} from '../store';
-import type {
-  HandlerRegistry,
-  MessageHandlerContext,
-} from '../messageDispatcher';
+import type { StreamLogs, StreamState } from '../store';
+import type { HandlerRegistry } from '../messageDispatcher';
 
-// ============================================================
-// Internal state for pending log updates
-// ============================================================
-
-/**
- * Stores pending log updates that arrive before their APPEND_LOG.
- * When UPDATE_LOG arrives for a log that doesn't exist yet, we store it here.
- * When APPEND_LOG arrives, we merge any pending update before rendering.
- */
-const pendingLogUpdates = new Map<string, Partial<LogMessageData>>();
-
-// ============================================================
-// Helpers (exported for use by other slices)
-// ============================================================
-
-function getPendingLogKey(streamId: string, logId: string): string {
-  return `${streamId}:${logId}`;
+function isTaskGroupStatus(
+  value: unknown,
+): value is
+  | typeof STREAM_STATUS.RUNNING
+  | typeof STREAM_STATUS.ERROR
+  | typeof STREAM_STATUS.STOPPED
+  | typeof STREAM_STATUS.READY {
+  return (
+    value === STREAM_STATUS.RUNNING ||
+    value === STREAM_STATUS.ERROR ||
+    value === STREAM_STATUS.STOPPED ||
+    value === STREAM_STATUS.READY
+  );
 }
 
-export function clearPendingLogUpdatesForStream(streamId: string): void {
-  const prefix = `${streamId}:`;
-  for (const key of pendingLogUpdates.keys()) {
-    if (key.startsWith(prefix)) {
-      pendingLogUpdates.delete(key);
-    }
+function asContextState(data: unknown): ContextState | undefined {
+  if (typeof data !== 'object' || data === null) return undefined;
+  const value = data as Partial<ContextState>;
+  if (
+    typeof value.inputTokens === 'number' &&
+    typeof value.contextWindow === 'number' &&
+    typeof value.utilizationPercent === 'number'
+  ) {
+    return {
+      inputTokens: value.inputTokens,
+      contextWindow: value.contextWindow,
+      utilizationPercent: value.utilizationPercent,
+    };
   }
+  return undefined;
 }
 
-export function clearAllPendingLogUpdates(): void {
-  pendingLogUpdates.clear();
+function toLogMessage(entry: StreamLogEntry): LogMessageData {
+  return {
+    id: entry.id,
+    text: entry.text ?? '',
+    level: entry.level,
+    timestamp: entry.timestamp,
+    ...(entry.groupId ? { groupId: entry.groupId } : {}),
+    ...(entry.messageType ? { messageType: entry.messageType } : {}),
+    ...(entry.verbose !== undefined ? { verbose: entry.verbose } : {}),
+    ...(entry.data !== undefined ? { data: entry.data } : {}),
+  };
 }
 
-/**
- * Shared log-update logic used by both UPDATE_LOGS and SYNC_STREAM_CONTENT.
- * Extracted to avoid the handler-calls-handler pattern with synthetic messages.
- */
-export function applyLogUpdate(
-  data: LogsPayload,
-  ctx: MessageHandlerContext,
-): void {
-  const { stream, messages, groups, action } = data;
+function updateTaskGroups(
+  streamState: StreamState,
+  entry: StreamLogEntry,
+): boolean {
+  const payload =
+    typeof entry.data === 'object' && entry.data !== null
+      ? (entry.data as Record<string, unknown>)
+      : {};
+  const groupIndex = streamState.taskGroups.findIndex((g) => g.id === entry.id);
 
-  if (!stream && action === 'clear') {
-    pendingLogUpdates.clear();
-    ctx.setState((prev) =>
-      create(prev, (draft) => {
-        draft.streamStates = new Map();
-        draft.streamLogs = new Map();
-      }),
-    );
-    return;
-  }
+  if (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START) {
+    const status = isTaskGroupStatus(payload.status)
+      ? payload.status
+      : STREAM_STATUS.RUNNING;
+    const nextGroup = {
+      id: entry.id,
+      name: entry.text ?? String(payload.name ?? entry.id),
+      startTime: entry.timestamp,
+      status,
+      ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
+    };
 
-  if (!stream) return;
-
-  const isClear = action === 'clear';
-  if (isClear) {
-    clearPendingLogUpdatesForStream(stream);
-  }
-
-  // Update meta first — setStreamState creates the streamStates entry if needed,
-  // which setStreamLogs requires (it guards against unknown streams).
-  ctx.setStreamState(stream, (prev): StreamState => {
-    const {
-      activeRunId,
-      runInstructions,
-      runUsage,
-      runFiles,
-      runMissingOutputs,
-      contextState,
-    } = data;
-
-    if (isWorkflowState(prev)) {
-      if (isClear) {
-        return create(prev, (draft) => {
-          draft.taskGroups = [];
-          draft.contextState = contextState ?? prev.contextState;
-          draft.activeRunId = null;
-          draft.ui.selectedRunId = null;
-          draft.runInstructions = {};
-          draft.runUsage = {};
-          draft.runFiles = {};
-          draft.runMissingOutputs = {};
-        });
-      }
-      return create(prev, (draft) => {
-        draft.taskGroups = groups ?? prev.taskGroups;
-        draft.contextState = contextState ?? prev.contextState;
-        draft.activeRunId = activeRunId ?? prev.activeRunId;
-        if (runInstructions)
-          Object.assign(draft.runInstructions, runInstructions);
-        if (runUsage) Object.assign(draft.runUsage, runUsage);
-        if (runFiles) Object.assign(draft.runFiles, runFiles);
-        if (runMissingOutputs)
-          Object.assign(draft.runMissingOutputs, runMissingOutputs);
-      });
+    if (groupIndex === -1) {
+      streamState.taskGroups.push(nextGroup);
+    } else {
+      streamState.taskGroups[groupIndex] = nextGroup;
     }
 
-    // Tool-use streams: store per-run usage and derive sessionUsage as their sum.
-    // Ignore empty payloads so we don't overwrite existing totals with zeros.
-    if (isToolUseState(prev) && runUsage && Object.keys(runUsage).length > 0) {
-      return create(prev, (draft) => {
-        draft.taskGroups = isClear ? [] : (groups ?? prev.taskGroups);
-        draft.contextState = contextState ?? prev.contextState;
-        Object.assign(draft.runUsage, runUsage);
-        draft.sessionUsage = sumUsageStats(Object.values(draft.runUsage));
-      });
+    if (
+      !entry.groupId &&
+      'activeRunId' in streamState &&
+      !streamState.activeRunId
+    ) {
+      streamState.activeRunId = entry.id;
     }
+    return true;
+  }
 
-    return create(prev, (draft) => {
-      draft.taskGroups = isClear ? [] : (groups ?? prev.taskGroups);
-      draft.contextState = contextState ?? prev.contextState;
+  if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END) {
+    return false;
+  }
+
+  const status = isTaskGroupStatus(payload.status)
+    ? payload.status
+    : STREAM_STATUS.STOPPED;
+  const endTime =
+    typeof payload.endTime === 'number' ? payload.endTime : undefined;
+
+  if (groupIndex === -1) {
+    streamState.taskGroups.push({
+      id: entry.id,
+      name: entry.text ?? entry.id,
+      startTime: entry.timestamp,
+      status,
+      ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
+      ...(endTime !== undefined ? { endTime } : {}),
     });
-  });
-
-  if (isClear) {
-    ctx.setState((prev) =>
-      create(prev, (draft) => {
-        draft.streamLogs.delete(stream);
-      }),
-    );
-    return;
+    return true;
   }
 
-  // Update logs in the separate streamLogs Map (after setStreamState so the entry exists)
-  ctx.setStreamLogs(stream, () => createStreamLogs(messages));
+  const current = streamState.taskGroups[groupIndex];
+  streamState.taskGroups[groupIndex] = {
+    ...current,
+    status,
+    ...(endTime !== undefined ? { endTime } : {}),
+  };
+  return true;
 }
 
-// ============================================================
-// Handlers
-// ============================================================
+function applyEntry(
+  entry: StreamLogEntry,
+  streamLogs: StreamLogs,
+  streamState: StreamState,
+): { logChanged: boolean; stateChanged: boolean } {
+  let stateChanged = updateTaskGroups(streamState, entry);
+
+  if (entry.messageType === MESSAGE_TYPES.CONTEXT_STATE) {
+    const contextState = asContextState(entry.data);
+    if (contextState) {
+      streamState.contextState = contextState;
+      stateChanged = true;
+    }
+  }
+
+  if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) {
+    return { logChanged: false, stateChanged };
+  }
+
+  const nextLog = toLogMessage(entry);
+  const existingIndex = streamLogs.logIndex.get(entry.id);
+  if (existingIndex === undefined) {
+    streamLogs.logIndex.set(entry.id, streamLogs.logs.length);
+    streamLogs.logs.push(nextLog);
+    return { logChanged: true, stateChanged };
+  }
+
+  streamLogs.logs[existingIndex] = nextLog;
+  return { logChanged: true, stateChanged };
+}
 
 export const logHandlers: HandlerRegistry = {
-  [PROGRESS_VIEW_COMMANDS.UPDATE_LOGS]: applyLogUpdate,
+  [PROGRESS_VIEW_COMMANDS.LOG_DELTA]: (data, ctx) => {
+    const { streamId, entries, updates } = data;
 
-  // --- Log updates ---
-  // These use setStreamLogs so only the streamLogs Map gets a new entry.
-  // The streamStates Map stays unchanged, so meta context consumers
-  // (content components) skip re-rendering on log-only updates.
+    ctx.setState((prev) =>
+      create(prev, (draft) => {
+        const streamState = draft.streamStates.get(streamId);
+        if (!streamState) return;
 
-  [PROGRESS_VIEW_COMMANDS.APPEND_LOG]: (data, ctx) => {
-    const logId = data.logMessage.id;
-    const pendingUpdate =
-      logId && data.stream
-        ? pendingLogUpdates.get(getPendingLogKey(data.stream, logId))
-        : null;
+        const existingStreamLogs = draft.streamLogs.get(streamId);
+        const streamLogs: StreamLogs = existingStreamLogs ?? {
+          logs: [],
+          logIndex: new Map<string, number>(),
+          generation: 0,
+        };
 
-    const mergedLogMessage = pendingUpdate
-      ? { ...data.logMessage, ...pendingUpdate }
-      : data.logMessage;
+        let logChanged = false;
+        let stateChanged = false;
 
-    if (logId && pendingUpdate) {
-      pendingLogUpdates.delete(getPendingLogKey(data.stream, logId));
-    }
+        for (const entry of entries) {
+          const changed = applyEntry(entry, streamLogs, streamState);
+          logChanged ||= changed.logChanged;
+          stateChanged ||= changed.stateChanged;
+        }
 
-    ctx.setStreamLogs(data.stream, (prev) => {
-      // O(1) duplicate check via logIndex (race between UPDATE_LOGS and
-      // APPEND_LOG can cause the same entry to arrive twice).
-      if (logId && prev.logIndex.has(logId)) {
-        return prev;
-      }
-      // Mutate logIndex in place — no downstream code checks Map reference
-      // identity; it's only used for O(1) lookups within handlers.
-      prev.logIndex.set(logId, prev.logs.length);
-      return create(prev, (draft) => {
-        draft.logs.push(mergedLogMessage);
-      });
-    });
-  },
+        for (const entry of updates) {
+          const changed = applyEntry(entry, streamLogs, streamState);
+          logChanged ||= changed.logChanged;
+          stateChanged ||= changed.stateChanged;
+        }
 
-  [PROGRESS_VIEW_COMMANDS.UPDATE_LOG]: (data, ctx) => {
-    const logId = data.logMessage.id;
-
-    ctx.setStreamLogs(data.stream, (prev) => {
-      const idx = prev.logIndex.get(logId);
-
-      if (idx === undefined) {
-        // Out-of-order: APPEND hasn't arrived yet, stash for later merge
-        if (logId) {
-          const key = getPendingLogKey(data.stream, logId);
-          const existingUpdate = pendingLogUpdates.get(key) ?? {};
-          pendingLogUpdates.set(key, {
-            ...existingUpdate,
-            ...data.logMessage,
+        if (logChanged) {
+          draft.streamLogs.set(streamId, {
+            logs: streamLogs.logs,
+            logIndex: streamLogs.logIndex,
+            generation: streamLogs.generation + 1,
           });
         }
-        return prev; // Same reference → setStreamLogs skips update
-      }
 
-      // Reuse logIndex — position unchanged, only the object at that index
-      return create(prev, (draft) => {
-        draft.logs[idx] = data.logMessage;
-      });
-    });
+        if (stateChanged) {
+          draft.streamStates.set(streamId, streamState);
+        }
+      }),
+    );
   },
 };
