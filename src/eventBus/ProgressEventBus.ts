@@ -48,8 +48,9 @@ interface SetTaskStatePayload {
 /**
  * Per-event-type buffer limit. Prevents one noisy event type (e.g., addLogMessage)
  * from evicting critical events of other types during the startup buffering window.
+ * Kept at 1000 (same as the previous global limit) so no single type regresses in capacity.
  */
-const PER_TYPE_BUFFER_LIMIT = 200;
+const PER_TYPE_BUFFER_LIMIT = 1000;
 
 export interface ProgressEventPayloads {
   addLogMessage: { streamId: StreamTabId; logMessage: LogMessageData };
