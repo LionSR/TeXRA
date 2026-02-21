@@ -57,10 +57,8 @@ import type { CycleParams, ToolUseCycleServices } from './CycleServices';
 // ============================================================================
 
 const DUPLICATE_CALL_ERROR =
-  'Duplicate parallel call skipped. This call has the same tool name and arguments ' +
-  'as an earlier call in this batch that was already executed. ' +
-  'If you need to run this tool multiple times with the same arguments, ' +
-  'please call them sequentially in separate responses.';
+  'Duplicate parallel call skipped — same tool name and arguments as an earlier call in this batch. ' +
+  'To run identical calls, invoke them sequentially in separate responses.';
 
 /**
  * Identify duplicate parallel tool calls (same name + identical arguments).
