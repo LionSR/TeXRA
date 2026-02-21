@@ -24,6 +24,11 @@ import type {
 /** Proposal IDs resolved before a show message arrives (out-of-order guard). */
 export const resolvedProposalIds = new Set<string>();
 
+/** Clear all resolved proposal IDs (called on stream delete / delete-all). */
+export function clearResolvedProposalIds(): void {
+  resolvedProposalIds.clear();
+}
+
 // ============================================================
 // Helpers (exported for use by eventHandlers.ts)
 // ============================================================

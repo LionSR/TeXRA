@@ -344,11 +344,11 @@ export class ProgressViewState {
     return this._runInstructions.get(stream)?.get(runId);
   }
 
-  async setRunInstruction(
+  setRunInstruction(
     stream: StreamTabId,
     runId: StorageKey,
     instruction: InstructionUpdate | null,
-  ): Promise<void> {
+  ): void {
     const existing = this._runInstructions.get(stream) ?? new Map();
     if (instruction) {
       existing.set(runId, instruction);
@@ -697,7 +697,7 @@ export class ProgressViewState {
     );
   }
 
-  private async loadTaskGroups(): Promise<void> {
+  private loadTaskGroups(): void {
     const stored = this.loadRecord(WorkspaceStateKey.TASK_GROUPS);
     const parsed = TaskGroupsByStreamSchema.parse(stored);
     this._taskGroups = new Map(

@@ -185,11 +185,12 @@ export const logHandlers: HandlerRegistry = {
       if (logId && prev.logIndex.has(logId)) {
         return prev;
       }
-      const newLogs = [...prev.logs, mergedLogMessage];
       // Mutate logIndex in place — no downstream code checks Map reference
       // identity; it's only used for O(1) lookups within handlers.
-      prev.logIndex.set(logId, newLogs.length - 1);
-      return { logs: newLogs, logIndex: prev.logIndex };
+      prev.logIndex.set(logId, prev.logs.length);
+      return create(prev, (draft) => {
+        draft.logs.push(mergedLogMessage);
+      });
     });
   },
 
@@ -212,10 +213,10 @@ export const logHandlers: HandlerRegistry = {
         return prev; // Same reference → setStreamLogs skips update
       }
 
-      const newLogs = [...prev.logs];
-      newLogs[idx] = data.logMessage;
       // Reuse logIndex — position unchanged, only the object at that index
-      return { logs: newLogs, logIndex: prev.logIndex };
+      return create(prev, (draft) => {
+        draft.logs[idx] = data.logMessage;
+      });
     });
   },
 };

@@ -152,7 +152,6 @@ export class ProgressViewProvider
         updateSuperYoloBypassState: (
           streamId,
           bypassActive,
-          _featureEnabled,
         ) => {
           if (canSend())
             u.updateBypassState(

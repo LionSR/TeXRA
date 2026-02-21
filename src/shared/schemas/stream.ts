@@ -55,7 +55,7 @@ export const StreamTabInfoSchema = z.object({
   hasMultipleOutputs: z.boolean().optional(),
   isRemote: z.boolean().optional(),
   inputFile: z.string().optional(),
-  creationTimestamp: z.number().optional(),
+  creationTimestamp: z.number(),
   executionId: ExecutionIdSchema.optional(),
   parentStreamId: StreamTabIdSchema.optional(),
 });

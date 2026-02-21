@@ -19,6 +19,7 @@ import {
   clearPendingLogUpdatesForStream,
   clearAllPendingLogUpdates,
 } from './logSlice';
+import { clearResolvedProposalIds } from './permissionSlice';
 import { updateParentStreamId } from '../stateUtils';
 import type { HandlerRegistry } from '../messageDispatcher';
 
@@ -142,6 +143,7 @@ export const streamLifecycleHandlers: HandlerRegistry = {
 
     // Always clear pending log updates for deleted stream, not just active stream
     clearPendingLogUpdatesForStream(streamId);
+    clearResolvedProposalIds();
 
     ctx.setState((prev) =>
       create(prev, (draft) => {
@@ -158,6 +160,7 @@ export const streamLifecycleHandlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: (_data, ctx) => {
     clearAllPendingLogUpdates();
+    clearResolvedProposalIds();
     ctx.setState((prev) =>
       create(prev, (draft) => {
         draft.streamById = new Map();

@@ -25,12 +25,10 @@ function compareByTime(
   b: StreamTabInfo,
   options?: StreamSortOptions,
 ): number {
-  // Treat streams without timestamps as newest (sort to top)
-  const now = Date.now();
   const aTime =
-    options?.getLastActivityTimestamp?.(a) ?? a.creationTimestamp ?? now;
+    options?.getLastActivityTimestamp?.(a) ?? a.creationTimestamp;
   const bTime =
-    options?.getLastActivityTimestamp?.(b) ?? b.creationTimestamp ?? now;
+    options?.getLastActivityTimestamp?.(b) ?? b.creationTimestamp;
   return bTime - aTime;
 }
 
