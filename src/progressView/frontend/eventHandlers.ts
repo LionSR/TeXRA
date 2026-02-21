@@ -9,7 +9,6 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view
 import {
-  buildStreamById,
   getStreamState,
   isToolUseState,
   isWorkflowState,
@@ -96,7 +95,7 @@ export function handleStreamDelete(
       draft.streamStates.delete(streamId);
       draft.streamLogs.delete(streamId);
       draft.streams = draft.streams.filter((s) => s.name !== streamId);
-      draft.streamById = buildStreamById(draft.streams);
+      draft.streamById.delete(streamId);
       if (draft.activeStreamId === streamId) {
         draft.activeStreamId = draft.streams.at(0)?.name ?? null;
       }

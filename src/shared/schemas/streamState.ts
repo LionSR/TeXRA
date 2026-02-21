@@ -87,6 +87,12 @@ export const ToolUseUIStateSchema = z.object({
 
 export type ToolUseUIState = z.infer<typeof ToolUseUIStateSchema>;
 
+// Shared helper for run-keyed records
+
+function RunScopedRecord<T extends z.ZodType>(valueSchema: T) {
+  return z.record(z.string(), valueSchema).prefault({});
+}
+
 // Tool-Use Stream State
 
 export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
@@ -96,6 +102,8 @@ export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   queuedFollowUps: z.array(z.string()).prefault([]),
   toolEditBypass: z.boolean().optional(),
   superYoloBypass: z.boolean().optional(),
+  // Per-run usage for accumulation; sessionUsage is derived as their sum.
+  runUsage: RunScopedRecord(TokenUsageStatsSchema),
   sessionUsage: TokenUsageStatsSchema.nullable().prefault(null),
   // Frontend-owned (nested under ui)
   ui: ToolUseUIStateSchema.prefault({}),
@@ -112,10 +120,6 @@ export const WorkflowUIStateSchema = z.object({
 export type WorkflowUIState = z.infer<typeof WorkflowUIStateSchema>;
 
 // Workflow Stream State
-
-function RunScopedRecord<T extends z.ZodType>(valueSchema: T) {
-  return z.record(z.string(), valueSchema).prefault({});
-}
 
 function RoundScopedRecord<T extends z.ZodType>(valueSchema: T) {
   return z

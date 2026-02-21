@@ -194,11 +194,12 @@ function updateStreamInfo(
     }
   }
 
-  return create(state, (draft) => {
-    const knownStreams = new Set(streams.map((s) => s.name));
+  // Build streamById once — reuse for cleanup check instead of a separate Set.
+  const newStreamById = buildStreamById(streams);
 
+  return create(state, (draft) => {
     for (const key of draft.streamStates.keys()) {
-      if (!knownStreams.has(key)) {
+      if (!newStreamById.has(key)) {
         draft.streamStates.delete(key);
         draft.streamLogs.delete(key);
         clearPendingLogUpdatesForStream(key);
@@ -210,7 +211,7 @@ function updateStreamInfo(
     }
 
     draft.streams = streams;
-    draft.streamById = buildStreamById(streams);
+    draft.streamById = newStreamById;
   });
 }
 
@@ -299,13 +300,14 @@ function applyLogUpdate(data: LogsPayload, ctx: MessageHandlerContext): void {
       });
     }
 
-    // Tool-use streams: compute sessionUsage from runUsage (sum all runs)
+    // Tool-use streams: store per-run usage and derive sessionUsage as their sum.
     // Ignore empty payloads so we don't overwrite existing totals with zeros.
     if (isToolUseState(prev) && runUsage && Object.keys(runUsage).length > 0) {
       return create(prev, (draft) => {
         draft.taskGroups = isClear ? [] : (groups ?? prev.taskGroups);
         draft.contextState = contextState ?? prev.contextState;
-        draft.sessionUsage = sumUsageStats(Object.values(runUsage));
+        Object.assign(draft.runUsage, runUsage);
+        draft.sessionUsage = sumUsageStats(Object.values(draft.runUsage));
       });
     }
 
@@ -338,10 +340,10 @@ const handlers: HandlerRegistry = {
       data.streams,
       data.streamStates,
     );
-    const validStreamIds = new Set(data.streams.map((stream) => stream.name));
+    // Reuse streamById built by updateStreamInfo instead of building a Set
     const fallbackStreamId = data.streams.at(0)?.name ?? null;
     const nextActiveStreamId =
-      activeStream && validStreamIds.has(activeStream)
+      activeStream && updated.streamById.has(activeStream)
         ? activeStream
         : fallbackStreamId;
 
@@ -350,7 +352,7 @@ const handlers: HandlerRegistry = {
         draft.activeStreamId = nextActiveStreamId;
         draft.streamFilter = data.agentFilter;
         for (const key of draft.followupOptionsByStream.keys()) {
-          if (!validStreamIds.has(key)) {
+          if (!updated.streamById.has(key)) {
             draft.followupOptionsByStream.delete(key);
           }
         }
@@ -360,10 +362,9 @@ const handlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM]: (data, ctx) => {
     ctx.setState((prev) => {
-      const validStreamIds = new Set(prev.streams.map((stream) => stream.name));
       const fallbackStreamId = prev.streams.at(0)?.name ?? null;
       const nextActiveStreamId =
-        data.activeStream && validStreamIds.has(data.activeStream)
+        data.activeStream && prev.streamById.has(data.activeStream)
           ? data.activeStream
           : fallbackStreamId;
       if (nextActiveStreamId === prev.activeStreamId) {
@@ -403,7 +404,7 @@ const handlers: HandlerRegistry = {
       const updated = { ...target, parentStreamId: nextParentStreamId };
       return create(prev, (draft) => {
         draft.streams[idx] = updated;
-        draft.streamById = buildStreamById(draft.streams);
+        draft.streamById.set(data.stream, updated);
       });
     });
   },
@@ -419,7 +420,7 @@ const handlers: HandlerRegistry = {
         draft.streamStates.delete(streamId);
         draft.streamLogs.delete(streamId);
         draft.streams = draft.streams.filter((s) => s.name !== streamId);
-        draft.streamById = buildStreamById(draft.streams);
+        draft.streamById.delete(streamId);
         if (draft.activeStreamId === streamId) {
           draft.activeStreamId = null;
         }
@@ -473,9 +474,10 @@ const handlers: HandlerRegistry = {
         return prev;
       }
       const newLogs = [...prev.logs, mergedLogMessage];
-      const newIndex = new Map(prev.logIndex);
-      newIndex.set(logId, newLogs.length - 1);
-      return { logs: newLogs, logIndex: newIndex };
+      // Mutate logIndex in place — no downstream code checks Map reference
+      // identity; it's only used for O(1) lookups within handlers.
+      prev.logIndex.set(logId, newLogs.length - 1);
+      return { logs: newLogs, logIndex: prev.logIndex };
     });
   },
 
@@ -578,7 +580,8 @@ const handlers: HandlerRegistry = {
     ctx.setStreamState(stream, (prev) => {
       if (isToolUseState(prev)) {
         return create(prev, (draft) => {
-          draft.sessionUsage = usage;
+          draft.runUsage[runId] = usage;
+          draft.sessionUsage = sumUsageStats(Object.values(draft.runUsage));
         });
       }
       if (isWorkflowState(prev)) {
@@ -747,7 +750,7 @@ const handlers: HandlerRegistry = {
         const updated = { ...target, parentStreamId: data.parentStreamId };
         return create(prev, (draft) => {
           draft.streams[idx] = updated;
-          draft.streamById = buildStreamById(draft.streams);
+          draft.streamById.set(data.stream as string, updated);
         });
       });
     }
