@@ -87,6 +87,32 @@ export class StreamTab extends LitElement {
         position: relative;
         width: 100%;
         gap: var(--spacing-tiny);
+        border-left: 3px solid transparent;
+        transition:
+          border-left-color var(--transition-normal),
+          background-color var(--transition-fast);
+      }
+
+      .tab-container.status-running {
+        border-left-color: var(--color-success);
+      }
+
+      .tab-container.status-error {
+        border-left-color: var(--color-error);
+      }
+
+      .tab-container.status-waiting,
+      .tab-container.status-resuming {
+        border-left-color: var(--vscode-textLink-foreground);
+      }
+
+      .tab-container.status-stopped,
+      .tab-container.status-ready {
+        border-left-color: var(--color-border);
+      }
+
+      .tab-container.status-initializing {
+        border-left-color: var(--color-warning);
       }
 
       .tab {
@@ -153,8 +179,8 @@ export class StreamTab extends LitElement {
         margin: 0 var(--spacing-small) 0 0;
         color: var(--vscode-icon-foreground, var(--vscode-foreground));
         transition:
-          color 0.15s ease,
-          background-color 0.15s ease;
+          color var(--transition-fast),
+          background-color var(--transition-fast);
       }
 
       .tab-container:hover {
@@ -209,6 +235,7 @@ export class StreamTab extends LitElement {
           'tab-container': true,
           'stream-tab': true,
           'is-active': this.active,
+          [`status-${status}`]: Boolean(status),
         })}
       >
         <button

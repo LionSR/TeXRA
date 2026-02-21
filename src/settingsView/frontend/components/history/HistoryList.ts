@@ -234,6 +234,7 @@ export class HistoryList extends LitElement {
   override render(): TemplateResult {
     if (!this.items.length) {
       return html`<div class="empty-state">
+        <span class="codicon codicon-history"></span>
         <p>No history items found.</p>
         <p class="text-secondary">
           History is recorded when you run agent commands. Past results will

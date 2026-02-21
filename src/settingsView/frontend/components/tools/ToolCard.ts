@@ -33,7 +33,7 @@ export class ToolCard extends LitElement {
           --vscode-editor-background,
           var(--vscode-sideBar-background)
         );
-        transition: border-color 0.15s ease;
+        transition: border-color var(--transition-fast);
       }
 
       .tool-card:hover {
@@ -130,7 +130,7 @@ export class ToolCard extends LitElement {
         background: none;
         border: none;
         cursor: pointer;
-        transition: opacity 0.15s ease;
+        transition: opacity var(--transition-fast);
       }
 
       .tool-guide-toggle:hover {
@@ -176,8 +176,8 @@ export class ToolCard extends LitElement {
         border-radius: var(--border-radius);
         cursor: pointer;
         transition:
-          background 0.15s ease,
-          opacity 0.15s ease;
+          background var(--transition-fast),
+          opacity var(--transition-fast);
       }
 
       .tool-action-btn:hover {

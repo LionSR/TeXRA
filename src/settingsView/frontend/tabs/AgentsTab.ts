@@ -67,8 +67,8 @@ export class AgentsTab extends LitElement {
         border-bottom: var(--border-medium) solid transparent;
         cursor: pointer;
         transition:
-          color 0.15s ease,
-          border-color 0.15s ease;
+          color var(--transition-fast),
+          border-color var(--transition-fast);
       }
 
       .agents-sub-tab:hover {
@@ -165,7 +165,7 @@ export class AgentsTab extends LitElement {
         border: none;
         border-radius: var(--border-radius);
         cursor: pointer;
-        transition: color 0.15s ease;
+        transition: color var(--transition-fast);
       }
 
       .agents-dir-icon-btn:hover {

@@ -72,6 +72,11 @@ export const designTokens: CSSResult = css`
     --opacity-subtle: 0.7;
     --opacity-normal: 0.85;
     --opacity-full: 1;
+
+    /* Transitions */
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.2s ease;
+    --transition-slow: 0.3s ease;
   }
 `;
 

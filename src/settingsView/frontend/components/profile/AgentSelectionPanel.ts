@@ -69,8 +69,9 @@ export class AgentSelectionPanel extends LitElement {
 
       /* --- Left: Agent list --- */
       .agent-list-pane {
-        width: 240px;
+        width: 30%;
         min-width: 200px;
+        max-width: 300px;
         border-right: var(--border-thin) solid var(--color-border);
         overflow-y: auto;
         flex-shrink: 0;
@@ -110,7 +111,7 @@ export class AgentSelectionPanel extends LitElement {
         font-size: var(--font-size-sm);
         color: var(--vscode-foreground);
         border-left: var(--border-medium) solid transparent;
-        transition: background 0.15s ease;
+        transition: background var(--transition-fast);
         outline: none;
       }
 
@@ -243,8 +244,8 @@ export class AgentSelectionPanel extends LitElement {
         border-radius: var(--border-radius);
         cursor: pointer;
         transition:
-          background 0.15s ease,
-          border-color 0.15s ease;
+          background var(--transition-fast),
+          border-color var(--transition-fast);
       }
 
       .agent-action-btn:hover {

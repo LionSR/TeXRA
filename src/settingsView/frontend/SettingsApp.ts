@@ -587,13 +587,13 @@ export class SettingsApp extends BaseWebviewApp {
           .selectedIndex=${this.selectedTabIndex}
           @vsc-tabs-select=${this.handleTabSelect}
         >
-          <vscode-tab-header slot="header">Memory</vscode-tab-header>
-          <vscode-tab-header slot="header">History</vscode-tab-header>
-          <vscode-tab-header slot="header">Models</vscode-tab-header>
-          <vscode-tab-header slot="header">Agents</vscode-tab-header>
-          <vscode-tab-header slot="header">Multi-Agent</vscode-tab-header>
-          <vscode-tab-header slot="header">Tools</vscode-tab-header>
-          <vscode-tab-header slot="header">LaTeX</vscode-tab-header>
+          <vscode-tab-header slot="header"><span class="codicon codicon-database"></span> Memory</vscode-tab-header>
+          <vscode-tab-header slot="header"><span class="codicon codicon-history"></span> History</vscode-tab-header>
+          <vscode-tab-header slot="header"><span class="codicon codicon-server"></span> Models</vscode-tab-header>
+          <vscode-tab-header slot="header"><span class="codicon codicon-robot"></span> Agents</vscode-tab-header>
+          <vscode-tab-header slot="header"><span class="codicon codicon-organization"></span> Multi-Agent</vscode-tab-header>
+          <vscode-tab-header slot="header"><span class="codicon codicon-tools"></span> Tools</vscode-tab-header>
+          <vscode-tab-header slot="header"><span class="codicon codicon-file-code"></span> LaTeX</vscode-tab-header>
 
           <vscode-tab-panel>
             <memory-tab

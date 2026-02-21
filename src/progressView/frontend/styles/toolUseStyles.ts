@@ -7,6 +7,9 @@ import { css } from 'lit';
 export const toolUseStyles = css`
   .tool-use-section {
     margin: var(--spacing-small) 0;
+    border-left: var(--border-medium) solid
+      color-mix(in srgb, var(--vscode-textLink-foreground) 30%, transparent);
+    padding-left: var(--spacing-medium);
   }
 
   .tool-use-title {
@@ -153,7 +156,7 @@ export const toolUseStyles = css`
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-tiny);
-    transition: color 0.15s ease;
+    transition: color var(--transition-fast);
   }
 
   .proposal-restore-link:hover {

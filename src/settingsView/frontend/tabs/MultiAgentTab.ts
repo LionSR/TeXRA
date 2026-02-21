@@ -68,8 +68,8 @@ export class MultiAgentTab extends LitElement {
         border-radius: var(--border-radius);
         cursor: pointer;
         transition:
-          border-color 0.15s ease,
-          background-color 0.15s ease;
+          border-color var(--transition-fast),
+          background-color var(--transition-fast);
       }
 
       .preset-card:hover {

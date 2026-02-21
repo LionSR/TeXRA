@@ -122,7 +122,7 @@ export const logEntryStyles = css`
   :is(.file-link, .web-search-link) {
     color: var(--color-text-link);
     cursor: pointer;
-    transition: color 0.15s ease;
+    transition: color var(--transition-fast);
   }
 
   :is(.file-link, .web-search-link):hover {
@@ -181,8 +181,8 @@ export const logEntryStyles = css`
     opacity: 0;
     margin-left: auto;
     transition:
-      opacity 0.2s ease,
-      color 0.2s ease;
+      opacity var(--transition-normal),
+      color var(--transition-normal);
     cursor: pointer;
   }
 

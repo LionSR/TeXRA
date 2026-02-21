@@ -45,7 +45,7 @@ export const commonViewStyles: CSSResult = css`
   .collapsible::part(body) {
     max-height: var(--height-medium);
     overflow: hidden;
-    transition: max-height 0.3s ease;
+    transition: max-height var(--transition-slow);
   }
 
   .collapsible[open]::part(body) {
@@ -85,7 +85,7 @@ export const commonViewStyles: CSSResult = css`
     cursor: pointer;
     color: var(--color-text-link);
     text-decoration: none;
-    transition: color 0.15s ease;
+    transition: color var(--transition-fast);
   }
 
   .clickable-link:hover {
@@ -127,7 +127,7 @@ export const commonViewStyles: CSSResult = css`
     list-style: none;
     user-select: none;
     opacity: var(--opacity-normal);
-    transition: opacity 0.15s ease;
+    transition: opacity var(--transition-fast);
   }
 
   .details-summary:hover {
@@ -145,7 +145,7 @@ export const commonViewStyles: CSSResult = css`
     opacity: var(--opacity-subtle);
     font-size: var(--font-size-sm);
     display: inline-block;
-    transition: transform 0.15s ease;
+    transition: transform var(--transition-fast);
   }
 
   details[open] > summary .toggle-icon {
@@ -158,10 +158,18 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .empty-state {
-    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-medium);
     margin-top: calc(var(--spacing-xlarge) * 2);
     color: var(--color-text-secondary);
     font-style: italic;
+  }
+
+  .empty-state .codicon {
+    font-size: 32px;
+    opacity: var(--opacity-disabled);
   }
 
   /* Agent icon indicators (remote, multiple outputs) - fixed width for consistent sizing */
@@ -177,7 +185,7 @@ export const commonViewStyles: CSSResult = css`
 
   .btn-secondary {
     opacity: var(--opacity-normal);
-    transition: opacity 0.15s ease;
+    transition: opacity var(--transition-fast);
   }
 
   .btn-secondary:hover {
@@ -210,8 +218,8 @@ export const commonViewStyles: CSSResult = css`
     border-radius: var(--border-radius);
     cursor: pointer;
     transition:
-      color 0.15s ease,
-      border-color 0.15s ease;
+      color var(--transition-fast),
+      border-color var(--transition-fast);
   }
 
   .tab-action-btn:hover {
@@ -242,7 +250,7 @@ export const commonViewStyles: CSSResult = css`
     padding: 0;
     color: inherit;
     opacity: var(--opacity-subtle);
-    transition: opacity 0.15s ease;
+    transition: opacity var(--transition-fast);
   }
 
   .icon-btn-reset:hover {

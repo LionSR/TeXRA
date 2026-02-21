@@ -13,6 +13,7 @@ export const permissionCardStyles: CSSResult = css`
       var(--vscode-editor-background) 60%,
       transparent
     );
+    backdrop-filter: blur(4px);
   }
 
   :host([hidden]) {
@@ -85,8 +86,8 @@ export const permissionCardStyles: CSSResult = css`
     cursor: pointer;
     font-size: var(--font-size);
     transition:
-      background-color 0.15s ease,
-      opacity 0.15s ease;
+      background-color var(--transition-fast),
+      opacity var(--transition-fast);
   }
 
   .action-button:focus-visible {
@@ -142,7 +143,7 @@ export const permissionCardStyles: CSSResult = css`
     color: var(--vscode-textLink-foreground);
     cursor: pointer;
     text-decoration: none;
-    transition: color 0.15s ease;
+    transition: color var(--transition-fast);
   }
 
   .file-link:hover {

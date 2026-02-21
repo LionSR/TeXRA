@@ -15,12 +15,17 @@ export const groupStyles = css`
     background-color: transparent;
     border-left: var(--border-medium) solid var(--color-border);
     transition:
-      border-left-color 0.2s ease,
-      background-color 0.15s ease;
+      border-left-color var(--transition-normal),
+      background-color var(--transition-fast);
   }
 
   .log-group-header:hover {
     background-color: var(--vscode-list-hoverBackground);
+  }
+
+  /* Alternate striping on top-level groups for visual separation */
+  .log-run > .log-group-content > .log-group:nth-child(even) > .log-group-header {
+    background-color: color-mix(in srgb, var(--vscode-editor-background) 97%, var(--vscode-foreground));
   }
 
   .log-group-header {

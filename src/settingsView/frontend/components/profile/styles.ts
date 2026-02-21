@@ -269,7 +269,7 @@ export const profileViewStyles: CSSResult = css`
     border: none;
     color: var(--color-text-secondary);
     padding: 0;
-    transition: transform 0.15s ease;
+    transition: transform var(--transition-fast);
   }
 
   .provider-expand-btn:hover {
@@ -441,7 +441,7 @@ export const profileViewStyles: CSSResult = css`
     width: 16px;
     height: 16px;
     margin-right: var(--spacing-small);
-    transition: transform 0.15s ease;
+    transition: transform var(--transition-fast);
     color: var(--color-text-secondary);
   }
 
