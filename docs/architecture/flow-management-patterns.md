@@ -1315,3 +1315,229 @@ This lets tests inject a mock inner flow while production uses the default. 3-li
 | Build `defineFlow()` declarative helper | New file | ~60 | Declarative flow design |
 
 Each phase is independently mergeable. Phase 1 alone removes friction for everything that follows. Phase 4 is best deferred until you're actually building a new flow type and can validate the composition model against a real use case.
+
+---
+
+## 12. The Bigger Win: Nodes → Pipeline Functions for Outer Flows
+
+Sections 10-11 focused on incremental fixes within the existing pattern. This section asks the harder question: **is the PocketFlow node pattern earning its keep for the outer flows?**
+
+The answer is no. The incremental fixes from Section 11 save ~460 LOC. Replacing the outer flow architecture saves ~1,300 LOC — a 28% reduction of the entire flow system.
+
+---
+
+### The Cost of the Node Pattern on Outer Flows
+
+The prep/exec/post split pays off when:
+1. `exec()` does expensive, retryable work (API calls)
+2. `exec()` is pure (no side effects)
+3. The flow graph has branching or loops
+
+**None of the 8 outer nodes meet any of these criteria.** Zero outer nodes use retry. Several `exec()` methods have side effects (ResponseCycleNode.exec() runs an entire sub-flow with streaming). Both outer flows are linear pipelines with no branching.
+
+#### Reflection outer flow: 5 nodes, linear pipeline
+
+| Node | Total LOC | Actual logic | Framework tax | What it actually does |
+|------|-----------|-------------|---------------|-----------------------|
+| PrepareContextNode | 79 | ~25 | 54 | Builds round messages |
+| TeXCountNode | 58 | ~8 | 50 | One function call |
+| MediaExtractionNode | 106 | ~40 | 66 | Extracts images |
+| ResponseCycleNode | 172 | ~30 | 142 | Creates flow, runs it, reads result |
+| OutputNode | 275 | ~150 | 125 | Processes output files |
+| **Total** | **690** | **~253** | **~437** | |
+
+**72% overhead.** 437 lines of class declarations, prep result interfaces, exec result interfaces, shared-to-prep extraction, exec-to-post transfer, and flow transition returns — for a linear pipeline.
+
+#### Tool-use outer flow: 3 nodes, one loop
+
+| Node | Total LOC | Actual logic | Framework tax |
+|------|-----------|-------------|---------------|
+| ToolUsePrepareNode | 123 | ~60 | 63 |
+| ToolUseCycleNode | 163 | ~30 | 133 |
+| ToolUseWaitNode | 85 | ~40 | 45 |
+| **Total** | **371** | **~130** | **~241** |
+
+**65% overhead.** Same pattern — classes and interfaces wrapping sequential function calls.
+
+#### Bridge types that only exist because of nodes
+
+Every node creates its own `PrepResult` and `ExecResult` types to shuttle data between prep → exec → post. These types disappear entirely when nodes become functions:
+
+| File | LOC | Purpose |
+|------|-----|---------|
+| ReflectionFlowState.ts | 49 | Shared state schema for outer reflection nodes |
+| ReflectionServices.ts | 34 | Service interface for outer reflection nodes |
+| tooluse/nodes/types.ts | 114 | Prep result types, migration logic, assertions |
+| ToolUseServices.ts | 29 | Service interface for outer tool-use nodes |
+| Inline prep/exec result interfaces | ~100 | Scattered across node files |
+| **Total** | **~326** | |
+
+**Grand total outer flow infrastructure: ~1,387 LOC. Business logic inside: ~383 LOC.**
+
+---
+
+### The Fix: Pipeline Functions + Round-Level Checkpointing
+
+Replace the outer node graphs with plain async functions. Keep the inner cycle flows (ResponseCycleFlow, ToolUseCycleFlow) as node graphs — they actually benefit from retry, branching, and persistence.
+
+#### Reflection outer flow becomes:
+
+```typescript
+async function executeReflectionRound(
+  shared: ReflectionRoundState,
+  services: ReflectionServices,
+): Promise<RoundResult> {
+  // PrepareContext — was 79 LOC node
+  const context = await buildRoundContext(shared, services);
+
+  // TeXCount — was 58 LOC node
+  context.texCount = await getTeXCount(services.fileService, context.files);
+
+  // MediaExtraction — was 106 LOC node
+  context.mediaFiles = await extractMedia(services, context);
+
+  // ResponseCycle — was 172 LOC node
+  const cycleResult = await runResponseCycle(context, services);
+  if (cycleResult.failed) return cycleResult;
+
+  // Output — was 275 LOC node, keeps its complexity
+  return await processOutput(shared, context, cycleResult, services);
+}
+```
+
+~150 LOC replacing ~690 LOC of nodes + ~200 LOC of bridge types.
+
+#### Tool-use outer flow becomes:
+
+```typescript
+async function executeToolUseIteration(
+  shared: ToolUseRunState,
+  services: ToolUseServices,
+): Promise<IterationResult> {
+  const prepResult = await prepareToolUseRun(shared, services);
+  const cycleResult = await runToolUseCycle(prepResult, services);
+
+  if (cycleResult.needsFollowUp) {
+    return await waitForFollowUp(shared, services);
+  }
+  return cycleResult;
+}
+```
+
+~80 LOC replacing ~371 LOC of nodes + ~143 LOC of bridge types.
+
+#### Round-level persistence replaces per-node persistence:
+
+The outer flow currently uses `PersistedFlow`/`RoundPersistedFlow` to persist after every node step. But every outer node except the cycle node completes in < 1 second. The expensive work (LLM calls) happens inside the inner cycle flows, which have their own persistence.
+
+Persist at round boundaries only:
+
+```typescript
+// In the round loop (runReflectionFlow):
+for (let round = shared.currentRound; round < shared.totalRounds; round++) {
+  const result = await executeReflectionRound(shared, services);
+  shared.currentRound = round + 1;
+  await kv.write(`flow:${executionId}`, shared);  // checkpoint at round boundary
+  if (!result.continueRounds) break;
+}
+```
+
+This preserves 99% of resume value (you restart from the last completed round, not from scratch) while eliminating the per-node persistence overhead.
+
+---
+
+### Code Reduction Accounting
+
+| Change | LOC removed | LOC added | Net |
+|--------|------------|-----------|-----|
+| Reflection outer: 5 node files + types → pipeline | ~890 | ~150 | **-740** |
+| Tool-use outer: 3 node files + types → pipeline | ~514 | ~80 | **-434** |
+| Runner lifecycle extraction | ~140 | ~60 | **-80** |
+| Kill orphaned bridge type files | ~63 | 0 | **-63** |
+| **Total** | **~1,607** | **~290** | **-1,317** |
+
+**~1,300 LOC removed. ~14 fewer files. 28% reduction of the flow system.**
+
+---
+
+### What Stays Unchanged (Correctly Using the Node Pattern)
+
+| Component | LOC | Why it earns the pattern |
+|-----------|-----|-------------------------|
+| ResponseCycleFlow.ts | 690 | Real graph: prep → invoke → process → continuation with CONTINUE loop and COMPLETE branches. ModelInvocationNode uses retry. |
+| ToolUseCycleFlow.ts | 941 | Real graph: prep → call → process → dispatch with CONTINUE loop. BatchNode for tool dispatch. Retry on model calls. |
+| ModelInvocationNode.ts | 153 | Uses retry, abort signal, error handling. The canonical use case for Node. |
+| persisted-flow.ts | 247 | Needed for inner cycle persistence. |
+| round-persisted-flow.ts | 269 | Round management is real orchestration logic. Used by the round loop (which stays). |
+| node/index.ts | 300 | Framework stays, used by inner cycle flows. |
+
+---
+
+### What You Lose and Why It's Fine
+
+**1. Per-node persistence replay for outer flows**
+
+Outer nodes complete in < 1 second. If the process crashes between PrepareContext and TeXCount, you lose 50ms of work. Round-level checkpointing means you restart from the last completed round, not from scratch. The inner cycle flows still have full per-node persistence for their expensive LLM calls.
+
+**2. Per-node retry for outer flows**
+
+Zero outer nodes use retry today. If `extractMedia` ever needs retry, add `retry(() => extractMedia(...))` — a 1-line wrapper, not a 106-LOC node class.
+
+**3. Theoretical reorderability**
+
+You'd never reorder these steps. You can't process output before getting a response. You can't count TeX before preparing context. The pipeline is sequential by nature.
+
+---
+
+### Long-Term Compounding Effect
+
+This isn't just -1,300 LOC today. It's a pattern change that prevents future bloat:
+
+**New flow types default to pipeline functions.** You only reach for the node framework when you genuinely need retry, branching, or per-step persistence. This is a high bar — most orchestration is sequential.
+
+**Fewer bridge types.** Functions pass arguments directly. No more `PrepResult` → `ExecResult` → `PostAction` type chains that exist solely to satisfy the prep/exec/post contract.
+
+**Flatter services.** Without nodes needing `this.services`, you pass services directly to functions. The 3-layer hierarchy (`BaseFlowContextInit` → `ReflectionServices` → `ResponseCycleServices`) collapses to 2 layers.
+
+**Fewer files.** 14 fewer files means simpler imports, easier navigation, and less context-switching when reading a flow end-to-end. A reflection round reads top-to-bottom in one file instead of bouncing across 7 files.
+
+---
+
+### What Doesn't Help (Patterns That Sound Good but Add Code)
+
+| Pattern | Why it doesn't reduce code |
+|---------|---------------------------|
+| Declarative FSM definitions | Outer flows are 3-5 linear steps. `defineFlow()` adds abstraction over trivial logic. |
+| Redux/reducer for shared state | Adds dispatch/action boilerplate. More code, not less. |
+| Effect isolation | Inner cycle flows run streaming LLM calls. Can't be described as data effects. |
+| Higher-order flows | Useful for new features, not for reducing existing code. |
+| Reactive event streams | Event bus is already 40 lines. RxJS adds a dependency for zero new capability. |
+
+None of these kill code. They add architecture. **The thing that kills code is recognizing that 8 of 8 outer nodes are functions wearing a class costume, and taking the costume off.**
+
+---
+
+### Migration Path
+
+The outer flow refactoring can be done incrementally, one flow at a time:
+
+**Step 1: Reflection flow (largest win)**
+
+1. Create `executeReflectionRound()` pipeline function with the logic from all 5 nodes inlined
+2. Update `runReflectionFlow()` to call it in the round loop with round-level checkpointing
+3. Delete: `PrepareContextNode.ts`, `TeXCountNode.ts`, `MediaExtractionNode.ts`, `ResponseCycleNode.ts`, `OutputNode.ts`
+4. Simplify: `ReflectionFlowState.ts` (remove fields only needed for inter-node transfer)
+
+**Step 2: Tool-use flow**
+
+1. Create `executeToolUseIteration()` pipeline function
+2. Update `runToolUseFlow()` — the cycle+wait loop is already almost a pipeline
+3. Delete: `ToolUseCycleNode.ts`, simplify `ToolUsePrepareNode.ts` and `ToolUseWaitNode.ts` into functions
+4. Simplify: `types.ts` (remove prep result types)
+
+**Step 3: Runner lifecycle**
+
+1. Extract `runFlowWithLifecycle()` from the shared try/catch/finally
+2. Both runners become: setup → `runFlowWithLifecycle(factory)` → extract result
+
+Each step is independently shippable and testable. The inner cycle flows and framework are untouched throughout.
