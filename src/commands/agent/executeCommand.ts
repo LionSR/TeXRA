@@ -6,7 +6,7 @@ import { ZodError } from 'zod';
 import { AgentConfigSchema } from '@agent/core';
 import { registerExecution } from '@agent/storage';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { createWorktree, removeWorktree } from '@agent/worktree';
+import { createWorktree } from '@agent/worktree';
 import { formatZodError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { generateExecutionId } from '@utils/core/executionId';
@@ -53,32 +53,36 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
       await registerExecution(executionId, config, config.agent);
     }
 
-    // Worktree isolation: create a separate git worktree for the agent
+    // Worktree isolation: create a separate git worktree for the agent.
+    // The worktree persists after completion so the user can review the branch
+    // and merge at their own pace. Use `texra.removeWorktree` to clean up.
     const useWorktree = config.toolConfig?.worktreeIsolation === true;
     let worktreePath: string | undefined;
     let worktreeBranch: string | undefined;
-    try {
-      if (useWorktree && !isResume) {
-        const info = await createWorktree({
-          executionId,
-          agentName: config.agent,
-        });
-        worktreePath = info.path;
-        worktreeBranch = info.branch;
-        logger.info(
-          CHANNEL,
-          `Created worktree for agent "${config.agent}" on branch ${worktreeBranch}`,
-        );
-      }
-      await executeAgent(config, executionId, {
-        workspacePath: worktreePath,
-        worktreeBranch,
+    if (useWorktree && !isResume) {
+      const info = await createWorktree({
+        executionId,
+        agentName: config.agent,
       });
-    } finally {
-      if (worktreePath) {
-        await removeWorktree(worktreePath);
-        logger.info(CHANNEL, `Cleaned up worktree at ${worktreePath}`);
-      }
+      worktreePath = info.path;
+      worktreeBranch = info.branch;
+      logger.info(
+        CHANNEL,
+        `Created worktree for agent "${config.agent}" on branch ${worktreeBranch}`,
+      );
+    }
+
+    await executeAgent(config, executionId, {
+      workspacePath: worktreePath,
+      worktreeBranch,
+    });
+
+    if (worktreeBranch) {
+      logger.info(
+        CHANNEL,
+        `Agent completed. Worktree branch "${worktreeBranch}" preserved for review.`,
+      );
+      void showWorktreeCompletionNotification(worktreeBranch);
     }
   } catch (error) {
     if (error instanceof ZodError) {
@@ -92,5 +96,19 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
       data: error,
     });
     throw error;
+  }
+}
+
+async function showWorktreeCompletionNotification(
+  branch: string,
+): Promise<void> {
+  const selection = await vscode.window.showInformationMessage(
+    `Agent finished on branch "${branch}". Review changes and merge when ready.`,
+    'Show in Terminal',
+  );
+  if (selection === 'Show in Terminal') {
+    const terminal = vscode.window.createTerminal('Worktree Review');
+    terminal.show();
+    terminal.sendText(`git log ${branch} --oneline -10`);
   }
 }

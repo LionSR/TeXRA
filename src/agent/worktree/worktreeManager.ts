@@ -50,7 +50,7 @@ export async function createWorktree(options: {
   const shortId = options.executionId.slice(0, 8);
   const branch = `agent/${options.agentName}-${shortId}`;
   const worktreePath = path.join(
-    StorageFS.getBasePath(),
+    StorageFS.getStoragePath(),
     'worktrees',
     options.executionId,
   );

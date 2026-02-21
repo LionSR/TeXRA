@@ -42,6 +42,13 @@ export class StorageFS extends RelativeFS {
     return this.context.globalStorageUri.fsPath;
   }
 
+  /**
+   * Return the workspace storage base path (public accessor for non-subclass callers).
+   */
+  public static getStoragePath(): string {
+    return this.getBasePath();
+  }
+
   // Inherit file operations from RelativeFS
 }
 
