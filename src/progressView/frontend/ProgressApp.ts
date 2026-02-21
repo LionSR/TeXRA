@@ -18,7 +18,6 @@ import {
   AgentCategoryFilterSchema,
   type ProgressViewOutboundMessage,
   type StreamTabId,
-  type StreamTabInfo,
 } from '@shared/schemas';
 import { getEffectiveRunId } from '@shared/streams/runSelection';
 import { StreamSortSchema } from '@shared/streams/streamSort';
@@ -33,11 +32,11 @@ import {
   EMPTY_STREAM_LOGS,
   getStreamState,
   isToolUseState,
-  type ProgressState,
   type StreamLogs,
   type StreamState,
 } from './store';
 import { getFilteredStreams } from './stateUtils';
+import { SignalWatcher, signal, Signal, select } from './signals';
 
 /** Schema for persisted preferences. */
 const ProgressViewPrefsSchema = z.object({
@@ -91,13 +90,21 @@ import './components/LatexdiffResults';
 import './components/ContextManagement';
 
 // Local imports - progress view component types
-import type { FollowUpInput } from './components/FollowUpInput';
 import type { PermissionState } from './components/PermissionCard';
 import type { ToolUseStreamContent } from './components/ToolUseStreamContent';
 
+// Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
+// Safe because ProgressApp implements all abstract members below.
+const ProgressAppBase = SignalWatcher(
+  BaseWebviewApp as unknown as new (
+    ...args: any[]
+  ) => BaseWebviewApp<ProgressViewOutboundMessage>,
+);
+
 @customElement('progress-app')
-export class ProgressApp extends BaseWebviewApp<ProgressViewOutboundMessage> {
-  static override styles = css`
+export class ProgressApp extends ProgressAppBase {
+  // Static 'styles' override lost through mixin type erasure; still works at runtime.
+  static styles = css`
     :host {
       display: flex;
       flex: 1;
@@ -134,7 +141,11 @@ export class ProgressApp extends BaseWebviewApp<ProgressViewOutboundMessage> {
     }
   `;
 
-  @state() private appState: ProgressState;
+  // --- Signal-based state ---
+  // Single source of truth: monolithic state wrapped in a signal.
+  // Mutative's structural sharing ensures unchanged branches keep their
+  // reference, so selector computeds auto-skip via Object.is().
+  private appState = signal(createInitialState());
   @state() private permissions: PermissionState[] = [];
 
   @provide({ context: streamStateContext })
@@ -152,18 +163,116 @@ export class ProgressApp extends BaseWebviewApp<ProgressViewOutboundMessage> {
   // Container ref for accessing child component methods (FollowUpInput)
   private toolUseContentRef = createRef<ToolUseStreamContent>();
 
-  /**
-   * Memoized filtered+sorted stream list, recomputed once per willUpdate()
-   * cycle. Shared between render() and updateStreamContext() to avoid
-   * redundant sort/filter on every call.
-   */
-  private cachedFilteredStreams: StreamTabInfo[] = [];
-  private cachedFilteredStreamMap = new Map<StreamTabId, StreamTabInfo>();
-  private cachedStreamStatusById = new Map<StreamTabId, string>();
-  private cachedStreamLastTimestampById = new Map<
-    StreamTabId,
-    number | undefined
-  >();
+  // --- Selector computeds: extract fields, auto-memoized by Object.is ---
+  private streamFilter$ = select(this.appState, (s) => s.streamFilter);
+  private streamSort$ = select(this.appState, (s) => s.streamSort);
+  private streamStates$ = select(this.appState, (s) => s.streamStates);
+  private streamLogs$ = select(this.appState, (s) => s.streamLogs);
+  private activeStreamId$ = select(this.appState, (s) => s.activeStreamId);
+  private followupOptions$ = select(
+    this.appState,
+    (s) => s.followupOptionsByStream,
+  );
+
+  // --- Derived computeds: only re-evaluate when selector inputs propagate ---
+
+  /** Filtered + sorted stream list. Re-evaluates when streams, filter, sort, or streamStates change. */
+  private filteredStreams$ = new Signal.Computed(() => {
+    // Read all dependencies so Signal.Computed tracks them:
+    const state = this.appState.get();
+    // Touch streamStates so timestamp-based re-sorts propagate
+    void this.streamStates$.get();
+    return getFilteredStreams(state);
+  });
+
+  private filteredStreamMap$ = new Signal.Computed(
+    () => new Map(this.filteredStreams$.get().map((s) => [s.name, s])),
+  );
+
+  /** Status string per stream tab. */
+  private statusById$ = new Signal.Computed(() => {
+    const states = this.streamStates$.get();
+    const map = new Map<StreamTabId, string>();
+    for (const stream of this.filteredStreams$.get()) {
+      map.set(
+        stream.name,
+        states.get(stream.name)?.status ?? STREAM_STATUS.READY,
+      );
+    }
+    return map;
+  });
+
+  /** Last timestamp per stream tab. */
+  private timestampById$ = new Signal.Computed(() => {
+    const states = this.streamStates$.get();
+    const map = new Map<StreamTabId, number | undefined>();
+    for (const stream of this.filteredStreams$.get()) {
+      map.set(stream.name, states.get(stream.name)?.lastTimestamp);
+    }
+    return map;
+  });
+
+  /** Stream context derived from active stream + state. */
+  private streamContext$ = new Signal.Computed((): StreamContextValue => {
+    const filteredStreams = this.filteredStreams$.get();
+    const hasStreams = filteredStreams.length > 0;
+    const activeStreamId = this.activeStreamId$.get();
+    const activeStreamInfo = activeStreamId
+      ? (this.filteredStreamMap$.get().get(activeStreamId) ?? null)
+      : null;
+
+    if (!activeStreamInfo) return { ...EMPTY_STREAM_CONTEXT, hasStreams };
+
+    const streamState = getStreamState(
+      this.appState.get(),
+      activeStreamInfo.name,
+      activeStreamInfo.agentCategory,
+    );
+    const isToolUse = isToolUseState(streamState);
+    const runId = getEffectiveRunId(streamState, { mode: 'fallback' });
+    const followupOptions =
+      this.followupOptions$.get().get(activeStreamInfo.name) ?? null;
+
+    return {
+      streamInfo: activeStreamInfo,
+      streamState,
+      runId,
+      followupOptions,
+      isToolUse,
+      hasStreams,
+    };
+  });
+
+  /** Log context derived from active stream + logs. */
+  private logContext$ = new Signal.Computed((): StreamLogContextValue => {
+    const filteredStreams = this.filteredStreams$.get();
+    const hasStreams = filteredStreams.length > 0;
+    const activeStreamId = this.activeStreamId$.get();
+    const activeStreamInfo = activeStreamId
+      ? (this.filteredStreamMap$.get().get(activeStreamId) ?? null)
+      : null;
+
+    if (!activeStreamInfo) return { ...EMPTY_LOG_CONTEXT, hasStreams };
+
+    const streamState = getStreamState(
+      this.appState.get(),
+      activeStreamInfo.name,
+      activeStreamInfo.agentCategory,
+    );
+    const streamLogs =
+      this.streamLogs$.get().get(activeStreamInfo.name) ?? EMPTY_STREAM_LOGS;
+    const isToolUse = isToolUseState(streamState);
+    const runId = getEffectiveRunId(streamState, { mode: 'fallback' });
+
+    return {
+      logs: streamLogs.logs,
+      taskGroups: streamState.taskGroups,
+      runId,
+      isToolUse,
+      hasStreams,
+      streamName: activeStreamInfo.name,
+    };
+  });
 
   private prefsManager = new PersistedState(
     createWebviewStorage(vscode),
@@ -175,96 +284,26 @@ export class ProgressApp extends BaseWebviewApp<ProgressViewOutboundMessage> {
     super();
     // Restore persisted preferences
     const prefs = this.prefsManager.getState();
-    this.appState = {
+    this.appState.set({
       ...createInitialState(),
       streamFilter: prefs.streamFilter,
       streamSort: prefs.streamSort,
-    };
+    });
   }
 
-  protected override get readyCommand(): string | null {
+  protected get readyCommand(): string | null {
     return PROGRESS_VIEW_COMMANDS.WEBVIEW_READY;
   }
 
-  protected override willUpdate(changed: Map<string, unknown>): void {
-    if (!changed.has('appState') && !changed.has('permissions')) return;
-
-    const prevAppState = changed.get('appState') as ProgressState | undefined;
-
-    // Structural change: streams list, filter, or sort criteria changed.
-    const structuralChange =
-      changed.has('appState') &&
-      (!prevAppState ||
-        prevAppState.streams !== this.appState.streams ||
-        prevAppState.streamFilter !== this.appState.streamFilter ||
-        prevAppState.streamSort !== this.appState.streamSort);
-
-    if (structuralChange) {
-      // Full rebuild: re-filter/sort and rebuild all cached maps.
-      this.rebuildFilteredStreams();
-      this.rebuildStreamMaps();
-    } else if (
-      changed.has('appState') &&
-      prevAppState &&
-      prevAppState.streamStates !== this.appState.streamStates
-    ) {
-      // streamStates identity changed without structural change.
-      // Compare against cached Maps to detect real value changes.
-      let anyStatusChanged = false;
-      let anyTimestampChanged = false;
-      for (const stream of this.cachedFilteredStreams) {
-        const curr = this.appState.streamStates.get(stream.name);
-        if (
-          (curr?.status ?? STREAM_STATUS.READY) !==
-          this.cachedStreamStatusById.get(stream.name)
-        ) {
-          anyStatusChanged = true;
-        }
-        if (
-          curr?.lastTimestamp !==
-          this.cachedStreamLastTimestampById.get(stream.name)
-        ) {
-          anyTimestampChanged = true;
-        }
-        if (anyStatusChanged && anyTimestampChanged) break;
-      }
-
-      // Re-sort only when sorting by time and timestamps actually changed.
-      if (anyTimestampChanged && this.appState.streamSort === 'time') {
-        this.rebuildFilteredStreams();
-      }
-
-      // Rebuild status/timestamp maps only when values actually differ.
-      if (anyStatusChanged || anyTimestampChanged) {
-        this.rebuildStreamMaps();
-      }
-    }
-
-    this.updateContexts();
-  }
-
-  private rebuildFilteredStreams(): void {
-    this.cachedFilteredStreams = getFilteredStreams(this.appState);
-    this.cachedFilteredStreamMap = new Map(
-      this.cachedFilteredStreams.map((stream) => [stream.name, stream]),
-    );
-  }
-
-  /** Rebuild cached status and lastTimestamp Maps from current streamStates. */
-  private rebuildStreamMaps(): void {
-    this.cachedStreamStatusById = new Map();
-    this.cachedStreamLastTimestampById = new Map();
-    for (const stream of this.cachedFilteredStreams) {
-      const streamState = this.appState.streamStates.get(stream.name);
-      this.cachedStreamStatusById.set(
-        stream.name,
-        streamState?.status ?? STREAM_STATUS.READY,
-      );
-      this.cachedStreamLastTimestampById.set(
-        stream.name,
-        streamState?.lastTimestamp,
-      );
-    }
+  /**
+   * Sync signal-computed values into @provide/@state context properties.
+   * SignalWatcher triggers requestUpdate() when any read signal changes,
+   * so this runs only when computed values actually propagate.
+   */
+  protected override willUpdate(): void {
+    this.streamContextValue = this.streamContext$.get();
+    this.streamLogContextValue = this.logContext$.get();
+    this.permissionsContextValue = this.permissions;
   }
 
   render(): TemplateResult {
@@ -281,12 +320,12 @@ export class ProgressApp extends BaseWebviewApp<ProgressViewOutboundMessage> {
 
           <stream-tabs
             slot="end"
-            .streams=${this.cachedFilteredStreams}
-            .activeStreamId=${this.appState.activeStreamId}
-            .filter=${this.appState.streamFilter}
-            .sort=${this.appState.streamSort}
-            .streamStatusById=${this.cachedStreamStatusById}
-            .streamLastTimestampById=${this.cachedStreamLastTimestampById}
+            .streams=${this.filteredStreams$.get()}
+            .activeStreamId=${this.activeStreamId$.get()}
+            .filter=${this.streamFilter$.get()}
+            .sort=${this.streamSort$.get()}
+            .streamStatusById=${this.statusById$.get()}
+            .streamLastTimestampById=${this.timestampById$.get()}
             @stream-switch=${this.onStreamSwitch}
             @stream-delete=${this.onStreamDelete}
             @filter-change=${this.onFilterChange}
@@ -344,121 +383,46 @@ export class ProgressApp extends BaseWebviewApp<ProgressViewOutboundMessage> {
     dispatchMessage(message, this.createMessageHandlerContext());
   }
 
-  /**
-   * Update stream contexts from current appState.
-   *
-   * Logs and meta are stored in separate Maps (streamLogs vs streamStates),
-   * so log-only updates (~10Hz during streaming) don't change the streamStates
-   * ref — the meta context assignment is naturally skipped via simple `!==`.
-   * No field-by-field comparison needed.
-   */
-  private updateContexts(): void {
-    const hasStreams = this.cachedFilteredStreams.length > 0;
-    const activeStreamInfo = this.appState.activeStreamId
-      ? (this.cachedFilteredStreamMap.get(this.appState.activeStreamId) ?? null)
-      : null;
-
-    if (!activeStreamInfo) {
-      this.streamLogContextValue = { ...EMPTY_LOG_CONTEXT, hasStreams };
-      this.streamContextValue = { ...EMPTY_STREAM_CONTEXT, hasStreams };
-      this.permissionsContextValue = this.permissions;
-      return;
-    }
-
-    const streamState = getStreamState(
-      this.appState,
-      activeStreamInfo.name,
-      activeStreamInfo.agentCategory,
-    );
-    const streamLogs =
-      this.appState.streamLogs.get(activeStreamInfo.name) ?? EMPTY_STREAM_LOGS;
-    const isToolUse = isToolUseState(streamState);
-    const runId = getEffectiveRunId(streamState, { mode: 'fallback' });
-
-    // Log context: rebuild when logs, taskGroups, or related fields changed.
-    const prevLog = this.streamLogContextValue;
-    if (
-      prevLog.logs !== streamLogs.logs ||
-      prevLog.taskGroups !== streamState.taskGroups ||
-      prevLog.runId !== runId ||
-      prevLog.isToolUse !== isToolUse ||
-      prevLog.hasStreams !== hasStreams ||
-      prevLog.streamName !== activeStreamInfo.name
-    ) {
-      this.streamLogContextValue = {
-        logs: streamLogs.logs,
-        taskGroups: streamState.taskGroups,
-        runId,
-        isToolUse,
-        hasStreams,
-        streamName: activeStreamInfo.name,
-      };
-    }
-
-    // Meta context: simple ref check on streamState.
-    // Since log-only updates (APPEND_LOG, UPDATE_LOG) only touch streamLogs Map,
-    // the streamStates entry ref stays the same → this assignment is skipped.
-    const followupOptions =
-      this.appState.followupOptionsByStream.get(activeStreamInfo.name) ?? null;
-    const prevCtx = this.streamContextValue;
-    if (
-      prevCtx.streamInfo !== activeStreamInfo ||
-      prevCtx.streamState !== streamState ||
-      prevCtx.runId !== runId ||
-      prevCtx.followupOptions !== followupOptions ||
-      prevCtx.isToolUse !== isToolUse ||
-      prevCtx.hasStreams !== hasStreams
-    ) {
-      this.streamContextValue = {
-        streamInfo: activeStreamInfo,
-        streamState,
-        runId,
-        followupOptions,
-        isToolUse,
-        hasStreams,
-      };
-    }
-    this.permissionsContextValue = this.permissions;
-  }
-
   private setStreamState(
     streamId: StreamTabId,
     updater: (prev: StreamState) => StreamState,
   ): void {
+    const state = this.appState.get();
     // Fast path: stream already has state (common during streaming).
     // Only fall back to streams.find() when creating default state for new streams.
-    let current = this.appState.streamStates.get(streamId);
+    let current = state.streamStates.get(streamId);
     if (!current) {
-      const streamInfo = this.appState.streamById.get(streamId);
+      const streamInfo = state.streamById.get(streamId);
       // Skip unknown streams - they'll receive full state via UPDATE_LOGS after initialization
       if (!streamInfo) return;
-      current = getStreamState(
-        this.appState,
-        streamId,
-        streamInfo.agentCategory,
-      );
+      current = getStreamState(state, streamId, streamInfo.agentCategory);
     }
     const updated = updater(current);
     // Skip no-op updates: avoid Map copy + appState spread + willUpdate cycle
     if (updated === current) return;
-    this.appState = create(this.appState, (draft) => {
-      draft.streamStates.set(streamId, updated);
-    });
+    this.appState.set(
+      create(state, (draft) => {
+        draft.streamStates.set(streamId, updated);
+      }),
+    );
   }
 
   private setStreamLogs(
     streamId: StreamTabId,
     updater: (prev: StreamLogs) => StreamLogs,
   ): void {
+    const state = this.appState.get();
     // Skip unknown streams — prevents orphan streamLogs entries that survive
     // updateStreamInfo cleanup (which only iterates streamStates keys)
-    if (!this.appState.streamStates.has(streamId)) return;
-    const current = this.appState.streamLogs.get(streamId) ?? EMPTY_STREAM_LOGS;
+    if (!state.streamStates.has(streamId)) return;
+    const current = state.streamLogs.get(streamId) ?? EMPTY_STREAM_LOGS;
     const updated = updater(current);
     if (updated === current) return;
-    this.appState = create(this.appState, (draft) => {
-      draft.streamLogs.set(streamId, updated);
-    });
+    this.appState.set(
+      create(state, (draft) => {
+        draft.streamLogs.set(streamId, updated);
+      }),
+    );
   }
 
   /**
@@ -467,9 +431,9 @@ export class ProgressApp extends BaseWebviewApp<ProgressViewOutboundMessage> {
    */
   private getEventHandlerContext(): FrontendEventHandlerContext {
     return {
-      getState: () => this.appState,
+      getState: () => this.appState.get(),
       setState: (updater) => {
-        this.appState = updater(this.appState);
+        this.appState.set(updater(this.appState.get()));
       },
       setStreamState: (streamId, updater) =>
         this.setStreamState(streamId, updater),
@@ -550,7 +514,7 @@ export class ProgressApp extends BaseWebviewApp<ProgressViewOutboundMessage> {
    * Part of Lit-native Phase 9e reactive property pattern.
    */
   private onFollowUpFocusComplete(): void {
-    const streamId = this.appState.activeStreamId;
+    const streamId = this.appState.get().activeStreamId;
     if (!streamId) return;
 
     this.setStreamState(streamId, (prev) => {
