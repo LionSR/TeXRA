@@ -15,6 +15,7 @@
 7. [Pattern 6: Command-Query Separation for Shared State](#7-pattern-6-command-query-separation-for-shared-state)
 8. [Pattern 7: Flow Composition via Higher-Order Flows (React HOC-style)](#8-pattern-7-flow-composition-via-higher-order-flows-react-hoc-style)
 9. [What Would Make the Biggest Impact](#9-what-would-make-the-biggest-impact)
+10. [Reality Check: Honest Feasibility Assessment](#10-reality-check-honest-feasibility-assessment)
 
 ---
 
@@ -752,3 +753,226 @@ Ranked by effort-to-reward ratio:
 These patterns are **independently adoptable**. Start with FlowScope (Pattern 2) and CQS (Pattern 6) — they're essentially free. Then layer in declarative definitions (Pattern 1) and reducers (Pattern 3) as you build new flows.
 
 The key insight from all these industry patterns is the same: **make implicit things explicit**. Implicit state machines → explicit definitions. Implicit mutations → explicit actions. Implicit cleanup → explicit scopes. Implicit effects → explicit descriptions. Each one trades a tiny bit of verbosity for a massive gain in debuggability and composability.
+
+---
+
+## 10. Reality Check: Honest Feasibility Assessment
+
+After reading every node implementation, both `runXFlow` functions, `PersistedFlow`, `RoundPersistedFlow`, both inner cycle flows, and all the service/state types — here's what actually holds up, what's harder than it sounds, and what would quietly break things.
+
+---
+
+### Pattern 1: Declarative FSM — VERDICT: Partially Realistic
+
+**What works**: The outer flows (reflection, tool-use) are simple enough that a declarative definition would genuinely help. Reflection is a linear chain: `prepare → texCount → media → responseCycle → output`. Tool-use is `prepare → cycle → wait` with one loop. A `defineFlow()` wrapper over these is straightforward.
+
+**What breaks**: The inner cycle flows are the hard part. `ResponseCycleFlow` has 5 nodes with a `CONTINUE` loop, conditional `COMPLETE` exits from multiple nodes, and transient fields (`responseObject`, `systemPrompt`) that don't serialize. `ToolUseCycleFlow` has 4 nodes, a loop, and `ToolUseDispatchNode` that extends `BatchNode` (not `Node`). A declarative format needs to handle:
+
+- **Mixed node types** in the same flow (BatchNode vs Node)
+- **Transient state** — `shared.responseObject` is set in `post()` and read in the next `prep()`, but must NOT be serialized by PersistedFlow. The declarative config can't express "this field exists but is invisible to persistence."
+- **`resetCycleState()`** — called at the start of each loop iteration to clear fields. This is an imperative side effect that doesn't fit a pure FSM model.
+
+**Honest assessment**: A declarative definition layer makes sense for the 2 outer flows. For the inner cycle flows, the imperative wiring (5 lines of `node.next()`) is already concise enough that a declarative wrapper adds indirection without meaningful clarity. The real complexity isn't in the wiring — it's in the nodes themselves.
+
+**What to actually do**: Build `defineFlow()` for new flows only. Don't retrofit existing flows. The ROI is highest when you're designing a new flow and want to reason about its shape before writing nodes.
+
+---
+
+### Pattern 2: FlowScope (Structured Concurrency) — VERDICT: Mostly Realistic, But Not "~40 Lines"
+
+**What works**: The cleanup pattern in `runReflectionFlow` and `runToolUseFlow` is genuinely messy. Both follow the same structure:
+
+```
+try {
+  registerInterruptible(...)
+  [read/create flow record]
+  [wire nodes, create services]
+  [run flow]
+  [interpret result]
+} catch {
+  status = ERROR
+  throw
+} finally {
+  [persist conversation — best-effort]
+  [maybe delete flow record]
+  [clear retry coordinator]
+  [unregister interruptible]
+  [dispose session — tool-use only]
+}
+```
+
+A `FlowScope` that owns cleanup would genuinely help here.
+
+**What breaks**:
+
+1. **Conditional cleanup**: The `finally` block in `runToolUseFlow` checks `shared.userCancelledRetry` before deciding whether to delete the flow record. This is state-dependent cleanup — you can't register it upfront because you don't know the condition until the flow finishes. A `FlowScope.onCleanup()` would need to close over the mutable `shared` reference.
+
+2. **Ordered dependencies**: The conversation must be persisted BEFORE the flow record is deleted. `scope.onCleanup()` runs in LIFO order, so you'd need to register them in reverse order of desired execution, which is error-prone.
+
+3. **Best-effort semantics**: The `try { await kv.write(...) } catch { /* ignore */ }` pattern for conversation persistence is intentional — it must not mask the original error. A generic scope needs to replicate this "swallow errors in cleanup" behavior.
+
+4. **Two different flows have different cleanup**: Reflection clears retry coordinator + unregisters interruptible. Tool-use does those plus disposes `sessionLifecycle`. A generic scope doesn't actually reduce the number of things you need to think about — it just moves them.
+
+**Honest assessment**: A `FlowScope` is realistic but saves less than claimed. The cleanup blocks are ~15 lines each. A scope replaces them with ~10 lines of `scope.onCleanup()` registrations. The real win isn't lines saved — it's the guarantee that cleanup runs even if someone adds an early return. But the conditional cleanup (`userCancelledRetry`) means you can't fully eliminate the `finally` block anyway.
+
+**What to actually do**: Consider a lightweight `FlowLifecycle` class that both `runReflectionFlow` and `runToolUseFlow` share, extracting the common try/catch/finally skeleton. This is simpler than a generic `FlowScope` and handles the real deduplication.
+
+---
+
+### Pattern 3: Redux-style Actions — VERDICT: Unrealistic for Existing Flows
+
+**What works in theory**: The idea of replacing `shared.continueRounds = false` with `dispatch({ type: 'STOP_ROUNDS', reason: 'cancelled' })` sounds great for debuggability.
+
+**What actually happens when you try to implement it**:
+
+1. **Mutation count**: Across both outer flows, there are **~25 distinct shared-state mutations** in `post()` methods. Each one becomes an action type. You'd have a discriminated union of 25+ action types and a reducer with 25+ cases. The reducer would be larger than all the `post()` methods combined.
+
+2. **PersistedFlow interaction is the killer**: `PersistedFlow.stepWithResult()` calls `node._run(shared)`, which calls `prep(shared) → exec(prepRes) → post(shared, prepRes, execRes)`. After `post()` mutates shared, `stepWithResult()` calls `this.serializeShared(shared)` — which does `structuredClone(shared)`. If shared is a `SharedStore` wrapper with a `dispatch()` method and an internal reducer function, **`structuredClone` will throw** because functions aren't cloneable.
+
+3. **Inner cycle flows are worse**: `ResponseCycleFlow` and `ToolUseCycleFlow` have **~35 shared-state mutations** between them, including `replaceMessagesInPlace()` which mutates an array in-place by reference. A reducer pattern can't express "mutate this specific array that's referenced from multiple locations."
+
+4. **Transient fields**: `shared.responseObject` holds a raw model response (non-serializable SDK object). It's set in one node's `post()` and consumed in the next node's `prep()`. Redux-style immutable state would clone this between dispatches, but it's not cloneable. This is why it's explicitly excluded from `BaseCycleFieldsSchema`.
+
+**Honest assessment**: Redux-style reducers fundamentally conflict with PersistedFlow's `structuredClone` serialization model. You'd need to either: (a) make the store serialization-aware, re-attaching the reducer after deserialization, which is complex and fragile; or (b) only use reducers for non-persisted flows, which limits the pattern to the inner cycle flows where it's least needed (they're already short-lived and non-persisted).
+
+**What to actually do**: If you want action logging for debuggability, add a lightweight mutation tracker:
+
+```typescript
+// Drop-in enhancement, no architecture change needed
+function trackMutations<S extends object>(shared: S, label: string): S {
+  return new Proxy(shared, {
+    set(target, prop, value) {
+      console.debug(`[${label}] ${String(prop)} = ${JSON.stringify(value)}`);
+      target[prop as keyof S] = value;
+      return true;
+    },
+  });
+}
+```
+
+This gives you the debuggability win without the architecture pain. Wrap `shared` in `trackMutations()` during development, strip it in production.
+
+---
+
+### Pattern 4: Effect Isolation — VERDICT: Unrealistic
+
+**Why it falls apart**: The `exec()` methods in TeXRA don't just "call the LLM." They:
+
+- Create inner flows and run them (`ResponseCycleNode.exec()` creates `createResponseCycleFlow()` and calls `flow.run()`)
+- Register callbacks on workspace state (`workspaceState.todos.setOnUpdate(...)`)
+- Call `buildCycleServices()` which combines services from multiple sources
+- Interact with streaming (the model handler streams tokens to VS Code's output channel in real-time)
+
+These aren't effects you can describe as data. A `{ type: 'LLM_CALL', messages: [...] }` effect descriptor can't capture "create an inner PocketFlow with these 4 nodes, wire them, inject these services, run it, and stream the output to the VS Code webview in real-time while checking for follow-up messages from the user."
+
+**The streaming problem specifically**: `modelHandler.createResponse()` returns a response object, but side-effects (streaming tokens to the UI) happen during the call as callbacks. An effect runner would need to replicate the entire model handler's streaming protocol, which defeats the purpose of isolating effects.
+
+**What to actually do**: Nothing. The current architecture where `exec()` does the work directly is the right call. The `exec()` contract in PocketFlow is "do the work, possibly with retries." Trying to make it pure would fight the framework.
+
+---
+
+### Pattern 5: Reactive Streams — VERDICT: Over-Engineering
+
+**The real scale of the problem**: `ProgressEventBus` has 26 event types. The throttling logic is in one place (`ProgressEventHandler`). The `StreamEventQueue` is ~40 lines. Total event infrastructure: ~200 lines.
+
+**What RxJS would add**: A dependency (~45KB minified), operator learning curve, debugging complexity (RxJS stack traces are notoriously hard to read), and subscription lifecycle management. For 26 event types with one debounce and one sequential queue, this is a sledgehammer for a nail.
+
+**The "micro-reactive" alternative**: Building `filter()`, `map()`, `debounce()`, `groupBy()` from scratch is ~150 lines. You'd replace ~200 lines of purpose-built code with ~150 lines of general-purpose code plus ~50 lines of composition. Net savings: negative.
+
+**When it would matter**: If you were adding 10 more event types with complex cross-event logic (e.g., "when stream starts AND model responds AND no errors within 5s, then show success banner"). You currently have none of these. The event handling is simple: receive event → update state → post to webview.
+
+**What to actually do**: Keep ProgressEventBus as-is. It's simple, debuggable, and purpose-built. If you find yourself writing a third manual throttle/queue, that's the signal to reconsider.
+
+---
+
+### Pattern 6: CQS on SharedState — VERDICT: Partially Realistic, But With a Catch
+
+**What works**: Almost all `prep()` methods are genuinely read-only. They destructure shared into typed prep results and return them. The pattern is disciplined and consistent.
+
+**The catch I found**: `ToolUseDispatchNode.prep()` in `ToolUseCycleFlow.ts:550` **mutates shared in prep**:
+
+```typescript
+async prep(shared: ToolUseCycleShared): Promise<SdkToolCall[]> {
+  // ...
+  if (this.services.checkInterruption()) {
+    shared.shouldStop = true;  // ← MUTATION IN PREP
+    return [];
+  }
+```
+
+And `ResponsePrepNode.post()` in `ResponseCycleFlow.ts:140`:
+```typescript
+async post(shared, prepRes, execRes) {
+  if (prepRes.interrupted) {
+    shared.shouldStop = true;  // this one is in post(), correct
+  }
+  shared.outputExists = prepRes.exists;  // writes in post(), correct
+  shared.systemPrompt = prepRes.systemPrompt;  // writes transient field in post()
+```
+
+The interruption check in `prep()` is a pragmatic shortcut — checking interruption early to avoid expensive work. Moving it to `post()` would mean running the full prep (deduplication analysis, tool call validation) only to throw it away.
+
+**The `DeepReadonly<S>` type problem**: If you make `prep(shared: DeepReadonly<S>)`, you'd need to fix the `ToolUseDispatchNode.prep()` mutation. The fix would be to return a `{ shouldStop: true }` sentinel from `prep()` and handle it in `post()`. This is doable but changes the contract subtly.
+
+**The bigger issue**: `prep()` returns plain objects that share references with `shared`. For example, `prep()` returns `{ messages: shared.messages }` — this is the same array reference. If `exec()` mutates that array (which `replaceMessagesInPlace()` explicitly does), it's mutating shared state through the reference. `DeepReadonly` on `prep()`'s parameter doesn't prevent this because the returned prep result isn't readonly.
+
+**What to actually do**: Don't add `DeepReadonly` to `BaseNode.prep()`. It would create a false sense of safety and require workarounds for legitimate patterns. Instead, document the convention: "prep reads, post writes" as a code review guideline. The one `prep()` mutation (`ToolUseDispatchNode`) could be refactored to return a flag, but the reference-sharing issue means `DeepReadonly` can't enforce true isolation anyway.
+
+---
+
+### Pattern 7: Higher-Order Flows — VERDICT: Blocked by PersistedFlow Design
+
+**Why this is the hardest pattern to adopt**:
+
+`PersistedFlow` doesn't compose through wrapping — it composes through **inheritance**. The class hierarchy `Flow → PersistedFlow → RoundPersistedFlow` exists because each layer adds behavior that depends on internal state:
+
+1. **`PersistedFlow`** overrides `run()` to call `ensureRecord()` then loop `step()`. It owns `cachedRecord`, `runId`, and the KV store reference. Every step reads/writes the flow record.
+
+2. **`RoundPersistedFlow`** overrides `run()` again, calling `init()` → `executeRoundSteps()` → `shouldContinueNextRound()` → `transitionToNextRound()`. It calls `protected` methods on PersistedFlow (`stepWithResult()`, `resetNodeHistory()`, `init()`).
+
+A wrapper can't call `protected` methods. You'd need to either:
+- Make `stepWithResult()` and `resetNodeHistory()` public (leaking internals)
+- Use the adapter pattern (duplicating the inheritance chain)
+- Rewrite PersistedFlow to be composable from the start
+
+**The `structuredClone` coupling**: `PersistedFlow.serializeShared()` calls `structuredClone(shared)`. Any wrapper that wraps the shared state (like a Redux store, a Proxy tracker, or a readonly wrapper) would be stripped by `structuredClone`. Wrappers around shared state are fundamentally incompatible with the persistence model.
+
+**The graph-replay coupling**: `PersistedFlow.stepWithResult()` replays the node graph by walking `this.start.getNextNode(action)` through the recorded action history. A wrapper that modifies the graph (timeout wrapper, retry wrapper) would invalidate the replay path. Resuming a persisted flow through a different wrapper configuration would crash.
+
+**What to actually do**: If you want composable behaviors, build them as **mixins on the services object** rather than wrappers on the flow:
+
+```typescript
+// Instead of wrapping the flow, wrap the services
+const services = pipe(
+  baseServices,
+  withTimeout(5 * 60 * 1000),    // adds checkTimeout to services
+  withMetrics(usageCollector),     // adds recordMetrics to services
+);
+flow.setServices(services);
+```
+
+This works because services are injected, not serialized. Nodes call `this.services.checkTimeout()` or `this.services.recordMetrics()` — the behavior is composable without touching the flow or persistence layer.
+
+---
+
+### Revised Priority Table
+
+| Pattern | Original Rating | Honest Rating | Why |
+|---------|----------------|---------------|-----|
+| **FlowScope** | Low effort, High reward | Medium effort, Medium reward | Conditional cleanup limits savings; a shared `FlowLifecycle` base is more practical |
+| **CQS on Shared** | "Type-only, free" | Not viable as typed enforcement | Reference sharing and legitimate prep mutations make `DeepReadonly` a false promise |
+| **Declarative FSM** | Low effort | Low effort for new flows only | Existing flows are too simple to benefit; inner cycle flows are too complex to fit |
+| **Redux Actions** | Medium effort | Blocked by `structuredClone` | Fundamentally incompatible with PersistedFlow's serialization model |
+| **Higher-Order Flows** | Medium effort | Blocked by PersistedFlow design | Protected methods, structuredClone, and graph replay prevent wrapping |
+| **Reactive Streams** | Low-Medium effort | Over-engineering | 26 event types, 1 debounce, 1 queue — doesn't justify the abstraction |
+| **Effect Isolation** | High effort | Unrealistic | Streaming, inner flows, and callback-based side effects can't be described as data |
+
+### What Actually Would Help
+
+1. **Mutation tracking via Proxy** (for debugging) — 15 lines, zero architecture change, immediate value for understanding "why did the flow stop?"
+
+2. **Shared `FlowLifecycle` base** — extract the common try/catch/finally skeleton from `runReflectionFlow` and `runToolUseFlow` into a shared function that takes callbacks for the variable parts. Not a generic scope, just a template method.
+
+3. **`defineFlow()` for new flows** — a thin declarative layer for future flows, not a retrofit. Use it when designing a new flow type to reason about the graph before writing nodes.
+
+4. **Services composition via `pipe()`** — add cross-cutting concerns (timeout, metrics, rate limiting) by wrapping services, not flows. This sidesteps all the PersistedFlow constraints.
