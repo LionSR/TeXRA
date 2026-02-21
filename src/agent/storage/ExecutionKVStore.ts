@@ -75,6 +75,19 @@ export interface ExecutionKVStore {
   readTodos(): Promise<TodoEntry[]>;
   readConversation(): Promise<unknown[] | null>;
   readChildren(): Promise<ChildRecord[]>;
+
+  // -- Output files (co-located with execution data) ----------------------
+  readOutputFiles(): Promise<OutputFilesRecord | null>;
+  writeOutputFiles(data: OutputFilesRecord): Promise<void>;
+}
+
+/**
+ * Serialized output file data co-located with an execution.
+ * Canonical format: files + missing outputs per round.
+ */
+export interface OutputFilesRecord {
+  files: Record<string, unknown[]>;
+  missing: Record<string, string[]>;
 }
 
 /**
@@ -239,6 +252,16 @@ class StorageFSKVStore implements ExecutionKVStore {
       }),
     );
     return entries.filter((e): e is ChildRecord => e !== null);
+  }
+
+  /** Read output files co-located with this execution. */
+  async readOutputFiles(): Promise<OutputFilesRecord | null> {
+    return (await this.read<OutputFilesRecord>('output-files')) ?? null;
+  }
+
+  /** Write output files co-located with this execution. */
+  async writeOutputFiles(data: OutputFilesRecord): Promise<void> {
+    await this.write('output-files', data);
   }
 }
 

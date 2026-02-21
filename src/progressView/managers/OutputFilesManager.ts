@@ -1,397 +1,329 @@
-import * as vscode from 'vscode';
+/**
+ * Manages output files collection with persistence.
+ *
+ * Internal structure: Map<StreamTabId, Map<StorageKey, OutputFileCollection>>
+ * Each OutputFileCollection owns both files AND missing outputs for a single run,
+ * eliminating the separate MISSING_OUTPUTS Memento key and the triple-nested Maps.
+ *
+ * Write-through: when the storageKey is a real ExecutionId (not "__default__"),
+ * output data is also persisted to `executions/{id}/output-files.json` via
+ * ExecutionKVStore, co-locating execution artifacts.
+ */
 import { z } from 'zod';
 
 import {
-  OutputFileInfoListSchema,
-  OutputFileInfoSchema,
+  ExecutionIdSchema,
   type OutputFileInfo,
   type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
-import { normalizeRunId } from '@common/constants/runIds';
+import { isPlainObject } from '@shared/utils/string';
+import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   PersistentMapManager,
   type MementoStorage,
 } from '@progressView/persistence/PersistentMapManager';
-import {
-  RoundKeySchema,
-  createRoundMapSchema,
-  createRunMapSchema,
-} from '@progressView/persistence/schemaUtils';
-import {
-  nestedMapToRecord,
-  tripleNestedMapToRecord,
-} from '@progressView/persistence/serializationUtils';
+import { createRoundMapSchema, createRunMapSchema } from '@progressView/persistence/schemaUtils';
+import { OutputFileCollection } from './OutputFileCollection';
+
+// =============================================================================
+// Legacy deserialization schemas (for loading old Memento data)
+// =============================================================================
 
 /** Schema for storage records with null/invalid fallback to empty object */
 const StorageRecordSchema = z.record(z.string(), z.unknown()).catch({});
 
-/** Schema for missing output paths (string arrays per round) */
-const MissingOutputRoundMapSchema = createRoundMapSchema(z.string());
+/** Legacy missing output paths (string arrays per round) */
+const LegacyMissingRoundMapSchema = createRoundMapSchema(z.string());
 
-/** Schema for output files round map (filters invalid entries during parsing) */
-const OutputFilesRoundMapSchema = z
-  .record(z.string(), z.array(z.unknown()).catch([]))
-  .transform((record): Map<number, OutputFileInfo[]> => {
-    const map = new Map<number, OutputFileInfo[]>();
-    for (const [key, items] of Object.entries(record)) {
-      const round = RoundKeySchema.safeParse(key);
-      if (!round.success) continue;
-      const parsed = items
-        .map((item) => OutputFileInfoSchema.safeParse(item))
-        .filter(
-          (result): result is { success: true; data: OutputFileInfo } =>
-            result.success,
-        )
-        .map((result) => result.data);
-      if (parsed.length > 0) {
-        map.set(round.data, parsed);
-      }
-    }
-    return map;
+/** Legacy missing outputs run map */
+const LegacyMissingOutputsSchema = createRunMapSchema(LegacyMissingRoundMapSchema);
+
+const logger = new AgentLogger('OutputFilesManager');
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+/** Check if a StorageKey is a real ExecutionId (not the __default__ sentinel). */
+function isExecutionId(key: StorageKey): boolean {
+  return ExecutionIdSchema.safeParse(key).success;
+}
+
+/** Write-through to ExecutionKVStore. Fire-and-forget; errors are logged, not thrown. */
+function writeThrough(storageKey: StorageKey, collection: OutputFileCollection): void {
+  if (!isExecutionId(storageKey)) return;
+
+  const store = getExecutionStore(storageKey);
+  store.writeOutputFiles(collection.toJSON()).catch((err) => {
+    logger.warn(`Write-through failed for execution ${storageKey}: ${err}`);
   });
+}
 
-/** Schema for missing outputs run map */
-const MissingOutputsDataSchema = createRunMapSchema(
-  MissingOutputRoundMapSchema,
-);
+// =============================================================================
+// Manager
+// =============================================================================
 
-/** Schema for output files run map */
-const OutputFilesDataSchema = createRunMapSchema(OutputFilesRoundMapSchema);
-
-/**
- * Manages output files collection with persistence and file existence validation.
- * Handles adding, updating, and managing output files for different streams.
- */
 export class OutputFilesManager extends PersistentMapManager<
   StreamTabId,
-  Map<string, Map<number, OutputFileInfo[]>>
+  Map<string, OutputFileCollection>
 > {
-  private _missingOutputs: Map<
-    StreamTabId,
-    Map<string, Map<number, string[]>>
-  > = new Map();
-  private missingOutputsLoaded = false;
-  private missingOutputsLoadPromise: Promise<void> | null = null;
-  private readonly logger: AgentLogger;
-
   constructor(storage?: MementoStorage) {
     super(WorkspaceStateKey.OUTPUT_FILES, storage);
-    this.logger = new AgentLogger('OutputFilesManager');
   }
 
-  /** Get or create a nested map entry */
-  private getOrCreateNested<K, V>(map: Map<K, V>, key: K, factory: () => V): V {
-    let inner = map.get(key);
-    if (!inner) {
-      inner = factory();
-      map.set(key, inner);
-    }
-    return inner;
-  }
+  // ---------------------------------------------------------------------------
+  // Write operations
+  // ---------------------------------------------------------------------------
 
   /**
    * Add output files for a stream and round.
-   *
-   * @param stream - The stream tab ID
-   * @param storageKey - THE key for storage (single source of truth)
-   * @param filesByRound - Map of round number to output files
    */
   async addFiles(
     stream: StreamTabId,
     storageKey: StorageKey,
     filesByRound: { [key: number]: OutputFileInfo[] },
   ): Promise<void> {
-    // storageKey is already branded - use directly, no normalization needed
-    const streamRuns = this.getOrCreateNested(
-      this.items,
-      stream,
-      () => new Map(),
-    );
-    const runRounds = this.getOrCreateNested(
-      streamRuns,
-      storageKey,
-      () => new Map(),
-    );
-
-    for (const [round, files] of Object.entries(filesByRound)) {
-      const roundResult = RoundKeySchema.safeParse(round);
-      if (!roundResult.success) {
-        this.logger.warn(
-          `Invalid round number '${round}' for stream ${stream}`,
-        );
-        continue;
-      }
-      const normalizedFiles = OutputFileInfoListSchema.parse(
-        Array.isArray(files) ? files : [],
-      );
-      if (normalizedFiles.length === 0) {
-        runRounds.delete(roundResult.data);
-        continue;
-      }
-
-      runRounds.set(roundResult.data, normalizedFiles);
-    }
-
+    const collection = this.getOrCreateCollection(stream, storageKey);
+    collection.addFiles(filesByRound);
+    writeThrough(storageKey, collection);
     await this.save();
   }
 
   /**
    * Update missing outputs for a stream.
-   *
-   * @param stream - The stream tab ID
-   * @param storageKey - THE key for storage (single source of truth)
-   * @param filesByRound - Map of round number to missing file paths
    */
   async updateMissingOutputs(
     stream: StreamTabId,
     storageKey: StorageKey,
     filesByRound: { [key: number]: string[] },
   ): Promise<void> {
-    await this.ensureMissingOutputsLoaded();
-    // storageKey is already branded - use directly, no normalization needed
-    const streamMissing = this.getOrCreateNested(
-      this._missingOutputs,
-      stream,
-      () => new Map(),
-    );
-    const runMissing = this.getOrCreateNested(
-      streamMissing,
-      storageKey,
-      () => new Map(),
-    );
+    const collection = this.getOrCreateCollection(stream, storageKey);
+    collection.setMissing(filesByRound);
+    writeThrough(storageKey, collection);
+    await this.save();
+  }
 
-    for (const [round, files] of Object.entries(filesByRound)) {
-      const roundResult = RoundKeySchema.safeParse(round);
-      if (!roundResult.success) {
-        this.logger.warn(
-          `Invalid missing-output round '${round}' for stream ${stream}`,
-        );
-        continue;
+  /** Clear missing outputs for a stream (all runs). */
+  async clearMissingOutputs(stream: StreamTabId): Promise<void> {
+    const runMap = this.items.get(stream);
+    if (!runMap) return;
+
+    let changed = false;
+    for (const collection of runMap.values()) {
+      if (collection.hasMissing()) {
+        collection.clearMissing();
+        changed = true;
       }
-      runMissing.set(roundResult.data, files);
     }
 
-    await this.saveMissingOutputs();
+    if (changed) {
+      await this.save();
+    }
   }
 
-  /** Get output files for a stream */
+  /** Delete all files for a stream. */
+  async deleteStream(stream: StreamTabId): Promise<void> {
+    await super.delete(stream);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Read operations (public API unchanged)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Get output files for a stream.
+   * Returns Map<StorageKey, Map<round, OutputFileInfo[]>> for backward compatibility.
+   */
   getFiles(stream: StreamTabId): Map<string, Map<number, OutputFileInfo[]>> {
-    return new Map(this.items.get(stream) ?? []);
+    const runMap = this.items.get(stream);
+    if (!runMap) return new Map();
+
+    const result = new Map<string, Map<number, OutputFileInfo[]>>();
+    for (const [key, collection] of runMap) {
+      const files = collection.getFiles();
+      if (files.size > 0) {
+        result.set(key, files);
+      }
+    }
+    return result;
   }
 
+  /**
+   * Get output files for a specific run within a stream.
+   */
   getRun(
     stream: StreamTabId,
     storageKey: StorageKey,
   ): Map<number, OutputFileInfo[]> | undefined {
-    const target = this.items.get(stream)?.get(storageKey);
-    // Return a copy to prevent external mutation
-    return target ? new Map(target) : undefined;
+    const collection = this.items.get(stream)?.get(storageKey);
+    return collection ? collection.getFiles() : undefined;
   }
 
   /**
    * Return a flattened set of file paths known for the provided stream.
-   * When workspaceOnly is true, only workspace-scoped paths are returned so
-   * commands like pack/clean do not accidentally target run-storage artifacts.
-   *
-   * @param stream - The stream tab ID
-   * @param options.storageKey - THE key for storage lookup
-   * @param options.workspaceOnly - If true, only returns workspace-scoped paths
+   * When workspaceOnly is true, only workspace-scoped paths are returned.
    */
   getKnownFilePaths(
     stream: StreamTabId,
     options: { storageKey?: StorageKey | null; workspaceOnly?: boolean } = {},
   ): Set<string> {
-    const paths = new Set<string>();
-    const runs = this.items.get(stream);
-    if (!runs) return paths;
+    const runMap = this.items.get(stream);
+    if (!runMap) return new Set();
 
-    const targetRunIds =
-      options.storageKey != null ? [options.storageKey] : [...runs.keys()];
+    const targetKeys =
+      options.storageKey !== null && options.storageKey !== undefined
+        ? [options.storageKey]
+        : [...runMap.keys()];
     const workspaceOnly = options.workspaceOnly ?? false;
 
-    for (const target of targetRunIds) {
-      const runRounds = runs.get(target);
-      if (!runRounds) continue;
-
-      for (const infos of runRounds.values()) {
-        for (const info of infos) {
-          this.collectPaths(paths, info, workspaceOnly);
-        }
+    const paths = new Set<string>();
+    for (const key of targetKeys) {
+      const collection = runMap.get(key);
+      if (!collection) continue;
+      for (const p of collection.getKnownPaths(workspaceOnly)) {
+        paths.add(p);
       }
     }
     return paths;
   }
 
   /**
-   * Collect paths from an output file info.
-   * @param target - Set to add paths to
-   * @param info - Output file info containing location and lineage
-   * @param workspaceOnly - If true, only collect workspace-scoped paths
+   * Get missing outputs for a stream.
+   * Returns Map<StorageKey, Map<round, string[]>> for backward compatibility.
    */
-  private collectPaths(
-    target: Set<string>,
-    info: OutputFileInfo,
-    workspaceOnly: boolean,
-  ): void {
-    const { lineage } = info;
-    const locations = [
-      info.location,
-      lineage?.original,
-      lineage?.diffBase,
-      lineage?.diffFile,
-    ];
+  getMissingOutputs(stream: StreamTabId): Map<string, Map<number, string[]>> {
+    const runMap = this.items.get(stream);
+    if (!runMap) return new Map();
 
-    for (const loc of locations) {
-      if (loc?.absolutePath && (!workspaceOnly || loc.kind === 'workspace')) {
-        target.add(loc.absolutePath);
+    const result = new Map<string, Map<number, string[]>>();
+    for (const [key, collection] of runMap) {
+      const missing = collection.getMissing();
+      if (missing.size > 0) {
+        result.set(key, missing);
       }
     }
+    return result;
   }
 
-  /** Get missing outputs for a stream */
-  getMissingOutputs(stream: StreamTabId): Map<string, Map<number, string[]>> {
-    if (!this.missingOutputsLoaded) {
-      throw new Error('Missing outputs requested before load completed');
-    }
-    const missing = this._missingOutputs.get(stream);
-    return missing ? new Map(missing) : new Map();
-  }
+  // ---------------------------------------------------------------------------
+  // Persistence
+  // ---------------------------------------------------------------------------
 
-  /** Clear missing outputs for a stream */
-  async clearMissingOutputs(stream: StreamTabId): Promise<void> {
-    await this.ensureMissingOutputsLoaded();
-    if (!this._missingOutputs.delete(stream)) {
-      return;
-    }
-    await this.saveMissingOutputs();
-  }
-
-  /** Delete all files for a stream */
-  async deleteStream(stream: StreamTabId): Promise<void> {
-    await super.delete(stream);
-    await this.ensureMissingOutputsLoaded();
-    this._missingOutputs.delete(stream);
-    await this.saveMissingOutputs();
-  }
-
-  /** Clear all output files */
-  async clear(): Promise<void> {
-    await super.clear();
-    await this.ensureMissingOutputsLoaded();
-    this._missingOutputs.clear();
-    await this.saveMissingOutputs();
-  }
-
-  /** Load output files from persistence and clean up missing files */
+  /**
+   * Load output files from persistence.
+   * Handles migration from the legacy separate MISSING_OUTPUTS key.
+   */
   async load(): Promise<void> {
     await super.load();
-    await this.ensureMissingOutputsLoaded();
-  }
-
-  /** Load missing outputs from persistence */
-  private async loadMissingOutputs(): Promise<void> {
-    const saved = this.loadStorageRecord(WorkspaceStateKey.MISSING_OUTPUTS);
-    if (Object.keys(saved).length > 0) {
-      this._missingOutputs = this.deserializeMissingOutputs(saved);
-      return;
-    }
-
-    const migrated = await this.migrateLegacyMissingOutputs();
-    if (!migrated) {
-      this._missingOutputs.clear();
-    }
-  }
-
-  private async ensureMissingOutputsLoaded(): Promise<void> {
-    if (this.missingOutputsLoaded) return;
-
-    if (!this.missingOutputsLoadPromise) {
-      this.missingOutputsLoadPromise = (async () => {
-        try {
-          await this.loadMissingOutputs();
-          this.missingOutputsLoaded = true;
-        } catch (error) {
-          this.logger.error('Failed to load missing outputs', { data: error });
-          this.missingOutputsLoadPromise = null;
-          throw error;
-        }
-      })();
-    }
-
-    await this.missingOutputsLoadPromise;
-  }
-
-  /** Save missing outputs to persistence */
-  async saveMissingOutputs(): Promise<void> {
-    const obj = tripleNestedMapToRecord(this._missingOutputs);
-    await this.storage.update(WorkspaceStateKey.MISSING_OUTPUTS, obj);
-  }
-
-  private deserializeMissingOutputs(
-    saved: Record<string, unknown>,
-  ): Map<StreamTabId, Map<string, Map<number, string[]>>> {
-    const processed = new Map<
-      StreamTabId,
-      Map<string, Map<number, string[]>>
-    >();
-
-    for (const [stream, raw] of Object.entries(saved)) {
-      const runMap = MissingOutputsDataSchema.parse(raw);
-      processed.set(stream as StreamTabId, runMap);
-    }
-
-    return processed;
-  }
-
-  private async migrateLegacyMissingOutputs(): Promise<boolean> {
-    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (!workspacePath) {
-      return false;
-    }
-
-    const legacyKey = `${WorkspaceStateKey.MISSING_OUTPUTS}.${workspacePath}`;
-    const legacy = this.loadStorageRecord(legacyKey);
-    if (Object.keys(legacy).length === 0) {
-      return false;
-    }
-
-    const converted: Record<
-      string,
-      Record<string, { [key: number]: string[] }>
-    > = {};
-
-    for (const [stream, rounds] of Object.entries(legacy)) {
-      converted[stream] = {
-        [normalizeRunId(null)]: rounds as { [key: number]: string[] },
-      };
-    }
-
-    this._missingOutputs = this.deserializeMissingOutputs(converted);
-    await this.saveMissingOutputs();
-    await this.storage.update(legacyKey, undefined as never);
-    return true;
-  }
-
-  /** Load record from storage with null/invalid fallback */
-  private loadStorageRecord(key: string): Record<string, unknown> {
-    return StorageRecordSchema.parse(this.storage.get(key));
+    await this.migrateLegacyMissingOutputs();
   }
 
   protected override serialize(
-    value: Map<string, Map<number, OutputFileInfo[]>>,
+    value: Map<string, OutputFileCollection>,
     _key: StreamTabId,
   ): unknown {
-    return nestedMapToRecord(value);
+    const record: Record<string, unknown> = {};
+    for (const [runKey, collection] of value) {
+      record[runKey] = collection.toJSON();
+    }
+    return record;
   }
 
-  /** Validate and normalize loaded output files */
   protected override async deserialize(
     data: unknown,
     _key: StreamTabId,
-  ): Promise<Map<string, Map<number, OutputFileInfo[]>>> {
-    return OutputFilesDataSchema.parse(data);
+  ): Promise<Map<string, OutputFileCollection>> {
+    return deserializeRunMap(data);
   }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  private getOrCreateCollection(
+    stream: StreamTabId,
+    storageKey: StorageKey,
+  ): OutputFileCollection {
+    let runMap = this.items.get(stream);
+    if (!runMap) {
+      runMap = new Map();
+      this.items.set(stream, runMap);
+    }
+
+    let collection = runMap.get(storageKey);
+    if (!collection) {
+      collection = new OutputFileCollection();
+      runMap.set(storageKey, collection);
+    }
+    return collection;
+  }
+
+  /**
+   * One-time migration: merge legacy MISSING_OUTPUTS into the main data structure.
+   * After merging, the legacy key is cleared.
+   */
+  private async migrateLegacyMissingOutputs(): Promise<void> {
+    const raw = StorageRecordSchema.parse(
+      this.storage.get(WorkspaceStateKey.MISSING_OUTPUTS),
+    );
+    if (Object.keys(raw).length === 0) return;
+
+    let merged = false;
+    for (const [stream, streamData] of Object.entries(raw)) {
+      const runMap = LegacyMissingOutputsSchema.safeParse(streamData);
+      if (!runMap.success) continue;
+
+      for (const [runKey, roundMap] of runMap.data) {
+        const collection = this.getOrCreateCollection(
+          stream as StreamTabId,
+          runKey as StorageKey,
+        );
+        const missingRecord: { [key: number]: string[] } = {};
+        for (const [round, paths] of roundMap) {
+          missingRecord[round] = paths;
+        }
+        collection.setMissing(missingRecord);
+        merged = true;
+      }
+    }
+
+    if (merged) {
+      // Persist the merged data under OUTPUT_FILES
+      await this.save();
+      // Clear the legacy MISSING_OUTPUTS key
+      await this.storage.update(
+        WorkspaceStateKey.MISSING_OUTPUTS,
+        undefined as never,
+      );
+      logger.info('Migrated legacy MISSING_OUTPUTS into OUTPUT_FILES');
+    }
+  }
+}
+
+// =============================================================================
+// Deserialization
+// =============================================================================
+
+/**
+ * Deserialize a run map from persistence.
+ * Handles both new format (OutputFileCollection JSON) and legacy format
+ * (raw round→files records without the { files, missing } wrapper).
+ */
+function deserializeRunMap(
+  data: unknown,
+): Map<string, OutputFileCollection> {
+  if (!isPlainObject(data)) return new Map();
+
+  const result = new Map<string, OutputFileCollection>();
+  for (const [runKey, value] of Object.entries(data)) {
+    if (!isPlainObject(value) && !Array.isArray(value)) continue;
+    const collection = OutputFileCollection.fromJSON(value);
+    if (!collection.isEmpty()) {
+      result.set(runKey, collection);
+    }
+  }
+  return result;
 }
