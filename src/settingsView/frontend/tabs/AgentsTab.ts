@@ -84,7 +84,7 @@ export class AgentsTab extends LitElement {
       .agents-sub-tab.active {
         color: var(--vscode-foreground);
         border-bottom-color: var(--vscode-focusBorder);
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
       }
 
       .agents-sub-tab-count {
@@ -103,7 +103,7 @@ export class AgentsTab extends LitElement {
       .agents-create-btn {
         color: var(--vscode-foreground);
         border-color: var(--vscode-focusBorder);
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
       }
 
       /* Row 2: directory info bar */

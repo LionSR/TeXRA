@@ -30,6 +30,8 @@ export const designTokens: CSSResult = css`
     --font-size: var(--vscode-font-size);
     --font-family: var(--vscode-font-family);
     --font-weight: var(--vscode-font-weight);
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
     --font-size-lg: calc(var(--font-size) * 1.2);
     --font-size-sm: calc(var(--font-size) * 0.9);
     --font-size-xs: calc(var(--font-size) * 0.8);
@@ -46,6 +48,7 @@ export const designTokens: CSSResult = css`
     /* Border radius */
     --border-radius-small: 2px;
     --border-radius: 3px;
+    --border-radius-medium: 4px;
     --border-radius-large: 6px;
 
     /* Heights */

@@ -34,7 +34,7 @@ export const permissionCardStyles: CSSResult = css`
     display: flex;
     align-items: center;
     gap: var(--spacing-small);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     margin-bottom: var(--spacing-medium);
   }
 
@@ -90,6 +90,10 @@ export const permissionCardStyles: CSSResult = css`
       opacity var(--transition-fast);
   }
 
+  .action-button:active {
+    opacity: 0.85;
+  }
+
   .action-button:focus-visible {
     outline: var(--border-thin) solid var(--vscode-focusBorder);
     outline-offset: 1px;
@@ -117,12 +121,12 @@ export const permissionCardStyles: CSSResult = css`
 
   .diff-added {
     color: var(--vscode-gitDecoration-addedResourceForeground, #89d185);
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
   }
 
   .diff-removed {
     color: var(--vscode-gitDecoration-deletedResourceForeground, #f48771);
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
   }
 
   .meta-text {

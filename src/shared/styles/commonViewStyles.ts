@@ -227,6 +227,10 @@ export const commonViewStyles: CSSResult = css`
     border-color: var(--vscode-focusBorder);
   }
 
+  .tab-action-btn:active {
+    background: var(--vscode-toolbar-activeBackground, rgba(99, 102, 103, 0.31));
+  }
+
   .tab-action-btn:focus-visible {
     outline: var(--border-thin) solid var(--vscode-focusBorder);
     outline-offset: 1px;
@@ -255,6 +259,10 @@ export const commonViewStyles: CSSResult = css`
 
   .icon-btn-reset:hover {
     opacity: var(--opacity-full);
+  }
+
+  .icon-btn-reset:active {
+    transform: scale(0.95);
   }
 
   .icon-btn-reset:focus-visible {

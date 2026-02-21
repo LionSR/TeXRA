@@ -29,7 +29,7 @@ export const toolUseStyles = css`
   }
 
   .tool-use-label {
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     color: var(--color-text-link);
     margin-bottom: var(--spacing-small);
   }
@@ -39,7 +39,7 @@ export const toolUseStyles = css`
   }
 
   .tool-use-sublabel {
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
     color: var(--vscode-foreground);
     opacity: var(--opacity-normal);
     font-size: var(--font-size-sm);
@@ -152,7 +152,7 @@ export const toolUseStyles = css`
     color: var(--color-text-link);
     cursor: pointer;
     font-size: var(--font-size-sm);
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-tiny);

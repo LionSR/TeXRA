@@ -80,7 +80,7 @@ export class ToolsTab extends LitElement {
         align-items: center;
         gap: var(--spacing-small);
         font-size: var(--font-size-lg);
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         color: var(--vscode-foreground);
       }
 
@@ -123,7 +123,7 @@ export class ToolsTab extends LitElement {
         margin-bottom: var(--spacing-medium);
         border-bottom: var(--border-thin) solid var(--color-border);
         font-size: var(--font-size-sm);
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         color: var(--color-text-secondary);
         text-transform: uppercase;
         letter-spacing: 0.5px;

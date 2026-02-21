@@ -17,6 +17,7 @@ export const logEntryStyles = css`
     font-size: var(--font-size);
     position: relative;
     overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .log-line {
@@ -165,7 +166,7 @@ export const logEntryStyles = css`
   .file-list-summary {
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
   }
 
   /* Note: .toggle-icon and .details-summary base styles are in commonViewStyles */
@@ -238,7 +239,7 @@ export const logEntryStyles = css`
     align-items: center;
     gap: var(--spacing-small);
     font-size: var(--font-size);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
   }
 
   .banner-details {

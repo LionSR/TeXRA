@@ -173,7 +173,7 @@ export class LaTeXTab extends LitElement {
         align-items: center;
         gap: var(--spacing-small);
         font-size: var(--font-size-lg);
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         color: var(--vscode-foreground);
       }
 
@@ -217,7 +217,7 @@ export class LaTeXTab extends LitElement {
       }
 
       .dependency-name {
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         color: var(--vscode-foreground);
       }
 
@@ -319,7 +319,7 @@ export class LaTeXTab extends LitElement {
       }
 
       .prerequisite-hint .hint-title {
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         color: var(--vscode-foreground);
         margin-bottom: 2px;
       }
@@ -345,7 +345,7 @@ export class LaTeXTab extends LitElement {
         margin-bottom: var(--spacing-medium);
         border-bottom: var(--border-thin) solid var(--color-border);
         font-size: var(--font-size-sm);
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         color: var(--color-text-secondary);
         text-transform: uppercase;
         letter-spacing: 0.5px;
@@ -382,7 +382,7 @@ export class LaTeXTab extends LitElement {
       }
 
       .setting-name {
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         color: var(--vscode-foreground);
         margin-bottom: 2px;
       }
@@ -412,7 +412,7 @@ export class LaTeXTab extends LitElement {
         font-size: var(--font-size-xs, 11px);
         padding: 2px 6px;
         border-radius: var(--radius-small, 3px);
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
       }
 
       .setting-badge.is-set {
