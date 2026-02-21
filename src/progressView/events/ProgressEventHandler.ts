@@ -230,6 +230,7 @@ export class ProgressEventHandler {
           this.progressThrottleTimer = null;
         }
         this.pendingProgressUpdates.clear();
+        this.pendingTaskGroups.clear();
       }),
     ];
   }

@@ -122,7 +122,7 @@ export class ToolUseCycleNode<C> extends Node<
       shared.shouldSkipCycle = false;
     }
 
-    const workspaceSnapshot = prepRes.workspaceState.toSnapshot();
+    const workspaceSnapshot = prepRes.workspaceState.toSnapshot({ excludeAssemblyStrings: true });
     shared.stateSlices = {
       runStateSnapshot: prepRes.runState,
       workspaceSnapshot,

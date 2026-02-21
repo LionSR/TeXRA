@@ -34,6 +34,7 @@ import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
+import { clearStoreCache } from '@agent/storage';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -321,6 +322,9 @@ export async function deactivate() {
 
   // Flush pending progress-view persistence writes before teardown.
   await progressViewProviderInstance?.flushState();
+
+  // Release cached KV store wrappers
+  clearStoreCache();
 
   // Notify all listeners that extension is deactivating
   bus.emit('extensionDeactivating', undefined);

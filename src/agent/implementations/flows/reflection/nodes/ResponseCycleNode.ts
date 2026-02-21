@@ -163,7 +163,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
     shared.lastError = undefined;
     shared.runStateSnapshot = prepRes.run;
-    shared.workspaceSnapshot = prepRes.workspace.toSnapshot();
+    shared.workspaceSnapshot = prepRes.workspace.toSnapshot({ excludeAssemblyStrings: true });
     shared.conversation = shared.context!.messages;
     shared.roundStateSnapshots.push(shared.context!.stateRoundSnapshot);
 
