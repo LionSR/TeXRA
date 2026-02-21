@@ -37,13 +37,6 @@ import type { MessageHandlerContext } from './messageDispatcher';
 // Local imports - shared schemas (types)
 import type { StreamTabId } from '@shared/schemas';
 
-// Local imports - message dispatcher
-import {
-  removePrompt,
-  resolvedProposalIds,
-  type MessageHandlerContext,
-} from './messageDispatcher';
-
 // Local imports - component types
 import type { FollowUpInput } from './components/FollowUpInput';
 

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import {
+  MESSAGE_TYPES,
   STREAM_STATUS,
   type ConversationProgress,
   type StorageKey,
