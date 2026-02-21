@@ -219,6 +219,22 @@ export class TaskGroupList extends LitElement {
         this.updateTimelineMessageRefs();
       }
     }
+
+    // Recompute tool-use timeline only when inputs change
+    if (this.isToolUse && (groupsChanged || messagesChanged)) {
+      this.cachedTimeline = [
+        ...this.cachedUngrouped.map((m) => ({
+          key: m.id,
+          time: m.timestamp ?? 0,
+          msg: m,
+        })),
+        ...this.cachedTree.map((t) => ({
+          key: t.group.id,
+          time: t.group.startTime ?? 0,
+          tree: t,
+        })),
+      ].sort((a, b) => a.time - b.time);
+    }
   }
 
   /**
