@@ -483,8 +483,8 @@ Both views render the same two-tab `<vscode-tabs>` header. The `.selectedIndex` 
 ```html
 <div class="view-header">
   <vscode-tabs
-    .selectedIndex=${this.activeViewIndex}
-    @vsc-tabs-select=${this.onViewTabSelect}
+    .selectedIndex="${this.activeViewIndex}"
+    @vsc-tabs-select="${this.onViewTabSelect}"
   >
     <vscode-tab-header slot="header">
       <span class="codicon codicon-edit"></span>
@@ -497,15 +497,19 @@ Both views render the same two-tab `<vscode-tabs>` header. The `.selectedIndex` 
   </vscode-tabs>
 
   <!-- Action button: pop-out (sidebar) or pop-back (editor) -->
-  ${this.isEditorMode
-    ? html`<vscode-button appearance="icon" @click=${this.onPopBack}
-        title="Back to sidebar">
-        <span class="codicon codicon-layout-sidebar-right"></span>
-      </vscode-button>`
-    : html`<vscode-button appearance="icon" @click=${this.onPopOut}
-        title="Open in editor">
-        <span class="codicon codicon-link-external"></span>
-      </vscode-button>`}
+  ${this.isEditorMode ? html`<vscode-button
+    appearance="icon"
+    @click="${this.onPopBack}"
+    title="Back to sidebar"
+  >
+    <span class="codicon codicon-layout-sidebar-right"></span> </vscode-button
+  >` : html`<vscode-button
+    appearance="icon"
+    @click="${this.onPopOut}"
+    title="Open in editor"
+  >
+    <span class="codicon codicon-link-external"></span> </vscode-button
+  >`}
 </div>
 ```
 
@@ -532,12 +536,12 @@ The `<vscode-tabs>` header CSS needs a small override to sit inline with the act
 
 #### Files Modified
 
-| File | Change |
-|---|---|
-| `src/webview/frontend/MainApp.ts` | Add `vscode-tabs` header with toggle and pop-out button |
-| `src/progressView/frontend/ProgressApp.ts` | Add `vscode-tabs` header with toggle and pop-out/pop-back buttons |
-| `src/progressView/ProgressViewMessageHandler.ts` | Send placement context via `SET_PLACEMENT` |
-| `src/shared/schemas/progressView.ts` | Add placement enum and `SET_PLACEMENT` outbound message |
+| File                                             | Change                                                            |
+| ------------------------------------------------ | ----------------------------------------------------------------- |
+| `src/webview/frontend/MainApp.ts`                | Add `vscode-tabs` header with toggle and pop-out button           |
+| `src/progressView/frontend/ProgressApp.ts`       | Add `vscode-tabs` header with toggle and pop-out/pop-back buttons |
+| `src/progressView/ProgressViewMessageHandler.ts` | Send placement context via `SET_PLACEMENT`                        |
+| `src/shared/schemas/progressView.ts`             | Add placement enum and `SET_PLACEMENT` outbound message           |
 
 ## Surface Area
 

@@ -193,10 +193,16 @@ export class ProgressApp extends ProgressAppBase {
    * don't trigger recomputation.
    */
   private filteredStreams$ = combine(
-    [this.streamById$, this.streamFilter$, this.streamSort$, this.streamStates$] as const,
+    [
+      this.streamById$,
+      this.streamFilter$,
+      this.streamSort$,
+      this.streamStates$,
+    ] as const,
     (streamById, filter, sort, states) => {
       const sorted = sortStreams([...streamById.values()], sort, {
-        getLastActivityTimestamp: (stream) => states.get(stream.name)?.lastTimestamp,
+        getLastActivityTimestamp: (stream) =>
+          states.get(stream.name)?.lastTimestamp,
       });
       if (filter === 'all') return sorted;
       return sorted.filter((stream) => stream.agentCategory === filter);

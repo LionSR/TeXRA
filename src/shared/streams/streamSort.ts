@@ -25,10 +25,8 @@ function compareByTime(
   b: StreamTabInfo,
   options?: StreamSortOptions,
 ): number {
-  const aTime =
-    options?.getLastActivityTimestamp?.(a) ?? a.creationTimestamp;
-  const bTime =
-    options?.getLastActivityTimestamp?.(b) ?? b.creationTimestamp;
+  const aTime = options?.getLastActivityTimestamp?.(a) ?? a.creationTimestamp;
+  const bTime = options?.getLastActivityTimestamp?.(b) ?? b.creationTimestamp;
   return bTime - aTime;
 }
 

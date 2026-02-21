@@ -24,3 +24,6 @@ supabase/.temp
 
 slides/
 .texpadtmp
+
+scripts/Heap-20260221T154935.heapsnapshot
+scripts/analyze_heap.py

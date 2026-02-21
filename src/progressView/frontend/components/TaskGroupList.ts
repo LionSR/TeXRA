@@ -196,9 +196,7 @@ export class TaskGroupList extends LitElement {
       changedProperties.has('groups') ||
       changedProperties.has('activeRunId')
     ) {
-      this.cachedRootGroupIds = new Set(
-        this.cachedTree.map((t) => t.group.id),
-      );
+      this.cachedRootGroupIds = new Set(this.cachedTree.map((t) => t.group.id));
     }
 
     // Recompute tool-use timeline incrementally when possible
@@ -244,7 +242,9 @@ export class TaskGroupList extends LitElement {
   ): void {
     const msgTime = message.timestamp ?? 0;
     const lastTs =
-      target.length > 0 ? (target[target.length - 1].timestamp ?? 0) : -Infinity;
+      target.length > 0
+        ? (target[target.length - 1].timestamp ?? 0)
+        : -Infinity;
     if (msgTime >= lastTs) {
       target.push(message);
     } else {

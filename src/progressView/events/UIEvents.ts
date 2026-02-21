@@ -31,10 +31,7 @@ export interface UICallbacks {
     streamId: string,
     bypassActive: boolean,
   ) => void;
-  updateSuperYoloBypassState: (
-    streamId: string,
-    bypassActive: boolean,
-  ) => void;
+  updateSuperYoloBypassState: (streamId: string, bypassActive: boolean) => void;
   showBashPermission: (
     payload: ProgressEventPayloads['showBashPermission'],
   ) => void;
@@ -114,11 +111,7 @@ export function registerUIEvents(
   registerEvent(
     bus,
     'updateSuperYoloBypassState',
-    (p) =>
-      callbacks.updateSuperYoloBypassState(
-        p.streamId,
-        p.bypassActive,
-      ),
+    (p) => callbacks.updateSuperYoloBypassState(p.streamId, p.bypassActive),
     'failed to update super yolo bypass state',
     signal,
   );

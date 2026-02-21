@@ -51,7 +51,9 @@ function buildStreamInfo(
   if (category === null) return null;
 
   const creationTimestamp =
-    state.streamTabs.getFirstTimestamp(id) ?? hints.creationTimestamp ?? Date.now();
+    state.streamTabs.getFirstTimestamp(id) ??
+    hints.creationTimestamp ??
+    Date.now();
 
   // Agent and file info (with fallbacks to hints)
   const inputFile = config?.inputFile ?? '';

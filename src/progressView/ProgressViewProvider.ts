@@ -149,10 +149,7 @@ export class ProgressViewProvider
               bypassActive,
             );
         },
-        updateSuperYoloBypassState: (
-          streamId,
-          bypassActive,
-        ) => {
+        updateSuperYoloBypassState: (streamId, bypassActive) => {
           if (canSend())
             u.updateBypassState(
               streamId as StreamTabId,
