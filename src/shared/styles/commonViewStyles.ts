@@ -228,7 +228,10 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .tab-action-btn:active {
-    background: var(--vscode-toolbar-activeBackground, rgba(99, 102, 103, 0.31));
+    background: var(
+      --vscode-toolbar-activeBackground,
+      rgba(99, 102, 103, 0.31)
+    );
   }
 
   .tab-action-btn:focus-visible {

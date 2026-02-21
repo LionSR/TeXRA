@@ -36,7 +36,13 @@ import {
   type StreamState,
 } from './store';
 import { getFilteredStreams } from './stateUtils';
-import { SignalWatcher, signal, Signal, select } from './signals';
+import {
+  SignalWatcher,
+  signal,
+  Signal,
+  select,
+  combine,
+} from '@shared/signals';
 
 /** Schema for persisted preferences. */
 const ProgressViewPrefsSchema = z.object({
@@ -177,40 +183,41 @@ export class ProgressApp extends ProgressAppBase {
   // --- Derived computeds: only re-evaluate when selector inputs propagate ---
 
   /** Filtered + sorted stream list. Re-evaluates when streams, filter, sort, or streamStates change. */
-  private filteredStreams$ = new Signal.Computed(() => {
-    // Read all dependencies so Signal.Computed tracks them:
-    const state = this.appState.get();
-    // Touch streamStates so timestamp-based re-sorts propagate
-    void this.streamStates$.get();
-    return getFilteredStreams(state);
-  });
+  private filteredStreams$ = combine(
+    [this.appState, this.streamStates$] as const,
+    (state, _states) => getFilteredStreams(state),
+  );
 
   private filteredStreamMap$ = new Signal.Computed(
     () => new Map(this.filteredStreams$.get().map((s) => [s.name, s])),
   );
 
   /** Status string per stream tab. */
-  private statusById$ = new Signal.Computed(() => {
-    const states = this.streamStates$.get();
-    const map = new Map<StreamTabId, string>();
-    for (const stream of this.filteredStreams$.get()) {
-      map.set(
-        stream.name,
-        states.get(stream.name)?.status ?? STREAM_STATUS.READY,
-      );
-    }
-    return map;
-  });
+  private statusById$ = combine(
+    [this.streamStates$, this.filteredStreams$] as const,
+    (states, streams) => {
+      const map = new Map<StreamTabId, string>();
+      for (const stream of streams) {
+        map.set(
+          stream.name,
+          states.get(stream.name)?.status ?? STREAM_STATUS.READY,
+        );
+      }
+      return map;
+    },
+  );
 
   /** Last timestamp per stream tab. */
-  private timestampById$ = new Signal.Computed(() => {
-    const states = this.streamStates$.get();
-    const map = new Map<StreamTabId, number | undefined>();
-    for (const stream of this.filteredStreams$.get()) {
-      map.set(stream.name, states.get(stream.name)?.lastTimestamp);
-    }
-    return map;
-  });
+  private timestampById$ = combine(
+    [this.streamStates$, this.filteredStreams$] as const,
+    (states, streams) => {
+      const map = new Map<StreamTabId, number | undefined>();
+      for (const stream of streams) {
+        map.set(stream.name, states.get(stream.name)?.lastTimestamp);
+      }
+      return map;
+    },
+  );
 
   /** Stream context derived from active stream + state. */
   private streamContext$ = new Signal.Computed((): StreamContextValue => {

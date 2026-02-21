@@ -115,6 +115,20 @@ export class TaskGroupList extends LitElement {
   @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
   private scrollContainer?: HTMLElement;
 
+  /**
+   * Sticky scroll state: when true, new content auto-scrolls to bottom.
+   * Flips false when user scrolls away, true when user scrolls back to bottom.
+   */
+  private isSticky = true;
+
+  /** Threshold for detecting "near bottom" in scroll listener (px) */
+  private static readonly STICKY_THRESHOLD = 150;
+
+  /** Handle scroll events from vscode-scrollable to track user intent */
+  private handleVscScroll = (): void => {
+    this.isSticky = this.isNearBottom(TaskGroupList.STICKY_THRESHOLD);
+  };
+
   /** Public method to scroll to bottom - called by parent LogList */
   scrollToBottom(): void {
     if (this.scrollContainer) {
@@ -122,11 +136,31 @@ export class TaskGroupList extends LitElement {
     }
   }
 
-  /** Scroll to bottom only when the user is already near the end. */
-  scrollToBottomIfNearEnd(threshold = 32): void {
-    if (!this.scrollContainer) return;
-    if (!this.isNearBottom(threshold)) return;
-    scrollToBottom(this.scrollContainer);
+  /** Scroll to bottom only when sticky (user hasn't scrolled away). */
+  scrollToBottomIfSticky(): void {
+    if (!this.isSticky) return;
+    this.scrollToBottom();
+  }
+
+  /** Force sticky state — called by parent on tab switch */
+  setSticky(value: boolean): void {
+    this.isSticky = value;
+  }
+
+  override firstUpdated(): void {
+    this.scrollContainer?.addEventListener(
+      'vsc-scrollable-scroll',
+      this.handleVscScroll,
+      { passive: true },
+    );
+  }
+
+  override disconnectedCallback(): void {
+    this.scrollContainer?.removeEventListener(
+      'vsc-scrollable-scroll',
+      this.handleVscScroll,
+    );
+    super.disconnectedCallback();
   }
 
   override willUpdate(changedProperties: Map<string, unknown>): void {

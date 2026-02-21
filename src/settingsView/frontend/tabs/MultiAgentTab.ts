@@ -103,7 +103,11 @@ export class MultiAgentTab extends LitElement {
         font-size: var(--font-size-xs);
         font-weight: var(--font-weight-medium);
         color: var(--vscode-focusBorder);
-        background: color-mix(in srgb, var(--vscode-focusBorder) 15%, transparent);
+        background: color-mix(
+          in srgb,
+          var(--vscode-focusBorder) 15%,
+          transparent
+        );
         border-radius: var(--border-radius-medium, 4px);
       }
 
@@ -342,11 +346,6 @@ export class MultiAgentTab extends LitElement {
     return html`
       <div class="multi-agent-container tab-content-container">
         <h3>Mode Presets</h3>
-
-        <p class="text-secondary setting-description">
-          Apply a preset to quickly configure which agents are enabled for your
-          workflow. This updates the Agents tab selection.
-        </p>
 
         <div class="preset-grid">
           ${AGENT_MODE_PRESETS.map((p) => this.renderPresetCard(p, false))}

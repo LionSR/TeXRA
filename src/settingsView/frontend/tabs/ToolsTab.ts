@@ -320,10 +320,6 @@ export class ToolsTab extends LitElement {
     return html`
       <div class="tools-container tab-content-container">
         <div class="tools-header">
-          <div class="tools-title">
-            <span class="codicon codicon-tools"></span>
-            Tool Dashboard
-          </div>
           <div class="tools-header-actions">
             ${this.renderSummary()}
             <button

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import {
+  MESSAGE_TYPES,
   STREAM_STATUS,
   type ConversationProgress,
   type StorageKey,
@@ -14,7 +15,10 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
-import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
+import {
+  mapToRecord,
+  nestedMapToRecord,
+} from '@progressView/persistence/serializationUtils';
 import {
   ProgressViewState,
   type ActiveStreamId,
@@ -24,13 +28,8 @@ import { bus } from '@eventBus/ProgressEventBus';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { streamEventQueue } from '@eventBus/StreamEventQueue';
 
-import { withEventErrorHandling } from './errorHandling';
-import { registerFollowUpEventHandlers } from './FollowUpEventHandlers';
-import { registerLogEventHandlers } from './LogEventHandlers';
-import { registerOutputEventHandlers } from './OutputEventHandlers';
-import { registerTodoEventHandlers } from './TodoEventHandlers';
+import { registerHandlers } from './registerHandlers';
 import { registerUIEvents, type UICallbacks } from './UIEvents';
-import { registerUsageEventHandlers } from './UsageEventHandlers';
 import type { EventHandlerContext } from './EventHandlerContext';
 
 export type { UICallbacks };
@@ -78,32 +77,148 @@ export class ProgressEventHandler {
     const controller = new AbortController();
     const { signal } = controller;
 
-    bus.on('setActiveStream', this.handleSetActiveStream, { signal });
-    bus.on('updateStreamStatus', this.handleUpdateStreamStatus, { signal });
-    bus.on('setTaskState', this.handleSetTaskState, { signal });
-    bus.on('addTaskGroup', this.handleAddTaskGroup, { signal });
-    bus.on('updateTaskGroup', this.handleUpdateTaskGroup, { signal });
-    bus.on(
-      'updateConversationProgress',
-      this.handleUpdateConversationProgress,
-      { signal },
-    );
-    bus.on('updateActiveSubagents', this.handleUpdateActiveSubagents, {
-      signal,
-    });
-    bus.on('updateActiveProcesses', this.handleUpdateActiveProcesses, {
-      signal,
-    });
-    bus.on('setParentStream', this.handleSetParentStream, { signal });
-    bus.on('extensionDeactivating', this.markAllRunningTasksAsCancelled, {
-      signal,
-    });
+    // All event handlers — unified registration with automatic error wrapping.
+    // Class-level handlers are wrapped as context handlers (ignoring ctx).
+    registerHandlers(
+      bus,
+      this.ctx,
+      {
+        // Stream lifecycle
+        setActiveStream: (_ctx, payload) => this.handleSetActiveStream(payload),
+        updateStreamStatus: (_ctx, payload) =>
+          this.handleUpdateStreamStatus(payload),
+        setTaskState: (_ctx, data) => this.handleSetTaskState(data),
+        addTaskGroup: (_ctx, data) => this.handleAddTaskGroup(data),
+        updateTaskGroup: (_ctx, data) => this.handleUpdateTaskGroup(data),
+        updateConversationProgress: (_ctx, data) =>
+          this.handleUpdateConversationProgress(data),
+        updateActiveSubagents: (_ctx, data) =>
+          this.handleUpdateActiveSubagents(data),
+        updateActiveProcesses: (_ctx, data) =>
+          this.handleUpdateActiveProcesses(data),
+        setParentStream: (_ctx, data) => this.handleSetParentStream(data),
+        extensionDeactivating: () => this.markAllRunningTasksAsCancelled(),
 
-    registerLogEventHandlers(bus, this.ctx, signal);
-    registerOutputEventHandlers(bus, this.ctx, signal);
-    registerUsageEventHandlers(bus, this.ctx, signal);
-    registerTodoEventHandlers(bus, this.ctx, signal);
-    registerFollowUpEventHandlers(bus, this.ctx, signal);
+        // Log events
+        addLogMessage: (ctx, { streamId, logMessage }) => {
+          const isNew = ctx.state.streamTabs.addMessage(streamId, logMessage);
+          if (isNew) {
+            this.sendIfActive(streamId, () =>
+              ctx.webviewUpdater.appendLogMessage(streamId, logMessage),
+            );
+          }
+        },
+        updateLogMessage: (ctx, { streamId, logMessage }) => {
+          if (logMessage.messageType === MESSAGE_TYPES.INTERNAL) return;
+          if (!ctx.state.streamTabs.has(streamId)) return;
+          const { id: _id, ...updates } = logMessage;
+          const existing = ctx.state.streamTabs.updateMessage(
+            streamId,
+            logMessage.id,
+            updates,
+            (msg) => msg.messageType !== MESSAGE_TYPES.INTERNAL,
+          );
+          if (!existing) return;
+          this.sendIfActive(streamId, () => {
+            const merged = { ...existing, ...updates };
+            if (updates.messageType === undefined && existing.messageType) {
+              merged.messageType = existing.messageType;
+            }
+            ctx.webviewUpdater.updateLogMessage(streamId, merged);
+          });
+        },
+        // Output events
+        addOutputFiles: async (ctx, { streamId, storageKey, filesByRound }) => {
+          await ctx.state.outputFiles.addFiles(
+            streamId,
+            storageKey,
+            filesByRound,
+          );
+          this.sendIfActive(streamId, () => {
+            const runFiles = ctx.state.outputFiles
+              .getFiles(streamId)
+              .get(storageKey);
+            const rounds = runFiles?.size ? mapToRecord(runFiles) : undefined;
+            ctx.webviewUpdater.updateFiles(streamId, {
+              runId: storageKey,
+              rounds,
+            });
+          });
+        },
+        updateMissingOutputs: async (
+          ctx,
+          { streamId, storageKey, filesByRound },
+        ) => {
+          await ctx.state.outputFiles.updateMissingOutputs(
+            streamId,
+            storageKey,
+            filesByRound,
+          );
+          this.sendIfActive(streamId, () => {
+            const runMissing = ctx.state.outputFiles
+              .getMissingOutputs(streamId)
+              .get(storageKey);
+            const rounds = runMissing?.size
+              ? mapToRecord(runMissing)
+              : undefined;
+            ctx.webviewUpdater.updateMissingOutputs(streamId, {
+              runId: storageKey,
+              rounds,
+            });
+          });
+        },
+        clearMissingOutputs: async (ctx, { streamId }) => {
+          await ctx.state.outputFiles.clearMissingOutputs(streamId);
+          this.sendIfActive(streamId, () =>
+            ctx.webviewUpdater.updateMissingOutputs(streamId, { reset: true }),
+          );
+        },
+        // Usage events
+        updateStreamUsage: async (ctx, { streamId, usage, storageKey }) => {
+          const accumulated = await ctx.state.usageStats.setRunUsage(
+            streamId,
+            storageKey,
+            usage,
+          );
+          if (!ctx.state.getActiveRunId(streamId)) {
+            ctx.state.setActiveRunId(streamId, storageKey);
+          }
+          if (accumulated) {
+            this.sendIfActive(streamId, () =>
+              ctx.webviewUpdater.updateRunUsage(
+                streamId,
+                storageKey,
+                accumulated,
+              ),
+            );
+          }
+        },
+        updateContextState: (ctx, { streamId, contextState }) => {
+          ctx.state.setContextState(streamId, contextState);
+          this.sendIfActive(streamId, () =>
+            ctx.webviewUpdater.updateContextState(streamId, contextState),
+          );
+        },
+        // Todo events
+        updateTodos: (ctx, { streamId, todos }) => {
+          ctx.state.setTodos(streamId, todos);
+          this.sendIfActive(streamId, () =>
+            ctx.webviewUpdater.updateTodos(streamId, todos),
+          );
+        },
+        // Follow-up events
+        updateQueuedFollowUps: (ctx, { streamId }) => {
+          this.sendIfActive(streamId, () => {
+            const messages = ToolUseFollowUpQueue.getAll(streamId);
+            ctx.webviewUpdater.updateQueuedFollowUps(streamId, messages);
+          });
+        },
+      },
+      signal,
+      'ProgressEvents',
+    );
+
+    // UI callback handlers (different pattern — no state, no active-stream guard)
     registerUIEvents(bus, this.uiCallbacks, signal);
 
     return [
@@ -118,122 +233,111 @@ export class ProgressEventHandler {
     ];
   }
 
-  private handleSetActiveStream = (
+  /** Send to webview only if streamId is the active stream. */
+  private sendIfActive(streamId: string, send: () => void): void {
+    if (
+      streamId === this.state.activeStream &&
+      this.webviewUpdater.isAvailable()
+    ) {
+      send();
+    }
+  }
+
+  private handleSetActiveStream(
     payload: ProgressEventPayloads['setActiveStream'],
-  ): void => {
-    withEventErrorHandling(
-      'StreamStatus',
-      'failed to handle setActiveStream',
-      () => {
-        const { streamId, agentCategory, isRemote, hasMultipleOutputs } =
-          payload;
-        if (!streamId) return;
+  ): void {
+    const { streamId, agentCategory, isRemote, hasMultipleOutputs } = payload;
+    if (!streamId) return;
 
-        const wasKnownStream = this.state.streamTabs.has(streamId);
-        const previousFilter = this.state.agentCategoryFilter;
-        this.state.streamTabs.ensureStream(streamId);
-        this.state.updateStreamHints(streamId, {
-          agentCategory,
-          isRemote,
-          hasMultipleOutputs,
-        });
-        // Ensure stream state exists so it's included in getAllStreamStates()
-        if (agentCategory) {
-          this.state.getOrCreateStreamState(streamId, agentCategory);
-        }
-        this.maybeUpdateFilterForCategory(agentCategory);
-        this.state.activeStream = streamId;
-        this.replayPendingTaskGroups(streamId);
+    const wasKnownStream = this.state.streamTabs.has(streamId);
+    const previousFilter = this.state.agentCategoryFilter;
+    this.state.streamTabs.ensureStream(streamId);
+    this.state.updateStreamHints(streamId, {
+      agentCategory,
+      isRemote,
+      hasMultipleOutputs,
+    });
+    // Ensure stream state exists so it's included in getAllStreamStates()
+    if (agentCategory) {
+      this.state.getOrCreateStreamState(streamId, agentCategory);
+    }
+    this.maybeUpdateFilterForCategory(agentCategory);
+    this.state.activeStream = streamId;
+    this.replayPendingTaskGroups(streamId);
 
-        if (!this.webviewUpdater.isAvailable()) return;
+    if (!this.webviewUpdater.isAvailable()) return;
 
-        const filterChanged = this.state.agentCategoryFilter !== previousFilter;
-        if (!wasKnownStream || filterChanged) {
-          this.webviewUpdater.sendStreamMetadata(
-            this.state,
-            StreamStatusService.getAll(),
-          );
-        } else {
-          this.webviewUpdater.setActiveStream(streamId);
-        }
-        // Known-stream path: include active-stream state in the batch
-        // so we don't need separate progress/badges/parent messages.
-        this.syncStreamContent(streamId, {
-          updateInstruction: true,
-          includeActiveState: wasKnownStream && !filterChanged,
-        });
-      },
-    );
-  };
+    const filterChanged = this.state.agentCategoryFilter !== previousFilter;
+    if (!wasKnownStream || filterChanged) {
+      this.webviewUpdater.sendStreamMetadata(
+        this.state,
+        StreamStatusService.getAll(),
+      );
+    } else {
+      this.webviewUpdater.setActiveStream(streamId);
+    }
+    // Known-stream path: include active-stream state in the batch
+    // so we don't need separate progress/badges/parent messages.
+    this.syncStreamContent(streamId, {
+      updateInstruction: true,
+      includeActiveState: wasKnownStream && !filterChanged,
+    });
+  }
 
-  private handleUpdateStreamStatus = (
+  private handleUpdateStreamStatus(
     payload: ProgressEventPayloads['updateStreamStatus'],
-  ): void => {
-    withEventErrorHandling(
-      'StreamStatus',
-      'failed to handle updateStreamStatus',
-      () =>
-        this.setStreamStatus(
-          payload.streamId,
-          payload.status,
-          payload.previousStatus,
-        ),
+  ): void {
+    this.setStreamStatus(
+      payload.streamId,
+      payload.status,
+      payload.previousStatus,
     );
-  };
+  }
 
-  private handleSetTaskState = (
+  private handleSetTaskState(
     data: ProgressEventPayloads['setTaskState'],
-  ): void => {
-    withEventErrorHandling(
-      'StreamStatus',
-      'failed to handle setTaskState',
-      () => {
-        const { streamId, executionId, taskState } = data;
-        const isActiveStream = this.state.activeStream === streamId;
-        const category = taskState.agentConfig.agentCategory;
-        const previousFilter = this.state.agentCategoryFilter;
+  ): void {
+    const { streamId, executionId, taskState } = data;
+    const isActiveStream = this.state.activeStream === streamId;
+    const category = taskState.agentConfig.agentCategory;
+    const previousFilter = this.state.agentCategoryFilter;
 
-        this.state.setTaskState(streamId, taskState);
+    this.state.setTaskState(streamId, taskState);
 
-        if (isActiveStream) {
-          this.maybeUpdateFilterForCategory(category);
-        }
+    if (isActiveStream) {
+      this.maybeUpdateFilterForCategory(category);
+    }
 
-        if (executionId) {
-          this.state.setExecutionId(streamId, executionId);
-        }
+    if (executionId) {
+      this.state.setExecutionId(streamId, executionId);
+    }
 
-        if (isActiveStream) {
-          this.sendInstructionUpdate(streamId);
-        }
+    if (isActiveStream) {
+      this.sendInstructionUpdate(streamId);
+    }
 
-        if (this.webviewUpdater.isAvailable()) {
-          const filterChanged =
-            this.state.agentCategoryFilter !== previousFilter;
-          if (filterChanged || isActiveStream) {
-            // sendStreamMetadata rebuilds StreamTabInfo[] for all visible streams.
-            // This fires once per run start (not during streaming) so the O(N)
-            // cost is acceptable. We need it here because setTaskState may change
-            // agentConfig (agent name, model, label) which the frontend tabs display.
-            this.webviewUpdater.sendStreamMetadata(
-              this.state,
-              StreamStatusService.getAll(),
-            );
-          }
-        }
-      },
-    );
-  };
+    if (this.webviewUpdater.isAvailable()) {
+      const filterChanged = this.state.agentCategoryFilter !== previousFilter;
+      if (filterChanged || isActiveStream) {
+        // sendStreamMetadata rebuilds StreamTabInfo[] for all visible streams.
+        // This fires once per run start (not during streaming) so the O(N)
+        // cost is acceptable. We need it here because setTaskState may change
+        // agentConfig (agent name, model, label) which the frontend tabs display.
+        this.webviewUpdater.sendStreamMetadata(
+          this.state,
+          StreamStatusService.getAll(),
+        );
+      }
+    }
+  }
 
-  private handleAddTaskGroup = (
+  private handleAddTaskGroup(
     data: ProgressEventPayloads['addTaskGroup'],
-  ): void => {
-    withEventErrorHandling('TaskGroup', 'failed to handle addTaskGroup', () =>
-      streamEventQueue.enqueue(data.streamId, () =>
-        this.processAddTaskGroup(data),
-      ),
+  ): void {
+    streamEventQueue.enqueue(data.streamId, () =>
+      this.processAddTaskGroup(data),
     );
-  };
+  }
 
   private async processAddTaskGroup(
     data: ProgressEventPayloads['addTaskGroup'],
@@ -263,18 +367,13 @@ export class ProgressEventHandler {
     }
   }
 
-  private handleUpdateTaskGroup = (
+  private handleUpdateTaskGroup(
     data: ProgressEventPayloads['updateTaskGroup'],
-  ): void => {
-    withEventErrorHandling(
-      'TaskGroup',
-      'failed to handle updateTaskGroup',
-      () =>
-        streamEventQueue.enqueue(data.streamId, () =>
-          this.processUpdateTaskGroup(data),
-        ),
+  ): void {
+    streamEventQueue.enqueue(data.streamId, () =>
+      this.processUpdateTaskGroup(data),
     );
-  };
+  }
 
   private async processUpdateTaskGroup(
     data: ProgressEventPayloads['updateTaskGroup'],
@@ -297,33 +396,27 @@ export class ProgressEventHandler {
     }
   }
 
-  private handleUpdateConversationProgress = (
+  private handleUpdateConversationProgress(
     data: ProgressEventPayloads['updateConversationProgress'],
-  ): void => {
-    withEventErrorHandling(
-      'ConversationProgress',
-      'failed to handle updateConversationProgress',
-      () => {
-        const { streamId, progress } = data;
+  ): void {
+    const { streamId, progress } = data;
 
-        // Always update state immediately so full metadata rebuilds include
-        // the latest values when structural refreshes happen.
-        this.state.updateStreamState(streamId, (prev) => ({
-          ...prev,
-          conversationProgress: progress,
-        }));
+    // Always update state immediately so full metadata rebuilds include
+    // the latest values when structural refreshes happen.
+    this.state.updateStreamState(streamId, (prev) => ({
+      ...prev,
+      conversationProgress: progress,
+    }));
 
-        // Throttle webview pushes: buffer per-stream, flush on timer
-        this.pendingProgressUpdates.set(streamId, progress);
-        if (!this.progressThrottleTimer) {
-          this.progressThrottleTimer = setTimeout(
-            () => this.flushProgressUpdates(),
-            PROGRESS_THROTTLE_MS,
-          );
-        }
-      },
-    );
-  };
+    // Throttle webview pushes: buffer per-stream, flush on timer
+    this.pendingProgressUpdates.set(streamId, progress);
+    if (!this.progressThrottleTimer) {
+      this.progressThrottleTimer = setTimeout(
+        () => this.flushProgressUpdates(),
+        PROGRESS_THROTTLE_MS,
+      );
+    }
+  }
 
   private flushProgressUpdates(): void {
     this.progressThrottleTimer = null;
@@ -346,35 +439,25 @@ export class ProgressEventHandler {
     this.pendingProgressUpdates.clear();
   }
 
-  private handleUpdateActiveSubagents = (
+  private handleUpdateActiveSubagents(
     data: ProgressEventPayloads['updateActiveSubagents'],
-  ): void => {
-    withEventErrorHandling(
-      'ActiveSubagents',
-      'failed to handle updateActiveSubagents',
-      () =>
-        this.updateActiveChildren(data.parentStreamId, {
-          activeField: 'activeSubagents',
-          countField: 'finishedSubagentCount',
-          next: data.children,
-        }),
-    );
-  };
+  ): void {
+    this.updateActiveChildren(data.parentStreamId, {
+      activeField: 'activeSubagents',
+      countField: 'finishedSubagentCount',
+      next: data.children,
+    });
+  }
 
-  private handleUpdateActiveProcesses = (
+  private handleUpdateActiveProcesses(
     data: ProgressEventPayloads['updateActiveProcesses'],
-  ): void => {
-    withEventErrorHandling(
-      'ActiveProcesses',
-      'failed to handle updateActiveProcesses',
-      () =>
-        this.updateActiveChildren(data.parentStreamId, {
-          activeField: 'activeProcesses',
-          countField: 'finishedProcessCount',
-          next: data.processes,
-        }),
-    );
-  };
+  ): void {
+    this.updateActiveChildren(data.parentStreamId, {
+      activeField: 'activeProcesses',
+      countField: 'finishedProcessCount',
+      next: data.processes,
+    });
+  }
 
   private updateActiveChildren(
     parentStreamId: StreamTabId,
@@ -415,32 +498,26 @@ export class ProgressEventHandler {
     }
   }
 
-  private handleSetParentStream = (
+  private handleSetParentStream(
     data: ProgressEventPayloads['setParentStream'],
-  ): void => {
-    withEventErrorHandling(
-      'SetParentStream',
-      'failed to handle setParentStream',
-      () => {
-        this.state.setParentStream(data.childStreamId, data.parentStreamId);
+  ): void {
+    this.state.setParentStream(data.childStreamId, data.parentStreamId);
 
-        if (this.webviewUpdater.isAvailable()) {
-          this.webviewUpdater.updateParentStream(
-            data.childStreamId,
-            data.parentStreamId,
-          );
-        }
-      },
-    );
-  };
+    if (this.webviewUpdater.isAvailable()) {
+      this.webviewUpdater.updateParentStream(
+        data.childStreamId,
+        data.parentStreamId,
+      );
+    }
+  }
 
-  private markAllRunningTasksAsCancelled = (): void => {
+  private markAllRunningTasksAsCancelled(): void {
     for (const [stream, status] of StreamStatusService.entries()) {
       if (status === STREAM_STATUS.RUNNING) {
         StreamStatusService.set(stream, STREAM_STATUS.STOPPED, { emit: false });
       }
     }
-  };
+  }
 
   private sendInstructionUpdate(
     stream: StreamTabId | '',

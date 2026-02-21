@@ -61,9 +61,9 @@ const DEPENDENCIES: DependencyInfo[] = [
   {
     key: 'texDistributionInstalled',
     name: 'TeX Distribution',
-    installedDesc: 'Installed — pdflatex/latexmk detected on PATH.',
+    installedDesc: 'pdflatex/latexmk detected on PATH.',
     missingDesc:
-      'Not found — a TeX distribution (TeX Live, MacTeX, or MiKTeX) is required to compile LaTeX documents.',
+      'A TeX distribution (TeX Live, MacTeX, or MiKTeX) is required to compile LaTeX documents.',
     installGuide: PDFLATEX_INSTALL_GUIDE,
     pathKeys: ['pdflatexPath', 'latexmkPath'],
   },
@@ -71,9 +71,9 @@ const DEPENDENCIES: DependencyInfo[] = [
     key: 'latexWorkshopInstalled',
     name: 'LaTeX Workshop',
     installedDesc:
-      'Installed — provides LaTeX compilation, PDF preview, and IntelliSense.',
+      'Provides LaTeX compilation, PDF preview, and IntelliSense.',
     missingDesc:
-      'Not installed — required for LaTeX compilation, PDF preview, and IntelliSense.',
+      'Required for LaTeX compilation, PDF preview, and IntelliSense.',
     actionEvent: 'latex-install-workshop',
     actionLabel: 'Install',
   },
@@ -81,9 +81,9 @@ const DEPENDENCIES: DependencyInfo[] = [
     key: 'latexdiffInstalled',
     name: 'latexdiff',
     installedDesc:
-      'Installed — enables visual comparison of LaTeX document revisions.',
+      'Enables visual comparison of LaTeX document revisions.',
     missingDesc:
-      'Not found — install via your TeX distribution to enable diff comparisons.',
+      'Install via your TeX distribution to enable diff comparisons.',
     installGuide: LATEXDIFF_INSTALL_GUIDE,
     pathKeys: ['latexdiffPath'],
   },
@@ -91,9 +91,9 @@ const DEPENDENCIES: DependencyInfo[] = [
     key: 'latexindentInstalled',
     name: 'latexindent',
     installedDesc:
-      'Installed — used by agents to clean up formatting after editing your LaTeX source.',
+      'Used by agents to clean up formatting after editing your LaTeX source.',
     missingDesc:
-      'Not found — without it, agents may produce inconsistent indentation ' +
+      'Without it, agents may produce inconsistent indentation ' +
       'when editing .tex files. Requires Perl.',
     installGuide: LATEXINDENT_INSTALL_GUIDE,
     pathKeys: ['latexindentPath'],
@@ -102,9 +102,9 @@ const DEPENDENCIES: DependencyInfo[] = [
     key: 'texcountInstalled',
     name: 'TeXcount',
     installedDesc:
-      'Installed — enables word, heading, and figure counting in LaTeX documents.',
+      'Enables word, heading, and figure counting in LaTeX documents.',
     missingDesc:
-      'Not found — without it, agents cannot count words or structural elements in your .tex files. ' +
+      'Without it, agents cannot count words or structural elements in your .tex files. ' +
       'Part of most TeX Live distributions.',
     installGuide: TEXCOUNT_INSTALL_GUIDE,
     pathKeys: ['texcountPath'],
@@ -113,9 +113,9 @@ const DEPENDENCIES: DependencyInfo[] = [
     key: 'imageProcessingInstalled',
     name: 'Image Processing',
     installedDesc:
-      'Installed — Ghostscript + GraphicsMagick/ImageMagick detected for PDF-to-PNG conversion.',
+      'Ghostscript + GraphicsMagick/ImageMagick detected for PDF-to-PNG conversion.',
     missingDesc:
-      'Not found — needed to generate PNG previews of compiled PDF pages. ' +
+      'Needed to generate PNG previews of compiled PDF pages. ' +
       'Requires Ghostscript and either GraphicsMagick or ImageMagick.',
     installGuide: IMAGE_PROCESSING_INSTALL_GUIDE,
     pathKeys: ['ghostscriptPath', 'graphicsmagickPath'],
@@ -733,13 +733,9 @@ export class LaTeXTab extends LitElement {
 
     return html`
       <div class="tab-content-container">
-        <div class="latex-header">
-          <div class="latex-title">
-            <span class="codicon codicon-file-code"></span>
-            LaTeX Settings
-          </div>
-          ${!this.allSettingsSet()
-            ? html`
+        ${!this.allSettingsSet()
+          ? html`
+              <div class="latex-header">
                 <button
                   class="tab-action-btn"
                   @click=${() => this.handleApply()}
@@ -748,9 +744,9 @@ export class LaTeXTab extends LitElement {
                   <span class="codicon codicon-check-all"></span>
                   Apply All
                 </button>
-              `
-            : nothing}
-        </div>
+              </div>
+            `
+          : nothing}
 
         ${this.renderDependencies()}
 

@@ -194,27 +194,9 @@ function buildTerminalSection(label: string, text: string): TemplateResult {
   );
 }
 
-/** Title prefix lookup based on tool state. */
-function getToolTitlePrefix(
-  isUserFeedback: boolean,
-  isError: boolean,
-  isInProgress: boolean,
-): string {
-  if (isUserFeedback) return 'User Feedback';
-  if (isError) return 'Tool Error';
-  if (isInProgress) return 'Running';
-  return 'Tool Use';
-}
-
-/** Build title base from tool name and prefix. */
-function buildTitleBase(
-  toolName: string,
-  titlePrefix: string,
-  isNormalToolUse: boolean,
-): string {
-  if (!toolName) return titlePrefix;
-  if (isNormalToolUse) return toolName;
-  return `${titlePrefix}: ${toolName}`;
+/** Build title base — always just the tool name; icon + color convey state. */
+function buildTitleBase(toolName: string): string {
+  return toolName || 'tool';
 }
 
 /** Format tool use log entry as TemplateResult. */
@@ -249,14 +231,8 @@ export function formatToolUseTemplate(
     iconClass = getToolIconClass(toolName, showAsError);
   }
 
-  // Build title
-  const titlePrefix = getToolTitlePrefix(
-    isUserFeedback,
-    showAsError,
-    isInProgress,
-  );
-  const isNormalToolUse = !isUserFeedback && !showAsError && !isInProgress;
-  const titleBase = buildTitleBase(toolName, titlePrefix, isNormalToolUse);
+  // Build title — icon + color convey state, so title is always just tool name
+  const titleBase = buildTitleBase(toolName);
 
   // Surface action + path for executions tool so it's visible without expanding
   const headerSummary =
@@ -302,7 +278,7 @@ export function formatToolUseTemplate(
       }
       sections.push(
         buildToolUseSection(
-          'Changes:',
+          '',
           buildEditDiffSection(editInput.old_str, editInput.new_str),
         ),
       );
@@ -329,7 +305,7 @@ export function formatToolUseTemplate(
     );
     const contentLanguage = getLanguageFromPath(filePath);
     sections.push(
-      buildToolSection('Content:', writeInput.content, {
+      buildToolSection('', writeInput.content, {
         toolName,
         language: contentLanguage,
       }),
@@ -360,7 +336,7 @@ export function formatToolUseTemplate(
       // str_replace: show diff (like edit_file)
       sections.push(
         buildToolUseSection(
-          'Changes:',
+          '',
           buildEditDiffSection(memInput.old_str, memInput.new_str),
         ),
       );
@@ -370,7 +346,7 @@ export function formatToolUseTemplate(
         ? getLanguageFromPath(memPath)
         : 'plaintext';
       sections.push(
-        buildToolSection('Content:', memInput.file_text, {
+        buildToolSection('', memInput.file_text, {
           language: contentLanguage,
         }),
       );
@@ -555,14 +531,14 @@ export function formatToolUseTemplate(
 
     if (isCodeOnly) {
       sections.push(
-        buildToolSection('Input:', code, { toolName, language: codeLanguage }),
+        buildToolSection('', code, { toolName, language: codeLanguage }),
       );
     } else {
       const { text: inputValue, language: inputLanguage } =
         stringifyWithLanguage(input);
       if (inputValue) {
         sections.push(
-          buildToolSection('Input:', inputValue, {
+          buildToolSection('', inputValue, {
             toolName,
             language: inputLanguage,
           }),
@@ -582,8 +558,8 @@ export function formatToolUseTemplate(
   ) {
     sections.push(
       toolName === 'bash'
-        ? buildTerminalSection('Output:', outputText)
-        : buildToolSection('Output:', outputText, {
+        ? buildTerminalSection('', outputText)
+        : buildToolSection('', outputText, {
             toolName,
             extraClass: 'tool-output-full',
           }),
@@ -675,12 +651,8 @@ export function formatWebSearchTemplate(
   if (query) titleText += `: "${query}"`;
   titleText += statusSuffix;
 
-  // Build content sections
+  // Build content sections — query is already in the title, only show sources
   const sections: TemplateResult[] = [];
-
-  if (query) {
-    sections.push(buildToolUseSection('Query:', wrapInPre(query)));
-  }
 
   if (resultCount > 0) {
     // prettier-ignore

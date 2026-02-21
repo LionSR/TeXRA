@@ -186,18 +186,20 @@ export class LogList extends LitElement {
 
     if (this.shouldScrollToBottom) {
       // Force scroll to bottom when switching to a different stream tab.
+      // Re-sticky so future content updates auto-scroll.
       // Must wait for child TaskGroupList to finish rendering (updateComplete)
       // and then for a layout pass (requestAnimationFrame) so vscode-scrollable
       // has an accurate scrollMax before we scroll.
       this.shouldScrollToBottom = false;
       void activeEl?.updateComplete.then(() => {
         requestAnimationFrame(() => {
+          activeEl?.setSticky(true);
           activeEl?.scrollToBottom();
         });
       });
     } else {
-      // Scroll to bottom after render if the user is already near the end
-      activeEl?.scrollToBottomIfNearEnd();
+      // Auto-scroll only when the user hasn't scrolled away (sticky)
+      activeEl?.scrollToBottomIfSticky();
     }
   }
 

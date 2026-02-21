@@ -72,19 +72,21 @@ export class UsagePanel extends LitElement {
       .context-gauge__fill {
         height: 100%;
         border-radius: 3px;
-        transition: width var(--transition-slow), background-color var(--transition-slow);
+        transition:
+          width var(--transition-slow),
+          background-color var(--transition-slow);
       }
 
       .context-gauge__fill--ok {
-        background-color: var(--color-success);
+        background-color: var(--vscode-testing-iconPassed, #73c991);
       }
 
       .context-gauge__fill--warn {
-        background-color: var(--color-warning);
+        background-color: var(--vscode-editorWarning-foreground, #cca700);
       }
 
       .context-gauge__fill--critical {
-        background-color: var(--color-error);
+        background-color: var(--vscode-testing-iconFailed, #f48771);
       }
 
       .run-summary {
@@ -186,18 +188,11 @@ export class UsagePanel extends LitElement {
     if (!this.contextState) return nothing;
     const { inputTokens, contextWindow, utilizationPercent } =
       this.contextState;
-    const contextLeft = Math.max(0, 100 - utilizationPercent);
     const clamped = Math.min(100, Math.max(0, utilizationPercent));
-    const level =
-      clamped >= 80 ? 'critical' : clamped >= 60 ? 'warn' : 'ok';
+    const level = clamped >= 80 ? 'critical' : clamped >= 60 ? 'warn' : 'ok';
 
     return html`
-      <span
-        class="context-gauge"
-        title="${formatTokens(inputTokens)} / ${formatTokens(
-          contextWindow,
-        )} tokens used"
-      >
+      <span class="context-gauge" title="${clamped.toFixed(0)}% context used">
         <i class="codicon codicon-window"></i>
         <span class="context-gauge__track">
           <span
@@ -206,7 +201,7 @@ export class UsagePanel extends LitElement {
           ></span>
         </span>
         <span class="context-state__value">
-          ${contextLeft.toFixed(0)}% left
+          ${formatTokens(inputTokens)} / ${formatTokens(contextWindow)}
         </span>
       </span>
     `;

@@ -5,11 +5,14 @@
 
 // Third-party imports
 import { html, css, type TemplateResult } from 'lit';
-import { customElement, state, query } from 'lit/decorators.js';
+import { customElement, query } from 'lit/decorators.js';
 
 // Local imports - shared webview
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/vscode';
+
+// Local imports - shared signals
+import { SignalWatcher, signal } from '@shared/signals';
 
 // Local imports - shared styles
 import {
@@ -81,9 +84,16 @@ function forwardDetail<T extends Record<string, unknown>>(
   return (event: CustomEvent<T>) => postMessage(command, event.detail);
 }
 
+// Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
+// Safe because SettingsApp implements all abstract members below.
+const SettingsAppBase = SignalWatcher(
+  BaseWebviewApp as unknown as new (...args: any[]) => BaseWebviewApp,
+);
+
 @customElement('settings-app')
-export class SettingsApp extends BaseWebviewApp {
-  static override styles = [
+export class SettingsApp extends SettingsAppBase {
+  // Static 'styles' override lost through mixin type erasure; still works at runtime.
+  static styles = [
     designTokens,
     codiconStyles,
     commonViewStyles,
@@ -119,54 +129,56 @@ export class SettingsApp extends BaseWebviewApp {
   @query('history-tab') private historyTab?: HistoryTab;
 
   // Tab state
-  @state() private selectedTabIndex = 0;
+  private readonly selectedTabIndex = signal(0);
 
   // Memory state
-  @state() private memoryItems: MemoryViewItem[] = [];
-  @state() private memoryEnabled = false;
-  @state() private memoryToggleDisabled = true;
+  private readonly memoryItems = signal<MemoryViewItem[]>([]);
+  private readonly memoryEnabled = signal(false);
+  private readonly memoryToggleDisabled = signal(true);
 
   // History state
-  @state() private historyItems: HistoryItem[] = [];
+  private readonly historyItems = signal<HistoryItem[]>([]);
 
   // Profile state
-  @state() private authenticated = false;
-  @state() private userEmail = '';
-  @state() private userId = '';
-  @state() private tier = 'free';
-  @state() private apiAccessMode: 'included' | 'personal' = 'personal';
-  @state() private allowedModels: string[] | null = [];
-  @state() private accessExpiresAt: string | null = null;
-  @state() private providerKeyStatuses: ProviderKeyStatus[] = [];
-  @state() private globalStreamingDefault = true;
+  private readonly authenticated = signal(false);
+  private readonly userEmail = signal('');
+  private readonly userId = signal('');
+  private readonly tier = signal('free');
+  private readonly apiAccessMode = signal<'included' | 'personal'>('personal');
+  private readonly allowedModels = signal<string[] | null>([]);
+  private readonly accessExpiresAt = signal<string | null>(null);
+  private readonly providerKeyStatuses = signal<ProviderKeyStatus[]>([]);
+  private readonly globalStreamingDefault = signal(true);
 
   // Model selection state
-  @state() private modelSelectionItems: ModelSelectionItem[] = [];
-  @state() private helperModel = DEFAULT_HELPER_MODEL;
+  private readonly modelSelectionItems = signal<ModelSelectionItem[]>([]);
+  private readonly helperModel = signal(DEFAULT_HELPER_MODEL);
 
   // Agent selection state
-  @state() private workflowAgents: AgentSelectionItem[] = [];
-  @state() private toolUseAgents: AgentSelectionItem[] = [];
-  @state() private customAgentDir = '';
-  @state() private customAgentDirIsDefault = true;
-  @state() private agentSubTab: AgentCategory | undefined;
+  private readonly workflowAgents = signal<AgentSelectionItem[]>([]);
+  private readonly toolUseAgents = signal<AgentSelectionItem[]>([]);
+  private readonly customAgentDir = signal('');
+  private readonly customAgentDirIsDefault = signal(true);
+  private readonly agentSubTab = signal<AgentCategory | undefined>(undefined);
 
   // Agent mode presets state
-  @state() private customPresets: AgentModePreset[] = [];
+  private readonly customPresets = signal<AgentModePreset[]>([]);
 
   // Super YOLO / reliability state
-  @state() private superYoloEnabled = false;
-  @state() private superYoloToggleDisabled = true;
-  @state() private reliabilitySettings: NumberVscodeSetting[] = [];
-  @state() private allowOrchestratorKill = true;
+  private readonly superYoloEnabled = signal(false);
+  private readonly superYoloToggleDisabled = signal(true);
+  private readonly reliabilitySettings = signal<NumberVscodeSetting[]>([]);
+  private readonly allowOrchestratorKill = signal(true);
 
   // Tool dashboard state
-  @state() private toolDashboardItems: ToolDashboardItem[] = [];
-  @state() private toolDashboardLoaded = false;
+  private readonly toolDashboardItems = signal<ToolDashboardItem[]>([]);
+  private readonly toolDashboardLoaded = signal(false);
 
   // LaTeX settings state
-  @state() private latexSettingsStatus = { ...DEFAULT_LATEX_SETTINGS_STATUS };
-  @state() private latexSettingsLoaded = false;
+  private readonly latexSettingsStatus = signal({
+    ...DEFAULT_LATEX_SETTINGS_STATUS,
+  });
+  private readonly latexSettingsLoaded = signal(false);
 
   protected override get readyCommand(): string | null {
     return null;
@@ -218,32 +230,34 @@ export class SettingsApp extends BaseWebviewApp {
       case SETTINGS_VIEW_COMMANDS.SET_TAB: {
         const data = this.parseMessage(raw, SetTabMessageSchema);
         if (!data) return;
-        this.selectedTabIndex = data.tabIndex;
-        this.agentSubTab = data.agentSubTab;
+        this.selectedTabIndex.set(data.tabIndex);
+        this.agentSubTab.set(data.agentSubTab);
         return;
       }
 
       case SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY: {
         const data = this.parseMessage(raw, UpdateMemoryMessageSchema);
         if (!data) return;
-        this.memoryItems = data.items ?? [];
+        this.memoryItems.set(data.items ?? []);
         return;
       }
 
       case SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED: {
         const data = this.parseMessage(raw, UpdateMemoryEnabledMessageSchema);
         if (!data) return;
-        this.memoryEnabled = data.enabled;
-        this.memoryToggleDisabled = false;
+        this.memoryEnabled.set(data.enabled);
+        this.memoryToggleDisabled.set(false);
         return;
       }
 
       case SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY: {
         const data = this.parseMessage(raw, UpdateHistoryMessageSchema);
         if (!data) return;
-        this.historyItems = [...data.historyItems].sort(
-          (a, b) =>
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+        this.historyItems.set(
+          [...data.historyItems].sort(
+            (a, b) =>
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+          ),
         );
         return;
       }
@@ -251,7 +265,7 @@ export class SettingsApp extends BaseWebviewApp {
       case SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED: {
         const data = this.parseMessage(raw, HistoryClearedMessageSchema);
         if (!data) return;
-        this.historyItems = [];
+        this.historyItems.set([]);
         this.historyTab?.clearSearch();
         return;
       }
@@ -259,24 +273,24 @@ export class SettingsApp extends BaseWebviewApp {
       case SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION: {
         const data = this.parseMessage(raw, UpdateModelSelectionMessageSchema);
         if (!data) return;
-        this.modelSelectionItems = data.models;
-        this.helperModel = data.helperModel;
+        this.modelSelectionItems.set(data.models);
+        this.helperModel.set(data.helperModel);
         return;
       }
 
       case SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION: {
         const data = this.parseMessage(raw, UpdateAgentSelectionMessageSchema);
         if (!data) return;
-        this.workflowAgents = data.workflow;
-        this.toolUseAgents = data.toolUse;
+        this.workflowAgents.set(data.workflow);
+        this.toolUseAgents.set(data.toolUse);
         return;
       }
 
       case SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR: {
         const data = this.parseMessage(raw, UpdateCustomAgentDirMessageSchema);
         if (!data) return;
-        this.customAgentDir = data.path;
-        this.customAgentDirIsDefault = data.isDefault;
+        this.customAgentDir.set(data.path);
+        this.customAgentDirIsDefault.set(data.isDefault);
         return;
       }
 
@@ -286,10 +300,10 @@ export class SettingsApp extends BaseWebviewApp {
           UpdateSuperYoloEnabledMessageSchema,
         );
         if (!data) return;
-        this.superYoloEnabled = data.enabled;
-        this.superYoloToggleDisabled = false;
-        this.reliabilitySettings = data.reliabilitySettings;
-        this.allowOrchestratorKill = data.allowOrchestratorKill;
+        this.superYoloEnabled.set(data.enabled);
+        this.superYoloToggleDisabled.set(false);
+        this.reliabilitySettings.set(data.reliabilitySettings);
+        this.allowOrchestratorKill.set(data.allowOrchestratorKill);
         return;
       }
 
@@ -299,15 +313,15 @@ export class SettingsApp extends BaseWebviewApp {
           UpdateAgentModePresetsMessageSchema,
         );
         if (!data) return;
-        this.customPresets = data.customPresets;
+        this.customPresets.set(data.customPresets);
         return;
       }
 
       case SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD: {
         const data = this.parseMessage(raw, UpdateToolDashboardMessageSchema);
         if (!data) return;
-        this.toolDashboardItems = data.items;
-        this.toolDashboardLoaded = true;
+        this.toolDashboardItems.set(data.items);
+        this.toolDashboardLoaded.set(true);
         return;
       }
 
@@ -317,23 +331,23 @@ export class SettingsApp extends BaseWebviewApp {
           UpdateLatexSettingsStatusMessageSchema,
         );
         if (!data) return;
-        this.latexSettingsStatus = data.settings;
-        this.latexSettingsLoaded = true;
+        this.latexSettingsStatus.set(data.settings);
+        this.latexSettingsLoaded.set(true);
         return;
       }
 
       case SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE: {
         const data = this.parseMessage(raw, UpdateProfileMessageSchema);
         if (!data) return;
-        this.authenticated = data.authenticated;
-        this.userEmail = data.user?.email ?? 'N/A';
-        this.userId = data.user?.id ?? '';
-        this.tier = data.tier ?? 'free';
-        this.apiAccessMode = data.apiAccessMode;
-        this.allowedModels = data.allowedModels ?? null;
-        this.accessExpiresAt = data.accessExpiresAt ?? null;
-        this.providerKeyStatuses = data.providerKeyStatuses ?? [];
-        this.globalStreamingDefault = data.globalStreamingDefault ?? true;
+        this.authenticated.set(data.authenticated);
+        this.userEmail.set(data.user?.email ?? 'N/A');
+        this.userId.set(data.user?.id ?? '');
+        this.tier.set(data.tier ?? 'free');
+        this.apiAccessMode.set(data.apiAccessMode);
+        this.allowedModels.set(data.allowedModels ?? null);
+        this.accessExpiresAt.set(data.accessExpiresAt ?? null);
+        this.providerKeyStatuses.set(data.providerKeyStatuses ?? []);
+        this.globalStreamingDefault.set(data.globalStreamingDefault ?? true);
         return;
       }
     }
@@ -341,7 +355,7 @@ export class SettingsApp extends BaseWebviewApp {
 
   // Tab event handler
   private handleTabSelect(event: VscTabsSelectEvent): void {
-    this.selectedTabIndex = event.detail.selectedIndex;
+    this.selectedTabIndex.set(event.detail.selectedIndex);
   }
 
   // Memory event handlers
@@ -537,14 +551,14 @@ export class SettingsApp extends BaseWebviewApp {
       ></vscode-toolbar-button>
     `;
 
-    if (this.authenticated) {
+    if (this.authenticated.get()) {
       return html`
         <div class="settings-header">
           <div class="settings-header-user">
             <span class="codicon codicon-account"></span>
             <div class="settings-header-info">
-              <span class="settings-header-email">${this.userEmail}</span>
-              <span class="settings-header-tier">${this.tier} Plan</span>
+              <span class="settings-header-email">${this.userEmail.get()}</span>
+              <span class="settings-header-tier">${this.tier.get()} Plan</span>
             </div>
           </div>
           <div class="settings-header-actions">
@@ -584,22 +598,43 @@ export class SettingsApp extends BaseWebviewApp {
         ${this.renderHeader()}
 
         <vscode-tabs
-          .selectedIndex=${this.selectedTabIndex}
+          .selectedIndex=${this.selectedTabIndex.get()}
           @vsc-tabs-select=${this.handleTabSelect}
         >
-          <vscode-tab-header slot="header"><span class="codicon codicon-database"></span> Memory</vscode-tab-header>
-          <vscode-tab-header slot="header"><span class="codicon codicon-history"></span> History</vscode-tab-header>
-          <vscode-tab-header slot="header"><span class="codicon codicon-server"></span> Models</vscode-tab-header>
-          <vscode-tab-header slot="header"><span class="codicon codicon-robot"></span> Agents</vscode-tab-header>
-          <vscode-tab-header slot="header"><span class="codicon codicon-organization"></span> Multi-Agent</vscode-tab-header>
-          <vscode-tab-header slot="header"><span class="codicon codicon-tools"></span> Tools</vscode-tab-header>
-          <vscode-tab-header slot="header"><span class="codicon codicon-file-code"></span> LaTeX</vscode-tab-header>
+          <vscode-tab-header slot="header"
+            ><span class="codicon codicon-database"></span>
+            Memory</vscode-tab-header
+          >
+          <vscode-tab-header slot="header"
+            ><span class="codicon codicon-history"></span>
+            History</vscode-tab-header
+          >
+          <vscode-tab-header slot="header"
+            ><span class="codicon codicon-server"></span>
+            Models</vscode-tab-header
+          >
+          <vscode-tab-header slot="header"
+            ><span class="codicon codicon-robot"></span>
+            Agents</vscode-tab-header
+          >
+          <vscode-tab-header slot="header"
+            ><span class="codicon codicon-organization"></span>
+            Multi-Agent</vscode-tab-header
+          >
+          <vscode-tab-header slot="header"
+            ><span class="codicon codicon-tools"></span>
+            Tools</vscode-tab-header
+          >
+          <vscode-tab-header slot="header"
+            ><span class="codicon codicon-file-code"></span>
+            LaTeX</vscode-tab-header
+          >
 
           <vscode-tab-panel>
             <memory-tab
-              .items=${this.memoryItems}
-              .enabled=${this.memoryEnabled}
-              .toggleDisabled=${this.memoryToggleDisabled}
+              .items=${this.memoryItems.get()}
+              .enabled=${this.memoryEnabled.get()}
+              .toggleDisabled=${this.memoryToggleDisabled.get()}
               @memory-refresh=${this.handleMemoryRefresh}
               @memory-open-folder=${this.handleMemoryOpenFolder}
               @memory-toggle-enabled=${this.handleMemoryToggleEnabled}
@@ -610,7 +645,7 @@ export class SettingsApp extends BaseWebviewApp {
 
           <vscode-tab-panel>
             <history-tab
-              .items=${this.historyItems}
+              .items=${this.historyItems.get()}
               @history-action=${this.handleHistoryAction}
               @history-clear=${this.handleClearHistory}
             ></history-tab>
@@ -618,13 +653,13 @@ export class SettingsApp extends BaseWebviewApp {
 
           <vscode-tab-panel>
             <models-tab
-              .authenticated=${this.authenticated}
-              .apiAccessMode=${this.apiAccessMode}
-              .allowedModels=${this.allowedModels}
-              .providerKeyStatuses=${this.providerKeyStatuses}
-              .globalStreamingDefault=${this.globalStreamingDefault}
-              .modelSelectionItems=${this.modelSelectionItems}
-              .helperModel=${this.helperModel}
+              .authenticated=${this.authenticated.get()}
+              .apiAccessMode=${this.apiAccessMode.get()}
+              .allowedModels=${this.allowedModels.get()}
+              .providerKeyStatuses=${this.providerKeyStatuses.get()}
+              .globalStreamingDefault=${this.globalStreamingDefault.get()}
+              .modelSelectionItems=${this.modelSelectionItems.get()}
+              .helperModel=${this.helperModel.get()}
               @profile-api-access-mode=${this.handleApiAccessMode}
               @provider-key-set=${this.handleSetProviderKey}
               @provider-key-remove=${this.handleRemoveProviderKey}
@@ -642,11 +677,11 @@ export class SettingsApp extends BaseWebviewApp {
 
           <vscode-tab-panel>
             <agents-tab
-              .workflowAgents=${this.workflowAgents}
-              .toolUseAgents=${this.toolUseAgents}
-              .customAgentDir=${this.customAgentDir}
-              .customAgentDirIsDefault=${this.customAgentDirIsDefault}
-              .initialSubTab=${this.agentSubTab}
+              .workflowAgents=${this.workflowAgents.get()}
+              .toolUseAgents=${this.toolUseAgents.get()}
+              .customAgentDir=${this.customAgentDir.get()}
+              .customAgentDirIsDefault=${this.customAgentDirIsDefault.get()}
+              .initialSubTab=${this.agentSubTab.get()}
               @agent-open-yaml=${this.handleOpenAgentYaml}
               @agent-enabled-set=${this.handleSetAgentEnabled}
               @agent-all-enabled-set=${this.handleSetAllAgentsEnabled}
@@ -663,11 +698,11 @@ export class SettingsApp extends BaseWebviewApp {
 
           <vscode-tab-panel>
             <multi-agent-tab
-              .superYoloEnabled=${this.superYoloEnabled}
-              .toggleDisabled=${this.superYoloToggleDisabled}
-              .reliabilitySettings=${this.reliabilitySettings}
-              .customPresets=${this.customPresets}
-              .allowOrchestratorKill=${this.allowOrchestratorKill}
+              .superYoloEnabled=${this.superYoloEnabled.get()}
+              .toggleDisabled=${this.superYoloToggleDisabled.get()}
+              .reliabilitySettings=${this.reliabilitySettings.get()}
+              .customPresets=${this.customPresets.get()}
+              .allowOrchestratorKill=${this.allowOrchestratorKill.get()}
               @super-yolo-toggle=${this.handleSuperYoloToggle}
               @allow-orchestrator-kill-toggle=${this
                 .handleAllowOrchestratorKillToggle}
@@ -679,8 +714,8 @@ export class SettingsApp extends BaseWebviewApp {
 
           <vscode-tab-panel>
             <tools-tab
-              .items=${this.toolDashboardItems}
-              .loaded=${this.toolDashboardLoaded}
+              .items=${this.toolDashboardItems.get()}
+              .loaded=${this.toolDashboardLoaded.get()}
               @tool-open-url=${this.handleToolOpenUrl}
               @tool-install-extension=${this.handleToolInstallExtension}
               @tool-recheck=${this.handleToolRecheck}
@@ -689,8 +724,8 @@ export class SettingsApp extends BaseWebviewApp {
 
           <vscode-tab-panel>
             <latex-tab
-              .settings=${this.latexSettingsStatus}
-              .loaded=${this.latexSettingsLoaded}
+              .settings=${this.latexSettingsStatus.get()}
+              .loaded=${this.latexSettingsLoaded.get()}
               @latex-apply-settings=${this.handleApplyLatexSettings}
               @latex-install-workshop=${this.handleInstallLatexWorkshop}
               @latex-run-install-command=${this.handleRunInstallCommand}
