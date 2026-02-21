@@ -976,3 +976,342 @@ This works because services are injected, not serialized. Nodes call `this.servi
 3. **`defineFlow()` for new flows** — a thin declarative layer for future flows, not a retrofit. Use it when designing a new flow type to reason about the graph before writing nodes.
 
 4. **Services composition via `pipe()`** — add cross-cutting concerns (timeout, metrics, rate limiting) by wrapping services, not flows. This sidesteps all the PersistedFlow constraints.
+
+---
+
+## 11. Blocker Anatomy: What's Refactorable vs. What's Load-Bearing
+
+Each blocker from Section 10 traced to its root cause in actual code, with an honest assessment of what can be moved to make way for new architecture and what's genuinely structural.
+
+---
+
+### Blocker A: `structuredClone` Kills Stateful Wrappers (Redux, Proxy)
+
+**Root cause**: `PersistedFlow.serializeShared()` at `persisted-flow.ts:86`:
+```typescript
+protected serializeShared(shared: S): Record<string, unknown> {
+  return structuredClone(shared) as Record<string, unknown>;
+}
+```
+
+Called at 4 points: after each `stepWithResult()`, in `setShared()`, `resetNodeHistory()`, and `ensureRecord()`. Any class instance, Proxy, function, or Symbol on `shared` is destroyed.
+
+**Is it load-bearing?**
+
+**Partially.** It serves two purposes:
+1. **Isolation** — nodes can't corrupt persisted state through stale references
+2. **Serializability** — cloned state goes to KV store (filesystem JSON)
+
+Purpose (2) is the real constraint. But `structuredClone` is actually *stricter* than needed — it throws on functions/Symbols, while JSON silently drops them. The real need is "produce a JSON-safe deep copy," not `structuredClone` specifically.
+
+**Refactoring path — MEDIUM effort, high unlock**:
+
+`serializeShared()` is `protected`, so it's *designed* to be overridden. The missing counterpart is a `deserializeShared()` hook:
+
+```typescript
+// Add to PersistedFlow (persisted-flow.ts)
+protected deserializeShared(raw: unknown): S {
+  return raw as S;  // default: trust the stored data
+}
+```
+
+Then change the 3 deserialization points in `stepWithResult()`, `getShared()`, and `resetNodeHistory()` from `flow.shared as S` to `this.deserializeShared(flow.shared)`.
+
+This lets a subclass round-trip a wrapper:
+
+```typescript
+class TrackedFlow<S> extends PersistedFlow<S> {
+  protected serializeShared(shared: S) {
+    // Strip wrapper before persisting
+    return structuredClone(unwrapTracker(shared));
+  }
+  protected deserializeShared(raw: unknown): S {
+    // Re-attach wrapper after loading
+    return wrapWithTracker(raw as S);
+  }
+}
+```
+
+**What it unlocks**: Redux-style stores (serialize the state, re-attach reducer), Proxy mutation tracking (serialize the target, re-attach the Proxy), class-based shared state (serialize to plain object, reconstruct class).
+
+**Lines changed**: ~20 in `persisted-flow.ts` (add `deserializeShared`, call it at 3 points). Non-breaking — default implementation preserves current behavior.
+
+---
+
+### Blocker B: Protected Methods Block Higher-Order Flow Composition
+
+**Root cause**: `RoundPersistedFlow` calls 3 `protected` members of `PersistedFlow`:
+- `stepWithResult()` — execute one node, get action + shared
+- `resetNodeHistory()` — clear node history to restart a round
+- `init()` — ensure the flow record exists
+
+A wrapper can't call protected methods. So `withRounds(flow)` is impossible — round logic MUST live in a subclass.
+
+**Is it load-bearing?**
+
+**No.** These methods are `protected` by convention, not necessity. They're well-documented, safe to call, and have clear contracts. Making them `public` doesn't expose dangerous internals — they're the step-by-step execution API that any orchestrator needs.
+
+Also: `PersistedFlow.attach()` is dead code (never called anywhere in the codebase). This means the "distributed resume" capability isn't used, simplifying the public API.
+
+**Refactoring path — LOW effort, high unlock**:
+
+```typescript
+// persisted-flow.ts — change 3 keywords
+public async stepWithResult(): Promise<StepResult<S>> { ... }  // was protected
+public async resetNodeHistory(shared: S): Promise<void> { ... }  // was protected
+public async init(shared: S): Promise<void> { ... }  // was protected (via ensureRecord)
+```
+
+Optionally, extract the interface for composition:
+
+```typescript
+interface SteppableFlow<S> {
+  init(shared: S): Promise<void>;
+  stepWithResult(): Promise<StepResult<S>>;
+  resetNodeHistory(shared: S): Promise<void>;
+  getShared(): Promise<S | undefined>;
+  setShared(shared: S): Promise<void>;
+}
+```
+
+Then `RoundPersistedFlow` can be rewritten as a standalone `RoundOrchestrator` that takes any `SteppableFlow`:
+
+```typescript
+class RoundOrchestrator<S extends RoundAwareState> {
+  constructor(
+    private flow: SteppableFlow<S>,
+    private callbacks: RoundCallbacks<S>,
+  ) {}
+
+  async run(shared: S): Promise<ExecutionStatus> {
+    await this.flow.init(shared);
+    // ... identical round logic, calling this.flow.stepWithResult() ...
+  }
+}
+```
+
+**What it unlocks**: `withTimeout()`, `withRetry()`, `withMetrics()` wrappers that compose around any `SteppableFlow`. New behaviors without new subclasses.
+
+**Risk**: External code might call `stepWithResult()` out of context. Mitigate with documentation, not access control — the same tradeoff TypeScript already makes for `public`.
+
+**Lines changed**: 3 keyword changes + optional 10-line interface extraction.
+
+---
+
+### Blocker C: `prep()` Mutations and Reference Sharing (CQS)
+
+Two separate issues:
+
+#### C1: Direct mutation in `prep()` — TRIVIAL to fix
+
+**The single offender**: `ToolUseDispatchNode.prep()` at `ToolUseCycleFlow.ts:550`:
+```typescript
+if (this.services.checkInterruption()) {
+  shared.shouldStop = true;  // ← mutation in prep
+  return [];
+}
+```
+
+**Why it exists**: Shortcut to skip deduplication work when interrupted.
+
+**Fix**: Return empty array from `prep()`. Check interruption in `post()`:
+
+```typescript
+async prep(shared) {
+  if (this.services.checkInterruption()) return [];  // no mutation
+  // ... dedup logic unchanged
+}
+
+async post(shared, prepRes, execRes) {
+  if (prepRes.length === 0 && this.services.checkInterruption()) {
+    shared.shouldStop = true;  // mutation correctly in post()
+  }
+  // ... rest unchanged
+}
+```
+
+**Lines changed**: ~3. Behavior identical.
+
+#### C2: Passing `shared` reference through prep → exec — MEDIUM to fix
+
+**The offender**: `ResponseCycleNode.prep()` at `ResponseCycleNode.ts:57`:
+```typescript
+return {
+  shared,  // ← entire shared reference leaks into exec
+  outputLocation: ...,
+};
+```
+
+Then in `exec()`:
+```typescript
+const { shared } = prepRes;
+const context = shared.context!;  // reading shared through prep result
+```
+
+**Why it exists**: `exec()` needs `shared.context` (messages + prefill) that was set by the previous node. The inner `ResponseCycleFlow` mutates `context.messages` during execution. After the inner flow completes, `post()` reads the mutated messages back from `shared.context!.messages`. The reference chain is the mutation channel.
+
+**This is genuinely harder to fix** because the data flow is:
+```
+PrepareContextNode.post() writes shared.context
+    → ResponseCycleNode.prep() reads shared.context
+    → ResponseCycleNode.exec() passes context.messages to inner flow
+    → inner flow mutates messages (compaction, continuation)
+    → ResponseCycleNode.post() reads shared.context!.messages (mutated)
+```
+
+**Fix**: Have `exec()` return the final messages from the inner flow:
+
+```typescript
+// Change CyclePrepInput to carry context directly, not shared:
+interface CyclePrepInput {
+  context: RoundContext;  // NOT shared
+  outputLocation: AgentFileLocation;
+  run: AgentRunStateSnapshot;
+  workspace: AgentWorkspaceState;
+}
+
+// exec() returns mutated messages:
+type CycleOutcome =
+  | { outcome: 'completed'; endTurn: boolean; messages: ProviderMessage[] }
+  // ...
+
+async exec(prepRes: CyclePrepInput): Promise<CycleOutcome> {
+  // ... run inner flow ...
+  return {
+    outcome: 'completed',
+    endTurn: cycleShared.endTurn,
+    messages: cycleShared.messages,  // return from exec, not via shared ref
+  };
+}
+
+// post() writes returned messages to shared:
+async post(shared, prepRes, execRes) {
+  if (execRes.outcome === 'completed') {
+    shared.conversation = execRes.messages;  // explicit write
+  }
+}
+```
+
+**Lines changed**: ~25 across `ResponseCycleNode.ts`. No behavioral change, but the data flow becomes explicit.
+
+**What C1 + C2 unlock together**: Once all `prep()` methods are read-only and don't leak shared references, you can add `DeepReadonly<S>` to `BaseNode.prep()` and the type system enforces the boundary. This is the prerequisite for future parallel `prep()` execution.
+
+---
+
+### Blocker D: Inner Flow Creation in `exec()` — LOAD-BEARING
+
+**Root cause**: `ResponseCycleNode.exec()` creates `createResponseCycleFlow()`, wires 4 nodes, injects services, runs the flow with real-time token streaming. `ToolUseCycleNode.exec()` does the same with `createToolUseCycleFlow()`.
+
+**Is it load-bearing?**
+
+**Yes.** These inner flows are genuine orchestration — they loop through multiple LLM calls, handle continuation, dispatch tools, manage compaction. They're not "a side effect" — they're the core work. Describing them as `{ type: 'RUN_INNER_FLOW', config: ... }` just re-describes the flow without simplifying anything.
+
+**Why it can't be refactored away**: The inner flow's behavior depends on runtime decisions at each step (should we continue? did the model request tools? is the user interrupting?). An effect descriptor would need to capture the entire decision tree — at which point you've re-described the flow graph itself.
+
+**What you CAN do instead — LOW effort**:
+
+Make inner flow creation injectable for testing:
+
+```typescript
+// Add optional factory to services:
+interface ReflectionServices {
+  // ... existing ...
+  createCycleFlow?: () => Flow<ResponseCycleShared>;
+}
+
+// In ResponseCycleNode.exec():
+const flow = this.services.createCycleFlow?.() ?? createResponseCycleFlow<C>();
+```
+
+This lets tests inject a mock inner flow while production uses the default. 3-line change per flow.
+
+---
+
+### Blocker E: Event Bus Too Simple for Reactive Streams — NOT A BLOCKER
+
+**Root cause**: Not a blocker at all. The `ProgressEventBus` is correctly scoped:
+- 26 event types, each handled independently
+- No cross-event compositions anywhere in the codebase
+- Single-process VS Code extension — no distributed event problem
+- One debounce, one sequential queue — already implemented in ~40 lines each
+
+**Reactive streams would add**: A dependency (~45KB), operator learning curve, impenetrable stack traces, subscription lifecycle bugs. For zero new capability.
+
+**When to revisit**: If you build agent-to-agent communication (orchestrator coordinating multiple subagents with interdependent progress streams). Not before.
+
+---
+
+### The Refactoring Roadmap
+
+```
+                    REFACTORABILITY MAP
+
+   Easy to move                              Load-bearing
+   (do it)                                   (work around it)
+   ◄───────────────────────────────────────────────────────►
+
+   ┌──────────────────┐
+   │ C1: prep()       │  TRIVIAL — move 1 line from prep() to post()
+   │ mutation          │  Unlocks: clean CQS boundary
+   └──────────────────┘
+
+       ┌──────────────────┐
+       │ B: Protected     │  LOW — change 3 access modifiers
+       │ methods           │  Unlocks: HOF composition, wrappers
+       └──────────────────┘
+
+            ┌────────────────────┐
+            │ A: structuredClone │  MEDIUM — add deserializeShared() hook
+            │ strips wrappers    │  Unlocks: Redux stores, Proxy tracking
+            └────────────────────┘
+
+                 ┌────────────────────┐
+                 │ C2: shared ref     │  MEDIUM — return data from exec()
+                 │ leaks through prep │  Unlocks: true prep/exec isolation
+                 └────────────────────┘
+
+                                    ┌────────────────────┐
+                                    │ D: Inner flows in  │  LOAD-BEARING
+                                    │ exec()             │  Can't be effects.
+                                    │                    │  Inject factory for testing
+                                    └────────────────────┘
+
+                                             ┌─────────────┐
+                                             │ E: Simple   │  NOT A PROBLEM
+                                             │ event bus   │
+                                             └─────────────┘
+```
+
+### Recommended Phasing
+
+**Phase 1 — Quick wins (1-2 days, zero risk)**
+
+| Change | Files | Lines | Unlocks |
+|--------|-------|-------|---------|
+| Move `shared.shouldStop=true` from `ToolUseDispatchNode.prep()` to `post()` | `ToolUseCycleFlow.ts` | ~3 | CQS compliance |
+| Change `stepWithResult`, `resetNodeHistory`, `init` from `protected` → `public` | `persisted-flow.ts` | 3 | Wrapping/composition |
+| Remove dead `PersistedFlow.attach()` | `persisted-flow.ts` | ~15 deleted | Cleaner API |
+
+**Phase 2 — Serialization hooks (2-3 days, low risk)**
+
+| Change | Files | Lines | Unlocks |
+|--------|-------|-------|---------|
+| Add `deserializeShared()` hook to `PersistedFlow` | `persisted-flow.ts` | ~20 | Smart shared wrappers |
+| Build `TrackedPersistedFlow` with Proxy-based mutation logging | New file | ~40 | Dev-time debugging |
+
+**Phase 3 — prep/exec isolation (3-5 days, medium risk)**
+
+| Change | Files | Lines | Unlocks |
+|--------|-------|-------|---------|
+| Refactor `ResponseCycleNode` to not pass `shared` through prep → exec | `ResponseCycleNode.ts` | ~25 | True isolation |
+| Add `DeepReadonly<S>` to `BaseNode.prep()` | `node/index.ts` | 1 | Type-enforced CQS |
+
+**Phase 4 — Composition layer (when building a new flow type)**
+
+| Change | Files | Lines | Unlocks |
+|--------|-------|-------|---------|
+| Extract `SteppableFlow` interface | `persisted-flow.ts` | ~10 | Wrappable flows |
+| Rewrite `RoundPersistedFlow` as `RoundOrchestrator` wrapper | New file, delete old | ~80 | Composition over inheritance |
+| Build `defineFlow()` declarative helper | New file | ~60 | Declarative flow design |
+
+Each phase is independently mergeable. Phase 1 alone removes friction for everything that follows. Phase 4 is best deferred until you're actually building a new flow type and can validate the composition model against a real use case.
