@@ -107,6 +107,12 @@
             "description": "Enable background mode for OpenAI Responses API to handle long-running generations (>10mins) more reliably by preventing request timeouts. Adds polling overhead.",
             "scope": "resource"
           },
+          "texra.model.openaiParallelToolCalls": {
+            "type": "boolean",
+            "default": true,
+            "description": "Allow OpenAI models to call multiple tools in parallel within a single turn. Disable to force sequential (zero or one) tool calls per turn.",
+            "scope": "resource"
+          },
           "texra.model.compactionThresholdPercent": {
             "type": "number",
             "default": 75,

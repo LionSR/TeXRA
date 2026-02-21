@@ -156,6 +156,12 @@ const PROVIDER_VSCODE_SETTINGS: Record<
       description:
         'Handle long-running generations (>10 min) via polling to prevent timeouts. Adds polling overhead.',
     },
+    {
+      key: 'texra.model.openaiParallelToolCalls',
+      label: 'Parallel Tool Calls',
+      description:
+        'Allow the model to call multiple tools in parallel. Disable to force one tool call per turn.',
+    },
   ],
   anthropic: [
     {
