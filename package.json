@@ -755,14 +755,14 @@
         "title": "Clean All LLM Output Files (Workspace-wide)",
         "shortTitle": "Clean LLM Outputs",
         "category": "TeXRA",
-        "icon": "$(trash)"
+        "icon": "$(clear-all)"
       },
       {
         "command": "texra.cleanBuild",
         "title": "Clean All Build Files (Workspace-wide)",
         "shortTitle": "Clean Build Files",
         "category": "TeXRA",
-        "icon": "$(trash)"
+        "icon": "$(close-all)"
       },
       {
         "command": "texra.indentTeX",

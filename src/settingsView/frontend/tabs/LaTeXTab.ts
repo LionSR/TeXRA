@@ -70,8 +70,7 @@ const DEPENDENCIES: DependencyInfo[] = [
   {
     key: 'latexWorkshopInstalled',
     name: 'LaTeX Workshop',
-    installedDesc:
-      'Provides LaTeX compilation, PDF preview, and IntelliSense.',
+    installedDesc: 'Provides LaTeX compilation, PDF preview, and IntelliSense.',
     missingDesc:
       'Required for LaTeX compilation, PDF preview, and IntelliSense.',
     actionEvent: 'latex-install-workshop',
@@ -80,8 +79,7 @@ const DEPENDENCIES: DependencyInfo[] = [
   {
     key: 'latexdiffInstalled',
     name: 'latexdiff',
-    installedDesc:
-      'Enables visual comparison of LaTeX document revisions.',
+    installedDesc: 'Enables visual comparison of LaTeX document revisions.',
     missingDesc:
       'Install via your TeX distribution to enable diff comparisons.',
     installGuide: LATEXDIFF_INSTALL_GUIDE,
@@ -747,7 +745,6 @@ export class LaTeXTab extends LitElement {
               </div>
             `
           : nothing}
-
         ${this.renderDependencies()}
 
         <div class="section-header" style="margin-top:var(--spacing-large)">

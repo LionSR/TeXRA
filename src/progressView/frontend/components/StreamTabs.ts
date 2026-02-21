@@ -12,7 +12,6 @@ import {
   commonViewStyles,
 } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
-import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 
 // Local imports - shared utilities
 import { formatRelativeTime } from '@shared/utils/string';
@@ -34,12 +33,6 @@ import type { StreamFilter, StreamSort } from '../store';
 
 // Local imports - shared schemas
 import type { StreamTabInfo } from '@shared/schemas';
-
-/** Capitalize first letter for display */
-function formatStatusLabel(status: string): string {
-  if (!status) return '';
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
 
 function buildTooltip(
   info: StreamTabInfo,
@@ -75,7 +68,6 @@ export class StreamTab extends LitElement {
     designTokens,
     animationStyles,
     codiconIconClasses,
-    statusIndicatorStyles,
     css`
       :host {
         display: block;
@@ -136,11 +128,6 @@ export class StreamTab extends LitElement {
         align-items: center;
         gap: var(--spacing-small);
         width: 100%;
-      }
-
-      /* .tab-status styles from statusIndicatorStyles */
-      .tab-header .tab-status {
-        margin: 0;
       }
 
       .tab-title {
@@ -226,7 +213,6 @@ export class StreamTab extends LitElement {
     const stream = this.info;
     const tooltip = buildTooltip(stream, this.lastTimestamp);
     const status = this.status || STREAM_STATUS.READY;
-    const statusLabel = formatStatusLabel(status);
     const agentDecorator = getAgentCategoryDecorator(stream.agentCategory);
 
     return html`
@@ -245,13 +231,6 @@ export class StreamTab extends LitElement {
           title=${tooltip}
         >
           <div class="tab-header">
-            <span
-              class=${classMap({
-                'tab-status': true,
-                [`is-${status}`]: Boolean(status),
-              })}
-              data-status=${statusLabel}
-            ></span>
             <span class="tab-title"
               >${stream.parentStreamId ? '↳ ' : ''}${stream.label ||
               stream.name}</span

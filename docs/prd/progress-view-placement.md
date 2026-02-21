@@ -36,11 +36,11 @@ The progress view is designed like a full application (its own navigation, inter
 
 As of VS Code 1.106 (October 2025), extensions can place view containers in three locations:
 
-| Location | `viewsContainers` key | Characteristics |
-|----------|----------------------|-----------------|
-| **Primary Sidebar** (left) | `activitybar` | Full height, ~300-400px wide, activity bar icons |
-| **Bottom Panel** | `panel` | Full width, ~200px tall, tab-based |
-| **Secondary Sidebar** (right) | `secondarySidebar` | Full height, ~300-400px wide, independent from primary |
+| Location                      | `viewsContainers` key | Characteristics                                        |
+| ----------------------------- | --------------------- | ------------------------------------------------------ |
+| **Primary Sidebar** (left)    | `activitybar`         | Full height, ~300-400px wide, activity bar icons       |
+| **Bottom Panel**              | `panel`               | Full width, ~200px tall, tab-based                     |
+| **Secondary Sidebar** (right) | `secondarySidebar`    | Full height, ~300-400px wide, independent from primary |
 
 The `secondarySidebar` contribution point was finalized in VS Code 1.106 and is now stable. This gives the progress view a natural home — the secondary sidebar is where VS Code places agent/AI tools (Chat, Copilot), and monitoring agent progress fits that pattern.
 
@@ -120,6 +120,7 @@ Alternatively, the progress view can pop out to the secondary sidebar. This keep
 ```
 
 **Advantages of secondary sidebar over editor pop-out:**
+
 - Both main view and progress view visible simultaneously — no context switching
 - Full vertical height (same as primary sidebar)
 - Doesn't consume an editor tab (preserves the editing workspace)
@@ -127,6 +128,7 @@ Alternatively, the progress view can pop out to the secondary sidebar. This keep
 - User can resize the secondary sidebar independently
 
 **When editor pop-out is still preferable:**
+
 - User wants maximum width for log content (editor area gives ~800px+ vs ~300px)
 - User doesn't want to give up horizontal screen real estate to a second sidebar
 - Single-monitor setups where three columns are too tight
@@ -137,14 +139,14 @@ Both pop-out targets are available simultaneously — the user chooses based on 
 
 No user setting. Transitions are automatic and contextual:
 
-| Trigger | Action |
-|---------|--------|
-| User clicks Execute in main view | Primary sidebar swaps to progress view, auto-focuses the new stream |
-| User clicks "Back to setup" in progress (primary sidebar) | Primary sidebar swaps back to main view |
-| User clicks pop-out button on progress (primary sidebar) | Progress opens in secondary sidebar or editor area (see Pop-Out UI); primary sidebar reverts to main view |
-| User clicks pop-back button on popped-out progress | Popped-out view closes; primary sidebar swaps to progress view |
-| User closes popped-out progress (via VS Code × or sidebar drag) | Primary sidebar remains on main view (no forced swap) |
-| User clicks Execute while progress is popped out | Popped-out progress view focuses + auto-switches to new stream; primary sidebar stays on main view |
+| Trigger                                                         | Action                                                                                                    |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| User clicks Execute in main view                                | Primary sidebar swaps to progress view, auto-focuses the new stream                                       |
+| User clicks "Back to setup" in progress (primary sidebar)       | Primary sidebar swaps back to main view                                                                   |
+| User clicks pop-out button on progress (primary sidebar)        | Progress opens in secondary sidebar or editor area (see Pop-Out UI); primary sidebar reverts to main view |
+| User clicks pop-back button on popped-out progress              | Popped-out view closes; primary sidebar swaps to progress view                                            |
+| User closes popped-out progress (via VS Code × or sidebar drag) | Primary sidebar remains on main view (no forced swap)                                                     |
+| User clicks Execute while progress is popped out                | Popped-out progress view focuses + auto-switches to new stream; primary sidebar stays on main view        |
 
 ### Stream Tabs in Narrow Mode
 
@@ -161,15 +163,15 @@ At editor width (~800px+), stream tabs render at full width with status badges, 
 
 **Primary sidebar toolbar buttons** (visible when progress is in the primary sidebar):
 
-| Button | Codicon | Action |
-|--------|---------|--------|
+| Button                   | Codicon                   | Action                                                                    |
+| ------------------------ | ------------------------- | ------------------------------------------------------------------------- |
 | Pop to secondary sidebar | `$(layout-sidebar-right)` | Opens progress in secondary sidebar; primary sidebar reverts to main view |
-| Pop to editor | `$(link-external)` | Opens progress as editor tab; primary sidebar reverts to main view |
+| Pop to editor            | `$(link-external)`        | Opens progress as editor tab; primary sidebar reverts to main view        |
 
 **Popped-out toolbar button** (visible when progress is in secondary sidebar or editor):
 
-| Button | Codicon | Action |
-|--------|---------|--------|
+| Button              | Codicon                  | Action                                                         |
+| ------------------- | ------------------------ | -------------------------------------------------------------- |
 | Pop back to sidebar | `$(layout-sidebar-left)` | Closes popped-out view; primary sidebar swaps to progress view |
 
 These replace the current "Open in Tab" command — the behavior is now bidirectional and supports three locations.
@@ -253,14 +255,10 @@ Add a `when` clause to each view and toggle a context key:
 
 ```typescript
 // On Execute:
-vscode.commands.executeCommand(
-  'setContext', 'texra.activeView', 'progress'
-);
+vscode.commands.executeCommand('setContext', 'texra.activeView', 'progress');
 
 // On "Back to setup":
-vscode.commands.executeCommand(
-  'setContext', 'texra.activeView', 'main'
-);
+vscode.commands.executeCommand('setContext', 'texra.activeView', 'main');
 ```
 
 This fully hides the inactive view (no collapsed section header visible).
@@ -277,13 +275,13 @@ Less preferred — leaves a visible collapsed section header for the inactive vi
 
 #### Files Modified
 
-| File | Change |
-|------|--------|
-| `package.json` | Add `when` clauses to both view declarations |
-| `src/extension.ts` | Initialize `texra.activeView` context to `'main'` on activation |
-| `src/commands/agent/executeCommands.ts` | Set context to `'progress'` after execution starts |
-| `src/progressView/ProgressViewProvider.ts` | Add `showInSidebar()` method that sets context to `'progress'` |
-| `src/MainViewProvider.ts` | Add `showInSidebar()` method that sets context to `'main'` |
+| File                                       | Change                                                          |
+| ------------------------------------------ | --------------------------------------------------------------- |
+| `package.json`                             | Add `when` clauses to both view declarations                    |
+| `src/extension.ts`                         | Initialize `texra.activeView` context to `'main'` on activation |
+| `src/commands/agent/executeCommands.ts`    | Set context to `'progress'` after execution starts              |
+| `src/progressView/ProgressViewProvider.ts` | Add `showInSidebar()` method that sets context to `'progress'`  |
+| `src/MainViewProvider.ts`                  | Add `showInSidebar()` method that sets context to `'main'`      |
 
 ### Phase 3: Pop-Out to Editor Area
 
@@ -316,13 +314,13 @@ No state is lost because the provider is a singleton — it holds all state rega
 
 #### Files Modified
 
-| File | Change |
-|------|--------|
-| `src/progressView/ProgressViewProvider.ts` | Add `popOutToEditor()` and `popBackToSidebar()` methods |
-| `src/progressView/frontend/ProgressApp.ts` | Add pop-out/pop-back toolbar buttons; post `POP_OUT_EDITOR`/`POP_BACK` messages |
-| `src/progressView/ProgressViewMessageHandler.ts` | Handle `POP_OUT_EDITOR` and `POP_BACK` inbound messages |
-| `src/shared/schemas/progressView.ts` | Add `POP_OUT_EDITOR` and `POP_BACK` to inbound message schema |
-| `src/commands/progress/progressViewCommands.ts` | Update `openProgressViewInTab` to use `popOutToEditor()` |
+| File                                             | Change                                                                          |
+| ------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `src/progressView/ProgressViewProvider.ts`       | Add `popOutToEditor()` and `popBackToSidebar()` methods                         |
+| `src/progressView/frontend/ProgressApp.ts`       | Add pop-out/pop-back toolbar buttons; post `POP_OUT_EDITOR`/`POP_BACK` messages |
+| `src/progressView/ProgressViewMessageHandler.ts` | Handle `POP_OUT_EDITOR` and `POP_BACK` inbound messages                         |
+| `src/shared/schemas/progressView.ts`             | Add `POP_OUT_EDITOR` and `POP_BACK` to inbound message schema                   |
+| `src/commands/progress/progressViewCommands.ts`  | Update `openProgressViewInTab` to use `popOutToEditor()`                        |
 
 ### Phase 4: Pop-Out to Secondary Sidebar
 
@@ -371,25 +369,27 @@ Unlike the editor pop-out (which uses `createWebviewPanel`), secondary sidebar p
 
 ```typescript
 // WebviewUpdater receives all active webviews
-this.webviewUpdater = new WebviewUpdater(() => [
-  this._view?.webview,           // Primary sidebar
-  this._panelView?.webview,      // Editor panel
-  this._secondaryView?.webview,  // Secondary sidebar
-].filter(Boolean));
+this.webviewUpdater = new WebviewUpdater(() =>
+  [
+    this._view?.webview, // Primary sidebar
+    this._panelView?.webview, // Editor panel
+    this._secondaryView?.webview, // Secondary sidebar
+  ].filter(Boolean),
+);
 ```
 
 The secondary sidebar view is registered as a separate `WebviewViewProvider` (same pattern as the primary sidebar), but backed by the same `ProgressViewProvider` singleton for state.
 
 #### Files Modified
 
-| File | Change |
-|------|--------|
-| `package.json` | Add `secondarySidebar` container and secondary progress view declaration |
-| `src/progressView/ProgressViewProvider.ts` | Register secondary sidebar view provider; manage third webview target; add `popOutToSecondary()` |
-| `src/progressView/frontend/ProgressApp.ts` | Add secondary sidebar pop-out button; post `POP_OUT_SECONDARY` message |
-| `src/progressView/ProgressViewMessageHandler.ts` | Handle `POP_OUT_SECONDARY` inbound message |
-| `src/shared/schemas/progressView.ts` | Add `POP_OUT_SECONDARY` to inbound message schema |
-| `src/extension.ts` | Register secondary sidebar view provider; initialize `texra.progressLocation` context |
+| File                                             | Change                                                                                           |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `package.json`                                   | Add `secondarySidebar` container and secondary progress view declaration                         |
+| `src/progressView/ProgressViewProvider.ts`       | Register secondary sidebar view provider; manage third webview target; add `popOutToSecondary()` |
+| `src/progressView/frontend/ProgressApp.ts`       | Add secondary sidebar pop-out button; post `POP_OUT_SECONDARY` message                           |
+| `src/progressView/ProgressViewMessageHandler.ts` | Handle `POP_OUT_SECONDARY` inbound message                                                       |
+| `src/shared/schemas/progressView.ts`             | Add `POP_OUT_SECONDARY` to inbound message schema                                                |
+| `src/extension.ts`                               | Register secondary sidebar view provider; initialize `texra.progressLocation` context            |
 
 ### Phase 5: Responsive Stream Tabs
 
@@ -415,7 +415,9 @@ CSS adapts the stream tabs column:
 
 ```css
 /* Default: full-width tabs (editor mode) */
-stream-tabs { min-width: 180px; }
+stream-tabs {
+  min-width: 180px;
+}
 
 /* Narrow: compact icon strip (primary/secondary sidebar mode) */
 :host(.narrow) stream-tabs {
@@ -425,6 +427,7 @@ stream-tabs { min-width: 180px; }
 ```
 
 `StreamTabs` component renders a compact variant when narrow:
+
 - Status icon only (no text label)
 - Tooltip with full stream info on hover
 - Active stream highlighted with left border
@@ -433,11 +436,11 @@ This works identically in both sidebar locations since both are ~300px wide.
 
 #### Files Modified
 
-| File | Change |
-|------|--------|
-| `src/progressView/frontend/ProgressApp.ts` | Add `ResizeObserver`, `narrow` class toggle |
-| `src/progressView/frontend/components/StreamTabs.ts` | Compact rendering variant for narrow mode |
-| `src/progressView/frontend/styles/` | Responsive styles for stream tabs |
+| File                                                 | Change                                      |
+| ---------------------------------------------------- | ------------------------------------------- |
+| `src/progressView/frontend/ProgressApp.ts`           | Add `ResizeObserver`, `narrow` class toggle |
+| `src/progressView/frontend/components/StreamTabs.ts` | Compact rendering variant for narrow mode   |
+| `src/progressView/frontend/styles/`                  | Responsive styles for stream tabs           |
 
 ### Phase 6: Header Toolbar with Navigation
 
@@ -448,29 +451,43 @@ Add a header toolbar to the progress view with context-aware navigation and pop-
 The header renders differently based on current placement:
 
 **Primary sidebar** (full toolbar):
+
 ```html
 <div class="progress-header">
-  <vscode-button appearance="icon" @click=${this.onBackToSetup}
-    title="Back to setup">
+  <vscode-button
+    appearance="icon"
+    @click="${this.onBackToSetup}"
+    title="Back to setup"
+  >
     <span class="codicon codicon-arrow-left"></span>
   </vscode-button>
   <span class="header-title">ProgressBoard</span>
-  <vscode-button appearance="icon" @click=${this.onPopOutSecondary}
-    title="Open in secondary sidebar">
+  <vscode-button
+    appearance="icon"
+    @click="${this.onPopOutSecondary}"
+    title="Open in secondary sidebar"
+  >
     <span class="codicon codicon-layout-sidebar-right"></span>
   </vscode-button>
-  <vscode-button appearance="icon" @click=${this.onPopOutEditor}
-    title="Open in editor">
+  <vscode-button
+    appearance="icon"
+    @click="${this.onPopOutEditor}"
+    title="Open in editor"
+  >
     <span class="codicon codicon-link-external"></span>
   </vscode-button>
 </div>
 ```
 
 **Secondary sidebar or editor** (pop-back only):
+
 ```html
 <div class="progress-header">
-  <vscode-button appearance="icon" @click=${this.onPopBack}
-    title="Back to sidebar">
+  <vscode-button
+    appearance="icon"
+    @click="${this.onPopBack}"
+    title="Back to sidebar"
+  >
     <span class="codicon codicon-layout-sidebar-left"></span>
   </vscode-button>
   <span class="header-title">ProgressBoard</span>
@@ -481,44 +498,44 @@ The backend informs the frontend of its current placement via an outbound messag
 
 #### Files Modified
 
-| File | Change |
-|------|--------|
-| `src/progressView/frontend/ProgressApp.ts` | Add header bar with context-aware buttons |
+| File                                             | Change                                                 |
+| ------------------------------------------------ | ------------------------------------------------------ |
+| `src/progressView/frontend/ProgressApp.ts`       | Add header bar with context-aware buttons              |
 | `src/progressView/ProgressViewMessageHandler.ts` | Handle `BACK_TO_SETUP` message; send placement context |
-| `src/shared/schemas/progressView.ts` | Add placement context to outbound messages |
+| `src/shared/schemas/progressView.ts`             | Add placement context to outbound messages             |
 
 ## Surface Area
 
 ### Removed
 
-| Component | Reason |
-|-----------|--------|
+| Component                                     | Reason                                                   |
+| --------------------------------------------- | -------------------------------------------------------- |
 | `texra-panel` view container (`package.json`) | No longer needed; progress view moves to primary sidebar |
-| Bottom panel icon in activity bar | Replaced by sidebar co-location |
+| Bottom panel icon in activity bar             | Replaced by sidebar co-location                          |
 
 ### Added
 
-| Component | Reason |
-|-----------|--------|
-| `texra-secondary` view container (`package.json`) | Secondary sidebar pop-out target |
-| `texra.progressView.secondary` view (`package.json`) | Secondary sidebar progress view instance |
-| `texra.activeView` context key | Controls primary sidebar view swapping |
-| `texra.progressLocation` context key | Controls secondary sidebar view visibility |
+| Component                                            | Reason                                     |
+| ---------------------------------------------------- | ------------------------------------------ |
+| `texra-secondary` view container (`package.json`)    | Secondary sidebar pop-out target           |
+| `texra.progressView.secondary` view (`package.json`) | Secondary sidebar progress view instance   |
+| `texra.activeView` context key                       | Controls primary sidebar view swapping     |
+| `texra.progressLocation` context key                 | Controls secondary sidebar view visibility |
 
 ### Modified
 
-| File | Nature of Change |
-|------|-----------------|
-| `package.json` | View container restructuring, `when` clauses, secondary sidebar, engine version bump |
-| `src/extension.ts` | Context key initialization, secondary sidebar view registration |
-| `src/progressView/ProgressViewProvider.ts` | Three-target webview management, pop-out/pop-back methods, sidebar swap helpers |
-| `src/progressView/frontend/ProgressApp.ts` | Header toolbar, ResizeObserver, pop-out/pop-back messages |
-| `src/progressView/frontend/components/StreamTabs.ts` | Responsive compact variant |
-| `src/progressView/ProgressViewMessageHandler.ts` | New inbound message handlers, placement context |
-| `src/shared/schemas/progressView.ts` | New message types, placement enum |
-| `src/commands/progress/progressViewCommands.ts` | Updated pop-out commands |
-| `src/commands/agent/executeCommands.ts` | Auto-swap to progress on execute |
-| `src/MainViewProvider.ts` | Sidebar swap helper |
+| File                                                 | Nature of Change                                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `package.json`                                       | View container restructuring, `when` clauses, secondary sidebar, engine version bump |
+| `src/extension.ts`                                   | Context key initialization, secondary sidebar view registration                      |
+| `src/progressView/ProgressViewProvider.ts`           | Three-target webview management, pop-out/pop-back methods, sidebar swap helpers      |
+| `src/progressView/frontend/ProgressApp.ts`           | Header toolbar, ResizeObserver, pop-out/pop-back messages                            |
+| `src/progressView/frontend/components/StreamTabs.ts` | Responsive compact variant                                                           |
+| `src/progressView/ProgressViewMessageHandler.ts`     | New inbound message handlers, placement context                                      |
+| `src/shared/schemas/progressView.ts`                 | New message types, placement enum                                                    |
+| `src/commands/progress/progressViewCommands.ts`      | Updated pop-out commands                                                             |
+| `src/commands/agent/executeCommands.ts`              | Auto-swap to progress on execute                                                     |
+| `src/MainViewProvider.ts`                            | Sidebar swap helper                                                                  |
 
 ### Unchanged
 
