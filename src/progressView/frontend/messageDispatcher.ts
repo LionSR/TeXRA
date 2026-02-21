@@ -29,6 +29,7 @@ import {
   updateNestedRounds,
 } from './stateUtils';
 import {
+  createStreamLogs,
   getStreamState,
   isToolUseState,
   isWorkflowState,
@@ -147,7 +148,9 @@ function mergeBackendOwnedState(
   backendState: StreamState,
 ): StreamState {
   if (existing.kind !== backendState.kind) {
-    return backendState;
+    // taskGroups is frontend-owned (populated via ADD_TASK_GROUP/UPDATE_TASK_GROUP,
+    // never included in metadata syncs), so preserve it across kind changes.
+    return { ...backendState, taskGroups: existing.taskGroups };
   }
   return {
     ...existing,
@@ -436,7 +439,7 @@ const handlers: HandlerRegistry = {
     }
 
     // Update logs in the separate streamLogs Map (after setStreamState so the entry exists)
-    ctx.setStreamLogs(stream, () => ({ logs: messages }));
+    ctx.setStreamLogs(stream, () => createStreamLogs(messages));
   },
 
   // --- Log updates ---
@@ -460,12 +463,15 @@ const handlers: HandlerRegistry = {
     }
 
     ctx.setStreamLogs(data.stream, (prev) => {
-      // Guard: skip if this message is already in the log list (race between
-      // UPDATE_LOGS and APPEND_LOG can cause the same entry to arrive twice).
-      if (logId && prev.logs.some((entry) => entry.id === logId)) {
+      // O(1) duplicate check via logIndex (race between UPDATE_LOGS and
+      // APPEND_LOG can cause the same entry to arrive twice).
+      if (logId && prev.logIndex.has(logId)) {
         return prev;
       }
-      return { logs: [...prev.logs, mergedLogMessage] };
+      const newLogs = [...prev.logs, mergedLogMessage];
+      const newIndex = new Map(prev.logIndex as Map<string, number>);
+      newIndex.set(logId, newLogs.length - 1);
+      return { logs: newLogs, logIndex: newIndex };
     });
   },
 
@@ -473,9 +479,9 @@ const handlers: HandlerRegistry = {
     const logId = data.logMessage.id;
 
     ctx.setStreamLogs(data.stream, (prev) => {
-      const logIndex = prev.logs.findIndex((entry) => entry.id === logId);
+      const idx = prev.logIndex.get(logId);
 
-      if (logIndex < 0) {
+      if (idx === undefined) {
         // Out-of-order: APPEND hasn't arrived yet, stash for later merge
         if (logId) {
           const key = getPendingLogKey(data.stream, logId);
@@ -489,8 +495,9 @@ const handlers: HandlerRegistry = {
       }
 
       const newLogs = [...prev.logs];
-      newLogs[logIndex] = data.logMessage;
-      return { logs: newLogs };
+      newLogs[idx] = data.logMessage;
+      // Reuse logIndex — position unchanged, only the object at that index
+      return { logs: newLogs, logIndex: prev.logIndex };
     });
   },
 
@@ -642,8 +649,6 @@ const handlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION]: (data, ctx) => {
     if (data.action === 'show') {
       const { permission } = data;
-      if (!permission) return;
-
       if (permission.kind === PERMISSION_KIND.PROPOSAL) {
         // Drop if this proposal was already resolved (out-of-order messages)
         if (resolvedProposalIds.delete(permission.data.proposalId)) return;
@@ -679,8 +684,6 @@ const handlers: HandlerRegistry = {
     }
 
     const { kind, id } = data;
-    if (!kind || !id) return;
-
     if (kind === PERMISSION_KIND.TOOL_EDIT) {
       removePrompt(ctx, PERMISSION_KIND.TOOL_EDIT, 'requestId', id);
       return;

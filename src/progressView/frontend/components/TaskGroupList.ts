@@ -105,6 +105,12 @@ export class TaskGroupList extends LitElement {
   /** Memoized set of root group IDs for isGroupVisible() */
   private cachedRootGroupIds: Set<string> = new Set();
 
+  /** Memoized tool-use timeline (ungrouped msgs + groups sorted chronologically) */
+  private cachedTimeline: Array<
+    | { key: string; time: number; msg: LogMessageData }
+    | { key: string; time: number; tree: GroupTree }
+  > = [];
+
   /** Reference to the scroll container */
   @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
   private scrollContainer?: HTMLElement;
@@ -163,6 +169,22 @@ export class TaskGroupList extends LitElement {
       this.cachedRootGroupIds = new Set(
         this.groups.filter((g) => !g.parentGroupId).map((g) => g.id),
       );
+    }
+
+    // Recompute tool-use timeline only when inputs change
+    if (this.isToolUse && (groupsChanged || messagesChanged)) {
+      this.cachedTimeline = [
+        ...this.cachedUngrouped.map((m) => ({
+          key: m.id,
+          time: m.timestamp ?? 0,
+          msg: m,
+        })),
+        ...this.cachedTree.map((t) => ({
+          key: t.group.id,
+          time: t.group.startTime ?? 0,
+          tree: t,
+        })),
+      ].sort((a, b) => a.time - b.time);
     }
   }
 
@@ -505,28 +527,16 @@ export class TaskGroupList extends LitElement {
     if (this.isToolUse) {
       // Tool-use: interleave ungrouped messages (user input, follow-ups, errors)
       // with groups chronologically so the conversation reads top-to-bottom.
-      const timeline = [
-        ...this.cachedUngrouped.map((m) => ({
-          key: m.id,
-          time: m.timestamp ?? 0,
-          msg: m,
-        })),
-        ...this.cachedTree.map((t) => ({
-          key: t.group.id,
-          time: t.group.startTime ?? 0,
-          tree: t,
-        })),
-      ].sort((a, b) => a.time - b.time);
-
+      // Timeline is memoized in willUpdate() — only rebuilt when inputs change.
       return html`
         <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
           ${repeat(
-            timeline,
+            this.cachedTimeline,
             (item) => item.key,
             (item) =>
               'msg' in item
                 ? guard([item.msg], () => formatLogEntry(item.msg))
-                : this.renderGroupNode(item.tree!),
+                : this.renderGroupNode(item.tree),
           )}
         </vscode-scrollable>
       `;
