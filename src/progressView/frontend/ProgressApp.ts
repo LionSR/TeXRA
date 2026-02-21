@@ -1,3 +1,5 @@
+import { create } from 'mutative';
+
 // Third-party imports
 import { html, css, type TemplateResult } from 'lit';
 import { provide } from '@lit/context';
@@ -427,9 +429,7 @@ export class ProgressApp extends BaseWebviewApp<ProgressViewOutboundMessage> {
     // Only fall back to streams.find() when creating default state for new streams.
     let current = this.appState.streamStates.get(streamId);
     if (!current) {
-      const streamInfo = this.appState.streams.find(
-        (stream) => stream.name === streamId,
-      );
+      const streamInfo = this.appState.streamById.get(streamId);
       // Skip unknown streams - they'll receive full state via UPDATE_LOGS after initialization
       if (!streamInfo) return;
       current = getStreamState(
@@ -441,9 +441,9 @@ export class ProgressApp extends BaseWebviewApp<ProgressViewOutboundMessage> {
     const updated = updater(current);
     // Skip no-op updates: avoid Map copy + appState spread + willUpdate cycle
     if (updated === current) return;
-    const nextStates = new Map(this.appState.streamStates);
-    nextStates.set(streamId, updated);
-    this.appState = { ...this.appState, streamStates: nextStates };
+    this.appState = create(this.appState, (draft) => {
+      draft.streamStates.set(streamId, updated);
+    });
   }
 
   private setStreamLogs(
@@ -456,9 +456,9 @@ export class ProgressApp extends BaseWebviewApp<ProgressViewOutboundMessage> {
     const current = this.appState.streamLogs.get(streamId) ?? EMPTY_STREAM_LOGS;
     const updated = updater(current);
     if (updated === current) return;
-    const nextLogs = new Map(this.appState.streamLogs);
-    nextLogs.set(streamId, updated);
-    this.appState = { ...this.appState, streamLogs: nextLogs };
+    this.appState = create(this.appState, (draft) => {
+      draft.streamLogs.set(streamId, updated);
+    });
   }
 
   /**
@@ -555,15 +555,11 @@ export class ProgressApp extends BaseWebviewApp<ProgressViewOutboundMessage> {
 
     this.setStreamState(streamId, (prev) => {
       if (!isToolUseState(prev)) return prev;
-      return {
-        ...prev,
-        ui: {
-          ...prev.ui,
-          shouldFocusFollowUp: false,
-          polishedText: null,
-          transcribedText: null,
-        },
-      };
+      return create(prev, (draft) => {
+        draft.ui.shouldFocusFollowUp = false;
+        draft.ui.polishedText = null;
+        draft.ui.transcribedText = null;
+      });
     });
   }
 }

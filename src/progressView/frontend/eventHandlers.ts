@@ -1,3 +1,5 @@
+import { create } from 'mutative';
+
 // Local imports - shared webview
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { postMessage } from '@shared/vscode';
@@ -7,6 +9,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view
 import {
+  buildStreamById,
   getStreamState,
   isToolUseState,
   isWorkflowState,
@@ -73,7 +76,11 @@ export function handleStreamSwitch(
 ): void {
   const streamId = event.detail.streamId;
   // Optimistic: highlight tab immediately
-  ctx.setState((prev) => ({ ...prev, activeStreamId: streamId }));
+  ctx.setState((prev) =>
+    create(prev, (draft) => {
+      draft.activeStreamId = streamId;
+    }),
+  );
   postMessage(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, { stream: streamId });
 }
 
@@ -84,30 +91,18 @@ export function handleStreamDelete(
   const streamId = event.detail.streamId;
 
   // Optimistic removal: apply delete locally before notifying backend
-  ctx.setState((prev) => {
-    const nextStates = new Map(prev.streamStates);
-    nextStates.delete(streamId);
-
-    const nextLogs = new Map(prev.streamLogs);
-    nextLogs.delete(streamId);
-
-    const nextStreams = prev.streams.filter((s) => s.name !== streamId);
-    const nextActiveStreamId =
-      prev.activeStreamId === streamId
-        ? (nextStreams.at(0)?.name ?? null)
-        : prev.activeStreamId;
-
-    return {
-      ...prev,
-      streams: nextStreams,
-      streamStates: nextStates,
-      streamLogs: nextLogs,
-      activeStreamId: nextActiveStreamId,
-      followupOptionsByStream: new Map(
-        [...prev.followupOptionsByStream].filter(([key]) => key !== streamId),
-      ),
-    };
-  });
+  ctx.setState((prev) =>
+    create(prev, (draft) => {
+      draft.streamStates.delete(streamId);
+      draft.streamLogs.delete(streamId);
+      draft.streams = draft.streams.filter((s) => s.name !== streamId);
+      draft.streamById = buildStreamById(draft.streams);
+      if (draft.activeStreamId === streamId) {
+        draft.activeStreamId = draft.streams.at(0)?.name ?? null;
+      }
+      draft.followupOptionsByStream.delete(streamId);
+    }),
+  );
 
   // Fire-and-forget to backend
   postMessage(PROGRESS_VIEW_COMMANDS.DELETE_STREAM, { stream: streamId });
@@ -118,7 +113,11 @@ export function handleFilterChange(
   ctx: FrontendEventHandlerContext,
 ): void {
   const { filter } = event.detail;
-  ctx.setState((prev) => ({ ...prev, streamFilter: filter }));
+  ctx.setState((prev) =>
+    create(prev, (draft) => {
+      draft.streamFilter = filter;
+    }),
+  );
   ctx.savePrefs?.({ streamFilter: filter });
   postMessage(PROGRESS_VIEW_COMMANDS.FILTER_STREAMS, { filter });
 }
@@ -128,7 +127,11 @@ export function handleSortChange(
   ctx: FrontendEventHandlerContext,
 ): void {
   const { sort } = event.detail;
-  ctx.setState((prev) => ({ ...prev, streamSort: sort }));
+  ctx.setState((prev) =>
+    create(prev, (draft) => {
+      draft.streamSort = sort;
+    }),
+  );
   ctx.savePrefs?.({ streamSort: sort });
   postMessage(PROGRESS_VIEW_COMMANDS.SORT_STREAMS, { sortBy: sort });
 }
@@ -156,7 +159,9 @@ export function handleRunSelected(
 
   ctx.setStreamState(streamId, (prev) => {
     if (!isWorkflowState(prev)) return prev;
-    return { ...prev, ui: { ...prev.ui, selectedRunId: event.detail.runId } };
+    return create(prev, (draft) => {
+      draft.ui.selectedRunId = event.detail.runId;
+    });
   });
 }
 
@@ -179,7 +184,9 @@ export function handleFollowUpChange(
   if (!streamId) return;
   ctx.setStreamState(streamId, (prev) => {
     if (!isToolUseState(prev)) return prev;
-    return { ...prev, ui: { ...prev.ui, followUpText: event.detail.value } };
+    return create(prev, (draft) => {
+      draft.ui.followUpText = event.detail.value;
+    });
   });
 }
 
@@ -191,7 +198,7 @@ function getActiveFollowUpText(
   const streamId = state.activeStreamId;
   if (!streamId) return null;
 
-  const streamInfo = state.streams.find((stream) => stream.name === streamId);
+  const streamInfo = state.streamById.get(streamId);
   const streamState = getStreamState(
     state,
     streamId,
@@ -215,7 +222,9 @@ export function handleFollowUpSend(ctx: FrontendEventHandlerContext): void {
   });
   ctx.setStreamState(result.streamId, (prev) => {
     if (!isToolUseState(prev)) return prev;
-    return { ...prev, ui: { ...prev.ui, followUpText: '' } };
+    return create(prev, (draft) => {
+      draft.ui.followUpText = '';
+    });
   });
 }
 
@@ -234,7 +243,9 @@ export function handleFollowUpClear(ctx: FrontendEventHandlerContext): void {
   if (!streamId) return;
   ctx.setStreamState(streamId, (prev) => {
     if (!isToolUseState(prev)) return prev;
-    return { ...prev, ui: { ...prev.ui, followUpText: '' } };
+    return create(prev, (draft) => {
+      draft.ui.followUpText = '';
+    });
   });
 }
 
@@ -256,7 +267,9 @@ export function handleFollowupModeChange(
   if (!streamId) return;
   ctx.setStreamState(streamId, (prev) => {
     if (!isWorkflowState(prev)) return prev;
-    return { ...prev, followupMode: event.detail.mode };
+    return create(prev, (draft) => {
+      draft.followupMode = event.detail.mode;
+    });
   });
 }
 

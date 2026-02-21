@@ -9,6 +9,8 @@
  * dispatchMessage(raw, ctx);
  */
 
+import { create } from 'mutative';
+
 // Local imports - shared schemas
 import {
   createStreamState,
@@ -30,6 +32,7 @@ import {
   updateNestedRounds,
 } from './stateUtils';
 import {
+  buildStreamById,
   createStreamLogs,
   getStreamState,
   isToolUseState,
@@ -138,10 +141,11 @@ function setActiveStreamRecording(
 ): void {
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
-  updateToolUseState(ctx, streamId, (prev) => ({
-    ...prev,
-    ui: { ...prev.ui, recording },
-  }));
+  updateToolUseState(ctx, streamId, (prev) =>
+    create(prev, (draft) => {
+      draft.ui.recording = recording;
+    }),
+  );
 }
 
 function mergeBackendOwnedState(
@@ -156,16 +160,15 @@ function mergeBackendOwnedState(
       taskGroups: existing.taskGroups,
     });
   }
-  return {
-    ...existing,
-    status: metadata.status,
-    lastTimestamp: metadata.lastTimestamp,
-    conversationProgress: metadata.conversationProgress,
-    activeSubagents: metadata.activeSubagents,
-    finishedSubagentCount: metadata.finishedSubagentCount,
-    activeProcesses: metadata.activeProcesses,
-    finishedProcessCount: metadata.finishedProcessCount,
-  };
+  return create(existing, (draft) => {
+    draft.status = metadata.status;
+    draft.lastTimestamp = metadata.lastTimestamp;
+    draft.conversationProgress = metadata.conversationProgress;
+    draft.activeSubagents = metadata.activeSubagents;
+    draft.finishedSubagentCount = metadata.finishedSubagentCount;
+    draft.activeProcesses = metadata.activeProcesses;
+    draft.finishedProcessCount = metadata.finishedProcessCount;
+  });
 }
 
 function updateStreamInfo(
@@ -173,34 +176,42 @@ function updateStreamInfo(
   streams: StreamTabInfo[],
   backendMetadata?: Record<string, StreamMetadata>,
 ): ProgressState {
-  const nextStates = new Map(state.streamStates);
-  const nextLogs = new Map(state.streamLogs);
-  const knownStreams = new Set(streams.map((stream) => stream.name));
-
-  for (const key of nextStates.keys()) {
-    if (!knownStreams.has(key)) {
-      nextStates.delete(key);
-      nextLogs.delete(key);
-      clearPendingLogUpdatesForStream(key);
-    }
-  }
-
+  // Pre-compute merged states outside the draft (mergeBackendOwnedState uses
+  // create() internally, which cannot operate on draft proxies).
+  const mergedStates = new Map<string, StreamState>();
   for (const stream of streams) {
-    const existing = nextStates.get(stream.name);
+    const existing = state.streamStates.get(stream.name);
     const metadata = backendMetadata?.[stream.name];
     if (metadata) {
-      nextStates.set(
+      mergedStates.set(
         stream.name,
         existing
           ? mergeBackendOwnedState(existing, metadata)
           : createStreamState(stream.agentCategory, metadata),
       );
     } else if (!existing) {
-      nextStates.set(stream.name, createStreamState(stream.agentCategory));
+      mergedStates.set(stream.name, createStreamState(stream.agentCategory));
     }
   }
 
-  return { ...state, streams, streamStates: nextStates, streamLogs: nextLogs };
+  return create(state, (draft) => {
+    const knownStreams = new Set(streams.map((s) => s.name));
+
+    for (const key of draft.streamStates.keys()) {
+      if (!knownStreams.has(key)) {
+        draft.streamStates.delete(key);
+        draft.streamLogs.delete(key);
+        clearPendingLogUpdatesForStream(key);
+      }
+    }
+
+    for (const [name, merged] of mergedStates) {
+      draft.streamStates.set(name, merged);
+    }
+
+    draft.streams = streams;
+    draft.streamById = buildStreamById(streams);
+  });
 }
 
 // ============================================================
@@ -234,11 +245,12 @@ function applyLogUpdate(data: LogsPayload, ctx: MessageHandlerContext): void {
 
   if (!stream && action === 'clear') {
     pendingLogUpdates.clear();
-    ctx.setState((prev) => ({
-      ...prev,
-      streamStates: new Map(),
-      streamLogs: new Map(),
-    }));
+    ctx.setState((prev) =>
+      create(prev, (draft) => {
+        draft.streamStates = new Map();
+        draft.streamLogs = new Map();
+      }),
+    );
     return;
   }
 
@@ -261,58 +273,54 @@ function applyLogUpdate(data: LogsPayload, ctx: MessageHandlerContext): void {
       contextState,
     } = data;
 
-    const base = {
-      taskGroups: isClear ? [] : (groups ?? prev.taskGroups),
-      contextState: contextState ?? prev.contextState,
-    };
-
     if (isWorkflowState(prev)) {
       if (isClear) {
-        return {
-          ...prev,
-          ...base,
-          activeRunId: null,
-          ui: { ...prev.ui, selectedRunId: null },
-          runInstructions: {},
-          runUsage: {},
-          runFiles: {},
-          runMissingOutputs: {},
-        };
+        return create(prev, (draft) => {
+          draft.taskGroups = [];
+          draft.contextState = contextState ?? prev.contextState;
+          draft.activeRunId = null;
+          draft.ui.selectedRunId = null;
+          draft.runInstructions = {};
+          draft.runUsage = {};
+          draft.runFiles = {};
+          draft.runMissingOutputs = {};
+        });
       }
-      return {
-        ...prev,
-        ...base,
-        activeRunId: activeRunId ?? prev.activeRunId,
-        runInstructions: runInstructions
-          ? { ...prev.runInstructions, ...runInstructions }
-          : prev.runInstructions,
-        runUsage: runUsage ? { ...prev.runUsage, ...runUsage } : prev.runUsage,
-        runFiles: runFiles ? { ...prev.runFiles, ...runFiles } : prev.runFiles,
-        runMissingOutputs: runMissingOutputs
-          ? { ...prev.runMissingOutputs, ...runMissingOutputs }
-          : prev.runMissingOutputs,
-      };
+      return create(prev, (draft) => {
+        draft.taskGroups = groups ?? prev.taskGroups;
+        draft.contextState = contextState ?? prev.contextState;
+        draft.activeRunId = activeRunId ?? prev.activeRunId;
+        if (runInstructions)
+          Object.assign(draft.runInstructions, runInstructions);
+        if (runUsage) Object.assign(draft.runUsage, runUsage);
+        if (runFiles) Object.assign(draft.runFiles, runFiles);
+        if (runMissingOutputs)
+          Object.assign(draft.runMissingOutputs, runMissingOutputs);
+      });
     }
 
     // Tool-use streams: compute sessionUsage from runUsage (sum all runs)
     // Ignore empty payloads so we don't overwrite existing totals with zeros.
     if (isToolUseState(prev) && runUsage && Object.keys(runUsage).length > 0) {
-      return {
-        ...prev,
-        ...base,
-        sessionUsage: sumUsageStats(Object.values(runUsage)),
-      };
+      return create(prev, (draft) => {
+        draft.taskGroups = isClear ? [] : (groups ?? prev.taskGroups);
+        draft.contextState = contextState ?? prev.contextState;
+        draft.sessionUsage = sumUsageStats(Object.values(runUsage));
+      });
     }
 
-    return { ...prev, ...base };
+    return create(prev, (draft) => {
+      draft.taskGroups = isClear ? [] : (groups ?? prev.taskGroups);
+      draft.contextState = contextState ?? prev.contextState;
+    });
   });
 
   if (isClear) {
-    ctx.setState((prev) => {
-      const nextLogs = new Map(prev.streamLogs);
-      nextLogs.delete(stream);
-      return { ...prev, streamLogs: nextLogs };
-    });
+    ctx.setState((prev) =>
+      create(prev, (draft) => {
+        draft.streamLogs.delete(stream);
+      }),
+    );
     return;
   }
 
@@ -336,18 +344,18 @@ const handlers: HandlerRegistry = {
       activeStream && validStreamIds.has(activeStream)
         ? activeStream
         : fallbackStreamId;
-    const nextFollowupOptions = new Map(
-      [...previousState.followupOptionsByStream].filter(([streamId]) =>
-        validStreamIds.has(streamId),
-      ),
-    );
 
-    ctx.setState(() => ({
-      ...updated,
-      activeStreamId: nextActiveStreamId,
-      streamFilter: data.agentFilter,
-      followupOptionsByStream: nextFollowupOptions,
-    }));
+    ctx.setState(() =>
+      create(updated, (draft) => {
+        draft.activeStreamId = nextActiveStreamId;
+        draft.streamFilter = data.agentFilter;
+        for (const key of draft.followupOptionsByStream.keys()) {
+          if (!validStreamIds.has(key)) {
+            draft.followupOptionsByStream.delete(key);
+          }
+        }
+      }),
+    );
   },
 
   [PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM]: (data, ctx) => {
@@ -361,82 +369,77 @@ const handlers: HandlerRegistry = {
       if (nextActiveStreamId === prev.activeStreamId) {
         return prev;
       }
-      return { ...prev, activeStreamId: nextActiveStreamId };
+      return create(prev, (draft) => {
+        draft.activeStreamId = nextActiveStreamId;
+      });
     });
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS]: (data, ctx) => {
-    ctx.setStreamState(data.stream, (prev) => ({
-      ...prev,
-      conversationProgress: data.progress,
-    }));
+    ctx.setStreamState(data.stream, (prev) =>
+      create(prev, (draft) => {
+        draft.conversationProgress = data.progress;
+      }),
+    );
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES]: (data, ctx) => {
-    ctx.setStreamState(data.stream, (prev) => ({
-      ...prev,
-      activeSubagents: data.activeSubagents,
-      finishedSubagentCount: data.finishedSubagentCount,
-      activeProcesses: data.activeProcesses,
-      finishedProcessCount: data.finishedProcessCount,
-    }));
+    ctx.setStreamState(data.stream, (prev) =>
+      create(prev, (draft) => {
+        draft.activeSubagents = data.activeSubagents;
+        draft.finishedSubagentCount = data.finishedSubagentCount;
+        draft.activeProcesses = data.activeProcesses;
+        draft.finishedProcessCount = data.finishedProcessCount;
+      }),
+    );
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM]: (data, ctx) => {
     ctx.setState((prev) => {
       const nextParentStreamId = data.parentStreamId ?? undefined;
-      const target = prev.streams.find((stream) => stream.name === data.stream);
+      const target = prev.streamById.get(data.stream);
       if (!target || target.parentStreamId === nextParentStreamId) return prev;
-      const nextStreams = prev.streams.map((stream) =>
-        stream.name === data.stream
-          ? { ...stream, parentStreamId: nextParentStreamId }
-          : stream,
-      );
-      return { ...prev, streams: nextStreams };
+      const idx = prev.streams.indexOf(target);
+      const updated = { ...target, parentStreamId: nextParentStreamId };
+      return create(prev, (draft) => {
+        draft.streams[idx] = updated;
+        draft.streamById = buildStreamById(draft.streams);
+      });
     });
   },
 
   [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: (data, ctx) => {
     const streamId = data.stream;
-    const state = ctx.getState();
-
-    const nextStates = new Map(state.streamStates);
-    nextStates.delete(streamId);
-
-    const nextLogs = new Map(state.streamLogs);
-    nextLogs.delete(streamId);
-
-    const nextStreams = state.streams.filter((s) => s.name !== streamId);
-    const nextActiveStreamId =
-      state.activeStreamId === streamId ? null : state.activeStreamId;
 
     // Always clear pending log updates for deleted stream, not just active stream
     clearPendingLogUpdatesForStream(streamId);
 
-    ctx.setState(() => ({
-      ...state,
-      streams: nextStreams,
-      streamStates: nextStates,
-      streamLogs: nextLogs,
-      activeStreamId: nextActiveStreamId,
-      followupOptionsByStream: new Map(
-        [...state.followupOptionsByStream].filter(
-          ([streamKey]) => streamKey !== streamId,
-        ),
-      ),
-    }));
+    ctx.setState((prev) =>
+      create(prev, (draft) => {
+        draft.streamStates.delete(streamId);
+        draft.streamLogs.delete(streamId);
+        draft.streams = draft.streams.filter((s) => s.name !== streamId);
+        draft.streamById = buildStreamById(draft.streams);
+        if (draft.activeStreamId === streamId) {
+          draft.activeStreamId = null;
+        }
+        draft.followupOptionsByStream.delete(streamId);
+      }),
+    );
   },
 
   [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: (_data, ctx) => {
     pendingLogUpdates.clear();
-    ctx.setState((prev) => ({
-      ...prev,
-      streams: [],
-      streamStates: new Map(),
-      streamLogs: new Map(),
-      activeStreamId: null,
-      followupOptionsByStream: new Map(),
-    }));
+    ctx.setState((prev) =>
+      create(prev, (draft) => {
+        draft.streams = [];
+        draft.streamById = new Map();
+        draft.streamStates = new Map();
+        draft.streamLogs = new Map();
+        draft.activeStreamId = null;
+        draft.followupOptionsByStream = new Map();
+      }),
+    );
   },
 
   // Log updates
@@ -470,7 +473,7 @@ const handlers: HandlerRegistry = {
         return prev;
       }
       const newLogs = [...prev.logs, mergedLogMessage];
-      const newIndex = new Map(prev.logIndex as Map<string, number>);
+      const newIndex = new Map(prev.logIndex);
       newIndex.set(logId, newLogs.length - 1);
       return { logs: newLogs, logIndex: newIndex };
     });
@@ -512,46 +515,45 @@ const handlers: HandlerRegistry = {
     // Single atomic update: stream state + tab metadata in one setState call,
     // avoiding two Map copies and two Lit re-render triggers.
     ctx.setState((prev) => {
-      const streamInfo = prev.streams.find((s) => s.name === stream);
-      const nextStates = new Map(prev.streamStates);
+      const streamInfo = prev.streamById.get(stream);
+      if (!streamInfo) return prev;
 
-      if (streamInfo) {
-        const current = getStreamState(prev, stream, streamInfo.agentCategory);
-        const resolvedTimestamp = lastTimestamp ?? current.lastTimestamp;
-        const updatedState =
-          isToolUseState(current) && shouldFocus
-            ? {
-                ...current,
-                status,
-                lastTimestamp: resolvedTimestamp,
-                ui: { ...current.ui, shouldFocusFollowUp: true },
-              }
-            : { ...current, status, lastTimestamp: resolvedTimestamp };
-        nextStates.set(stream, updatedState);
-      }
+      const current = getStreamState(prev, stream, streamInfo.agentCategory);
+      const resolvedTimestamp = lastTimestamp ?? current.lastTimestamp;
+      const updatedState = create(current, (draft) => {
+        draft.status = status;
+        draft.lastTimestamp = resolvedTimestamp;
+        if (isToolUseState(current) && shouldFocus) {
+          (draft as typeof current).ui.shouldFocusFollowUp = true;
+        }
+      });
 
-      return {
-        ...prev,
-        streamStates: nextStates,
-      };
+      return create(prev, (draft) => {
+        draft.streamStates.set(stream, updatedState);
+      });
     });
   },
 
   // File and output updates
   [PROGRESS_VIEW_COMMANDS.UPDATE_FILES]: (data, ctx) => {
     const { stream, ...update } = data;
-    updateWorkflowState(ctx, stream, (prev) => ({
-      ...prev,
-      runFiles: updateNestedRounds(prev.runFiles, update),
-    }));
+    updateWorkflowState(ctx, stream, (prev) =>
+      create(prev, (draft) => {
+        draft.runFiles = updateNestedRounds(prev.runFiles, update);
+      }),
+    );
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS]: (data, ctx) => {
     const { stream, ...update } = data;
-    updateWorkflowState(ctx, stream, (prev) => ({
-      ...prev,
-      runMissingOutputs: updateNestedRounds(prev.runMissingOutputs, update),
-    }));
+    updateWorkflowState(ctx, stream, (prev) =>
+      create(prev, (draft) => {
+        draft.runMissingOutputs = updateNestedRounds(
+          prev.runMissingOutputs,
+          update,
+        );
+      }),
+    );
   },
 
   // Run-specific updates
@@ -559,13 +561,15 @@ const handlers: HandlerRegistry = {
     const { stream, instruction, runId } = data;
     if (!stream || !runId) return;
 
-    updateWorkflowState(ctx, stream, (prev) => {
-      const { [runId]: _, ...rest } = prev.runInstructions;
-      return {
-        ...prev,
-        runInstructions: instruction ? { ...rest, [runId]: instruction } : rest,
-      };
-    });
+    updateWorkflowState(ctx, stream, (prev) =>
+      create(prev, (draft) => {
+        if (instruction) {
+          draft.runInstructions[runId] = instruction;
+        } else {
+          delete draft.runInstructions[runId];
+        }
+      }),
+    );
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE]: (data, ctx) => {
@@ -573,74 +577,75 @@ const handlers: HandlerRegistry = {
     // Use StreamState.kind as single source of truth for stream type
     ctx.setStreamState(stream, (prev) => {
       if (isToolUseState(prev)) {
-        return { ...prev, sessionUsage: usage };
+        return create(prev, (draft) => {
+          draft.sessionUsage = usage;
+        });
       }
       if (isWorkflowState(prev)) {
-        return { ...prev, runUsage: { ...prev.runUsage, [runId]: usage } };
+        return create(prev, (draft) => {
+          draft.runUsage[runId] = usage;
+        });
       }
       return prev;
     });
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_CONTEXT_STATE]: (data, ctx) => {
-    ctx.setStreamState(data.stream, (prev) => ({
-      ...prev,
-      contextState: data.contextState,
-    }));
+    ctx.setStreamState(data.stream, (prev) =>
+      create(prev, (draft) => {
+        draft.contextState = data.contextState;
+      }),
+    );
   },
 
   // Task group updates
   [PROGRESS_VIEW_COMMANDS.ADD_TASK_GROUP]: (data, ctx) => {
-    ctx.setStreamState(data.stream, (prev) => ({
-      ...prev,
-      taskGroups: [...prev.taskGroups, data.group],
-    }));
+    ctx.setStreamState(data.stream, (prev) =>
+      create(prev, (draft) => {
+        draft.taskGroups.push(data.group);
+      }),
+    );
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_TASK_GROUP]: (data, ctx) => {
     const { streamId, id, status, endTime } = data.update;
-    ctx.setStreamState(streamId, (prev) => {
-      const existingGroup = prev.taskGroups.find((group) => group.id === id);
-      if (!existingGroup) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        taskGroups: prev.taskGroups.map((group) =>
-          group.id === id
-            ? {
-                ...group,
-                status: status ?? group.status,
-                endTime: endTime ?? group.endTime,
-              }
-            : group,
-        ),
-      };
-    });
+    ctx.setStreamState(streamId, (prev) =>
+      create(prev, (draft) => {
+        const group = draft.taskGroups.find((g) => g.id === id);
+        if (!group) return;
+        if (status) group.status = status;
+        if (endTime) group.endTime = endTime;
+      }),
+    );
   },
 
   // Tool-use specific
   [PROGRESS_VIEW_COMMANDS.UPDATE_TODOS]: (data, ctx) => {
-    updateToolUseState(ctx, data.stream, (prev) => ({
-      ...prev,
-      todos: data.todos,
-    }));
+    updateToolUseState(ctx, data.stream, (prev) =>
+      create(prev, (draft) => {
+        draft.todos = data.todos;
+      }),
+    );
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS]: (data, ctx) => {
-    updateToolUseState(ctx, data.stream, (prev) => ({
-      ...prev,
-      queuedFollowUps: data.messages,
-    }));
+    updateToolUseState(ctx, data.stream, (prev) =>
+      create(prev, (draft) => {
+        draft.queuedFollowUps = data.messages;
+      }),
+    );
   },
 
   // Approval requests
   [PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS]: (data, ctx) => {
     updateToolUseState(ctx, data.stream, (prev) =>
-      data.type === 'toolEdit'
-        ? { ...prev, toolEditBypass: data.bypassActive }
-        : { ...prev, superYoloBypass: data.bypassActive },
+      create(prev, (draft) => {
+        if (data.type === 'toolEdit') {
+          draft.toolEditBypass = data.bypassActive;
+        } else {
+          draft.superYoloBypass = data.bypassActive;
+        }
+      }),
     );
   },
 
@@ -694,50 +699,56 @@ const handlers: HandlerRegistry = {
 
     // 2. Todos and queued follow-ups
     if (data.todos || data.queuedFollowUps) {
-      updateToolUseState(ctx, data.stream, (prev) => ({
-        ...prev,
-        ...(data.todos && { todos: data.todos }),
-        ...(data.queuedFollowUps && { queuedFollowUps: data.queuedFollowUps }),
-      }));
+      updateToolUseState(ctx, data.stream, (prev) =>
+        create(prev, (draft) => {
+          if (data.todos) draft.todos = data.todos;
+          if (data.queuedFollowUps)
+            draft.queuedFollowUps = data.queuedFollowUps;
+        }),
+      );
     }
 
     // 3. Instruction
     if (data.instruction !== undefined && data.runId) {
-      updateWorkflowState(ctx, data.stream, (prev) => {
-        const runId = data.runId as string;
-        const { [runId]: _, ...rest } = prev.runInstructions;
-        return {
-          ...prev,
-          runInstructions: data.instruction
-            ? { ...rest, [runId]: data.instruction }
-            : rest,
-        };
-      });
+      updateWorkflowState(ctx, data.stream, (prev) =>
+        create(prev, (draft) => {
+          const runId = data.runId as string;
+          if (data.instruction) {
+            draft.runInstructions[runId] = data.instruction;
+          } else {
+            delete draft.runInstructions[runId];
+          }
+        }),
+      );
     }
 
     // 4. Active-stream state (R2: replaces separate syncActiveStreamState messages)
     if (data.conversationProgress || data.badges) {
-      ctx.setStreamState(data.stream, (prev) => ({
-        ...prev,
-        ...(data.conversationProgress && {
-          conversationProgress: data.conversationProgress,
+      ctx.setStreamState(data.stream, (prev) =>
+        create(prev, (draft) => {
+          if (data.conversationProgress) {
+            draft.conversationProgress = data.conversationProgress;
+          }
+          if (data.badges) {
+            draft.activeSubagents = data.badges.activeSubagents;
+            draft.finishedSubagentCount = data.badges.finishedSubagentCount;
+            draft.activeProcesses = data.badges.activeProcesses;
+            draft.finishedProcessCount = data.badges.finishedProcessCount;
+          }
         }),
-        ...(data.badges && data.badges),
-      }));
+      );
     }
     if (data.parentStreamId !== undefined) {
       ctx.setState((prev) => {
-        const target = prev.streams.find(
-          (stream) => stream.name === data.stream,
-        );
+        const target = prev.streamById.get(data.stream as string);
         if (!target || target.parentStreamId === data.parentStreamId)
           return prev;
-        const nextStreams = prev.streams.map((stream) =>
-          stream.name === data.stream
-            ? { ...stream, parentStreamId: data.parentStreamId }
-            : stream,
-        );
-        return { ...prev, streams: nextStreams };
+        const idx = prev.streams.indexOf(target);
+        const updated = { ...target, parentStreamId: data.parentStreamId };
+        return create(prev, (draft) => {
+          draft.streams[idx] = updated;
+          draft.streamById = buildStreamById(draft.streams);
+        });
       });
     }
   },
@@ -750,45 +761,29 @@ const handlers: HandlerRegistry = {
     if (!streamId) return;
     if (!ctx.getState().streamStates.has(streamId)) return;
 
-    updateToolUseState(ctx, streamId, (prev) => {
-      if (data.kind === 'polished' && data.text) {
-        return {
-          ...prev,
-          ui: {
-            ...prev.ui,
-            followUpText: data.text,
-            polishedText: data.text,
-            polishRevision: prev.ui.polishRevision + 1,
-            shouldFocusFollowUp: true,
-          },
-        };
-      }
+    updateToolUseState(ctx, streamId, (prev) =>
+      create(prev, (draft) => {
+        if (data.kind === 'polished' && data.text) {
+          draft.ui.followUpText = data.text;
+          draft.ui.polishedText = data.text;
+          draft.ui.polishRevision += 1;
+          draft.ui.shouldFocusFollowUp = true;
+          return;
+        }
 
-      if (data.kind === 'polishError') {
-        return {
-          ...prev,
-          ui: {
-            ...prev.ui,
-            polishedText: prev.ui.followUpText,
-            polishRevision: prev.ui.polishRevision + 1,
-            shouldFocusFollowUp: true,
-          },
-        };
-      }
+        if (data.kind === 'polishError') {
+          draft.ui.polishedText = prev.ui.followUpText;
+          draft.ui.polishRevision += 1;
+          draft.ui.shouldFocusFollowUp = true;
+          return;
+        }
 
-      if (data.kind === 'transcribed' && data.text) {
-        return {
-          ...prev,
-          ui: {
-            ...prev.ui,
-            transcribedText: data.text,
-            shouldFocusFollowUp: true,
-          },
-        };
-      }
-
-      return prev;
-    });
+        if (data.kind === 'transcribed' && data.text) {
+          draft.ui.transcribedText = data.text;
+          draft.ui.shouldFocusFollowUp = true;
+        }
+      }),
+    );
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING]: (data, ctx) =>
@@ -803,13 +798,11 @@ const handlers: HandlerRegistry = {
     // Guard: ignore late-arriving messages for deleted streams
     if (!ctx.getState().streamStates.has(stream)) return;
 
-    ctx.setState((prev) => ({
-      ...prev,
-      followupOptionsByStream: new Map(prev.followupOptionsByStream).set(
-        stream,
-        options,
-      ),
-    }));
+    ctx.setState((prev) =>
+      create(prev, (draft) => {
+        draft.followupOptionsByStream.set(stream, options);
+      }),
+    );
   },
 };
 

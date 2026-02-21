@@ -44,7 +44,7 @@ export type FollowupOptionsState = Omit<
 export interface StreamLogs {
   logs: LogMessageData[];
   /** O(1) lookup: log ID → array index. Maintained by mutation handlers. */
-  readonly logIndex: ReadonlyMap<string, number>;
+  logIndex: Map<string, number>;
 }
 
 export const EMPTY_STREAM_LOGS: StreamLogs = {
@@ -64,6 +64,8 @@ export function createStreamLogs(logs: LogMessageData[]): StreamLogs {
 export interface ProgressState {
   activeStreamId: StreamTabId | null;
   streams: StreamTabInfo[];
+  /** O(1) lookup by stream name. Maintained alongside streams array. */
+  streamById: Map<StreamTabId, StreamTabInfo>;
   streamFilter: StreamFilter;
   streamSort: StreamSort;
   /** Meta state per stream (status, todos, usage, ui, taskGroups, etc.) */
@@ -73,10 +75,18 @@ export interface ProgressState {
   followupOptionsByStream: Map<StreamTabId, FollowupOptionsState>;
 }
 
+/** Build a streamById lookup from an array of streams. */
+export function buildStreamById(
+  streams: StreamTabInfo[],
+): Map<StreamTabId, StreamTabInfo> {
+  return new Map(streams.map((s) => [s.name, s]));
+}
+
 export function createInitialState(): ProgressState {
   return {
     activeStreamId: null,
     streams: [],
+    streamById: new Map(),
     streamFilter: 'all',
     streamSort: 'time',
     streamStates: new Map(),
