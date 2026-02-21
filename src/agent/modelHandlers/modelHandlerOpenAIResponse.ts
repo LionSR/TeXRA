@@ -2268,7 +2268,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     // Build tool result as plain text - JSON wastes tokens
-    const combinedText = formatToolResultAsText(
+    let combinedText = formatToolResultAsText(
       result,
       finalResult.attachmentSummary,
     );
@@ -2299,6 +2299,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // but the model supports visual content, embed images/PDFs directly.
       const inlineParts = await this.buildInlineAttachmentParts(attachments);
       if (inlineParts.length > 0) {
+        // Rebuild text with 'included-inline' variant so the model doesn't get
+        // a misleading "use read_file" hint alongside the actual inline content.
+        const inlineSummary = formatAttachmentSummary(
+          attachments,
+          'included-inline',
+        );
+        finalResult.attachmentSummary = inlineSummary;
+        combinedText = formatToolResultAsText(result, inlineSummary);
         outputPayload = [
           { type: 'input_text', text: combinedText },
           ...inlineParts,
