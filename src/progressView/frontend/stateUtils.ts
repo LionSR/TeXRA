@@ -1,4 +1,5 @@
 // Shared imports
+import { create } from 'mutative';
 import { sortStreams } from '@shared/streams/streamSort';
 import {
   isToolUseState,
@@ -154,5 +155,24 @@ export function updateWorkflowState(
   ctx.setStreamState(stream, (prev) => {
     if (!isWorkflowState(prev)) return prev;
     return updater(prev);
+  });
+}
+
+/**
+ * Update a stream's parentStreamId in the streamById map.
+ * No-op if the stream doesn't exist or the parentStreamId hasn't changed.
+ */
+export function updateParentStreamId(
+  ctx: FrontendEventHandlerContext,
+  streamId: string,
+  parentStreamId: string | null | undefined,
+): void {
+  const resolved = parentStreamId ?? undefined;
+  ctx.setState((prev) => {
+    const target = prev.streamById.get(streamId);
+    if (!target || target.parentStreamId === resolved) return prev;
+    return create(prev, (draft) => {
+      draft.streamById.set(streamId, { ...target, parentStreamId: resolved });
+    });
   });
 }

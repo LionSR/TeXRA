@@ -12,7 +12,6 @@ import {
   firstStreamId,
   getStreamState,
   isToolUseState,
-  isWorkflowState,
   type ProgressState,
   type StreamFilter,
   type StreamLogs,
@@ -20,6 +19,7 @@ import {
   type StreamState,
 } from './store';
 import { removePrompt, resolvedProposalIds } from './slices/permissionSlice';
+import { updateToolUseState, updateWorkflowState } from './stateUtils';
 import type {
   FilterEventDetail,
   FollowUpChangeDetail,
@@ -151,12 +151,11 @@ export function handleRunSelected(
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
 
-  ctx.setStreamState(streamId, (prev) => {
-    if (!isWorkflowState(prev)) return prev;
-    return create(prev, (draft) => {
+  updateWorkflowState(ctx, streamId, (prev) =>
+    create(prev, (draft) => {
       draft.ui.selectedRunId = event.detail.runId;
-    });
-  });
+    }),
+  );
 }
 
 export function handleFileAction(
@@ -176,12 +175,11 @@ export function handleFollowUpChange(
 ): void {
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
-  ctx.setStreamState(streamId, (prev) => {
-    if (!isToolUseState(prev)) return prev;
-    return create(prev, (draft) => {
+  updateToolUseState(ctx, streamId, (prev) =>
+    create(prev, (draft) => {
       draft.ui.followUpText = event.detail.value;
-    });
-  });
+    }),
+  );
 }
 
 /** Resolve the active tool-use stream's trimmed follow-up text, or null if unavailable. */
@@ -214,12 +212,11 @@ export function handleFollowUpSend(ctx: FrontendEventHandlerContext): void {
     stream: result.streamId,
     text: result.text,
   });
-  ctx.setStreamState(result.streamId, (prev) => {
-    if (!isToolUseState(prev)) return prev;
-    return create(prev, (draft) => {
+  updateToolUseState(ctx, result.streamId, (prev) =>
+    create(prev, (draft) => {
       draft.ui.followUpText = '';
-    });
-  });
+    }),
+  );
 }
 
 export function handleFollowUpPolish(ctx: FrontendEventHandlerContext): void {
@@ -235,12 +232,11 @@ export function handleFollowUpPolish(ctx: FrontendEventHandlerContext): void {
 export function handleFollowUpClear(ctx: FrontendEventHandlerContext): void {
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
-  ctx.setStreamState(streamId, (prev) => {
-    if (!isToolUseState(prev)) return prev;
-    return create(prev, (draft) => {
+  updateToolUseState(ctx, streamId, (prev) =>
+    create(prev, (draft) => {
       draft.ui.followUpText = '';
-    });
-  });
+    }),
+  );
 }
 
 export function handleFollowupRequestOptions(
@@ -259,12 +255,11 @@ export function handleFollowupModeChange(
 ): void {
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
-  ctx.setStreamState(streamId, (prev) => {
-    if (!isWorkflowState(prev)) return prev;
-    return create(prev, (draft) => {
+  updateWorkflowState(ctx, streamId, (prev) =>
+    create(prev, (draft) => {
       draft.followupMode = event.detail.mode;
-    });
-  });
+    }),
+  );
 }
 
 export function sendFollowupCommand(

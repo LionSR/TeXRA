@@ -219,16 +219,22 @@ export class ProgressApp extends ProgressAppBase {
     },
   );
 
-  /** Stream context derived from active stream + state. */
-  private streamContext$ = new Signal.Computed((): StreamContextValue => {
-    const filteredStreams = this.filteredStreams$.get();
-    const hasStreams = filteredStreams.length > 0;
+  /** Core active-stream derivation shared by streamContext$ and logContext$. */
+  private activeStreamCore$ = new Signal.Computed(() => {
+    const hasStreams = this.filteredStreams$.get().length > 0;
     const activeStreamId = this.activeStreamId$.get();
     const activeStreamInfo = activeStreamId
       ? (this.filteredStreamMap$.get().get(activeStreamId) ?? null)
       : null;
 
-    if (!activeStreamInfo) return { ...EMPTY_STREAM_CONTEXT, hasStreams };
+    if (!activeStreamInfo)
+      return {
+        hasStreams,
+        activeStreamInfo: null as null,
+        streamState: null as null,
+        isToolUse: false,
+        runId: null as string | null,
+      };
 
     const streamState = getStreamState(
       this.appState.get(),
@@ -237,6 +243,16 @@ export class ProgressApp extends ProgressAppBase {
     );
     const isToolUse = isToolUseState(streamState);
     const runId = getEffectiveRunId(streamState, { mode: 'fallback' });
+
+    return { hasStreams, activeStreamInfo, streamState, isToolUse, runId };
+  });
+
+  /** Stream context derived from active stream + state. */
+  private streamContext$ = new Signal.Computed((): StreamContextValue => {
+    const { hasStreams, activeStreamInfo, streamState, isToolUse, runId } =
+      this.activeStreamCore$.get();
+    if (!activeStreamInfo) return { ...EMPTY_STREAM_CONTEXT, hasStreams };
+
     const followupOptions =
       this.followupOptions$.get().get(activeStreamInfo.name) ?? null;
 
@@ -252,28 +268,16 @@ export class ProgressApp extends ProgressAppBase {
 
   /** Log context derived from active stream + logs. */
   private logContext$ = new Signal.Computed((): StreamLogContextValue => {
-    const filteredStreams = this.filteredStreams$.get();
-    const hasStreams = filteredStreams.length > 0;
-    const activeStreamId = this.activeStreamId$.get();
-    const activeStreamInfo = activeStreamId
-      ? (this.filteredStreamMap$.get().get(activeStreamId) ?? null)
-      : null;
-
+    const { hasStreams, activeStreamInfo, streamState, isToolUse, runId } =
+      this.activeStreamCore$.get();
     if (!activeStreamInfo) return { ...EMPTY_LOG_CONTEXT, hasStreams };
 
-    const streamState = getStreamState(
-      this.appState.get(),
-      activeStreamInfo.name,
-      activeStreamInfo.agentCategory,
-    );
     const streamLogs =
       this.streamLogs$.get().get(activeStreamInfo.name) ?? EMPTY_STREAM_LOGS;
-    const isToolUse = isToolUseState(streamState);
-    const runId = getEffectiveRunId(streamState, { mode: 'fallback' });
 
     return {
       logs: streamLogs.logs,
-      taskGroups: streamState.taskGroups,
+      taskGroups: streamState!.taskGroups,
       runId,
       isToolUse,
       hasStreams,

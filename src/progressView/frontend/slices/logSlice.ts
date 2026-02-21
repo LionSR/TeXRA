@@ -157,8 +157,7 @@ export function applyLogUpdate(
 // ============================================================
 
 export const logHandlers: HandlerRegistry = {
-  [PROGRESS_VIEW_COMMANDS.UPDATE_LOGS]: (data, ctx) =>
-    applyLogUpdate(data, ctx),
+  [PROGRESS_VIEW_COMMANDS.UPDATE_LOGS]: applyLogUpdate,
 
   // --- Log updates ---
   // These use setStreamLogs so only the streamLogs Map gets a new entry.

@@ -8,7 +8,11 @@ import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
-import { updateToolUseState, updateWorkflowState } from '../stateUtils';
+import {
+  updateToolUseState,
+  updateWorkflowState,
+  updateParentStreamId,
+} from '../stateUtils';
 import { applyLogUpdate } from './logSlice';
 import type { HandlerRegistry } from '../messageDispatcher';
 
@@ -61,15 +65,7 @@ export const syncHandlers: HandlerRegistry = {
       );
     }
     if (data.parentStreamId !== undefined) {
-      ctx.setState((prev) => {
-        const target = prev.streamById.get(data.stream as string);
-        if (!target || target.parentStreamId === data.parentStreamId)
-          return prev;
-        const updated = { ...target, parentStreamId: data.parentStreamId };
-        return create(prev, (draft) => {
-          draft.streamById.set(data.stream as string, updated);
-        });
-      });
+      updateParentStreamId(ctx, data.stream as string, data.parentStreamId);
     }
   },
 };

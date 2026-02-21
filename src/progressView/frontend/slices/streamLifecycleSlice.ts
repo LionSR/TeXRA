@@ -19,6 +19,7 @@ import {
   clearPendingLogUpdatesForStream,
   clearAllPendingLogUpdates,
 } from './logSlice';
+import { updateParentStreamId } from '../stateUtils';
 import type { HandlerRegistry } from '../messageDispatcher';
 
 // ============================================================
@@ -169,14 +170,6 @@ export const streamLifecycleHandlers: HandlerRegistry = {
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM]: (data, ctx) => {
-    ctx.setState((prev) => {
-      const nextParentStreamId = data.parentStreamId ?? undefined;
-      const target = prev.streamById.get(data.stream);
-      if (!target || target.parentStreamId === nextParentStreamId) return prev;
-      const updated = { ...target, parentStreamId: nextParentStreamId };
-      return create(prev, (draft) => {
-        draft.streamById.set(data.stream, updated);
-      });
-    });
+    updateParentStreamId(ctx, data.stream, data.parentStreamId);
   },
 };
