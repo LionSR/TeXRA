@@ -30,6 +30,7 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
             arxivId: string | undefined;
             autoIndent: boolean;
           }>((resolve) => {
+            let settled = false;
             const inputBox = vscode.window.createInputBox();
             inputBox.placeholder =
               'e.g., 2404.12175 or https://arxiv.org/abs/2404.12175';
@@ -61,13 +62,16 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
               }
               const checked = (indentToggle.toggle as { checked: boolean })
                 .checked;
-              inputBox.dispose();
+              settled = true;
               resolve({ arxivId: value, autoIndent: checked });
+              inputBox.dispose();
             });
 
             inputBox.onDidHide(() => {
               inputBox.dispose();
-              resolve({ arxivId: undefined, autoIndent: false });
+              if (!settled) {
+                resolve({ arxivId: undefined, autoIndent: false });
+              }
             });
 
             inputBox.show();
