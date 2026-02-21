@@ -4,17 +4,12 @@
  * Provides access to state, webview updater, and common utilities
  * without creating circular dependencies.
  *
- * ## Multi-Agent Architecture: "Backend broadcasts, Frontend decides"
+ * ## Active-Stream Guard Pattern
  *
- * For run-scoped data (usage, outputs, todos, instructions), use `webviewUpdater.isAvailable()`
- * to broadcast updates to the frontend regardless of which run is "active". The frontend
- * decides what to display based on user focus.
- *
- * For stream-level operations (like clearing all content), also check `state.activeStream`
- * to ensure the stream is currently displayed.
- *
- * This design supports concurrent subagents - each run receives updates independently,
- * and the frontend can display multiple runs simultaneously in the future.
+ * Event handlers always update backend state for ANY stream, but only send
+ * webview messages for the active stream (`streamId === ctx.state.activeStream`).
+ * Inactive streams get fully hydrated via syncStreamContent on tab switch.
+ * This avoids wasted serialization + frontend state churn for non-visible streams.
  */
 
 import type { WebviewUpdater } from '@progressView/managers/WebviewUpdater';

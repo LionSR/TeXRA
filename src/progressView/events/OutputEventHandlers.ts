@@ -53,7 +53,8 @@ function handleAddOutputFiles(
     'failed to handle addOutputFiles',
     async () => {
       await ctx.state.outputFiles.addFiles(streamId, storageKey, filesByRound);
-      if (!ctx.webviewUpdater.isAvailable()) return;
+      const isActive = streamId === ctx.state.activeStream;
+      if (!isActive || !ctx.webviewUpdater.isAvailable()) return;
 
       const runFiles = ctx.state.outputFiles.getFiles(streamId).get(storageKey);
       const rounds = mapToRecordIfNonEmpty(runFiles);
@@ -79,7 +80,8 @@ function handleUpdateMissingOutputs(
         storageKey,
         filesByRound,
       );
-      if (!ctx.webviewUpdater.isAvailable()) return;
+      const isActive = streamId === ctx.state.activeStream;
+      if (!isActive || !ctx.webviewUpdater.isAvailable()) return;
 
       const runMissing = ctx.state.outputFiles
         .getMissingOutputs(streamId)
@@ -102,8 +104,8 @@ function handleClearMissingOutputs(
     'failed to handle clearMissingOutputs',
     async () => {
       await ctx.state.outputFiles.clearMissingOutputs(streamId);
-      // Broadcast to webview - frontend decides which run to display
-      if (ctx.webviewUpdater.isAvailable()) {
+      const isActive = streamId === ctx.state.activeStream;
+      if (isActive && ctx.webviewUpdater.isAvailable()) {
         ctx.webviewUpdater.updateMissingOutputs(streamId, { reset: true });
       }
     },

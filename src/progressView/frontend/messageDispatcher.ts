@@ -15,6 +15,7 @@ import {
   ProgressViewOutboundMessageSchema,
   sumUsageStats,
   type LogMessageData,
+  type LogsPayload,
   type ProgressViewOutboundMessage,
   type StreamMetadata,
   type StreamTabInfo,
@@ -225,6 +226,101 @@ type HandlerRegistry = {
   >;
 };
 
+/**
+ * Shared log-update logic used by both UPDATE_LOGS and SYNC_STREAM_CONTENT.
+ * Extracted to avoid the handler-calls-handler pattern with synthetic messages.
+ */
+function applyLogUpdate(data: LogsPayload, ctx: MessageHandlerContext): void {
+  const { stream, messages, groups, action } = data;
+
+  if (!stream && action === 'clear') {
+    pendingLogUpdates.clear();
+    ctx.setState((prev) => ({
+      ...prev,
+      streamStates: new Map(),
+      streamLogs: new Map(),
+    }));
+    return;
+  }
+
+  if (!stream) return;
+
+  const isClear = action === 'clear';
+  if (isClear) {
+    clearPendingLogUpdatesForStream(stream);
+  }
+
+  // Update meta first — setStreamState creates the streamStates entry if needed,
+  // which setStreamLogs requires (it guards against unknown streams).
+  ctx.setStreamState(stream, (prev): StreamState => {
+    const {
+      activeRunId,
+      runInstructions,
+      runUsage,
+      runFiles,
+      runMissingOutputs,
+      contextState,
+    } = data;
+
+    const base = {
+      taskGroups: isClear ? [] : (groups ?? prev.taskGroups),
+      contextState: contextState ?? prev.contextState,
+    };
+
+    if (isWorkflowState(prev)) {
+      if (isClear) {
+        return {
+          ...prev,
+          ...base,
+          activeRunId: null,
+          ui: { ...prev.ui, selectedRunId: null },
+          runInstructions: {},
+          runUsage: {},
+          runFiles: {},
+          runMissingOutputs: {},
+        };
+      }
+      return {
+        ...prev,
+        ...base,
+        activeRunId: activeRunId ?? prev.activeRunId,
+        runInstructions: runInstructions
+          ? { ...prev.runInstructions, ...runInstructions }
+          : prev.runInstructions,
+        runUsage: runUsage ? { ...prev.runUsage, ...runUsage } : prev.runUsage,
+        runFiles: runFiles ? { ...prev.runFiles, ...runFiles } : prev.runFiles,
+        runMissingOutputs: runMissingOutputs
+          ? { ...prev.runMissingOutputs, ...runMissingOutputs }
+          : prev.runMissingOutputs,
+      };
+    }
+
+    // Tool-use streams: compute sessionUsage from runUsage (sum all runs)
+    // Ignore empty payloads so we don't overwrite existing totals with zeros.
+    if (isToolUseState(prev) && runUsage && Object.keys(runUsage).length > 0) {
+      return {
+        ...prev,
+        ...base,
+        sessionUsage: sumUsageStats(Object.values(runUsage)),
+      };
+    }
+
+    return { ...prev, ...base };
+  });
+
+  if (isClear) {
+    ctx.setState((prev) => {
+      const nextLogs = new Map(prev.streamLogs);
+      nextLogs.delete(stream);
+      return { ...prev, streamLogs: nextLogs };
+    });
+    return;
+  }
+
+  // Update logs in the separate streamLogs Map (after setStreamState so the entry exists)
+  ctx.setStreamLogs(stream, () => createStreamLogs(messages));
+}
+
 const handlers: HandlerRegistry = {
   // Stream management
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS]: (data, ctx) => {
@@ -345,104 +441,8 @@ const handlers: HandlerRegistry = {
   },
 
   // Log updates
-  [PROGRESS_VIEW_COMMANDS.UPDATE_LOGS]: (data, ctx) => {
-    const { stream, messages, groups, action } = data;
-
-    if (!stream && action === 'clear') {
-      pendingLogUpdates.clear();
-      ctx.setState((prev) => ({
-        ...prev,
-        streamStates: new Map(),
-        streamLogs: new Map(),
-      }));
-      return;
-    }
-
-    if (!stream) return;
-
-    const isClear = action === 'clear';
-    if (isClear) {
-      clearPendingLogUpdatesForStream(stream);
-    }
-
-    // Update meta first — setStreamState creates the streamStates entry if needed,
-    // which setStreamLogs requires (it guards against unknown streams).
-    ctx.setStreamState(stream, (prev): StreamState => {
-      const {
-        activeRunId,
-        runInstructions,
-        runUsage,
-        runFiles,
-        runMissingOutputs,
-        contextState,
-      } = data;
-
-      const base = {
-        taskGroups: isClear ? [] : (groups ?? prev.taskGroups),
-        contextState: contextState ?? prev.contextState,
-      };
-
-      if (isWorkflowState(prev)) {
-        if (isClear) {
-          return {
-            ...prev,
-            ...base,
-            activeRunId: null,
-            ui: { ...prev.ui, selectedRunId: null },
-            runInstructions: {},
-            runUsage: {},
-            runFiles: {},
-            runMissingOutputs: {},
-          };
-        }
-        return {
-          ...prev,
-          ...base,
-          activeRunId: activeRunId ?? prev.activeRunId,
-          runInstructions: runInstructions
-            ? { ...prev.runInstructions, ...runInstructions }
-            : prev.runInstructions,
-          runUsage: runUsage
-            ? { ...prev.runUsage, ...runUsage }
-            : prev.runUsage,
-          runFiles: runFiles
-            ? { ...prev.runFiles, ...runFiles }
-            : prev.runFiles,
-          runMissingOutputs: runMissingOutputs
-            ? { ...prev.runMissingOutputs, ...runMissingOutputs }
-            : prev.runMissingOutputs,
-        };
-      }
-
-      // Tool-use streams: compute sessionUsage from runUsage (sum all runs)
-      // Ignore empty payloads so we don't overwrite existing totals with zeros.
-      if (
-        isToolUseState(prev) &&
-        runUsage &&
-        Object.keys(runUsage).length > 0
-      ) {
-        return {
-          ...prev,
-          ...base,
-          sessionUsage: sumUsageStats(Object.values(runUsage)),
-        };
-      }
-
-      return { ...prev, ...base };
-    });
-
-    if (isClear) {
-      ctx.setState((prev) => {
-        const nextLogs = new Map(prev.streamLogs);
-        nextLogs.delete(stream);
-        return { ...prev, streamLogs: nextLogs };
-      });
-      return;
-    }
-
-    // Update logs in the separate streamLogs Map (after setStreamState so the entry exists)
-    ctx.setStreamLogs(stream, () => createStreamLogs(messages));
-  },
+  [PROGRESS_VIEW_COMMANDS.UPDATE_LOGS]: (data, ctx) =>
+    applyLogUpdate(data, ctx),
 
   // --- Log updates ---
   // These use setStreamLogs so only the streamLogs Map gets a new entry.
@@ -688,28 +688,8 @@ const handlers: HandlerRegistry = {
 
   // Batched content sync (tab switch: logs + todos + follow-ups + instruction in one message)
   [PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT]: (data, ctx) => {
-    // Delegate to individual handlers — Lit batches synchronous property
-    // changes into a single microtask update, so multiple setState calls
-    // still result in one render cycle. The main win is reducing 4 postMessage
-    // round-trips to 1.
-
-    // 1. Logs (same logic as UPDATE_LOGS handler)
-    handlers[PROGRESS_VIEW_COMMANDS.UPDATE_LOGS]?.(
-      {
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_LOGS,
-        stream: data.stream,
-        messages: data.messages,
-        groups: data.groups,
-        action: data.action,
-        runInstructions: data.runInstructions,
-        activeRunId: data.activeRunId,
-        runUsage: data.runUsage,
-        runFiles: data.runFiles,
-        runMissingOutputs: data.runMissingOutputs,
-        contextState: data.contextState,
-      },
-      ctx,
-    );
+    // 1. Logs — shared logic with UPDATE_LOGS
+    applyLogUpdate(data, ctx);
 
     if (!data.stream || data.action === 'clear') return;
 
@@ -733,6 +713,32 @@ const handlers: HandlerRegistry = {
             ? { ...rest, [runId]: data.instruction }
             : rest,
         };
+      });
+    }
+
+    // 4. Active-stream state (R2: replaces separate syncActiveStreamState messages)
+    if (data.conversationProgress || data.badges) {
+      ctx.setStreamState(data.stream, (prev) => ({
+        ...prev,
+        ...(data.conversationProgress && {
+          conversationProgress: data.conversationProgress,
+        }),
+        ...(data.badges && data.badges),
+      }));
+    }
+    if (data.parentStreamId !== undefined) {
+      ctx.setState((prev) => {
+        const target = prev.streams.find(
+          (stream) => stream.name === data.stream,
+        );
+        if (!target || target.parentStreamId === data.parentStreamId)
+          return prev;
+        const nextStreams = prev.streams.map((stream) =>
+          stream.name === data.stream
+            ? { ...stream, parentStreamId: data.parentStreamId }
+            : stream,
+        );
+        return { ...prev, streams: nextStreams };
       });
     }
   },

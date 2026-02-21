@@ -43,7 +43,8 @@ function handleUpdateStreamUsage(
       ctx.state.setActiveRunId(streamId, storageKey);
     }
 
-    if (accumulated && ctx.webviewUpdater.isAvailable()) {
+    const isActive = streamId === ctx.state.activeStream;
+    if (accumulated && isActive && ctx.webviewUpdater.isAvailable()) {
       ctx.webviewUpdater.updateRunUsage(streamId, storageKey, accumulated);
     }
   });
@@ -55,7 +56,8 @@ function handleUpdateContextState(
 ): void {
   withEventErrorHandling('UsageEvents', 'updateContextState', () => {
     ctx.state.setContextState(streamId, contextState);
-    if (ctx.webviewUpdater.isAvailable()) {
+    const isActive = streamId === ctx.state.activeStream;
+    if (isActive && ctx.webviewUpdater.isAvailable()) {
       ctx.webviewUpdater.updateContextState(streamId, contextState);
     }
   });

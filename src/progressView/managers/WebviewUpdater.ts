@@ -4,7 +4,10 @@ import { STREAM_STATUS } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { TaskState } from '@logger/TaskState';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
-import { ProgressViewState } from '@progressView/state/ProgressViewState';
+import {
+  ProgressViewState,
+  type StreamExecutionState,
+} from '@progressView/state/ProgressViewState';
 import type {
   AgentCategoryFilter,
   ConversationProgress,
@@ -16,7 +19,6 @@ import type {
   ProgressPermissionKind,
   ProgressViewOutboundMessage,
   StreamMetadata,
-  StreamState,
   StreamStatus,
   StreamTabId,
   StreamTabInfo,
@@ -62,6 +64,15 @@ export interface SyncStreamContentPayload {
   instruction: InstructionUpdate | null;
   agentCategory?: string;
   runId?: StorageKey | null;
+  /** Tab-switch state previously sent by syncActiveStreamState (R2). */
+  conversationProgress?: ConversationProgress;
+  badges?: {
+    activeSubagents: StreamExecutionState['activeSubagents'];
+    finishedSubagentCount: StreamExecutionState['finishedSubagentCount'];
+    activeProcesses: StreamExecutionState['activeProcesses'];
+    finishedProcessCount: StreamExecutionState['finishedProcessCount'];
+  };
+  parentStreamId?: StreamTabId;
 }
 
 /**
@@ -352,10 +363,10 @@ export class WebviewUpdater {
   updateStreamBadges(
     stream: StreamTabId,
     badges: {
-      activeSubagents: StreamState['activeSubagents'];
-      finishedSubagentCount: StreamState['finishedSubagentCount'];
-      activeProcesses: StreamState['activeProcesses'];
-      finishedProcessCount: StreamState['finishedProcessCount'];
+      activeSubagents: StreamExecutionState['activeSubagents'];
+      finishedSubagentCount: StreamExecutionState['finishedSubagentCount'];
+      activeProcesses: StreamExecutionState['activeProcesses'];
+      finishedProcessCount: StreamExecutionState['finishedProcessCount'];
     },
   ): void {
     this.sendMessage({

@@ -6,10 +6,8 @@
  *
  * DESIGN NOTES:
  *
- * 1. No active stream filtering: Unlike TodoEventHandlers, this does NOT filter
- *    by active stream. Follow-up updates are sent for any stream because:
- *    - Follow-ups represent user messages waiting to be processed
- *    - The frontend handles display logic based on which stream is visible
+ * 1. Active stream filtering: Only sends to the active stream. Inactive streams
+ *    get hydrated via syncStreamContent on tab switch.
  *
  * 2. No state storage: Unlike TodoEventHandlers which stores state via
  *    ctx.state.setTodos(), this handler doesn't store in ProgressViewState.
@@ -47,8 +45,8 @@ function handleUpdateQueuedFollowUps(
     'FollowUpEvents',
     'failed to handle updateQueuedFollowUps',
     () => {
-      // Don't filter by active stream - see module docstring for rationale
-      if (ctx.webviewUpdater.isAvailable()) {
+      const isActive = streamId === ctx.state.activeStream;
+      if (isActive && ctx.webviewUpdater.isAvailable()) {
         const messages = ToolUseFollowUpQueue.getAll(streamId);
         ctx.webviewUpdater.updateQueuedFollowUps(streamId, messages);
       }

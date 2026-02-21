@@ -149,8 +149,8 @@ export const UpdateStreamStatusMessageSchema = z.object({
   lastTimestamp: z.number().optional(),
 });
 
-export const UpdateLogsMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_LOGS),
+/** Shared fields between UPDATE_LOGS and SYNC_STREAM_CONTENT. */
+export const LogsPayloadSchema = z.object({
   stream: z.union([StreamTabIdSchema, z.literal('')]),
   messages: z.array(LogMessageDataSchema),
   groups: z.array(TaskGroupSchema).optional(),
@@ -165,6 +165,12 @@ export const UpdateLogsMessageSchema = z.object({
     .record(z.string(), z.record(z.string(), z.array(z.string())))
     .optional(),
   contextState: ContextStateSchema.optional(),
+});
+
+export type LogsPayload = z.infer<typeof LogsPayloadSchema>;
+
+export const UpdateLogsMessageSchema = LogsPayloadSchema.extend({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_LOGS),
 });
 
 export const AppendLogMessageSchema = z.object({
@@ -320,31 +326,24 @@ export const SetFollowupOptionsMessageSchema = z.object({
   defaultMergeModel: z.string().optional(),
 });
 
-export const SyncStreamContentMessageSchema = z.object({
+export const SyncStreamContentMessageSchema = LogsPayloadSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT),
-  stream: z.union([StreamTabIdSchema, z.literal('')]),
-  // Logs payload (same fields as UPDATE_LOGS)
-  messages: z.array(LogMessageDataSchema),
-  groups: z.array(TaskGroupSchema).optional(),
-  action: z.enum(['render', 'clear']).optional(),
-  runInstructions: z.record(z.string(), InstructionUpdateSchema).optional(),
-  activeRunId: z.string().nullable().optional(),
-  runUsage: z.record(z.string(), TokenUsageStatsSchema).optional(),
-  runFiles: z
-    .record(z.string(), z.record(z.string(), z.array(OutputFileInfoSchema)))
-    .optional(),
-  runMissingOutputs: z
-    .record(z.string(), z.record(z.string(), z.array(z.string())))
-    .optional(),
-  contextState: ContextStateSchema.optional(),
-  // Todos payload
   todos: z.array(TodoItemSchema).optional(),
-  // Queued follow-ups payload
   queuedFollowUps: z.array(z.string()).optional(),
-  // Instruction payload
   instruction: InstructionUpdateSchema.nullable().optional(),
   agentCategory: z.string().optional(),
   runId: z.string().nullish(),
+  // Tab-switch state (R2: replaces separate syncActiveStreamState messages)
+  conversationProgress: ConversationProgressSchema.optional(),
+  badges: z
+    .object({
+      activeSubagents: z.array(ActiveChildInfoSchema),
+      finishedSubagentCount: z.number(),
+      activeProcesses: z.array(ActiveChildInfoSchema),
+      finishedProcessCount: z.number(),
+    })
+    .optional(),
+  parentStreamId: StreamTabIdSchema.optional(),
 });
 
 export const ProgressSetThemeMessageSchema = z.object({

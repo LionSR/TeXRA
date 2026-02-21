@@ -297,8 +297,8 @@ export class ProgressViewProvider
       }),
       webviewView.onDidDispose(this.cleanupView.bind(this)),
     );
-
-    this.syncFullView();
+    // No syncFullView here — the webview JS hasn't loaded yet.
+    // markWebviewReady() handles the initial sync when WEBVIEW_READY fires.
   }
 
   public syncFullView(options?: { forceRebuild?: boolean }): void {

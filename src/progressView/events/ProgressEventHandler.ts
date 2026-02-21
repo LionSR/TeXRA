@@ -4,7 +4,6 @@ import {
   STREAM_STATUS,
   type ConversationProgress,
   type StorageKey,
-  type StreamState,
   type StreamStatus,
   type StreamTabId,
   type TaskGroup,
@@ -19,6 +18,7 @@ import { nestedMapToRecord } from '@progressView/persistence/serializationUtils'
 import {
   ProgressViewState,
   type ActiveStreamId,
+  type StreamExecutionState,
 } from '@progressView/state/ProgressViewState';
 import { bus } from '@eventBus/ProgressEventBus';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -39,10 +39,10 @@ export type { UICallbacks };
 const PROGRESS_THROTTLE_MS = 500;
 
 type StreamBadgeSnapshot = {
-  activeSubagents: StreamState['activeSubagents'];
-  finishedSubagentCount: StreamState['finishedSubagentCount'];
-  activeProcesses: StreamState['activeProcesses'];
-  finishedProcessCount: StreamState['finishedProcessCount'];
+  activeSubagents: StreamExecutionState['activeSubagents'];
+  finishedSubagentCount: StreamExecutionState['finishedSubagentCount'];
+  activeProcesses: StreamExecutionState['activeProcesses'];
+  finishedProcessCount: StreamExecutionState['finishedProcessCount'];
 };
 
 /** Handles progress event bus subscriptions for the progress view. */
@@ -155,34 +155,16 @@ export class ProgressEventHandler {
           );
         } else {
           this.webviewUpdater.setActiveStream(streamId);
-          this.syncActiveStreamState(streamId);
         }
-        this.syncStreamContent(streamId, { updateInstruction: true });
+        // Known-stream path: include active-stream state in the batch
+        // so we don't need separate progress/badges/parent messages.
+        this.syncStreamContent(streamId, {
+          updateInstruction: true,
+          includeActiveState: wasKnownStream && !filterChanged,
+        });
       },
     );
   };
-
-  private syncActiveStreamState(streamId: StreamTabId): void {
-    const streamState = this.state.getStreamState(streamId);
-    if (!streamState) {
-      return;
-    }
-
-    this.webviewUpdater.updateConversationProgress(
-      streamId,
-      streamState.conversationProgress,
-    );
-    this.webviewUpdater.updateStreamBadges(streamId, {
-      activeSubagents: streamState.activeSubagents,
-      finishedSubagentCount: streamState.finishedSubagentCount,
-      activeProcesses: streamState.activeProcesses,
-      finishedProcessCount: streamState.finishedProcessCount,
-    });
-    this.webviewUpdater.updateParentStream(
-      streamId,
-      this.state.getParentStreamId(streamId),
-    );
-  }
 
   private handleUpdateStreamStatus = (
     payload: ProgressEventPayloads['updateStreamStatus'],
@@ -229,6 +211,10 @@ export class ProgressEventHandler {
           const filterChanged =
             this.state.agentCategoryFilter !== previousFilter;
           if (filterChanged || isActiveStream) {
+            // sendStreamMetadata rebuilds StreamTabInfo[] for all visible streams.
+            // This fires once per run start (not during streaming) so the O(N)
+            // cost is acceptable. We need it here because setTaskState may change
+            // agentConfig (agent name, model, label) which the frontend tabs display.
             this.webviewUpdater.sendStreamMetadata(
               this.state,
               StreamStatusService.getAll(),
@@ -256,7 +242,8 @@ export class ProgressEventHandler {
     const { id, parentGroupId } = group;
 
     const hasStream = this.state.streamTabs.has(streamId);
-    const addGroupPromise = this.state.addTaskGroup(streamId, id, group);
+    // Await persistence before sending to webview so intent matches code structure.
+    await this.state.addTaskGroup(streamId, id, group);
 
     if (!parentGroupId) {
       this.state.setActiveRunId(streamId, id);
@@ -274,8 +261,6 @@ export class ProgressEventHandler {
     } else {
       this.bufferTaskGroupForReplay(streamId, group);
     }
-
-    await addGroupPromise;
   }
 
   private handleUpdateTaskGroup = (
@@ -396,7 +381,7 @@ export class ProgressEventHandler {
     opts: {
       activeField: 'activeSubagents' | 'activeProcesses';
       countField: 'finishedSubagentCount' | 'finishedProcessCount';
-      next: StreamState['activeSubagents'];
+      next: StreamExecutionState['activeSubagents'];
     },
   ): void {
     let nextBadges: StreamBadgeSnapshot | null = null;
@@ -484,11 +469,15 @@ export class ProgressEventHandler {
 
   public syncStreamContent(
     stream: ActiveStreamId,
-    options: { updateInstruction?: boolean } = {},
+    options: {
+      updateInstruction?: boolean;
+      /** Include conversation progress, badges, and parent stream in the batch. */
+      includeActiveState?: boolean;
+    } = {},
   ): StorageKey | null {
     if (!this.webviewUpdater.isAvailable()) return null;
 
-    const { updateInstruction = true } = options;
+    const { updateInstruction = true, includeActiveState = false } = options;
 
     if (!stream) {
       // Clear the stream surface when no stream is active.
@@ -521,6 +510,26 @@ export class ProgressEventHandler {
       ));
     }
 
+    // Optionally include active-stream state (replaces syncActiveStreamState).
+    let conversationProgress:
+      | import('@shared/schemas').ConversationProgress
+      | undefined;
+    let badges: StreamBadgeSnapshot | undefined;
+    let parentStreamId: StreamTabId | undefined;
+    if (includeActiveState) {
+      const streamState = this.state.getStreamState(stream);
+      if (streamState) {
+        conversationProgress = streamState.conversationProgress;
+        badges = {
+          activeSubagents: streamState.activeSubagents,
+          finishedSubagentCount: streamState.finishedSubagentCount,
+          activeProcesses: streamState.activeProcesses,
+          finishedProcessCount: streamState.finishedProcessCount,
+        };
+      }
+      parentStreamId = this.state.getParentStreamId(stream);
+    }
+
     this.webviewUpdater.sendSyncStreamContent({
       stream,
       messages,
@@ -531,6 +540,9 @@ export class ProgressEventHandler {
       instruction,
       agentCategory,
       runId,
+      conversationProgress,
+      badges,
+      parentStreamId,
     });
 
     return activeRunId;

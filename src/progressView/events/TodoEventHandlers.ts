@@ -29,8 +29,9 @@ function handleUpdateTodos(
 ): void {
   withEventErrorHandling('TodoEvents', 'failed to handle updateTodos', () => {
     ctx.state.setTodos(streamId, todos);
-    // Broadcast to webview - frontend decides which run to display
-    if (ctx.webviewUpdater.isAvailable()) {
+    // Only send for active stream — inactive streams get hydrated on tab switch.
+    const isActive = streamId === ctx.state.activeStream;
+    if (isActive && ctx.webviewUpdater.isAvailable()) {
       ctx.webviewUpdater.updateTodos(streamId, todos);
     }
   });

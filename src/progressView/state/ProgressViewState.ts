@@ -4,20 +4,20 @@ import {
   AgentCategoryFilterSchema,
   ContextStateDataSchema,
   STREAM_STATUS,
-  createStreamState,
   InstructionUpdateSchema,
   StorageKeySchema,
   StorageRecordSchema,
   StreamTabIdSchema,
   TaskGroupSchema,
   TodoItemSchema,
+  type ActiveChildInfo,
   type AgentCategoryFilter,
+  type ConversationProgress,
   type ContextStateData,
   type ExecutionId,
   type InstructionUpdate,
   type OutputFileInfo,
   type StorageKey,
-  type StreamState,
   type StreamTabId,
   type TaskGroup,
   type TodoItem,
@@ -87,6 +87,33 @@ const TaskGroupsByStreamSchema = z.record(
   createRecordToMapSchema(TaskGroupSchema),
 );
 
+/**
+ * Backend-owned ephemeral counters, updated during streaming.
+ * This is the narrowed type replacing the full StreamState in _streamStates.
+ * The frontend owns the full StreamState (todos, ui, taskGroups, etc.).
+ */
+export interface StreamExecutionState {
+  kind: (typeof AgentCategory)[keyof typeof AgentCategory];
+  conversationProgress: ConversationProgress;
+  activeSubagents: ActiveChildInfo[];
+  finishedSubagentCount: number;
+  activeProcesses: ActiveChildInfo[];
+  finishedProcessCount: number;
+}
+
+function createExecutionState(
+  kind: (typeof AgentCategory)[keyof typeof AgentCategory],
+): StreamExecutionState {
+  return {
+    kind,
+    conversationProgress: { conversationTurns: 0, toolCallCount: 0 },
+    activeSubagents: [],
+    finishedSubagentCount: 0,
+    activeProcesses: [],
+    finishedProcessCount: 0,
+  };
+}
+
 /** Core state management for the progress view. */
 export class ProgressViewState {
   private _streamTabs: StreamTabsManager;
@@ -100,7 +127,7 @@ export class ProgressViewState {
   private _prefs!: PersistedState<ProgressViewPrefs>;
   private readonly taskStates = new Map<StreamTabId, TaskState>();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
-  private _streamStates = new Map<StreamTabId, StreamState>();
+  private _streamStates = new Map<StreamTabId, StreamExecutionState>();
   private _sessionState = new Map<StreamTabId, StreamSessionState>();
 
   private readonly storage: MementoStorage;
@@ -252,11 +279,11 @@ export class ProgressViewState {
   getOrCreateStreamState(
     stream: StreamTabId,
     agentCategory: (typeof AgentCategory)[keyof typeof AgentCategory],
-  ): StreamState {
+  ): StreamExecutionState {
     const existing = this._streamStates.get(stream);
     // Create new state, or replace if kind doesn't match the agent category
     if (!existing || existing.kind !== agentCategory) {
-      const state = createStreamState(agentCategory);
+      const state = createExecutionState(agentCategory);
       this._streamStates.set(stream, state);
       return state;
     }
@@ -265,7 +292,7 @@ export class ProgressViewState {
 
   updateStreamState(
     stream: StreamTabId,
-    updater: (prev: StreamState) => StreamState,
+    updater: (prev: StreamExecutionState) => StreamExecutionState,
   ): void {
     const current = this._streamStates.get(stream);
     if (current) {
@@ -294,11 +321,11 @@ export class ProgressViewState {
     }
   }
 
-  getStreamState(stream: StreamTabId): StreamState | undefined {
+  getStreamState(stream: StreamTabId): StreamExecutionState | undefined {
     return this._streamStates.get(stream);
   }
 
-  getAllStreamStates(): Record<StreamTabId, StreamState> {
+  getAllStreamStates(): Record<StreamTabId, StreamExecutionState> {
     return Object.fromEntries(this._streamStates.entries());
   }
 
