@@ -331,9 +331,10 @@ export class ProgressEventHandler {
         // Throttle webview pushes: buffer per-stream, flush on timer
         this.pendingProgressUpdates.set(streamId, progress);
         if (!this.progressThrottleTimer) {
-          this.progressThrottleTimer = setTimeout(() => {
-            this.flushProgressUpdates();
-          }, PROGRESS_THROTTLE_MS);
+          this.progressThrottleTimer = setTimeout(
+            () => this.flushProgressUpdates(),
+            PROGRESS_THROTTLE_MS,
+          );
         }
       },
     );
@@ -641,25 +642,6 @@ export class ProgressEventHandler {
       agentCategory: category,
       runId,
     };
-  }
-
-  /** Send stream logs as a standalone message (for incremental updates). */
-  private sendStreamLogs(stream: StreamTabId): StorageKey | null {
-    const { messages, groups, extras, activeRunId } =
-      this.prepareStreamLogs(stream);
-    this.webviewUpdater.updateLogContent(stream, messages, groups, extras);
-    return activeRunId;
-  }
-
-  private sendStreamTodos(stream: StreamTabId): void {
-    this.webviewUpdater.updateTodos(stream, this.state.getTodos(stream));
-  }
-
-  private sendStreamFollowUps(stream: StreamTabId): void {
-    this.webviewUpdater.updateQueuedFollowUps(
-      stream,
-      ToolUseFollowUpQueue.getAll(stream),
-    );
   }
 
   setStreamStatus(

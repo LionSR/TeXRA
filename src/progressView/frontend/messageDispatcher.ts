@@ -722,7 +722,7 @@ const handlers: HandlerRegistry = {
       }));
     }
 
-    // 4. Instruction
+    // 3. Instruction
     if (data.instruction !== undefined && data.runId) {
       updateWorkflowState(ctx, data.stream, (prev) => {
         const runId = data.runId as string;
