@@ -365,6 +365,13 @@ export class ProgressApp extends ProgressAppBase {
     this.permissionsContextValue = this.permissions;
   }
 
+  private rebuildFilteredStreams(): void {
+    this.cachedFilteredStreams = getFilteredStreams(this.appState);
+    this.cachedFilteredStreamMap = new Map(
+      this.cachedFilteredStreams.map((stream) => [stream.name, stream]),
+    );
+  }
+
   /** Rebuild cached status and lastTimestamp Maps from current streamStates. */
   private rebuildStreamMaps(): void {
     this.cachedStreamStatusById = new Map();
