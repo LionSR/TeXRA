@@ -36,11 +36,11 @@ The progress view is designed like a full application (its own navigation, inter
 
 As of VS Code 1.106 (October 2025), extensions can place view containers in three locations:
 
-| Location                      | `viewsContainers` key | Characteristics                                        |
-| ----------------------------- | --------------------- | ------------------------------------------------------ |
-| **Primary Sidebar** (left)    | `activitybar`         | Full height, ~300-400px wide, activity bar icons       |
-| **Bottom Panel**              | `panel`               | Full width, ~200px tall, tab-based                     |
-| **Secondary Sidebar** (right) | `secondarySidebar`    | Full height, ~300-400px wide, independent from primary |
+| Location | `viewsContainers` key | Characteristics |
+|---|---|---|
+| **Primary Sidebar** (left) | `activitybar` | Full height, ~300-400px wide, activity bar icons |
+| **Bottom Panel** | `panel` | Full width, ~200px tall, tab-based |
+| **Secondary Sidebar** (right) | `secondarySidebar` | Full height, ~300-400px wide, independent from primary |
 
 The `secondarySidebar` contribution point was finalized in VS Code 1.106 and is now stable. The secondary sidebar is where VS Code places agent/AI tools (Chat, Copilot), making it the natural home for an AI research assistant.
 
@@ -445,9 +445,7 @@ CSS adapts the stream tabs column:
 
 ```css
 /* Default: full-width tabs (editor mode) */
-stream-tabs {
-  min-width: 180px;
-}
+stream-tabs { min-width: 180px; }
 
 /* Narrow: compact icon strip (sidebar mode) */
 :host(.narrow) stream-tabs {
@@ -457,18 +455,17 @@ stream-tabs {
 ```
 
 `StreamTabs` component renders a compact variant when narrow:
-
 - Status icon only (no text label)
 - Tooltip with full stream info on hover
 - Active stream highlighted with left border
 
 #### Files Modified
 
-| File                                                 | Change                                      |
-| ---------------------------------------------------- | ------------------------------------------- |
-| `src/progressView/frontend/ProgressApp.ts`           | Add `ResizeObserver`, `narrow` class toggle |
-| `src/progressView/frontend/components/StreamTabs.ts` | Compact rendering variant for narrow mode   |
-| `src/progressView/frontend/styles/`                  | Responsive styles for stream tabs           |
+| File | Change |
+|---|---|
+| `src/progressView/frontend/ProgressApp.ts` | Add `ResizeObserver`, `narrow` class toggle |
+| `src/progressView/frontend/components/StreamTabs.ts` | Compact rendering variant for narrow mode |
+| `src/progressView/frontend/styles/` | Responsive styles for stream tabs |
 
 ### Phase 5: Header Navigation with `vscode-tabs`
 
