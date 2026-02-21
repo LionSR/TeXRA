@@ -17,6 +17,7 @@ export const logEntryStyles = css`
     font-size: var(--font-size);
     position: relative;
     overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .log-line {
@@ -27,6 +28,8 @@ export const logEntryStyles = css`
     white-space: pre-wrap;
     word-wrap: break-word;
     word-break: break-all;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 24px;
   }
 
   .log-line--render-error {
@@ -120,7 +123,7 @@ export const logEntryStyles = css`
   :is(.file-link, .web-search-link) {
     color: var(--color-text-link);
     cursor: pointer;
-    transition: color 0.15s ease;
+    transition: color var(--transition-fast);
   }
 
   :is(.file-link, .web-search-link):hover {
@@ -163,7 +166,7 @@ export const logEntryStyles = css`
   .file-list-summary {
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
   }
 
   /* Note: .toggle-icon and .details-summary base styles are in commonViewStyles */
@@ -179,8 +182,8 @@ export const logEntryStyles = css`
     opacity: 0;
     margin-left: auto;
     transition:
-      opacity 0.2s ease,
-      color 0.2s ease;
+      opacity var(--transition-normal),
+      color var(--transition-normal);
     cursor: pointer;
   }
 
@@ -236,11 +239,13 @@ export const logEntryStyles = css`
     align-items: center;
     gap: var(--spacing-small);
     font-size: var(--font-size);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
   }
 
   .banner-details {
     margin: var(--spacing-small) 0;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 40px;
   }
 
   .banner-content {

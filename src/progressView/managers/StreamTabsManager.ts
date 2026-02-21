@@ -32,6 +32,9 @@ export class StreamTabsManager extends PersistentMapManager<
   private static readonly MAX_MESSAGE_HISTORY = 1000;
   private readonly logger: AgentLogger;
 
+  /** Per-stream message index: messageId → array position. O(1) lookups. */
+  private messageIndices = new Map<StreamTabId, Map<string, number>>();
+
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingResolve: (() => void) | null = null;
   private savePromise: Promise<void> | null = null;
@@ -51,20 +54,23 @@ export class StreamTabsManager extends PersistentMapManager<
    */
   addMessage(stream: StreamTabId, message: LogMessageData): boolean {
     const messages = this.ensureMessages(stream);
+    const index = this.getMessageIndex(stream);
 
-    const existingIndex = messages.findIndex(
-      (entry) => entry.id === message.id,
-    );
+    // O(1) duplicate check via index
+    const existingIdx = message.id ? index.get(message.id) : undefined;
 
     // Update existing message
-    if (existingIndex >= 0) {
-      messages[existingIndex] = message;
+    if (existingIdx !== undefined) {
+      messages[existingIdx] = message;
       void this.save();
       return false;
     }
 
     // Add new message
     messages.push(message);
+    if (message.id) {
+      index.set(message.id, messages.length - 1);
+    }
 
     // Limit message history to prevent memory issues
     if (messages.length > StreamTabsManager.MAX_MESSAGE_HISTORY) {
@@ -72,6 +78,8 @@ export class StreamTabsManager extends PersistentMapManager<
         0,
         messages.length - StreamTabsManager.MAX_MESSAGE_HISTORY,
       );
+      // Rebuild index — splice shifts all positions
+      this.rebuildMessageIndex(stream, messages);
     }
 
     void this.save();
@@ -135,10 +143,11 @@ export class StreamTabsManager extends PersistentMapManager<
     const messages = this.items.get(stream);
     if (!messages) return undefined;
 
-    const index = messages.findIndex((m) => m.id === messageId);
-    if (index < 0) return undefined;
+    // O(1) lookup via index
+    const idx = this.getMessageIndex(stream).get(messageId);
+    if (idx === undefined) return undefined;
 
-    const original = messages[index];
+    const original = messages[idx];
     if (guard && !guard(original)) return undefined;
     // Preserve messageType from the original if the update doesn't explicitly
     // provide one — spreading { messageType: undefined } would overwrite it,
@@ -147,7 +156,7 @@ export class StreamTabsManager extends PersistentMapManager<
     if (updates.messageType === undefined && original.messageType) {
       merged.messageType = original.messageType;
     }
-    messages[index] = merged;
+    messages[idx] = merged;
     void this.save();
     return original;
   }
@@ -210,6 +219,42 @@ export class StreamTabsManager extends PersistentMapManager<
     }
   }
 
+  // ============================================================
+  // Message index maintenance
+  // ============================================================
+
+  /** Get or create the message index for a stream. */
+  private getMessageIndex(stream: StreamTabId): Map<string, number> {
+    let index = this.messageIndices.get(stream);
+    if (!index) {
+      index = new Map();
+      this.messageIndices.set(stream, index);
+    }
+    return index;
+  }
+
+  /** Rebuild the message index from the current array (after splice/load). */
+  private rebuildMessageIndex(
+    stream: StreamTabId,
+    messages: LogMessageData[],
+  ): void {
+    const index = new Map<string, number>();
+    for (let i = 0; i < messages.length; i++) {
+      if (messages[i].id) index.set(messages[i].id, i);
+    }
+    this.messageIndices.set(stream, index);
+  }
+
+  override async delete(key: StreamTabId): Promise<void> {
+    this.messageIndices.delete(key);
+    return super.delete(key);
+  }
+
+  override async clear(): Promise<void> {
+    this.messageIndices.clear();
+    return super.clear();
+  }
+
   private ensureMessages(stream: StreamTabId): LogMessageData[] {
     return this.getOrCreate(stream, () => []);
   }
@@ -219,6 +264,10 @@ export class StreamTabsManager extends PersistentMapManager<
    */
   async load(): Promise<void> {
     await super.load();
+    // Build message indices for all loaded streams
+    for (const [stream, messages] of this.items) {
+      this.rebuildMessageIndex(stream, messages);
+    }
     if (this.items.size > 0) {
       this.logger.debug(`Loaded ${this.items.size} streams from storage`);
     }

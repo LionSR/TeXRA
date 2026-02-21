@@ -92,3 +92,10 @@ export function registerProposalInput(
 export function getProposalInput(id: string): AgentProposal | undefined {
   return proposalInputStore.get(id);
 }
+
+/**
+ * Clear all proposal input entries (called on stream delete / delete-all).
+ */
+export function clearProposalInputStore(): void {
+  proposalInputStore.clear();
+}

@@ -43,13 +43,28 @@ export type FollowupOptionsState = Omit<
  */
 export interface StreamLogs {
   logs: LogMessageData[];
+  /** O(1) lookup: log ID → array index. Maintained by mutation handlers. */
+  logIndex: Map<string, number>;
 }
 
-export const EMPTY_STREAM_LOGS: StreamLogs = { logs: [] };
+export const EMPTY_STREAM_LOGS: StreamLogs = {
+  logs: [],
+  logIndex: new Map(),
+};
+
+/** Build StreamLogs from an array, constructing logIndex in one pass. */
+export function createStreamLogs(logs: LogMessageData[]): StreamLogs {
+  const logIndex = new Map<string, number>();
+  for (let i = 0; i < logs.length; i++) {
+    logIndex.set(logs[i].id, i);
+  }
+  return { logs, logIndex };
+}
 
 export interface ProgressState {
   activeStreamId: StreamTabId | null;
-  streams: StreamTabInfo[];
+  /** Canonical stream storage — Map preserves insertion order for iteration. */
+  streamById: Map<StreamTabId, StreamTabInfo>;
   streamFilter: StreamFilter;
   streamSort: StreamSort;
   /** Meta state per stream (status, todos, usage, ui, taskGroups, etc.) */
@@ -59,10 +74,17 @@ export interface ProgressState {
   followupOptionsByStream: Map<StreamTabId, FollowupOptionsState>;
 }
 
+/** Return the first stream ID from a streamById Map, or null if empty. */
+export function firstStreamId(
+  streamById: Map<StreamTabId, StreamTabInfo>,
+): StreamTabId | null {
+  return streamById.keys().next().value ?? null;
+}
+
 export function createInitialState(): ProgressState {
   return {
     activeStreamId: null,
-    streams: [],
+    streamById: new Map(),
     streamFilter: 'all',
     streamSort: 'time',
     streamStates: new Map(),

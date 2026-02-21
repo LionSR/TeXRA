@@ -4,6 +4,7 @@ import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
+import { SignalWatcher, signal, Signal } from '@shared/signals';
 
 // Local imports - shared webview
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
@@ -142,8 +143,14 @@ type SetMultipleFilesMessage =
   | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_MEDIA_FILES>
   | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES>;
 
+// Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
+// Safe because MainApp implements all abstract members below.
+const MainAppBase = SignalWatcher(
+  BaseWebviewApp as unknown as new (...args: any[]) => BaseWebviewApp,
+);
+
 @customElement('main-app')
-export class MainApp extends BaseWebviewApp {
+export class MainApp extends MainAppBase {
   static styles = [
     designTokens,
     commonViewStyles,
@@ -151,52 +158,86 @@ export class MainApp extends BaseWebviewApp {
     mainViewStyles,
   ];
 
-  @state() private sessionType: SessionType = DEFAULT_STATE.sessionType;
-  @state() private workflowAgent = DEFAULT_STATE.workflowAgent;
-  @state() private toolUseAgent = DEFAULT_STATE.toolUseAgent;
-  @state() private model = DEFAULT_STATE.model;
-  @state() private commit = DEFAULT_STATE.commit;
-  @state() private instruction = DEFAULT_STATE.instruction;
-  @state() private singleFiles: SingleFiles = { ...DEFAULT_SINGLE_FILES };
-  @state() private fileOptions: FileOptions = { ...DEFAULT_FILE_OPTIONS };
-  @state() private multiFiles: MultiFiles = { ...DEFAULT_MULTI_FILES };
-  @state() private multiFilesVisible: MultiFilesVisible = {
+  private readonly sessionType = signal<SessionType>(DEFAULT_STATE.sessionType);
+  private readonly workflowAgent = signal(DEFAULT_STATE.workflowAgent);
+  private readonly toolUseAgent = signal(DEFAULT_STATE.toolUseAgent);
+  private readonly model = signal(DEFAULT_STATE.model);
+  private readonly commit = signal(DEFAULT_STATE.commit);
+  private readonly instruction = signal(DEFAULT_STATE.instruction);
+  private readonly singleFiles = signal<SingleFiles>({
+    ...DEFAULT_SINGLE_FILES,
+  });
+  private readonly fileOptions = signal<FileOptions>({
+    ...DEFAULT_FILE_OPTIONS,
+  });
+  private readonly multiFiles = signal<MultiFiles>({ ...DEFAULT_MULTI_FILES });
+  private readonly multiFilesVisible = signal<MultiFilesVisible>({
     ...DEFAULT_MULTI_FILES_VISIBLE,
-  };
-  @state() private outputFilesActive = DEFAULT_STATE.outputFilesActive;
-  @state() private latexdiffsVisible = DEFAULT_STATE.latexdiffsVisible;
-  @state() private checkboxValues: CheckboxValues = {
+  });
+  private readonly outputFilesActive = signal(DEFAULT_STATE.outputFilesActive);
+  private readonly latexdiffsVisible = signal(DEFAULT_STATE.latexdiffsVisible);
+  private readonly checkboxValues = signal<CheckboxValues>({
     ...DEFAULT_CHECKBOX_VALUES,
-  };
-  @state() private isRecording = false;
-  @state() private isPolishing = false;
-  @state() private modelOptions: ModelOptionData[] = [];
-  @state() private workflowAgentOptions: AgentOptionData[] = [];
-  @state() private toolUseAgentOptions: AgentOptionData[] = [];
-  @state() private apiKeyBanner: ApiKeyBannerState = { visible: false };
-  @state() private agentConfigBanner: AgentConfigBannerState = {
+  });
+  private readonly isRecording = signal(false);
+  private readonly isPolishing = signal(false);
+  private readonly modelOptions = signal<ModelOptionData[]>([]);
+  private readonly workflowAgentOptions = signal<AgentOptionData[]>([]);
+  private readonly toolUseAgentOptions = signal<AgentOptionData[]>([]);
+  private readonly apiKeyBanner = signal<ApiKeyBannerState>({ visible: false });
+  private readonly agentConfigBanner = signal<AgentConfigBannerState>({
     visible: false,
-  };
-  @state() private dependencyBanner: DependencyBannerState = {
+  });
+  private readonly dependencyBanner = signal<DependencyBannerState>({
     visible: false,
-  };
-  @state() private gettingStartedVisible = false;
-  @state() private loginBannerVisible = false;
-  @state() private instructionPlaceholder =
-    ONBOARDING_PLACEHOLDERS[DEFAULT_STATE.sessionType][0];
+  });
+  private readonly gettingStartedVisible = signal(false);
+  private readonly loginBannerVisible = signal(false);
+  private readonly instructionPlaceholder = signal(
+    ONBOARDING_PLACEHOLDERS[DEFAULT_STATE.sessionType][0],
+  );
   @state() protected override debugMode = false;
-  @state() private isGitRepo = true;
+  private readonly isGitRepo = signal(true);
   private defaultOutputFiles: string[] = [];
   private instructionSaveTimer: number | null = null;
+
+  private readonly fileStateContext$ = new Signal.Computed(
+    (): FileStateContextValue => ({
+      sessionType: this.sessionType.get(),
+      checkboxValues: this.checkboxValues.get(),
+      singleFiles: this.singleFiles.get(),
+      fileOptions: this.fileOptions.get(),
+      multiFiles: this.multiFiles.get(),
+      multiFilesVisible: this.multiFilesVisible.get(),
+      outputFilesActive: this.outputFilesActive.get(),
+    }),
+  );
+
+  private readonly sessionContext$ = new Signal.Computed(
+    (): SessionContextValue => ({
+      sessionType: this.sessionType.get(),
+      instruction: this.instruction.get(),
+      placeholder: this.instructionPlaceholder.get(),
+      workflowAgent: this.workflowAgent.get(),
+      toolUseAgent: this.toolUseAgent.get(),
+      model: this.model.get(),
+      workflowAgentOptions: this.workflowAgentOptions.get(),
+      toolUseAgentOptions: this.toolUseAgentOptions.get(),
+      modelOptions: this.modelOptions.get(),
+      isRecording: this.isRecording.get(),
+      isPolishing: this.isPolishing.get(),
+      debugMode: this.debugMode,
+    }),
+  );
 
   @provide({ context: fileStateContext })
   @state()
   private fileStateContextValue: FileStateContextValue =
-    this.buildFileStateContext();
+    this.fileStateContext$.get();
 
   @provide({ context: sessionContext })
   @state()
-  private sessionContextValue: SessionContextValue = this.buildSessionContext();
+  private sessionContextValue: SessionContextValue = this.sessionContext$.get();
 
   // Note: model/agent selects are inside InstructionPanel's shadow DOM.
   // Decoration is now handled declaratively in selectTemplates.ts via Lit templates.
@@ -283,13 +324,13 @@ export class MainApp extends BaseWebviewApp {
 
     // Recording state
     [MAIN_VIEW_COMMANDS.RECORDING_STARTED]: () => {
-      this.isRecording = true;
+      this.isRecording.set(true);
     },
     [MAIN_VIEW_COMMANDS.RECORDING_STOPPED]: () => {
-      this.isRecording = false;
+      this.isRecording.set(false);
     },
     [MAIN_VIEW_COMMANDS.RECORDING_ERROR]: () => {
-      this.isRecording = false;
+      this.isRecording.set(false);
     },
 
     // Banner operations
@@ -299,29 +340,29 @@ export class MainApp extends BaseWebviewApp {
       if (this.shouldForceApiKeyBanner()) {
         return;
       }
-      this.apiKeyBanner = { visible: false };
+      this.apiKeyBanner.set({ visible: false });
     },
     [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (data) =>
       this.handleShowAgentConfigBanner(data),
     [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: () => {
-      this.agentConfigBanner = { visible: false };
+      this.agentConfigBanner.set({ visible: false });
     },
     [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: (data) =>
       this.handleShowDependencyBanner(data),
     [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: () => {
-      this.dependencyBanner = { visible: false };
+      this.dependencyBanner.set({ visible: false });
     },
     [MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER]: () => {
-      this.gettingStartedVisible = true;
+      this.gettingStartedVisible.set(true);
     },
     [MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER]: () => {
-      this.gettingStartedVisible = false;
+      this.gettingStartedVisible.set(false);
     },
     [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: () => {
-      this.loginBannerVisible = true;
+      this.loginBannerVisible.set(true);
     },
     [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: () => {
-      this.loginBannerVisible = false;
+      this.loginBannerVisible.set(false);
     },
 
     // Agent selection
@@ -360,51 +401,14 @@ export class MainApp extends BaseWebviewApp {
     this.refreshInstructionPlaceholder(false);
   }
 
-  protected override willUpdate(changed: Map<string, unknown>): void {
-    if (
-      changed.has('sessionType') ||
-      changed.has('singleFiles') ||
-      changed.has('fileOptions') ||
-      changed.has('multiFiles') ||
-      changed.has('multiFilesVisible') ||
-      changed.has('checkboxValues') ||
-      changed.has('outputFilesActive')
-    ) {
-      const nextValue = this.buildFileStateContext();
-      if (
-        !this.isFileStateContextEqual(this.fileStateContextValue, nextValue)
-      ) {
-        this.fileStateContextValue = nextValue;
-      }
-    }
-
-    if (
-      changed.has('sessionType') ||
-      changed.has('instruction') ||
-      changed.has('instructionPlaceholder') ||
-      changed.has('workflowAgent') ||
-      changed.has('toolUseAgent') ||
-      changed.has('model') ||
-      changed.has('workflowAgentOptions') ||
-      changed.has('toolUseAgentOptions') ||
-      changed.has('modelOptions') ||
-      changed.has('isRecording') ||
-      changed.has('isPolishing') ||
-      changed.has('debugMode')
-    ) {
-      const nextValue = this.buildSessionContext();
-      if (!this.isSessionContextEqual(this.sessionContextValue, nextValue)) {
-        this.sessionContextValue = nextValue;
-      }
-    }
-  }
-
-  protected override updated(changed: Map<string, unknown>): void {
-    if (changed.has('sessionType')) {
-      this.refreshInstructionPlaceholder(false);
-    }
-    // Note: Option decoration is handled declaratively in selectTemplates.ts
-    // via renderAgentOptions/renderModelOptions.
+  /**
+   * Sync signal-computed values into @provide/@state context properties.
+   * SignalWatcher triggers requestUpdate() when any read signal changes,
+   * so this runs only when computed values actually propagate.
+   */
+  protected override willUpdate(): void {
+    this.fileStateContextValue = this.fileStateContext$.get();
+    this.sessionContextValue = this.sessionContext$.get();
   }
 
   private blockSave(): void {
@@ -422,36 +426,41 @@ export class MainApp extends BaseWebviewApp {
       return;
     }
 
+    const sf = this.singleFiles.get();
+    const mf = this.multiFiles.get();
+    const mv = this.multiFilesVisible.get();
+    const cv = this.checkboxValues.get();
+
     const persisted: MainViewPersistedState = {
-      sessionType: this.sessionType,
-      workflowAgent: this.workflowAgent,
-      toolUseAgent: this.toolUseAgent,
-      model: this.model,
-      commit: this.commit,
-      instruction: this.instruction,
-      inputFile: this.singleFiles.inputFile,
-      referenceFile: this.singleFiles.referenceFile,
-      auxiliaryFile: this.singleFiles.auxiliaryFile,
-      mediaFile: this.singleFiles.mediaFile,
-      editedFile: this.singleFiles.editedFile,
-      baseFile: this.singleFiles.baseFile,
-      inputFiles: this.multiFiles.inputFiles,
-      referenceFiles: this.multiFiles.referenceFiles,
-      auxiliaryFiles: this.multiFiles.auxiliaryFiles,
-      mediaFiles: this.multiFiles.mediaFiles,
-      outputFiles: this.multiFiles.outputFiles,
-      inputFilesVisible: this.multiFilesVisible.inputFiles,
-      referenceFilesVisible: this.multiFilesVisible.referenceFiles,
-      auxiliaryFilesVisible: this.multiFilesVisible.auxiliaryFiles,
-      mediaFilesVisible: this.multiFilesVisible.mediaFiles,
-      outputFilesVisible: this.multiFilesVisible.outputFiles,
-      outputFilesActive: this.outputFilesActive,
-      latexdiffsVisible: this.latexdiffsVisible,
-      autoExtractFigure: this.checkboxValues.autoExtractFigure,
-      autoExtractTikzFigure: this.checkboxValues.autoExtractTikzFigure,
-      autoCompileInputPdf: this.checkboxValues.autoCompileInputPdf,
-      attachTeXCount: this.checkboxValues.attachTeXCount,
-      attachDiagnostics: this.checkboxValues.attachDiagnostics,
+      sessionType: this.sessionType.get(),
+      workflowAgent: this.workflowAgent.get(),
+      toolUseAgent: this.toolUseAgent.get(),
+      model: this.model.get(),
+      commit: this.commit.get(),
+      instruction: this.instruction.get(),
+      inputFile: sf.inputFile,
+      referenceFile: sf.referenceFile,
+      auxiliaryFile: sf.auxiliaryFile,
+      mediaFile: sf.mediaFile,
+      editedFile: sf.editedFile,
+      baseFile: sf.baseFile,
+      inputFiles: mf.inputFiles,
+      referenceFiles: mf.referenceFiles,
+      auxiliaryFiles: mf.auxiliaryFiles,
+      mediaFiles: mf.mediaFiles,
+      outputFiles: mf.outputFiles,
+      inputFilesVisible: mv.inputFiles,
+      referenceFilesVisible: mv.referenceFiles,
+      auxiliaryFilesVisible: mv.auxiliaryFiles,
+      mediaFilesVisible: mv.mediaFiles,
+      outputFilesVisible: mv.outputFiles,
+      outputFilesActive: this.outputFilesActive.get(),
+      latexdiffsVisible: this.latexdiffsVisible.get(),
+      autoExtractFigure: cv.autoExtractFigure,
+      autoExtractTikzFigure: cv.autoExtractTikzFigure,
+      autoCompileInputPdf: cv.autoCompileInputPdf,
+      attachTeXCount: cv.attachTeXCount,
+      attachDiagnostics: cv.attachDiagnostics,
     };
 
     this.stateManager.setState(persisted);
@@ -462,43 +471,43 @@ export class MainApp extends BaseWebviewApp {
     // No manual fallbacks needed - schema handles missing/invalid values.
     const state = this.stateManager.getState();
 
-    this.sessionType = state.sessionType;
-    this.workflowAgent = state.workflowAgent;
-    this.toolUseAgent = state.toolUseAgent;
-    this.model = state.model;
-    this.commit = state.commit;
-    this.instruction = state.instruction;
-    this.singleFiles = {
+    this.sessionType.set(state.sessionType);
+    this.workflowAgent.set(state.workflowAgent);
+    this.toolUseAgent.set(state.toolUseAgent);
+    this.model.set(state.model);
+    this.commit.set(state.commit);
+    this.instruction.set(state.instruction);
+    this.singleFiles.set({
       inputFile: state.inputFile,
       referenceFile: state.referenceFile,
       auxiliaryFile: state.auxiliaryFile,
       mediaFile: state.mediaFile,
       editedFile: state.editedFile,
       baseFile: state.baseFile,
-    };
-    this.multiFiles = {
+    });
+    this.multiFiles.set({
       inputFiles: state.inputFiles,
       referenceFiles: state.referenceFiles,
       auxiliaryFiles: state.auxiliaryFiles,
       mediaFiles: state.mediaFiles,
       outputFiles: state.outputFiles,
-    };
-    this.multiFilesVisible = {
+    });
+    this.multiFilesVisible.set({
       inputFiles: state.inputFilesVisible,
       referenceFiles: state.referenceFilesVisible,
       auxiliaryFiles: state.auxiliaryFilesVisible,
       mediaFiles: state.mediaFilesVisible,
       outputFiles: state.outputFilesVisible,
-    };
-    this.outputFilesActive = state.outputFilesActive;
-    this.latexdiffsVisible = state.latexdiffsVisible;
-    this.checkboxValues = {
+    });
+    this.outputFilesActive.set(state.outputFilesActive);
+    this.latexdiffsVisible.set(state.latexdiffsVisible);
+    this.checkboxValues.set({
       autoExtractFigure: state.autoExtractFigure,
       autoExtractTikzFigure: state.autoExtractTikzFigure,
       autoCompileInputPdf: state.autoCompileInputPdf,
       attachTeXCount: state.attachTeXCount,
       attachDiagnostics: state.attachDiagnostics,
-    };
+    });
   }
 
   private requestInitialData(): void {
@@ -515,16 +524,16 @@ export class MainApp extends BaseWebviewApp {
     commands.forEach((command) => postMessage(command));
 
     const agent =
-      this.sessionType === SESSION_TYPES.TOOL_USE
-        ? this.toolUseAgent
-        : this.workflowAgent;
+      this.sessionType.get() === SESSION_TYPES.TOOL_USE
+        ? this.toolUseAgent.get()
+        : this.workflowAgent.get();
     if (agent) {
       postMessage(MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES, { agent });
     }
   }
 
   private updateMultiFiles(listId: keyof MultiFiles, files: string[]): void {
-    this.multiFiles = { ...this.multiFiles, [listId]: files };
+    this.multiFiles.set({ ...this.multiFiles.get(), [listId]: files });
     this.saveState();
 
     const fileType = listId.replace('Files', '') as MultipleFileType;
@@ -561,11 +570,13 @@ export class MainApp extends BaseWebviewApp {
   ): void {
     if (!message.optionsData) return;
 
-    this.modelOptions = message.optionsData;
-    this.model = this.validateSelection(
-      message.optionsData,
-      this.model,
-      true, // preferEnabled: skip disabled models
+    this.modelOptions.set(message.optionsData);
+    this.model.set(
+      this.validateSelection(
+        message.optionsData,
+        this.model.get(),
+        true, // preferEnabled: skip disabled models
+      ),
     );
   }
 
@@ -575,20 +586,24 @@ export class MainApp extends BaseWebviewApp {
     const optionsData = message.optionsData ?? {};
 
     if (optionsData.workflow) {
-      this.workflowAgentOptions = optionsData.workflow;
-      this.workflowAgent = this.validateSelection(
-        optionsData.workflow,
-        this.workflowAgent,
-        true, // preferEnabled for consistency (agents don't have disabled, but future-proof)
+      this.workflowAgentOptions.set(optionsData.workflow);
+      this.workflowAgent.set(
+        this.validateSelection(
+          optionsData.workflow,
+          this.workflowAgent.get(),
+          true, // preferEnabled for consistency (agents don't have disabled, but future-proof)
+        ),
       );
     }
 
     if (optionsData.toolUse) {
-      this.toolUseAgentOptions = optionsData.toolUse;
-      this.toolUseAgent = this.validateSelection(
-        optionsData.toolUse,
-        this.toolUseAgent,
-        true,
+      this.toolUseAgentOptions.set(optionsData.toolUse);
+      this.toolUseAgent.set(
+        this.validateSelection(
+          optionsData.toolUse,
+          this.toolUseAgent.get(),
+          true,
+        ),
       );
     }
   }
@@ -600,11 +615,10 @@ export class MainApp extends BaseWebviewApp {
     const targetId = this.extractFileKeyFromCommand(message.command);
     if (!targetId) return;
 
-    this.fileOptions = { ...this.fileOptions, [targetId]: files };
-    const currentValue =
-      this.singleFiles[targetId as keyof typeof this.singleFiles];
+    this.fileOptions.set({ ...this.fileOptions.get(), [targetId]: files });
+    const currentValue = this.singleFiles.get()[targetId as keyof SingleFiles];
     if (currentValue && !files.includes(currentValue)) {
-      this.singleFiles = { ...this.singleFiles, [targetId]: '' };
+      this.singleFiles.set({ ...this.singleFiles.get(), [targetId]: '' });
     }
     this.saveState();
   }
@@ -613,13 +627,13 @@ export class MainApp extends BaseWebviewApp {
     message: MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_BASE_FILE>,
   ): void {
     const files = message.files ?? [];
-    this.fileOptions = { ...this.fileOptions, baseFile: files };
+    this.fileOptions.set({ ...this.fileOptions.get(), baseFile: files });
 
     if (
       !message.preserveBaseFile &&
-      !files.includes(this.singleFiles.baseFile)
+      !files.includes(this.singleFiles.get().baseFile)
     ) {
-      this.singleFiles = { ...this.singleFiles, baseFile: '' };
+      this.singleFiles.set({ ...this.singleFiles.get(), baseFile: '' });
     }
 
     this.saveState();
@@ -629,7 +643,7 @@ export class MainApp extends BaseWebviewApp {
     const value = message.filePath;
     const key = this.extractFileKeyFromCommand(message.command);
     if (!key) return;
-    this.singleFiles = { ...this.singleFiles, [key]: value };
+    this.singleFiles.set({ ...this.singleFiles.get(), [key]: value });
     this.saveState();
   }
 
@@ -640,13 +654,13 @@ export class MainApp extends BaseWebviewApp {
     ) as keyof MultiFiles;
     if (!listId) return;
 
-    this.multiFiles = { ...this.multiFiles, [listId]: files };
-    this.multiFilesVisible = {
-      ...this.multiFilesVisible,
+    this.multiFiles.set({ ...this.multiFiles.get(), [listId]: files });
+    this.multiFilesVisible.set({
+      ...this.multiFilesVisible.get(),
       [listId]: files.length > 0,
-    };
+    });
     if (listId === ELEMENT_IDS.OUTPUT_FILES) {
-      this.outputFilesActive = files.length > 0;
+      this.outputFilesActive.set(files.length > 0);
     }
     this.saveState();
   }
@@ -657,7 +671,10 @@ export class MainApp extends BaseWebviewApp {
     >,
   ): void {
     this.defaultOutputFiles = [...message.files];
-    if (this.outputFilesActive && this.multiFiles.outputFiles.length === 0) {
+    if (
+      this.outputFilesActive.get() &&
+      this.multiFiles.get().outputFiles.length === 0
+    ) {
       this.initializeOutputFiles();
     }
   }
@@ -666,13 +683,17 @@ export class MainApp extends BaseWebviewApp {
     message: MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE>,
   ): void {
     const file = message.file;
-    const existing = this.multiFiles.mediaFiles;
+    const mf = this.multiFiles.get();
+    const existing = mf.mediaFiles;
     if (existing.includes(file)) return;
-    this.multiFiles = {
-      ...this.multiFiles,
+    this.multiFiles.set({
+      ...mf,
       mediaFiles: [...existing, file],
-    };
-    this.multiFilesVisible = { ...this.multiFilesVisible, mediaFiles: true };
+    });
+    this.multiFilesVisible.set({
+      ...this.multiFilesVisible.get(),
+      mediaFiles: true,
+    });
     this.saveState();
   }
 
@@ -680,17 +701,19 @@ export class MainApp extends BaseWebviewApp {
     message: MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS>,
   ): void {
     const commits = message.commits;
-    this.isGitRepo = message.isGitRepo ?? true;
+    const gitRepo = message.isGitRepo ?? true;
+    this.isGitRepo.set(gitRepo);
 
-    this.fileOptions = {
-      ...this.fileOptions,
-      commit: this.isGitRepo ? commits : [],
-    };
+    this.fileOptions.set({
+      ...this.fileOptions.get(),
+      commit: gitRepo ? commits : [],
+    });
 
-    if (!this.isGitRepo) {
-      this.commit = '';
-    } else if (!this.commit || !this.hasCommitValue(this.commit)) {
-      this.commit = 'HEAD';
+    const currentCommit = this.commit.get();
+    if (!gitRepo) {
+      this.commit.set('');
+    } else if (!currentCommit || !this.hasCommitValue(currentCommit)) {
+      this.commit.set('HEAD');
     }
     this.saveState();
   }
@@ -700,9 +723,10 @@ export class MainApp extends BaseWebviewApp {
   ): void {
     const { fileType, filePath } = message;
     const key = `${fileType}File` as keyof FileOptions;
-    if (!filePath || !(key in this.singleFiles)) return;
+    const sf = this.singleFiles.get();
+    if (!filePath || !(key in sf)) return;
 
-    const options = this.fileOptions[key] ?? [];
+    const options = this.fileOptions.get()[key] ?? [];
     if (!options.includes(filePath)) {
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
         text: `The current file is not in the ${fileType} file list: ${filePath}`,
@@ -714,7 +738,7 @@ export class MainApp extends BaseWebviewApp {
       return;
     }
 
-    this.singleFiles = { ...this.singleFiles, [key]: filePath };
+    this.singleFiles.set({ ...sf, [key]: filePath });
     this.saveState();
   }
 
@@ -725,14 +749,15 @@ export class MainApp extends BaseWebviewApp {
     const commitLabel = message.commitLabel ?? '';
 
     if (!commitHash) return;
-    const options = this.fileOptions.commit ?? [];
+    const fo = this.fileOptions.get();
+    const options = fo.commit ?? [];
     if (!options.some((option) => option.startsWith(commitHash))) {
-      this.fileOptions = {
-        ...this.fileOptions,
+      this.fileOptions.set({
+        ...fo,
         commit: [...options, commitLabel || commitHash],
-      };
+      });
     }
-    this.commit = commitHash;
+    this.commit.set(commitHash);
     this.saveState();
   }
 
@@ -744,23 +769,27 @@ export class MainApp extends BaseWebviewApp {
       ? fileType
       : `${fileType}Files`;
     const listId = normalizedType as keyof MultiFiles;
-    if (!(listId in this.multiFiles)) return;
+    const mf = this.multiFiles.get();
+    if (!(listId in mf)) return;
 
     let filesToAdd = message.files ?? [];
 
     if (message.shouldFilter) {
       const singleFileKey = `${normalizedType.replace('Files', '')}File`;
       const selected =
-        this.singleFiles[singleFileKey as keyof typeof this.singleFiles];
+        this.singleFiles.get()[singleFileKey as keyof SingleFiles];
       if (selected) {
         filesToAdd = filesToAdd.filter((file) => file !== selected);
       }
     }
 
-    const existing = this.multiFiles[listId] ?? [];
+    const existing = mf[listId] ?? [];
     const merged = this.mergeUnique(existing, filesToAdd);
-    this.multiFiles = { ...this.multiFiles, [listId]: merged };
-    this.multiFilesVisible = { ...this.multiFilesVisible, [listId]: true };
+    this.multiFiles.set({ ...mf, [listId]: merged });
+    this.multiFilesVisible.set({
+      ...this.multiFilesVisible.get(),
+      [listId]: true,
+    });
     this.saveState();
   }
 
@@ -777,21 +806,19 @@ export class MainApp extends BaseWebviewApp {
         { files: message.mediaFiles, target: 'mediaFile' },
       ];
 
+      let sf = this.singleFiles.get();
       fileGroups.forEach(({ files, target }) => {
         if (!files || !Array.isArray(files)) {
           return;
         }
         updates[target] = files;
-        const currentValue =
-          this.singleFiles[target as keyof typeof this.singleFiles];
+        const currentValue = sf[target as keyof SingleFiles];
         if (currentValue && !files.includes(currentValue)) {
-          this.singleFiles = {
-            ...this.singleFiles,
-            [target]: '',
-          };
+          sf = { ...sf, [target]: '' };
         }
       });
-      this.fileOptions = { ...this.fileOptions, ...updates };
+      this.singleFiles.set(sf);
+      this.fileOptions.set({ ...this.fileOptions.get(), ...updates });
     } finally {
       this.unblockSave();
     }
@@ -802,9 +829,9 @@ export class MainApp extends BaseWebviewApp {
       typeof MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED
     >,
   ): void {
-    this.isPolishing = false;
+    this.isPolishing.set(false);
     if (message.text.trim()) {
-      this.instruction = message.text;
+      this.instruction.set(message.text);
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
         text: 'Instruction text has been polished!',
       });
@@ -817,7 +844,7 @@ export class MainApp extends BaseWebviewApp {
       typeof MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR
     >,
   ): void {
-    this.isPolishing = false;
+    this.isPolishing.set(false);
     const errorText = message.error ?? '';
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
       text: `Error polishing text: ${errorText || 'Unknown error'}`,
@@ -830,18 +857,17 @@ export class MainApp extends BaseWebviewApp {
     >,
   ): void {
     if (!message.text) {
-      this.isRecording = false;
+      this.isRecording.set(false);
       return;
     }
 
     // Append transcribed text to instruction (Lit-native: update state, not DOM)
     // Note: Cursor position insertion is not supported with shadow DOM isolation.
     // The InstructionPanel receives the updated instruction via property binding.
-    const updated = this.instruction
-      ? `${this.instruction} ${message.text}`
-      : message.text;
-    this.instruction = updated;
-    this.isRecording = false;
+    const current = this.instruction.get();
+    const updated = current ? `${current} ${message.text}` : message.text;
+    this.instruction.set(updated);
+    this.isRecording.set(false);
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
       text: 'Instruction text transcribed!',
     });
@@ -872,32 +898,32 @@ export class MainApp extends BaseWebviewApp {
     const state = parsed.data;
     this.blockSave();
     try {
-      this.sessionType = state.sessionType;
+      this.sessionType.set(state.sessionType);
       // Backend resolves agent names to source:name format via buildMainViewState,
       // so we can set directly. handleSetAgentOptions validates when options arrive.
-      this.workflowAgent = state.workflowAgent;
-      this.toolUseAgent = state.toolUseAgent;
-      this.model = state.model;
-      this.commit = state.commit;
-      this.instruction = state.instruction;
-      this.singleFiles = {
+      this.workflowAgent.set(state.workflowAgent);
+      this.toolUseAgent.set(state.toolUseAgent);
+      this.model.set(state.model);
+      this.commit.set(state.commit);
+      this.instruction.set(state.instruction);
+      this.singleFiles.set({
         inputFile: state.inputFile,
         referenceFile: state.referenceFile,
         auxiliaryFile: state.auxiliaryFile,
         mediaFile: state.mediaFile,
         editedFile: state.editedFile,
         baseFile: state.baseFile,
-      };
+      });
 
-      this.checkboxValues = {
+      this.checkboxValues.set({
         autoExtractFigure: state.autoExtractFigure,
         autoExtractTikzFigure: state.autoExtractTikzFigure,
         autoCompileInputPdf: state.autoCompileInputPdf,
         attachTeXCount: state.attachTeXCount,
         attachDiagnostics: state.attachDiagnostics,
-      };
-      this.outputFilesActive = state.outputFilesActive;
-      this.latexdiffsVisible = state.latexdiffsVisible;
+      });
+      this.outputFilesActive.set(state.outputFilesActive);
+      this.latexdiffsVisible.set(state.latexdiffsVisible);
 
       this.restoreFileArrays(state);
     } finally {
@@ -911,57 +937,62 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private restoreFileArrays(state: MainViewPersistedState): void {
-    this.multiFiles = Object.fromEntries(
-      MULTIPLE_FILE_TYPES.map((type) => {
-        const key = `${type}Files` as keyof MultiFiles;
-        const files = state[key as keyof MainViewPersistedState];
-        return [key, Array.isArray(files) ? files : []];
-      }),
-    ) as MultiFiles;
+    this.multiFiles.set(
+      Object.fromEntries(
+        MULTIPLE_FILE_TYPES.map((type) => {
+          const key = `${type}Files` as keyof MultiFiles;
+          const files = state[key as keyof MainViewPersistedState];
+          return [key, Array.isArray(files) ? files : []];
+        }),
+      ) as MultiFiles,
+    );
 
-    this.multiFilesVisible = Object.fromEntries(
-      MULTIPLE_FILE_TYPES.map((type) => {
-        const key = `${type}Files` as keyof MultiFilesVisible;
-        const visible = state[`${key}Visible` as keyof MainViewPersistedState];
-        return [key, Boolean(visible)];
-      }),
-    ) as MultiFilesVisible;
+    this.multiFilesVisible.set(
+      Object.fromEntries(
+        MULTIPLE_FILE_TYPES.map((type) => {
+          const key = `${type}Files` as keyof MultiFilesVisible;
+          const visible =
+            state[`${key}Visible` as keyof MainViewPersistedState];
+          return [key, Boolean(visible)];
+        }),
+      ) as MultiFilesVisible,
+    );
   }
 
   private clearForNewSession(): void {
-    this.instruction = '';
-    const defaults = SESSION_DEFAULTS[this.sessionType];
+    this.instruction.set('');
+    const defaults = SESSION_DEFAULTS[this.sessionType.get()];
     if (defaults.resetFiles) {
-      this.singleFiles = {
+      this.singleFiles.set({
         inputFile: '',
         referenceFile: '',
         auxiliaryFile: '',
         mediaFile: '',
         editedFile: '',
         baseFile: '',
-      };
-      this.multiFiles = {
+      });
+      this.multiFiles.set({
         inputFiles: [],
         referenceFiles: [],
         auxiliaryFiles: [],
         mediaFiles: [],
         outputFiles: [],
-      };
-      this.multiFilesVisible = {
+      });
+      this.multiFilesVisible.set({
         inputFiles: false,
         referenceFiles: false,
         auxiliaryFiles: false,
         mediaFiles: false,
         outputFiles: false,
-      };
+      });
       if (defaults.checkboxOverrides) {
-        this.checkboxValues = {
-          ...this.checkboxValues,
+        this.checkboxValues.set({
+          ...this.checkboxValues.get(),
           ...defaults.checkboxOverrides,
-        };
+        });
       }
       if (defaults.outputFilesActive !== undefined) {
-        this.outputFilesActive = defaults.outputFilesActive;
+        this.outputFilesActive.set(defaults.outputFilesActive);
       }
     }
     this.saveState();
@@ -980,11 +1011,14 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private toggleListVisibility(listId: keyof MultiFiles): void {
-    const visible = !this.multiFilesVisible[listId];
-    this.multiFilesVisible = { ...this.multiFilesVisible, [listId]: visible };
+    const visible = !this.multiFilesVisible.get()[listId];
+    this.multiFilesVisible.set({
+      ...this.multiFilesVisible.get(),
+      [listId]: visible,
+    });
     if (listId === ELEMENT_IDS.OUTPUT_FILES) {
-      this.outputFilesActive = visible;
-      if (visible && this.multiFiles.outputFiles.length === 0) {
+      this.outputFilesActive.set(visible);
+      if (visible && this.multiFiles.get().outputFiles.length === 0) {
         this.initializeOutputFiles();
       }
     }
@@ -992,23 +1026,27 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private initializeOutputFiles(): void {
-    const inputFile = this.singleFiles.inputFile;
+    const inputFile = this.singleFiles.get().inputFile;
     if (!inputFile) return;
 
     const initialFiles = this.getInitialOutputFiles(inputFile);
-    this.multiFiles = { ...this.multiFiles, outputFiles: initialFiles };
+    this.multiFiles.set({
+      ...this.multiFiles.get(),
+      outputFiles: initialFiles,
+    });
   }
 
   private getInitialOutputFiles(inputFile: string): string[] {
-    if (this.multiFiles.outputFiles.length > 0) {
-      return this.multiFiles.outputFiles;
+    const mf = this.multiFiles.get();
+    if (mf.outputFiles.length > 0) {
+      return mf.outputFiles;
     }
     if (this.defaultOutputFiles.length > 0) {
       return this.defaultOutputFiles;
     }
     // Include both the single input file and multiple input files
     const files = [inputFile];
-    for (const file of this.multiFiles.inputFiles) {
+    for (const file of mf.inputFiles) {
       if (!files.includes(file)) {
         files.push(file);
       }
@@ -1017,13 +1055,16 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private handleRemoveFile(listId: keyof MultiFiles, file: string): void {
-    const files = (this.multiFiles[listId] ?? []).filter(
+    const files = (this.multiFiles.get()[listId] ?? []).filter(
       (f: string) => f !== file,
     );
     if (files.length === 0) {
-      this.multiFilesVisible = { ...this.multiFilesVisible, [listId]: false };
+      this.multiFilesVisible.set({
+        ...this.multiFilesVisible.get(),
+        [listId]: false,
+      });
       if (listId === ELEMENT_IDS.OUTPUT_FILES) {
-        this.outputFilesActive = false;
+        this.outputFilesActive.set(false);
       }
     }
     this.updateMultiFiles(listId, files);
@@ -1032,7 +1073,7 @@ export class MainApp extends BaseWebviewApp {
   private handleSelectMultipleFiles(listId: string): void {
     const currentFileKey = listId.replace('Files', 'File');
     const currentFile =
-      this.singleFiles[currentFileKey as keyof typeof this.singleFiles];
+      this.singleFiles.get()[currentFileKey as keyof SingleFiles];
     // Convert listId (e.g., 'inputFiles') to fileType (e.g., 'input')
     const fileType = listId.replace('Files', '');
     postMessage(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES, {
@@ -1047,16 +1088,18 @@ export class MainApp extends BaseWebviewApp {
 
   private handleGetCurrentFile(type: FileType | 'base' | 'edited'): void {
     const payload: Record<string, unknown> = { fileType: type };
-    if ((type === 'base' || type === 'edited') && this.singleFiles.baseFile) {
-      payload.baseFile = this.singleFiles.baseFile;
+    const sf = this.singleFiles.get();
+    if ((type === 'base' || type === 'edited') && sf.baseFile) {
+      payload.baseFile = sf.baseFile;
     }
     postMessage(MAIN_VIEW_COMMANDS.GET_CURRENT_FILE, payload);
   }
 
   private handleEmptyFile(type: FileType | 'base' | 'edited'): void {
-    const key = `${type}File` as keyof typeof this.singleFiles;
-    if (key in this.singleFiles) {
-      this.singleFiles = { ...this.singleFiles, [key]: '' };
+    const key = `${type}File` as keyof SingleFiles;
+    const sf = this.singleFiles.get();
+    if (key in sf) {
+      this.singleFiles.set({ ...sf, [key]: '' });
       this.saveState();
     }
 
@@ -1068,16 +1111,19 @@ export class MainApp extends BaseWebviewApp {
 
   private handleRefreshEditedFiles(): void {
     postMessage(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE, {
-      baseFile: this.singleFiles.baseFile,
+      baseFile: this.singleFiles.get().baseFile,
       notifyWhenEmpty: true,
     });
   }
 
   private handleEmptyFiles(type: MultipleFileType): void {
     const listId = `${type}Files`;
-    this.multiFilesVisible = { ...this.multiFilesVisible, [listId]: false };
+    this.multiFilesVisible.set({
+      ...this.multiFilesVisible.get(),
+      [listId]: false,
+    });
     if (type === 'output') {
-      this.outputFilesActive = false;
+      this.outputFilesActive.set(false);
     }
     this.updateMultiFiles(listId as keyof MultiFiles, []);
   }
@@ -1088,8 +1134,8 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private handleSingleFileChange(type: FileType, value: string): void {
-    const key = `${type}File` as keyof typeof this.singleFiles;
-    this.singleFiles = { ...this.singleFiles, [key]: value };
+    const key = `${type}File` as keyof SingleFiles;
+    this.singleFiles.set({ ...this.singleFiles.get(), [key]: value });
     this.saveState();
 
     const command = FILE_SELECTED_COMMANDS[type];
@@ -1101,21 +1147,21 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private handleBaseFileChange(value: string): void {
-    this.singleFiles = { ...this.singleFiles, baseFile: value };
+    this.singleFiles.set({ ...this.singleFiles.get(), baseFile: value });
     this.saveState();
     postMessage(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE, { baseFile: value });
   }
 
   private handleSessionTypeChange(value: string): void {
     const parsed = parseSessionType(value) ?? SESSION_TYPES.WORKFLOW;
-    if (parsed === this.sessionType) return;
-    this.sessionType = parsed;
+    if (parsed === this.sessionType.get()) return;
+    this.sessionType.set(parsed);
     if (parsed === SESSION_TYPES.TOOL_USE) {
-      this.outputFilesActive = false;
-      this.multiFilesVisible = {
-        ...this.multiFilesVisible,
+      this.outputFilesActive.set(false);
+      this.multiFilesVisible.set({
+        ...this.multiFilesVisible.get(),
         outputFiles: false,
-      };
+      });
       this.updateMultiFiles('outputFiles', []);
     }
     this.saveState();
@@ -1123,11 +1169,11 @@ export class MainApp extends BaseWebviewApp {
 
   private handleAgentChange(sessionType: SessionType, value: string): void {
     if (sessionType === SESSION_TYPES.WORKFLOW) {
-      this.workflowAgent = value;
+      this.workflowAgent.set(value);
     } else {
-      this.toolUseAgent = value;
+      this.toolUseAgent.set(value);
     }
-    this.sessionType = sessionType;
+    this.sessionType.set(sessionType);
     this.saveState();
     postMessage(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER);
     postMessage(MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE);
@@ -1139,7 +1185,7 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private handleModelChange(value: string): void {
-    this.model = value;
+    this.model.set(value);
     this.saveState();
     postMessage(MAIN_VIEW_COMMANDS.MODEL_SELECTED, { model: value });
     // Note: API key banner updates are handled by backend messages
@@ -1151,11 +1197,11 @@ export class MainApp extends BaseWebviewApp {
   private handleShowApiKeyBanner(
     message: MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER>,
   ): void {
-    this.apiKeyBanner = {
+    this.apiKeyBanner.set({
       visible: true,
       provider: message.provider ?? '',
       requiresKey: message.requiresKey ?? false,
-    };
+    });
   }
 
   private handleShowAgentConfigBanner(
@@ -1163,11 +1209,11 @@ export class MainApp extends BaseWebviewApp {
       typeof MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER
     >,
   ): void {
-    this.agentConfigBanner = {
+    this.agentConfigBanner.set({
       visible: true,
       agentName: message.agentName ?? '',
       customDirSet: message.customDirSet ?? false,
-    };
+    });
   }
 
   private handleShowDependencyBanner(
@@ -1175,10 +1221,10 @@ export class MainApp extends BaseWebviewApp {
       typeof MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER
     >,
   ): void {
-    this.dependencyBanner = {
+    this.dependencyBanner.set({
       visible: true,
       missingTools: message.missingTools ?? [],
-    };
+    });
   }
 
   private handleSetSelectedAgent(
@@ -1186,13 +1232,13 @@ export class MainApp extends BaseWebviewApp {
   ): void {
     const sessionType = parseSessionType(message.sessionType ?? undefined);
     if (sessionType) {
-      this.sessionType = sessionType;
+      this.sessionType.set(sessionType);
     }
     if (message.agentId) {
-      if (this.sessionType === SESSION_TYPES.TOOL_USE) {
-        this.toolUseAgent = message.agentId;
+      if (this.sessionType.get() === SESSION_TYPES.TOOL_USE) {
+        this.toolUseAgent.set(message.agentId);
       } else {
-        this.workflowAgent = message.agentId;
+        this.workflowAgent.set(message.agentId);
       }
     }
     this.saveState();
@@ -1224,14 +1270,15 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private refreshInstructionPlaceholder(advance: boolean): void {
-    const placeholders = ONBOARDING_PLACEHOLDERS[this.sessionType];
+    const placeholders = ONBOARDING_PLACEHOLDERS[this.sessionType.get()];
     if (!placeholders.length) return;
-    const currentIndex = placeholders.indexOf(this.instructionPlaceholder);
+    const current = this.instructionPlaceholder.get();
+    const currentIndex = placeholders.indexOf(current);
     if (advance) {
       const nextIndex = (currentIndex + 1) % placeholders.length;
-      this.instructionPlaceholder = placeholders[nextIndex];
-    } else if (!this.instructionPlaceholder) {
-      this.instructionPlaceholder = placeholders[0];
+      this.instructionPlaceholder.set(placeholders[nextIndex]);
+    } else if (!current) {
+      this.instructionPlaceholder.set(placeholders[0]);
     }
   }
 
@@ -1245,8 +1292,8 @@ export class MainApp extends BaseWebviewApp {
     } = this.collectCurrentContext();
     postMessage(MAIN_VIEW_COMMANDS.EXECUTE, {
       agent,
-      model: this.model,
-      instruction: this.instruction,
+      model: this.model.get(),
+      instruction: this.instruction.get(),
       isToolUseAgent,
       ...singleFileSelections,
       ...multipleFileSelections,
@@ -1261,34 +1308,38 @@ export class MainApp extends BaseWebviewApp {
     multipleFileSelections: Record<string, string[] | boolean>;
     checkboxValues: Record<string, boolean>;
   } {
+    const st = this.sessionType.get();
     const agent =
-      this.sessionType === SESSION_TYPES.TOOL_USE
-        ? this.toolUseAgent
-        : this.workflowAgent;
+      st === SESSION_TYPES.TOOL_USE
+        ? this.toolUseAgent.get()
+        : this.workflowAgent.get();
 
+    const sf = this.singleFiles.get();
     const singleFileSelections = {
-      inputFile: this.singleFiles.inputFile,
-      referenceFile: this.singleFiles.referenceFile,
-      auxiliaryFile: this.singleFiles.auxiliaryFile,
-      mediaFile: this.singleFiles.mediaFile,
-      editedFile: this.singleFiles.editedFile,
-      baseFile: this.singleFiles.baseFile,
+      inputFile: sf.inputFile,
+      referenceFile: sf.referenceFile,
+      auxiliaryFile: sf.auxiliaryFile,
+      mediaFile: sf.mediaFile,
+      editedFile: sf.editedFile,
+      baseFile: sf.baseFile,
     };
 
+    const mf = this.multiFiles.get();
+    const mv = this.multiFilesVisible.get();
     const multipleFileSelections: Record<string, string[] | boolean> = {};
     MULTIPLE_FILE_TYPES.forEach((type) => {
       const listId = `${type}Files` as keyof MultiFiles;
-      const isActive = this.multiFilesVisible[listId];
-      const files = isActive ? (this.multiFiles[listId] ?? []) : [];
+      const isActive = mv[listId];
+      const files = isActive ? (mf[listId] ?? []) : [];
       multipleFileSelections[listId] = files;
       multipleFileSelections[`${listId}Active`] = isActive;
     });
 
-    const checkboxValues = { ...this.checkboxValues };
+    const checkboxValues = { ...this.checkboxValues.get() };
 
     return {
       agent,
-      isToolUseAgent: this.sessionType === SESSION_TYPES.TOOL_USE,
+      isToolUseAgent: st === SESSION_TYPES.TOOL_USE,
       singleFileSelections,
       multipleFileSelections,
       checkboxValues,
@@ -1296,22 +1347,24 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private handlePolishInstruction(): void {
-    if (!this.instruction.trim()) return;
+    const instructionText = this.instruction.get();
+    if (!instructionText.trim()) return;
 
     const { agent, singleFileSelections, multipleFileSelections } =
       this.collectCurrentContext();
-    this.isPolishing = true;
+    this.isPolishing.set(true);
     postMessage(MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT, {
-      text: this.instruction,
+      text: instructionText,
       agent,
-      model: this.model,
+      model: this.model.get(),
       ...singleFileSelections,
       ...multipleFileSelections,
     });
   }
 
   private handleMerge(): void {
-    if (!this.singleFiles.inputFile || !this.singleFiles.editedFile) {
+    const sf = this.singleFiles.get();
+    if (!sf.inputFile || !sf.editedFile) {
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
         text: 'Please select both input and edited files to merge',
       });
@@ -1319,40 +1372,41 @@ export class MainApp extends BaseWebviewApp {
     }
 
     postMessage(MAIN_VIEW_COMMANDS.MERGE, {
-      inputFile: this.singleFiles.inputFile,
-      editedFile: this.singleFiles.editedFile,
+      inputFile: sf.inputFile,
+      editedFile: sf.editedFile,
     });
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-      text: `Merging files: ${this.singleFiles.inputFile} and ${this.singleFiles.editedFile}`,
+      text: `Merging files: ${sf.inputFile} and ${sf.editedFile}`,
     });
   }
 
   private handlePackClean(action: 'pack' | 'clean'): void {
-    if (!this.singleFiles.inputFile || !this.model) {
+    const sf = this.singleFiles.get();
+    if (!sf.inputFile || !this.model.get()) {
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
         text: 'Please select all required fields (input file, agent, and model)',
       });
       return;
     }
 
-    const outputFiles = this.multiFiles.outputFiles ?? [];
-    const useMultiple = this.outputFilesActive && outputFiles.length > 0;
+    const outputFiles = this.multiFiles.get().outputFiles ?? [];
+    const useMultiple = this.outputFilesActive.get() && outputFiles.length > 0;
     const command = this.getPackCleanCommand(action, useMultiple);
 
     postMessage(command, {
-      inputFile: this.singleFiles.inputFile,
+      inputFile: sf.inputFile,
       agent:
-        this.sessionType === SESSION_TYPES.TOOL_USE
-          ? this.toolUseAgent
-          : this.workflowAgent,
-      model: this.model,
+        this.sessionType.get() === SESSION_TYPES.TOOL_USE
+          ? this.toolUseAgent.get()
+          : this.workflowAgent.get(),
+      model: this.model.get(),
       outputFiles: useMultiple ? outputFiles : undefined,
     });
 
     const actionLabel = capitalize(action);
     const summary = useMultiple
-      ? `${actionLabel}ing multiple files: ${[this.singleFiles.inputFile, ...outputFiles].join(', ')}`
-      : `${actionLabel}ing single file: ${this.singleFiles.inputFile}`;
+      ? `${actionLabel}ing multiple files: ${[sf.inputFile, ...outputFiles].join(', ')}`
+      : `${actionLabel}ing single file: ${sf.inputFile}`;
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, { text: summary });
   }
 
@@ -1371,47 +1425,53 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private handleLatexdiff(): void {
+    const sf = this.singleFiles.get();
     postMessage(MAIN_VIEW_COMMANDS.LATEXDIFF, {
-      inputFile: this.singleFiles.inputFile,
-      baseFile: this.singleFiles.baseFile,
-      editedFile: this.singleFiles.editedFile,
+      inputFile: sf.inputFile,
+      baseFile: sf.baseFile,
+      editedFile: sf.editedFile,
     });
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-      text: `Running LaTeX diff between ${this.singleFiles.baseFile} and ${this.singleFiles.editedFile}`,
+      text: `Running LaTeX diff between ${sf.baseFile} and ${sf.editedFile}`,
     });
   }
 
   private handleLatexdiffVC(): void {
+    const sf = this.singleFiles.get();
+    const commitVal = this.commit.get();
     postMessage(MAIN_VIEW_COMMANDS.LATEXDIFFVC, {
-      inputFile: this.singleFiles.inputFile,
-      baseFile: this.singleFiles.baseFile,
-      commitHash: this.commit,
+      inputFile: sf.inputFile,
+      baseFile: sf.baseFile,
+      commitHash: commitVal,
     });
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-      text: `Running LaTeX diff with version control: ${this.singleFiles.baseFile} at commit ${this.commit}`,
+      text: `Running LaTeX diff with version control: ${sf.baseFile} at commit ${commitVal}`,
     });
   }
 
   private handleLatexdiffVCPack(action: 'pack' | 'clean'): void {
+    const sf = this.singleFiles.get();
+    const commitVal = this.commit.get();
     postMessage(
       action === 'pack'
         ? MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC
         : MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC,
       {
-        inputFile: this.singleFiles.inputFile,
-        baseFile: this.singleFiles.baseFile,
-        commitHash: this.commit,
+        inputFile: sf.inputFile,
+        baseFile: sf.baseFile,
+        commitHash: commitVal,
         clean: action === 'clean',
       },
     );
     const actionLabel = action === 'pack' ? 'Pack' : 'Clean';
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-      text: `${actionLabel}ing LaTeX diff with version control: ${this.singleFiles.baseFile} at commit ${this.commit}`,
+      text: `${actionLabel}ing LaTeX diff with version control: ${sf.baseFile} at commit ${commitVal}`,
     });
   }
 
   private handleCompare(command: string): void {
-    if (!this.singleFiles.baseFile || !this.singleFiles.editedFile) {
+    const sf = this.singleFiles.get();
+    if (!sf.baseFile || !sf.editedFile) {
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
         text: 'Please select both base and edited files to compare',
       });
@@ -1419,13 +1479,13 @@ export class MainApp extends BaseWebviewApp {
     }
 
     postMessage(command, {
-      baseFile: this.singleFiles.baseFile,
-      editedFile: this.singleFiles.editedFile,
+      baseFile: sf.baseFile,
+      editedFile: sf.editedFile,
     });
   }
 
   private handleRecordingToggle(): void {
-    if (this.isRecording) {
+    if (this.isRecording.get()) {
       postMessage(MAIN_VIEW_COMMANDS.STOP_RECORDING);
     } else {
       postMessage(MAIN_VIEW_COMMANDS.START_RECORDING);
@@ -1433,7 +1493,7 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private handleApiKeyBannerAction(action: 'set' | 'guide'): void {
-    const { provider } = this.apiKeyBanner;
+    const { provider } = this.apiKeyBanner.get();
     if (action === 'set') {
       const command = provider
         ? MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY
@@ -1451,12 +1511,12 @@ export class MainApp extends BaseWebviewApp {
     switch (action) {
       case 'edit':
         postMessage(MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS, {
-          sessionType: this.sessionType,
+          sessionType: this.sessionType.get(),
         });
         break;
       case 'dir':
         postMessage(MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY, {
-          customDirSet: this.agentConfigBanner.customDirSet,
+          customDirSet: this.agentConfigBanner.get().customDirSet,
         });
         break;
       case 'docs':
@@ -1533,11 +1593,12 @@ export class MainApp extends BaseWebviewApp {
     e: CustomEvent<CheckboxChangeDetail>,
   ): void {
     const { id, checked } = e.detail;
-    if (id in this.checkboxValues) {
-      this.checkboxValues = {
-        ...this.checkboxValues,
+    const cv = this.checkboxValues.get();
+    if (id in cv) {
+      this.checkboxValues.set({
+        ...cv,
         [id]: checked,
-      };
+      });
       this.saveState();
     }
   }
@@ -1588,7 +1649,7 @@ export class MainApp extends BaseWebviewApp {
   private handleComponentLatexDiffsToggle(
     e: CustomEvent<LatexDiffsToggleDetail>,
   ): void {
-    this.latexdiffsVisible = e.detail.visible;
+    this.latexdiffsVisible.set(e.detail.visible);
     this.saveState();
   }
 
@@ -1629,14 +1690,17 @@ export class MainApp extends BaseWebviewApp {
   private handleComponentEditedFileChange(
     e: CustomEvent<EditedFileChangeDetail>,
   ): void {
-    this.singleFiles = { ...this.singleFiles, editedFile: e.detail.value };
+    this.singleFiles.set({
+      ...this.singleFiles.get(),
+      editedFile: e.detail.value,
+    });
     this.saveState();
   }
 
   private handleComponentCommitChange(
     e: CustomEvent<CommitChangeDetail>,
   ): void {
-    this.commit = e.detail.value;
+    this.commit.set(e.detail.value);
     this.saveState();
   }
 
@@ -1668,17 +1732,19 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private shouldForceApiKeyBanner(): boolean {
-    if (this.apiKeyBanner.requiresKey) {
+    if (this.apiKeyBanner.get().requiresKey) {
       return true;
     }
-    const option = this.modelOptions.find((item) => item.value === this.model);
+    const option = this.modelOptions
+      .get()
+      .find((item) => item.value === this.model.get());
     return option?.requiresKey ?? false;
   }
 
   private handleComponentInstructionInput(
     e: CustomEvent<InstructionChangeDetail>,
   ): void {
-    this.instruction = e.detail.value;
+    this.instruction.set(e.detail.value);
     this.scheduleInstructionSave();
   }
 
@@ -1697,7 +1763,7 @@ export class MainApp extends BaseWebviewApp {
         this.handleRecordingToggle();
         break;
       case 'erase':
-        this.instruction = '';
+        this.instruction.set('');
         this.saveState();
         break;
     }
@@ -1723,13 +1789,13 @@ export class MainApp extends BaseWebviewApp {
     postMessage(MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING, {
       value: false,
     });
-    this.dependencyBanner = { visible: false };
+    this.dependencyBanner.set({ visible: false });
   }
 
   /** Check if a commit hash exists in the options array. */
   private hasCommitValue(value: string): boolean {
     if (!value) return false;
-    const commits = this.fileOptions.commit ?? [];
+    const commits = this.fileOptions.get().commit ?? [];
     const entries = commits.some((commit) => commit.startsWith('HEAD'))
       ? commits
       : ['HEAD', ...commits];
@@ -1737,158 +1803,6 @@ export class MainApp extends BaseWebviewApp {
       const [hash] = commit.split(': ');
       return hash === value;
     });
-  }
-
-  private buildFileStateContext(): FileStateContextValue {
-    return {
-      sessionType: this.sessionType,
-      checkboxValues: this.checkboxValues,
-      singleFiles: { ...this.singleFiles },
-      fileOptions: { ...this.fileOptions },
-      multiFiles: { ...this.multiFiles },
-      multiFilesVisible: { ...this.multiFilesVisible },
-      outputFilesActive: this.outputFilesActive,
-    };
-  }
-
-  private buildSessionContext(): SessionContextValue {
-    return {
-      sessionType: this.sessionType,
-      instruction: this.instruction,
-      placeholder: this.instructionPlaceholder,
-      workflowAgent: this.workflowAgent,
-      toolUseAgent: this.toolUseAgent,
-      model: this.model,
-      workflowAgentOptions: this.workflowAgentOptions,
-      toolUseAgentOptions: this.toolUseAgentOptions,
-      modelOptions: this.modelOptions,
-      isRecording: this.isRecording,
-      isPolishing: this.isPolishing,
-      debugMode: this.debugMode,
-    };
-  }
-
-  private isSessionContextEqual(
-    current: SessionContextValue,
-    next: SessionContextValue,
-  ): boolean {
-    return (
-      current.sessionType === next.sessionType &&
-      current.instruction === next.instruction &&
-      current.placeholder === next.placeholder &&
-      current.workflowAgent === next.workflowAgent &&
-      current.toolUseAgent === next.toolUseAgent &&
-      current.model === next.model &&
-      this.areArraysEqual(
-        current.workflowAgentOptions,
-        next.workflowAgentOptions,
-      ) &&
-      this.areArraysEqual(
-        current.toolUseAgentOptions,
-        next.toolUseAgentOptions,
-      ) &&
-      this.areArraysEqual(current.modelOptions, next.modelOptions) &&
-      current.isRecording === next.isRecording &&
-      current.isPolishing === next.isPolishing &&
-      current.debugMode === next.debugMode
-    );
-  }
-
-  private isFileStateContextEqual(
-    current: FileStateContextValue,
-    next: FileStateContextValue,
-  ): boolean {
-    return (
-      current.sessionType === next.sessionType &&
-      this.areCheckboxValuesEqual(
-        current.checkboxValues,
-        next.checkboxValues,
-      ) &&
-      current.singleFiles.inputFile === next.singleFiles.inputFile &&
-      current.singleFiles.referenceFile === next.singleFiles.referenceFile &&
-      current.singleFiles.auxiliaryFile === next.singleFiles.auxiliaryFile &&
-      current.singleFiles.mediaFile === next.singleFiles.mediaFile &&
-      current.singleFiles.baseFile === next.singleFiles.baseFile &&
-      current.singleFiles.editedFile === next.singleFiles.editedFile &&
-      this.areArraysEqual(
-        current.fileOptions.inputFile,
-        next.fileOptions.inputFile,
-      ) &&
-      this.areArraysEqual(
-        current.fileOptions.referenceFile,
-        next.fileOptions.referenceFile,
-      ) &&
-      this.areArraysEqual(
-        current.fileOptions.auxiliaryFile,
-        next.fileOptions.auxiliaryFile,
-      ) &&
-      this.areArraysEqual(
-        current.fileOptions.mediaFile,
-        next.fileOptions.mediaFile,
-      ) &&
-      this.areArraysEqual(
-        current.fileOptions.baseFile,
-        next.fileOptions.baseFile,
-      ) &&
-      this.areArraysEqual(
-        current.fileOptions.editedFile,
-        next.fileOptions.editedFile,
-      ) &&
-      this.areArraysEqual(
-        current.multiFiles.inputFiles,
-        next.multiFiles.inputFiles,
-      ) &&
-      this.areArraysEqual(
-        current.multiFiles.referenceFiles,
-        next.multiFiles.referenceFiles,
-      ) &&
-      this.areArraysEqual(
-        current.multiFiles.auxiliaryFiles,
-        next.multiFiles.auxiliaryFiles,
-      ) &&
-      this.areArraysEqual(
-        current.multiFiles.mediaFiles,
-        next.multiFiles.mediaFiles,
-      ) &&
-      this.areArraysEqual(
-        current.multiFiles.outputFiles,
-        next.multiFiles.outputFiles,
-      ) &&
-      current.multiFilesVisible.inputFiles ===
-        next.multiFilesVisible.inputFiles &&
-      current.multiFilesVisible.referenceFiles ===
-        next.multiFilesVisible.referenceFiles &&
-      current.multiFilesVisible.auxiliaryFiles ===
-        next.multiFilesVisible.auxiliaryFiles &&
-      current.multiFilesVisible.mediaFiles ===
-        next.multiFilesVisible.mediaFiles &&
-      current.multiFilesVisible.outputFiles ===
-        next.multiFilesVisible.outputFiles &&
-      current.outputFilesActive === next.outputFilesActive
-    );
-  }
-
-  private areCheckboxValuesEqual(
-    current: CheckboxValues,
-    next: CheckboxValues,
-  ): boolean {
-    return (
-      current.autoExtractFigure === next.autoExtractFigure &&
-      current.autoExtractTikzFigure === next.autoExtractTikzFigure &&
-      current.autoCompileInputPdf === next.autoCompileInputPdf &&
-      current.attachTeXCount === next.attachTeXCount &&
-      current.attachDiagnostics === next.attachDiagnostics
-    );
-  }
-
-  private areArraysEqual<T>(current: T[], next: T[]): boolean {
-    if (current === next) {
-      return true;
-    }
-    if (current.length !== next.length) {
-      return false;
-    }
-    return current.every((value, index) => Object.is(value, next[index]));
   }
 
   /** Merge arrays, appending only items not already present */
@@ -1903,11 +1817,17 @@ export class MainApp extends BaseWebviewApp {
   }
 
   render(): TemplateResult {
-    const isToolUse = this.sessionType === SESSION_TYPES.TOOL_USE;
+    const isToolUse = this.sessionType.get() === SESSION_TYPES.TOOL_USE;
     const fileSelectionClasses = classMap({
       'file-selection-group': true,
       'file-selection-group--disabled': isToolUse,
     });
+
+    const akb = this.apiKeyBanner.get();
+    const acb = this.agentConfigBanner.get();
+    const db = this.dependencyBanner.get();
+    const sf = this.singleFiles.get();
+    const fo = this.fileOptions.get();
 
     return html`
       <div class="content-wrapper">
@@ -1959,21 +1879,21 @@ export class MainApp extends BaseWebviewApp {
 
           <banner-group
             .apiKeyBanner=${{
-              visible: this.apiKeyBanner.visible,
-              provider: this.apiKeyBanner.provider,
-              requiresKey: this.apiKeyBanner.requiresKey,
+              visible: akb.visible,
+              provider: akb.provider,
+              requiresKey: akb.requiresKey,
             }}
             .agentConfigBanner=${{
-              visible: this.agentConfigBanner.visible,
-              agentName: this.agentConfigBanner.agentName,
-              customDirSet: this.agentConfigBanner.customDirSet,
+              visible: acb.visible,
+              agentName: acb.agentName,
+              customDirSet: acb.customDirSet,
             }}
             .dependencyBanner=${{
-              visible: this.dependencyBanner.visible,
-              missingTools: this.dependencyBanner.missingTools,
+              visible: db.visible,
+              missingTools: db.missingTools,
             }}
-            .gettingStartedVisible=${this.gettingStartedVisible}
-            .loginBannerVisible=${this.loginBannerVisible}
+            .gettingStartedVisible=${this.gettingStartedVisible.get()}
+            .loginBannerVisible=${this.loginBannerVisible.get()}
             @api-key-action=${this.handleComponentApiKeyAction}
             @agent-config-action=${this.handleComponentAgentConfigAction}
             @dependency-dismiss=${this.handleComponentDependencyDismiss}
@@ -1985,14 +1905,14 @@ export class MainApp extends BaseWebviewApp {
         </div>
 
         <latexdiffs-section
-          .visible=${this.latexdiffsVisible}
-          .baseFile=${this.singleFiles.baseFile}
-          .baseFileOptions=${this.fileOptions.baseFile ?? []}
-          .editedFile=${this.singleFiles.editedFile}
-          .editedFileOptions=${this.fileOptions.editedFile ?? []}
-          .commit=${this.commit}
-          .commitOptions=${this.fileOptions.commit ?? []}
-          .isGitRepo=${this.isGitRepo}
+          .visible=${this.latexdiffsVisible.get()}
+          .baseFile=${sf.baseFile}
+          .baseFileOptions=${fo.baseFile ?? []}
+          .editedFile=${sf.editedFile}
+          .editedFileOptions=${fo.editedFile ?? []}
+          .commit=${this.commit.get()}
+          .commitOptions=${fo.commit ?? []}
+          .isGitRepo=${this.isGitRepo.get()}
           @latexdiffs-toggle=${this.handleComponentLatexDiffsToggle}
           @latexdiffs-action=${this.handleComponentLatexDiffsAction}
           @base-file-change=${this.handleComponentBaseFileChange}

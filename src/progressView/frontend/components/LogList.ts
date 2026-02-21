@@ -30,13 +30,14 @@ import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { PersistedState, createWebviewStorage } from '@shared/state';
 
 // Local imports - shared styles
-import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
+import { codiconStyles, designTokens } from '@shared/styles';
 
 // Local imports - progress view constants
 import { COMMANDS } from '../constants';
 
 // Local imports - progress view contexts
 import {
+  EMPTY_LOG_CONTEXT,
   streamLogContext,
   type StreamLogContextValue,
 } from '../contexts/streamContexts';
@@ -72,36 +73,31 @@ interface CachedStream {
 
 @customElement('log-list')
 export class LogList extends LitElement {
-  static override styles = [
-    designTokens,
-    commonViewStyles,
-    codiconStyles,
-    ...logStyles,
-  ];
+  static override styles = [designTokens, codiconStyles, ...logStyles];
 
   // Log context - only updates when logs/groups change (not on metadata-only changes)
   @consume({ context: streamLogContext, subscribe: true })
   @state()
-  private streamContext?: StreamLogContextValue;
+  private streamContext: StreamLogContextValue = EMPTY_LOG_CONTEXT;
 
   private get groups(): TaskGroup[] {
-    return this.streamContext?.taskGroups ?? [];
+    return this.streamContext.taskGroups;
   }
 
   private get messages(): LogMessageData[] {
-    return this.streamContext?.logs ?? [];
+    return this.streamContext.logs;
   }
 
   private get activeRunId(): string | null {
-    return this.streamContext?.runId ?? null;
+    return this.streamContext.runId;
   }
 
   private get isToolUse(): boolean {
-    return this.streamContext?.isToolUse ?? false;
+    return this.streamContext.isToolUse;
   }
 
   private get hasStreams(): boolean {
-    return this.streamContext?.hasStreams ?? false;
+    return this.streamContext.hasStreams;
   }
 
   /** Max cached stream DOM trees. Oldest non-active entries are evicted beyond this. */
@@ -126,7 +122,7 @@ export class LogList extends LitElement {
   }
 
   protected willUpdate(): void {
-    const streamId = this.streamContext?.streamName ?? null;
+    const streamId = this.streamContext.streamName;
 
     // Detect stream switch
     if (streamId !== this.activeStreamId) {
@@ -185,18 +181,20 @@ export class LogList extends LitElement {
 
     if (this.shouldScrollToBottom) {
       // Force scroll to bottom when switching to a different stream tab.
+      // Re-sticky so future content updates auto-scroll.
       // Must wait for child TaskGroupList to finish rendering (updateComplete)
       // and then for a layout pass (requestAnimationFrame) so vscode-scrollable
       // has an accurate scrollMax before we scroll.
       this.shouldScrollToBottom = false;
       void activeEl?.updateComplete.then(() => {
         requestAnimationFrame(() => {
+          activeEl?.setSticky(true);
           activeEl?.scrollToBottom();
         });
       });
     } else {
-      // Scroll to bottom after render if the user is already near the end
-      activeEl?.scrollToBottomIfNearEnd();
+      // Auto-scroll only when the user hasn't scrolled away (sticky)
+      activeEl?.scrollToBottomIfSticky();
     }
   }
 

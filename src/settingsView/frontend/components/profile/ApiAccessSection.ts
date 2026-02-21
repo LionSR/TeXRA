@@ -33,10 +33,6 @@ export class ApiAccessSection extends LitElement {
     return html`
       <div class="api-access-section">
         <h2>Model Access</h2>
-        <p class="api-access-description">
-          As a subscriber, you can use TeXRA's included model access or provide
-          your own API keys.
-        </p>
         <div class="api-access-options">
           <label class="api-access-option">
             <input

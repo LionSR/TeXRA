@@ -22,9 +22,9 @@ import {
  */
 export abstract class BaseTool<T> implements ITool {
   readonly definition: ToolDefinition;
-  readonly schema: ZodType<T>;
+  readonly schema: ZodType<T, T>;
 
-  protected constructor(definition: ToolDefinition, schema: ZodType<T>) {
+  protected constructor(definition: ToolDefinition, schema: ZodType<T, T>) {
     this.definition = definition;
     this.schema = schema;
   }
