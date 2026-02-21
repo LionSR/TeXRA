@@ -7,6 +7,9 @@ import { css } from 'lit';
 export const toolUseStyles = css`
   .tool-use-section {
     margin: var(--spacing-small) 0;
+    border-left: var(--border-medium) solid
+      color-mix(in srgb, var(--vscode-textLink-foreground) 30%, transparent);
+    padding-left: var(--spacing-medium);
   }
 
   .tool-use-title {
@@ -26,7 +29,7 @@ export const toolUseStyles = css`
   }
 
   .tool-use-label {
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     color: var(--color-text-link);
     margin-bottom: var(--spacing-small);
   }
@@ -36,7 +39,7 @@ export const toolUseStyles = css`
   }
 
   .tool-use-sublabel {
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
     color: var(--vscode-foreground);
     opacity: var(--opacity-normal);
     font-size: var(--font-size-sm);
@@ -149,11 +152,11 @@ export const toolUseStyles = css`
     color: var(--color-text-link);
     cursor: pointer;
     font-size: var(--font-size-sm);
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-tiny);
-    transition: color 0.15s ease;
+    transition: color var(--transition-fast);
   }
 
   .proposal-restore-link:hover {

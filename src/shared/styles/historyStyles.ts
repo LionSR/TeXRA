@@ -123,7 +123,7 @@ export const historyListStyles: CSSResult = css`
   }
 
   .config-key {
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
     color: var(--vscode-editorInfo-foreground);
     min-width: calc(
       var(--width-button-min) + var(--spacing-xlarge) + var(--spacing-xlarge)

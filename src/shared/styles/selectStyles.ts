@@ -51,7 +51,7 @@ export const selectStyles: CSSResult = css`
 
   .clickable {
     cursor: pointer;
-    transition: color 0.15s ease;
+    transition: color var(--transition-fast);
   }
 
   .clickable:hover {

@@ -69,10 +69,12 @@ export class AgentSelectionPanel extends LitElement {
 
       /* --- Left: Agent list --- */
       .agent-list-pane {
-        width: 240px;
+        width: 30%;
         min-width: 200px;
+        max-width: 300px;
         border-right: var(--border-thin) solid var(--color-border);
         overflow-y: auto;
+        overscroll-behavior: contain;
         flex-shrink: 0;
       }
 
@@ -82,7 +84,7 @@ export class AgentSelectionPanel extends LitElement {
         justify-content: space-between;
         padding: var(--spacing-small) var(--spacing-medium);
         font-size: var(--font-size-xs);
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
         color: var(--color-text-secondary);
         text-transform: uppercase;
         letter-spacing: 0.05em;
@@ -110,7 +112,7 @@ export class AgentSelectionPanel extends LitElement {
         font-size: var(--font-size-sm);
         color: var(--vscode-foreground);
         border-left: var(--border-medium) solid transparent;
-        transition: background 0.15s ease;
+        transition: background var(--transition-fast);
         outline: none;
       }
 
@@ -178,7 +180,7 @@ export class AgentSelectionPanel extends LitElement {
 
       .agent-detail-name {
         font-size: var(--font-size-lg);
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
         font-family: var(--vscode-editor-font-family);
         color: var(--vscode-foreground);
       }
@@ -198,7 +200,7 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-detail-meta-label {
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         color: var(--color-text-secondary);
         white-space: nowrap;
       }
@@ -243,8 +245,8 @@ export class AgentSelectionPanel extends LitElement {
         border-radius: var(--border-radius);
         cursor: pointer;
         transition:
-          background 0.15s ease,
-          border-color 0.15s ease;
+          background var(--transition-fast),
+          border-color var(--transition-fast);
       }
 
       .agent-action-btn:hover {
@@ -298,7 +300,7 @@ export class AgentSelectionPanel extends LitElement {
         display: inline-block;
         padding: var(--border-thin) var(--spacing-small);
         font-size: var(--font-size-xs);
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         border-radius: var(--border-radius);
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
         color: var(--color-text-secondary);

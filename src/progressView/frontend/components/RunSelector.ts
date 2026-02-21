@@ -96,15 +96,14 @@ export class RunSelector extends LitElement {
   }
 
   private toTime(value?: number | string | Date): number {
-    // Use Date.now() for missing timestamps so new runs sort to top
-    const now = Date.now();
+    // Stable fallback: missing/invalid timestamps sort to top without Date.now()
     if (typeof value === 'number') return value;
     if (value instanceof Date) {
       const time = value.getTime();
-      return Number.isNaN(time) ? now : time;
+      return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
     }
-    if (!value) return now;
+    if (!value) return Number.MAX_SAFE_INTEGER;
     const parsed = Date.parse(value);
-    return Number.isNaN(parsed) ? now : parsed;
+    return Number.isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
   }
 }

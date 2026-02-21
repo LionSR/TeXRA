@@ -1,3 +1,5 @@
+import { create } from 'mutative';
+
 // Local imports - shared webview
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { postMessage } from '@shared/vscode';
@@ -7,15 +9,17 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view
 import {
+  firstStreamId,
   getStreamState,
   isToolUseState,
-  isWorkflowState,
   type ProgressState,
   type StreamFilter,
   type StreamLogs,
   type StreamSort,
   type StreamState,
 } from './store';
+import { removePrompt, resolvedProposalIds } from './slices/permissionSlice';
+import { updateToolUseState, updateWorkflowState } from './stateUtils';
 import type {
   FilterEventDetail,
   FollowUpChangeDetail,
@@ -28,6 +32,7 @@ import type {
   StreamEventDetail,
   ToolbarCommandDetail,
 } from './events';
+import type { MessageHandlerContext } from './messageDispatcher';
 
 // Local imports - shared schemas (types)
 import type { StreamTabId } from '@shared/schemas';
@@ -62,18 +67,39 @@ export interface FrontendEventHandlerContext {
 
 export function handleStreamSwitch(
   event: CustomEvent<StreamEventDetail>,
+  ctx: FrontendEventHandlerContext,
 ): void {
-  postMessage(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, {
-    stream: event.detail.streamId,
-  });
+  const streamId = event.detail.streamId;
+  // Optimistic: highlight tab immediately
+  ctx.setState((prev) =>
+    create(prev, (draft) => {
+      draft.activeStreamId = streamId;
+    }),
+  );
+  postMessage(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, { stream: streamId });
 }
 
 export function handleStreamDelete(
   event: CustomEvent<StreamEventDetail>,
+  ctx: FrontendEventHandlerContext,
 ): void {
-  postMessage(PROGRESS_VIEW_COMMANDS.DELETE_STREAM, {
-    stream: event.detail.streamId,
-  });
+  const streamId = event.detail.streamId;
+
+  // Optimistic removal: apply delete locally before notifying backend
+  ctx.setState((prev) =>
+    create(prev, (draft) => {
+      draft.streamStates.delete(streamId);
+      draft.streamLogs.delete(streamId);
+      draft.streamById.delete(streamId);
+      if (draft.activeStreamId === streamId) {
+        draft.activeStreamId = firstStreamId(draft.streamById);
+      }
+      draft.followupOptionsByStream.delete(streamId);
+    }),
+  );
+
+  // Fire-and-forget to backend
+  postMessage(PROGRESS_VIEW_COMMANDS.DELETE_STREAM, { stream: streamId });
 }
 
 export function handleFilterChange(
@@ -81,7 +107,11 @@ export function handleFilterChange(
   ctx: FrontendEventHandlerContext,
 ): void {
   const { filter } = event.detail;
-  ctx.setState((prev) => ({ ...prev, streamFilter: filter }));
+  ctx.setState((prev) =>
+    create(prev, (draft) => {
+      draft.streamFilter = filter;
+    }),
+  );
   ctx.savePrefs?.({ streamFilter: filter });
   postMessage(PROGRESS_VIEW_COMMANDS.FILTER_STREAMS, { filter });
 }
@@ -91,7 +121,11 @@ export function handleSortChange(
   ctx: FrontendEventHandlerContext,
 ): void {
   const { sort } = event.detail;
-  ctx.setState((prev) => ({ ...prev, streamSort: sort }));
+  ctx.setState((prev) =>
+    create(prev, (draft) => {
+      draft.streamSort = sort;
+    }),
+  );
   ctx.savePrefs?.({ streamSort: sort });
   postMessage(PROGRESS_VIEW_COMMANDS.SORT_STREAMS, { sortBy: sort });
 }
@@ -117,10 +151,11 @@ export function handleRunSelected(
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
 
-  ctx.setStreamState(streamId, (prev) => {
-    if (!isWorkflowState(prev)) return prev;
-    return { ...prev, ui: { ...prev.ui, selectedRunId: event.detail.runId } };
-  });
+  updateWorkflowState(ctx, streamId, (prev) =>
+    create(prev, (draft) => {
+      draft.ui.selectedRunId = event.detail.runId;
+    }),
+  );
 }
 
 export function handleFileAction(
@@ -140,10 +175,11 @@ export function handleFollowUpChange(
 ): void {
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
-  ctx.setStreamState(streamId, (prev) => {
-    if (!isToolUseState(prev)) return prev;
-    return { ...prev, ui: { ...prev.ui, followUpText: event.detail.value } };
-  });
+  updateToolUseState(ctx, streamId, (prev) =>
+    create(prev, (draft) => {
+      draft.ui.followUpText = event.detail.value;
+    }),
+  );
 }
 
 /** Resolve the active tool-use stream's trimmed follow-up text, or null if unavailable. */
@@ -154,7 +190,7 @@ function getActiveFollowUpText(
   const streamId = state.activeStreamId;
   if (!streamId) return null;
 
-  const streamInfo = state.streams.find((stream) => stream.name === streamId);
+  const streamInfo = state.streamById.get(streamId);
   const streamState = getStreamState(
     state,
     streamId,
@@ -176,10 +212,11 @@ export function handleFollowUpSend(ctx: FrontendEventHandlerContext): void {
     stream: result.streamId,
     text: result.text,
   });
-  ctx.setStreamState(result.streamId, (prev) => {
-    if (!isToolUseState(prev)) return prev;
-    return { ...prev, ui: { ...prev.ui, followUpText: '' } };
-  });
+  updateToolUseState(ctx, result.streamId, (prev) =>
+    create(prev, (draft) => {
+      draft.ui.followUpText = '';
+    }),
+  );
 }
 
 export function handleFollowUpPolish(ctx: FrontendEventHandlerContext): void {
@@ -195,10 +232,11 @@ export function handleFollowUpPolish(ctx: FrontendEventHandlerContext): void {
 export function handleFollowUpClear(ctx: FrontendEventHandlerContext): void {
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
-  ctx.setStreamState(streamId, (prev) => {
-    if (!isToolUseState(prev)) return prev;
-    return { ...prev, ui: { ...prev.ui, followUpText: '' } };
-  });
+  updateToolUseState(ctx, streamId, (prev) =>
+    create(prev, (draft) => {
+      draft.ui.followUpText = '';
+    }),
+  );
 }
 
 export function handleFollowupRequestOptions(
@@ -217,10 +255,11 @@ export function handleFollowupModeChange(
 ): void {
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
-  ctx.setStreamState(streamId, (prev) => {
-    if (!isWorkflowState(prev)) return prev;
-    return { ...prev, followupMode: event.detail.mode };
-  });
+  updateWorkflowState(ctx, streamId, (prev) =>
+    create(prev, (draft) => {
+      draft.followupMode = event.detail.mode;
+    }),
+  );
 }
 
 export function sendFollowupCommand(
@@ -253,6 +292,7 @@ export function sendFollowupCommand(
 
 export function handlePermissionAction(
   event: CustomEvent<PermissionActionDetail>,
+  ctx: MessageHandlerContext,
 ): void {
   const { permission, action, feedback, modelOverride } = event.detail;
 
@@ -268,6 +308,13 @@ export function handlePermissionAction(
         action,
         feedback,
       });
+      // Optimistic removal — backend RESOLVE will be a no-op
+      removePrompt(
+        ctx,
+        permission.kind,
+        'requestId',
+        permission.data.requestId,
+      );
       break;
     }
     case PERMISSION_KIND.RETRY:
@@ -281,6 +328,13 @@ export function handlePermissionAction(
           stream: permission.data.streamId,
         });
       }
+      // Optimistic removal
+      removePrompt(
+        ctx,
+        PERMISSION_KIND.RETRY,
+        'streamId',
+        permission.data.streamId,
+      );
       break;
     case PERMISSION_KIND.PROPOSAL:
       postMessage(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION, {
@@ -289,6 +343,16 @@ export function handlePermissionAction(
         feedback,
         model: modelOverride,
       });
+      // Optimistic removal — track resolved ID so late SHOW is a no-op
+      const removed = removePrompt(
+        ctx,
+        PERMISSION_KIND.PROPOSAL,
+        'proposalId',
+        permission.data.proposalId,
+      );
+      if (!removed) {
+        resolvedProposalIds.add(permission.data.proposalId);
+      }
       break;
   }
 }

@@ -40,6 +40,7 @@ export const layoutStyles = css`
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
+    contain: layout style paint;
   }
 
   task-group-list > vscode-scrollable,
@@ -47,6 +48,7 @@ export const layoutStyles = css`
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
+    contain: layout paint;
   }
 
   user-message {

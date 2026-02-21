@@ -166,7 +166,7 @@ export const multiFilesStyles = css`
     justify-content: space-between;
     align-items: center;
     border-radius: var(--border-radius-small);
-    transition: background-color 0.15s ease;
+    transition: background-color var(--transition-fast);
   }
 
   .file-item:hover {
@@ -190,7 +190,7 @@ export const multiFilesStyles = css`
     padding: 0;
     display: inline-flex;
     align-items: center;
-    transition: opacity 0.15s ease;
+    transition: opacity var(--transition-fast);
   }
 
   .remove-button:hover {
@@ -262,7 +262,7 @@ export const dropdownStyles = css`
   }
 
   .dropdown-container .dropdown-menu vscode-checkbox {
-    transition: background-color 0.15s ease;
+    transition: background-color var(--transition-fast);
   }
 
   .dropdown-container .dropdown-menu vscode-checkbox:hover {

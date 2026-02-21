@@ -116,7 +116,7 @@ export function formatLogEntry(
   // Determine if details should be open (undefined = no preference)
   const isOpen =
     options.preservedOpen ??
-    (options.defaultOpen && AUTO_EXPANDED_TYPES.has(messageType ?? '')
+    (options.defaultOpen && messageType && AUTO_EXPANDED_TYPES.has(messageType)
       ? true
       : undefined);
   const templateOptions = { defaultOpen: isOpen };

@@ -18,7 +18,7 @@ export function defineTool<T>(def: {
   name: string;
   /** Static description string or function for lazy evaluation */
   description: string | (() => string);
-  schema: ZodType<T>;
+  schema: ZodType<T, T>;
 }) {
   const getDescription = (): string =>
     typeof def.description === 'function' ? def.description() : def.description;

@@ -11,9 +11,9 @@ export const statusIndicatorStyles: CSSResult = css`
     background-color: var(--vscode-descriptionForeground);
     opacity: var(--opacity-subtle, 0.7);
     transition:
-      background-color 0.3s ease,
-      box-shadow 0.3s ease,
-      opacity 0.3s ease;
+      background-color var(--transition-slow),
+      box-shadow var(--transition-slow),
+      opacity var(--transition-slow);
   }
 
   .status-indicator.is-running,
