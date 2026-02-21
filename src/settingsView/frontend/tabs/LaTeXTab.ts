@@ -483,7 +483,9 @@ export class LaTeXTab extends LitElement {
   }
 
   private handleRunInTerminal(command: string): void {
-    this.dispatchEvent(createEvent('latex-run-install-command', { installCommand: command }));
+    this.dispatchEvent(
+      createEvent('latex-run-install-command', { installCommand: command }),
+    );
   }
 
   /** Collect detected tool paths for a dependency. */

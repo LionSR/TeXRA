@@ -226,13 +226,19 @@ export class ToolCard extends LitElement {
 
   private handleInstallUrl(): void {
     if (this.item.installUrl) {
-      this.dispatchEvent(createEvent('tool-open-url', { url: this.item.installUrl }));
+      this.dispatchEvent(
+        createEvent('tool-open-url', { url: this.item.installUrl }),
+      );
     }
   }
 
   private handleInstallExtension(): void {
     if (this.item.installExtensionId) {
-      this.dispatchEvent(createEvent('tool-install-extension', { extensionId: this.item.installExtensionId }));
+      this.dispatchEvent(
+        createEvent('tool-install-extension', {
+          extensionId: this.item.installExtensionId,
+        }),
+      );
     }
   }
 

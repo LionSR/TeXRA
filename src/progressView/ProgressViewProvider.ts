@@ -250,18 +250,11 @@ export class ProgressViewProvider
 
   private setupWebviewContent(
     view: vscode.WebviewView | vscode.WebviewPanel,
-  ): vscode.Disposable[] {
-    const disposables: vscode.Disposable[] = [];
-
+  ): vscode.Disposable {
     view.webview.html = this.contentProvider.getHtmlContent(view.webview);
-
-    disposables.push(
-      view.webview.onDidReceiveMessage((message) =>
-        this.messageHandler.handleMessage(message, view),
-      ),
+    return view.webview.onDidReceiveMessage((message) =>
+      this.messageHandler.handleMessage(message, view),
     );
-
-    return disposables;
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -286,10 +279,8 @@ export class ProgressViewProvider
     this.cleanupView();
     this._view = webviewView;
 
-    const disposables = this.setupWebviewContent(webviewView);
-    this._viewDisposables.push(...disposables);
-
     this._viewDisposables.push(
+      this.setupWebviewContent(webviewView),
       webviewView.onDidChangeVisibility(() => {
         if (webviewView.visible) {
           this.syncFullView();
@@ -332,17 +323,7 @@ export class ProgressViewProvider
 
     // Send YOLO/Super YOLO bypass state for the active stream
     if (this.canSendToWebview()) {
-      const bypassStreamId = activeStream || ('' as StreamTabId);
-      this.webviewUpdater.updateBypassState(
-        bypassStreamId,
-        'toolEdit',
-        activeStream ? isApprovalBypassedForStream(activeStream) : false,
-      );
-      this.webviewUpdater.updateBypassState(
-        bypassStreamId,
-        'superYolo',
-        activeStream ? isProposalBypassedForStream(activeStream) : false,
-      );
+      this.sendBypassStates(activeStream || ('' as StreamTabId));
     }
   }
 
@@ -382,6 +363,20 @@ export class ProgressViewProvider
 
   private canSendToWebview(): boolean {
     return this.isAnyViewReady() && this.webviewUpdater.isAvailable();
+  }
+
+  /** Send YOLO / Super YOLO bypass state for a given stream. */
+  private sendBypassStates(streamId: StreamTabId): void {
+    this.webviewUpdater.updateBypassState(
+      streamId,
+      'toolEdit',
+      isApprovalBypassedForStream(streamId),
+    );
+    this.webviewUpdater.updateBypassState(
+      streamId,
+      'superYolo',
+      isProposalBypassedForStream(streamId),
+    );
   }
 
   public async cleanupTasksAfterRestart(
@@ -432,19 +427,9 @@ export class ProgressViewProvider
 
     // Lightweight sync for dual-webview: notify the other webview of the switch
     this.webviewUpdater.setActiveStream(streamId);
-    // Send bypass states for the new active stream
-    this.webviewUpdater.updateBypassState(
-      streamId,
-      'toolEdit',
-      isApprovalBypassedForStream(streamId),
-    );
-    this.webviewUpdater.updateBypassState(
-      streamId,
-      'superYolo',
-      isProposalBypassedForStream(streamId),
-    );
-    // Hydrate content (logs, todos, follow-ups, instruction)
-    this.eventHandler.syncStreamContent(streamId);
+    this.sendBypassStates(streamId);
+    // Hydrate content (logs, todos, follow-ups, instruction) + active-state metadata
+    this.eventHandler.syncStreamContent(streamId, { includeActiveState: true });
   }
 
   public showProgressViewAsPanel(): void {
@@ -470,17 +455,13 @@ export class ProgressViewProvider
     );
     this._panelReady = false;
 
-    this._panelDisposables.push(...this.setupWebviewContent(this._panelView));
-
     this._panelDisposables.push(
+      this.setupWebviewContent(this._panelView),
       this._panelView.onDidChangeViewState((e) => {
         if (e.webviewPanel.visible) {
           this.syncFullView();
         }
       }),
-    );
-
-    this._panelDisposables.push(
       this._panelView.onDidDispose(() => {
         this.disposePanelResources();
       }),

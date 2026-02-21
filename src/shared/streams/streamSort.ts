@@ -6,11 +6,11 @@ import type { StreamTabInfo } from '@shared/schemas';
 
 export const StreamSortSchema = z.enum(['time', 'agent', 'inputFile']);
 export type StreamSort = z.infer<typeof StreamSortSchema>;
-export interface StreamSortOptions {
+interface StreamSortOptions {
   getLastActivityTimestamp?: (stream: StreamTabInfo) => number | undefined;
 }
 
-export type StreamComparator = (a: StreamTabInfo, b: StreamTabInfo) => number;
+type StreamComparator = (a: StreamTabInfo, b: StreamTabInfo) => number;
 
 function compareByAgent(a: StreamTabInfo, b: StreamTabInfo): number {
   return (a.agent ?? '').localeCompare(b.agent ?? '');
@@ -34,7 +34,7 @@ function compareByTime(
   return bTime - aTime;
 }
 
-export const streamComparators: Record<
+const streamComparators: Record<
   StreamSort,
   (a: StreamTabInfo, b: StreamTabInfo, options?: StreamSortOptions) => number
 > = {

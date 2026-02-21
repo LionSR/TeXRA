@@ -46,24 +46,24 @@ export const followUpHandlers: HandlerRegistry = {
 
     updateToolUseState(ctx, streamId, (prev) =>
       create(prev, (draft) => {
-        if (data.kind === 'polished' && data.text) {
-          draft.ui.followUpText = data.text;
-          draft.ui.polishedText = data.text;
-          draft.ui.polishRevision += 1;
-          draft.ui.shouldFocusFollowUp = true;
-          return;
-        }
-
-        if (data.kind === 'polishError') {
-          draft.ui.polishedText = prev.ui.followUpText;
-          draft.ui.polishRevision += 1;
-          draft.ui.shouldFocusFollowUp = true;
-          return;
-        }
-
-        if (data.kind === 'transcribed' && data.text) {
-          draft.ui.transcribedText = data.text;
-          draft.ui.shouldFocusFollowUp = true;
+        switch (data.kind) {
+          case 'polished':
+            if (!data.text) return;
+            draft.ui.followUpText = data.text;
+            draft.ui.polishedText = data.text;
+            draft.ui.polishRevision += 1;
+            draft.ui.shouldFocusFollowUp = true;
+            break;
+          case 'polishError':
+            draft.ui.polishedText = prev.ui.followUpText;
+            draft.ui.polishRevision += 1;
+            draft.ui.shouldFocusFollowUp = true;
+            break;
+          case 'transcribed':
+            if (!data.text) return;
+            draft.ui.transcribedText = data.text;
+            draft.ui.shouldFocusFollowUp = true;
+            break;
         }
       }),
     );

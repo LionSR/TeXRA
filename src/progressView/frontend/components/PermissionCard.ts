@@ -142,7 +142,7 @@ const SECONDARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
     {
       action: 'setup',
       label: 'Setup',
-      icon: 'codicon-gear',
+      icon: 'codicon-reply',
       variant: 'secondary',
     },
   ],

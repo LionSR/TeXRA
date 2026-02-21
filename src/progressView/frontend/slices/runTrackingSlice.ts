@@ -51,7 +51,6 @@ export const runTrackingHandlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE]: (data, ctx) => {
     const { stream, runId, usage } = data;
-    // Use StreamState.kind as single source of truth for stream type
     ctx.setStreamState(stream, (prev) => {
       if (isToolUseState(prev)) {
         return create(prev, (draft) => {

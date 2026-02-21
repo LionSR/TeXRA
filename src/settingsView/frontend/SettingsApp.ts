@@ -84,6 +84,11 @@ function forwardDetail<T extends Record<string, unknown>>(
   return (event: CustomEvent<T>) => postMessage(command, event.detail);
 }
 
+/** Create an event handler that sends a postMessage command with no payload. */
+function forwardCommand(command: string): () => void {
+  return () => postMessage(command);
+}
+
 // Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
 // Safe because SettingsApp implements all abstract members below.
 const SettingsAppBase = SignalWatcher(
@@ -184,20 +189,26 @@ export class SettingsApp extends SettingsAppBase {
     return null;
   }
 
+  /** Commands sent on load to populate all tabs with initial data. */
+  private static readonly INIT_COMMANDS = [
+    SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA,
+    SETTINGS_VIEW_COMMANDS.GET_MEMORY_ENABLED,
+    SETTINGS_VIEW_COMMANDS.GET_HISTORY_DATA,
+    SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA,
+    SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION,
+    SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION,
+    SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR,
+    SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED,
+    SETTINGS_VIEW_COMMANDS.GET_AGENT_MODE_PRESETS,
+    SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA,
+    SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS,
+  ] as const;
+
   override connectedCallback(): void {
     super.connectedCallback();
-    // Request all data on load
-    postMessage(SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA);
-    postMessage(SETTINGS_VIEW_COMMANDS.GET_MEMORY_ENABLED);
-    postMessage(SETTINGS_VIEW_COMMANDS.GET_HISTORY_DATA);
-    postMessage(SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA);
-    postMessage(SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION);
-    postMessage(SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION);
-    postMessage(SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR);
-    postMessage(SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED);
-    postMessage(SETTINGS_VIEW_COMMANDS.GET_AGENT_MODE_PRESETS);
-    postMessage(SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA);
-    postMessage(SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS);
+    for (const command of SettingsApp.INIT_COMMANDS) {
+      postMessage(command);
+    }
   }
 
   private parseMessage<T>(
@@ -353,19 +364,18 @@ export class SettingsApp extends SettingsAppBase {
     }
   }
 
-  // Tab event handler
   private handleTabSelect(event: VscTabsSelectEvent): void {
     this.selectedTabIndex.set(event.detail.selectedIndex);
   }
 
   // Memory event handlers
-  private handleMemoryRefresh(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA);
-  }
+  private handleMemoryRefresh = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA,
+  );
 
-  private handleMemoryOpenFolder(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER);
-  }
+  private handleMemoryOpenFolder = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,
+  );
 
   private handleMemoryToggleEnabled = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED,
@@ -393,18 +403,14 @@ export class SettingsApp extends SettingsAppBase {
     postMessage(command, { historyId: event.detail.historyId });
   }
 
-  private handleClearHistory(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY);
-  }
+  private handleClearHistory = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY,
+  );
 
   // Profile event handlers
-  private handleSignIn(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SIGN_IN);
-  }
+  private handleSignIn = forwardCommand(SETTINGS_VIEW_COMMANDS.SIGN_IN);
 
-  private handleSignOut(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SIGN_OUT);
-  }
+  private handleSignOut = forwardCommand(SETTINGS_VIEW_COMMANDS.SIGN_OUT);
 
   private handleApiAccessMode = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
@@ -480,13 +486,13 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT,
   );
 
-  private handleSetCustomAgentDir(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR);
-  }
+  private handleSetCustomAgentDir = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR,
+  );
 
-  private handleResetCustomAgentDir(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR);
-  }
+  private handleResetCustomAgentDir = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR,
+  );
 
   private handleRevealAgentFile = forwardDetail(
     SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE,
@@ -504,9 +510,9 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
   );
 
-  private handleSaveAgentModePreset(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET);
-  }
+  private handleSaveAgentModePreset = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET,
+  );
 
   private handleDeleteAgentModePreset = forwardDetail(
     SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET,
@@ -521,26 +527,26 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION,
   );
 
-  private handleToolRecheck(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS);
-  }
+  private handleToolRecheck = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
+  );
 
   // LaTeX settings event handlers
   private handleApplyLatexSettings = forwardDetail(
     SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS,
   );
 
-  private handleInstallLatexWorkshop(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP);
-  }
+  private handleInstallLatexWorkshop = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
+  );
 
   private handleRunInstallCommand = forwardDetail(
     SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
   );
 
-  private handleOpenVscodeSettings(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS);
-  }
+  private handleOpenVscodeSettings = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
+  );
 
   private renderHeader(): TemplateResult {
     const settingsButton = html`

@@ -7,13 +7,18 @@ import { when } from 'lit/directives/when.js';
 import { designTokens } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
-// Local imports - progress view formatters
+// Local imports - progress view
 import { formatTokens } from '../formatters/timestampUtils';
-
-// Local imports - progress view constants and types
 import { ELEMENT_IDS } from '../constants';
 import type { TokenUsageStats } from '@shared/schemas';
 import type { ContextState } from '../store';
+
+/** Map utilization percentage to gauge severity level. */
+function getGaugeLevel(percent: number): 'ok' | 'warn' | 'critical' {
+  if (percent >= 80) return 'critical';
+  if (percent >= 60) return 'warn';
+  return 'ok';
+}
 
 @customElement('usage-panel')
 export class UsagePanel extends LitElement {
@@ -107,18 +112,28 @@ export class UsagePanel extends LitElement {
   @property({ attribute: false }) usage: TokenUsageStats | null = null;
   @property({ attribute: false }) contextState: ContextState | null = null;
 
-  override render(): TemplateResult | typeof nothing {
-    const hasUsage =
-      (this.usage?.inputTokens ?? 0) > 0 ||
-      (this.usage?.outputTokens ?? 0) > 0 ||
-      (this.usage?.cost ?? 0) > 0 ||
-      (this.usage?.cacheReadInputTokens ?? 0) > 0 ||
-      (this.usage?.cacheCreationInputTokens ?? 0) > 0;
-    const hasContext =
-      (this.contextState?.contextWindow ?? 0) > 0 &&
-      this.contextState?.utilizationPercent !== undefined;
+  /** Whether the usage stats have any non-zero values worth displaying. */
+  private get hasUsage(): boolean {
+    const u = this.usage;
+    if (!u) return false;
+    return (
+      u.inputTokens > 0 ||
+      u.outputTokens > 0 ||
+      u.cost > 0 ||
+      (u.cacheReadInputTokens ?? 0) > 0 ||
+      (u.cacheCreationInputTokens ?? 0) > 0
+    );
+  }
 
-    if (!hasUsage && !hasContext) {
+  private get hasContext(): boolean {
+    return (
+      (this.contextState?.contextWindow ?? 0) > 0 &&
+      this.contextState?.utilizationPercent !== undefined
+    );
+  }
+
+  override render(): TemplateResult | typeof nothing {
+    if (!this.hasUsage && !this.hasContext) {
       return nothing;
     }
 
@@ -127,7 +142,7 @@ export class UsagePanel extends LitElement {
         <span
           id=${ELEMENT_IDS.CONTEXT_STATE}
           class="context-state"
-          ?hidden=${!hasContext}
+          ?hidden=${!this.hasContext}
         >
           ${this.renderContext()}
         </span>
@@ -145,9 +160,7 @@ export class UsagePanel extends LitElement {
   private renderUsage(): TemplateResult | typeof nothing {
     if (!this.usage) return nothing;
 
-    const inputTokens = this.usage.inputTokens ?? 0;
-    const outputTokens = this.usage.outputTokens ?? 0;
-    const cost = this.usage.cost ?? 0;
+    const { inputTokens, outputTokens, cost } = this.usage;
     const cacheRead = this.usage.cacheReadInputTokens ?? 0;
     const cacheWrite = this.usage.cacheCreationInputTokens ?? 0;
 
@@ -189,7 +202,7 @@ export class UsagePanel extends LitElement {
     const { inputTokens, contextWindow, utilizationPercent } =
       this.contextState;
     const clamped = Math.min(100, Math.max(0, utilizationPercent));
-    const level = clamped >= 80 ? 'critical' : clamped >= 60 ? 'warn' : 'ok';
+    const level = getGaugeLevel(clamped);
 
     return html`
       <span class="context-gauge" title="${clamped.toFixed(0)}% context used">
@@ -209,11 +222,7 @@ export class UsagePanel extends LitElement {
 
   private buildUsageLabel(): string {
     if (!this.usage) return '';
-    const inputTokens = this.usage.inputTokens ?? 0;
-    const outputTokens = this.usage.outputTokens ?? 0;
-    const cost = this.usage.cost ?? 0;
-    return `Total usage: ${formatTokens(inputTokens)} input tokens, ${formatTokens(
-      outputTokens,
-    )} output tokens, $${cost.toFixed(3)}`;
+    const { inputTokens, outputTokens, cost } = this.usage;
+    return `Total usage: ${formatTokens(inputTokens)} input tokens, ${formatTokens(outputTokens)} output tokens, $${cost.toFixed(3)}`;
   }
 }

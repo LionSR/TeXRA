@@ -57,10 +57,10 @@ export const MissingOutputsPayloadSchema = z.object({
   xmlFile: z.string().nullable().prefault(null),
   documentTag: z.string().nullable().prefault(null),
 });
-export type MissingOutputsPayload = z.infer<typeof MissingOutputsPayloadSchema>;
+type MissingOutputsPayload = z.infer<typeof MissingOutputsPayloadSchema>;
 
-export const ToolUseStatusSchema = z.enum(['in_progress', 'completed']);
-export type ToolUseStatus = z.infer<typeof ToolUseStatusSchema>;
+const ToolUseStatusSchema = z.enum(['in_progress', 'completed']);
+type ToolUseStatus = z.infer<typeof ToolUseStatusSchema>;
 
 export const ToolUseLogSchema = z.object({
   toolName: z.string().optional(),
@@ -75,7 +75,7 @@ export const ToolUseLogSchema = z.object({
 });
 export type ToolUseLog = z.infer<typeof ToolUseLogSchema>;
 
-export const NormalizedToolUseSchema = z.object({
+const NormalizedToolUseSchema = z.object({
   parsed: z.record(z.string(), z.unknown()),
   toolName: z.string(),
   errorText: z.string(),

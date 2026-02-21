@@ -1,7 +1,7 @@
 /**
  * Permission handlers: UPDATE_PERMISSION, UPDATE_BYPASS.
  *
- * Owns resolvedProposalIds, addPermission, upsertProposalPermission,
+ * Owns resolvedProposalIds, upsertProposalPermission,
  * and removePrompt helpers.
  */
 
@@ -27,14 +27,6 @@ export const resolvedProposalIds = new Set<string>();
 // ============================================================
 // Helpers (exported for use by eventHandlers.ts)
 // ============================================================
-
-function addPermission(
-  ctx: MessageHandlerContext,
-  permission: PermissionState,
-): void {
-  // Prepend newest permissions so keyboard shortcuts target the latest request.
-  ctx.setPermissions([permission, ...ctx.getPermissions()]);
-}
 
 /**
  * Upsert a proposal permission. If one with the same proposalId already exists
@@ -105,32 +97,34 @@ export const permissionHandlers: HandlerRegistry = {
           modelOptions: permission.modelOptionsData,
         });
       } else {
-        addPermission(ctx, {
+        // Prepend newest permissions so keyboard shortcuts target the latest request.
+        const entry = {
           kind: permission.kind,
           data: permission.data,
-        } as PermissionState);
+        } as PermissionState;
+        ctx.setPermissions([entry, ...ctx.getPermissions()]);
       }
       return;
     }
 
     const { kind, id } = data;
-    if (kind === PERMISSION_KIND.TOOL_EDIT || kind === PERMISSION_KIND.BASH) {
-      removePrompt(ctx, kind, 'requestId', id);
-      return;
-    }
-    if (kind === PERMISSION_KIND.RETRY) {
-      removePrompt(ctx, PERMISSION_KIND.RETRY, 'streamId', id);
-      return;
-    }
-
-    const removed = removePrompt(
-      ctx,
-      PERMISSION_KIND.PROPOSAL,
-      'proposalId',
-      id,
-    );
-    if (!removed) {
-      resolvedProposalIds.add(id);
+    switch (kind) {
+      case PERMISSION_KIND.TOOL_EDIT:
+      case PERMISSION_KIND.BASH:
+        removePrompt(ctx, kind, 'requestId', id);
+        break;
+      case PERMISSION_KIND.RETRY:
+        removePrompt(ctx, kind, 'streamId', id);
+        break;
+      default: {
+        const removed = removePrompt(
+          ctx,
+          PERMISSION_KIND.PROPOSAL,
+          'proposalId',
+          id,
+        );
+        if (!removed) resolvedProposalIds.add(id);
+      }
     }
   },
 };
