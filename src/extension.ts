@@ -36,6 +36,7 @@ import { registerAgentEventListeners } from '@frontend/events/agentEventListener
 import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
 import { setExtensionChecker } from '@tools/externalToolDefs';
+import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
@@ -228,6 +229,21 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register VS Code extension checker for external tool availability
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
+
+  // Register VS Code notification handler for unavailable tool groups
+  setToolNotificationHandler((message, actionCommand) => {
+    if (actionCommand) {
+      void vscode.window
+        .showInformationMessage(message, 'Open Tools Dashboard')
+        .then((choice) => {
+          if (choice === 'Open Tools Dashboard') {
+            void vscode.commands.executeCommand(actionCommand);
+          }
+        });
+    } else {
+      void vscode.window.showInformationMessage(message);
+    }
+  });
 
   // Create a status bar item to show TeXRA progress
   statusBarItem = vscode.window.createStatusBarItem(
