@@ -119,8 +119,19 @@ class Node<
     this.maxRetries = maxRetries;
     this.wait = wait;
   }
-  async execFallback(prepRes: unknown, error: Error): Promise<unknown> {
-    throw error;
+  async execFallback(prepRes: unknown, error: unknown): Promise<unknown> {
+    throw error instanceof Error ? error : new Error(String(error));
+  }
+  /**
+   * Hook to classify a raw thrown error into a structured form.
+   * Called once per catch; the result is threaded to shouldAutoRetry,
+   * retryPrompt, and execFallback — avoiding repeated classification.
+   *
+   * Default: wraps in Error if needed (identity for Error instances).
+   * Override to return richer error types (e.g., ProviderError).
+   */
+  classifyError(raw: unknown): unknown {
+    return raw instanceof Error ? raw : new Error(String(raw));
   }
   /**
    * Hook called when all auto-retries are exhausted.
@@ -138,14 +149,14 @@ class Node<
    * @example
    * ```typescript
    * class MyNode extends Node<S, P> {
-   *   async retryPrompt(prepRes: unknown, error: Error): Promise<boolean> {
-   *     const result = await showRetryDialog(error.message);
+   *   async retryPrompt(prepRes: unknown, error: unknown): Promise<boolean> {
+   *     const result = await showRetryDialog(String(error));
    *     return result === 'retry';
    *   }
    * }
    * ```
    */
-  async retryPrompt(_prepRes: unknown, _error: Error): Promise<boolean> {
+  async retryPrompt(_prepRes: unknown, _error: unknown): Promise<boolean> {
     return false;
   }
   /**
@@ -155,7 +166,7 @@ class Node<
    *
    * Default: true (all errors are auto-retried).
    */
-  shouldAutoRetry(_error: Error): boolean {
+  shouldAutoRetry(_error: unknown): boolean {
     return true;
   }
   /**
@@ -195,34 +206,39 @@ class Node<
         // Check abort at start of each retry for responsive cancellation
         // This ensures we don't attempt exec when the user has already cancelled
         if (this.signal?.aborted) {
-          const cancelError = new Error('Operation cancelled by user');
-          return await this.execFallback(prepRes, cancelError);
+          return await this.execFallback(
+            prepRes,
+            this.classifyError(new Error('Operation cancelled by user')),
+          );
         }
         try {
           return await this.exec(prepRes);
         } catch (e) {
+          // Classify once — all downstream hooks receive the classified error
+          const classified = this.classifyError(e);
+
           // If abort signal is set and aborted, skip retries and go to fallback
           // This prevents unnecessary retries when the user intentionally cancelled
           const isAborted = this.signal?.aborted;
           const isLastAutoRetry = this.currentRetry === effectiveMaxRetries - 1;
-          const skipAutoRetry = !this.shouldAutoRetry(e as Error);
+          const skipAutoRetry = !this.shouldAutoRetry(classified);
 
           if (isLastAutoRetry || isAborted || skipAutoRetry) {
             // Auto-retries exhausted - try manual retry (unless aborted)
             if (!isAborted) {
-              const shouldRetry = await this.retryPrompt(prepRes, e as Error);
+              const shouldRetry = await this.retryPrompt(prepRes, classified);
               if (shouldRetry) {
                 manualRetryCount++;
                 break; // Break inner loop to restart auto-retries
               }
             }
-            return await this.execFallback(prepRes, e as Error);
+            return await this.execFallback(prepRes, classified);
           }
           if (this.wait > 0) {
             await delay(this.wait * 1000);
             // Check abort after delay to exit quickly if cancelled during wait
             if (this.signal?.aborted) {
-              return await this.execFallback(prepRes, e as Error);
+              return await this.execFallback(prepRes, classified);
             }
           }
         }

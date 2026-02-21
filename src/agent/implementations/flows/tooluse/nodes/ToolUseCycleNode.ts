@@ -9,6 +9,7 @@ import { buildCycleServices } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { formatProviderHttpError } from '@common/errors';
 import { bus } from '@eventBus/ProgressEventBus';
+import type { ProviderError, TodoItem } from '@shared/schemas';
 
 import {
   type ToolUseRunShared,
@@ -16,13 +17,12 @@ import {
   assertPreparedShared,
 } from './types';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
-import type { TodoItem } from '@shared/schemas';
 
 type ToolUseCycleOutcome =
   | { outcome: 'completed'; messages: ProviderMessage[] }
   | { outcome: 'skipped' }
   | { outcome: 'cancelled' }
-  | { outcome: 'failed'; message: string; retryable?: boolean };
+  | { outcome: 'failed'; error: ProviderError };
 
 export class ToolUseCycleNode<C> extends Node<
   ToolUseRunShared,
@@ -88,8 +88,7 @@ export class ToolUseCycleNode<C> extends Node<
       if (cycleShared.shouldStop && cycleShared.lastError) {
         return {
           outcome: 'failed',
-          message: cycleShared.lastError.message,
-          retryable: cycleShared.lastError.retryable,
+          error: cycleShared.lastError,
         };
       }
       if (cycleShared.shouldStop && !cycleShared.endTurn) {
@@ -103,13 +102,11 @@ export class ToolUseCycleNode<C> extends Node<
 
   async execFallback(
     _prepRes: CyclePrepResult,
-    error: Error,
+    error: unknown,
   ): Promise<ToolUseCycleOutcome> {
-    const formatted = formatProviderHttpError(error);
     return {
       outcome: 'failed',
-      message: error.message,
-      retryable: formatted.retryable,
+      error: formatProviderHttpError(error),
     };
   }
 
@@ -149,10 +146,7 @@ export class ToolUseCycleNode<C> extends Node<
         return FlowTransition.DEFAULT;
 
       case 'failed':
-        shared.lastError = {
-          message: execRes.message,
-          retryable: execRes.retryable ?? false,
-        };
+        shared.lastError = execRes.error;
         return FlowTransition.FINALIZE;
 
       case 'cancelled':

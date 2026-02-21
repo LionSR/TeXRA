@@ -28,6 +28,7 @@ import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { FlowRecord } from '@agent/node/persisted-flow';
 import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
 import type { UsageMonitor } from '@agent/utils/UsageMonitor';
+import { AgentFlowError } from '@common/errors';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import {
@@ -302,7 +303,9 @@ export async function runReflectionFlow<C = unknown>(
       status = END_GROUP_STATUS.ERROR;
       // Re-throw after state persistence (handled in finally) so
       // runFlowWithLifecycle logs the error and shows the user notification.
-      throw new Error(shared.lastError.message);
+      // AgentFlowError preserves the full ProviderError (status code,
+      // request ID, provider, etc.) instead of discarding it.
+      throw new AgentFlowError(shared.lastError);
     } else {
       status = executionToEndStatus(flowStatus) as EndGroupStatus;
     }

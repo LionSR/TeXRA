@@ -24,7 +24,7 @@ export const StreamDiagnosticsSchema = z.object({
 export type StreamDiagnostics = z.infer<typeof StreamDiagnosticsSchema>;
 
 /** Core error details from a provider/SDK */
-const ProviderErrorSchema = z.object({
+export const ProviderErrorSchema = z.object({
   message: z.string(),
   statusCode: z.int().optional(),
   statusText: z.string().optional(),

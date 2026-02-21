@@ -21,3 +21,6 @@ export {
 // These SDK utilities are exposed in the barrel because they have broad usage
 // across the codebase (model handlers, runtime, UI layers).
 export { formatProviderHttpError, getSdkErrorMessage } from './sdkErrorUtils';
+
+// Typed error for agent flow failures — carries full ProviderError through the stack.
+export { AgentFlowError } from './AgentFlowError';

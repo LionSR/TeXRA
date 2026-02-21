@@ -4,7 +4,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   MESSAGE_TYPES,
   STREAM_STATUS,
-  type RetryErrorInfo,
+  type ProviderError,
 } from '@shared/schemas';
 import { Node, type NonIterableObject } from '@agent/node';
 import {
@@ -22,7 +22,7 @@ import {
 const BACKGROUND_MODE_MIN_RETRIES = 3;
 
 export interface RetryState {
-  lastError?: RetryErrorInfo;
+  lastError?: ProviderError;
 }
 
 /** Returns maxRetries (1 initial + N auto-retries) and wait (seconds between retries). */
@@ -44,7 +44,7 @@ interface ManualRetryPromptResult {
 /** success: model response | failed: retries exhausted | cancelled: user cancelled | skipped: shouldStop was true */
 export type InvocationResult<TSuccess> =
   | ({ kind: 'success' } & TSuccess)
-  | { kind: 'failed'; message: string; retryable?: boolean }
+  | { kind: 'failed'; error: ProviderError }
   | { kind: 'cancelled' }
   | { kind: 'skipped' };
 
@@ -199,10 +199,19 @@ export abstract class RetryableInvocationNode<
     }
   }
 
+  /**
+   * Classify raw thrown errors into ProviderError once.
+   * All downstream hooks (shouldAutoRetry, retryPrompt, execFallback)
+   * receive this classified result — no redundant formatProviderHttpError calls.
+   */
+  classifyError(raw: unknown): ProviderError {
+    return formatProviderHttpError(raw);
+  }
+
   /** Auth/permission errors (401, 403) skip auto-retries — they need human attention. */
-  shouldAutoRetry(error: Error): boolean {
-    const formatted = formatProviderHttpError(error);
-    const code = formatted.statusCode;
+  shouldAutoRetry(classified: unknown): boolean {
+    const error = classified as ProviderError;
+    const code = error.statusCode;
     return code !== 401 && code !== 403;
   }
 
@@ -223,7 +232,8 @@ export abstract class RetryableInvocationNode<
     return super._exec(prepRes);
   }
 
-  async retryPrompt(_prepRes: unknown, error: Error): Promise<boolean> {
+  async retryPrompt(_prepRes: unknown, classified: unknown): Promise<boolean> {
+    const error = classified as ProviderError;
     const result = await this.handleManualRetryPrompt(error);
 
     if (result.userCancelled) {
@@ -233,8 +243,7 @@ export abstract class RetryableInvocationNode<
     if (result.shouldRetry) {
       this._persistent401Error = null;
       this._hasAttemptedTokenRefresh = false;
-      const formatted = formatProviderHttpError(error);
-      if (formatted.isRelayError && formatted.statusCode === 401) {
+      if (error.isRelayError && error.statusCode === 401) {
         await tryRefreshClient(
           this.services.refreshClient,
           this.services.logger,
@@ -247,27 +256,26 @@ export abstract class RetryableInvocationNode<
   }
 
   protected async handleManualRetryPrompt(
-    error: Error,
+    error: ProviderError,
   ): Promise<ManualRetryPromptResult> {
     const { streamId, logger } = this.services;
     const operationName = this.getOperationName();
-    const formatted = formatProviderHttpError(error);
 
-    if (!formatted.retryable) {
+    if (!error.retryable) {
       return { shouldRetry: false, userCancelled: false };
     }
 
     logger.logErrorData(
-      `${operationName} failed: ${formatted.message}`,
-      formatted,
+      `${operationName} failed: ${error.message}`,
+      error,
     );
 
     StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
     const result: RetryResult = await retryCoordinator.waitForRetry(streamId, {
       operation: operationName,
-      errorMessage: formatted.message,
+      errorMessage: error.message,
       logger,
-      errorDetails: formatted,
+      errorDetails: error,
     });
 
     if (result.action === 'retry') {
@@ -286,25 +294,24 @@ export abstract class RetryableInvocationNode<
   }
 
   protected getFallbackResult(
-    error: Error,
+    classified: unknown,
   ):
     | { kind: 'cancelled' }
-    | { kind: 'failed'; message: string; retryable?: boolean } {
+    | { kind: 'failed'; error: ProviderError } {
     if (this._userCancelled) {
       return { kind: 'cancelled' };
     }
 
-    const formatted = formatProviderHttpError(error);
-    if (!formatted.retryable) {
+    const error = classified as ProviderError;
+    if (!error.retryable) {
       this.services.logger.logErrorData(
-        `${this.getOperationName()} failed (not retryable): ${formatted.message}`,
-        formatted,
+        `${this.getOperationName()} failed (not retryable): ${error.message}`,
+        error,
       );
     }
     return {
       kind: 'failed',
-      message: formatted.message,
-      retryable: formatted.retryable,
+      error,
     };
   }
 }
@@ -339,10 +346,7 @@ export function handleInvocationResult<T extends { response: unknown }>(
   }
 
   if (result.kind === 'failed') {
-    retryState.lastError = {
-      message: result.message,
-      retryable: result.retryable ?? false,
-    };
+    retryState.lastError = result.error;
     state.shouldStop = true;
     state.endTurn = false;
     return null;
@@ -353,6 +357,7 @@ export function handleInvocationResult<T extends { response: unknown }>(
     retryState.lastError = {
       message: EMPTY_RESPONSE_ERROR_MESSAGE,
       retryable: false,
+      isRelayError: false,
     };
     state.shouldStop = true;
     state.endTurn = false;

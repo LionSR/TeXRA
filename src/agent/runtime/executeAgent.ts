@@ -53,7 +53,11 @@ import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { normalizeRunId } from '@common/constants/runIds';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import {
+  getSdkErrorMessage,
+  formatProviderHttpError,
+} from '@common/errors/sdkErrorUtils';
+import { AgentFlowError } from '@common/errors/AgentFlowError';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import {
@@ -411,7 +415,15 @@ async function runFlowWithLifecycle(
   } catch (err) {
     await writeTerminalStatus(ctx.executionId, 'error').catch(() => {});
     untrackExecution(ctx.executionId);
-    const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
+
+    // Extract structured error info — AgentFlowError carries the full
+    // ProviderError; for other errors, classify on the spot.
+    const providerError =
+      err instanceof AgentFlowError
+        ? err.providerError
+        : formatProviderHttpError(err);
+
+    const errorMsg = `Error executing agent ${agentName}: ${providerError.message}`;
 
     // Log error BEFORE ending the group so it gets the correct groupId
     await ctx.logger.logError(errorMsg, err, {
@@ -424,18 +436,20 @@ async function runFlowWithLifecycle(
     // Subagents propagate errors to the orchestrator via FollowUpQueue —
     // don't show VS Code popups that would confuse the user.
     if (!options?.isSubagent) {
-      const msg = toErrorMessage(err);
-      if (
-        msg.includes('Missing API key') ||
-        msg.includes('API key not found')
-      ) {
+      // Use typed status code detection instead of string matching.
+      // 401 from provider APIs indicates missing/invalid API keys.
+      if (providerError.statusCode === 401) {
         await showApiKeyErrorNotification();
       } else {
         vscode.window.showErrorMessage(errorMsg);
       }
     }
 
-    throw new Error(errorMsg);
+    // Preserve the typed error for upstream consumers
+    if (err instanceof AgentFlowError) {
+      throw err;
+    }
+    throw new AgentFlowError(providerError);
   }
 }
 

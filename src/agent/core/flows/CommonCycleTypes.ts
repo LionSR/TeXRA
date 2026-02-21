@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 
-import { RetryErrorInfoSchema } from '@shared/schemas';
+import { ProviderErrorSchema } from '@shared/schemas';
 import {
   ProviderMessageSchema,
   type ProviderMessage,
@@ -19,7 +19,7 @@ export const BaseCycleFieldsSchema = z.object({
   endTurn: z.boolean(),
   responseTimeMs: z.number().optional(),
   stopReason: z.string().nullish(),
-  lastError: RetryErrorInfoSchema.optional(),
+  lastError: ProviderErrorSchema.optional(),
 });
 
 export type BaseCycleFields = z.infer<typeof BaseCycleFieldsSchema>;

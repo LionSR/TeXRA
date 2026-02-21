@@ -109,9 +109,9 @@ export class ModelInvocationNode<
 
   async execFallback(
     _prepRes: BaseInvocationPrepResult,
-    error: Error,
+    classified: unknown,
   ): Promise<InvocationResult<BaseInvocationSuccessData>> {
-    return this.getFallbackResult(error);
+    return this.getFallbackResult(classified);
   }
 
   async post(

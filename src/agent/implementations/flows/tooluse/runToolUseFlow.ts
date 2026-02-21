@@ -16,6 +16,7 @@ import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { AgentFlowError } from '@common/errors';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
@@ -196,7 +197,9 @@ export async function runToolUseFlow<C = unknown>(
       status = END_GROUP_STATUS.ERROR;
       // Re-throw after state persistence (handled in finally) so
       // runFlowWithLifecycle logs the error and shows the user notification.
-      throw new Error(shared.lastError.message);
+      // AgentFlowError preserves the full ProviderError (status code,
+      // request ID, provider, etc.) instead of discarding it.
+      throw new AgentFlowError(shared.lastError);
     } else {
       const execStatus = input.checkInterruption()
         ? EXECUTION_STATUS.INTERRUPTED

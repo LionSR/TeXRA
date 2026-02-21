@@ -12,6 +12,7 @@ import type {
 } from '@agent/core/AgentState';
 import { buildCycleServices } from '@agent/core/flows/CycleServices';
 import { formatProviderHttpError } from '@common/errors';
+import type { ProviderError } from '@shared/schemas';
 import type { AgentFileLocation } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -31,7 +32,7 @@ interface CyclePrepInput {
 type CycleOutcome =
   | { outcome: 'completed'; endTurn: boolean }
   | { outcome: 'cancelled' }
-  | { outcome: 'failed'; error: Error; retryable?: boolean };
+  | { outcome: 'failed'; error: ProviderError };
 
 export class ResponseCycleNode<C = unknown> extends Node<
   ReflectionFlowShared,
@@ -102,8 +103,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
       if (cycleShared.lastError) {
         return {
           outcome: 'failed',
-          error: new Error(cycleShared.lastError.message),
-          retryable: cycleShared.lastError.retryable,
+          error: cycleShared.lastError,
         };
       }
       if (cycleShared.shouldStop && !cycleShared.endTurn) {
@@ -115,21 +115,18 @@ export class ResponseCycleNode<C = unknown> extends Node<
       if (this.services.onRoundFinalized) {
         await this.services.onRoundFinalized(prepRes.run);
       }
-      const formatted = formatProviderHttpError(error);
       return {
         outcome: 'failed',
-        error: error instanceof Error ? error : new Error(String(error)),
-        retryable: formatted.retryable,
+        error: formatProviderHttpError(error),
       };
     }
   }
 
   async execFallback(
     _prepRes: CyclePrepInput,
-    error: Error,
+    error: unknown,
   ): Promise<CycleOutcome> {
-    const formatted = formatProviderHttpError(error);
-    return { outcome: 'failed', error, retryable: formatted.retryable };
+    return { outcome: 'failed', error: formatProviderHttpError(error) };
   }
 
   async post(
@@ -143,10 +140,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
     if (execRes.outcome === 'failed') {
       logger.error(`Response cycle failed: ${execRes.error.message}`);
-      shared.lastError = {
-        message: execRes.error.message,
-        retryable: execRes.retryable ?? false,
-      };
+      shared.lastError = execRes.error;
       shared.continueRounds = false;
       shared.endTurn = false;
       return FlowTransition.FINALIZE;

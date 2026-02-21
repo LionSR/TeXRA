@@ -19,7 +19,7 @@
 import {
   EXECUTION_STATUS,
   type ExecutionStatus,
-  type RetryErrorInfo,
+  type ProviderError,
 } from '@shared/schemas';
 import type { ExecutionKVStore } from '@agent/storage';
 import type { AgentLogStage } from '@logger/AgentLogger';
@@ -47,7 +47,7 @@ export interface RoundAwareState {
   continueRounds: boolean;
 
   /** Set by nodes when execution fails. Skips round completion callbacks. */
-  lastError?: RetryErrorInfo;
+  lastError?: ProviderError;
 }
 
 // ============================================================================

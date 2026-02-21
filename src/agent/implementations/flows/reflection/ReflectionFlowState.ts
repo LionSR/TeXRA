@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import {
   AgentFileLocationSchema,
-  RetryErrorInfoSchema,
+  ProviderErrorSchema,
   RoundOutputSchema,
 } from '@shared/schemas';
 import {
@@ -40,7 +40,7 @@ export const ReflectionFlowStateSchema = z.object({
   endTurn: z.boolean(),
 
   /** Distinguishes failure from cancellation during resume. */
-  lastError: RetryErrorInfoSchema.optional(),
+  lastError: ProviderErrorSchema.optional(),
 });
 
 export type ReflectionFlowState = z.infer<typeof ReflectionFlowStateSchema>;
