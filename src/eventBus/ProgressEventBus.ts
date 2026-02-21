@@ -4,14 +4,10 @@ import type { AgentCategory } from '@agent/core/AgentDataclass';
 import type { TaskState } from '@logger/TaskState';
 import type {
   ActiveChildInfo,
-  AddTaskGroupPayload,
   AgentProposalPermission,
   BashPermission,
   ConversationProgress,
-  ContextStateData,
   ExecutionId,
-  LogMessageData,
-  LogMessageUpdate,
   OutputFileInfo,
   RetryPermission,
   StorageKey,
@@ -19,7 +15,6 @@ import type {
   StreamTabId,
   TokenUsageStats,
   ToolEditPermission,
-  UpdateTaskGroupPayload,
   UpdateTodosPayload,
 } from '@shared/schemas';
 
@@ -48,10 +43,6 @@ interface SetTaskStatePayload {
 const MAX_BUFFER_SIZE = 1000;
 
 export interface ProgressEventPayloads {
-  addLogMessage: { streamId: StreamTabId; logMessage: LogMessageData };
-  updateLogMessage: { streamId: StreamTabId; logMessage: LogMessageUpdate };
-  addTaskGroup: AddTaskGroupPayload;
-  updateTaskGroup: UpdateTaskGroupPayload;
   setActiveStream: SetActiveStreamPayload;
   updateStreamStatus: {
     streamId: StreamTabId;
@@ -69,10 +60,6 @@ export interface ProgressEventPayloads {
   setTaskState: SetTaskStatePayload;
   updateStreamUsage: RunScopedPayload & {
     usage: TokenUsageStats;
-  };
-  updateContextState: {
-    streamId: StreamTabId;
-    contextState: ContextStateData;
   };
   showRetryRequest: RetryPermission;
   resolveRetryRequest: { streamId: StreamTabId };

@@ -177,7 +177,7 @@ export class TaskGroupList extends LitElement {
     } else if (messagesChanged) {
       // Only messages changed — use Lit's old value to pick incremental path
       if (this.messages.length === prevCount && prevMessages) {
-        // Same length: text-only update (e.g. streaming UPDATE_LOG).
+        // Same length: text-only update (e.g. streaming LOG_DELTA updates).
         // Propagate fresh message references to cached structures so
         // render() passes updated objects to repeat()/guard().
         this.updateCachedMessageRefs(prevMessages);

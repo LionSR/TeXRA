@@ -1,113 +1,133 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { randomUUID } from 'crypto';
 
-import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
-import { registry } from './LogChannelRegistry';
+import * as vscode from 'vscode';
+
+import { type EndGroupStatus, type LogLevel } from '@shared/schemas';
+import { getConfig } from '@utils/config';
+import { serializeError } from '@utils/core';
+
+import { getColorForLevel } from './utils';
 import type { LogUtilsOptions } from './logOptions';
 
 const contextStorage = new AsyncLocalStorage<Map<string, string[]>>();
+
+const channels = new Map<string, vscode.OutputChannel>();
+let mainOutputChannel: vscode.OutputChannel | null = null;
 
 function getKey(channel: string, isAgent: boolean): string {
   return `${channel}::${isAgent ? 'agent' : 'shared'}`;
 }
 
-function getStore(): Map<string, string[]> {
-  const existing = contextStorage.getStore();
+function getTimestamp(): string {
+  const now = new Date();
+  const pad = (value: number, width: number = 2) =>
+    value.toString().padStart(width, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad(now.getMilliseconds(), 3)}`;
+}
+
+function ensureChannel(
+  channel: string,
+  isAgent: boolean,
+): vscode.OutputChannel {
+  const key = getKey(channel, isAgent);
+  const existing = channels.get(key);
   if (existing) return existing;
 
-  const store = new Map<string, string[]>();
-  contextStorage.enterWith(store);
-  return store;
+  const output = isAgent
+    ? vscode.window.createOutputChannel(`TeXRA ${channel}`)
+    : (mainOutputChannel ??= vscode.window.createOutputChannel('TeXRA'));
+  channels.set(key, output);
+  return output;
 }
 
-function pushGroup(channel: string, groupId: string, isAgent: boolean): void {
-  const store = getStore();
-  const key = getKey(channel, isAgent);
-  store.set(key, [...(store.get(key) ?? []), groupId]);
-  contextStorage.enterWith(store);
+function getActiveGroupStack(
+  channel: string,
+  isAgent: boolean,
+): string[] | undefined {
+  return contextStorage.getStore()?.get(getKey(channel, isAgent));
 }
 
-function popGroup(channel: string, groupId: string, isAgent: boolean): void {
-  const store = getStore();
-  const key = getKey(channel, isAgent);
-  const stack = store.get(key);
-  if (!stack?.length) return;
+function writeLine(
+  channel: vscode.OutputChannel,
+  streamId: string,
+  level: LogLevel,
+  message: string,
+  isAgent: boolean,
+  data: unknown,
+): void {
+  const prefix = isAgent ? '' : `[${streamId}] `;
+  channel.appendLine(
+    `${getColorForLevel(level)} [${getTimestamp()}] ${prefix}${message}`,
+  );
 
-  const idx = stack.lastIndexOf(groupId);
-  if (idx === -1) return;
+  const includeStructuredData = getConfig<boolean>(
+    'texra.logger.debugMode',
+    false,
+  );
+  if (!includeStructuredData || data === null || data === undefined) return;
 
-  const newStack = stack.toSpliced(idx, 1);
-  if (newStack.length) {
-    store.set(key, newStack);
-  } else {
-    store.delete(key);
-  }
-  contextStorage.enterWith(store);
+  const payload =
+    typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  channel.appendLine(payload);
 }
 
 function logWithGroup(
   channel: string,
-  level: 'debug' | 'info' | 'warn' | 'error',
+  level: LogLevel,
   message: string,
   options: LogUtilsOptions = {},
 ): void {
   const isAgent = options.isAgent ?? false;
-  const key = getKey(channel, isAgent);
-  const entry = registry.ensure(channel, { isAgent });
+  const output = ensureChannel(channel, isAgent);
+  const resolvedData =
+    options.data instanceof Error ? serializeError(options.data) : options.data;
 
-  entry.logger.log(level, message, {
-    groupId: options.groupId ?? getStore().get(key)?.at(-1),
-    messageType: options.messageType,
-    data: options.data,
-  });
+  writeLine(output, channel, level, message, isAgent, resolvedData);
 }
 
 export function initialize(channel: string, isAgent = false): void {
-  registry.ensure(channel, { isAgent });
+  ensureChannel(channel, isAgent);
 }
 
 export function startGroup(
-  channel: string,
-  groupName: string,
+  _channel: string,
+  _groupName: string,
   id?: string,
-  parentGroupId?: string,
-  isAgent = false,
+  _parentGroupId?: string,
+  _isAgent = false,
 ): string {
-  const transport = registry.ensure(channel, { isAgent }).transport;
-  const groupId = id ?? randomUUID();
-  pushGroup(channel, groupId, isAgent);
-  return transport.startGroup(groupName, groupId, parentGroupId);
+  return id ?? randomUUID();
 }
 
 export function endGroup(
-  channel: string,
-  groupId: string,
-  status: EndGroupStatus = END_GROUP_STATUS.STOPPED,
-  isAgent = false,
+  _channel: string,
+  _groupId: string,
+  _status: EndGroupStatus,
+  _isAgent = false,
 ): void {
-  registry.getTransport(channel, isAgent)?.endGroup(groupId, status);
-  popGroup(channel, groupId, isAgent);
+  // Group lifecycle is handled by AgentLogger + StreamLogStore.
 }
 
 export function getActiveGroupId(
   channel: string,
   isAgent = false,
 ): string | undefined {
-  return getStore().get(getKey(channel, isAgent))?.at(-1);
+  return getActiveGroupStack(channel, isAgent)?.at(-1);
 }
 
-export async function runWithGroupContext<T>(
+export function runWithGroupContext<T>(
   channel: string,
   groupId: string,
   isAgent: boolean,
   fn: () => Promise<T> | T,
 ): Promise<T> {
-  pushGroup(channel, groupId, isAgent);
-  try {
-    return await fn();
-  } finally {
-    popGroup(channel, groupId, isAgent);
-  }
+  const parentStore = contextStorage.getStore() ?? new Map<string, string[]>();
+  const childStore = new Map(parentStore);
+  const key = getKey(channel, isAgent);
+  const stack = childStore.get(key) ?? [];
+  childStore.set(key, [...stack, groupId]);
+  return contextStorage.run(childStore, () => Promise.resolve().then(fn));
 }
 
 export function debug(

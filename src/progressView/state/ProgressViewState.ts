@@ -3,12 +3,10 @@ import { z } from 'zod';
 import {
   AgentCategoryFilterSchema,
   ContextStateDataSchema,
-  STREAM_STATUS,
   InstructionUpdateSchema,
   StorageKeySchema,
   StorageRecordSchema,
   StreamTabIdSchema,
-  TaskGroupSchema,
   TodoItemSchema,
   type ActiveChildInfo,
   type AgentCategoryFilter,
@@ -19,9 +17,7 @@ import {
   type OutputFileInfo,
   type StorageKey,
   type StreamTabId,
-  type TaskGroup,
   type TodoItem,
-  type UpdateTaskGroupPayload,
 } from '@shared/schemas';
 import { StreamSortSchema, type StreamSort } from '@shared/streams/streamSort';
 import {
@@ -34,13 +30,13 @@ import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { normalizeRunId } from '@common/constants/runIds';
 import { AgentLogger } from '@logger/AgentLogger';
+import { StreamLogStore } from '@logger/StreamLogStore';
 import {
   TaskState,
   TaskStateSchema,
   isToolUseTaskState,
 } from '@logger/TaskState';
 import { OutputFilesManager } from '@progressView/managers/OutputFilesManager';
-import { StreamTabsManager } from '@progressView/managers/StreamTabsManager';
 import { UsageStatsManager } from '@progressView/managers/UsageStatsManager';
 import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 import { createRecordToMapSchema } from '@progressView/persistence/schemaUtils';
@@ -82,10 +78,6 @@ const RunInstructionsByStreamSchema = z.record(
   z.string(),
   createRecordToMapSchema(InstructionUpdateSchema),
 );
-const TaskGroupsByStreamSchema = z.record(
-  z.string(),
-  createRecordToMapSchema(TaskGroupSchema),
-);
 
 /**
  * Backend-owned ephemeral counters, updated during streaming.
@@ -116,8 +108,7 @@ function createExecutionState(
 
 /** Core state management for the progress view. */
 export class ProgressViewState {
-  private _streamTabs: StreamTabsManager;
-  private _taskGroups = new Map<StreamTabId, Map<string, TaskGroup>>();
+  private _streamLogs: StreamLogStore;
   private _outputFiles: OutputFilesManager;
   private _usageStats: UsageStatsManager;
   private _runInstructions = new Map<
@@ -146,13 +137,14 @@ export class ProgressViewState {
       WorkspaceStateKey.PROGRESS_VIEW_PREFS,
       ProgressViewPrefsSchema,
     );
-    this._streamTabs = new StreamTabsManager(resolvedStorage);
+    this._streamLogs = new StreamLogStore(resolvedStorage);
+    AgentLogger.setStreamLogStore(this._streamLogs);
     this._outputFiles = new OutputFilesManager(resolvedStorage);
     this._usageStats = new UsageStatsManager(resolvedStorage);
   }
 
-  get streamTabs(): StreamTabsManager {
-    return this._streamTabs;
+  get streamLogs(): StreamLogStore {
+    return this._streamLogs;
   }
 
   get outputFiles(): OutputFilesManager {
@@ -330,7 +322,7 @@ export class ProgressViewState {
   }
 
   getStreamLastTimestamp(stream: StreamTabId): number | undefined {
-    return this._streamTabs.getLastTimestamp(stream);
+    return this._streamLogs.getLastTimestamp(stream);
   }
 
   getRunInstructions(stream: StreamTabId): Map<string, InstructionUpdate> {
@@ -435,71 +427,12 @@ export class ProgressViewState {
     return this._outputFiles.getRun(stream, options.storageKey);
   }
 
-  async addTaskGroup(
-    stream: StreamTabId,
-    groupId: string,
-    group: TaskGroup,
-  ): Promise<void> {
-    const streamGroups = this._taskGroups.get(stream) ?? new Map();
-    streamGroups.set(groupId, { ...group });
-    this._taskGroups.set(stream, streamGroups);
-    await this.saveTaskGroups();
-  }
-
-  getTaskGroups(stream: StreamTabId): Map<string, TaskGroup> {
-    return this._taskGroups.get(stream) ?? new Map();
-  }
-
-  async updateTaskGroup(payload: UpdateTaskGroupPayload): Promise<void> {
-    const streamGroups = this._taskGroups.get(payload.streamId);
-    if (!streamGroups) {
-      this.logger.warn(
-        `Cannot update group ${payload.id}: stream ${payload.streamId} not found`,
-      );
-      return;
-    }
-
-    const group = streamGroups.get(payload.id);
-    if (!group) {
-      this.logger.warn(
-        `Cannot update group ${payload.id}: group not found in stream ${payload.streamId}`,
-      );
-      return;
-    }
-
-    group.status = payload.status;
-    if (payload.endTime !== undefined) {
-      group.endTime = payload.endTime;
-    }
-    await this.saveTaskGroups();
-  }
-
   async endRunningTaskGroups(now: number = Date.now()): Promise<StreamTabId[]> {
-    const affected: StreamTabId[] = [];
-
-    for (const [streamId, groups] of this._taskGroups.entries()) {
-      let count = 0;
-      for (const group of groups.values()) {
-        if (group.status === STREAM_STATUS.RUNNING) {
-          group.status = STREAM_STATUS.ERROR;
-          group.endTime = now;
-          count++;
-        }
-      }
-
-      if (count > 0) {
-        affected.push(streamId);
-        this.logger.debug(
-          `Marked ${count} running task groups in stream ${streamId} as ERROR after reload`,
-        );
-      }
+    const affectedFromLogs = this._streamLogs.endRunningGroups(now);
+    if (affectedFromLogs.length > 0) {
+      await this._streamLogs.save();
     }
-
-    if (affected.length > 0) {
-      await this.saveTaskGroups();
-    }
-
-    return affected;
+    return affectedFromLogs;
   }
 
   setExecutionId(streamTabId: StreamTabId, executionId: ExecutionId): void {
@@ -512,10 +445,8 @@ export class ProgressViewState {
   }
 
   async clearStream(stream: StreamTabId): Promise<void> {
-    this._taskGroups.delete(stream);
     await Promise.all([
-      this._streamTabs.delete(stream),
-      this.saveTaskGroups(),
+      this._streamLogs.delete(stream),
       this._outputFiles.deleteStream(stream),
       this._usageStats.delete(stream),
     ]);
@@ -528,7 +459,7 @@ export class ProgressViewState {
 
     if (this._prefs.get('activeStream') === stream) {
       this._prefs.update({
-        activeStream: this._streamTabs.keys()[0] || '',
+        activeStream: this._streamLogs.keys()[0] || '',
       });
     }
 
@@ -548,10 +479,8 @@ export class ProgressViewState {
       { data: { stack: new Error().stack } },
     );
 
-    this._taskGroups.clear();
     await Promise.all([
-      this._streamTabs.clear(),
-      this.saveTaskGroups(),
+      this._streamLogs.clear(),
       this._outputFiles.clear(),
       this._usageStats.clear(),
     ]);
@@ -575,8 +504,7 @@ export class ProgressViewState {
     );
 
     await Promise.all([
-      this._streamTabs.load(),
-      this.loadTaskGroups(),
+      this._streamLogs.load(),
       this._outputFiles.load(),
       this._usageStats.load(),
     ]);
@@ -598,17 +526,17 @@ export class ProgressViewState {
 
   /**
    * Flush pending writes from all managers.
-   * Only StreamTabsManager has debounced writes; the rest are no-ops.
+   * StreamLogStore has debounced writes; other managers write immediately.
    */
   async flush(): Promise<void> {
-    await this._streamTabs.flush();
+    await this._streamLogs.flush();
   }
 
   /** Validate activeStream against available streams after load */
   private validateActiveStream(): void {
     const savedActiveStream = this._prefs.get('activeStream');
-    if (!savedActiveStream || !this._streamTabs.has(savedActiveStream)) {
-      const fallback = this._streamTabs.keys()[0] ?? '';
+    if (!savedActiveStream || !this._streamLogs.has(savedActiveStream)) {
+      const fallback = this._streamLogs.keys()[0] ?? '';
       if (fallback !== savedActiveStream) {
         this._prefs.update({ activeStream: fallback });
       }
@@ -695,25 +623,6 @@ export class ProgressViewState {
         instructions,
       ]),
     );
-  }
-
-  private loadTaskGroups(): void {
-    const stored = this.loadRecord(WorkspaceStateKey.TASK_GROUPS);
-    const parsed = TaskGroupsByStreamSchema.parse(stored);
-    this._taskGroups = new Map(
-      Object.entries(parsed).map(([stream, groups]) => [
-        stream as StreamTabId,
-        groups,
-      ]),
-    );
-  }
-
-  private async saveTaskGroups(): Promise<void> {
-    const record: Record<string, unknown> = {};
-    for (const [stream, groups] of this._taskGroups.entries()) {
-      record[stream] = mapToRecord(groups);
-    }
-    await this.storage.update(WorkspaceStateKey.TASK_GROUPS, record);
   }
 
   private loadRecord(key: WorkspaceStateKey): Record<string, unknown> {

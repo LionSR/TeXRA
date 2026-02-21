@@ -51,7 +51,7 @@ function buildStreamInfo(
   if (category === null) return null;
 
   const creationTimestamp =
-    state.streamTabs.getFirstTimestamp(id) ??
+    state.streamLogs.getFirstTimestamp(id) ??
     hints.creationTimestamp ??
     Date.now();
 
@@ -91,7 +91,7 @@ export function buildStreamInfos(
   state: ProgressViewState,
   filter: AgentCategoryFilter = 'all',
 ): StreamTabInfo[] {
-  const infos = state.streamTabs
+  const infos = state.streamLogs
     .keys()
     .map((id) => buildStreamInfo(state, id, filter))
     .filter((info): info is StreamTabInfo => info !== null);

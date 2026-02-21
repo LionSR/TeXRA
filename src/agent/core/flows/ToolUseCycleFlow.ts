@@ -45,7 +45,6 @@ import {
 import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
-import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
@@ -488,9 +487,6 @@ const DEFERRED_LOG_TOOLS = new Set(['bash']);
 /** Tools that support streaming partial output to the UI. */
 const STREAMABLE_TOOLS = new Set(['bash']);
 
-/** Minimum interval between streaming output updates (ms). */
-const STREAM_THROTTLE_MS = 500;
-
 /** Maximum size of the streaming output buffer sent to the UI (bytes). */
 const STREAM_BUFFER_MAX = 50_000;
 
@@ -686,36 +682,28 @@ class ToolUseDispatchNode<C> extends BatchNode<
         }
       : undefined;
 
-    // Build throttled streaming callback for tools that support it.
+    // Build streaming callback for tools that support it.
     // Keeps a rolling tail buffer (max STREAM_BUFFER_MAX) to bound memory.
     let onToolOutput: ((chunk: string) => void) | undefined;
     if (STREAMABLE_TOOLS.has(call.name)) {
       let outputBuffer = '';
-      let lastFlush = 0;
       onToolOutput = (chunk: string) => {
         outputBuffer += chunk;
         // Cap buffer to last STREAM_BUFFER_MAX chars to prevent unbounded growth
         if (outputBuffer.length > STREAM_BUFFER_MAX) {
           outputBuffer = outputBuffer.slice(-STREAM_BUFFER_MAX);
         }
-        const now = Date.now();
-        if (now - lastFlush < STREAM_THROTTLE_MS) return;
-        lastFlush = now;
         if (!logRef.logId) return;
-        bus.emit('updateLogMessage', {
-          streamId: options.logger.streamId,
-          logMessage: {
-            id: logRef.logId,
-            groupId: logRef.groupId,
-            messageType: MESSAGE_TYPES.TOOL_USE,
-            data: {
-              toolName: call.name,
-              input: parsedInput ?? call.raw,
-              output: outputBuffer,
-              status: 'in_progress',
-            },
+        options.logger.updateToolUse(
+          logRef.logId,
+          {
+            toolName: call.name,
+            input: parsedInput ?? call.raw,
+            output: outputBuffer,
           },
-        });
+          logRef.groupId,
+          'in_progress',
+        );
       };
     }
 
