@@ -56,7 +56,7 @@ export function updateNestedRounds<T>(
  * Get filtered streams based on current filter setting.
  */
 export function getFilteredStreams(state: ProgressState): StreamTabInfo[] {
-  const sorted = sortStreams(state.streams, state.streamSort, {
+  const sorted = sortStreams([...state.streamById.values()], state.streamSort, {
     getLastActivityTimestamp: (stream) =>
       state.streamStates.get(stream.name)?.lastTimestamp,
   });

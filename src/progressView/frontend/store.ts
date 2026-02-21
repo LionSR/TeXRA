@@ -63,8 +63,7 @@ export function createStreamLogs(logs: LogMessageData[]): StreamLogs {
 
 export interface ProgressState {
   activeStreamId: StreamTabId | null;
-  streams: StreamTabInfo[];
-  /** O(1) lookup by stream name. Maintained alongside streams array. */
+  /** Canonical stream storage — Map preserves insertion order for iteration. */
   streamById: Map<StreamTabId, StreamTabInfo>;
   streamFilter: StreamFilter;
   streamSort: StreamSort;
@@ -75,17 +74,16 @@ export interface ProgressState {
   followupOptionsByStream: Map<StreamTabId, FollowupOptionsState>;
 }
 
-/** Build a streamById lookup from an array of streams. */
-export function buildStreamById(
-  streams: StreamTabInfo[],
-): Map<StreamTabId, StreamTabInfo> {
-  return new Map(streams.map((s) => [s.name, s]));
+/** Return the first stream ID from a streamById Map, or null if empty. */
+export function firstStreamId(
+  streamById: Map<StreamTabId, StreamTabInfo>,
+): StreamTabId | null {
+  return streamById.keys().next().value ?? null;
 }
 
 export function createInitialState(): ProgressState {
   return {
     activeStreamId: null,
-    streams: [],
     streamById: new Map(),
     streamFilter: 'all',
     streamSort: 'time',

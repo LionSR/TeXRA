@@ -32,8 +32,8 @@ import {
   updateNestedRounds,
 } from './stateUtils';
 import {
-  buildStreamById,
   createStreamLogs,
+  firstStreamId,
   getStreamState,
   isToolUseState,
   isWorkflowState,
@@ -194,8 +194,7 @@ function updateStreamInfo(
     }
   }
 
-  // Build streamById once — reuse for cleanup check instead of a separate Set.
-  const newStreamById = buildStreamById(streams);
+  const newStreamById = new Map(streams.map((s) => [s.name, s]));
 
   return create(state, (draft) => {
     for (const key of draft.streamStates.keys()) {
@@ -210,7 +209,6 @@ function updateStreamInfo(
       draft.streamStates.set(name, merged);
     }
 
-    draft.streams = streams;
     draft.streamById = newStreamById;
   });
 }
@@ -340,12 +338,10 @@ const handlers: HandlerRegistry = {
       data.streams,
       data.streamStates,
     );
-    // Reuse streamById built by updateStreamInfo instead of building a Set
-    const fallbackStreamId = data.streams.at(0)?.name ?? null;
     const nextActiveStreamId =
       activeStream && updated.streamById.has(activeStream)
         ? activeStream
-        : fallbackStreamId;
+        : firstStreamId(updated.streamById);
 
     ctx.setState(() =>
       create(updated, (draft) => {
@@ -362,11 +358,10 @@ const handlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM]: (data, ctx) => {
     ctx.setState((prev) => {
-      const fallbackStreamId = prev.streams.at(0)?.name ?? null;
       const nextActiveStreamId =
         data.activeStream && prev.streamById.has(data.activeStream)
           ? data.activeStream
-          : fallbackStreamId;
+          : firstStreamId(prev.streamById);
       if (nextActiveStreamId === prev.activeStreamId) {
         return prev;
       }
@@ -400,10 +395,8 @@ const handlers: HandlerRegistry = {
       const nextParentStreamId = data.parentStreamId ?? undefined;
       const target = prev.streamById.get(data.stream);
       if (!target || target.parentStreamId === nextParentStreamId) return prev;
-      const idx = prev.streams.indexOf(target);
       const updated = { ...target, parentStreamId: nextParentStreamId };
       return create(prev, (draft) => {
-        draft.streams[idx] = updated;
         draft.streamById.set(data.stream, updated);
       });
     });
@@ -419,7 +412,6 @@ const handlers: HandlerRegistry = {
       create(prev, (draft) => {
         draft.streamStates.delete(streamId);
         draft.streamLogs.delete(streamId);
-        draft.streams = draft.streams.filter((s) => s.name !== streamId);
         draft.streamById.delete(streamId);
         if (draft.activeStreamId === streamId) {
           draft.activeStreamId = null;
@@ -433,7 +425,6 @@ const handlers: HandlerRegistry = {
     pendingLogUpdates.clear();
     ctx.setState((prev) =>
       create(prev, (draft) => {
-        draft.streams = [];
         draft.streamById = new Map();
         draft.streamStates = new Map();
         draft.streamLogs = new Map();
@@ -746,10 +737,8 @@ const handlers: HandlerRegistry = {
         const target = prev.streamById.get(data.stream as string);
         if (!target || target.parentStreamId === data.parentStreamId)
           return prev;
-        const idx = prev.streams.indexOf(target);
         const updated = { ...target, parentStreamId: data.parentStreamId };
         return create(prev, (draft) => {
-          draft.streams[idx] = updated;
           draft.streamById.set(data.stream as string, updated);
         });
       });

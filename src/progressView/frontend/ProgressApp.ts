@@ -389,7 +389,7 @@ export class ProgressApp extends ProgressAppBase {
   ): void {
     const state = this.appState.get();
     // Fast path: stream already has state (common during streaming).
-    // Only fall back to streams.find() when creating default state for new streams.
+    // Only fall back to streamById lookup when creating default state for new streams.
     let current = state.streamStates.get(streamId);
     if (!current) {
       const streamInfo = state.streamById.get(streamId);
