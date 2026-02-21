@@ -341,6 +341,7 @@ export class WebviewUpdater {
    * and instruction. Used on tab switch to replace 4 separate messages with 1.
    */
   sendSyncStreamContent(payload: SyncStreamContentPayload): void {
+    const { extras, ...rest } = payload;
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
       ...payload,
