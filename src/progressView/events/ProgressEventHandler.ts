@@ -723,7 +723,7 @@ export class ProgressEventHandler {
     if (instructionUpdate) {
       void this.state.setRunInstruction(stream, runId, instructionUpdate);
     } else {
-      void this.state.deleteRunInstruction(stream, runId);
+      void this.state.setRunInstruction(stream, runId, null);
     }
 
     return {

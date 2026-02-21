@@ -364,20 +364,6 @@ export class ProgressViewState {
     this.saveRunInstructions();
   }
 
-  async deleteRunInstruction(
-    stream: StreamTabId,
-    runId: StorageKey,
-  ): Promise<void> {
-    const existing = this._runInstructions.get(stream);
-    if (!existing) return;
-
-    existing.delete(runId);
-    if (existing.size === 0) {
-      this._runInstructions.delete(stream);
-    }
-    this.saveRunInstructions();
-  }
-
   private loadActiveRunIds(): void {
     const stored = this.loadRecord(WorkspaceStateKey.ACTIVE_RUN_IDS);
 

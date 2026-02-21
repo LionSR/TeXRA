@@ -13,6 +13,9 @@ import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
 // Local imports - shared schemas
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 
+// Local imports - shared utilities
+import { createEvent } from '@shared/utils/events';
+
 @customElement('tool-card')
 export class ToolCard extends LitElement {
   static override styles = [
@@ -223,30 +226,18 @@ export class ToolCard extends LitElement {
 
   private handleInstallUrl(): void {
     if (this.item.installUrl) {
-      this.dispatchEvent(
-        new CustomEvent('tool-open-url', {
-          detail: { url: this.item.installUrl },
-          bubbles: true,
-          composed: true,
-        }),
-      );
+      this.dispatchEvent(createEvent('tool-open-url', { url: this.item.installUrl }));
     }
   }
 
   private handleInstallExtension(): void {
     if (this.item.installExtensionId) {
-      this.dispatchEvent(
-        new CustomEvent('tool-install-extension', {
-          detail: { extensionId: this.item.installExtensionId },
-          bubbles: true,
-          composed: true,
-        }),
-      );
+      this.dispatchEvent(createEvent('tool-install-extension', { extensionId: this.item.installExtensionId }));
     }
   }
 
   private static readonly STATUS_CONFIG: Record<
-    string,
+    ToolDashboardItem['status'],
     { icon: string; label: string }
   > = {
     available: { icon: 'codicon-check', label: 'Available' },

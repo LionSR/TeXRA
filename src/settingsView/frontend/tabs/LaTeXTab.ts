@@ -32,6 +32,7 @@ import {
 
 // Local imports - shared utilities
 import { copyTextToClipboard } from '@shared/utils/clipboard';
+import { createEvent } from '@shared/utils/events';
 
 /** Path keys in LatexSettingsStatus for tool paths. */
 type ToolPathKey =
@@ -186,7 +187,7 @@ export class LaTeXTab extends LitElement {
         padding: var(--spacing-medium);
         margin-bottom: var(--spacing-medium);
         border: var(--border-thin) solid var(--color-border);
-        border-radius: var(--radius-medium);
+        border-radius: var(--border-radius-medium);
         background: var(--vscode-editor-background);
       }
 
@@ -251,7 +252,7 @@ export class LaTeXTab extends LitElement {
           --vscode-textCodeBlock-background,
           rgba(128, 128, 128, 0.08)
         );
-        border-radius: var(--radius-medium);
+        border-radius: var(--border-radius-medium);
         font-size: var(--font-size-sm);
         color: var(--vscode-foreground);
         line-height: 1.5;
@@ -279,7 +280,7 @@ export class LaTeXTab extends LitElement {
           --vscode-textCodeBlock-background,
           rgba(128, 128, 128, 0.08)
         );
-        border-radius: var(--radius-small, 3px);
+        border-radius: var(--border-radius-small, 3px);
         font-family: var(--vscode-editor-font-family, monospace);
         font-size: var(--font-size-sm);
         color: var(--vscode-foreground);
@@ -301,7 +302,7 @@ export class LaTeXTab extends LitElement {
         margin-bottom: var(--spacing-medium);
         border: var(--border-thin) solid
           var(--vscode-editorInfo-foreground, #3794ff);
-        border-radius: var(--radius-medium);
+        border-radius: var(--border-radius-medium);
         background: var(--vscode-editor-background);
       }
 
@@ -356,7 +357,7 @@ export class LaTeXTab extends LitElement {
         padding: var(--spacing-medium);
         margin-bottom: var(--spacing-medium);
         border: var(--border-thin) solid var(--color-border);
-        border-radius: var(--radius-medium);
+        border-radius: var(--border-radius-medium);
         background: var(--vscode-editor-background);
       }
 
@@ -409,7 +410,7 @@ export class LaTeXTab extends LitElement {
         flex-shrink: 0;
         font-size: var(--font-size-xs, 11px);
         padding: 2px 6px;
-        border-radius: var(--radius-small, 3px);
+        border-radius: var(--border-radius-small, 3px);
         font-weight: var(--font-weight-medium);
       }
 
@@ -440,13 +441,7 @@ export class LaTeXTab extends LitElement {
   }
 
   private handleApply(field?: SettingInfo['key'], reset = false): void {
-    this.dispatchEvent(
-      new CustomEvent('latex-apply-settings', {
-        bubbles: true,
-        composed: true,
-        detail: { ...(field ? { field } : {}), ...(reset ? { reset } : {}) },
-      }),
-    );
+    this.dispatchEvent(createEvent('latex-apply-settings', { field, reset }));
   }
 
   private allSettingsSet(): boolean {
@@ -488,13 +483,7 @@ export class LaTeXTab extends LitElement {
   }
 
   private handleRunInTerminal(command: string): void {
-    this.dispatchEvent(
-      new CustomEvent('latex-run-install-command', {
-        bubbles: true,
-        composed: true,
-        detail: { installCommand: command },
-      }),
-    );
+    this.dispatchEvent(createEvent('latex-run-install-command', { installCommand: command }));
   }
 
   /** Collect detected tool paths for a dependency. */

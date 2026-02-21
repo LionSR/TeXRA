@@ -30,7 +30,7 @@ import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { PersistedState, createWebviewStorage } from '@shared/state';
 
 // Local imports - shared styles
-import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
+import { codiconStyles, designTokens } from '@shared/styles';
 
 // Local imports - progress view constants
 import { COMMANDS } from '../constants';
@@ -73,12 +73,7 @@ interface CachedStream {
 
 @customElement('log-list')
 export class LogList extends LitElement {
-  static override styles = [
-    designTokens,
-    commonViewStyles,
-    codiconStyles,
-    ...logStyles,
-  ];
+  static override styles = [designTokens, codiconStyles, ...logStyles];
 
   // Log context - only updates when logs/groups change (not on metadata-only changes)
   @consume({ context: streamLogContext, subscribe: true })

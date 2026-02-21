@@ -17,6 +17,9 @@ import type {
   ToolCategory,
 } from '@shared/schemas/settingsViewMessages';
 
+// Local imports - shared utilities
+import { createEvent } from '@shared/utils/events';
+
 // Local imports - tool card component (side-effect: register)
 import '../components/tools/ToolCard';
 
@@ -198,12 +201,7 @@ export class ToolsTab extends LitElement {
   @property({ type: Boolean }) loaded = false;
 
   private handleRecheck(): void {
-    this.dispatchEvent(
-      new CustomEvent('tool-recheck', {
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(createEvent('tool-recheck'));
   }
 
   private groupByCategory(): Map<ToolCategory, ToolDashboardItem[]> {

@@ -7,7 +7,7 @@
 
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { codiconStyles, designTokens, commonViewStyles } from '@shared/styles';
@@ -229,7 +229,7 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) reliabilitySettings: NumberVscodeSetting[] =
     [];
   @property({ attribute: false }) customPresets: AgentModePreset[] = [];
-  @property({ attribute: false }) activePresetId: string | null = null;
+  @state() private activePresetId: string | null = null;
 
   private handleToggle(event: Event): void {
     const target = event.target as HTMLInputElement | null;

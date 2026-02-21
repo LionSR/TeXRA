@@ -413,8 +413,6 @@ export class StreamHeader extends LitElement {
     const finishedProcessCount = streamState
       ? streamState.finishedProcessCount
       : 0;
-    const totalSubagents = activeSubagents.length + finishedSubagentCount;
-    const totalProcesses = activeProcesses.length + finishedProcessCount;
     const progress = this.streamState?.conversationProgress;
 
     return html`
@@ -439,38 +437,18 @@ export class StreamHeader extends LitElement {
               })}
               data-status=${statusLabel}
             ></span>
-            ${totalSubagents > 0
-              ? html`<span
-                  class="child-badge subagent-badge"
-                  title=${activeSubagents.map((s) => s.agentName).join(', ')}
-                >
-                  <i class="codicon codicon-server-process"></i>
-                  ${activeSubagents.length > 0
-                    ? html`${activeSubagents.length} running`
-                    : nothing}${activeSubagents.length > 0 &&
-                  finishedSubagentCount > 0
-                    ? html`, `
-                    : nothing}${finishedSubagentCount > 0
-                    ? html`${finishedSubagentCount} done`
-                    : nothing}
-                </span>`
-              : nothing}
-            ${totalProcesses > 0
-              ? html`<span
-                  class="child-badge process-badge"
-                  title=${activeProcesses.map((p) => p.agentName).join(', ')}
-                >
-                  <i class="codicon codicon-terminal"></i>
-                  ${activeProcesses.length > 0
-                    ? html`${activeProcesses.length} running`
-                    : nothing}${activeProcesses.length > 0 &&
-                  finishedProcessCount > 0
-                    ? html`, `
-                    : nothing}${finishedProcessCount > 0
-                    ? html`${finishedProcessCount} done`
-                    : nothing}
-                </span>`
-              : nothing}
+            ${this.renderChildBadge(
+              activeSubagents,
+              finishedSubagentCount,
+              'server-process',
+              'subagent-badge',
+            )}
+            ${this.renderChildBadge(
+              activeProcesses,
+              finishedProcessCount,
+              'terminal',
+              'process-badge',
+            )}
             ${progress && progress.conversationTurns > 0
               ? html`<span
                   class="child-badge progress-badge"
@@ -575,6 +553,28 @@ export class StreamHeader extends LitElement {
     const hidden = EXECUTION_DEPENDENT_BUTTONS.has(buttonId) && !hasExecutionId;
     const disabled = hidden || !enabledButtons.has(buttonId);
     return { disabled, hidden };
+  }
+
+  /** Render a child-count badge (subagents or processes). */
+  private renderChildBadge(
+    active: { agentName: string }[],
+    finishedCount: number,
+    icon: string,
+    cssClass: string,
+  ): TemplateResult | typeof nothing {
+    const total = active.length + finishedCount;
+    if (total === 0) return nothing;
+    return html`<span
+      class="child-badge ${cssClass}"
+      title=${active.map((s) => s.agentName).join(', ')}
+    >
+      <i class="codicon codicon-${icon}"></i>
+      ${active.length > 0
+        ? html`${active.length} running`
+        : nothing}${active.length > 0 && finishedCount > 0
+        ? html`, `
+        : nothing}${finishedCount > 0 ? html`${finishedCount} done` : nothing}
+    </span>`;
   }
 
   private renderParentLink(): TemplateResult | typeof nothing {

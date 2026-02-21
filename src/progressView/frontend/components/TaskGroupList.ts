@@ -24,7 +24,7 @@ import { getGettingStartedHtml } from '@shared/utils/uiConstants';
 import { formatDuration } from '@utils/core';
 
 // Local imports - shared styles
-import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
+import { designTokens, codiconStyles } from '@shared/styles';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';
@@ -67,12 +67,7 @@ function getStatusIcon(status: string): string {
 
 @customElement('task-group-list')
 export class TaskGroupList extends LitElement {
-  static override styles = [
-    designTokens,
-    commonViewStyles,
-    codiconStyles,
-    ...logStyles,
-  ];
+  static override styles = [designTokens, codiconStyles, ...logStyles];
 
   /** All task groups to render */
   @property({ attribute: false }) groups: TaskGroup[] = [];

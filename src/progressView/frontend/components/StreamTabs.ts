@@ -13,6 +13,9 @@ import {
 } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
+// Local imports - progress view styles
+import { layoutStyles } from '../styles/logStyles';
+
 // Local imports - shared utilities
 import { formatRelativeTime } from '@shared/utils/string';
 import {
@@ -290,6 +293,7 @@ export class StreamTabs extends LitElement {
     designTokens,
     animationStyles,
     commonViewStyles,
+    layoutStyles,
     css`
       :host {
         display: flex;
@@ -343,21 +347,6 @@ export class StreamTabs extends LitElement {
 
       .sort-btn.active::part(control) {
         background-color: var(--vscode-toolbar-hoverBackground);
-      }
-
-      .log-placeholder {
-        text-align: center;
-        color: var(--color-text-secondary);
-        padding: var(--spacing-large) var(--spacing-medium);
-      }
-
-      .log-placeholder a {
-        color: var(--color-text-link);
-        text-decoration: underline;
-      }
-
-      .log-placeholder a:hover {
-        color: var(--color-text-link-active);
       }
     `,
   ];
