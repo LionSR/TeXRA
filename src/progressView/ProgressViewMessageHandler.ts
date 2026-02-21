@@ -100,10 +100,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     super('ProgressView', { trackActiveView: true });
 
     this.recordingManager = new RecordingManager(context, {
-      recordingStartedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STARTED,
-      recordingStoppedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED,
-      recordingErrorCommand: PROGRESS_VIEW_COMMANDS.RECORDING_ERROR,
-      transcriptionCommand: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED,
+      buildRecordingMessage: ({ status, error }) => ({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING,
+        status,
+        ...(error ? { error } : {}),
+      }),
+      buildTranscriptionMessage: (text) => ({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+        kind: 'transcribed',
+        text,
+      }),
       progressTitle: 'Transcribing follow-up message',
     });
 
@@ -147,18 +153,29 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.withToolbarTaskState(data.stream, (ts) =>
           this.handleFileOperation(data.stream, ts, 'texra.clean'),
         ),
-      [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: (data) =>
-        this.handleSortStreams(data),
-      [PROGRESS_VIEW_COMMANDS.FILTER_STREAMS]: (data) =>
-        this.handleFilterStreams(data),
+      [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: (data) => {
+        this.provider.state.streamSortOrder = data.sortBy;
+      },
+      [PROGRESS_VIEW_COMMANDS.FILTER_STREAMS]: (data) => {
+        this.provider.state.agentCategoryFilter = data.filter;
+      },
       [PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST]: (data) =>
         this.handleRetryStreamRequest(data),
-      [PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST]: (data) =>
-        this.handleCancelRetryRequest(data),
-      [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]: (data) =>
-        this.handleRestoreState(data),
-      [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: (data) =>
-        this.handleSendFollowUp(data),
+      [PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST]: (data) => {
+        retryCoordinator.cancelRetry(data.stream);
+      },
+      [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]: async (data) => {
+        const taskState = this.provider.state.getTaskState(data.stream);
+        if (taskState) {
+          await vscode.commands.executeCommand('texra.restoreState', taskState);
+        }
+      },
+      [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: async (data) => {
+        await vscode.commands.executeCommand('texra.sendFollowUp', {
+          stream: data.stream,
+          text: data.text,
+        });
+      },
       [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]: (data) =>
         this.handleOpenTaskStorage(data),
       [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]: (data) =>
@@ -318,10 +335,28 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.provider.eventHandler.clearPendingTaskGroups(streamId);
     cleanupApprovalsForStream(streamId);
     ToolUseFollowUpQueue.release(streamId);
-    this.clearModelOutputBackups(streamId);
+    this.modelOutputBackups.delete(streamId);
+
+    // Handle active stream rotation if the deleted stream was active
+    const wasActive = this.provider.state.activeStream === streamId;
     await this.provider.state.clearStream(streamId);
-    // Force rebuild since we deleted a stream
-    this.provider.updateWebview({ forceRebuild: true });
+
+    if (wasActive) {
+      // Pick next active from remaining streams
+      const remainingStreams = [...this.provider.state.streamTabs.keys()];
+      this.provider.state.activeStream =
+        (remainingStreams[0] as StreamTabId) ?? ('' as StreamTabId);
+    }
+
+    // Lightweight sync for dual-webview (frontend DELETE_STREAM handler is idempotent)
+    this.provider.webviewUpdater.deleteStream(streamId);
+
+    // Broadcast the replacement active stream so secondary webviews stay consistent
+    if (wasActive && this.provider.state.activeStream) {
+      this.provider.setActiveStream(
+        this.provider.state.activeStream as StreamTabId,
+      );
+    }
   }
 
   private async handleDeleteAll(): Promise<void> {
@@ -346,7 +381,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.modelOutputBackups.clear();
     await this.provider.state.clearAll();
     // Force rebuild since we deleted all streams
-    this.provider.updateWebview({ forceRebuild: true });
+    this.provider.syncFullView({ forceRebuild: true });
   }
 
   // ============================================================
@@ -356,24 +391,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleResume(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RESUME>,
   ): Promise<void> {
-    const streamId = data.stream;
-    const taskState = this.provider.state.getTaskState(streamId);
-    if (!taskState) {
-      return;
-    }
+    const taskState = this.provider.state.getTaskState(data.stream);
+    if (!taskState) return;
 
-    if (isWorkflowTaskState(taskState)) {
-      const executionId = this.provider.state.getExecutionId(streamId);
-      if (executionId) {
-        await this.executeValidated({
-          config: taskState.agentConfig,
-          executionId,
-        });
-        return;
-      }
-    }
+    const executionId = isWorkflowTaskState(taskState)
+      ? this.provider.state.getExecutionId(data.stream)
+      : undefined;
 
-    await this.executeValidated({ config: taskState.agentConfig });
+    await this.executeValidated({
+      config: taskState.agentConfig,
+      ...(executionId && { executionId }),
+    });
   }
 
   private async handleRunNew(
@@ -395,12 +423,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         'No retryable request is available for this stream yet.',
       );
     }
-  }
-
-  private handleCancelRetryRequest(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST>,
-  ): void {
-    retryCoordinator.cancelRetry(data.stream);
   }
 
   private async handleDiffStream(
@@ -433,38 +455,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  private handleSortStreams(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.SORT_STREAMS>,
-  ): void {
-    this.provider.state.streamSortOrder = data.sortBy;
-    this.provider.updateWebview();
-  }
-
-  private handleFilterStreams(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.FILTER_STREAMS>,
-  ): void {
-    this.provider.state.agentCategoryFilter = data.filter;
-    this.provider.updateWebview();
-  }
-
-  private async handleRestoreState(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RESTORE_STATE>,
-  ): Promise<void> {
-    const taskState = this.provider.state.getTaskState(data.stream);
-    if (taskState) {
-      await vscode.commands.executeCommand('texra.restoreState', taskState);
-    }
-  }
-
-  private async handleSendFollowUp(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP>,
-  ): Promise<void> {
-    await vscode.commands.executeCommand('texra.sendFollowUp', {
-      stream: data.stream,
-      text: data.text,
-    });
-  }
-
   private async handlePolishFollowUp(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP>,
   ): Promise<void> {
@@ -472,6 +462,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (!taskState) return;
 
     const fileContext = buildFileContextFromTaskState(taskState);
+
+    const sendPolishError = (errorMsg: string): void => {
+      this.postToActiveView({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+        stream: data.stream,
+        kind: 'polishError',
+        text: null,
+        error: errorMsg,
+      });
+    };
 
     await vscode.window.withProgress(
       {
@@ -493,31 +493,24 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
           if (result.success) {
             this.postToActiveView({
-              command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED,
+              command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
               stream: data.stream,
+              kind: 'polished',
               text: result.text,
             });
           } else if (result.error) {
-            this.postToActiveView({
-              command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR,
-              stream: data.stream,
-              error: result.error,
-            });
+            sendPolishError(result.error);
             await vscode.window.showErrorMessage(result.error);
           }
         } catch (error) {
-          const messageText = toErrorMessage(error);
-          this.postToActiveView({
-            command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR,
-            stream: data.stream,
-            error: messageText,
-          });
+          const errorMsg = toErrorMessage(error);
+          sendPolishError(errorMsg);
           await vscode.window.showErrorMessage(
-            `Error polishing follow-up: ${messageText}`,
+            `Error polishing follow-up: ${errorMsg}`,
           );
           this.logger.error(
             this.channel,
-            `Error polishing follow-up: ${messageText}`,
+            `Error polishing follow-up: ${errorMsg}`,
             {
               data: error instanceof Error ? error : undefined,
             },
@@ -805,27 +798,20 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       currentContent !== backup.content
     ) {
       const fileName = path.basename(file);
-      const followUpText = `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`;
-
       await vscode.commands.executeCommand('texra.sendFollowUp', {
         stream: backup.streamId,
-        text: followUpText,
+        text: `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`,
       });
     }
 
-    if (file && streamId) {
+    // Clean up the backup entry for this file
+    if (backup && streamId) {
       const streamBackups = this.modelOutputBackups.get(streamId);
-      if (streamBackups) {
-        streamBackups.delete(file);
-        if (streamBackups.size === 0) {
-          this.modelOutputBackups.delete(streamId);
-        }
+      streamBackups?.delete(file);
+      if (streamBackups?.size === 0) {
+        this.modelOutputBackups.delete(streamId);
       }
     }
-  }
-
-  private clearModelOutputBackups(streamId: StreamTabId): void {
-    this.modelOutputBackups.delete(streamId);
   }
 
   private async handleMergeFile(
@@ -1174,20 +1160,19 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     } = options;
     const isChat = mode === 'chat';
 
+    const toRelative = (p: string): string => WorkspaceFS.relativePath(p);
     const mapOutputToRelative = (p: string): string =>
-      WorkspaceFS.relativePath(fileMapping.get(p) ?? p);
-    const keepOriginalRelative = (p: string): string =>
-      WorkspaceFS.relativePath(p);
+      toRelative(fileMapping.get(p) ?? p);
 
     const newInputFile = attachAgentOutputs
-      ? keepOriginalRelative(originalConfig.inputFile)
+      ? toRelative(originalConfig.inputFile)
       : mapOutputToRelative(originalConfig.inputFile);
     const newInputFiles = attachAgentOutputs
-      ? originalConfig.inputFiles.map(keepOriginalRelative)
+      ? originalConfig.inputFiles.map(toRelative)
       : originalConfig.inputFiles.map(mapOutputToRelative);
 
     const outputsAsReference = attachAgentOutputs
-      ? [...fileMapping.values()].map((p) => WorkspaceFS.relativePath(p))
+      ? [...fileMapping.values()].map(toRelative)
       : [];
 
     const template = isChat
@@ -1222,7 +1207,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           ...new Set(
             [originalConfig.inputFile, ...originalConfig.inputFiles]
               .filter(Boolean)
-              .map((p) => WorkspaceFS.relativePath(p)),
+              .map(toRelative),
           ),
         ]
       : originalConfig.outputFiles;

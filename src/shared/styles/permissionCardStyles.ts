@@ -13,6 +13,7 @@ export const permissionCardStyles: CSSResult = css`
       var(--vscode-editor-background) 60%,
       transparent
     );
+    backdrop-filter: blur(4px);
   }
 
   :host([hidden]) {
@@ -33,7 +34,7 @@ export const permissionCardStyles: CSSResult = css`
     display: flex;
     align-items: center;
     gap: var(--spacing-small);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     margin-bottom: var(--spacing-medium);
   }
 
@@ -85,8 +86,12 @@ export const permissionCardStyles: CSSResult = css`
     cursor: pointer;
     font-size: var(--font-size);
     transition:
-      background-color 0.15s ease,
-      opacity 0.15s ease;
+      background-color var(--transition-fast),
+      opacity var(--transition-fast);
+  }
+
+  .action-button:active {
+    opacity: 0.85;
   }
 
   .action-button:focus-visible {
@@ -116,12 +121,12 @@ export const permissionCardStyles: CSSResult = css`
 
   .diff-added {
     color: var(--vscode-gitDecoration-addedResourceForeground, #89d185);
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
   }
 
   .diff-removed {
     color: var(--vscode-gitDecoration-deletedResourceForeground, #f48771);
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
   }
 
   .meta-text {
@@ -142,7 +147,7 @@ export const permissionCardStyles: CSSResult = css`
     color: var(--vscode-textLink-foreground);
     cursor: pointer;
     text-decoration: none;
-    transition: color 0.15s ease;
+    transition: color var(--transition-fast);
   }
 
   .file-link:hover {

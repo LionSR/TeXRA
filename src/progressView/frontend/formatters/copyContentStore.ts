@@ -29,3 +29,10 @@ export function registerCopyContent(
 export function getCopyContent(id: string): string | undefined {
   return copyContentStore.get(id);
 }
+
+/**
+ * Clear all copy content entries (called on stream delete / delete-all).
+ */
+export function clearCopyContentStore(): void {
+  copyContentStore.clear();
+}

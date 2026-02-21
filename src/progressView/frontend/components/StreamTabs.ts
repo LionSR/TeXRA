@@ -12,7 +12,9 @@ import {
   commonViewStyles,
 } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
-import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
+
+// Local imports - progress view styles
+import { layoutStyles } from '../styles/logStyles';
 
 // Local imports - shared utilities
 import { formatRelativeTime } from '@shared/utils/string';
@@ -35,13 +37,10 @@ import type { StreamFilter, StreamSort } from '../store';
 // Local imports - shared schemas
 import type { StreamTabInfo } from '@shared/schemas';
 
-/** Capitalize first letter for display */
-function formatStatusLabel(status: string): string {
-  if (!status) return '';
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
-function buildTooltip(info: StreamTabInfo): string {
+function buildTooltip(
+  info: StreamTabInfo,
+  lastTimestamp: number | undefined,
+): string {
   const mainLine = [
     info.label,
     info.model && `Model: ${info.model}`,
@@ -49,8 +48,8 @@ function buildTooltip(info: StreamTabInfo): string {
   ]
     .filter(Boolean)
     .join(' • ');
-  if (!info.lastTimestamp) return mainLine;
-  const lastSeen = formatRelativeTime(info.lastTimestamp);
+  if (!lastTimestamp) return mainLine;
+  const lastSeen = formatRelativeTime(lastTimestamp);
   return lastSeen && mainLine
     ? `${mainLine}\nLast activity ${lastSeen}`
     : mainLine;
@@ -72,7 +71,6 @@ export class StreamTab extends LitElement {
     designTokens,
     animationStyles,
     codiconIconClasses,
-    statusIndicatorStyles,
     css`
       :host {
         display: block;
@@ -84,6 +82,32 @@ export class StreamTab extends LitElement {
         position: relative;
         width: 100%;
         gap: var(--spacing-tiny);
+        border-left: 3px solid transparent;
+        transition:
+          border-left-color var(--transition-normal),
+          background-color var(--transition-fast);
+      }
+
+      .tab-container.status-running {
+        border-left-color: var(--color-success);
+      }
+
+      .tab-container.status-error {
+        border-left-color: var(--color-error);
+      }
+
+      .tab-container.status-waiting,
+      .tab-container.status-resuming {
+        border-left-color: var(--vscode-textLink-foreground);
+      }
+
+      .tab-container.status-stopped,
+      .tab-container.status-ready {
+        border-left-color: var(--color-border);
+      }
+
+      .tab-container.status-initializing {
+        border-left-color: var(--color-warning);
       }
 
       .tab {
@@ -107,11 +131,6 @@ export class StreamTab extends LitElement {
         align-items: center;
         gap: var(--spacing-small);
         width: 100%;
-      }
-
-      /* .tab-status styles from statusIndicatorStyles */
-      .tab-header .tab-status {
-        margin: 0;
       }
 
       .tab-title {
@@ -150,8 +169,8 @@ export class StreamTab extends LitElement {
         margin: 0 var(--spacing-small) 0 0;
         color: var(--vscode-icon-foreground, var(--vscode-foreground));
         transition:
-          color 0.15s ease,
-          background-color 0.15s ease;
+          color var(--transition-fast),
+          background-color var(--transition-fast);
       }
 
       .tab-container:hover {
@@ -189,13 +208,14 @@ export class StreamTab extends LitElement {
   ];
 
   @property({ attribute: false }) info!: StreamTabInfo;
+  @property({ type: String }) status: string = STREAM_STATUS.READY;
+  @property({ attribute: false }) lastTimestamp: number | undefined = undefined;
   @property({ type: Boolean }) active = false;
 
   override render(): TemplateResult {
     const stream = this.info;
-    const tooltip = buildTooltip(stream);
-    const status = stream.status ?? STREAM_STATUS.READY;
-    const statusLabel = formatStatusLabel(status);
+    const tooltip = buildTooltip(stream, this.lastTimestamp);
+    const status = this.status || STREAM_STATUS.READY;
     const agentDecorator = getAgentCategoryDecorator(stream.agentCategory);
 
     return html`
@@ -204,6 +224,7 @@ export class StreamTab extends LitElement {
           'tab-container': true,
           'stream-tab': true,
           'is-active': this.active,
+          [`status-${status}`]: Boolean(status),
         })}
       >
         <button
@@ -213,13 +234,6 @@ export class StreamTab extends LitElement {
           title=${tooltip}
         >
           <div class="tab-header">
-            <span
-              class=${classMap({
-                'tab-status': true,
-                [`is-${status}`]: Boolean(status),
-              })}
-              data-status=${statusLabel}
-            ></span>
             <span class="tab-title"
               >${stream.parentStreamId ? '↳ ' : ''}${stream.label ||
               stream.name}</span
@@ -227,8 +241,8 @@ export class StreamTab extends LitElement {
           </div>
           <div class="tab-meta">
             <span class="last-active"
-              >${stream.lastTimestamp
-                ? formatRelativeTime(stream.lastTimestamp)
+              >${this.lastTimestamp
+                ? formatRelativeTime(this.lastTimestamp)
                 : ''}</span
             >
             <span class="model">${stream.model ?? ''}</span>
@@ -279,6 +293,7 @@ export class StreamTabs extends LitElement {
     designTokens,
     animationStyles,
     commonViewStyles,
+    layoutStyles,
     css`
       :host {
         display: flex;
@@ -333,21 +348,6 @@ export class StreamTabs extends LitElement {
       .sort-btn.active::part(control) {
         background-color: var(--vscode-toolbar-hoverBackground);
       }
-
-      .log-placeholder {
-        text-align: center;
-        color: var(--color-text-secondary);
-        padding: var(--spacing-large) var(--spacing-medium);
-      }
-
-      .log-placeholder a {
-        color: var(--color-text-link);
-        text-decoration: underline;
-      }
-
-      .log-placeholder a:hover {
-        color: var(--color-text-link-active);
-      }
     `,
   ];
 
@@ -355,6 +355,10 @@ export class StreamTabs extends LitElement {
   @property({ attribute: false }) activeStreamId: string | null = null;
   @property({ attribute: false }) filter: StreamFilter = 'all';
   @property({ attribute: false }) sort: StreamSort = 'time';
+  @property({ attribute: false })
+  streamStatusById: Map<string, string> = new Map();
+  @property({ attribute: false })
+  streamLastTimestampById: Map<string, number | undefined> = new Map();
 
   override render(): TemplateResult {
     return html`
@@ -367,6 +371,11 @@ export class StreamTabs extends LitElement {
               (stream) => html`
                 <stream-tab
                   .info=${stream}
+                  .status=${this.streamStatusById.get(stream.name) ??
+                  STREAM_STATUS.READY}
+                  .lastTimestamp=${this.streamLastTimestampById.get(
+                    stream.name,
+                  )}
                   ?active=${stream.name === this.activeStreamId}
                 ></stream-tab>
               `,

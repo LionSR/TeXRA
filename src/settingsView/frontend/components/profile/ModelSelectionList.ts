@@ -222,9 +222,6 @@ export class ModelSelectionList extends LitElement {
     return html`
       <div class="model-selection-section">
         <h2>Model Selection</h2>
-        <p class="model-selection-description">
-          Select which models appear in the dropdown.
-        </p>
         ${this.renderHelperModelDropdown()}
         ${groups.map((g) => this.renderProviderGroup(g))}
       </div>

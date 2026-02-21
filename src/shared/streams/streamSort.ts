@@ -6,8 +6,11 @@ import type { StreamTabInfo } from '@shared/schemas';
 
 export const StreamSortSchema = z.enum(['time', 'agent', 'inputFile']);
 export type StreamSort = z.infer<typeof StreamSortSchema>;
+interface StreamSortOptions {
+  getLastActivityTimestamp?: (stream: StreamTabInfo) => number | undefined;
+}
 
-export type StreamComparator = (a: StreamTabInfo, b: StreamTabInfo) => number;
+type StreamComparator = (a: StreamTabInfo, b: StreamTabInfo) => number;
 
 function compareByAgent(a: StreamTabInfo, b: StreamTabInfo): number {
   return (a.agent ?? '').localeCompare(b.agent ?? '');
@@ -17,15 +20,20 @@ function compareByInputFile(a: StreamTabInfo, b: StreamTabInfo): number {
   return (a.inputFile ?? '').localeCompare(b.inputFile ?? '');
 }
 
-function compareByTime(a: StreamTabInfo, b: StreamTabInfo): number {
-  // Treat streams without timestamps as newest (sort to top)
-  const now = Date.now();
-  const aTime = a.lastTimestamp ?? a.creationTimestamp ?? now;
-  const bTime = b.lastTimestamp ?? b.creationTimestamp ?? now;
+function compareByTime(
+  a: StreamTabInfo,
+  b: StreamTabInfo,
+  options?: StreamSortOptions,
+): number {
+  const aTime = options?.getLastActivityTimestamp?.(a) ?? a.creationTimestamp;
+  const bTime = options?.getLastActivityTimestamp?.(b) ?? b.creationTimestamp;
   return bTime - aTime;
 }
 
-export const streamComparators: Record<StreamSort, StreamComparator> = {
+const streamComparators: Record<
+  StreamSort,
+  (a: StreamTabInfo, b: StreamTabInfo, options?: StreamSortOptions) => number
+> = {
   agent: compareByAgent,
   inputFile: compareByInputFile,
   time: compareByTime,
@@ -38,7 +46,9 @@ export const streamComparators: Record<StreamSort, StreamComparator> = {
 export function sortStreams(
   streams: StreamTabInfo[],
   sort: StreamSort,
+  options?: StreamSortOptions,
 ): StreamTabInfo[] {
-  const comparator = streamComparators[sort] ?? streamComparators.time;
-  return [...streams].sort(comparator);
+  const comparator =
+    streamComparators[sort] ?? ((a, b) => compareByTime(a, b, options));
+  return [...streams].sort((a, b) => comparator(a, b, options));
 }

@@ -1,29 +1,32 @@
 import * as vscode from 'vscode';
 
+import { STREAM_STATUS } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { TaskState } from '@logger/TaskState';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
-import { ProgressViewState } from '@progressView/state/ProgressViewState';
+import {
+  ProgressViewState,
+  type StreamExecutionState,
+} from '@progressView/state/ProgressViewState';
 import type {
   AgentCategoryFilter,
-  AgentProposalPermission,
-  BashPermission,
+  ConversationProgress,
   ContextState,
   InstructionUpdate,
   LogMessageData,
-  ModelOptionData,
   OutputFileInfo,
+  PermissionPayload,
+  ProgressPermissionKind,
   ProgressViewOutboundMessage,
-  RetryPermission,
-  StreamState,
+  StreamMetadata,
   StreamStatus,
   StreamTabId,
   StreamTabInfo,
   TaskGroup,
   TodoItem,
   TokenUsageStats,
-  ToolEditPermission,
   UpdateTaskGroupPayload,
+  StorageKey,
 } from '@shared/schemas';
 
 /**
@@ -47,6 +50,29 @@ export interface LogContentExtras {
   runMissingOutputs?: Record<string, { [key: number]: string[] }>;
   /** Context window utilization state */
   contextState?: ContextState;
+}
+
+/** Payload for batched stream content hydration (tab switch). */
+export interface SyncStreamContentPayload {
+  stream: StreamTabId | '';
+  messages: LogMessageData[];
+  groups: TaskGroup[];
+  extras?: LogContentExtras;
+  action?: 'render' | 'clear';
+  todos: TodoItem[];
+  queuedFollowUps: string[];
+  instruction: InstructionUpdate | null;
+  agentCategory?: string;
+  runId?: StorageKey | null;
+  /** Tab-switch state previously sent by syncActiveStreamState (R2). */
+  conversationProgress?: ConversationProgress;
+  badges?: {
+    activeSubagents: StreamExecutionState['activeSubagents'];
+    finishedSubagentCount: StreamExecutionState['finishedSubagentCount'];
+    activeProcesses: StreamExecutionState['activeProcesses'];
+    finishedProcessCount: StreamExecutionState['finishedProcessCount'];
+  };
+  parentStreamId?: StreamTabId;
 }
 
 /**
@@ -90,13 +116,13 @@ export class WebviewUpdater {
 
   /**
    * Update stream tabs in the webview.
-   * Optionally includes full stream states - backend is source of truth.
+   * Optionally includes lightweight stream metadata (backend-owned fields only).
    */
   updateStreams(
     streams: StreamTabInfo[],
     activeStream: StreamTabId,
     agentFilter: AgentCategoryFilter,
-    streamStates?: Record<StreamTabId, StreamState>,
+    streamStates?: Record<StreamTabId, StreamMetadata>,
   ): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
@@ -197,87 +223,33 @@ export class WebviewUpdater {
     });
   }
 
-  showToolEditPermission(permission: ToolEditPermission): void {
+  showPermission(permission: PermissionPayload): void {
     this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL,
-      request: permission,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+      action: 'show',
+      permission,
     });
   }
 
-  resolveToolEditPermission(requestId: string): void {
+  resolvePermission(kind: ProgressPermissionKind, id: string): void {
     this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL,
-      requestId,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+      action: 'resolve',
+      kind,
+      id,
     });
   }
 
-  updateToolEditApprovalState(
+  updateBypassState(
     stream: StreamTabId,
+    type: 'toolEdit' | 'superYolo',
     bypassActive: boolean,
   ): void {
     this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
       stream,
+      type,
       bypassActive,
-    });
-  }
-
-  updateSuperYoloBypassState(
-    stream: StreamTabId,
-    bypassActive: boolean,
-    featureEnabled: boolean,
-  ): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_BYPASS_STATE,
-      stream,
-      bypassActive,
-      featureEnabled,
-    });
-  }
-
-  showBashPermission(permission: BashPermission): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL,
-      request: permission,
-    });
-  }
-
-  resolveBashPermission(requestId: string): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.RESOLVE_BASH_APPROVAL,
-      requestId,
-    });
-  }
-
-  showRetryRequest(request: RetryPermission): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.SHOW_RETRY_REQUEST,
-      request,
-    });
-  }
-
-  resolveRetryRequest(streamId: string): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.RESOLVE_RETRY_REQUEST,
-      streamId,
-    });
-  }
-
-  showAgentProposal(
-    proposal: AgentProposalPermission,
-    modelOptionsData?: ModelOptionData[],
-  ): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL,
-      proposal,
-      modelOptionsData,
-    });
-  }
-
-  resolveAgentProposal(proposalId: string): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.RESOLVE_AGENT_PROPOSAL,
-      proposalId,
     });
   }
 
@@ -362,6 +334,59 @@ export class WebviewUpdater {
     });
   }
 
+  setActiveStream(activeStream: StreamTabId): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream,
+    });
+  }
+
+  /** Send lightweight delete notification to all webviews (dual-webview sync). */
+  deleteStream(stream: StreamTabId): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+      stream,
+    });
+  }
+
+  updateConversationProgress(
+    stream: StreamTabId,
+    progress: ConversationProgress,
+  ): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS,
+      stream,
+      progress,
+    });
+  }
+
+  updateStreamBadges(
+    stream: StreamTabId,
+    badges: {
+      activeSubagents: StreamExecutionState['activeSubagents'];
+      finishedSubagentCount: StreamExecutionState['finishedSubagentCount'];
+      activeProcesses: StreamExecutionState['activeProcesses'];
+      finishedProcessCount: StreamExecutionState['finishedProcessCount'];
+    },
+  ): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
+      stream,
+      ...badges,
+    });
+  }
+
+  updateParentStream(
+    stream: StreamTabId,
+    parentStreamId: StreamTabId | undefined,
+  ): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM,
+      stream,
+      parentStreamId,
+    });
+  }
+
   /**
    * Add a task group to the webview
    */
@@ -406,22 +431,36 @@ export class WebviewUpdater {
   }
 
   /**
+   * Send a single batched content sync message combining logs, todos, follow-ups,
+   * and instruction. Used on tab switch to replace 4 separate messages with 1.
+   */
+  sendSyncStreamContent(payload: SyncStreamContentPayload): void {
+    const { extras, ...rest } = payload;
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+      ...rest,
+      ...extras,
+    });
+  }
+
+  /**
    * Update stream metadata and theme for the webview.
    * Returns the active stream after applying the update.
    *
    * Note: This method computes valid active stream via ProgressViewState
    * (single source of truth) and explicitly persists if changed.
+   *
+   * Use this for structural updates (initial sync, filter changes, stream add/remove).
+   * For incremental updates, prefer targeted messages like:
+   * setActiveStream(), updateConversationProgress(), updateStreamBadges(),
+   * updateParentStream(), updateStreamStatus().
    */
-  updateAll(
+  sendStreamMetadata(
     state: ProgressViewState,
     statuses?: Map<string, StreamStatus>,
     theme?: 'dark' | 'light',
   ): StreamTabId {
-    const streams = buildStreamInfos(
-      state,
-      statuses,
-      state.agentCategoryFilter,
-    );
+    const streams = buildStreamInfos(state, state.agentCategoryFilter);
     const streamNames = streams.map((info) => info.name);
 
     // Compute valid active stream (pure query) and persist if changed
@@ -438,14 +477,31 @@ export class WebviewUpdater {
       this.updateTheme(theme);
     }
 
-    // Send stream states - backend is the source of truth
-    const streamStates = state.getAllStreamStates();
+    // Send lightweight metadata — only backend-owned fields the frontend merges.
+    const allStates = state.getAllStreamStates();
+    const streamMetadata: Record<StreamTabId, StreamMetadata> = {};
+    for (const { name, agentCategory } of streams) {
+      const current = allStates[name];
+      streamMetadata[name] = {
+        kind: agentCategory,
+        status: statuses?.get(name) ?? STREAM_STATUS.READY,
+        lastTimestamp: state.streamTabs.getLastTimestamp(name),
+        conversationProgress: current?.conversationProgress ?? {
+          conversationTurns: 0,
+          toolCallCount: 0,
+        },
+        activeSubagents: current?.activeSubagents ?? [],
+        finishedSubagentCount: current?.finishedSubagentCount ?? 0,
+        activeProcesses: current?.activeProcesses ?? [],
+        finishedProcessCount: current?.finishedProcessCount ?? 0,
+      };
+    }
 
     this.updateStreams(
       streams,
       activeStream,
       state.agentCategoryFilter,
-      streamStates,
+      streamMetadata,
     );
 
     return activeStream;
