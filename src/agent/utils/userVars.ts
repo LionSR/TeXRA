@@ -84,9 +84,12 @@ export async function buildUserVars(
     ...getToolFlags(agentConfig, agentSetting, agentPrompt),
   };
 
-  // Emit aggregated file list if any files were loaded
-  if (allLoadedFiles.length > 0) {
-    logger.fileList(allLoadedFiles);
+  // Emit aggregated file list if any non-internal files were loaded.
+  // Internal-only files (e.g. requiredFilesInternal templates) are loaded
+  // for prompt variable substitution but shouldn't appear in the UI.
+  const visibleFiles = allLoadedFiles.filter((f) => !f.internal);
+  if (visibleFiles.length > 0) {
+    logger.fileList(visibleFiles);
   }
 
   return userVars;
