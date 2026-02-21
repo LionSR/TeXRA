@@ -666,10 +666,9 @@ Remove old log path. Winston, VSCodeTransport, old bus emits, and old frontend l
 | File | Change |
 |------|--------|
 | `src/logger/AgentLogger.ts` | Remove Winston delegation. Remove `createStream` 100ms throttle. Remove `startGroup` 50ms `delay()`. `emitContextState` replaces `logContextState`. Add temporary `bus.emit('addTaskGroup')` / `bus.emit('updateTaskGroup')` in `startGroup()` / `endGroup()` (removed in Phase 3). Remove `addLogMessage` / `updateLogMessage` bus imports. |
-| `src/progressView/events/LogEventHandlers.ts` | Remove — WebviewBridge handles notification |
-| `src/progressView/events/ProgressEventHandler.ts` | Remove log-related event subscriptions (`addLogMessage`, `updateLogMessage`, `updateContextState`). `WebviewUpdater` retained for non-log messages. |
+| `src/progressView/events/ProgressEventHandler.ts` | Remove inline `addLogMessage`, `updateLogMessage`, `updateContextState` handlers from the unified `registerHandlers` call. `WebviewUpdater` retained for non-log messages. |
 | `src/eventBus/ProgressEventBus.ts` | Remove `addLogMessage` / `updateLogMessage` / `updateContextState` event types |
-| `src/progressView/managers/WebviewUpdater.ts` | Remove `appendLogMessage` / `updateLogMessage` / `sendStreamContent` / `updateContextState` methods. Keep all non-log methods. |
+| `src/progressView/managers/WebviewUpdater.ts` | Remove `appendLogMessage` / `updateLogMessage` / `updateContextState` methods. Strip log fields from `sendSyncStreamContent`. Keep all non-log methods. |
 
 **Files removed:**
 | File | Reason |
@@ -691,9 +690,9 @@ Remove old log path. Winston, VSCodeTransport, old bus emits, and old frontend l
 **Files modified:**
 | File | Change |
 |------|--------|
-| `src/progressView/frontend/slices/logSlice.ts` | Remove old `APPEND_LOG` / `UPDATE_LOG` / `UPDATE_LOGS` handlers and `pendingLogUpdates` OOO buffering |
+| `src/progressView/frontend/slices/logSlice.ts` | Remove old `APPEND_LOG` / `UPDATE_LOG` handlers, `pendingLogUpdates` Map, `clearPendingLogUpdatesForStream`/`clearAllPendingLogUpdates` helpers, and `applyLogUpdate` shared function |
 | `src/progressView/frontend/store.ts` | Add `generation` to `StreamLogs`, remove array spread |
-| `src/progressView/frontend/slices/syncSlice.ts` | Simplify — WebviewBridge handles hydration |
+| `src/progressView/frontend/slices/syncSlice.ts` | Rewrite — `SYNC_STREAM_CONTENT` no longer delegates to `applyLogUpdate`; WebviewBridge.syncStream handles log hydration, sync handler only handles todos/follow-ups/instruction/badges |
 
 ### Phase 3: Task Groups as Store Entries
 
@@ -710,7 +709,8 @@ Remove old log path. Winston, VSCodeTransport, old bus emits, and old frontend l
 |------|--------|
 | `src/eventBus/StreamEventQueue.ts` | Remove entirely |
 | `src/eventBus/ProgressEventBus.ts` | Remove task group event types |
-| `src/progressView/events/ProgressEventHandler.ts` | Remove task group handling + buffering |
+| `src/progressView/events/ProgressEventHandler.ts` | Remove inline `addTaskGroup` / `updateTaskGroup` handlers, `pendingTaskGroups` buffer, `bufferTaskGroupForReplay`/`replayPendingTaskGroups`/`clearPendingTaskGroups`/`clearAllPendingTaskGroups` methods, and `streamEventQueue` import |
+| `src/progressView/frontend/slices/taskSlice.ts` | Remove `ADD_TASK_GROUP` / `UPDATE_TASK_GROUP` handlers (task groups now derived from `LOG_DELTA` entries) |
 
 ### Phase 4: Cleanup
 
@@ -779,7 +779,7 @@ createRoundStage: (roundIndex) => {
 
 ## What Stays Unchanged
 
-- **Active-stream optimization**: Only the active stream gets deltas sent to the frontend. Inactive streams hydrate on tab switch. This moves from `LogEventHandlers` to `WebviewBridge` but the behavior is identical.
+- **Active-stream optimization**: Only the active stream gets deltas sent to the frontend. Inactive streams hydrate on tab switch. This moves from `ProgressEventHandler`'s inline log handlers to `WebviewBridge` but the behavior is identical.
 - **Non-log events on EventBus**: `updateStreamStatus`, `showRetryRequest`, permission events, todos, usage, badges, follow-ups, etc. continue using the EventBus → `ProgressEventHandler` → `WebviewUpdater` path. These are low-frequency and well-served by push-based pub/sub.
 - **`WebviewUpdater` for non-log messages**: Retained with `sendIfActive` pattern for stream metadata, permissions, todos, usage stats, badges, parent stream updates, etc.
 - **Debounced persistence**: 300ms trailing-edge save pattern moves from `StreamTabsManager` to `StreamLog`.
@@ -887,13 +887,12 @@ These 33 call sites emit non-log events that remain on the EventBus unchanged:
 
 ### bus.on Subscribers — Impact Per Phase
 
-| Subscriber                                                      | Events Consumed                                                                                                                                                                                                        | Phase Impact                                                                                                 |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `ProgressEventHandler` (class-level via `registerAll`)          | `setActiveStream`, `updateStreamStatus`, `setTaskState`, `addTaskGroup`, `updateTaskGroup`, `updateConversationProgress`, `updateActiveSubagents`, `updateActiveProcesses`, `setParentStream`, `extensionDeactivating` | Phase 3: Remove `addTaskGroup` / `updateTaskGroup` subscriptions                                             |
-| `ProgressEventHandler` (domain handlers via `registerHandlers`) | `addLogMessage`, `updateLogMessage`, `addOutputFiles`, `updateMissingOutputs`, `clearMissingOutputs`, `updateStreamUsage`, `updateContextState`, `updateTodos`, `updateQueuedFollowUps`                                | Phase 1: Remove `addLogMessage`, `updateLogMessage`, `updateContextState`. Phase 3: task groups. Rest stays. |
-| `ProgressEventHandler` (UI callbacks via `registerUIEvents`)    | All `show*` / `resolve*` permission events + bypass state events                                                                                                                                                       | No change — stays on EventBus                                                                                |
-| `executionRegistry.ts`                                          | `updateStreamStatus`                                                                                                                                                                                                   | No change                                                                                                    |
-| `extension.ts` (status bar)                                     | `updateStreamStatus`                                                                                                                                                                                                   | No change                                                                                                    |
+| Subscriber                                                          | Events Consumed                                                                                                                                                                                                                                                                                                                                                                                                                           | Phase Impact                                                                                                                                        |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ProgressEventHandler` (unified via single `registerHandlers` call) | All domain events inline: `setActiveStream`, `updateStreamStatus`, `setTaskState`, `addTaskGroup`, `updateTaskGroup`, `updateConversationProgress`, `updateActiveSubagents`, `updateActiveProcesses`, `setParentStream`, `extensionDeactivating`, `addLogMessage`, `updateLogMessage`, `addOutputFiles`, `updateMissingOutputs`, `clearMissingOutputs`, `updateStreamUsage`, `updateContextState`, `updateTodos`, `updateQueuedFollowUps` | Phase 1: Remove `addLogMessage`, `updateLogMessage`, `updateContextState` handlers. Phase 3: Remove `addTaskGroup` / `updateTaskGroup`. Rest stays. |
+| `ProgressEventHandler` (UI callbacks via `registerUIEvents`)        | All `show*` / `resolve*` permission events + bypass state events                                                                                                                                                                                                                                                                                                                                                                          | No change — stays on EventBus                                                                                                                       |
+| `executionRegistry.ts`                                              | `updateStreamStatus`                                                                                                                                                                                                                                                                                                                                                                                                                      | No change                                                                                                                                           |
+| `extension.ts` (status bar)                                         | `updateStreamStatus`                                                                                                                                                                                                                                                                                                                                                                                                                      | No change                                                                                                                                           |
 
 ### Files That Import `bus` — Removal Schedule
 
@@ -931,32 +930,31 @@ These 33 call sites emit non-log events that remain on the EventBus unchanged:
 
 ### WebviewUpdater Methods — Removal Schedule
 
-| Method                                     | Purpose                           | Phase                                       |
-| ------------------------------------------ | --------------------------------- | ------------------------------------------- |
-| `appendLogMessage()`                       | Push single log entry to frontend | Phase 1: Removed (WebviewBridge)            |
-| `updateLogMessage()`                       | Push log update to frontend       | Phase 1: Removed (WebviewBridge)            |
-| `sendStreamContent()`                      | Full log hydration on tab switch  | Phase 1: Removed (WebviewBridge.syncStream) |
-| `updateContextState()`                     | Push context utilization          | Phase 1: Removed (store entry)              |
-| `updateTaskGroup()`                        | Push task group updates           | Phase 3: Removed (store entry)              |
-| `sendTaskGroups()`                         | Full task group hydration         | Phase 3: Removed (WebviewBridge.syncStream) |
-| `appendTaskGroup()`                        | Push new task group               | Phase 3: Removed (store entry)              |
-| `updateStreamStatus()`                     | Push stream status change         | **Stays**                                   |
-| `sendStreamMetadata()`                     | Push stream tab metadata          | **Stays**                                   |
-| `updateTodos()` / `sendTodos()`            | Push todo list                    | **Stays**                                   |
-| `sendPermission()` / `resolvePermission()` | Push permission cards             | **Stays**                                   |
-| `updateBadge()` / other badge methods      | Push notification badges          | **Stays**                                   |
+| Method                                     | Purpose                           | Phase                                                                                                    |
+| ------------------------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `appendLogMessage()`                       | Push single log entry to frontend | Phase 1: Removed (WebviewBridge)                                                                         |
+| `updateLogMessage()`                       | Push log update to frontend       | Phase 1: Removed (WebviewBridge)                                                                         |
+| `sendSyncStreamContent()` (log portions)   | Full log hydration on tab switch  | Phase 1: Log fields removed (WebviewBridge.syncStream); non-log fields (todos, badges, instruction) stay |
+| `updateContextState()`                     | Push context utilization          | Phase 1: Removed (store entry)                                                                           |
+| `updateTaskGroup()`                        | Push task group updates           | Phase 3: Removed (store entry)                                                                           |
+| `addTaskGroup()`                           | Push new task group               | Phase 3: Removed (store entry)                                                                           |
+| `updateStreamStatus()`                     | Push stream status change         | **Stays**                                                                                                |
+| `sendStreamMetadata()`                     | Push stream tab metadata          | **Stays**                                                                                                |
+| `updateTodos()` / `sendTodos()`            | Push todo list                    | **Stays**                                                                                                |
+| `sendPermission()` / `resolvePermission()` | Push permission cards             | **Stays**                                                                                                |
+| `updateBadge()` / other badge methods      | Push notification badges          | **Stays**                                                                                                |
 
 ### Frontend Handlers — Removal Schedule
 
-| Handler               | Slice          | Phase                            |
-| --------------------- | -------------- | -------------------------------- |
-| `APPEND_LOG`          | `logSlice.ts`  | Phase 2: Replaced by `LOG_DELTA` |
-| `UPDATE_LOG`          | `logSlice.ts`  | Phase 2: Replaced by `LOG_DELTA` |
-| `UPDATE_LOGS`         | `logSlice.ts`  | Phase 2: Replaced by `LOG_DELTA` |
-| `SYNC_STREAM_CONTENT` | `syncSlice.ts` | Phase 2: Replaced by `LOG_DELTA` |
-| `ADD_TASK_GROUP`      | `taskSlice.ts` | Phase 3: Merged into `LOG_DELTA` |
-| `UPDATE_TASK_GROUP`   | `taskSlice.ts` | Phase 3: Merged into `LOG_DELTA` |
-| `SYNC_TASK_GROUPS`    | `syncSlice.ts` | Phase 3: Merged into `LOG_DELTA` |
+| Handler               | Slice          | Phase                                                               |
+| --------------------- | -------------- | ------------------------------------------------------------------- |
+| `APPEND_LOG`          | `logSlice.ts`  | Phase 2: Replaced by `LOG_DELTA`                                    |
+| `UPDATE_LOG`          | `logSlice.ts`  | Phase 2: Replaced by `LOG_DELTA`                                    |
+| `UPDATE_LOGS`         | `logSlice.ts`  | Phase 2: Replaced by `LOG_DELTA`                                    |
+| `SYNC_STREAM_CONTENT` | `syncSlice.ts` | Phase 2: Log portion replaced by `LOG_DELTA`; non-log portions stay |
+| `ADD_TASK_GROUP`      | `taskSlice.ts` | Phase 3: Merged into `LOG_DELTA`                                    |
+| `UPDATE_TASK_GROUP`   | `taskSlice.ts` | Phase 3: Merged into `LOG_DELTA`                                    |
+| `UPDATE_TODOS`        | `taskSlice.ts` | **Stays** — non-log event                                           |
 
 ### EventBus Event Types — Removal Schedule
 

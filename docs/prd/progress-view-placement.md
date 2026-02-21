@@ -124,15 +124,15 @@ The toggle is a pair of buttons (or a segmented control) in the view header. The
 
 No user setting. Transitions are automatic and contextual. The toggle is always available for manual switching in addition to these automatic triggers:
 
-| Trigger | Action |
-|---|---|
-| User clicks Execute in main view | Sidebar swaps to progress view; auto-focuses the new stream |
-| User clicks toggle (Setup ↔ Progress) | Sidebar swaps to the selected view |
-| User presses `Ctrl/Cmd+Shift+T` | Sidebar toggles between main and progress view |
-| User clicks pop-out button in progress (sidebar) | Progress opens as editor tab; sidebar reverts to main view; sidebar progress view deactivated |
-| User clicks pop-back button in editor progress | Editor tab closes; sidebar swaps to progress view; sidebar progress view reactivated |
-| User closes editor progress tab (via VS Code ×) | Sidebar remains on main view (no forced swap) |
-| User clicks Execute while progress is in editor mode | Editor progress tab focuses + auto-switches to new stream; sidebar stays on main view |
+| Trigger                                              | Action                                                                                        |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| User clicks Execute in main view                     | Sidebar swaps to progress view; auto-focuses the new stream                                   |
+| User clicks toggle (Setup ↔ Progress)                | Sidebar swaps to the selected view                                                            |
+| User presses `Ctrl/Cmd+Shift+T`                      | Sidebar toggles between main and progress view                                                |
+| User clicks pop-out button in progress (sidebar)     | Progress opens as editor tab; sidebar reverts to main view; sidebar progress view deactivated |
+| User clicks pop-back button in editor progress       | Editor tab closes; sidebar swaps to progress view; sidebar progress view reactivated          |
+| User closes editor progress tab (via VS Code ×)      | Sidebar remains on main view (no forced swap)                                                 |
+| User clicks Execute while progress is in editor mode | Editor progress tab focuses + auto-switches to new stream; sidebar stays on main view         |
 
 ### Stream Tabs in Narrow Sidebar
 
@@ -150,6 +150,7 @@ At editor width (~800px+), stream tabs render at full width with status badges, 
 The view toggle is the left-most element in both views' headers. Pop-out/pop-back buttons appear on the right.
 
 **Main View header** (sidebar):
+
 ```
 ┌──────────────────────────────────┐
 │ [Setup ▾] [Progress]        [⧉] │
@@ -158,9 +159,10 @@ The view toggle is the left-most element in both views' headers. Pop-out/pop-bac
 └──────────────────────────────────┘
 ```
 
-The main view shows a pop-out button (`$(link-external)`) that opens the *progress view* in the editor area (shortcut for: switch to progress + pop out). This is useful when the user wants to monitor progress alongside the setup form.
+The main view shows a pop-out button (`$(link-external)`) that opens the _progress view_ in the editor area (shortcut for: switch to progress + pop out). This is useful when the user wants to monitor progress alongside the setup form.
 
 **Progress View header** (sidebar):
+
 ```
 ┌──────────────────────────────────┐
 │ [Setup] [Progress ▾]        [⧉] │
@@ -168,6 +170,7 @@ The main view shows a pop-out button (`$(link-external)`) that opens the *progre
 ```
 
 **Progress View header** (editor):
+
 ```
 ┌──────────────────────────────────────────────┐
 │ [Setup] [Progress ▾]        [← Back to bar] │
@@ -301,16 +304,16 @@ Both frontends also post a `SWITCH_VIEW` message when the user clicks the toggle
 
 #### Files Modified
 
-| File | Change |
-|---|---|
-| `package.json` | Add `when` clauses to both view declarations; register `texra.toggleView` command and keybinding |
-| `src/extension.ts` | Initialize `texra.activeView` context to `'main'` on activation; register toggle command |
-| `src/commands/agent/executeCommands.ts` | Set context to `'progress'` after execution starts |
-| `src/progressView/ProgressViewProvider.ts` | Add `showInSidebar()` method that sets context to `'progress'` |
-| `src/MainViewProvider.ts` | Add `showInSidebar()` method that sets context to `'main'` |
-| `src/webview/frontend/MainApp.ts` | Add view toggle to header; post `SWITCH_VIEW` message |
-| `src/progressView/frontend/ProgressApp.ts` | Add view toggle to header; post `SWITCH_VIEW` message |
-| `src/shared/schemas/commonViewMessages.ts` | Add `SWITCH_VIEW` to shared inbound message schema |
+| File                                       | Change                                                                                           |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `package.json`                             | Add `when` clauses to both view declarations; register `texra.toggleView` command and keybinding |
+| `src/extension.ts`                         | Initialize `texra.activeView` context to `'main'` on activation; register toggle command         |
+| `src/commands/agent/executeCommands.ts`    | Set context to `'progress'` after execution starts                                               |
+| `src/progressView/ProgressViewProvider.ts` | Add `showInSidebar()` method that sets context to `'progress'`                                   |
+| `src/MainViewProvider.ts`                  | Add `showInSidebar()` method that sets context to `'main'`                                       |
+| `src/webview/frontend/MainApp.ts`          | Add view toggle to header; post `SWITCH_VIEW` message                                            |
+| `src/progressView/frontend/ProgressApp.ts` | Add view toggle to header; post `SWITCH_VIEW` message                                            |
+| `src/shared/schemas/commonViewMessages.ts` | Add `SWITCH_VIEW` to shared inbound message schema                                               |
 
 ### Phase 3: Pop-Out to Editor Area (Exclusive)
 
@@ -439,10 +442,13 @@ Both views share the same toggle pattern — a segmented control (or button pair
 <div class="view-header">
   <div class="view-toggle">
     <button class="active" disabled>Setup</button>
-    <button @click=${this.onSwitchToProgress}>Progress</button>
+    <button @click="${this.onSwitchToProgress}">Progress</button>
   </div>
-  <vscode-button appearance="icon" @click=${this.onPopOutProgress}
-    title="Open progress in editor">
+  <vscode-button
+    appearance="icon"
+    @click="${this.onPopOutProgress}"
+    title="Open progress in editor"
+  >
     <span class="codicon codicon-link-external"></span>
   </vscode-button>
 </div>
@@ -453,11 +459,14 @@ Both views share the same toggle pattern — a segmented control (or button pair
 ```html
 <div class="view-header">
   <div class="view-toggle">
-    <button @click=${this.onSwitchToSetup}>Setup</button>
+    <button @click="${this.onSwitchToSetup}">Setup</button>
     <button class="active" disabled>Progress</button>
   </div>
-  <vscode-button appearance="icon" @click=${this.onPopOut}
-    title="Open in editor">
+  <vscode-button
+    appearance="icon"
+    @click="${this.onPopOut}"
+    title="Open in editor"
+  >
     <span class="codicon codicon-link-external"></span>
   </vscode-button>
 </div>
@@ -468,11 +477,14 @@ Both views share the same toggle pattern — a segmented control (or button pair
 ```html
 <div class="view-header">
   <div class="view-toggle">
-    <button @click=${this.onSwitchToSetup}>Setup</button>
+    <button @click="${this.onSwitchToSetup}">Setup</button>
     <button class="active" disabled>Progress</button>
   </div>
-  <vscode-button appearance="icon" @click=${this.onPopBack}
-    title="Back to sidebar">
+  <vscode-button
+    appearance="icon"
+    @click="${this.onPopBack}"
+    title="Back to sidebar"
+  >
     <span class="codicon codicon-layout-sidebar-right"></span>
   </vscode-button>
 </div>
@@ -488,13 +500,13 @@ The view toggle is a shared Lit component (`<view-toggle>`) used by both `MainAp
 
 #### Files Modified
 
-| File | Change |
-|---|---|
-| `src/shared/components/ViewToggle.ts` | New shared toggle component |
-| `src/webview/frontend/MainApp.ts` | Add view header with toggle and pop-out button |
-| `src/progressView/frontend/ProgressApp.ts` | Add view header with toggle and pop-out/pop-back buttons |
-| `src/progressView/ProgressViewMessageHandler.ts` | Send placement context via `SET_PLACEMENT` |
-| `src/shared/schemas/progressView.ts` | Add placement enum and `SET_PLACEMENT` outbound message |
+| File                                             | Change                                                   |
+| ------------------------------------------------ | -------------------------------------------------------- |
+| `src/shared/components/ViewToggle.ts`            | New shared toggle component                              |
+| `src/webview/frontend/MainApp.ts`                | Add view header with toggle and pop-out button           |
+| `src/progressView/frontend/ProgressApp.ts`       | Add view header with toggle and pop-out/pop-back buttons |
+| `src/progressView/ProgressViewMessageHandler.ts` | Send placement context via `SET_PLACEMENT`               |
+| `src/shared/schemas/progressView.ts`             | Add placement enum and `SET_PLACEMENT` outbound message  |
 
 ## Surface Area
 
@@ -508,31 +520,31 @@ The view toggle is a shared Lit component (`<view-toggle>`) used by both `MainAp
 
 ### Added
 
-| Component | Reason |
-|---|---|
-| `texra.activeView` context key | Controls sidebar view swapping |
-| `texra.toggleView` command + keybinding | Keyboard shortcut for switching views |
-| `SET_PLACEMENT` outbound message | Informs frontend of current location for toolbar rendering |
-| `SWITCH_VIEW` shared inbound message | Frontend toggle posts to backend to swap views |
-| `src/shared/components/ViewToggle.ts` | Shared segmented control component for both views |
+| Component                               | Reason                                                     |
+| --------------------------------------- | ---------------------------------------------------------- |
+| `texra.activeView` context key          | Controls sidebar view swapping                             |
+| `texra.toggleView` command + keybinding | Keyboard shortcut for switching views                      |
+| `SET_PLACEMENT` outbound message        | Informs frontend of current location for toolbar rendering |
+| `SWITCH_VIEW` shared inbound message    | Frontend toggle posts to backend to swap views             |
+| `src/shared/components/ViewToggle.ts`   | Shared segmented control component for both views          |
 
 ### Modified
 
-| File | Nature of Change |
-|---|---|
-| `package.json` | View container restructuring (`secondarySidebar`), `when` clauses, keybinding, engine version bump |
-| `src/extension.ts` | Context key initialization, toggle command registration |
-| `src/progressView/ProgressViewProvider.ts` | Exclusive webview targeting, pop-out/pop-back methods, sidebar swap helpers |
-| `src/progressView/WebviewUpdater.ts` | Exclusive-target mode (single active webview) |
-| `src/progressView/frontend/ProgressApp.ts` | View toggle header, ResizeObserver, pop-out/pop-back messages |
-| `src/progressView/frontend/components/StreamTabs.ts` | Responsive compact variant |
-| `src/progressView/ProgressViewMessageHandler.ts` | New inbound message handlers, placement context |
-| `src/shared/schemas/progressView.ts` | New message types, placement enum |
-| `src/shared/schemas/commonViewMessages.ts` | Add `SWITCH_VIEW` shared inbound message |
-| `src/webview/frontend/MainApp.ts` | View toggle header with pop-out button |
-| `src/commands/progress/progressViewCommands.ts` | Updated pop-out command |
-| `src/commands/agent/executeCommands.ts` | Auto-swap to progress on execute |
-| `src/MainViewProvider.ts` | Sidebar swap helper |
+| File                                                 | Nature of Change                                                                                   |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `package.json`                                       | View container restructuring (`secondarySidebar`), `when` clauses, keybinding, engine version bump |
+| `src/extension.ts`                                   | Context key initialization, toggle command registration                                            |
+| `src/progressView/ProgressViewProvider.ts`           | Exclusive webview targeting, pop-out/pop-back methods, sidebar swap helpers                        |
+| `src/progressView/WebviewUpdater.ts`                 | Exclusive-target mode (single active webview)                                                      |
+| `src/progressView/frontend/ProgressApp.ts`           | View toggle header, ResizeObserver, pop-out/pop-back messages                                      |
+| `src/progressView/frontend/components/StreamTabs.ts` | Responsive compact variant                                                                         |
+| `src/progressView/ProgressViewMessageHandler.ts`     | New inbound message handlers, placement context                                                    |
+| `src/shared/schemas/progressView.ts`                 | New message types, placement enum                                                                  |
+| `src/shared/schemas/commonViewMessages.ts`           | Add `SWITCH_VIEW` shared inbound message                                                           |
+| `src/webview/frontend/MainApp.ts`                    | View toggle header with pop-out button                                                             |
+| `src/commands/progress/progressViewCommands.ts`      | Updated pop-out command                                                                            |
+| `src/commands/agent/executeCommands.ts`              | Auto-swap to progress on execute                                                                   |
+| `src/MainViewProvider.ts`                            | Sidebar swap helper                                                                                |
 
 ### Unchanged
 
