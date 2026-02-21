@@ -1,17 +1,14 @@
 // Shared imports
 import { create } from 'mutative';
-import { sortStreams } from '@shared/streams/streamSort';
 import {
   isToolUseState,
   isWorkflowState,
-  type ProgressState,
   type ToolUseStreamState,
   type WorkflowStreamState,
 } from './store';
 import type {
   OutputFileInfo,
   StreamTabId,
-  StreamTabInfo,
   TaskGroup,
 } from '@shared/schemas';
 
@@ -51,18 +48,6 @@ export function updateNestedRounds<T>(
     ...base,
     [runId]: { ...existingRounds, ...rounds },
   };
-}
-
-/**
- * Get filtered streams based on current filter setting.
- */
-export function getFilteredStreams(state: ProgressState): StreamTabInfo[] {
-  const sorted = sortStreams([...state.streamById.values()], state.streamSort, {
-    getLastActivityTimestamp: (stream) =>
-      state.streamStates.get(stream.name)?.lastTimestamp,
-  });
-  if (state.streamFilter === 'all') return sorted;
-  return sorted.filter((stream) => stream.agentCategory === state.streamFilter);
 }
 
 /** Run group info for the run selector */

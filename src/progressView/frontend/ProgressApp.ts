@@ -16,11 +16,12 @@ import { PersistedState, createWebviewStorage } from '@shared/state';
 // Local imports - shared schemas
 import {
   AgentCategoryFilterSchema,
+  createStreamState,
   type ProgressViewOutboundMessage,
   type StreamTabId,
 } from '@shared/schemas';
 import { getEffectiveRunId } from '@shared/streams/runSelection';
-import { StreamSortSchema } from '@shared/streams/streamSort';
+import { sortStreams, StreamSortSchema } from '@shared/streams/streamSort';
 
 // Local imports - webview commands
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -35,7 +36,6 @@ import {
   type StreamLogs,
   type StreamState,
 } from './store';
-import { getFilteredStreams } from './stateUtils';
 import {
   SignalWatcher,
   signal,
@@ -170,6 +170,7 @@ export class ProgressApp extends ProgressAppBase {
   private toolUseContentRef = createRef<ToolUseStreamContent>();
 
   // --- Selector computeds: extract fields, auto-memoized by Object.is ---
+  private streamById$ = select(this.appState, (s) => s.streamById);
   private streamFilter$ = select(this.appState, (s) => s.streamFilter);
   private streamSort$ = select(this.appState, (s) => s.streamSort);
   private streamStates$ = select(this.appState, (s) => s.streamStates);
@@ -182,10 +183,20 @@ export class ProgressApp extends ProgressAppBase {
 
   // --- Derived computeds: only re-evaluate when selector inputs propagate ---
 
-  /** Filtered + sorted stream list. Re-evaluates when streams, filter, sort, or streamStates change. */
+  /**
+   * Filtered + sorted stream list.
+   * Uses fine-grained selectors so log appends (which only change streamLogs$)
+   * don't trigger recomputation.
+   */
   private filteredStreams$ = combine(
-    [this.appState, this.streamStates$] as const,
-    (state, _states) => getFilteredStreams(state),
+    [this.streamById$, this.streamFilter$, this.streamSort$, this.streamStates$] as const,
+    (streamById, filter, sort, states) => {
+      const sorted = sortStreams([...streamById.values()], sort, {
+        getLastActivityTimestamp: (stream) => states.get(stream.name)?.lastTimestamp,
+      });
+      if (filter === 'all') return sorted;
+      return sorted.filter((stream) => stream.agentCategory === filter);
+    },
   );
 
   private filteredStreamMap$ = new Signal.Computed(
@@ -219,40 +230,49 @@ export class ProgressApp extends ProgressAppBase {
     },
   );
 
-  /** Core active-stream derivation shared by streamContext$ and logContext$. */
-  private activeStreamCore$ = new Signal.Computed(() => {
-    const hasStreams = this.filteredStreams$.get().length > 0;
-    const activeStreamId = this.activeStreamId$.get();
-    const activeStreamInfo = activeStreamId
-      ? (this.filteredStreamMap$.get().get(activeStreamId) ?? null)
-      : null;
+  // --- Fine-grained active-stream selectors ---
+  // These return stable Map entry values (via Mutative structural sharing).
+  // When stream B's state changes, activeStreamState$ still returns stream A's
+  // state (same reference) → Object.is() passes → no downstream propagation.
 
-    if (!activeStreamInfo)
-      return {
-        hasStreams,
-        activeStreamInfo: null as null,
-        streamState: null as null,
-        isToolUse: false,
-        runId: null as string | null,
-      };
+  /** Only changes when active stream switches or stream list changes. */
+  private activeStreamInfo$ = new Signal.Computed(() => {
+    const id = this.activeStreamId$.get();
+    return id ? (this.filteredStreamMap$.get().get(id) ?? null) : null;
+  });
 
-    const streamState = getStreamState(
-      this.appState.get(),
-      activeStreamInfo.name,
-      activeStreamInfo.agentCategory,
+  private hasStreams$ = new Signal.Computed(
+    () => this.filteredStreams$.get().length > 0,
+  );
+
+  /** Only changes when the ACTIVE stream's state changes, not any stream. */
+  private activeStreamState$ = new Signal.Computed(() => {
+    const info = this.activeStreamInfo$.get();
+    if (!info) return null;
+    return (
+      this.streamStates$.get().get(info.name) ??
+      createStreamState(info.agentCategory)
     );
-    const isToolUse = isToolUseState(streamState);
-    const runId = getEffectiveRunId(streamState, { mode: 'fallback' });
+  });
 
-    return { hasStreams, activeStreamInfo, streamState, isToolUse, runId };
+  /** Only changes when the ACTIVE stream's logs change, not any stream. */
+  private activeStreamLogs$ = new Signal.Computed(() => {
+    const info = this.activeStreamInfo$.get();
+    if (!info) return EMPTY_STREAM_LOGS;
+    return this.streamLogs$.get().get(info.name) ?? EMPTY_STREAM_LOGS;
   });
 
   /** Stream context derived from active stream + state. */
   private streamContext$ = new Signal.Computed((): StreamContextValue => {
-    const { hasStreams, activeStreamInfo, streamState, isToolUse, runId } =
-      this.activeStreamCore$.get();
+    const activeStreamInfo = this.activeStreamInfo$.get();
+    const hasStreams = this.hasStreams$.get();
     if (!activeStreamInfo) return { ...EMPTY_STREAM_CONTEXT, hasStreams };
 
+    const streamState = this.activeStreamState$.get();
+    const isToolUse = streamState ? isToolUseState(streamState) : false;
+    const runId = streamState
+      ? getEffectiveRunId(streamState, { mode: 'fallback' })
+      : null;
     const followupOptions =
       this.followupOptions$.get().get(activeStreamInfo.name) ?? null;
 
@@ -268,12 +288,16 @@ export class ProgressApp extends ProgressAppBase {
 
   /** Log context derived from active stream + logs. */
   private logContext$ = new Signal.Computed((): StreamLogContextValue => {
-    const { hasStreams, activeStreamInfo, streamState, isToolUse, runId } =
-      this.activeStreamCore$.get();
+    const activeStreamInfo = this.activeStreamInfo$.get();
+    const hasStreams = this.hasStreams$.get();
     if (!activeStreamInfo) return { ...EMPTY_LOG_CONTEXT, hasStreams };
 
-    const streamLogs =
-      this.streamLogs$.get().get(activeStreamInfo.name) ?? EMPTY_STREAM_LOGS;
+    const streamState = this.activeStreamState$.get();
+    const streamLogs = this.activeStreamLogs$.get();
+    const isToolUse = streamState ? isToolUseState(streamState) : false;
+    const runId = streamState
+      ? getEffectiveRunId(streamState, { mode: 'fallback' })
+      : null;
 
     return {
       logs: streamLogs.logs,

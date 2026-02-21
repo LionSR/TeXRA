@@ -65,6 +65,12 @@ export class ToolUseStreamContent extends LitElement {
   private followUpRef: Ref<FollowUpInput> = createRef();
 
   protected override willUpdate(changedProperties: PropertyValues): void {
+    if (changedProperties.has('streamContext')) {
+      const currentState = this.currentState;
+      this.runGroups = currentState
+        ? getRunGroups(currentState.taskGroups)
+        : [];
+    }
     if (
       changedProperties.has('streamContext') ||
       changedProperties.has('permissionContext')
@@ -73,10 +79,6 @@ export class ToolUseStreamContent extends LitElement {
         this.permissionContext,
         this.streamContext.streamInfo?.name,
       );
-      const currentState = this.currentState;
-      this.runGroups = currentState
-        ? getRunGroups(currentState.taskGroups)
-        : [];
     }
   }
 

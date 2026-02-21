@@ -9,10 +9,12 @@ import { create } from 'mutative';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 import {
-  updateToolUseState,
-  updateWorkflowState,
-  updateParentStreamId,
-} from '../stateUtils';
+  isToolUseState,
+  isWorkflowState,
+  type ToolUseStreamState,
+  type WorkflowStreamState,
+} from '../store';
+import { updateParentStreamId } from '../stateUtils';
 import { applyLogUpdate } from './logSlice';
 import type { HandlerRegistry } from '../messageDispatcher';
 
@@ -23,35 +25,27 @@ export const syncHandlers: HandlerRegistry = {
 
     if (!data.stream || data.action === 'clear') return;
 
-    // 2. Todos and queued follow-ups
-    if (data.todos || data.queuedFollowUps) {
-      updateToolUseState(ctx, data.stream, (prev) =>
-        create(prev, (draft) => {
-          if (data.todos) draft.todos = data.todos;
-          if (data.queuedFollowUps)
-            draft.queuedFollowUps = data.queuedFollowUps;
-        }),
-      );
-    }
+    // 2-4. Consolidate stream state updates into a single create() call
+    const hasTodos = !!(data.todos || data.queuedFollowUps);
+    const hasInstruction = data.instruction !== undefined && !!data.runId;
+    const hasMeta = !!(data.conversationProgress || data.badges);
 
-    // 3. Instruction
-    if (data.instruction !== undefined && data.runId) {
-      updateWorkflowState(ctx, data.stream, (prev) =>
-        create(prev, (draft) => {
-          const runId = data.runId as string;
-          if (data.instruction) {
-            draft.runInstructions[runId] = data.instruction;
-          } else {
-            delete draft.runInstructions[runId];
-          }
-        }),
-      );
-    }
-
-    // 4. Active-stream state (R2: replaces separate syncActiveStreamState messages)
-    if (data.conversationProgress || data.badges) {
+    if (hasTodos || hasInstruction || hasMeta) {
       ctx.setStreamState(data.stream, (prev) =>
         create(prev, (draft) => {
+          if (isToolUseState(prev)) {
+            const d = draft as ToolUseStreamState;
+            if (data.todos) d.todos = data.todos;
+            if (data.queuedFollowUps) d.queuedFollowUps = data.queuedFollowUps;
+          }
+          if (isWorkflowState(prev) && data.instruction !== undefined && data.runId) {
+            const d = draft as WorkflowStreamState;
+            if (data.instruction) {
+              d.runInstructions[data.runId] = data.instruction;
+            } else {
+              delete d.runInstructions[data.runId];
+            }
+          }
           if (data.conversationProgress) {
             draft.conversationProgress = data.conversationProgress;
           }
@@ -64,6 +58,8 @@ export const syncHandlers: HandlerRegistry = {
         }),
       );
     }
+
+    // parentStreamId uses ctx.setState (different target) — stays separate
     if (data.parentStreamId !== undefined) {
       updateParentStreamId(ctx, data.stream as string, data.parentStreamId);
     }
