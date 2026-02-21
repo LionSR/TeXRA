@@ -36,13 +36,13 @@ import { registerCopyContent } from './copyContentStore';
 // Local imports - shared schemas (types)
 import type { FileListEntry } from '@shared/schemas';
 
-/** Build a tool-use section template. */
+/** Build a tool-use section template. Empty label omits the label element. */
 export function buildToolUseSection(
   label: string,
   content: TemplateResult,
 ): TemplateResult {
   // prettier-ignore
-  return html`<div class="tool-use-section"><div class="tool-use-subsection"><span class="tool-use-sublabel">${label}</span>${content}</div></div>`;
+  return html`<div class="tool-use-section"><div class="tool-use-subsection">${label ? html`<span class="tool-use-sublabel">${label}</span>` : nothing}${content}</div></div>`;
 }
 
 // Diff line prefix patterns (longer prefixes first for correct matching)

@@ -181,19 +181,19 @@ export const PROGRESS_VIEW_COMMANDS = {
   // Queued follow-ups
   UPDATE_QUEUED_FOLLOW_UPS: 'updateQueuedFollowUps',
 
+  // Batched content sync (replaces individual UPDATE_LOGS + UPDATE_TODOS + UPDATE_QUEUED_FOLLOW_UPS + UPDATE_INSTRUCTION on tab switch)
+  SYNC_STREAM_CONTENT: 'syncStreamContent',
+
   // Status and files
   UPDATE_STREAM_STATUS: 'updateStreamStatus', // Update single stream's status in tabs
+  SET_ACTIVE_STREAM: 'setActiveStream',
+  UPDATE_CONVERSATION_PROGRESS: 'updateConversationProgress',
+  UPDATE_STREAM_BADGES: 'updateStreamBadges',
+  UPDATE_PARENT_STREAM: 'updateParentStream',
   UPDATE_FILES: 'updateFiles',
   UPDATE_MISSING_OUTPUTS: 'updateMissingOutputs',
-  SHOW_TOOL_EDIT_APPROVAL: 'showToolEditApproval',
-  RESOLVE_TOOL_EDIT_APPROVAL: 'resolveToolEditApproval',
-  UPDATE_TOOL_EDIT_APPROVAL_STATE: 'updateToolEditApprovalState',
-  SHOW_BASH_APPROVAL: 'showBashApproval',
-  RESOLVE_BASH_APPROVAL: 'resolveBashApproval',
-  SHOW_RETRY_REQUEST: 'showRetryRequest',
-  RESOLVE_RETRY_REQUEST: 'resolveRetryRequest',
-  SHOW_AGENT_PROPOSAL: 'showAgentProposal',
-  RESOLVE_AGENT_PROPOSAL: 'resolveAgentProposal',
+  UPDATE_PERMISSION: 'updatePermission',
+  UPDATE_BYPASS: 'updateBypass',
 
   // Usage
   UPDATE_RUN_USAGE: 'updateRunUsage', // Update single run's usage (incremental)
@@ -212,14 +212,10 @@ export const PROGRESS_VIEW_COMMANDS = {
   RESTORE_STATE: 'restoreState',
   SEND_FOLLOW_UP: 'sendFollowUp',
   POLISH_FOLLOW_UP: 'polishFollowUp',
-  FOLLOW_UP_TEXT_POLISHED: 'followUpTextPolished',
-  FOLLOW_UP_TEXT_POLISH_ERROR: 'followUpTextPolishError',
-  FOLLOW_UP_TEXT_TRANSCRIBED: 'followUpTextTranscribed',
+  UPDATE_FOLLOW_UP_TEXT: 'updateFollowUpText',
   START_RECORDING: 'startRecording',
   STOP_RECORDING: 'stopRecording',
-  RECORDING_STOPPED: 'recordingStopped',
-  RECORDING_STARTED: 'recordingStarted',
-  RECORDING_ERROR: 'recordingError',
+  UPDATE_RECORDING: 'updateRecording',
   SHOW_INFORMATION_MESSAGE: 'showInformationMessage',
   OPEN_TASK_STORAGE: 'openTaskStorage',
   TOOL_EDIT_APPROVAL_ACTION: 'toolEditApprovalAction',
@@ -228,7 +224,6 @@ export const PROGRESS_VIEW_COMMANDS = {
   BASH_APPROVAL_ACTION: 'bashApprovalAction',
   RESTORE_PROPOSAL_CONFIG: 'restoreProposalConfig',
   TOGGLE_SUPER_YOLO_BYPASS: 'toggleSuperYoloBypass',
-  UPDATE_SUPER_YOLO_BYPASS_STATE: 'updateSuperYoloBypassState',
 
   // Memory
   OPEN_MEMORY_VIEW: 'openMemoryView',

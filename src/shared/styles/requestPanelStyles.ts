@@ -21,7 +21,7 @@ export const requestPanelStyles: CSSResult = css`
     display: flex;
     align-items: center;
     gap: var(--spacing-medium);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     color: var(--vscode-editor-foreground);
   }
 
@@ -235,7 +235,7 @@ export const requestPanelStyles: CSSResult = css`
     font-family: var(--vscode-editor-font-family);
     font-size: var(--font-size-sm);
     color: var(--vscode-editor-foreground);
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
   }
 
   .retry-request__error {
@@ -321,7 +321,7 @@ export const requestPanelStyles: CSSResult = css`
 
   .workflow-proposal__category-badge {
     font-size: var(--font-size-xs);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     padding: var(--spacing-tiny) 6px;
@@ -342,7 +342,7 @@ export const requestPanelStyles: CSSResult = css`
   .workflow-proposal__agent {
     font-family: var(--vscode-editor-font-family);
     font-size: var(--font-size);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     color: var(--vscode-textLink-foreground);
   }
 
@@ -399,7 +399,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .workflow-proposal__file-label {
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     color: var(--color-text-secondary);
   }
 

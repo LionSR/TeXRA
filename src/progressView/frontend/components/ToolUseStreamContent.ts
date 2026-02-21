@@ -1,25 +1,4 @@
-/**
- * Container component for tool-use agent streams.
- *
- * This component receives a narrowed `ToolUseStreamState` type, eliminating
- * the need for type guards inside the component. It renders:
- * - Stream header with toolbar controls
- * - Request panels for approvals and retry prompts (bash, tool edit, etc.)
- * - Todo list for task tracking
- * - Task group list for log display
- * - Usage panel for context window stats
- * - Follow-up input for user messages
- *
- * Uses memoized getters for derived values - only recomputes when
- * dependencies change.
- *
- * @fires toolbar-command - When toolbar actions are triggered
- * @fires permission-action - When user responds to a permission card
- * @fires followup-change - When follow-up text changes
- * @fires followup-send - When follow-up is submitted
- * @fires followup-polish - When polish button is clicked
- * @fires followup-clear - When clear button is clicked
- */
+/** Container component for tool-use agent streams. */
 
 // Third-party imports
 import {
@@ -34,34 +13,26 @@ import { consume } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
-// Local imports - progress view utilities
+// Local imports - progress view
 import {
   filterPermissionsForStream,
   getRunGroups,
   type RunGroup,
 } from '../stateUtils';
-
-// Local imports - progress view contexts
 import {
+  EMPTY_STREAM_CONTEXT,
   permissionsContext,
   streamStateContext,
   type StreamContextValue,
 } from '../contexts/streamContexts';
-
-// Local imports - progress view events
 import { ProgressEvents } from '../events';
-
-// Local imports - progress view store (type-only)
 import type { ToolUseStreamState } from '../store';
 
-// Local imports - shared schemas
-import type { StreamTabInfo } from '@shared/schemas';
-
-// Local imports - progress view component types
+// Local imports - types
 import type { PermissionState } from './PermissionCard';
 import type { FollowUpInput } from './FollowUpInput';
 
-// Local imports - sibling components
+// Side-effect imports - sibling components
 import './StreamHeader';
 import './RequestPanels';
 import './TodoList';
@@ -80,51 +51,46 @@ export class ToolUseStreamContent extends LitElement {
 
   @consume({ context: streamStateContext, subscribe: true })
   @state()
-  private streamContext?: StreamContextValue;
+  private streamContext: StreamContextValue = EMPTY_STREAM_CONTEXT;
 
   @consume({ context: permissionsContext, subscribe: true })
   @state()
-  private permissionContext?: PermissionState[];
+  private permissionContext: PermissionState[] = [];
 
-  // Memoized derived values - updated in willUpdate() before render().
-  // Not @state(): these are always recomputed when streamContext/permissionContext
-  // change, so they don't need independent reactivity (avoids double-render).
+  // Derived values - recomputed in willUpdate() before render.
+  // Not @state(): always derived from streamContext/permissionContext (avoids double-render).
   private filteredPermissions: PermissionState[] = [];
   private runGroups: RunGroup[] = [];
 
-  /** Ref for FollowUpInput - exposed for parent access */
   private followUpRef: Ref<FollowUpInput> = createRef();
 
   protected override willUpdate(changedProperties: PropertyValues): void {
+    if (changedProperties.has('streamContext')) {
+      const currentState = this.currentState;
+      this.runGroups = currentState
+        ? getRunGroups(currentState.taskGroups)
+        : [];
+    }
     if (
       changedProperties.has('streamContext') ||
       changedProperties.has('permissionContext')
     ) {
-      this.filteredPermissions = this.computeFilteredPermissions();
-      this.runGroups = getRunGroups(this.currentState?.taskGroups ?? []);
+      this.filteredPermissions = filterPermissionsForStream(
+        this.permissionContext,
+        this.streamContext.streamInfo?.name,
+      );
     }
-  }
-
-  private get currentStreamInfo(): StreamTabInfo | null {
-    return this.streamContext?.streamInfo ?? null;
   }
 
   private get currentState(): ToolUseStreamState | null {
     const ctx = this.streamContext;
-    if (!ctx || !ctx.isToolUse || !ctx.streamState) return null;
+    if (!ctx.isToolUse || !ctx.streamState) return null;
     return ctx.streamState as ToolUseStreamState;
-  }
-
-  private computeFilteredPermissions(): PermissionState[] {
-    return filterPermissionsForStream(
-      this.permissionContext ?? [],
-      this.currentStreamInfo?.name,
-    );
   }
 
   override render(): TemplateResult | typeof nothing {
     const currentState = this.currentState;
-    const streamInfo = this.currentStreamInfo;
+    const streamInfo = this.streamContext.streamInfo;
     if (!currentState || !streamInfo) {
       return nothing;
     }
@@ -165,19 +131,11 @@ export class ToolUseStreamContent extends LitElement {
     `;
   }
 
-  /**
-   * Get the FollowUpInput component ref for imperative operations.
-   * Used by parent to apply polished text or focus the input.
-   * @returns The FollowUpInput instance, or undefined if not mounted
-   */
+  /** Get the FollowUpInput ref for imperative operations (e.g., focus, polished text). */
   getFollowUpRef(): FollowUpInput | undefined {
     return this.followUpRef.value;
   }
 
-  /**
-   * Handle focus-complete event from FollowUpInput.
-   * Dispatches event to reset the shouldFocusFollowUp state.
-   */
   private handleFocusComplete(): void {
     this.dispatchEvent(ProgressEvents.followupFocusComplete());
   }

@@ -4,9 +4,9 @@ export const baseBadgeStyles: CSSResult = css`
   .badge {
     display: inline-block;
     padding: var(--spacing-small) var(--spacing-medium);
-    border-radius: var(--border-radius);
+    border-radius: var(--border-radius-medium, 4px);
     font-size: var(--font-size-sm);
-    font-weight: 500;
+    font-weight: var(--font-weight-medium, 500);
   }
 
   .badge--small {

@@ -246,14 +246,31 @@ class StorageFSKVStore implements ExecutionKVStore {
 // Factory
 // ============================================================================
 
-// Cached stores for reuse
+// LRU-capped store cache. StorageFSKVStore is stateless (file-backed),
+// so eviction is lossless — re-creation just makes a new thin wrapper.
+const MAX_STORE_CACHE_SIZE = 50;
 const storeCache = new Map<ExecutionId, ExecutionKVStore>();
 
 export function getExecutionStore(executionId: ExecutionId): ExecutionKVStore {
   const cached = storeCache.get(executionId);
-  if (cached) return cached;
+  if (cached) {
+    // Move to end (most-recently used)
+    storeCache.delete(executionId);
+    storeCache.set(executionId, cached);
+    return cached;
+  }
+
+  if (storeCache.size >= MAX_STORE_CACHE_SIZE) {
+    const oldest = storeCache.keys().next().value;
+    if (oldest !== undefined) storeCache.delete(oldest);
+  }
 
   const store = new StorageFSKVStore(executionId);
   storeCache.set(executionId, store);
   return store;
+}
+
+/** Clear the in-memory store cache. Called during extension deactivation. */
+export function clearStoreCache(): void {
+  storeCache.clear();
 }

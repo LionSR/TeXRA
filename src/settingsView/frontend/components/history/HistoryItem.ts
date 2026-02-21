@@ -266,8 +266,8 @@ export class HistoryItem extends LitElement {
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               icon="reply"
-              label="Restore"
-              title="Restore"
+              label="Setup"
+              title="Setup"
               data-action="restore"
             ></vscode-toolbar-button>
             <vscode-toolbar-button

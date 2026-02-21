@@ -90,7 +90,7 @@ const RESTORE_STATE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.RESTORE_STATE_BTN,
   icon: 'reply',
   command: COMMANDS.RESTORE_STATE,
-  title: 'Restore this configuration to the main view',
+  title: 'Setup this configuration in the main view',
   className: 'restore-button',
   disabled: true,
 });

@@ -19,8 +19,12 @@ import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
  * Base class for Lit-powered webview apps.
  *
  * Handles VS Code message wiring and emits a ready signal on connect.
+ * Generic parameter TMessage is the typed outbound message union from the
+ * backend — subclasses declare the contract so handlers receive typed data
+ * instead of `unknown`.
  */
-export abstract class BaseWebviewApp extends LitElement {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export abstract class BaseWebviewApp<TMessage = any> extends LitElement {
   @provide({ context: themeContext })
   @state()
   protected theme = '';
@@ -38,7 +42,7 @@ export abstract class BaseWebviewApp extends LitElement {
       onSchemaError: (context, error) => this.logSchemaError(context, error),
     });
     if (!handled) {
-      this.handleMessage(event.data);
+      this.handleMessage(event.data as TMessage);
     }
   };
 
@@ -97,7 +101,8 @@ export abstract class BaseWebviewApp extends LitElement {
   }
 
   /**
-   * Handle raw messages posted from the extension host.
+   * Handle typed messages posted from the extension host.
+   * The backend sends TMessage objects via postMessage (structured clone).
    */
-  protected abstract handleMessage(raw: unknown): void;
+  protected abstract handleMessage(message: TMessage): void;
 }

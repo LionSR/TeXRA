@@ -54,19 +54,17 @@ export const StreamTabInfoSchema = z.object({
   agentCategory: AgentCategorySchema,
   hasMultipleOutputs: z.boolean().optional(),
   isRemote: z.boolean().optional(),
-  lastTimestamp: z.number().optional(),
   inputFile: z.string().optional(),
-  creationTimestamp: z.number().optional(),
-  status: StreamStatusSchema.nullish(),
+  creationTimestamp: z.number(),
   executionId: ExecutionIdSchema.optional(),
   parentStreamId: StreamTabIdSchema.optional(),
 });
 export type StreamTabInfo = z.infer<typeof StreamTabInfoSchema>;
 
-export const InstructionMetadataSchema = z.object({
+const InstructionMetadataSchema = z.object({
   showToggle: z.boolean().optional(),
 });
-export type InstructionMetadata = z.infer<typeof InstructionMetadataSchema>;
+type InstructionMetadata = z.infer<typeof InstructionMetadataSchema>;
 
 export const InstructionUpdateSchema = z.object({
   text: z.string(),

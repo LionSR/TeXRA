@@ -7,7 +7,7 @@
 
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { codiconStyles, designTokens, commonViewStyles } from '@shared/styles';
@@ -68,8 +68,8 @@ export class MultiAgentTab extends LitElement {
         border-radius: var(--border-radius);
         cursor: pointer;
         transition:
-          border-color 0.15s ease,
-          background-color 0.15s ease;
+          border-color var(--transition-fast),
+          background-color var(--transition-fast);
       }
 
       .preset-card:hover {
@@ -87,6 +87,32 @@ export class MultiAgentTab extends LitElement {
 
       .preset-card.active {
         border-color: var(--vscode-focusBorder);
+        border-width: var(--border-medium);
+        background-color: color-mix(
+          in srgb,
+          var(--vscode-focusBorder) 8%,
+          var(--vscode-editor-inactiveSelectionBackground)
+        );
+      }
+
+      .preset-active-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-tiny);
+        padding: 1px 6px;
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-medium);
+        color: var(--vscode-focusBorder);
+        background: color-mix(
+          in srgb,
+          var(--vscode-focusBorder) 15%,
+          transparent
+        );
+        border-radius: var(--border-radius-medium, 4px);
+      }
+
+      .preset-active-badge .codicon {
+        font-size: var(--font-size-xs);
       }
 
       .preset-card-header {
@@ -103,7 +129,7 @@ export class MultiAgentTab extends LitElement {
 
       .preset-card-name {
         font-size: var(--font-size-sm);
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         color: var(--vscode-foreground);
         flex: 1;
         min-width: 0;
@@ -203,7 +229,7 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) reliabilitySettings: NumberVscodeSetting[] =
     [];
   @property({ attribute: false }) customPresets: AgentModePreset[] = [];
-  @property({ attribute: false }) activePresetId: string | null = null;
+  @state() private activePresetId: string | null = null;
 
   private handleToggle(event: Event): void {
     const target = event.target as HTMLInputElement | null;
@@ -268,6 +294,11 @@ export class MultiAgentTab extends LitElement {
         <div class="preset-card-header">
           <span class="codicon ${preset.icon} preset-card-icon"></span>
           <span class="preset-card-name">${preset.name}</span>
+          ${isActive
+            ? html`<span class="preset-active-badge">
+                <span class="codicon codicon-check"></span> Active
+              </span>`
+            : nothing}
         </div>
         <p class="preset-card-description">${preset.description}</p>
         <div class="preset-card-agents">
@@ -315,11 +346,6 @@ export class MultiAgentTab extends LitElement {
     return html`
       <div class="multi-agent-container tab-content-container">
         <h3>Mode Presets</h3>
-
-        <p class="text-secondary setting-description">
-          Apply a preset to quickly configure which agents are enabled for your
-          workflow. This updates the Agents tab selection.
-        </p>
 
         <div class="preset-grid">
           ${AGENT_MODE_PRESETS.map((p) => this.renderPresetCard(p, false))}

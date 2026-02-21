@@ -52,6 +52,12 @@ export class InstructionPanel extends LitElement {
         background-color: var(--background-color);
         border-radius: var(--border-radius);
         margin-bottom: var(--spacing-large);
+        box-shadow: 0 1px 4px
+          color-mix(
+            in srgb,
+            var(--vscode-widget-shadow, rgba(0, 0, 0, 0.3)) 50%,
+            transparent
+          );
       }
 
       .instruction-header {
@@ -100,7 +106,7 @@ export class InstructionPanel extends LitElement {
 
       vscode-textarea#instruction::part(control) {
         max-height: var(--height-xlarge);
-        transition: height 0.15s ease;
+        transition: height var(--transition-fast);
       }
 
       .instruction-controls {
