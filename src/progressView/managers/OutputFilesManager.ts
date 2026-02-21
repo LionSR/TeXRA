@@ -2,7 +2,7 @@
  * Manages output files collection with persistence.
  *
  * Internal structure: Map<StreamTabId, Map<StorageKey, OutputFileCollection>>
- * Each OutputFileCollection owns both files AND missing outputs for a single run,
+ * Each OutputFileCollection holds both files AND missing outputs for a single run,
  * eliminating the separate MISSING_OUTPUTS Memento key and the triple-nested Maps.
  *
  * Write-through: when the storageKey is a real ExecutionId (not "__default__"),
@@ -26,7 +26,16 @@ import {
   type MementoStorage,
 } from '@progressView/persistence/PersistentMapManager';
 import { createRoundMapSchema, createRunMapSchema } from '@progressView/persistence/schemaUtils';
-import { OutputFileCollection } from './OutputFileCollection';
+import {
+  type OutputFileCollection,
+  addFiles,
+  setMissing,
+  getKnownPaths,
+  createCollection,
+  isCollectionEmpty,
+  serializeCollection,
+  deserializeCollection,
+} from './OutputFileCollection';
 
 // =============================================================================
 // Legacy deserialization schemas (for loading old Memento data)
@@ -57,7 +66,7 @@ function writeThrough(storageKey: StorageKey, collection: OutputFileCollection):
   if (!isExecutionId(storageKey)) return;
 
   const store = getExecutionStore(storageKey);
-  store.writeOutputFiles(collection.toJSON()).catch((err) => {
+  store.writeOutputFiles(serializeCollection(collection)).catch((err) => {
     logger.warn(`Write-through failed for execution ${storageKey}: ${err}`);
   });
 }
@@ -87,7 +96,7 @@ export class OutputFilesManager extends PersistentMapManager<
     filesByRound: { [key: number]: OutputFileInfo[] },
   ): Promise<void> {
     const collection = this.getOrCreateCollection(stream, storageKey);
-    collection.addFiles(filesByRound);
+    addFiles(collection, filesByRound);
     writeThrough(storageKey, collection);
     await this.save();
   }
@@ -101,7 +110,7 @@ export class OutputFilesManager extends PersistentMapManager<
     filesByRound: { [key: number]: string[] },
   ): Promise<void> {
     const collection = this.getOrCreateCollection(stream, storageKey);
-    collection.setMissing(filesByRound);
+    setMissing(collection, filesByRound);
     writeThrough(storageKey, collection);
     await this.save();
   }
@@ -113,8 +122,8 @@ export class OutputFilesManager extends PersistentMapManager<
 
     let changed = false;
     for (const collection of runMap.values()) {
-      if (collection.hasMissing()) {
-        collection.clearMissing();
+      if (collection.missing.size > 0) {
+        collection.missing.clear();
         changed = true;
       }
     }
@@ -143,9 +152,8 @@ export class OutputFilesManager extends PersistentMapManager<
 
     const result = new Map<string, Map<number, OutputFileInfo[]>>();
     for (const [key, collection] of runMap) {
-      const files = collection.getFiles();
-      if (files.size > 0) {
-        result.set(key, files);
+      if (collection.files.size > 0) {
+        result.set(key, new Map(collection.files));
       }
     }
     return result;
@@ -159,7 +167,7 @@ export class OutputFilesManager extends PersistentMapManager<
     storageKey: StorageKey,
   ): Map<number, OutputFileInfo[]> | undefined {
     const collection = this.items.get(stream)?.get(storageKey);
-    return collection ? collection.getFiles() : undefined;
+    return collection ? new Map(collection.files) : undefined;
   }
 
   /**
@@ -183,7 +191,7 @@ export class OutputFilesManager extends PersistentMapManager<
     for (const key of targetKeys) {
       const collection = runMap.get(key);
       if (!collection) continue;
-      for (const p of collection.getKnownPaths(workspaceOnly)) {
+      for (const p of getKnownPaths(collection, workspaceOnly)) {
         paths.add(p);
       }
     }
@@ -200,9 +208,8 @@ export class OutputFilesManager extends PersistentMapManager<
 
     const result = new Map<string, Map<number, string[]>>();
     for (const [key, collection] of runMap) {
-      const missing = collection.getMissing();
-      if (missing.size > 0) {
-        result.set(key, missing);
+      if (collection.missing.size > 0) {
+        result.set(key, new Map(collection.missing));
       }
     }
     return result;
@@ -227,7 +234,7 @@ export class OutputFilesManager extends PersistentMapManager<
   ): unknown {
     const record: Record<string, unknown> = {};
     for (const [runKey, collection] of value) {
-      record[runKey] = collection.toJSON();
+      record[runKey] = serializeCollection(collection);
     }
     return record;
   }
@@ -255,7 +262,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
     let collection = runMap.get(storageKey);
     if (!collection) {
-      collection = new OutputFileCollection();
+      collection = createCollection();
       runMap.set(storageKey, collection);
     }
     return collection;
@@ -285,15 +292,13 @@ export class OutputFilesManager extends PersistentMapManager<
         for (const [round, paths] of roundMap) {
           missingRecord[round] = paths;
         }
-        collection.setMissing(missingRecord);
+        setMissing(collection, missingRecord);
         merged = true;
       }
     }
 
     if (merged) {
-      // Persist the merged data under OUTPUT_FILES
       await this.save();
-      // Clear the legacy MISSING_OUTPUTS key
       await this.storage.update(
         WorkspaceStateKey.MISSING_OUTPUTS,
         undefined as never,
@@ -307,11 +312,6 @@ export class OutputFilesManager extends PersistentMapManager<
 // Deserialization
 // =============================================================================
 
-/**
- * Deserialize a run map from persistence.
- * Handles both new format (OutputFileCollection JSON) and legacy format
- * (raw round→files records without the { files, missing } wrapper).
- */
 function deserializeRunMap(
   data: unknown,
 ): Map<string, OutputFileCollection> {
@@ -320,8 +320,8 @@ function deserializeRunMap(
   const result = new Map<string, OutputFileCollection>();
   for (const [runKey, value] of Object.entries(data)) {
     if (!isPlainObject(value) && !Array.isArray(value)) continue;
-    const collection = OutputFileCollection.fromJSON(value);
-    if (!collection.isEmpty()) {
+    const collection = deserializeCollection(value);
+    if (!isCollectionEmpty(collection)) {
       result.set(runKey, collection);
     }
   }
