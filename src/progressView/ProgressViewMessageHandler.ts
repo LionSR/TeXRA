@@ -34,6 +34,7 @@ import {
   WORKFLOW_CONTEXT_TEMPLATE,
   type FollowupInstructionVars,
 } from '@progressView/templates/followupInstructionTemplates';
+import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import {
   cleanupAllApprovals,
   cleanupApprovalsForStream,
@@ -155,9 +156,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         ),
       [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: (data) => {
         this.provider.state.streamSortOrder = data.sortBy;
+        this.provider.syncFullView();
       },
       [PROGRESS_VIEW_COMMANDS.FILTER_STREAMS]: (data) => {
         this.provider.state.agentCategoryFilter = data.filter;
+        this.provider.syncFullView();
       },
       [PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST]: (data) =>
         this.handleRetryStreamRequest(data),
@@ -342,10 +345,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     await this.provider.state.clearStream(streamId);
 
     if (wasActive) {
-      // Pick next active from remaining streams
-      const remainingStreams = [...this.provider.state.streamLogs.keys()];
+      // Pick next active from remaining streams, respecting the current filter
+      const filtered = buildStreamInfos(
+        this.provider.state,
+        this.provider.state.agentCategoryFilter,
+      );
       this.provider.state.activeStream =
-        (remainingStreams[0] as StreamTabId) ?? ('' as StreamTabId);
+        this.provider.state.pickValidActiveStream(
+          filtered.map((s) => s.name),
+        );
     }
 
     // Lightweight sync for dual-webview (frontend DELETE_STREAM handler is idempotent)
