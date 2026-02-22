@@ -90,6 +90,7 @@ export class UsagePanel extends LitElement {
       }
 
       .context-gauge__fill {
+        display: block;
         height: 100%;
         border-radius: 3px;
         transition: width var(--transition-slow);
