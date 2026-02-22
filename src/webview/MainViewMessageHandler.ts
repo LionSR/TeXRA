@@ -102,7 +102,11 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
             this.viewName,
           );
         }
-        return safeExecuteCommand('texra.showProgressView', [], this.viewName);
+        return safeExecuteCommand(
+          'texra.showProgressView',
+          [{ inPlace: true }],
+          this.viewName,
+        );
       },
 
       // Settings messages

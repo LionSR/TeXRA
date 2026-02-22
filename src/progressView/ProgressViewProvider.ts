@@ -444,10 +444,12 @@ export class ProgressViewProvider
     return this._activePlacement === 'editor' && this._panelView !== undefined;
   }
 
-  public async showInSidebar(): Promise<void> {
+  public async showInSidebar(options?: { inPlace?: boolean }): Promise<void> {
     this._activePlacement = 'sidebar';
     await setActiveSidebarView(SIDEBAR_VIEWS.PROGRESS);
-    await vscode.commands.executeCommand('texra.progressView.focus');
+    if (!options?.inPlace) {
+      await vscode.commands.executeCommand('texra.progressView.focus');
+    }
 
     if (this.isActivePlacementReady()) {
       this.syncFullView({ forceRebuild: true });
@@ -455,7 +457,9 @@ export class ProgressViewProvider
     }
   }
 
-  public async showProgressView(): Promise<void> {
+  public async showProgressView(options?: {
+    inPlace?: boolean;
+  }): Promise<void> {
     if (this.isEditorMode()) {
       this.revealEditorPanel();
       if (this.isActivePlacementReady()) {
@@ -463,7 +467,7 @@ export class ProgressViewProvider
       }
       return;
     }
-    await this.showInSidebar();
+    await this.showInSidebar(options);
   }
 
   public revealEditorPanel(): void {
