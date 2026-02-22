@@ -177,13 +177,16 @@ export class TaskGroupList extends LitElement {
     } else if (messagesChanged) {
       // Only messages changed — use Lit's old value to pick incremental path
       if (this.messages.length === prevCount && prevMessages) {
-        // Same length: text-only update (e.g. streaming LOG_DELTA updates).
-        // Propagate fresh message references to cached structures so
-        // render() passes updated objects to repeat()/guard().
+        // Same length: update changed refs (streaming output, status changes).
         this.updateCachedMessageRefs(prevMessages);
       } else if (this.messages.length > prevCount) {
         // Append-only: classify only the new messages incrementally.
         this.appendNewMessages(prevCount);
+        // A LOG_DELTA batch may also contain updates to existing entries
+        // (e.g. tool status → completed). Scan pre-append range for changes.
+        if (prevMessages) {
+          this.updateExistingMessageRefs(prevMessages, prevCount);
+        }
       } else {
         // Messages shrunk (e.g. clear) — full rebuild
         [this.cachedTree, this.cachedUngrouped] = this.buildGroupTree();
@@ -208,6 +211,8 @@ export class TaskGroupList extends LitElement {
         // Append-only: add new ungrouped entries to timeline.
         // Grouped messages are already referenced via tree nodes in timeline entries.
         this.appendToTimeline(prevUngroupedCount);
+        // Also refresh refs for existing timeline entries updated in the same batch.
+        this.updateTimelineMessageRefs();
       } else {
         // Same-length (streaming update): update msg refs on timeline entries in-place.
         // guard([item.msg]) in render() detects new refs.
@@ -257,18 +262,30 @@ export class TaskGroupList extends LitElement {
   /**
    * Replace stale message references in cached structures with fresh ones.
    *
-   * Scans from end (O(1) typical — streaming targets the last message),
-   * with early exit after consecutive unchanged refs (streaming only touches
-   * the tail). Uses groupNodeIndex for O(1) node lookup per changed message.
+   * Full reverse scan — completion status updates can target any position
+   * in the array (not just the tail), so early-exit would miss them.
+   * Reference comparison is O(1) per element, making the full scan cheap.
    */
   private updateCachedMessageRefs(prevMessages: LogMessageData[]): void {
-    let consecutiveMatches = 0;
     for (let i = this.messages.length - 1; i >= 0; i--) {
       if (this.messages[i] !== prevMessages[i]) {
         this.replaceSingleMessage(this.messages[i]);
-        consecutiveMatches = 0;
-      } else if (++consecutiveMatches >= 4) {
-        break;
+      }
+    }
+  }
+
+  /**
+   * Scan entries in the pre-append range [0, upTo) for changed refs.
+   * Called when a LOG_DELTA batch contains both new entries and updates
+   * to existing entries (e.g. tool status in_progress → completed).
+   */
+  private updateExistingMessageRefs(
+    prevMessages: LogMessageData[],
+    upTo: number,
+  ): void {
+    for (let i = upTo - 1; i >= 0; i--) {
+      if (this.messages[i] !== prevMessages[i]) {
+        this.replaceSingleMessage(this.messages[i]);
       }
     }
   }
@@ -425,22 +442,16 @@ export class TaskGroupList extends LitElement {
   }
 
   /**
-   * Update message refs on existing timeline entries for streaming updates.
-   * Scans from end with early exit — streaming only touches the tail.
-   * Uses reverse scan of cachedUngrouped for O(1) typical lookups.
+   * Update message refs on existing timeline entries.
+   * Full scan — status updates can target any position, not just the tail.
    */
   private updateTimelineMessageRefs(): void {
-    let consecutiveMatches = 0;
     for (let i = this.cachedTimeline.length - 1; i >= 0; i--) {
       const item = this.cachedTimeline[i];
       if (!('msg' in item)) continue;
-      // Reverse-scan cachedUngrouped: changed messages are near the end
       const fresh = this.findUngroupedReverse(item.key);
       if (fresh && fresh !== item.msg) {
         (item as { msg: LogMessageData }).msg = fresh;
-        consecutiveMatches = 0;
-      } else if (++consecutiveMatches >= 4) {
-        break;
       }
     }
   }
