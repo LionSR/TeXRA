@@ -19,19 +19,11 @@ import type { ContextState } from '../store';
  */
 const COMPACTION_THRESHOLD = 75;
 
-/**
- * Build a CSS gradient that transitions smoothly from green → amber → red
- * across the filled portion of the gauge, so the color shift feels gradual.
- */
-function buildFillGradient(percent: number): string {
-  const green = 'var(--vscode-testing-iconPassed, #73c991)';
-  const amber = 'var(--vscode-editorWarning-foreground, #cca700)';
-  const red = 'var(--vscode-testing-iconFailed, #f48771)';
-
-  if (percent <= 50) return green;
-  if (percent <= 65) return `linear-gradient(90deg, ${green}, ${amber})`;
-  if (percent <= 80) return `linear-gradient(90deg, ${green} 20%, ${amber})`;
-  return `linear-gradient(90deg, ${green} 10%, ${amber} 50%, ${red})`;
+/** Solid fill color based on context utilization. */
+function fillColor(percent: number): string {
+  if (percent <= 65) return 'var(--vscode-testing-iconPassed, #73c991)';
+  if (percent <= 80) return 'var(--vscode-editorWarning-foreground, #cca700)';
+  return 'var(--vscode-testing-iconFailed, #f48771)';
 }
 
 @customElement('usage-panel')
@@ -221,7 +213,7 @@ export class UsagePanel extends LitElement {
         <span class="context-gauge__track">
           <span
             class="context-gauge__fill"
-            style="width: ${clamped}%; background: ${buildFillGradient(
+            style="width: ${clamped}%; background-color: ${fillColor(
               clamped,
             )}"
           ></span>
