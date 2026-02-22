@@ -5,6 +5,11 @@ import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 
 import { BaseNode, Flow, type Action } from '.';
 
+/** KV key for a flow record. Single source of truth for the prefix. */
+export function flowKey(runId: string): string {
+  return `flow_${runId}`;
+}
+
 interface NodeRecord {
   action?: string;
 }
@@ -114,7 +119,7 @@ export class PersistedFlow<
    * so callers can use it directly without Object.assign.
    */
   protected async stepWithResult(): Promise<StepResult<S>> {
-    const key = `flow:${this.runId}`;
+    const key = flowKey(this.runId);
     const flow = this.cachedRecord ?? (await this.kv.read<FlowRecord>(key));
 
     if (!flow || !Array.isArray(flow.nodes)) {
@@ -178,7 +183,7 @@ export class PersistedFlow<
     start: BaseNode<any, any>,
   ): Promise<PersistedFlow<S, P, Svc>> {
     const effectiveRunId = runId ?? kv.getExecutionId();
-    const flow = await kv.read<FlowRecord>(`flow:${effectiveRunId}`);
+    const flow = await kv.read<FlowRecord>(flowKey(effectiveRunId));
     if (!flow) throw new Error(`flow "${effectiveRunId}" not found`);
     const pf = new PersistedFlow<S, P, Svc>(start, kv, effectiveRunId);
     pf.setParams(flow.params as P);
@@ -189,13 +194,13 @@ export class PersistedFlow<
   async getShared(): Promise<S | undefined> {
     const flow =
       this.cachedRecord ??
-      (await this.kv.read<FlowRecord>(`flow:${this.runId}`));
+      (await this.kv.read<FlowRecord>(flowKey(this.runId)));
     if (flow) this.cachedRecord = flow;
     return flow?.shared as S | undefined;
   }
 
   async setShared(newShared: S): Promise<void> {
-    const key = `flow:${this.runId}`;
+    const key = flowKey(this.runId);
     const flow = this.cachedRecord ?? (await this.kv.read<FlowRecord>(key))!;
     this.cachedRecord = null;
     flow.shared = this.serializeShared(newShared);
@@ -213,7 +218,7 @@ export class PersistedFlow<
    * without embedding loop edges in the graph itself.
    */
   protected async resetNodeHistory(shared: S): Promise<void> {
-    const key = `flow:${this.runId}`;
+    const key = flowKey(this.runId);
     const flow = this.cachedRecord ?? (await this.kv.read<FlowRecord>(key))!;
     this.cachedRecord = null;
     flow.nodes = [];
@@ -227,7 +232,7 @@ export class PersistedFlow<
   }
 
   private async ensureRecord(shared: S): Promise<void> {
-    const key = `flow:${this.runId}`;
+    const key = flowKey(this.runId);
     const existing = await this.kv.read<FlowRecord>(key);
     if (existing) {
       this.cachedRecord = existing;

@@ -10,7 +10,11 @@ import {
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 
-import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
+import {
+  PersistedFlow,
+  flowKey,
+  type FlowRecord,
+} from '@agent/node/persisted-flow';
 
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
@@ -155,7 +159,7 @@ export async function runToolUseFlow<C = unknown>(
     onSetup?.(flowContext);
     let flowRecord: FlowRecord | null = null;
     try {
-      flowRecord = (await kv.read<FlowRecord>(`flow:${executionId}`)) ?? null;
+      flowRecord = (await kv.read<FlowRecord>(flowKey(executionId))) ?? null;
     } catch {
       logger.debug('Resume parse failed, starting fresh');
     }
@@ -164,12 +168,12 @@ export async function runToolUseFlow<C = unknown>(
       const migrationResult = migrateSharedState(flowRecord.shared);
       if (migrationResult === null) {
         logger.warn('Failed to parse flow record shared state, starting fresh');
-        await kv.delete(`flow:${executionId}`);
+        await kv.delete(flowKey(executionId));
         flowRecord = null;
       } else if (migrationResult.migrated) {
         logger.debug('Migrated legacy shared state to flat format');
         flowRecord.shared = migrationResult.data;
-        await kv.write(`flow:${executionId}`, flowRecord);
+        await kv.write(flowKey(executionId), flowRecord);
       }
     }
 
@@ -212,11 +216,11 @@ export async function runToolUseFlow<C = unknown>(
     try {
       const writes: Promise<void>[] = [];
       if (shared.messages.length > 0) {
-        writes.push(kv.write('conversation', shared.messages));
+        writes.push(kv.writeConversation(shared.messages));
       }
       const todos = shared.stateSlices?.workspaceSnapshot?.todos?.todos;
       if (Array.isArray(todos) && todos.length > 0) {
-        writes.push(kv.write('todos', todos));
+        writes.push(kv.writeTodos(todos));
       }
       await Promise.all(writes);
     } catch {
@@ -227,7 +231,7 @@ export async function runToolUseFlow<C = unknown>(
       logger.debug('Flow record preserved for resume after retry cancellation');
     } else {
       try {
-        await kv.delete(`flow:${executionId}`);
+        await kv.delete(flowKey(executionId));
       } catch {
         // Ignore cleanup errors
       }
