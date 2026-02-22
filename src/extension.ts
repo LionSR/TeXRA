@@ -285,12 +285,11 @@ export async function activate(context: vscode.ExtensionContext) {
     statusBarItem,
     vscode.commands.registerCommand('texra.showMainView', showMainView),
     vscode.commands.registerCommand('texra.toggleView', async () => {
-      const currentView = getActiveSidebarView();
-      if (currentView === SIDEBAR_VIEWS.MAIN) {
-        await vscode.commands.executeCommand('texra.showProgressView');
-        return;
-      }
-      await vscode.commands.executeCommand('texra.showMainView');
+      const target =
+        getActiveSidebarView() === SIDEBAR_VIEWS.MAIN
+          ? 'texra.showProgressView'
+          : 'texra.showMainView';
+      await vscode.commands.executeCommand(target);
     }),
     vscode.commands.registerCommand(
       'texra.refreshApiKeyStatus',
@@ -298,10 +297,8 @@ export async function activate(context: vscode.ExtensionContext) {
     ),
   );
 
-  // Wire progress and main view providers together.
-  // MainViewProvider is already registered as a WebviewViewProvider for texra.mainView
-  // in commands.ts. ProgressViewProvider no longer registers its own sidebar view —
-  // it uses MainViewProvider's webview when in sidebar mode.
+  // Wire progress and main view providers together so the sidebar
+  // can switch between launcher and progress content.
   const mainViewProvider = getMainViewProvider();
   if (mainViewProvider) {
     progressViewProvider.setSidebarWebviewGetter(

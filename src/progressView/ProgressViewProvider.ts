@@ -70,9 +70,7 @@ export class ProgressViewProvider
   private _pendingUpdateOptions: { forceRebuild: boolean } | null = null;
   private readonly logger: AgentLogger;
 
-  /** Getter provided by MainViewProvider — returns its webview when in sidebar mode. */
   private _sidebarWebviewGetter?: () => vscode.Webview | undefined;
-  /** Reference to MainViewProvider for mode switching. */
   private _mainViewProvider?: MainViewProvider;
 
   /** TTL-cached model options to avoid redundant async work for rapid proposals. */
@@ -108,10 +106,7 @@ export class ProgressViewProvider
     this.webviewBridge = new WebviewBridge(
       this.state.streamLogs,
       () => [this.getActiveWebview()],
-      () => {
-        const active = this.state.activeStream;
-        return active || null;
-      },
+      () => this.state.activeStream || null,
     );
 
     const canSend = () => this.canSendToWebview();
@@ -219,15 +214,11 @@ export class ProgressViewProvider
     this._mainViewProvider = mvp;
   }
 
-  /** Expose content provider so MainViewProvider can render progress HTML. */
   public getContentProvider(): ProgressViewContentProvider {
     return this.contentProvider;
   }
 
-  /**
-   * Called by MainViewProvider when it receives a message while in progress mode.
-   * Routes to the progress view message handler.
-   */
+  /** Routes a sidebar message to the progress view message handler. */
   public handleSidebarMessage(
     message: unknown,
     view: vscode.WebviewView,
@@ -235,7 +226,6 @@ export class ProgressViewProvider
     void this.messageHandler.handleMessage(message, view);
   }
 
-  /** Called by MainViewProvider when switching away from progress mode. */
   public resetSidebarReady(): void {
     this._sidebarReady = false;
     this._pendingUpdateOptions = null;
@@ -310,9 +300,10 @@ export class ProgressViewProvider
       return;
     }
 
-    const isDarkTheme =
-      vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark;
-    const theme = isDarkTheme ? 'dark' : 'light';
+    const theme =
+      vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
+        ? 'dark'
+        : 'light';
 
     this.webviewUpdater.setPlacement(this._activePlacement);
 
@@ -330,7 +321,6 @@ export class ProgressViewProvider
 
     this._pendingUpdateOptions = null;
 
-    // Send YOLO/Super YOLO bypass state for the active stream
     if (this.canSendToWebview()) {
       this.sendBypassStates(activeStream || ('' as StreamTabId));
     }
@@ -378,7 +368,6 @@ export class ProgressViewProvider
     return this.isActivePlacementReady() && this.webviewUpdater.isAvailable();
   }
 
-  /** Send YOLO / Super YOLO bypass state for a given stream. */
   private sendBypassStates(streamId: StreamTabId): void {
     this.webviewUpdater.updateBypassState(
       streamId,
@@ -505,7 +494,7 @@ export class ProgressViewProvider
 
     this._panelView = vscode.window.createWebviewPanel(
       ProgressViewProvider.viewType + '.panel',
-      'TeXRA ProgressBoard',
+      'TeXRA Progress',
       vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -550,7 +539,6 @@ export class ProgressViewProvider
     super.dispose();
   }
 
-  /** Switch the sidebar back to the main launcher when popping out to an editor panel. */
   private async restoreSidebarToLauncher(): Promise<void> {
     if (this._mainViewProvider) {
       await this._mainViewProvider.switchMode('main');

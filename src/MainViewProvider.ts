@@ -43,10 +43,8 @@ export class MainViewProvider
   private fileWatcher: vscode.FileSystemWatcher | undefined;
   private agentWatcher: vscode.Disposable | undefined;
 
-  // Static flag to track if commands have been registered
   private static commandsRegistered = false;
 
-  // Mode switching support
   private _activeMode: SidebarMode = 'main';
   private _messageDisposable?: vscode.Disposable;
   private _progressViewProvider?: ProgressViewProvider;
@@ -75,7 +73,6 @@ export class MainViewProvider
     }
     MainViewProvider.commandsRegistered = true;
 
-    // Register command asynchronously only if it doesn't already exist
     void vscode.commands.getCommands(true).then((commands) => {
       if (!commands.includes('texra.getWebviewView')) {
         this.context.subscriptions.push(
@@ -88,7 +85,6 @@ export class MainViewProvider
   }
 
   private setupConfigurationWatcher() {
-    // Watch for file configuration changes - only refresh file list
     watchConfig(this.context, ['texra.files'], this.refreshFiles.bind(this));
   }
 
@@ -206,8 +202,7 @@ export class MainViewProvider
       ]),
     };
 
-    // Don't use super.resolveWebviewViewInternal() — we manage message
-    // listener separately via _messageDisposable so it can be swapped on mode switch.
+    // Manage message listener via _messageDisposable so it can be swapped on mode switch.
     this.cleanupView();
     this._view = webviewView;
 
@@ -238,7 +233,6 @@ export class MainViewProvider
       command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
     });
 
-    // Check if there's state to restore (consume it from pending state)
     let pendingData = consumePendingState();
     while (pendingData) {
       const parsed = MainViewPersistedStateSchema.safeParse(pendingData.state);
@@ -284,26 +278,19 @@ export class MainViewProvider
       mode === 'progress' ? SIDEBAR_VIEWS.PROGRESS : SIDEBAR_VIEWS.MAIN,
     );
 
-    // Dispose the current message listener
     this._messageDisposable?.dispose();
     this._messageDisposable = undefined;
 
     if (mode === 'progress') {
-      // Switch to progress view content
       if (!this._progressContentProvider || !this._progressViewProvider) return;
       webviewView.webview.html = this._progressContentProvider.getHtmlContent(
         webviewView.webview,
       );
+      const pvp = this._progressViewProvider;
       this._messageDisposable = webviewView.webview.onDidReceiveMessage(
-        (message) =>
-          this._progressViewProvider!.handleSidebarMessage(
-            message,
-            webviewView,
-          ),
+        (message) => pvp.handleSidebarMessage(message, webviewView),
       );
     } else {
-      // Switch back to main launcher content
-      // Tell progress provider the sidebar is no longer showing progress
       this._progressViewProvider?.resetSidebarReady();
       webviewView.webview.html = this.contentProvider.getHtmlContent(
         webviewView.webview,
@@ -312,8 +299,6 @@ export class MainViewProvider
         (message) => this.messageHandler.handleMessage(message, webviewView),
       );
     }
-    // The new webview will send WEBVIEW_READY which triggers the appropriate
-    // handler to sync state (setupInitialState for main, markWebviewReady for progress).
   }
 
   public async showInSidebar(): Promise<void> {
