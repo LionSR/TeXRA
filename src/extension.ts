@@ -272,11 +272,10 @@ export async function activate(context: vscode.ExtensionContext) {
   const showMainView = async () => {
     const mvp = getMainViewProvider();
     if (mvp) {
-      await mvp.switchMode('main');
-      await vscode.commands.executeCommand('texra.mainView.focus');
+      await mvp.showInSidebar();
       return;
     }
-
+    // Fallback when MainViewProvider is not yet registered
     await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
     await vscode.commands.executeCommand('texra.mainView.focus');
   };

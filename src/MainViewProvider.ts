@@ -111,23 +111,24 @@ export class MainViewProvider
     );
   }
 
+  /** Returns the sidebar webview, but only when in main mode. */
+  private getMainModeView(): vscode.WebviewView | undefined {
+    if (this._activeMode !== 'main') return undefined;
+    return this._view as vscode.WebviewView | undefined;
+  }
+
   /**
    * Refresh both agent and model options.
    * Called when auth state changes (login/logout affects both).
    */
   async refreshOptionsAndView() {
-    if (!this._view || this._activeMode !== 'main') {
-      return;
-    }
-    // Refresh the agent index to pick up any configuration changes
-    // (e.g., tool-use agent overrides)
-    await refresh();
+    const view = this.getMainModeView();
+    if (!view) return;
 
-    // Send delta messages instead of regenerating entire HTML
-    // This preserves webview state and avoids unnecessary DOM recreation
+    await refresh();
     await this.messageHandler.handleMessage(
       { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY },
-      this._view as vscode.WebviewView,
+      view,
     );
   }
 
@@ -136,14 +137,12 @@ export class MainViewProvider
    * Called when agent visibility changes.
    */
   async refreshAgentOptions() {
-    if (!this._view || this._activeMode !== 'main') {
-      return;
-    }
-    // Refresh the agent index to pick up configuration changes
-    await refresh();
+    const view = this.getMainModeView();
+    if (!view) return;
 
+    await refresh();
     const optionsData = await computeAgentOptionsData();
-    this._view.webview.postMessage({
+    view.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       optionsData,
     });
@@ -154,11 +153,11 @@ export class MainViewProvider
    * Called via texra.refreshAllOptions when model selection changes in Settings View.
    */
   async refreshModelOptions() {
-    if (!this._view || this._activeMode !== 'main') {
-      return;
-    }
+    const view = this.getMainModeView();
+    if (!view) return;
+
     const optionsData = await computeModelOptionsData();
-    this._view.webview.postMessage({
+    view.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
       optionsData,
     });
@@ -188,12 +187,13 @@ export class MainViewProvider
   }
 
   private async refreshFiles() {
-    if (this._view && this._activeMode === 'main') {
-      await this.messageHandler.handleMessage(
-        { command: MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES },
-        this._view as vscode.WebviewView,
-      );
-    }
+    const view = this.getMainModeView();
+    if (!view) return;
+
+    await this.messageHandler.handleMessage(
+      { command: MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES },
+      view,
+    );
   }
 
   resolveWebviewView(webviewView: vscode.WebviewView) {
@@ -276,10 +276,8 @@ export class MainViewProvider
    * Swaps HTML and message listener so both bundles share one VS Code view slot.
    */
   public async switchMode(mode: SidebarMode): Promise<void> {
-    const webviewView = this._view as vscode.WebviewView | undefined;
-    if (!webviewView) return;
-
-    if (mode === this._activeMode) return;
+    const webviewView = this.getWebviewView();
+    if (!webviewView || mode === this._activeMode) return;
 
     this._activeMode = mode;
     await setActiveSidebarView(

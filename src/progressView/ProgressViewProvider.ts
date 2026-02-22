@@ -300,7 +300,7 @@ export class ProgressViewProvider
   }
 
   public syncFullView(options?: { forceRebuild?: boolean }): void {
-    if (!this.getActiveWebview() && !this._panelView) return;
+    if (!this.getActiveWebview()) return;
 
     if (!this.isActivePlacementReady()) {
       const currentForce = this._pendingUpdateOptions?.forceRebuild ?? false;
@@ -403,15 +403,11 @@ export class ProgressViewProvider
     if (this._activePlacement === 'editor') {
       return this._panelView?.visible === true;
     }
-    // Sidebar mode: check MainViewProvider's mode and the webview view visibility
-    if (this._mainViewProvider) {
-      const webviewView = this._mainViewProvider.getWebviewView();
-      return (
-        this._mainViewProvider.getActiveMode() === 'progress' &&
-        webviewView?.visible === true
-      );
-    }
-    return false;
+    // Sidebar mode: visible only when MainViewProvider is in progress mode
+    return (
+      this._mainViewProvider?.getActiveMode() === 'progress' &&
+      this._mainViewProvider.getWebviewView()?.visible === true
+    );
   }
 
   public getActiveRunId(stream: StreamTabId): StorageKey | null {
@@ -500,12 +496,7 @@ export class ProgressViewProvider
   public async popOutToEditor(): Promise<void> {
     if (this._panelView) {
       this._activePlacement = 'editor';
-      // Restore sidebar to launcher mode
-      if (this._mainViewProvider) {
-        await this._mainViewProvider.switchMode('main');
-      } else {
-        await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
-      }
+      await this.restoreSidebarToLauncher();
       this.revealEditorPanel();
       this.syncFullView({ forceRebuild: true });
       this.replayPendingPrompts();
@@ -541,12 +532,7 @@ export class ProgressViewProvider
     );
 
     this._activePlacement = 'editor';
-    // Restore sidebar to launcher mode
-    if (this._mainViewProvider) {
-      await this._mainViewProvider.switchMode('main');
-    } else {
-      await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
-    }
+    await this.restoreSidebarToLauncher();
   }
 
   public async popBackToSidebar(): Promise<void> {
@@ -562,6 +548,15 @@ export class ProgressViewProvider
     this.disposePanelResources(true);
     this.webviewBridge.dispose();
     super.dispose();
+  }
+
+  /** Switch the sidebar back to the main launcher when popping out to an editor panel. */
+  private async restoreSidebarToLauncher(): Promise<void> {
+    if (this._mainViewProvider) {
+      await this._mainViewProvider.switchMode('main');
+    } else {
+      await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
+    }
   }
 
   private isActivePlacementReady(): boolean {
@@ -581,10 +576,9 @@ export class ProgressViewProvider
   private isViewActiveTarget(
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): boolean {
-    const placement: ProgressViewPlacement = this.isPanelView(view)
-      ? 'editor'
-      : 'sidebar';
-    return placement === this._activePlacement;
+    return this.isPanelView(view)
+      ? this._activePlacement === 'editor'
+      : this._activePlacement === 'sidebar';
   }
 
   private isPanelView(
