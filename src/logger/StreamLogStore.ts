@@ -170,8 +170,13 @@ export class StreamLogStore {
     if (streamIds.length > 0) {
       const results = await Promise.all(
         streamIds.map(async (streamId) => {
-          const raw = await this.kv.read<unknown[]>(streamId);
-          return [streamId, this.parsePersistedEntries(raw)] as const;
+          try {
+            const raw = await this.kv.read<unknown[]>(streamId);
+            return [streamId, this.parsePersistedEntries(raw)] as const;
+          } catch {
+            log.warn(LOG_TAG, `Skipping corrupt stream log: ${streamId}`);
+            return [streamId, [] as StreamLogEntry[]] as const;
+          }
         }),
       );
 
