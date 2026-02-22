@@ -1260,8 +1260,8 @@
       },
       {
         "command": "texra.toggleView",
-        "key": "ctrl+shift+t",
-        "mac": "cmd+shift+t",
+        "key": "ctrl+alt+t",
+        "mac": "cmd+option+t",
         "when": "focusedView == texra.mainView"
       },
       {

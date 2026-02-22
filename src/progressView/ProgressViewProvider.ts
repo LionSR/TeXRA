@@ -51,7 +51,7 @@ export class ProgressViewProvider
   extends BaseWebviewProvider
   implements IRunStorageService
 {
-  public static readonly viewType = 'texra.progressView';
+  public static readonly viewType = 'texra.progress';
   private static _instance: ProgressViewProvider | undefined;
 
   public readonly state: ProgressViewState;
@@ -560,7 +560,8 @@ export class ProgressViewProvider
     }
     // Only return the sidebar webview when it's actually showing progress content.
     // Otherwise progress messages would be routed to the launcher webview.
-    if (this._mainViewProvider?.getActiveMode() !== 'progress') return undefined;
+    if (this._mainViewProvider?.getActiveMode() !== 'progress')
+      return undefined;
     return this._sidebarWebviewGetter?.();
   }
 
