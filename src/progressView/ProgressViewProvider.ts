@@ -5,10 +5,8 @@ import type { IRunStorageService } from '@agent/runtime/RunStorageService';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
 import {
   BaseWebviewProvider,
-  ensureTeXRAViewsCoLocated,
   getSharedLocalResourceRoots,
   SIDEBAR_VIEWS,
-  TEXRA_VIEW_CONTAINER_COMMAND_ID,
   setActiveSidebarView,
 } from '@common/webview';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -38,14 +36,20 @@ import type {
   ToolEditPermission,
 } from '@shared/schemas';
 
+import type { MainViewProvider } from '../MainViewProvider';
+
 /**
  * Orchestrates the progress view webview with exclusive rendering:
  * sidebar OR editor panel, never both as active targets.
+ *
+ * In sidebar mode, the single `texra.mainView` hosts progress content —
+ * MainViewProvider owns the WebviewView and delegates messages here.
+ *
  * Implements IRunStorageService for agent runtime integration.
  */
 export class ProgressViewProvider
   extends BaseWebviewProvider
-  implements vscode.WebviewViewProvider, IRunStorageService
+  implements IRunStorageService
 {
   public static readonly viewType = 'texra.progressView';
   private static _instance: ProgressViewProvider | undefined;
@@ -58,7 +62,6 @@ export class ProgressViewProvider
   protected readonly contentProvider: ProgressViewContentProvider;
   protected readonly messageHandler: ProgressViewMessageHandler;
 
-  private readonly _viewTitle: string;
   private _sidebarReady = false;
   private _panelReady = false;
   private _panelView?: vscode.WebviewPanel;
@@ -66,6 +69,11 @@ export class ProgressViewProvider
   private _activePlacement: ProgressViewPlacement = 'sidebar';
   private _pendingUpdateOptions: { forceRebuild: boolean } | null = null;
   private readonly logger: AgentLogger;
+
+  /** Getter provided by MainViewProvider — returns its webview when in sidebar mode. */
+  private _sidebarWebviewGetter?: () => vscode.Webview | undefined;
+  /** Reference to MainViewProvider for mode switching. */
+  private _mainViewProvider?: MainViewProvider;
 
   /** TTL-cached model options to avoid redundant async work for rapid proposals. */
   private static readonly MODEL_OPTIONS_TTL_MS = 30_000;
@@ -91,12 +99,8 @@ export class ProgressViewProvider
     'proposalId'
   >;
 
-  constructor(
-    protected readonly context: vscode.ExtensionContext,
-    title: string = 'Tasks',
-  ) {
+  constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
-    this._viewTitle = title;
     this.logger = new AgentLogger('ProgressViewProvider');
 
     this.state = new ProgressViewState();
@@ -203,6 +207,40 @@ export class ProgressViewProvider
     this.logger.debug('ProgressViewProvider initialized');
   }
 
+  // --- Wiring from extension.ts ---
+
+  public setSidebarWebviewGetter(
+    getter: () => vscode.Webview | undefined,
+  ): void {
+    this._sidebarWebviewGetter = getter;
+  }
+
+  public setMainViewProvider(mvp: MainViewProvider): void {
+    this._mainViewProvider = mvp;
+  }
+
+  /** Expose content provider so MainViewProvider can render progress HTML. */
+  public getContentProvider(): ProgressViewContentProvider {
+    return this.contentProvider;
+  }
+
+  /**
+   * Called by MainViewProvider when it receives a message while in progress mode.
+   * Routes to the progress view message handler.
+   */
+  public handleSidebarMessage(
+    message: unknown,
+    view: vscode.WebviewView,
+  ): void {
+    void this.messageHandler.handleMessage(message, view);
+  }
+
+  /** Called by MainViewProvider when switching away from progress mode. */
+  public resetSidebarReady(): void {
+    this._sidebarReady = false;
+    this._pendingUpdateOptions = null;
+  }
+
   /**
    * Load model options and re-send the proposal with the dropdown data.
    * Sent as a second SHOW message — the frontend upserts it over the initial
@@ -252,12 +290,6 @@ export class ProgressViewProvider
     return this._instance;
   }
 
-  protected override cleanupView(): void {
-    super.cleanupView();
-    this._sidebarReady = false;
-    this._pendingUpdateOptions = null;
-  }
-
   private setupWebviewContent(
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): vscode.Disposable {
@@ -267,38 +299,8 @@ export class ProgressViewProvider
     );
   }
 
-  public resolveWebviewView(webviewView: vscode.WebviewView): void {
-    this._sidebarReady = false;
-    this._pendingUpdateOptions = null;
-
-    webviewView.webview.options = {
-      enableScripts: true,
-      enableCommandUris: true,
-      localResourceRoots: getSharedLocalResourceRoots(
-        this.context,
-        'progressView',
-      ),
-    };
-    webviewView.title = this._viewTitle;
-
-    this.cleanupView();
-    this._view = webviewView;
-
-    this._viewDisposables.push(
-      this.setupWebviewContent(webviewView),
-      webviewView.onDidChangeVisibility(() => {
-        if (webviewView.visible) {
-          this.syncFullView();
-        }
-      }),
-      webviewView.onDidDispose(this.cleanupView.bind(this)),
-    );
-    // No syncFullView here — the webview JS hasn't loaded yet.
-    // markWebviewReady() handles the initial sync when WEBVIEW_READY fires.
-  }
-
   public syncFullView(options?: { forceRebuild?: boolean }): void {
-    if (!this._view && !this._panelView) return;
+    if (!this.getActiveWebview() && !this._panelView) return;
 
     if (!this.isActivePlacementReady()) {
       const currentForce = this._pendingUpdateOptions?.forceRebuild ?? false;
@@ -398,7 +400,18 @@ export class ProgressViewProvider
   }
 
   public isViewVisible(): boolean {
-    return this._view?.visible === true || this._panelView?.visible === true;
+    if (this._activePlacement === 'editor') {
+      return this._panelView?.visible === true;
+    }
+    // Sidebar mode: check MainViewProvider's mode and the webview view visibility
+    if (this._mainViewProvider) {
+      const webviewView = this._mainViewProvider.getWebviewView();
+      return (
+        this._mainViewProvider.getActiveMode() === 'progress' &&
+        webviewView?.visible === true
+      );
+    }
+    return false;
   }
 
   public getActiveRunId(stream: StreamTabId): StorageKey | null {
@@ -447,12 +460,16 @@ export class ProgressViewProvider
   }
 
   public async showInSidebar(options?: { inPlace?: boolean }): Promise<void> {
-    await ensureTeXRAViewsCoLocated();
     this._activePlacement = 'sidebar';
-    await setActiveSidebarView(SIDEBAR_VIEWS.PROGRESS);
-    await vscode.commands.executeCommand(TEXRA_VIEW_CONTAINER_COMMAND_ID);
-    if (!options?.inPlace) {
-      await vscode.commands.executeCommand('texra.progressView.focus');
+
+    if (this._mainViewProvider) {
+      await this._mainViewProvider.switchMode('progress');
+      if (!options?.inPlace) {
+        await vscode.commands.executeCommand('texra.mainView.focus');
+      }
+    } else {
+      // Fallback: just set context key
+      await setActiveSidebarView(SIDEBAR_VIEWS.PROGRESS);
     }
 
     if (this.isActivePlacementReady()) {
@@ -483,7 +500,12 @@ export class ProgressViewProvider
   public async popOutToEditor(): Promise<void> {
     if (this._panelView) {
       this._activePlacement = 'editor';
-      await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
+      // Restore sidebar to launcher mode
+      if (this._mainViewProvider) {
+        await this._mainViewProvider.switchMode('main');
+      } else {
+        await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
+      }
       this.revealEditorPanel();
       this.syncFullView({ forceRebuild: true });
       this.replayPendingPrompts();
@@ -519,7 +541,12 @@ export class ProgressViewProvider
     );
 
     this._activePlacement = 'editor';
-    await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
+    // Restore sidebar to launcher mode
+    if (this._mainViewProvider) {
+      await this._mainViewProvider.switchMode('main');
+    } else {
+      await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
+    }
   }
 
   public showProgressViewAsPanel(): void {
@@ -551,7 +578,8 @@ export class ProgressViewProvider
     if (this._activePlacement === 'editor') {
       return this._panelView?.webview;
     }
-    return this._view?.webview;
+    // Sidebar mode: use the getter from MainViewProvider
+    return this._sidebarWebviewGetter?.();
   }
 
   private isViewActiveTarget(

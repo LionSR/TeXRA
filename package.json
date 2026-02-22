@@ -1148,16 +1148,7 @@
           "type": "webview",
           "id": "texra.mainView",
           "name": "TeXRA",
-          "contextualTitle": "TeXRA",
-          "when": "texra.activeView != 'progress'"
-        },
-        {
-          "type": "webview",
-          "id": "texra.progressView",
-          "name": "TeXRA: Progress",
-          "contextualTitle": "Progress",
-          "icon": "$(server-process)",
-          "when": "texra.activeView != 'main'"
+          "contextualTitle": "TeXRA"
         }
       ]
     },
@@ -1192,32 +1183,32 @@
       "view/title": [
         {
           "command": "texra.indentTeX",
-          "when": "view == texra.progressView",
+          "when": "view == texra.mainView && texra.activeView == 'progress'",
           "group": "navigation@1"
         },
         {
           "command": "texra.cleanOutput",
-          "when": "view == texra.progressView",
+          "when": "view == texra.mainView && texra.activeView == 'progress'",
           "group": "navigation@2"
         },
         {
           "command": "texra.cleanBuild",
-          "when": "view == texra.progressView",
+          "when": "view == texra.mainView && texra.activeView == 'progress'",
           "group": "navigation@3"
         },
         {
           "command": "texra.showDashboard",
-          "when": "view == texra.progressView",
+          "when": "view == texra.mainView && texra.activeView == 'progress'",
           "group": "navigation@4"
         },
         {
           "command": "texra.mainView.reset",
-          "when": "view == texra.mainView",
+          "when": "view == texra.mainView && texra.activeView != 'progress'",
           "group": "navigation@0"
         },
         {
           "command": "texra.showDashboard",
-          "when": "view == texra.mainView",
+          "when": "view == texra.mainView && texra.activeView != 'progress'",
           "group": "navigation@1"
         }
       ],
@@ -1271,7 +1262,7 @@
         "command": "texra.toggleView",
         "key": "ctrl+shift+t",
         "mac": "cmd+shift+t",
-        "when": "focusedView == texra.mainView || focusedView == texra.progressView"
+        "when": "focusedView == texra.mainView"
       },
       {
         "command": "texra.execute",

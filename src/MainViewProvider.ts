@@ -11,8 +11,7 @@ import { refresh, computeAgentOptionsData } from '@agent/index';
 // Local imports - common
 import {
   BaseWebviewProvider,
-  ensureTeXRAViewsCoLocated,
-  getSharedLocalResourceRoots,
+  getCombinedLocalResourceRoots,
   MAIN_VIEW_COMMANDS,
   SIDEBAR_VIEWS,
   setActiveSidebarView,
@@ -29,6 +28,11 @@ import { debounce } from '@utils/core';
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
 import { MainViewContentProvider } from './webview/MainViewContentProvider';
 
+import type { ProgressViewProvider } from './progressView/ProgressViewProvider';
+import type { ProgressViewContentProvider } from './progressView/ProgressViewContentProvider';
+
+export type SidebarMode = 'main' | 'progress';
+
 export class MainViewProvider
   extends BaseWebviewProvider
   implements vscode.WebviewViewProvider
@@ -41,6 +45,12 @@ export class MainViewProvider
 
   // Static flag to track if commands have been registered
   private static commandsRegistered = false;
+
+  // Mode switching support
+  private _activeMode: SidebarMode = 'main';
+  private _messageDisposable?: vscode.Disposable;
+  private _progressViewProvider?: ProgressViewProvider;
+  private _progressContentProvider?: ProgressViewContentProvider;
 
   // Debounced refresh for agent option changes
   private debouncedRefreshAgentOptions = debounce(
@@ -106,7 +116,7 @@ export class MainViewProvider
    * Called when auth state changes (login/logout affects both).
    */
   async refreshOptionsAndView() {
-    if (!this._view) {
+    if (!this._view || this._activeMode !== 'main') {
       return;
     }
     // Refresh the agent index to pick up any configuration changes
@@ -126,7 +136,7 @@ export class MainViewProvider
    * Called when agent visibility changes.
    */
   async refreshAgentOptions() {
-    if (!this._view) {
+    if (!this._view || this._activeMode !== 'main') {
       return;
     }
     // Refresh the agent index to pick up configuration changes
@@ -144,7 +154,7 @@ export class MainViewProvider
    * Called via texra.refreshAllOptions when model selection changes in Settings View.
    */
   async refreshModelOptions() {
-    if (!this._view) {
+    if (!this._view || this._activeMode !== 'main') {
       return;
     }
     const optionsData = await computeModelOptionsData();
@@ -178,7 +188,7 @@ export class MainViewProvider
   }
 
   private async refreshFiles() {
-    if (this._view) {
+    if (this._view && this._activeMode === 'main') {
       await this.messageHandler.handleMessage(
         { command: MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES },
         this._view as vscode.WebviewView,
@@ -190,12 +200,37 @@ export class MainViewProvider
     webviewView.webview.options = {
       enableScripts: true,
       enableCommandUris: true,
-      localResourceRoots: getSharedLocalResourceRoots(this.context, 'webview'),
+      localResourceRoots: getCombinedLocalResourceRoots(this.context, [
+        'webview',
+        'progressView',
+      ]),
     };
 
-    super.resolveWebviewViewInternal(webviewView);
+    // Don't use super.resolveWebviewViewInternal() — we manage message
+    // listener separately via _messageDisposable so it can be swapped on mode switch.
+    this.cleanupView();
+    this._view = webviewView;
+
+    webviewView.webview.html = this.contentProvider.getHtmlContent(
+      webviewView.webview,
+    );
+
+    this._messageDisposable = webviewView.webview.onDidReceiveMessage(
+      (message) => this.messageHandler.handleMessage(message, webviewView),
+    );
+
+    this._viewDisposables.push(
+      webviewView.onDidDispose(this.cleanupView.bind(this)),
+    );
 
     this.setupInitialState(webviewView);
+  }
+
+  protected override cleanupView(): void {
+    this._messageDisposable?.dispose();
+    this._messageDisposable = undefined;
+    this._activeMode = 'main';
+    super.cleanupView();
   }
 
   private async setupInitialState(webviewView: vscode.WebviewView) {
@@ -221,9 +256,70 @@ export class MainViewProvider
     }
   }
 
+  // --- Mode switching ---
+
+  public setProgressViewProvider(pvp: ProgressViewProvider): void {
+    this._progressViewProvider = pvp;
+    this._progressContentProvider = pvp.getContentProvider();
+  }
+
+  public getActiveMode(): SidebarMode {
+    return this._activeMode;
+  }
+
+  public getWebviewView(): vscode.WebviewView | undefined {
+    return this._view as vscode.WebviewView | undefined;
+  }
+
+  /**
+   * Switch the single sidebar view between 'main' (launcher) and 'progress' content.
+   * Swaps HTML and message listener so both bundles share one VS Code view slot.
+   */
+  public async switchMode(mode: SidebarMode): Promise<void> {
+    const webviewView = this._view as vscode.WebviewView | undefined;
+    if (!webviewView) return;
+
+    if (mode === this._activeMode) return;
+
+    this._activeMode = mode;
+    await setActiveSidebarView(
+      mode === 'progress' ? SIDEBAR_VIEWS.PROGRESS : SIDEBAR_VIEWS.MAIN,
+    );
+
+    // Dispose the current message listener
+    this._messageDisposable?.dispose();
+    this._messageDisposable = undefined;
+
+    if (mode === 'progress') {
+      // Switch to progress view content
+      if (!this._progressContentProvider || !this._progressViewProvider) return;
+      webviewView.webview.html = this._progressContentProvider.getHtmlContent(
+        webviewView.webview,
+      );
+      this._messageDisposable = webviewView.webview.onDidReceiveMessage(
+        (message) =>
+          this._progressViewProvider!.handleSidebarMessage(
+            message,
+            webviewView,
+          ),
+      );
+    } else {
+      // Switch back to main launcher content
+      // Tell progress provider the sidebar is no longer showing progress
+      this._progressViewProvider?.resetSidebarReady();
+      webviewView.webview.html = this.contentProvider.getHtmlContent(
+        webviewView.webview,
+      );
+      this._messageDisposable = webviewView.webview.onDidReceiveMessage(
+        (message) => this.messageHandler.handleMessage(message, webviewView),
+      );
+    }
+    // The new webview will send WEBVIEW_READY which triggers the appropriate
+    // handler to sync state (setupInitialState for main, markWebviewReady for progress).
+  }
+
   public async showInSidebar(): Promise<void> {
-    await ensureTeXRAViewsCoLocated();
-    await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
+    await this.switchMode('main');
     await vscode.commands.executeCommand('texra.mainView.focus');
   }
 }

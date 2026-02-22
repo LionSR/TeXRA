@@ -16,7 +16,6 @@ import { loadAgents } from '@agent/index';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import { toErrorMessage } from '@common/errors';
 import {
-  ensureTeXRAViewsCoLocated,
   getActiveSidebarView,
   SIDEBAR_VIEWS,
   setActiveSidebarView,
@@ -101,7 +100,6 @@ export async function activate(context: vscode.ExtensionContext) {
   dotenv.config({
     path: path.join(workspaceRoot, '.env'),
   });
-  await ensureTeXRAViewsCoLocated();
   await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
 
   // Initialize storage systems
@@ -272,13 +270,13 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   const showMainView = async () => {
-    const mainViewProvider = getMainViewProvider();
-    if (mainViewProvider) {
-      await mainViewProvider.showInSidebar();
+    const mvp = getMainViewProvider();
+    if (mvp) {
+      await mvp.switchMode('main');
+      await vscode.commands.executeCommand('texra.mainView.focus');
       return;
     }
 
-    await ensureTeXRAViewsCoLocated();
     await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
     await vscode.commands.executeCommand('texra.mainView.focus');
   };
@@ -301,14 +299,18 @@ export async function activate(context: vscode.ExtensionContext) {
     ),
   );
 
-  // Register webview providers
-  context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(
-      'texra.progressView',
-      progressViewProvider,
-      { webviewOptions: { retainContextWhenHidden: true } },
-    ),
-  );
+  // Wire progress and main view providers together.
+  // MainViewProvider is already registered as a WebviewViewProvider for texra.mainView
+  // in commands.ts. ProgressViewProvider no longer registers its own sidebar view —
+  // it uses MainViewProvider's webview when in sidebar mode.
+  const mainViewProvider = getMainViewProvider();
+  if (mainViewProvider) {
+    progressViewProvider.setSidebarWebviewGetter(
+      () => mainViewProvider.getWebviewView()?.webview,
+    );
+    progressViewProvider.setMainViewProvider(mainViewProvider);
+    mainViewProvider.setProgressViewProvider(progressViewProvider);
+  }
 
   const welcomeKey = 'texra.welcomeShown';
   if (!context.globalState.get<boolean>(welcomeKey)) {
