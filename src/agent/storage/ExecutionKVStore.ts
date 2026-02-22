@@ -12,6 +12,7 @@ import { z } from 'zod';
 
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
 import { type AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
+import { flowKey } from '@agent/node/persisted-flow';
 import { KVStore } from '@common/storage';
 
 // ============================================================================
@@ -187,7 +188,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
           workspaceSnapshot?: { todos?: { todos?: unknown[] } };
         };
       };
-    }>(`flow_${this.executionId}`);
+    }>(flowKey(this.executionId));
 
     const raw = flow?.shared?.stateSlices?.workspaceSnapshot?.todos?.todos;
     if (!Array.isArray(raw) || raw.length === 0) return [];
@@ -202,7 +203,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     // Fallback: extract from flow blob (backward compat / running executions)
     const flow = await this.read<{
       shared?: { conversation?: unknown[]; messages?: unknown[] };
-    }>(`flow_${this.executionId}`);
+    }>(flowKey(this.executionId));
     return flow?.shared?.conversation ?? flow?.shared?.messages ?? null;
   }
 
