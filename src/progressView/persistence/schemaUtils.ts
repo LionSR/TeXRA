@@ -1,50 +1,6 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - shared utilities
-import { isPlainObject } from '@shared/utils/string';
-
-// =============================================================================
-// Generic Schema Factories for Persistence
-// =============================================================================
-
-/**
- * Factory for creating schemas that transform Record<string, T> to Map<string, T>.
- * Used for deserializing persisted map data with schema validation.
- *
- * @param itemSchema - Zod schema for individual values
- * @returns Schema that parses Record and transforms to Map, or empty Map on failure
- *
- * @example
- * const TaskGroupMapSchema = createRecordToMapSchema(TaskGroupSchema);
- * const result = TaskGroupMapSchema.safeParse(data);
- * // result.data is Map<string, TaskGroup>
- */
-export function createRecordToMapSchema<T>(
-  itemSchema: z.ZodType<T>,
-): z.ZodType<Map<string, T>> {
-  return z
-    .record(z.string(), itemSchema)
-    .transform((record) => new Map(Object.entries(record)))
-    .catch(new Map());
-}
-
-/**
- * Factory for creating schemas that validate arrays with fallback to empty array.
- * Used for deserializing persisted array data with schema validation.
- *
- * @param itemSchema - Zod schema for individual items
- * @returns Schema that parses array, or empty array on failure
- *
- * @example
- * const LogMessagesSchema = createArraySchema(LogMessageDataSchema);
- * const result = LogMessagesSchema.safeParse(data);
- * // result.data is LogMessageData[]
- */
-export function createArraySchema<T>(itemSchema: z.ZodType<T>): z.ZodType<T[]> {
-  return z.array(itemSchema).catch([]);
-}
-
 // =============================================================================
 // Round/Run Map Schema Factories (for nested structures)
 // =============================================================================
@@ -75,65 +31,4 @@ export function createRoundMapSchema<T>(
       }
       return map;
     }) as z.ZodType<Map<number, T[]>>;
-}
-
-/**
- * Factory for creating run map schemas.
- * Format: { runId: { roundNum: items[] } }
- *
- * @param roundMapSchema - Schema for parsing the inner round map structure
- */
-export function createRunMapSchema<T>(
-  roundMapSchema: z.ZodType<Map<number, T[]>>,
-): z.ZodType<Map<string, Map<number, T[]>>> {
-  return z.unknown().transform((data): Map<string, Map<number, T[]>> => {
-    if (!isPlainObject(data)) return new Map();
-
-    const runMap = new Map<string, Map<number, T[]>>();
-    for (const [runId, value] of Object.entries(data)) {
-      if (!isPlainObject(value)) continue;
-      const result = roundMapSchema.safeParse(value);
-      if (result.success && result.data.size > 0) {
-        runMap.set(runId, result.data);
-      }
-    }
-    return runMap;
-  }) as z.ZodType<Map<string, Map<number, T[]>>>;
-}
-
-/**
- * Factory for creating run map schemas for single-value items (not arrays per round).
- * Format: { runId: { field: value } }
- *
- * @param itemSchema - Schema for parsing individual item values
- * @param options.isEmpty - Optional predicate to skip empty/zero values
- */
-export function createSingleValueRunMapSchema<T>(
-  itemSchema: z.ZodType<T>,
-  options?: { isEmpty?: (item: T) => boolean },
-): z.ZodType<Map<string, T>> {
-  const isEmpty = options?.isEmpty;
-
-  return z.unknown().transform((data): Map<string, T> => {
-    if (!isPlainObject(data)) return new Map();
-
-    // Try new format first (per backward-compatibility guidance: new format first)
-    const runMap = new Map<string, T>();
-    for (const [runId, value] of Object.entries(data)) {
-      if (!isPlainObject(value)) continue;
-      const result = itemSchema.safeParse(value);
-      if (result.success && !isEmpty?.(result.data)) {
-        runMap.set(runId, result.data);
-      }
-    }
-    if (runMap.size > 0) return runMap;
-
-    // Fall back to legacy single-value format
-    const legacyResult = itemSchema.safeParse(data);
-    if (legacyResult.success && !isEmpty?.(legacyResult.data)) {
-      return new Map([['default', legacyResult.data]]);
-    }
-
-    return runMap;
-  }) as z.ZodType<Map<string, T>>;
 }
