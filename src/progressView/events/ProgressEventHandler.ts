@@ -149,8 +149,8 @@ export class ProgressEventHandler {
             storageKey,
             usage,
           );
-          if (!ctx.state.getActiveRunId(streamId)) {
-            ctx.state.setActiveRunId(streamId, storageKey);
+          if (!ctx.state.meta.getActiveRunId(streamId)) {
+            ctx.state.meta.setActiveRunId(streamId, storageKey);
           }
           if (accumulated) {
             this.sendIfActive(streamId, () =>
@@ -272,7 +272,7 @@ export class ProgressEventHandler {
     }
 
     if (executionId) {
-      this.state.setExecutionId(streamId, executionId);
+      this.state.meta.setExecutionId(streamId, executionId);
     }
 
     if (isActiveStream) {
@@ -399,7 +399,7 @@ export class ProgressEventHandler {
   private handleSetParentStream(
     data: ProgressEventPayloads['setParentStream'],
   ): void {
-    this.state.setParentStream(data.childStreamId, data.parentStreamId);
+    this.state.meta.setParentStream(data.childStreamId, data.parentStreamId);
 
     if (this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.updateParentStream(
@@ -500,7 +500,7 @@ export class ProgressEventHandler {
           finishedProcessCount: streamState.finishedProcessCount,
         };
       }
-      parentStreamId = this.state.getParentStreamId(stream);
+      parentStreamId = this.state.meta.getParentStreamId(stream);
     }
 
     this.webviewUpdater.sendSyncStreamContent({
@@ -524,10 +524,10 @@ export class ProgressEventHandler {
     extras: import('@progressView/managers/WebviewUpdater').LogContentExtras;
     activeRunId: StorageKey | null;
   } {
-    const activeRunId = this.state.getActiveRunId(stream);
+    const activeRunId = this.state.meta.getActiveRunId(stream);
 
     const runInstructions = Object.fromEntries(
-      this.state.getRunInstructions(stream).entries(),
+      this.state.runInstructions.getAll(stream).entries(),
     );
 
     const runFiles = nestedMapToRecord(this.state.outputFiles.getFiles(stream));
@@ -561,16 +561,18 @@ export class ProgressEventHandler {
     agentCategory?: string;
     runId: StorageKey | null;
   } {
-    const taskState = this.state.getTaskState(stream);
+    const taskState = this.state.meta.getTaskState(stream);
     const category = this.getStreamCategory(stream);
     const runId =
-      runIdHint === undefined ? this.state.getActiveRunId(stream) : runIdHint;
+      runIdHint === undefined
+        ? this.state.meta.getActiveRunId(stream)
+        : runIdHint;
 
     if (!runId) {
       return { instruction: null, runId: null };
     }
 
-    const existingInstruction = this.state.getRunInstruction(stream, runId);
+    const existingInstruction = this.state.runInstructions.get(stream, runId);
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(
       taskState,
       existingInstruction?.timestamp,
@@ -578,9 +580,9 @@ export class ProgressEventHandler {
 
     // Persist instruction
     if (instructionUpdate) {
-      void this.state.setRunInstruction(stream, runId, instructionUpdate);
+      this.state.runInstructions.set(stream, runId, instructionUpdate);
     } else {
-      void this.state.setRunInstruction(stream, runId, null);
+      this.state.runInstructions.set(stream, runId, null);
     }
 
     return {
@@ -628,7 +630,7 @@ export class ProgressEventHandler {
   }
 
   private getStreamCategory(streamId: StreamTabId): AgentCategory | undefined {
-    const taskState = this.state.getTaskState(streamId);
+    const taskState = this.state.meta.getTaskState(streamId);
     return (
       taskState?.agentConfig?.agentCategory ??
       this.state.getStreamHints(streamId).agentCategory

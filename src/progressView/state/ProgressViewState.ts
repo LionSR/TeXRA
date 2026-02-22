@@ -3,17 +3,11 @@ import { z } from 'zod';
 import {
   AgentCategoryFilterSchema,
   ContextStateDataSchema,
-  StorageKeySchema,
-  StorageRecordSchema,
-  StreamTabIdSchema,
-  TaskGroupSchema,
   TodoItemSchema,
   type ActiveChildInfo,
   type AgentCategoryFilter,
   type ConversationProgress,
   type ContextStateData,
-  type ExecutionId,
-  type InstructionUpdate,
   type OutputFileInfo,
   type StorageKey,
   type StreamTabId,
@@ -29,24 +23,23 @@ import {
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
-import { normalizeRunId } from '@common/constants/runIds';
 import { AgentLogger } from '@logger/AgentLogger';
 import { StreamLogStore } from '@logger/StreamLogStore';
-import {
-  TaskState,
-  TaskStateSchema,
-  isToolUseTaskState,
-} from '@logger/TaskState';
+import type { TaskState } from '@logger/TaskState';
 import { OutputFilesManager } from '@progressView/managers/OutputFilesManager';
 import { UsageStatsManager } from '@progressView/managers/UsageStatsManager';
+import { StreamMetaManager } from '@progressView/managers/StreamMetaManager';
+import { RunInstructionsManager } from '@progressView/managers/RunInstructionsManager';
 import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
-import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import {
   getStreamTabStore,
   deleteAllStreamData,
   STREAM_DATA_DIR,
 } from '@progressView/persistence/StreamTabStore';
-import { type StreamTabMeta } from '@progressView/persistence/streamTabSchemas';
+import {
+  needsMigrationFromMemento,
+  migrateFromMemento,
+} from '@progressView/persistence/mementoMigration';
 import { KVStore } from '@common/storage';
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
@@ -59,13 +52,11 @@ export const StreamHintsSchema = z.object({
 
 export type StreamHints = z.infer<typeof StreamHintsSchema>;
 
-/** Consolidated session state per stream. Schema provides defaults via .prefault(). */
-export const StreamSessionStateSchema = z.object({
+/** Ephemeral session state per stream (not persisted). */
+const StreamSessionStateSchema = z.object({
   hints: StreamHintsSchema.prefault({}),
   todos: z.array(TodoItemSchema).prefault([]),
   contextState: ContextStateDataSchema.nullable().prefault(null),
-  activeRunId: StorageKeySchema.nullable().prefault(null),
-  parentStreamId: StreamTabIdSchema.optional(),
 });
 
 type StreamSessionState = z.output<typeof StreamSessionStateSchema>;
@@ -107,18 +98,24 @@ function createExecutionState(
   };
 }
 
-/** Core state management for the progress view. */
+/**
+ * Core state management for the progress view.
+ *
+ * Coordinates five persistence managers (streamLogs, outputFiles, usageStats,
+ * meta, runInstructions) plus ephemeral in-memory state and preferences.
+ */
 export class ProgressViewState {
+  // -- Persistence managers ---------------------------------------------------
   private _streamLogs: StreamLogStore;
   private _outputFiles: OutputFilesManager;
   private _usageStats: UsageStatsManager;
-  private _runInstructions = new Map<
-    StreamTabId,
-    Map<string, InstructionUpdate>
-  >();
+  private _meta: StreamMetaManager;
+  private _runInstructions: RunInstructionsManager;
+
+  // -- Preferences ------------------------------------------------------------
   private _prefs!: PersistedState<ProgressViewPrefs>;
-  private readonly taskStates = new Map<StreamTabId, TaskState>();
-  private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
+
+  // -- Ephemeral state (session-only, not persisted) --------------------------
   private _streamStates = new Map<StreamTabId, StreamExecutionState>();
   private _sessionState = new Map<StreamTabId, StreamSessionState>();
 
@@ -142,7 +139,11 @@ export class ProgressViewState {
     AgentLogger.setStreamLogStore(this._streamLogs);
     this._outputFiles = new OutputFilesManager();
     this._usageStats = new UsageStatsManager();
+    this._meta = new StreamMetaManager();
+    this._runInstructions = new RunInstructionsManager();
   }
+
+  // -- Manager accessors (consistent pattern: consumers access directly) ------
 
   get streamLogs(): StreamLogStore {
     return this._streamLogs;
@@ -155,6 +156,16 @@ export class ProgressViewState {
   get usageStats(): UsageStatsManager {
     return this._usageStats;
   }
+
+  get meta(): StreamMetaManager {
+    return this._meta;
+  }
+
+  get runInstructions(): RunInstructionsManager {
+    return this._runInstructions;
+  }
+
+  // -- Preferences ------------------------------------------------------------
 
   get activeStream(): ActiveStreamId {
     return this._prefs.get('activeStream');
@@ -194,6 +205,8 @@ export class ProgressViewState {
     }
     this._prefs.update({ agentCategoryFilter: filter });
   }
+
+  // -- Ephemeral session state ------------------------------------------------
 
   private getOrCreateSession(stream: StreamTabId): StreamSessionState {
     let state = this._sessionState.get(stream);
@@ -242,27 +255,7 @@ export class ProgressViewState {
     return this._sessionState.get(stream)?.contextState ?? undefined;
   }
 
-  setActiveRunId(stream: StreamTabId, runId: string | null): void {
-    const storageKey = runId ? normalizeRunId(runId) : null;
-    this.getOrCreateSession(stream).activeRunId = storageKey;
-    this.saveStreamMeta(stream);
-  }
-
-  getActiveRunId(stream: StreamTabId): StorageKey | null {
-    return this._sessionState.get(stream)?.activeRunId ?? null;
-  }
-
-  setParentStream(
-    childStreamId: StreamTabId,
-    parentStreamId: StreamTabId,
-  ): void {
-    this.getOrCreateSession(childStreamId).parentStreamId = parentStreamId;
-    this.saveStreamMeta(childStreamId);
-  }
-
-  getParentStreamId(streamId: StreamTabId): StreamTabId | undefined {
-    return this._sessionState.get(streamId)?.parentStreamId;
-  }
+  // -- Ephemeral execution state ----------------------------------------------
 
   getOrCreateStreamState(
     stream: StreamTabId,
@@ -320,53 +313,21 @@ export class ProgressViewState {
     return this._streamLogs.getLastTimestamp(stream);
   }
 
-  getRunInstructions(stream: StreamTabId): Map<string, InstructionUpdate> {
-    return new Map(this._runInstructions.get(stream) ?? []);
-  }
+  // -- Coordinator methods (cross-cutting side effects) -----------------------
 
-  getRunInstruction(
-    stream: StreamTabId,
-    runId: StorageKey,
-  ): InstructionUpdate | undefined {
-    return this._runInstructions.get(stream)?.get(runId);
-  }
-
-  setRunInstruction(
-    stream: StreamTabId,
-    runId: StorageKey,
-    instruction: InstructionUpdate | null,
-  ): void {
-    const existing = this._runInstructions.get(stream) ?? new Map();
-    if (instruction) {
-      existing.set(runId, instruction);
-      this._runInstructions.set(stream, existing);
-    } else {
-      existing.delete(runId);
-      if (existing.size === 0) {
-        this._runInstructions.delete(stream);
-      } else {
-        this._runInstructions.set(stream, existing);
-      }
-    }
-    this.saveRunInstructions(stream);
-  }
-
-  // Task state management
+  /**
+   * Store task state and trigger coordination side effects.
+   * Delegates storage to StreamMetaManager, then updates ephemeral state.
+   */
   setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
-    this.taskStates.set(streamTabId, taskState);
+    this._meta.setTaskState(streamTabId, taskState);
     this.clearStreamHints(streamTabId);
 
     const agentCategory = taskState.agentConfig.agentCategory;
     this.getOrCreateStreamState(streamTabId, agentCategory);
 
     this.resetFinishedChildCounters(streamTabId);
-
-    this.saveStreamMeta(streamTabId);
     this.cleanupToolUseAgentRegistry();
-  }
-
-  getTaskState(streamTabId: StreamTabId): TaskState | undefined {
-    return this.taskStates.get(streamTabId);
   }
 
   getRunOutputFiles(
@@ -384,24 +345,16 @@ export class ProgressViewState {
     return affectedFromLogs;
   }
 
-  setExecutionId(streamTabId: StreamTabId, executionId: ExecutionId): void {
-    this._executionIds.set(streamTabId, executionId);
-    this.saveStreamMeta(streamTabId);
-  }
-
-  getExecutionId(streamTabId: StreamTabId): ExecutionId | undefined {
-    return this._executionIds.get(streamTabId);
-  }
+  // -- Lifecycle --------------------------------------------------------------
 
   async clearStream(stream: StreamTabId): Promise<void> {
     // Clear in-memory state
     this._outputFiles.evict(stream);
     this._usageStats.evict(stream);
-    const removedState = this.taskStates.delete(stream);
-    this._executionIds.delete(stream);
+    this._meta.evict(stream);
+    this._runInstructions.evict(stream);
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
-    this._runInstructions.delete(stream);
 
     if (this._prefs.get('activeStream') === stream) {
       this._prefs.update({
@@ -411,14 +364,9 @@ export class ProgressViewState {
 
     // Delete from disk: stream log file + stream data directory
     const store = getStreamTabStore(stream);
-    await Promise.all([
-      this._streamLogs.delete(stream),
-      store.clear(),
-    ]);
+    await Promise.all([this._streamLogs.delete(stream), store.clear()]);
 
-    if (removedState) {
-      this.cleanupToolUseAgentRegistry();
-    }
+    this.cleanupToolUseAgentRegistry();
   }
 
   async clearAll(): Promise<void> {
@@ -430,64 +378,53 @@ export class ProgressViewState {
     // Clear in-memory state
     this._outputFiles.evictAll();
     this._usageStats.evictAll();
-    this.taskStates.clear();
-    this._executionIds.clear();
+    this._meta.evictAll();
+    this._runInstructions.evictAll();
     this._sessionState.clear();
     this._streamStates.clear();
-    this._runInstructions.clear();
     this._prefs.reset();
 
     // Delete from disk
-    await Promise.all([
-      this._streamLogs.clear(),
-      deleteAllStreamData(),
-    ]);
+    await Promise.all([this._streamLogs.clear(), deleteAllStreamData()]);
 
     this.cleanupToolUseAgentRegistry();
   }
 
   async load(): Promise<void> {
-    this.logger.info(
-      '[Persistence] Starting state load from storage',
-    );
+    this.logger.info('[Persistence] Starting state load from storage');
 
     // Load stream logs first — they define the set of known streams
     await this._streamLogs.load(this.storage);
 
-    // Discover all stream IDs from disk + stream logs
-    const streamIds = await this.discoverStreamIds();
+    // Discover all stream IDs from stream logs
+    const streamIds = this.discoverStreamIds();
 
-    this.logger.info(
-      `[Persistence] Discovered ${streamIds.length} stream(s)`,
-    );
+    this.logger.info(`[Persistence] Discovered ${streamIds.length} stream(s)`);
 
     // Check if we need one-time migration from workspace state
-    const needsMigration = await this.needsMigrationFromMemento(streamIds);
-    if (needsMigration) {
-      await this.migrateFromMemento();
+    const shouldMigrate = await needsMigrationFromMemento(
+      this.storage,
+      streamIds,
+    );
+    if (shouldMigrate) {
+      await migrateFromMemento(
+        this.storage,
+        this._streamLogs.keys(),
+        this.logger,
+      );
       // Re-discover after migration
-      const migratedIds = await this.discoverStreamIds();
-      await Promise.all([
-        this._outputFiles.load(migratedIds),
-        this._usageStats.load(migratedIds),
-      ]);
-      this.loadMetaFromDisk(migratedIds);
+      const migratedIds = this.discoverStreamIds();
+      await this.loadManagers(migratedIds);
     } else {
-      // Normal load from disk
-      await Promise.all([
-        this._outputFiles.load(streamIds),
-        this._usageStats.load(streamIds),
-      ]);
-      await this.loadMetaFromDisk(streamIds);
+      await this.loadManagers(streamIds);
     }
 
     this.logger.info('[Persistence] Managers loaded');
 
     this.validateActiveStream();
+    this.cleanupToolUseAgentRegistry();
 
-    this.logger.info(
-      `[Persistence] State load complete - taskStates: ${this.taskStates.size}, executionIds: ${this._executionIds.size}`,
-    );
+    this.logger.info('[Persistence] State load complete');
   }
 
   /**
@@ -495,6 +432,17 @@ export class ProgressViewState {
    */
   async flush(): Promise<void> {
     await this._streamLogs.flush();
+  }
+
+  // -- Private helpers --------------------------------------------------------
+
+  private async loadManagers(streamIds: StreamTabId[]): Promise<void> {
+    await Promise.all([
+      this._outputFiles.load(streamIds),
+      this._usageStats.load(streamIds),
+      this._meta.load(streamIds),
+      this._runInstructions.load(streamIds),
+    ]);
   }
 
   /** Validate activeStream against available streams after load */
@@ -509,379 +457,13 @@ export class ProgressViewState {
   }
 
   /**
-   * Discover all known stream IDs from both disk and stream logs.
+   * Discover all known stream IDs from stream logs.
    */
-  private async discoverStreamIds(): Promise<StreamTabId[]> {
-    const kv = new KVStore(STREAM_DATA_DIR);
-    // listKeys returns directory names (stream tab IDs) from the streamData dir
-    // But KVStore.listKeys only finds .json files, not subdirectories.
-    // We need to check stream logs as the canonical source, plus any on-disk streams.
-    const logStreams = new Set(this._streamLogs.keys());
-
-    // Try to discover on-disk streams by checking for meta.json files
-    // We rely on stream logs as the source of truth for known streams
-    return [...logStreams] as StreamTabId[];
-  }
-
-  /**
-   * Check if we need one-time migration from workspace state to disk.
-   * Returns true if workspace state has data but disk has no stream data.
-   */
-  private async needsMigrationFromMemento(
-    streamIds: StreamTabId[],
-  ): Promise<boolean> {
-    // If we already have data on disk for any stream, skip migration
-    if (streamIds.length > 0) {
-      const store = getStreamTabStore(streamIds[0]);
-      const meta = await store.readMeta();
-      if (meta) return false;
-    }
-
-    // Check if memento has any of the legacy keys with data
-    const legacyKeys = [
-      WorkspaceStateKey.TASK_STATES,
-      WorkspaceStateKey.OUTPUT_FILES,
-      WorkspaceStateKey.USAGE_STATS,
-      WorkspaceStateKey.EXECUTION_IDS,
-      WorkspaceStateKey.ACTIVE_RUN_IDS,
-      WorkspaceStateKey.PARENT_STREAM_IDS,
-      WorkspaceStateKey.RUN_INSTRUCTIONS,
-      WorkspaceStateKey.MISSING_OUTPUTS,
-    ] as const;
-
-    for (const key of legacyKeys) {
-      const raw = this.storage.get(key);
-      if (raw && typeof raw === 'object' && Object.keys(raw as object).length > 0) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  /**
-   * One-time migration from workspace state (VS Code memento) to disk-backed storage.
-   * Migrates all per-stream data to StreamTabStore, then clears the legacy keys.
-   */
-  private async migrateFromMemento(): Promise<void> {
-    this.logger.info('[Migration] Starting one-time migration from workspace state to disk');
-
-    // Load all legacy data from memento
-    const taskStatesRaw = this.loadRecord(WorkspaceStateKey.TASK_STATES);
-    const executionIdsRaw = this.loadRecord(WorkspaceStateKey.EXECUTION_IDS);
-    const activeRunIdsRaw = this.loadRecord(WorkspaceStateKey.ACTIVE_RUN_IDS);
-    const parentStreamIdsRaw = this.loadRecord(WorkspaceStateKey.PARENT_STREAM_IDS);
-    const runInstructionsRaw = this.loadRecord(WorkspaceStateKey.RUN_INSTRUCTIONS);
-    const outputFilesRaw = this.loadRecord(WorkspaceStateKey.OUTPUT_FILES);
-    const missingOutputsRaw = this.loadRecord(WorkspaceStateKey.MISSING_OUTPUTS);
-    const usageStatsRaw = this.loadRecord(WorkspaceStateKey.USAGE_STATS);
-
-    // Collect all known stream IDs from all sources
-    const allStreamIds = new Set<StreamTabId>();
-    for (const record of [
-      taskStatesRaw,
-      executionIdsRaw,
-      activeRunIdsRaw,
-      parentStreamIdsRaw,
-      runInstructionsRaw,
-      outputFilesRaw,
-      missingOutputsRaw,
-      usageStatsRaw,
-    ]) {
-      for (const key of Object.keys(record)) {
-        // Skip legacy bucket keys
-        if (key === 'workflow' || key === 'toolUse') {
-          const bucket = record[key];
-          if (typeof bucket === 'object' && bucket !== null) {
-            for (const innerKey of Object.keys(bucket as Record<string, unknown>)) {
-              allStreamIds.add(innerKey as StreamTabId);
-            }
-          }
-        } else {
-          allStreamIds.add(key as StreamTabId);
-        }
-      }
-    }
-    // Also include stream log keys
-    for (const key of this._streamLogs.keys()) {
-      allStreamIds.add(key);
-    }
-
-    this.logger.info(
-      `[Migration] Found ${allStreamIds.size} stream(s) to migrate`,
-    );
-
-    // Extract task state entries (handles legacy workflow/toolUse format)
-    const taskStateEntries = this.extractTaskStateEntries(taskStatesRaw);
-
-    // Migrate each stream's data to disk
-    const writes: Promise<void>[] = [];
-    for (const streamId of allStreamIds) {
-      writes.push(
-        this.migrateStreamToStore(streamId, {
-          taskStateEntries,
-          executionIdsRaw,
-          activeRunIdsRaw,
-          parentStreamIdsRaw,
-          runInstructionsRaw,
-          outputFilesRaw,
-          missingOutputsRaw,
-          usageStatsRaw,
-        }),
-      );
-    }
-    await Promise.all(writes);
-
-    // Clear legacy workspace state keys
-    this.logger.info('[Migration] Clearing legacy workspace state keys');
-    await Promise.all([
-      this.storage.update(WorkspaceStateKey.TASK_STATES, undefined as never),
-      this.storage.update(WorkspaceStateKey.EXECUTION_IDS, undefined as never),
-      this.storage.update(WorkspaceStateKey.ACTIVE_RUN_IDS, undefined as never),
-      this.storage.update(WorkspaceStateKey.PARENT_STREAM_IDS, undefined as never),
-      this.storage.update(WorkspaceStateKey.RUN_INSTRUCTIONS, undefined as never),
-      this.storage.update(WorkspaceStateKey.OUTPUT_FILES, undefined as never),
-      this.storage.update(WorkspaceStateKey.MISSING_OUTPUTS, undefined as never),
-      this.storage.update(WorkspaceStateKey.USAGE_STATS, undefined as never),
-    ]);
-
-    this.logger.info('[Migration] Migration complete');
-  }
-
-  private async migrateStreamToStore(
-    streamId: StreamTabId,
-    data: {
-      taskStateEntries: [string, unknown][];
-      executionIdsRaw: Record<string, unknown>;
-      activeRunIdsRaw: Record<string, unknown>;
-      parentStreamIdsRaw: Record<string, unknown>;
-      runInstructionsRaw: Record<string, unknown>;
-      outputFilesRaw: Record<string, unknown>;
-      missingOutputsRaw: Record<string, unknown>;
-      usageStatsRaw: Record<string, unknown>;
-    },
-  ): Promise<void> {
-    const store = getStreamTabStore(streamId);
-    const writes: Promise<void>[] = [];
-
-    // Meta: taskState + executionId + activeRunId + parentStreamId
-    const taskStateEntry = data.taskStateEntries.find(
-      ([key]) => key === streamId,
-    );
-    const taskState = taskStateEntry
-      ? TaskStateSchema.safeParse(taskStateEntry[1])
-      : null;
-    const executionId = data.executionIdsRaw[streamId];
-    const activeRunId = data.activeRunIdsRaw[streamId];
-    const parentStreamId = data.parentStreamIdsRaw[streamId];
-
-    const meta: StreamTabMeta = {};
-    if (taskState?.success) {
-      meta.taskState = taskState.data as TaskState;
-    }
-    if (typeof executionId === 'string' && executionId.length > 0) {
-      meta.executionId = executionId;
-    }
-    if (typeof activeRunId === 'string' && activeRunId.length > 0) {
-      meta.activeRunId = activeRunId;
-    }
-    if (typeof parentStreamId === 'string' && parentStreamId.length > 0) {
-      meta.parentStreamId = parentStreamId;
-    }
-    if (Object.keys(meta).length > 0) {
-      writes.push(store.writeMeta(meta));
-    }
-
-    // Output files
-    const outputFilesData = data.outputFilesRaw[streamId];
-    if (outputFilesData && typeof outputFilesData === 'object') {
-      writes.push(
-        store.writeOutputFiles(
-          outputFilesData as Record<string, Record<string, OutputFileInfo[]>>,
-        ),
-      );
-    }
-
-    // Missing outputs
-    const missingOutputsData = data.missingOutputsRaw[streamId];
-    if (missingOutputsData && typeof missingOutputsData === 'object') {
-      writes.push(
-        store.writeMissingOutputs(
-          missingOutputsData as Record<string, Record<string, string[]>>,
-        ),
-      );
-    }
-
-    // Usage stats — normalize legacy single-value format to run-map format
-    const usageStatsData = data.usageStatsRaw[streamId];
-    if (usageStatsData && typeof usageStatsData === 'object') {
-      const raw = usageStatsData as Record<string, unknown>;
-      // Legacy format: bare { inputTokens, outputTokens, cost } without run wrapper
-      const isLegacy = 'inputTokens' in raw || 'outputTokens' in raw || 'cost' in raw;
-      const normalized = isLegacy
-        ? { default: raw }
-        : raw;
-      writes.push(
-        store.writeUsageStats(
-          normalized as Record<string, import('@shared/schemas').TokenUsageStats>,
-        ),
-      );
-    }
-
-    // Run instructions
-    const runInstructionsData = data.runInstructionsRaw[streamId];
-    if (runInstructionsData && typeof runInstructionsData === 'object') {
-      writes.push(
-        store.writeRunInstructions(
-          runInstructionsData as Record<string, InstructionUpdate>,
-        ),
-      );
-    }
-
-    await Promise.all(writes);
-  }
-
-  /**
-   * Load meta.json + runInstructions from disk for all known streams.
-   * Populates taskStates, executionIds, sessionState, and runInstructions.
-   */
-  private async loadMetaFromDisk(streamIds: StreamTabId[]): Promise<void> {
-    this.taskStates.clear();
-    this._executionIds.clear();
-    this._runInstructions.clear();
-
-    const results = await Promise.all(
-      streamIds.map(async (streamId) => {
-        const store = getStreamTabStore(streamId);
-        const [meta, runInstructions] = await Promise.all([
-          store.readMeta(),
-          store.readRunInstructions(),
-        ]);
-        return { streamId, meta, runInstructions };
-      }),
-    );
-
-    let loadedTasks = 0;
-    let skippedTasks = 0;
-
-    for (const { streamId, meta, runInstructions } of results) {
-      if (meta) {
-        // Task state
-        if (meta.taskState) {
-          const parseResult = TaskStateSchema.safeParse(meta.taskState);
-          if (parseResult.success) {
-            this.taskStates.set(streamId, parseResult.data as TaskState);
-            loadedTasks++;
-          } else {
-            this.logger.warn(
-              `[Persistence] Skipping invalid task state for stream ${streamId}: ${parseResult.error.message}`,
-            );
-            skippedTasks++;
-          }
-        }
-
-        // Execution ID
-        if (meta.executionId) {
-          this._executionIds.set(
-            streamId,
-            meta.executionId as ExecutionId,
-          );
-        }
-
-        // Active run ID
-        if (meta.activeRunId) {
-          this.getOrCreateSession(streamId).activeRunId = normalizeRunId(
-            meta.activeRunId,
-          );
-        }
-
-        // Parent stream ID
-        if (meta.parentStreamId) {
-          this.getOrCreateSession(streamId).parentStreamId =
-            meta.parentStreamId as StreamTabId;
-        }
-      }
-
-      // Run instructions
-      if (runInstructions && runInstructions.size > 0) {
-        this._runInstructions.set(streamId, runInstructions);
-      }
-    }
-
-    this.logger.info(
-      `[Persistence] Meta loaded: ${loadedTasks} task states, ${skippedTasks} skipped, ${this._executionIds.size} execution IDs`,
-    );
-
-    this.cleanupToolUseAgentRegistry();
-  }
-
-  private extractTaskStateEntries(
-    raw: Record<string, unknown>,
-  ): [string, unknown][] {
-    const isPlainObject = (v: unknown): v is Record<string, unknown> =>
-      typeof v === 'object' && v !== null && !Array.isArray(v);
-
-    const legacyBuckets = [raw.workflow, raw.toolUse].filter(isPlainObject);
-    if (legacyBuckets.length > 0) {
-      return legacyBuckets.flatMap((bucket) =>
-        Object.entries(bucket).filter(([, v]) => isPlainObject(v)),
-      );
-    }
-
-    return Object.entries(raw).filter(([, v]) => isPlainObject(v));
-  }
-
-  private loadRecord(key: WorkspaceStateKey): Record<string, unknown> {
-    return StorageRecordSchema.parse(this.storage.get(key));
+  private discoverStreamIds(): StreamTabId[] {
+    return [...this._streamLogs.keys()];
   }
 
   private cleanupToolUseAgentRegistry(): void {
-    const activeStreams = new Set<StreamTabId>();
-    for (const [stream, state] of this.taskStates) {
-      if (isToolUseTaskState(state)) activeStreams.add(stream);
-    }
-    cleanupInactiveAgents(activeStreams);
-  }
-
-  // -- Per-stream meta persistence -------------------------------------------
-
-  private saveStreamMeta(stream: StreamTabId): void {
-    const meta = this.buildStreamMeta(stream);
-    const store = getStreamTabStore(stream);
-    void store.writeMeta(meta);
-  }
-
-  private buildStreamMeta(stream: StreamTabId): StreamTabMeta {
-    const meta: StreamTabMeta = {};
-    const taskState = this.taskStates.get(stream);
-    if (taskState) {
-      meta.taskState = taskState;
-    }
-    const executionId = this._executionIds.get(stream);
-    if (executionId) {
-      meta.executionId = executionId;
-    }
-    const session = this._sessionState.get(stream);
-    if (session) {
-      if (session.activeRunId !== null) {
-        meta.activeRunId = session.activeRunId;
-      }
-      if (session.parentStreamId) {
-        meta.parentStreamId = session.parentStreamId;
-      }
-    }
-    return meta;
-  }
-
-  // -- Per-stream run instructions persistence --------------------------------
-
-  private saveRunInstructions(stream: StreamTabId): void {
-    const instructions = this._runInstructions.get(stream);
-    const store = getStreamTabStore(stream);
-    if (!instructions || instructions.size === 0) {
-      void store.writeRunInstructions({});
-    } else {
-      void store.writeRunInstructions(mapToRecord(instructions));
-    }
+    cleanupInactiveAgents(this._meta.getActiveToolUseStreams());
   }
 }

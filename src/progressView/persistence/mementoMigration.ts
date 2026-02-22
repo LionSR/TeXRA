@@ -1,0 +1,276 @@
+/**
+ * One-time migration from VS Code workspace state (memento) to disk-backed
+ * StreamTabStore. This module can be deleted once all users have migrated.
+ */
+
+import {
+  StorageRecordSchema,
+  type InstructionUpdate,
+  type OutputFileInfo,
+  type StreamTabId,
+  type TokenUsageStats,
+} from '@shared/schemas';
+import { WorkspaceStateKey } from '@common/state';
+import { AgentLogger } from '@logger/AgentLogger';
+import { TaskStateSchema, type TaskState } from '@logger/TaskState';
+import { getStreamTabStore } from './StreamTabStore';
+import type { StreamTabMeta } from './streamTabSchemas';
+import type { MementoStorage } from './PersistentMapManager';
+
+/**
+ * Check if we need one-time migration from workspace state to disk.
+ * Returns true if workspace state has data but disk has no stream data.
+ */
+export async function needsMigrationFromMemento(
+  storage: MementoStorage,
+  streamIds: StreamTabId[],
+): Promise<boolean> {
+  // If we already have data on disk for any stream, skip migration
+  if (streamIds.length > 0) {
+    const store = getStreamTabStore(streamIds[0]);
+    const meta = await store.readMeta();
+    if (meta) return false;
+  }
+
+  // Check if memento has any of the legacy keys with data
+  const legacyKeys = [
+    WorkspaceStateKey.TASK_STATES,
+    WorkspaceStateKey.OUTPUT_FILES,
+    WorkspaceStateKey.USAGE_STATS,
+    WorkspaceStateKey.EXECUTION_IDS,
+    WorkspaceStateKey.ACTIVE_RUN_IDS,
+    WorkspaceStateKey.PARENT_STREAM_IDS,
+    WorkspaceStateKey.RUN_INSTRUCTIONS,
+    WorkspaceStateKey.MISSING_OUTPUTS,
+  ] as const;
+
+  for (const key of legacyKeys) {
+    const raw = storage.get(key);
+    if (
+      raw &&
+      typeof raw === 'object' &&
+      Object.keys(raw as object).length > 0
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * One-time migration from workspace state (VS Code memento) to disk-backed storage.
+ * Migrates all per-stream data to StreamTabStore, then clears the legacy keys.
+ */
+export async function migrateFromMemento(
+  storage: MementoStorage,
+  streamLogKeys: StreamTabId[],
+  logger: AgentLogger,
+): Promise<void> {
+  logger.info(
+    '[Migration] Starting one-time migration from workspace state to disk',
+  );
+
+  // Load all legacy data from memento
+  const taskStatesRaw = loadRecord(storage, WorkspaceStateKey.TASK_STATES);
+  const executionIdsRaw = loadRecord(storage, WorkspaceStateKey.EXECUTION_IDS);
+  const activeRunIdsRaw = loadRecord(storage, WorkspaceStateKey.ACTIVE_RUN_IDS);
+  const parentStreamIdsRaw = loadRecord(
+    storage,
+    WorkspaceStateKey.PARENT_STREAM_IDS,
+  );
+  const runInstructionsRaw = loadRecord(
+    storage,
+    WorkspaceStateKey.RUN_INSTRUCTIONS,
+  );
+  const outputFilesRaw = loadRecord(storage, WorkspaceStateKey.OUTPUT_FILES);
+  const missingOutputsRaw = loadRecord(
+    storage,
+    WorkspaceStateKey.MISSING_OUTPUTS,
+  );
+  const usageStatsRaw = loadRecord(storage, WorkspaceStateKey.USAGE_STATS);
+
+  // Collect all known stream IDs from all sources
+  const allStreamIds = new Set<StreamTabId>();
+  for (const record of [
+    taskStatesRaw,
+    executionIdsRaw,
+    activeRunIdsRaw,
+    parentStreamIdsRaw,
+    runInstructionsRaw,
+    outputFilesRaw,
+    missingOutputsRaw,
+    usageStatsRaw,
+  ]) {
+    for (const key of Object.keys(record)) {
+      // Skip legacy bucket keys
+      if (key === 'workflow' || key === 'toolUse') {
+        const bucket = record[key];
+        if (typeof bucket === 'object' && bucket !== null) {
+          for (const innerKey of Object.keys(
+            bucket as Record<string, unknown>,
+          )) {
+            allStreamIds.add(innerKey as StreamTabId);
+          }
+        }
+      } else {
+        allStreamIds.add(key as StreamTabId);
+      }
+    }
+  }
+  // Also include stream log keys
+  for (const key of streamLogKeys) {
+    allStreamIds.add(key);
+  }
+
+  logger.info(`[Migration] Found ${allStreamIds.size} stream(s) to migrate`);
+
+  // Extract task state entries (handles legacy workflow/toolUse format)
+  const taskStateEntries = extractTaskStateEntries(taskStatesRaw);
+
+  // Migrate each stream's data to disk
+  await Promise.all(
+    [...allStreamIds].map((streamId) =>
+      migrateStreamToStore(streamId, {
+        taskStateEntries,
+        executionIdsRaw,
+        activeRunIdsRaw,
+        parentStreamIdsRaw,
+        runInstructionsRaw,
+        outputFilesRaw,
+        missingOutputsRaw,
+        usageStatsRaw,
+      }),
+    ),
+  );
+
+  // Clear legacy workspace state keys
+  logger.info('[Migration] Clearing legacy workspace state keys');
+  await Promise.all([
+    storage.update(WorkspaceStateKey.TASK_STATES, undefined as never),
+    storage.update(WorkspaceStateKey.EXECUTION_IDS, undefined as never),
+    storage.update(WorkspaceStateKey.ACTIVE_RUN_IDS, undefined as never),
+    storage.update(WorkspaceStateKey.PARENT_STREAM_IDS, undefined as never),
+    storage.update(WorkspaceStateKey.RUN_INSTRUCTIONS, undefined as never),
+    storage.update(WorkspaceStateKey.OUTPUT_FILES, undefined as never),
+    storage.update(WorkspaceStateKey.MISSING_OUTPUTS, undefined as never),
+    storage.update(WorkspaceStateKey.USAGE_STATS, undefined as never),
+  ]);
+
+  logger.info('[Migration] Migration complete');
+}
+
+// -- Helpers ------------------------------------------------------------------
+
+function loadRecord(
+  storage: MementoStorage,
+  key: WorkspaceStateKey,
+): Record<string, unknown> {
+  return StorageRecordSchema.parse(storage.get(key));
+}
+
+function extractTaskStateEntries(
+  raw: Record<string, unknown>,
+): [string, unknown][] {
+  const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+    typeof v === 'object' && v !== null && !Array.isArray(v);
+
+  const legacyBuckets = [raw.workflow, raw.toolUse].filter(isPlainObject);
+  if (legacyBuckets.length > 0) {
+    return legacyBuckets.flatMap((bucket) =>
+      Object.entries(bucket).filter(([, v]) => isPlainObject(v)),
+    );
+  }
+
+  return Object.entries(raw).filter(([, v]) => isPlainObject(v));
+}
+
+async function migrateStreamToStore(
+  streamId: StreamTabId,
+  data: {
+    taskStateEntries: [string, unknown][];
+    executionIdsRaw: Record<string, unknown>;
+    activeRunIdsRaw: Record<string, unknown>;
+    parentStreamIdsRaw: Record<string, unknown>;
+    runInstructionsRaw: Record<string, unknown>;
+    outputFilesRaw: Record<string, unknown>;
+    missingOutputsRaw: Record<string, unknown>;
+    usageStatsRaw: Record<string, unknown>;
+  },
+): Promise<void> {
+  const store = getStreamTabStore(streamId);
+  const writes: Promise<void>[] = [];
+
+  // Meta: taskState + executionId + activeRunId + parentStreamId
+  const taskStateEntry = data.taskStateEntries.find(
+    ([key]) => key === streamId,
+  );
+  const taskState = taskStateEntry
+    ? TaskStateSchema.safeParse(taskStateEntry[1])
+    : null;
+  const executionId = data.executionIdsRaw[streamId];
+  const activeRunId = data.activeRunIdsRaw[streamId];
+  const parentStreamId = data.parentStreamIdsRaw[streamId];
+
+  const meta: StreamTabMeta = {};
+  if (taskState?.success) {
+    meta.taskState = taskState.data as TaskState;
+  }
+  if (typeof executionId === 'string' && executionId.length > 0) {
+    meta.executionId = executionId;
+  }
+  if (typeof activeRunId === 'string' && activeRunId.length > 0) {
+    meta.activeRunId = activeRunId;
+  }
+  if (typeof parentStreamId === 'string' && parentStreamId.length > 0) {
+    meta.parentStreamId = parentStreamId;
+  }
+  if (Object.keys(meta).length > 0) {
+    writes.push(store.writeMeta(meta));
+  }
+
+  // Output files
+  const outputFilesData = data.outputFilesRaw[streamId];
+  if (outputFilesData && typeof outputFilesData === 'object') {
+    writes.push(
+      store.writeOutputFiles(
+        outputFilesData as Record<string, Record<string, OutputFileInfo[]>>,
+      ),
+    );
+  }
+
+  // Missing outputs
+  const missingOutputsData = data.missingOutputsRaw[streamId];
+  if (missingOutputsData && typeof missingOutputsData === 'object') {
+    writes.push(
+      store.writeMissingOutputs(
+        missingOutputsData as Record<string, Record<string, string[]>>,
+      ),
+    );
+  }
+
+  // Usage stats — normalize legacy single-value format to run-map format
+  const usageStatsData = data.usageStatsRaw[streamId];
+  if (usageStatsData && typeof usageStatsData === 'object') {
+    const raw = usageStatsData as Record<string, unknown>;
+    // Legacy format: bare { inputTokens, outputTokens, cost } without run wrapper
+    const isLegacy =
+      'inputTokens' in raw || 'outputTokens' in raw || 'cost' in raw;
+    const normalized = isLegacy ? { default: raw } : raw;
+    writes.push(
+      store.writeUsageStats(normalized as Record<string, TokenUsageStats>),
+    );
+  }
+
+  // Run instructions
+  const runInstructionsData = data.runInstructionsRaw[streamId];
+  if (runInstructionsData && typeof runInstructionsData === 'object') {
+    writes.push(
+      store.writeRunInstructions(
+        runInstructionsData as Record<string, InstructionUpdate>,
+      ),
+    );
+  }
+
+  await Promise.all(writes);
+}

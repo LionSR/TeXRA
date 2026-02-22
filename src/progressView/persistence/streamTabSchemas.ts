@@ -52,8 +52,11 @@ export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
 export const OutputFilesRoundMapSchema = z
   .record(
     z.string(),
-    z.array(OutputFileInfoSchema.catch(null as unknown as OutputFileInfo))
-      .transform((items) => items.filter((item): item is OutputFileInfo => item !== null))
+    z
+      .array(OutputFileInfoSchema.catch(null as unknown as OutputFileInfo))
+      .transform((items) =>
+        items.filter((item): item is OutputFileInfo => item !== null),
+      )
       .catch([]),
   )
   .transform((record): Map<number, OutputFileInfo[]> => {
@@ -191,7 +194,10 @@ export const RunInstructionsRecordSchema = z
 // Write-side types — shape contracts for data written to disk
 // ============================================================================
 
-export type OutputFilesRecord = Record<string, Record<string, OutputFileInfo[]>>;
+export type OutputFilesRecord = Record<
+  string,
+  Record<string, OutputFileInfo[]>
+>;
 export type MissingOutputsRecord = Record<string, Record<string, string[]>>;
 export type UsageStatsRecord = Record<string, TokenUsageStats>;
 export type RunInstructionsRecord = Record<string, InstructionUpdate>;

@@ -41,7 +41,7 @@ function buildStreamInfo(
   id: string,
   filter: AgentCategoryFilter,
 ): StreamTabInfo | null {
-  const taskState = state.getTaskState(id);
+  const taskState = state.meta.getTaskState(id);
   const hints = state.getStreamHints(id);
   const config = taskState?.agentConfig;
 
@@ -79,8 +79,8 @@ function buildStreamInfo(
       : (hints.isRemote ?? false),
     inputFile,
     creationTimestamp,
-    executionId: state.getExecutionId(id),
-    parentStreamId: state.getParentStreamId(id),
+    executionId: state.meta.getExecutionId(id),
+    parentStreamId: state.meta.getParentStreamId(id),
   };
 }
 

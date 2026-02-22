@@ -400,14 +400,14 @@ export class ProgressViewProvider
   }
 
   public getActiveRunId(stream: StreamTabId): StorageKey | null {
-    return this.state.getActiveRunId(stream);
+    return this.state.meta.getActiveRunId(stream);
   }
 
   public getRunOutputFiles(
     stream: StreamTabId,
     options: { storageKey: StorageKey },
   ): Map<number, OutputFileInfo[]> | undefined {
-    return this.state.getRunOutputFiles(stream, options);
+    return this.state.outputFiles.getRun(stream, options.storageKey);
   }
 
   private async resetRunningStreamStatuses(

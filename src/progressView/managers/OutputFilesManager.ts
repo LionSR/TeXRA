@@ -17,10 +17,8 @@ import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
  * ProgressViewState (via store.clear() / deleteAllStreamData()).
  */
 export class OutputFilesManager {
-  private items: Map<
-    StreamTabId,
-    Map<string, Map<number, OutputFileInfo[]>>
-  > = new Map();
+  private items: Map<StreamTabId, Map<string, Map<number, OutputFileInfo[]>>> =
+    new Map();
   private _missingOutputs: Map<
     StreamTabId,
     Map<string, Map<number, string[]>>
@@ -235,17 +233,13 @@ export class OutputFilesManager {
     if (!this.loaded) return;
     const data = this.items.get(stream);
     const store = getStreamTabStore(stream);
-    await store.writeOutputFiles(
-      data ? nestedMapToRecord(data) : {},
-    );
+    await store.writeOutputFiles(data ? nestedMapToRecord(data) : {});
   }
 
   private async saveMissingOutputs(stream: StreamTabId): Promise<void> {
     if (!this.loaded) return;
     const data = this._missingOutputs.get(stream);
     const store = getStreamTabStore(stream);
-    await store.writeMissingOutputs(
-      data ? nestedMapToRecord(data) : {},
-    );
+    await store.writeMissingOutputs(data ? nestedMapToRecord(data) : {});
   }
 }
