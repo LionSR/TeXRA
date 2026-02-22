@@ -211,6 +211,8 @@ export class TaskGroupList extends LitElement {
         // Append-only: add new ungrouped entries to timeline.
         // Grouped messages are already referenced via tree nodes in timeline entries.
         this.appendToTimeline(prevUngroupedCount);
+        // LOG_DELTA may also mutate existing timeline entries in the same batch.
+        this.updateTimelineMessageRefs();
       } else {
         // Same-length (streaming update): update msg refs on timeline entries in-place.
         // guard([item.msg]) in render() detects new refs.

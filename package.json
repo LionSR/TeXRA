@@ -1271,7 +1271,7 @@
         "command": "texra.toggleView",
         "key": "ctrl+shift+t",
         "mac": "cmd+shift+t",
-        "when": "texra.activeView"
+        "when": "focusedView == texra.mainView || focusedView == texra.progressView"
       },
       {
         "command": "texra.execute",

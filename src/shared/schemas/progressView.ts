@@ -144,32 +144,6 @@ export const UpdateParentStreamMessageSchema = z.object({
   parentStreamId: StreamTabIdSchema.nullish(),
 });
 
-export const SetActiveStreamMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM),
-  activeStream: z.union([StreamTabIdSchema, z.literal('')]),
-});
-
-export const UpdateConversationProgressMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS),
-  stream: StreamTabIdSchema,
-  progress: ConversationProgressSchema,
-});
-
-export const UpdateStreamBadgesMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES),
-  stream: StreamTabIdSchema,
-  activeSubagents: z.array(ActiveChildInfoSchema),
-  finishedSubagentCount: z.number(),
-  activeProcesses: z.array(ActiveChildInfoSchema),
-  finishedProcessCount: z.number(),
-});
-
-export const UpdateParentStreamMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM),
-  stream: StreamTabIdSchema,
-  parentStreamId: StreamTabIdSchema.nullish(),
-});
-
 export const UpdateStreamStatusMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS),
   stream: StreamTabIdSchema,

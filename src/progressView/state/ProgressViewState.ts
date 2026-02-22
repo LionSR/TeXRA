@@ -109,33 +109,6 @@ function createExecutionState(
   };
 }
 
-/**
- * Backend-owned ephemeral counters, updated during streaming.
- * This is the narrowed type replacing the full StreamState in _streamStates.
- * The frontend owns the full StreamState (todos, ui, taskGroups, etc.).
- */
-export interface StreamExecutionState {
-  kind: (typeof AgentCategory)[keyof typeof AgentCategory];
-  conversationProgress: ConversationProgress;
-  activeSubagents: ActiveChildInfo[];
-  finishedSubagentCount: number;
-  activeProcesses: ActiveChildInfo[];
-  finishedProcessCount: number;
-}
-
-function createExecutionState(
-  kind: (typeof AgentCategory)[keyof typeof AgentCategory],
-): StreamExecutionState {
-  return {
-    kind,
-    conversationProgress: { conversationTurns: 0, toolCallCount: 0 },
-    activeSubagents: [],
-    finishedSubagentCount: 0,
-    activeProcesses: [],
-    finishedProcessCount: 0,
-  };
-}
-
 /** Core state management for the progress view. */
 export class ProgressViewState {
   private _streamLogs: StreamLogStore;
