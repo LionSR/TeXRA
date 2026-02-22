@@ -448,12 +448,13 @@ export class ProgressViewProvider
     this._activePlacement = 'sidebar';
 
     if (this._mainViewProvider) {
-      await this._mainViewProvider.switchMode('progress');
+      // Focus first to ensure VS Code resolves the webview before switching content.
+      // Without this, switchMode no-ops on first use (view not yet created).
       if (!options?.inPlace) {
         await vscode.commands.executeCommand('texra.mainView.focus');
       }
+      await this._mainViewProvider.switchMode('progress');
     } else {
-      // Fallback: just set context key
       await setActiveSidebarView(SIDEBAR_VIEWS.PROGRESS);
     }
 
@@ -557,7 +558,9 @@ export class ProgressViewProvider
     if (this._activePlacement === 'editor') {
       return this._panelView?.webview;
     }
-    // Sidebar mode: use the getter from MainViewProvider
+    // Only return the sidebar webview when it's actually showing progress content.
+    // Otherwise progress messages would be routed to the launcher webview.
+    if (this._mainViewProvider?.getActiveMode() !== 'progress') return undefined;
     return this._sidebarWebviewGetter?.();
   }
 
