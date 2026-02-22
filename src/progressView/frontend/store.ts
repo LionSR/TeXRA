@@ -54,15 +54,6 @@ export const EMPTY_STREAM_LOGS: StreamLogs = {
   generation: 0,
 };
 
-/** Build StreamLogs from an array, constructing logIndex in one pass. */
-export function createStreamLogs(logs: LogMessageData[]): StreamLogs {
-  const logIndex = new Map<string, number>();
-  for (let i = 0; i < logs.length; i++) {
-    logIndex.set(logs[i].id, i);
-  }
-  return { logs, logIndex, generation: 0 };
-}
-
 export interface ProgressState {
   activeStreamId: StreamTabId | null;
   /** Canonical stream storage — Map preserves insertion order for iteration. */
