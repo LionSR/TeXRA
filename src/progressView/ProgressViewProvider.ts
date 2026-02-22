@@ -449,6 +449,10 @@ export class ProgressViewProvider
     await setActiveSidebarView(SIDEBAR_VIEWS.PROGRESS);
     if (!options?.inPlace) {
       await vscode.commands.executeCommand('texra.progressView.focus');
+    } else {
+      // Keep view switching in the user's current TeXRA container location
+      // (primary sidebar or auxiliary bar) instead of forcing primary sidebar.
+      await vscode.commands.executeCommand('workbench.view.extension.texra');
     }
 
     if (this.isActivePlacementReady()) {
