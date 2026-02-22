@@ -14,7 +14,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 import { AgentCategorySchema } from './agent';
 import { StreamTabIdSchema } from './identifiers';
-import { LogMessageDataSchema } from './log';
+import { StreamLogEntrySchema } from './log';
 import { AgentOptionDataSchema, ModelOptionDataSchema } from './mainView';
 import { OutputFileInfoSchema } from './output';
 import {
@@ -34,7 +34,6 @@ import {
   ConversationProgressSchema,
   StreamMetadataSchema,
 } from './streamState';
-import { TaskGroupSchema, UpdateTaskGroupPayloadSchema } from './taskGroup';
 import { TodoItemSchema } from './todo';
 import { ContextStateSchema, TokenUsageStatsSchema } from './usage';
 
@@ -149,40 +148,11 @@ export const UpdateStreamStatusMessageSchema = z.object({
   lastTimestamp: z.number().optional(),
 });
 
-/** Shared fields between UPDATE_LOGS and SYNC_STREAM_CONTENT. */
-export const LogsPayloadSchema = z.object({
-  stream: z.union([StreamTabIdSchema, z.literal('')]),
-  messages: z.array(LogMessageDataSchema),
-  groups: z.array(TaskGroupSchema).optional(),
-  action: z.enum(['render', 'clear']).optional(),
-  runInstructions: z.record(z.string(), InstructionUpdateSchema).optional(),
-  activeRunId: z.string().nullable().optional(),
-  runUsage: z.record(z.string(), TokenUsageStatsSchema).optional(),
-  runFiles: z
-    .record(z.string(), z.record(z.string(), z.array(OutputFileInfoSchema)))
-    .optional(),
-  runMissingOutputs: z
-    .record(z.string(), z.record(z.string(), z.array(z.string())))
-    .optional(),
-  contextState: ContextStateSchema.optional(),
-});
-
-export type LogsPayload = z.infer<typeof LogsPayloadSchema>;
-
-export const UpdateLogsMessageSchema = LogsPayloadSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_LOGS),
-});
-
-export const AppendLogMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.APPEND_LOG),
-  stream: StreamTabIdSchema,
-  logMessage: LogMessageDataSchema,
-});
-
-export const UpdateLogMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_LOG),
-  stream: StreamTabIdSchema,
-  logMessage: LogMessageDataSchema,
+export const LogDeltaMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.LOG_DELTA),
+  streamId: StreamTabIdSchema,
+  entries: z.array(StreamLogEntrySchema),
+  updates: z.array(StreamLogEntrySchema).prefault([]),
 });
 
 export const UpdateFilesMessageSchema = z.object({
@@ -209,17 +179,6 @@ export const UpdateInstructionMessageSchema = z.object({
   runId: z.string().nullish(),
 });
 
-export const AddTaskGroupMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.ADD_TASK_GROUP),
-  stream: StreamTabIdSchema,
-  group: TaskGroupSchema,
-});
-
-export const UpdateTaskGroupMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_TASK_GROUP),
-  update: UpdateTaskGroupPayloadSchema,
-});
-
 export const UpdateTodosMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_TODOS),
   stream: StreamTabIdSchema,
@@ -231,12 +190,6 @@ export const UpdateRunUsageMessageSchema = z.object({
   stream: StreamTabIdSchema,
   runId: z.string(),
   usage: TokenUsageStatsSchema,
-});
-
-export const UpdateContextStateMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_CONTEXT_STATE),
-  stream: StreamTabIdSchema,
-  contextState: ContextStateSchema,
 });
 
 export const UpdateQueuedFollowUpsMessageSchema = z.object({
@@ -326,8 +279,20 @@ export const SetFollowupOptionsMessageSchema = z.object({
   defaultMergeModel: z.string().optional(),
 });
 
-export const SyncStreamContentMessageSchema = LogsPayloadSchema.extend({
+export const SyncStreamContentMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT),
+  stream: z.union([StreamTabIdSchema, z.literal('')]),
+  action: z.enum(['render', 'clear']).optional(),
+  runInstructions: z.record(z.string(), InstructionUpdateSchema).optional(),
+  activeRunId: z.string().nullable().optional(),
+  runUsage: z.record(z.string(), TokenUsageStatsSchema).optional(),
+  runFiles: z
+    .record(z.string(), z.record(z.string(), z.array(OutputFileInfoSchema)))
+    .optional(),
+  runMissingOutputs: z
+    .record(z.string(), z.record(z.string(), z.array(z.string())))
+    .optional(),
+  contextState: ContextStateSchema.optional(),
   todos: z.array(TodoItemSchema).optional(),
   queuedFollowUps: z.array(z.string()).optional(),
   instruction: InstructionUpdateSchema.nullable().optional(),
@@ -369,17 +334,12 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateStreamBadgesMessageSchema,
     UpdateParentStreamMessageSchema,
     UpdateStreamStatusMessageSchema,
-    UpdateLogsMessageSchema,
-    AppendLogMessageSchema,
-    UpdateLogMessageSchema,
+    LogDeltaMessageSchema,
     UpdateFilesMessageSchema,
     UpdateMissingOutputsMessageSchema,
     UpdateInstructionMessageSchema,
-    AddTaskGroupMessageSchema,
-    UpdateTaskGroupMessageSchema,
     UpdateTodosMessageSchema,
     UpdateRunUsageMessageSchema,
-    UpdateContextStateMessageSchema,
     UpdateQueuedFollowUpsMessageSchema,
     SyncStreamContentMessageSchema,
     UpdatePermissionMessageSchema,

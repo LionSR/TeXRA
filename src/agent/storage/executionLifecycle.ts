@@ -31,13 +31,13 @@ export async function registerExecution(
   if (category) meta.category = category;
 
   const writes: Promise<void>[] = [
-    store.write('config', config),
-    store.write('meta', meta),
+    store.writeConfig(config),
+    store.writeMeta(meta),
   ];
 
   if (parentExecutionId) {
     writes.push(
-      getExecutionStore(parentExecutionId).write(`child-${executionId}`, {
+      getExecutionStore(parentExecutionId).writeChild(executionId, {
         agent: agentName,
         timestamp,
       }),
@@ -60,9 +60,9 @@ export async function writeTerminalStatus(
 ): Promise<void> {
   try {
     const store = getExecutionStore(executionId);
-    const existing = await store.read<ExecutionMeta>('meta');
+    const existing = await store.readMeta();
     if (!existing) return;
-    await store.write('meta', { ...existing, terminalStatus: status });
+    await store.writeMeta({ ...existing, terminalStatus: status });
     invalidateListingCache();
   } catch {
     // Non-critical bookkeeping — don't let I/O errors disrupt execution lifecycle.
@@ -79,9 +79,9 @@ export async function writeSessionDescription(
 ): Promise<void> {
   try {
     const store = getExecutionStore(executionId);
-    const existing = await store.read<ExecutionMeta>('meta');
+    const existing = await store.readMeta();
     if (!existing) return;
-    await store.write('meta', { ...existing, description });
+    await store.writeMeta({ ...existing, description });
     invalidateListingCache();
   } catch {
     // Non-critical bookkeeping — don't let I/O errors disrupt execution lifecycle.
