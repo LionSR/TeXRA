@@ -1,6 +1,6 @@
 /**
  * Stream metadata handlers: UPDATE_STREAM_STATUS, UPDATE_CONVERSATION_PROGRESS,
- * UPDATE_STREAM_BADGES, UPDATE_CONTEXT_STATE.
+ * UPDATE_STREAM_BADGES.
  */
 
 import { create } from 'mutative';
@@ -55,14 +55,6 @@ export const streamMetaHandlers: HandlerRegistry = {
         draft.finishedSubagentCount = data.finishedSubagentCount;
         draft.activeProcesses = data.activeProcesses;
         draft.finishedProcessCount = data.finishedProcessCount;
-      }),
-    );
-  },
-
-  [PROGRESS_VIEW_COMMANDS.UPDATE_CONTEXT_STATE]: (data, ctx) => {
-    ctx.setStreamState(data.stream, (prev) =>
-      create(prev, (draft) => {
-        draft.contextState = data.contextState;
       }),
     );
   },

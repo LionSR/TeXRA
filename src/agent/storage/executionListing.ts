@@ -286,11 +286,11 @@ async function backfillEntries(entries: unknown[]): Promise<void> {
       if (await store.exists('meta')) return;
 
       await Promise.all([
-        store.write('meta', {
+        store.writeMeta({
           timestamp: candidate.timestamp,
           parentExecutionId: candidate.parentExecutionId,
-        } satisfies ExecutionMeta),
-        store.write('config', normalizedConfig),
+        }),
+        store.writeConfig(normalizedConfig),
       ]);
     }),
   );

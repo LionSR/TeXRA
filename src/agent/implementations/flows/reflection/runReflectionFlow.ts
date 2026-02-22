@@ -25,7 +25,7 @@ import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { createRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import type { FlowRecord } from '@agent/node/persisted-flow';
+import { flowKey, type FlowRecord } from '@agent/node/persisted-flow';
 import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
 import type { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { executionToEndStatus } from '@common/constants/streamStatus';
@@ -206,7 +206,7 @@ export async function runReflectionFlow<C = unknown>(
   try {
     registerInterruptible(streamId, interruptible);
 
-    const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
+    const flowRecord = await kv.read<FlowRecord>(flowKey(executionId));
     const validated = flowRecord?.shared
       ? ReflectionFlowStateSchema.safeParse(flowRecord.shared)
       : null;
@@ -287,6 +287,9 @@ export async function runReflectionFlow<C = unknown>(
       baseFiles,
     };
     pf.setServices(services);
+    pf.setProjection(async (s, store) => {
+      if (s.conversation?.length) await store.writeConversation(s.conversation);
+    });
 
     if (isResume) {
       logger.debug('Resuming reflection flow from persistence');
@@ -300,8 +303,8 @@ export async function runReflectionFlow<C = unknown>(
 
     if (shared?.lastError) {
       status = END_GROUP_STATUS.ERROR;
-      // Re-throw after state persistence (handled in finally) so
-      // runFlowWithLifecycle logs the error and shows the user notification.
+      // Re-throw so runFlowWithLifecycle logs the error and shows
+      // the user notification. State was already projected per-step.
       throw new Error(shared.lastError.message);
     } else {
       status = executionToEndStatus(flowStatus) as EndGroupStatus;
@@ -310,19 +313,9 @@ export async function runReflectionFlow<C = unknown>(
     status = END_GROUP_STATUS.ERROR;
     throw error;
   } finally {
-    // Persist conversation regardless of success or failure so that
-    // the executions tool can always show what happened before a crash.
-    try {
-      if (shared?.conversation?.length) {
-        await kv.write('conversation', shared.conversation);
-      }
-    } catch {
-      // Best-effort — don't mask the original error
-    }
-
     if (status === END_GROUP_STATUS.STOPPED) {
       try {
-        await kv.delete(`flow:${executionId}`);
+        await kv.delete(flowKey(executionId));
       } catch {
         // Ignore cleanup errors
       }

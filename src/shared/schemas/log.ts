@@ -73,6 +73,20 @@ export const MessageTypeSchema = z.enum([
 
 export type MessageType = z.infer<typeof MessageTypeSchema>;
 
+export const STREAM_LOG_ENTRY_TYPES = {
+  LOG: 'log',
+  GROUP_START: 'group-start',
+  GROUP_END: 'group-end',
+} as const;
+
+export const StreamLogEntryTypeSchema = z.enum([
+  STREAM_LOG_ENTRY_TYPES.LOG,
+  STREAM_LOG_ENTRY_TYPES.GROUP_START,
+  STREAM_LOG_ENTRY_TYPES.GROUP_END,
+]);
+
+export type StreamLogEntryType = z.infer<typeof StreamLogEntryTypeSchema>;
+
 export const FileListEntrySchema = z.object({
   path: z.string(),
   ok: z.boolean(),
@@ -83,6 +97,21 @@ export const FileListEntrySchema = z.object({
 });
 
 export type FileListEntry = z.infer<typeof FileListEntrySchema>;
+
+export const StreamLogEntrySchema = z.strictObject({
+  seqNo: z.int().positive(),
+  id: z.string().min(1),
+  type: StreamLogEntryTypeSchema,
+  level: LogLevelSchema,
+  timestamp: z.number(),
+  groupId: z.string().optional(),
+  messageType: MessageTypeSchema.optional(),
+  text: z.string().optional(),
+  verbose: z.boolean().optional(),
+  data: z.unknown().optional(),
+});
+
+export type StreamLogEntry = z.infer<typeof StreamLogEntrySchema>;
 
 export const LogMessageDataSchema = z.strictObject({
   id: z.string().min(1),
@@ -100,3 +129,43 @@ export const LogMessageUpdateSchema = LogMessageDataSchema.partial().required({
   id: true,
 });
 export type LogMessageUpdate = z.infer<typeof LogMessageUpdateSchema>;
+
+/**
+ * Legacy log message format (from STREAM_TABS era).
+ * Transforms into canonical StreamLogEntry on parse.
+ */
+const LegacyLogMessageSchema = z
+  .object({
+    id: z.string().min(1),
+    text: z.string(),
+    level: LogLevelSchema.optional().default(LOG_LEVELS.INFO),
+    timestamp: z.number(),
+    groupId: z.string().optional(),
+    messageType: MessageTypeSchema.optional().default(MESSAGE_TYPES.DEFAULT),
+    verbose: z.boolean().optional(),
+    data: z.unknown().optional(),
+  })
+  .transform(
+    (msg): StreamLogEntry => ({
+      seqNo: 0, // placeholder — StreamLog constructor renumbers
+      id: msg.id,
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: msg.level,
+      timestamp: msg.timestamp,
+      groupId: msg.groupId,
+      messageType: msg.messageType,
+      text: msg.text,
+      verbose: msg.verbose,
+      data: msg.data,
+    }),
+  );
+
+/**
+ * Accepts both current StreamLogEntry format and legacy log messages.
+ * Legacy entries are transformed into canonical StreamLogEntry.
+ * New format is tried first (Zod tries union members in order).
+ */
+export const PersistedStreamLogEntrySchema = z.union([
+  StreamLogEntrySchema,
+  LegacyLogMessageSchema,
+]);

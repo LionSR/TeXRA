@@ -45,21 +45,14 @@ export interface StreamLogs {
   logs: LogMessageData[];
   /** O(1) lookup: log ID → array index. Maintained by mutation handlers. */
   logIndex: Map<string, number>;
+  generation: number;
 }
 
 export const EMPTY_STREAM_LOGS: StreamLogs = {
   logs: [],
   logIndex: new Map(),
+  generation: 0,
 };
-
-/** Build StreamLogs from an array, constructing logIndex in one pass. */
-export function createStreamLogs(logs: LogMessageData[]): StreamLogs {
-  const logIndex = new Map<string, number>();
-  for (let i = 0; i < logs.length; i++) {
-    logIndex.set(logs[i].id, i);
-  }
-  return { logs, logIndex };
-}
 
 export interface ProgressState {
   activeStreamId: StreamTabId | null;

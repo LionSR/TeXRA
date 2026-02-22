@@ -1425,7 +1425,6 @@
     "tar": "^7.5.9",
     "turndown": "^7.2.2",
     "turndown-plugin-gfm": "^1.0.2",
-    "winston": "^3.19.0",
     "yaml": "^2.8.2",
     "zod": "^4.3.6"
   }
