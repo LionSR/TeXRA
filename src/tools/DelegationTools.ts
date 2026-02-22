@@ -184,7 +184,7 @@ async function executeSubagent(
       });
       // Best-effort persist — must never block delivery or abort the subagent.
       try {
-        await getExecutionStore(executionId).write('report', msg);
+        await getExecutionStore(executionId).writeReport(msg);
       } catch {
         /* storage failure is non-fatal */
       }
@@ -197,14 +197,14 @@ async function executeSubagent(
       if (deliveryState.hasDelivered) return;
       deliveryState.hasDelivered = true;
       const msg = formatSubagentDelivery(agentName, result);
-      void getExecutionStore(executionId).write('report', msg);
+      void getExecutionStore(executionId).writeReport(msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     },
   });
   promise
     .catch((err: unknown) => {
       const msg = formatSubagentError(executionId, agentName, err);
-      void getExecutionStore(executionId).write('report', msg);
+      void getExecutionStore(executionId).writeReport(msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     })
     .finally(() => {

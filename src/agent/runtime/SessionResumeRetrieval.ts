@@ -18,7 +18,7 @@ import {
 } from '@shared/schemas';
 import { getExecutionStore } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
-import type { FlowRecord } from '@agent/node/persisted-flow';
+import { flowKey, type FlowRecord } from '@agent/node/persisted-flow';
 import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
 import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/AgentWorkspaceState';
 import { UserVariableChannelsSchema } from '@agent/core/AgentCycleOptions';
@@ -165,7 +165,7 @@ async function readFlowRecord(
   agentType: 'tool-use' | 'workflow',
 ): Promise<FlowRecord | null> {
   const kv = getExecutionStore(executionId);
-  const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
+  const flowRecord = await kv.read<FlowRecord>(flowKey(executionId));
 
   if (!flowRecord?.shared) {
     logger.warn(

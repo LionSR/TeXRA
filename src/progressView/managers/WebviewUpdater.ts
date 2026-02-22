@@ -13,7 +13,6 @@ import type {
   ConversationProgress,
   ContextState,
   InstructionUpdate,
-  LogMessageData,
   OutputFileInfo,
   PermissionPayload,
   ProgressPermissionKind,
@@ -22,10 +21,8 @@ import type {
   StreamStatus,
   StreamTabId,
   StreamTabInfo,
-  TaskGroup,
   TodoItem,
   TokenUsageStats,
-  UpdateTaskGroupPayload,
   StorageKey,
 } from '@shared/schemas';
 
@@ -55,10 +52,13 @@ export interface LogContentExtras {
 /** Payload for batched stream content hydration (tab switch). */
 export interface SyncStreamContentPayload {
   stream: StreamTabId | '';
-  messages: LogMessageData[];
-  groups: TaskGroup[];
-  extras?: LogContentExtras;
   action?: 'render' | 'clear';
+  runInstructions?: Record<string, InstructionUpdate>;
+  activeRunId?: string | null;
+  runUsage?: Record<string, TokenUsageStats>;
+  runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
+  runMissingOutputs?: Record<string, { [key: number]: string[] }>;
+  contextState?: ContextState;
   todos: TodoItem[];
   queuedFollowUps: string[];
   instruction: InstructionUpdate | null;
@@ -130,60 +130,6 @@ export class WebviewUpdater {
       activeStream,
       agentFilter,
       streamStates,
-    });
-  }
-
-  /**
-   * Update log content for a specific stream.
-   *
-   * Action types:
-   * - `'render'` (default): Send data to display. Frontend detects stream switch
-   *   by comparing message.stream with its lastRenderedStream. If stream changed,
-   *   frontend clears and rebuilds. If same stream, frontend does incremental update.
-   * - `'clear'`: Explicitly clear DOM content (for stream deletion, no active stream).
-   *   Frontend always clears, even without messages.
-   *
-   * This design moves stream switch detection to the frontend (which tracks
-   * lastRenderedStream) and removes the need for backend to track render state.
-   *
-   * @param action - The action type: 'render' (default) or 'clear'
-   */
-  updateLogContent(
-    streamId: StreamTabId,
-    messages: LogMessageData[],
-    groups: TaskGroup[] = [],
-    extras?: LogContentExtras,
-    action: 'render' | 'clear' = 'render',
-  ): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_LOGS,
-      stream: streamId,
-      messages,
-      groups,
-      ...extras,
-      action,
-    });
-  }
-
-  /**
-   * Append a single log message to a stream
-   */
-  appendLogMessage(stream: StreamTabId, logMessage: LogMessageData): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.APPEND_LOG,
-      stream,
-      logMessage,
-    });
-  }
-
-  /**
-   * Update an existing log message
-   */
-  updateLogMessage(stream: StreamTabId, logMessage: LogMessageData): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_LOG,
-      stream,
-      logMessage,
     });
   }
 
@@ -264,25 +210,6 @@ export class WebviewUpdater {
       stream,
       runId,
       usage,
-    });
-  }
-
-  /**
-   * Update context utilization display in the footer.
-   * Shows "X% context left" based on current input tokens vs context window.
-   */
-  updateContextState(
-    stream: StreamTabId,
-    contextState: {
-      inputTokens: number;
-      contextWindow: number;
-      utilizationPercent: number;
-    },
-  ): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_CONTEXT_STATE,
-      stream,
-      contextState,
     });
   }
 
@@ -388,27 +315,6 @@ export class WebviewUpdater {
   }
 
   /**
-   * Add a task group to the webview
-   */
-  addTaskGroup(stream: StreamTabId, group: TaskGroup): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.ADD_TASK_GROUP,
-      stream,
-      group,
-    });
-  }
-
-  /**
-   * Update a task group in the webview
-   */
-  updateTaskGroup(update: UpdateTaskGroupPayload): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_TASK_GROUP,
-      update,
-    });
-  }
-
-  /**
    * Update the todo list for a stream
    */
   updateTodos(stream: StreamTabId, todos: TodoItem[]): void {
@@ -435,11 +341,9 @@ export class WebviewUpdater {
    * and instruction. Used on tab switch to replace 4 separate messages with 1.
    */
   sendSyncStreamContent(payload: SyncStreamContentPayload): void {
-    const { extras, ...rest } = payload;
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
-      ...rest,
-      ...extras,
+      ...payload,
     });
   }
 
@@ -485,7 +389,7 @@ export class WebviewUpdater {
       streamMetadata[name] = {
         kind: agentCategory,
         status: statuses?.get(name) ?? STREAM_STATUS.READY,
-        lastTimestamp: state.streamTabs.getLastTimestamp(name),
+        lastTimestamp: state.streamLogs.getLastTimestamp(name),
         conversationProgress: current?.conversationProgress ?? {
           conversationTurns: 0,
           toolCallCount: 0,

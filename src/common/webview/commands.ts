@@ -164,16 +164,10 @@ export const PROGRESS_VIEW_COMMANDS = {
   DELETE_ALL: 'deleteAll',
 
   // Logging
-  UPDATE_LOGS: 'updateLogs',
-  APPEND_LOG: 'appendLog',
-  UPDATE_LOG: 'updateLog',
+  LOG_DELTA: 'logDelta',
 
   // Instruction panel
   UPDATE_INSTRUCTION: 'updateInstruction',
-
-  // Task Groups
-  ADD_TASK_GROUP: 'addTaskGroup',
-  UPDATE_TASK_GROUP: 'updateTaskGroup',
 
   // Todo List
   UPDATE_TODOS: 'updateTodos',
@@ -181,7 +175,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   // Queued follow-ups
   UPDATE_QUEUED_FOLLOW_UPS: 'updateQueuedFollowUps',
 
-  // Batched content sync (replaces individual UPDATE_LOGS + UPDATE_TODOS + UPDATE_QUEUED_FOLLOW_UPS + UPDATE_INSTRUCTION on tab switch)
+  // Batched metadata sync on tab switch (non-log content only)
   SYNC_STREAM_CONTENT: 'syncStreamContent',
 
   // Status and files
@@ -197,7 +191,6 @@ export const PROGRESS_VIEW_COMMANDS = {
 
   // Usage
   UPDATE_RUN_USAGE: 'updateRunUsage', // Update single run's usage (incremental)
-  UPDATE_CONTEXT_STATE: 'updateContextState', // Update context utilization display
 
   // Actions
   RESUME: 'resume',

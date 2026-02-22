@@ -13,6 +13,7 @@ import {
   computeModelOptionsData,
 } from '@model/computeModelOptions';
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
+import { WebviewBridge } from '@progressView/managers/WebviewBridge';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
 import { isApprovalBypassedForStream } from '@tools/approval/toolEditApproval';
 import { isProposalBypassedForStream } from '@tools/approval/proposalApproval';
@@ -45,6 +46,7 @@ export class ProgressViewProvider
 
   public readonly state: ProgressViewState;
   public readonly eventHandler: ProgressEventHandler;
+  public readonly webviewBridge: WebviewBridge;
   public readonly webviewUpdater: WebviewUpdater;
 
   protected readonly contentProvider: ProgressViewContentProvider;
@@ -96,6 +98,14 @@ export class ProgressViewProvider
       this._view?.webview,
       this._panelView?.webview,
     ]);
+    this.webviewBridge = new WebviewBridge(
+      this.state.streamLogs,
+      () => [this._view?.webview, this._panelView?.webview],
+      () => {
+        const active = this.state.activeStream;
+        return active || null;
+      },
+    );
 
     const canSend = () => this.canSendToWebview();
     const u = this.webviewUpdater;
@@ -136,6 +146,7 @@ export class ProgressViewProvider
     this.eventHandler = new ProgressEventHandler(
       this.state,
       this.webviewUpdater,
+      this.webviewBridge,
       {
         showRetryRequest: (p) => this.retryRequestHandler.show(p),
         resolveRetryRequest: (id) => this.retryRequestHandler.resolve(id),
@@ -309,7 +320,7 @@ export class ProgressViewProvider
       theme,
     );
 
-    const hasStreams = this.state.streamTabs.keys().length > 0;
+    const hasStreams = this.state.streamLogs.keys().length > 0;
     const isFilterMismatch = !activeStream && hasStreams;
     if (!isFilterMismatch) {
       this.eventHandler.syncStreamContent(activeStream);
@@ -472,6 +483,7 @@ export class ProgressViewProvider
 
   public override dispose(): void {
     this.disposePanelResources(true);
+    this.webviewBridge.dispose();
     super.dispose();
   }
 

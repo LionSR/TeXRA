@@ -4,29 +4,35 @@ import { strict as assert } from 'assert';
 // Local imports
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { AgentLogger } from '@logger/AgentLogger';
-import { bus } from '@eventBus/ProgressEventBus';
+import { StreamLogStore } from '@logger/StreamLogStore';
 
 describe('AgentLogger.logFileCategory', () => {
   let logger: AgentLogger;
   let capturedMessages: any[];
-  let unsubscribe: () => void;
 
-  beforeEach(() => {
-    logger = new AgentLogger('TestFileListLogger');
+  beforeEach(async () => {
+    const store = new StreamLogStore();
+    AgentLogger.setStreamLogStore(store);
+    await store.clear();
+    logger = new AgentLogger('TestFileListLogger', true);
     capturedMessages = [];
-    unsubscribe = bus.on('addLogMessage', (payload) => {
-      if (payload.streamId === 'TestFileListLogger') {
-        capturedMessages.push(payload.logMessage);
-      }
-    });
   });
 
-  afterEach(() => {
-    unsubscribe();
-  });
+  const refreshCaptured = (): void => {
+    const log = AgentLogger.getStreamLogStore().get('TestFileListLogger');
+    capturedMessages = (log?.getRange(0, log.head) ?? []).map((entry) => ({
+      id: entry.id,
+      text: entry.text ?? '',
+      level: entry.level,
+      timestamp: entry.timestamp,
+      messageType: entry.messageType,
+      data: entry.data,
+    }));
+  };
 
   it('handles empty file array gracefully (no-op)', () => {
     logger.logFileCategory('Input Files', []);
+    refreshCaptured();
     assert.equal(capturedMessages.length, 0);
   });
 
@@ -35,6 +41,7 @@ describe('AgentLogger.logFileCategory', () => {
       { path: '/path/to/file.tex', ok: true },
     ]);
 
+    refreshCaptured();
     assert.equal(capturedMessages.length, 1);
     assert.equal(capturedMessages[0].messageType, MESSAGE_TYPES.FILE_LIST);
     assert.equal(capturedMessages[0].text, 'Loading Input Files (1/1)');
@@ -47,6 +54,7 @@ describe('AgentLogger.logFileCategory', () => {
       { path: '/path/also-exists.tex', ok: true },
     ]);
 
+    refreshCaptured();
     assert.equal(capturedMessages.length, 1);
     assert.equal(capturedMessages[0].text, 'Loading Reference Files (2/3)');
   });
@@ -57,6 +65,7 @@ describe('AgentLogger.logFileCategory', () => {
       { path: '/path/unknown.tex' }, // ok is undefined
     ]);
 
+    refreshCaptured();
     assert.equal(capturedMessages.length, 1);
     assert.equal(capturedMessages[0].text, 'Loading Auxiliary Files (1/2)');
   });
@@ -67,6 +76,7 @@ describe('AgentLogger.logFileCategory', () => {
       { path: '/path/missing2.png', ok: false },
     ]);
 
+    refreshCaptured();
     assert.equal(capturedMessages.length, 1);
     assert.equal(capturedMessages[0].text, 'Loading Media Files (0/2)');
   });
@@ -76,6 +86,7 @@ describe('AgentLogger.logFileCategory', () => {
       { path: '/path/file.tex', ok: true },
     ]);
 
+    refreshCaptured();
     const entries = capturedMessages[0].data;
     assert.equal(entries.length, 1);
     assert.equal(entries[0].source, 'Input Files');
@@ -91,6 +102,7 @@ describe('AgentLogger.logFileCategory', () => {
       { path: '/c' }, // undefined
     ]);
 
+    refreshCaptured();
     const entries = capturedMessages[0].data;
     assert.equal(entries[0].ok, true);
     assert.equal(entries[1].ok, false);
