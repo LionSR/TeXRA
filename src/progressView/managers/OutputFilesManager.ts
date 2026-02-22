@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 import {
   OutputFileInfoListSchema,
   type OutputFileInfo,
@@ -7,13 +5,16 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { AgentLogger } from '@logger/AgentLogger';
-import { RoundKeySchema } from '@progressView/persistence/schemaUtils';
+import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
 import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
 import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 
 /**
  * Manages output files collection with disk-backed persistence per stream tab.
  * Each stream's data lives in its own directory on disk via StreamTabStore.
+ *
+ * Disk writes happen per-stream on mutation. Disk deletion is owned by
+ * ProgressViewState (via store.clear() / deleteAllStreamData()).
  */
 export class OutputFilesManager {
   private items: Map<
@@ -31,7 +32,6 @@ export class OutputFilesManager {
     this.logger = new AgentLogger('OutputFilesManager');
   }
 
-  /** Get or create a nested map entry */
   private getOrCreateNested<K, V>(map: Map<K, V>, key: K, factory: () => V): V {
     let inner = map.get(key);
     if (!inner) {
@@ -185,7 +185,7 @@ export class OutputFilesManager {
     return missing ? new Map(missing) : new Map();
   }
 
-  /** Clear missing outputs for a stream */
+  /** Clear missing outputs for a stream (in-memory + disk) */
   async clearMissingOutputs(stream: StreamTabId): Promise<void> {
     if (!this._missingOutputs.delete(stream)) {
       return;
@@ -193,56 +193,16 @@ export class OutputFilesManager {
     await this.saveMissingOutputs(stream);
   }
 
-  /** Check if key exists */
-  has(key: StreamTabId): boolean {
-    return this.items.has(key);
-  }
-
-  /** Get all keys */
-  keys(): StreamTabId[] {
-    return [...this.items.keys()];
-  }
-
-  /** Get a value for the key */
-  get(key: StreamTabId): Map<string, Map<number, OutputFileInfo[]>> | undefined {
-    return this.items.get(key);
-  }
-
-  /** Delete all files for a stream */
-  async deleteStream(stream: StreamTabId): Promise<void> {
+  /** Remove a stream from in-memory state. Disk cleanup owned by caller. */
+  evict(stream: StreamTabId): void {
     this.items.delete(stream);
     this._missingOutputs.delete(stream);
-    if (this.loaded) {
-      const store = getStreamTabStore(stream);
-      await Promise.all([
-        store.writeOutputFiles({}),
-        store.writeMissingOutputs({}),
-      ]);
-    }
   }
 
-  /** Delete a stream entry (alias for deleteStream, used by ProgressViewState) */
-  async delete(stream: StreamTabId): Promise<void> {
-    await this.deleteStream(stream);
-  }
-
-  /** Clear all output files */
-  async clear(): Promise<void> {
-    const streams = [...this.items.keys(), ...this._missingOutputs.keys()];
+  /** Clear all in-memory state. Disk cleanup owned by caller. */
+  evictAll(): void {
     this.items.clear();
     this._missingOutputs.clear();
-    if (this.loaded) {
-      const uniqueStreams = [...new Set(streams)];
-      await Promise.all(
-        uniqueStreams.map(async (stream) => {
-          const store = getStreamTabStore(stream);
-          await Promise.all([
-            store.writeOutputFiles({}),
-            store.writeMissingOutputs({}),
-          ]);
-        }),
-      );
-    }
   }
 
   /** Load output files from disk-backed StreamTabStore */
@@ -268,9 +228,6 @@ export class OutputFilesManager {
 
     this.loaded = true;
   }
-
-  /** No-op: writes are immediate per-stream now */
-  async flush(): Promise<void> {}
 
   // -- Per-stream persistence -----------------------------------------------
 

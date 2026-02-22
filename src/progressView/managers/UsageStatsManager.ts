@@ -15,6 +15,9 @@ import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 
 /**
  * Manages usage statistics collection with disk-backed persistence per stream tab.
+ *
+ * Disk writes happen per-stream on mutation. Disk deletion is owned by
+ * ProgressViewState (via store.clear() / deleteAllStreamData()).
  */
 type RunUsageMap = Map<string, TokenUsageStats>;
 
@@ -54,49 +57,19 @@ export class UsageStatsManager {
     return accumulated;
   }
 
-  /**
-   * Get usage statistics for a stream (returns a copy of the map)
-   */
+  /** Get usage statistics for a stream (returns a copy of the map) */
   getRunUsage(stream: StreamTabId): RunUsageMap {
     return new Map(this.items.get(stream) ?? []);
   }
 
-  /** Check if key exists */
-  has(key: StreamTabId): boolean {
-    return this.items.has(key);
-  }
-
-  /** Get all keys */
-  keys(): StreamTabId[] {
-    return [...this.items.keys()];
-  }
-
-  /** Get a value for the key */
-  get(key: StreamTabId): RunUsageMap | undefined {
-    return this.items.get(key);
-  }
-
-  /** Delete a stream's usage stats */
-  async delete(stream: StreamTabId): Promise<void> {
+  /** Remove a stream from in-memory state. Disk cleanup owned by caller. */
+  evict(stream: StreamTabId): void {
     this.items.delete(stream);
-    if (this.loaded) {
-      const store = getStreamTabStore(stream);
-      await store.writeUsageStats({});
-    }
   }
 
-  /** Clear all usage stats */
-  async clear(): Promise<void> {
-    const streams = [...this.items.keys()];
+  /** Clear all in-memory state. Disk cleanup owned by caller. */
+  evictAll(): void {
     this.items.clear();
-    if (this.loaded) {
-      await Promise.all(
-        streams.map(async (stream) => {
-          const store = getStreamTabStore(stream);
-          await store.writeUsageStats({});
-        }),
-      );
-    }
   }
 
   /** Load usage stats from disk-backed StreamTabStore */
@@ -121,9 +94,6 @@ export class UsageStatsManager {
       );
     }
   }
-
-  /** No-op: writes are immediate per-stream now */
-  async flush(): Promise<void> {}
 
   // -- Per-stream persistence -----------------------------------------------
 

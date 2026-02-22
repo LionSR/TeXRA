@@ -6,33 +6,39 @@
  *   streamData/
  *     {encoded(streamTabId)}/
  *       meta.json              → StreamTabMeta
- *       outputFiles.json       → serialized output files (run → round → files)
- *       missingOutputs.json    → serialized missing outputs (run → round → paths)
- *       usageStats.json        → serialized usage stats (run → stats)
- *       runInstructions.json   → serialized run instructions (run → update)
+ *       outputFiles.json       → run → round → OutputFileInfo[]
+ *       missingOutputs.json    → run → round → string[]
+ *       usageStats.json        → run → TokenUsageStats
+ *       runInstructions.json   → run → InstructionUpdate
  *
  * Follows the ExecutionKVStore pattern: KVStore per entity, typed accessors
  * with Zod validation, LRU cache of store instances.
+ *
+ * All schemas live in streamTabSchemas.ts (single source of truth).
+ * This file is pure infrastructure: KV operations + typed accessors + cache.
  */
 
 import * as path from 'path';
 
-import { z } from 'zod';
-
-import {
-  InstructionUpdateSchema,
-  type InstructionUpdate,
-  type OutputFileInfo,
-  type StreamTabId,
-  type TokenUsageStats,
+import type {
+  InstructionUpdate,
+  OutputFileInfo,
+  StreamTabId,
+  TokenUsageStats,
 } from '@shared/schemas';
 import { KVStore } from '@common/storage';
-import { TaskStateSchema } from '@logger/TaskState';
 
 import {
+  StreamTabMetaSchema,
   OutputFilesDataSchema,
   MissingOutputsDataSchema,
   UsageDataSchema,
+  RunInstructionsRecordSchema,
+  type StreamTabMeta,
+  type OutputFilesRecord,
+  type MissingOutputsRecord,
+  type UsageStatsRecord,
+  type RunInstructionsRecord,
 } from './streamTabSchemas';
 
 // ============================================================================
@@ -48,32 +54,6 @@ const KEYS = {
 } as const;
 
 export const STREAM_DATA_DIR = 'streamData';
-
-// ============================================================================
-// Schemas — source of truth for all persisted shapes
-// ============================================================================
-
-/** Meta: small per-stream scalars consolidated into one file. */
-export const StreamTabMetaSchema = z.object({
-  activeRunId: z.string().nullable().optional(),
-  parentStreamId: z.string().optional(),
-  executionId: z.string().optional(),
-  taskState: TaskStateSchema.optional(),
-});
-
-export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
-
-/** Schema for run instructions record on disk. */
-const RunInstructionsRecordSchema = z
-  .record(z.string(), InstructionUpdateSchema)
-  .catch({});
-
-// -- Write-side types (no parsing needed, just shape contracts) ---------------
-
-type OutputFilesRecord = Record<string, Record<string, OutputFileInfo[]>>;
-type MissingOutputsRecord = Record<string, Record<string, string[]>>;
-type UsageStatsRecord = Record<string, TokenUsageStats>;
-type RunInstructionsRecord = z.infer<typeof RunInstructionsRecordSchema>;
 
 // ============================================================================
 // Implementation
@@ -181,7 +161,6 @@ const storeCache = new Map<StreamTabId, StreamTabKVStore>();
 export function getStreamTabStore(streamTabId: StreamTabId): StreamTabKVStore {
   const cached = storeCache.get(streamTabId);
   if (cached) {
-    // Move to end (most-recently used)
     storeCache.delete(streamTabId);
     storeCache.set(streamTabId, cached);
     return cached;
@@ -197,12 +176,10 @@ export function getStreamTabStore(streamTabId: StreamTabId): StreamTabKVStore {
   return store;
 }
 
-/** Clear the in-memory store cache. */
 export function clearStreamTabStoreCache(): void {
   storeCache.clear();
 }
 
-/** Delete all stream data from disk. */
 export async function deleteAllStreamData(): Promise<void> {
   const rootKv = new KVStore(STREAM_DATA_DIR);
   await rootKv.deleteDir();

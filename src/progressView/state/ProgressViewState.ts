@@ -44,10 +44,10 @@ import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import {
   getStreamTabStore,
   deleteAllStreamData,
-  type StreamTabMeta,
+  STREAM_DATA_DIR,
 } from '@progressView/persistence/StreamTabStore';
+import { type StreamTabMeta } from '@progressView/persistence/streamTabSchemas';
 import { KVStore } from '@common/storage';
-import { STREAM_DATA_DIR } from '@progressView/persistence/StreamTabStore';
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
 export const StreamHintsSchema = z.object({
@@ -394,13 +394,9 @@ export class ProgressViewState {
   }
 
   async clearStream(stream: StreamTabId): Promise<void> {
-    this._taskGroups.delete(stream);
-    await Promise.all([
-      this._streamLogs.delete(stream),
-      this._outputFiles.deleteStream(stream),
-      this._usageStats.delete(stream),
-    ]);
-
+    // Clear in-memory state
+    this._outputFiles.evict(stream);
+    this._usageStats.evict(stream);
     const removedState = this.taskStates.delete(stream);
     this._executionIds.delete(stream);
     this._sessionState.delete(stream);
@@ -413,9 +409,12 @@ export class ProgressViewState {
       });
     }
 
-    // Delete the entire stream directory on disk
+    // Delete from disk: stream log file + stream data directory
     const store = getStreamTabStore(stream);
-    await store.clear();
+    await Promise.all([
+      this._streamLogs.delete(stream),
+      store.clear(),
+    ]);
 
     if (removedState) {
       this.cleanupToolUseAgentRegistry();
@@ -428,19 +427,22 @@ export class ProgressViewState {
       { data: { stack: new Error().stack } },
     );
 
-    this._taskGroups.clear();
-    await Promise.all([
-      this._streamLogs.clear(),
-      this._outputFiles.clear(),
-      this._usageStats.clear(),
-      deleteAllStreamData(),
-    ]);
+    // Clear in-memory state
+    this._outputFiles.evictAll();
+    this._usageStats.evictAll();
     this.taskStates.clear();
     this._executionIds.clear();
     this._sessionState.clear();
     this._streamStates.clear();
     this._runInstructions.clear();
     this._prefs.reset();
+
+    // Delete from disk
+    await Promise.all([
+      this._streamLogs.clear(),
+      deleteAllStreamData(),
+    ]);
+
     this.cleanupToolUseAgentRegistry();
   }
 

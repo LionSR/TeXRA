@@ -1,8 +1,8 @@
 /**
- * Zod schemas for stream-tab data deserialization.
+ * Zod schemas for stream-tab persistence.
  *
- * These schemas parse disk-backed JSON records into typed Map structures
- * used by OutputFilesManager, UsageStatsManager, and StreamTabStore.
+ * Single source of truth for all data shapes read from / written to disk
+ * by StreamTabStore, OutputFilesManager, and UsageStatsManager.
  *
  * Design: Zod handles structural parsing (records, arrays, coercion).
  * Transforms only convert Record→Map at the boundary. No manual safeParse loops.
@@ -11,11 +11,14 @@
 import { z } from 'zod';
 
 import {
+  InstructionUpdateSchema,
   OutputFileInfoSchema,
   TokenUsageStatsSchema,
+  type InstructionUpdate,
   type OutputFileInfo,
   type TokenUsageStats,
 } from '@shared/schemas';
+import { TaskStateSchema } from '@logger/TaskState';
 
 // ============================================================================
 // Shared: round key coercion
@@ -25,11 +28,24 @@ import {
 export const RoundKeySchema = z.coerce.number().int();
 
 // ============================================================================
+// Meta — small per-stream scalars consolidated into one file
+// ============================================================================
+
+export const StreamTabMetaSchema = z.object({
+  activeRunId: z.string().nullable().optional(),
+  parentStreamId: z.string().optional(),
+  executionId: z.string().optional(),
+  taskState: TaskStateSchema.optional(),
+});
+
+export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
+
+// ============================================================================
 // Output files
 // ============================================================================
 
 /**
- * Round map for output files: { roundNum: OutputFileInfo[] } → Map<number, OutputFileInfo[]>
+ * Round map: { roundNum: OutputFileInfo[] } → Map<number, OutputFileInfo[]>
  *
  * Per-item .catch(null) + .filter ensures one corrupt item doesn't drop the entire round.
  */
@@ -51,9 +67,7 @@ export const OutputFilesRoundMapSchema = z
     return map;
   });
 
-/**
- * Run map for output files: { runId: roundMap } → Map<string, Map<number, OutputFileInfo[]>>
- */
+/** Run map: { runId: roundMap } → Map<string, Map<number, OutputFileInfo[]>> */
 export const OutputFilesDataSchema = z
   .record(z.string(), OutputFilesRoundMapSchema.catch(new Map()))
   .transform((record) => {
@@ -65,9 +79,11 @@ export const OutputFilesDataSchema = z
   })
   .catch(new Map()) as z.ZodType<Map<string, Map<number, OutputFileInfo[]>>>;
 
-/**
- * Round map for missing outputs: { roundNum: string[] } → Map<number, string[]>
- */
+// ============================================================================
+// Missing outputs
+// ============================================================================
+
+/** Round map: { roundNum: string[] } → Map<number, string[]> */
 const MissingOutputsRoundMapSchema = z
   .record(z.string(), z.array(z.string()).catch([]))
   .transform((record): Map<number, string[]> => {
@@ -81,9 +97,7 @@ const MissingOutputsRoundMapSchema = z
     return map;
   });
 
-/**
- * Run map for missing outputs: { runId: roundMap } → Map<string, Map<number, string[]>>
- */
+/** Run map: { runId: roundMap } → Map<string, Map<number, string[]>> */
 export const MissingOutputsDataSchema = z
   .record(z.string(), MissingOutputsRoundMapSchema.catch(new Map()))
   .transform((record) => {
@@ -104,9 +118,7 @@ const FiniteNumber = z.coerce
   .number()
   .transform((n) => (Number.isFinite(n) ? n : 0));
 
-/**
- * Schema for parsing TokenUsageStats with safe number coercion.
- */
+/** Parsing schema with safe number coercion. */
 const TokenUsageStatsParsingBaseSchema = z.object({
   inputTokens: FiniteNumber,
   outputTokens: FiniteNumber,
@@ -154,12 +166,7 @@ export function isEmptyUsage(usage: TokenUsageStats): boolean {
   );
 }
 
-/**
- * Run usage map: { runId: TokenUsageStats } → Map<string, TokenUsageStats>
- *
- * Legacy single-value format (bare stats object without run wrapper) is handled
- * during workspace-state migration, not here. Data on disk is always new format.
- */
+/** Run map: { runId: TokenUsageStats } → Map<string, TokenUsageStats> */
 export const UsageDataSchema = z
   .record(z.string(), TokenUsageStatsParsingSchema)
   .transform((record) => {
@@ -170,3 +177,21 @@ export const UsageDataSchema = z
     return map;
   })
   .catch(new Map()) as z.ZodType<Map<string, TokenUsageStats>>;
+
+// ============================================================================
+// Run instructions
+// ============================================================================
+
+/** { runId: InstructionUpdate } → Record validated then converted to Map on read. */
+export const RunInstructionsRecordSchema = z
+  .record(z.string(), InstructionUpdateSchema)
+  .catch({});
+
+// ============================================================================
+// Write-side types — shape contracts for data written to disk
+// ============================================================================
+
+export type OutputFilesRecord = Record<string, Record<string, OutputFileInfo[]>>;
+export type MissingOutputsRecord = Record<string, Record<string, string[]>>;
+export type UsageStatsRecord = Record<string, TokenUsageStats>;
+export type RunInstructionsRecord = Record<string, InstructionUpdate>;
