@@ -6,11 +6,8 @@ export type StreamLogUpdatePatch = Partial<
 >;
 
 export class StreamLog {
-  private static readonly MAX_ENTRIES = 1000;
-
   private entries: StreamLogEntry[] = [];
   private seqCounter = 0;
-  private pruneOffset = 0;
   private readonly indexById = new Map<string, number>();
   private readonly dirtyUpdates = new Set<string>();
 
@@ -19,15 +16,11 @@ export class StreamLog {
       return;
     }
 
-    // Keep only the newest MAX_ENTRIES when loading from persistence.
-    const start = Math.max(0, entries.length - StreamLog.MAX_ENTRIES);
-    const trimmed = start > 0 ? entries.slice(start) : entries;
-
     // Re-number seqNos sequentially (1-based) to close gaps from entries
     // that were filtered out by safeParse during schema upgrades.
-    // This keeps the invariant: seqCounter === entries.length + pruneOffset,
-    // which getRange() relies on when using seqNo as an array-index proxy.
-    this.entries = trimmed.map((entry, i) => {
+    // This keeps the invariant: seqCounter === entries.length, which
+    // getRange() relies on when using seqNo as an array-index proxy.
+    this.entries = entries.map((entry, i) => {
       const seqNo = i + 1;
       return entry.seqNo === seqNo ? entry : { ...entry, seqNo };
     });
@@ -62,16 +55,6 @@ export class StreamLog {
     this.seqCounter = fullEntry.seqNo;
     this.indexById.set(fullEntry.id, this.entries.length);
     this.entries.push(fullEntry);
-
-    if (this.entries.length > StreamLog.MAX_ENTRIES) {
-      this.entries.shift();
-      this.pruneOffset++;
-      this.indexById.clear();
-      for (let i = 0; i < this.entries.length; i++) {
-        this.indexById.set(this.entries[i].id, i);
-      }
-    }
-
     return fullEntry;
   }
 
@@ -96,13 +79,10 @@ export class StreamLog {
   }
 
   getRange(fromSeq: number, toSeq: number = this.seqCounter): StreamLogEntry[] {
-    const safeFrom = Math.max(this.pruneOffset, fromSeq);
+    const safeFrom = Math.max(0, fromSeq);
     const safeTo = Math.min(this.seqCounter, Math.max(safeFrom, toSeq));
     if (safeFrom >= safeTo) return [];
-    return this.entries.slice(
-      safeFrom - this.pruneOffset,
-      safeTo - this.pruneOffset,
-    );
+    return this.entries.slice(safeFrom, safeTo);
   }
 
   drainDirtyUpdates(
