@@ -129,3 +129,43 @@ export const LogMessageUpdateSchema = LogMessageDataSchema.partial().required({
   id: true,
 });
 export type LogMessageUpdate = z.infer<typeof LogMessageUpdateSchema>;
+
+/**
+ * Legacy log message format (from STREAM_TABS era).
+ * Transforms into canonical StreamLogEntry on parse.
+ */
+const LegacyLogMessageSchema = z
+  .object({
+    id: z.string().min(1),
+    text: z.string(),
+    level: LogLevelSchema.optional().default(LOG_LEVELS.INFO),
+    timestamp: z.number(),
+    groupId: z.string().optional(),
+    messageType: MessageTypeSchema.optional().default(MESSAGE_TYPES.DEFAULT),
+    verbose: z.boolean().optional(),
+    data: z.unknown().optional(),
+  })
+  .transform(
+    (msg): StreamLogEntry => ({
+      seqNo: 0, // placeholder — StreamLog constructor renumbers
+      id: msg.id,
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: msg.level,
+      timestamp: msg.timestamp,
+      groupId: msg.groupId,
+      messageType: msg.messageType,
+      text: msg.text,
+      verbose: msg.verbose,
+      data: msg.data,
+    }),
+  );
+
+/**
+ * Accepts both current StreamLogEntry format and legacy log messages.
+ * Legacy entries are transformed into canonical StreamLogEntry.
+ * New format is tried first (Zod tries union members in order).
+ */
+export const PersistedStreamLogEntrySchema = z.union([
+  StreamLogEntrySchema,
+  LegacyLogMessageSchema,
+]);

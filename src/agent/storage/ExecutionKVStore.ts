@@ -9,10 +9,7 @@
 import * as path from 'path';
 
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import { isFileNotFoundError } from '@common/errors';
-import { isFile } from '@common/files/fsEntryType';
-import { StorageFS } from '@utils/files';
-import { hasExtension } from '@utils/core/pathCore';
+import { KVStore } from '@common/storage';
 
 import type { ExecutionId } from '@shared/schemas';
 
@@ -85,91 +82,21 @@ export interface ExecutionKVStore {
 export const EXECUTIONS_DIR = 'executions';
 
 // ============================================================================
-// Helpers
-// ============================================================================
-
-/**
- * Executes an async operation, returning a fallback value if file/directory not found.
- * Re-throws all other errors.
- */
-async function withNotFoundFallback<T>(
-  operation: () => Promise<T>,
-  fallback: T,
-): Promise<T> {
-  try {
-    return await operation();
-  } catch (error) {
-    if (isFileNotFoundError(error)) {
-      return fallback;
-    }
-    throw error;
-  }
-}
-
-function jsonFileToKey(filename: string): string {
-  return filename.replace(/\.json$/, '');
-}
-
-// ============================================================================
 // Implementation
 // ============================================================================
 
 /**
  * StorageFS-backed implementation of ExecutionKVStore.
+ * Extends KVStore for generic file operations and adds typed readers.
  * Stores data in executions/{executionId}/{key}.json
  */
-class StorageFSKVStore implements ExecutionKVStore {
-  constructor(private readonly executionId: ExecutionId) {}
-
-  private keyToPath(key: string): string {
-    // Sanitize key to prevent path traversal
-    const sanitized = key.replaceAll('..', '_').replaceAll(/[<>:"|?*]/g, '_');
-    return path.join(EXECUTIONS_DIR, this.executionId, `${sanitized}.json`);
-  }
-
-  // -- Generic KV -----------------------------------------------------------
-
-  async read<T = unknown>(key: string): Promise<T | undefined> {
-    return withNotFoundFallback(
-      () => StorageFS.readJson<T>(this.keyToPath(key)),
-      undefined,
-    );
-  }
-
-  async write<T = unknown>(key: string, value: T): Promise<void> {
-    const dir = path.join(EXECUTIONS_DIR, this.executionId);
-    await StorageFS.ensureDir(dir);
-    await StorageFS.writeJson(this.keyToPath(key), value);
-  }
-
-  async delete(key: string): Promise<void> {
-    await withNotFoundFallback(
-      () => StorageFS.delete(this.keyToPath(key)),
-      undefined,
-    );
-  }
-
-  async exists(key: string): Promise<boolean> {
-    return StorageFS.exists(this.keyToPath(key));
-  }
-
-  async listKeys(prefix?: string): Promise<string[]> {
-    const dir = path.join(EXECUTIONS_DIR, this.executionId);
-    const entries = await withNotFoundFallback(
-      () => StorageFS.readDir(dir),
-      [],
-    );
-    return entries
-      .filter(([name, type]) => {
-        if (!isFile(type) || !hasExtension(name, '.json')) return false;
-        return !prefix || jsonFileToKey(name).startsWith(prefix);
-      })
-      .map(([name]) => jsonFileToKey(name));
+class StorageFSKVStore extends KVStore implements ExecutionKVStore {
+  constructor(private readonly executionId: ExecutionId) {
+    super(path.join(EXECUTIONS_DIR, executionId));
   }
 
   async clear(): Promise<void> {
-    const dir = path.join(EXECUTIONS_DIR, this.executionId);
-    await withNotFoundFallback(() => StorageFS.delete(dir), undefined);
+    return this.deleteDir();
   }
 
   getExecutionId(): ExecutionId {

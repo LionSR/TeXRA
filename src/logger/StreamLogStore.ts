@@ -1,13 +1,11 @@
 import {
-  LOG_LEVELS,
-  MESSAGE_TYPES,
+  PersistedStreamLogEntrySchema,
   StorageRecordSchema,
   STREAM_LOG_ENTRY_TYPES,
-  StreamLogEntrySchema,
-  type LogMessageData,
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
+import { KVStore } from '@common/storage';
 import { WorkspaceStateKey } from '@common/state';
 import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 
@@ -16,8 +14,11 @@ import {
   type StreamLogAppendInput,
   type StreamLogUpdatePatch,
 } from './StreamLog';
+import * as log from './logUtils';
 
 const SAVE_DEBOUNCE_MS = 300;
+const STREAM_LOGS_DIR = 'streamLogs';
+const LOG_TAG = 'StreamLogStore';
 
 type StreamLogListener = (streamId: StreamTabId) => void;
 
@@ -28,20 +29,16 @@ function isObject(value: unknown): value is Record<string, unknown> {
 export class StreamLogStore {
   private readonly logs = new Map<StreamTabId, StreamLog>();
   private readonly listeners = new Set<StreamLogListener>();
-  private storage: MementoStorage | undefined;
+  private readonly dirtyStreamIds = new Set<StreamTabId>();
+  private readonly kv = new KVStore(STREAM_LOGS_DIR);
+
+  /** Guards persistence — tests create store without calling load(). */
+  private loaded = false;
 
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingResolve: (() => void) | null = null;
   private savePromise: Promise<void> | null = null;
   private inFlightWrite: Promise<void> | null = null;
-
-  constructor(storage?: MementoStorage) {
-    this.storage = storage;
-  }
-
-  configureStorage(storage: MementoStorage): void {
-    this.storage = storage;
-  }
 
   onChange(listener: StreamLogListener): () => void {
     this.listeners.add(listener);
@@ -65,8 +62,9 @@ export class StreamLogStore {
   }
 
   append(streamId: StreamTabId, entry: StreamLogAppendInput): StreamLogEntry {
-    const log = this.getOrCreate(streamId);
-    const appended = log.append(entry);
+    const logInstance = this.getOrCreate(streamId);
+    const appended = logInstance.append(entry);
+    this.markDirty(streamId);
     void this.save();
     this.notify(streamId);
     return appended;
@@ -77,12 +75,13 @@ export class StreamLogStore {
     id: string,
     patch: StreamLogUpdatePatch,
   ): StreamLogEntry | undefined {
-    const log = this.logs.get(streamId);
-    if (!log) return undefined;
+    const logInstance = this.logs.get(streamId);
+    if (!logInstance) return undefined;
 
-    const updated = log.update(id, patch);
+    const updated = logInstance.update(id, patch);
     if (!updated) return undefined;
 
+    this.markDirty(streamId);
     void this.save();
     this.notify(streamId);
     return updated;
@@ -102,19 +101,30 @@ export class StreamLogStore {
 
   async delete(streamId: StreamTabId): Promise<void> {
     this.logs.delete(streamId);
-    await this.persistNow();
+    this.dirtyStreamIds.delete(streamId);
+    if (!this.loaded) return;
+
+    this.cancelPendingSave();
+    log.info(LOG_TAG, `Deleting stream: ${streamId}`);
+    await this.kv.delete(streamId);
   }
 
   async clear(): Promise<void> {
+    const count = this.logs.size;
     this.logs.clear();
-    await this.persistNow();
+    this.dirtyStreamIds.clear();
+    if (!this.loaded) return;
+
+    this.cancelPendingSave();
+    log.info(LOG_TAG, `Clearing all ${count} streams`);
+    await this.kv.deleteDir();
   }
 
   endRunningGroups(now: number = Date.now()): StreamTabId[] {
     const affected: StreamTabId[] = [];
-    for (const [streamId, log] of this.logs.entries()) {
+    for (const [streamId, logInstance] of this.logs.entries()) {
       let updatedAny = false;
-      for (const entry of log.getRange(0, log.head)) {
+      for (const entry of logInstance.getRange(0, logInstance.head)) {
         if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START) continue;
         const existingData = isObject(entry.data) ? entry.data : {};
         const status =
@@ -123,7 +133,7 @@ export class StreamLogStore {
             : 'running';
         if (status !== 'running') continue;
 
-        const updated = log.update(entry.id, {
+        const updated = logInstance.update(entry.id, {
           type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
           data: { ...existingData, status: 'error', endTime: now },
         });
@@ -134,6 +144,7 @@ export class StreamLogStore {
 
       if (updatedAny) {
         affected.push(streamId);
+        this.markDirty(streamId);
         this.notify(streamId);
       }
     }
@@ -145,26 +156,51 @@ export class StreamLogStore {
     return affected;
   }
 
-  async load(): Promise<void> {
-    if (!this.storage) return;
-
+  /**
+   * Load stream logs from disk. If no on-disk data exists and a memento
+   * source is provided, performs a one-time migration from VS Code memento.
+   */
+  async load(migrationSource?: MementoStorage): Promise<void> {
     this.logs.clear();
-    const streamLogsRaw = this.storage.get(WorkspaceStateKey.STREAM_LOGS);
-    const record = StorageRecordSchema.catch({}).parse(streamLogsRaw);
+    this.dirtyStreamIds.clear();
 
-    if (Object.keys(record).length > 0) {
-      for (const [streamId, rawEntries] of Object.entries(record)) {
-        const entries = this.parsePersistedEntries(rawEntries);
-        this.logs.set(streamId, new StreamLog(entries));
+    // 1. Scan directory — filenames decode back to stream IDs
+    const streamIds = await this.kv.listKeys();
+
+    if (streamIds.length > 0) {
+      const results = await Promise.all(
+        streamIds.map(async (streamId) => {
+          const raw = await this.kv.read<unknown[]>(streamId);
+          return [streamId, this.parsePersistedEntries(raw)] as const;
+        }),
+      );
+
+      let totalEntries = 0;
+      for (const [streamId, entries] of results) {
+        if (entries.length > 0) {
+          this.logs.set(streamId as StreamTabId, new StreamLog(entries));
+          totalEntries += entries.length;
+        }
       }
+
+      log.info(
+        LOG_TAG,
+        `Loaded ${this.logs.size} streams, ${totalEntries} entries (file-backed)`,
+      );
+      this.loaded = true;
       return;
     }
 
-    this.loadLegacyStreamTabs();
+    // 2. No on-disk data — try one-time migration from memento
+    if (migrationSource) {
+      await this.migrateFromMemento(migrationSource);
+    }
+
+    this.loaded = true;
   }
 
   async save(): Promise<void> {
-    if (!this.storage) return;
+    if (!this.loaded) return;
 
     if (this.saveTimer !== null) clearTimeout(this.saveTimer);
 
@@ -185,7 +221,7 @@ export class StreamLogStore {
   }
 
   async flush(): Promise<void> {
-    if (!this.storage) return;
+    if (!this.loaded) return;
 
     if (this.saveTimer !== null) {
       clearTimeout(this.saveTimer);
@@ -202,12 +238,16 @@ export class StreamLogStore {
   }
 
   private getOrCreate(streamId: StreamTabId): StreamLog {
-    let log = this.logs.get(streamId);
-    if (!log) {
-      log = new StreamLog();
-      this.logs.set(streamId, log);
+    let logInstance = this.logs.get(streamId);
+    if (!logInstance) {
+      logInstance = new StreamLog();
+      this.logs.set(streamId, logInstance);
     }
-    return log;
+    return logInstance;
+  }
+
+  private markDirty(streamId: StreamTabId): void {
+    this.dirtyStreamIds.add(streamId);
   }
 
   private notify(streamId: StreamTabId): void {
@@ -216,95 +256,110 @@ export class StreamLogStore {
     }
   }
 
+  private cancelPendingSave(): void {
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    this.pendingResolve = null;
+    this.savePromise = null;
+  }
+
   private parsePersistedEntries(rawEntries: unknown): StreamLogEntry[] {
     if (!Array.isArray(rawEntries)) return [];
 
     const entries: StreamLogEntry[] = [];
     for (const rawEntry of rawEntries) {
-      const parsed = StreamLogEntrySchema.safeParse(rawEntry);
-      if (parsed.success) {
-        entries.push(parsed.data);
+      const result = PersistedStreamLogEntrySchema.safeParse(rawEntry);
+      if (result.success) {
+        entries.push(result.data);
       }
     }
     return entries;
   }
 
-  private loadLegacyStreamTabs(): void {
-    if (!this.storage) return;
+  /**
+   * One-time migration from VS Code memento to file-backed storage.
+   * Handles monolithic STREAM_LOGS and legacy STREAM_TABS formats.
+   */
+  private async migrateFromMemento(storage: MementoStorage): Promise<void> {
+    this.loadFromMementoRecord(storage, WorkspaceStateKey.STREAM_LOGS, 'monolithic') ||
+      this.loadFromMementoRecord(storage, WorkspaceStateKey.STREAM_TABS, 'legacy STREAM_TABS');
 
-    const legacyRaw = this.storage.get(WorkspaceStateKey.STREAM_TABS);
-    const legacyRecord = StorageRecordSchema.catch({}).parse(legacyRaw);
+    if (this.logs.size === 0) return;
 
-    for (const [streamId, rawMessages] of Object.entries(legacyRecord)) {
-      if (!Array.isArray(rawMessages)) continue;
-      const entries: StreamLogEntry[] = [];
-      let seqNo = 0;
-
-      for (const rawMessage of rawMessages) {
-        if (!isObject(rawMessage)) continue;
-        const message = rawMessage as Partial<LogMessageData>;
-        if (
-          typeof message.id !== 'string' ||
-          typeof message.text !== 'string' ||
-          typeof message.timestamp !== 'number'
-        ) {
-          continue;
-        }
-
-        seqNo += 1;
-        entries.push(
-          StreamLogEntrySchema.parse({
-            seqNo,
-            id: message.id,
-            type: STREAM_LOG_ENTRY_TYPES.LOG,
-            level: message.level ?? LOG_LEVELS.INFO,
-            timestamp: message.timestamp,
-            groupId: message.groupId,
-            messageType: message.messageType ?? MESSAGE_TYPES.DEFAULT,
-            text: message.text,
-            verbose: message.verbose,
-            data: message.data,
-          }),
-        );
-      }
-
-      this.logs.set(streamId, new StreamLog(entries));
+    // Write all streams to disk in parallel
+    const writes: Promise<void>[] = [];
+    for (const [streamId, logInstance] of this.logs.entries()) {
+      writes.push(this.kv.write(streamId, logInstance.toJSON()));
     }
+    await Promise.all(writes);
 
-    // Don't persist immediately — the legacy data in STREAM_TABS is still
-    // available as a fallback.  The migration will re-run (cheaply) on each
-    // activation until normal activity triggers a debounced save(), which
-    // writes STREAM_LOGS and avoids a 100+ MB synchronous serialisation at
-    // startup that can crash the extension host.
+    log.info(
+      LOG_TAG,
+      `Migrated ${this.logs.size} streams to file-backed storage`,
+    );
+
+    // Clear memento keys after successful migration
+    await Promise.all([
+      storage.update(WorkspaceStateKey.STREAM_LOGS, undefined),
+      storage.update(WorkspaceStateKey.STREAM_TABS, undefined),
+    ]);
+
+    this.dirtyStreamIds.clear();
   }
 
-  private async persistNow(): Promise<void> {
-    if (!this.storage) return;
+  private loadFromMementoRecord(
+    storage: MementoStorage,
+    key: WorkspaceStateKey,
+    label: string,
+  ): boolean {
+    const raw = storage.get(key);
+    const record = StorageRecordSchema.catch({}).parse(raw);
+    if (Object.keys(record).length === 0) return false;
 
-    if (this.saveTimer !== null) {
-      clearTimeout(this.saveTimer);
-      this.saveTimer = null;
+    let totalEntries = 0;
+    for (const [streamId, rawEntries] of Object.entries(record)) {
+      const entries = this.parsePersistedEntries(rawEntries);
+      if (entries.length > 0) {
+        this.logs.set(streamId as StreamTabId, new StreamLog(entries));
+        totalEntries += entries.length;
+      }
     }
 
-    this.pendingResolve = null;
-    this.savePromise = null;
-    await this.executeWrite(null);
+    log.info(
+      LOG_TAG,
+      `Loaded ${this.logs.size} streams, ${totalEntries} entries from memento (${label}, migrating)`,
+    );
+    return this.logs.size > 0;
   }
 
   private executeWrite(resolve: (() => void) | null): Promise<void> {
-    if (!this.storage) {
+    if (!this.loaded) {
       resolve?.();
       return Promise.resolve();
     }
 
-    const record: Record<string, StreamLogEntry[]> = {};
-    for (const [streamId, log] of this.logs.entries()) {
-      record[streamId] = log.toJSON();
+    const dirtyIds = [...this.dirtyStreamIds];
+    this.dirtyStreamIds.clear();
+
+    if (dirtyIds.length === 0) {
+      resolve?.();
+      return Promise.resolve();
     }
 
-    const writePromise = Promise.resolve(
-      this.storage.update(WorkspaceStateKey.STREAM_LOGS, record),
-    )
+    const writes: Promise<void>[] = [];
+    for (const streamId of dirtyIds) {
+      const logInstance = this.logs.get(streamId);
+      if (logInstance) {
+        writes.push(this.kv.write(streamId, logInstance.toJSON()));
+      }
+    }
+
+    log.debug(LOG_TAG, `Writing ${dirtyIds.length} dirty stream(s)`);
+
+    const writePromise = Promise.all(writes)
+      .then(() => {})
       .catch(() => {
         // Keep writes non-throwing on hot path.
       })

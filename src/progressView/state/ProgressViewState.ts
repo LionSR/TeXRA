@@ -137,7 +137,7 @@ export class ProgressViewState {
       WorkspaceStateKey.PROGRESS_VIEW_PREFS,
       ProgressViewPrefsSchema,
     );
-    this._streamLogs = new StreamLogStore(resolvedStorage);
+    this._streamLogs = new StreamLogStore();
     AgentLogger.setStreamLogStore(this._streamLogs);
     this._outputFiles = new OutputFilesManager(resolvedStorage);
     this._usageStats = new UsageStatsManager(resolvedStorage);
@@ -504,7 +504,7 @@ export class ProgressViewState {
     );
 
     await Promise.all([
-      this._streamLogs.load(),
+      this._streamLogs.load(this.storage),
       this._outputFiles.load(),
       this._usageStats.load(),
     ]);
