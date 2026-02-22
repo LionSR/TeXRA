@@ -3,21 +3,27 @@ import { randomUUID } from 'crypto';
 import {
   END_GROUP_STATUS,
   MESSAGE_TYPES,
+  STREAM_LOG_ENTRY_TYPES,
   type ContextManagementData,
   type EndGroupStatus,
   type ErrorContext,
   type ExtendedTokenUsageStats,
   type FileListEntry,
+  type LogLevel,
   type MessageType,
+  type StreamLogEntry,
   type ToolUseLog,
 } from '@shared/schemas';
 import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
-import { delay } from '@utils/core';
-import { SHORT_SLEEP_MS } from '@utils/config';
-import { bus } from '@eventBus/ProgressEventBus';
+import { serializeError } from '@utils/core';
 
 import { getEmitFilter } from './filterUtils';
 import * as logger from './logUtils';
+import {
+  getDefaultStreamLogStore,
+  setDefaultStreamLogStore,
+  type StreamLogStore,
+} from './StreamLogStore';
 import type { LogOptions } from './logOptions';
 
 export interface LoggerScopeOptions {
@@ -111,6 +117,21 @@ export interface AgentLogStream {
 }
 
 export class AgentLogger {
+  private static streamLogStore: StreamLogStore = getDefaultStreamLogStore();
+
+  static setStreamLogStore(store: StreamLogStore): void {
+    setDefaultStreamLogStore(store);
+    AgentLogger.streamLogStore = store;
+  }
+
+  static getStreamLogStore(): StreamLogStore {
+    return AgentLogger.streamLogStore;
+  }
+
+  private get store(): StreamLogStore {
+    return AgentLogger.streamLogStore;
+  }
+
   constructor(
     public readonly streamId: string,
     public readonly isAgentLogger = false,
@@ -118,16 +139,63 @@ export class AgentLogger {
     logger.initialize(streamId, isAgentLogger);
   }
 
+  private appendToStore(
+    level: LogLevel,
+    messageType: MessageType,
+    entry: Omit<StreamLogEntry, 'seqNo' | 'type' | 'level' | 'messageType'> &
+      Partial<Pick<StreamLogEntry, 'type'>>,
+  ): StreamLogEntry | undefined {
+    if (!this.isAgentLogger) return undefined;
+
+    const { shouldEmit, debugMode } = getEmitFilter({ level, messageType });
+    if (!shouldEmit) return undefined;
+
+    return this.store.append(this.streamId, {
+      id: entry.id,
+      type: entry.type ?? STREAM_LOG_ENTRY_TYPES.LOG,
+      level,
+      timestamp: entry.timestamp,
+      groupId: entry.groupId,
+      messageType,
+      text: entry.text,
+      data: entry.data,
+      verbose: entry.verbose ?? debugMode,
+    });
+  }
+
+  private updateStore(
+    id: string,
+    patch: Partial<Omit<StreamLogEntry, 'id' | 'seqNo'>>,
+  ): StreamLogEntry | undefined {
+    if (!this.isAgentLogger) return undefined;
+    return this.store.update(this.streamId, id, patch);
+  }
+
   private log(
-    level: 'debug' | 'info' | 'warn' | 'error',
+    level: LogLevel,
     message: string,
     options: LogOptions = {},
   ): void {
+    const messageType = options.messageType ?? MESSAGE_TYPES.DEFAULT;
+    const groupId = options.groupId ?? this.resolveActiveGroupId();
+    const data =
+      options.data instanceof Error
+        ? serializeError(options.data)
+        : options.data;
+
     logger[level](this.streamId, message, {
-      groupId: options.groupId ?? this.resolveActiveGroupId(),
-      messageType: options.messageType,
+      groupId,
+      messageType,
       isAgent: this.isAgentLogger,
-      data: options.data,
+      data,
+    });
+
+    this.appendToStore(level, messageType, {
+      id: randomUUID(),
+      timestamp: Date.now(),
+      groupId,
+      text: message,
+      data,
     });
   }
 
@@ -215,11 +283,21 @@ export class AgentLogger {
     contextWindow: number,
     groupId?: string,
   ): void {
+    this.emitContextState(inputTokens, contextWindow, groupId);
+  }
+
+  emitContextState(
+    inputTokens: number,
+    contextWindow: number,
+    groupId?: string,
+  ): void {
     const utilizationPercent = (inputTokens / contextWindow) * 100;
-    this.info(
+    const resolvedGroupId = groupId ?? this.resolveActiveGroupId();
+    this.log(
+      'info',
       `Context: ${inputTokens}/${contextWindow} tokens (${utilizationPercent.toFixed(1)}%)`,
       {
-        groupId,
+        groupId: resolvedGroupId,
         messageType: MESSAGE_TYPES.CONTEXT_STATE,
         data: { inputTokens, contextWindow, utilizationPercent },
       },
@@ -289,59 +367,61 @@ export class AgentLogger {
   }
 
   logToolUse(data: unknown, groupId?: string): void {
-    this.info('', { groupId, messageType: MESSAGE_TYPES.TOOL_USE, data });
+    this.emitToolUse(data, groupId);
   }
 
-  /**
-   * Log tool use start with status='in_progress'.
-   * Returns log ID and resolved groupId for consistent update.
-   * Note: Emits directly to bus (like createStream) for immediate UI update.
-   */
+  emitToolUse(
+    data: unknown,
+    groupId?: string,
+  ): { logId: string; groupId: string | undefined } {
+    const id = randomUUID();
+    const resolvedGroupId = groupId ?? this.resolveActiveGroupId();
+    this.appendToStore('info', MESSAGE_TYPES.TOOL_USE, {
+      id,
+      timestamp: Date.now(),
+      groupId: resolvedGroupId,
+      data,
+    });
+    return { logId: id, groupId: resolvedGroupId };
+  }
+
   logToolUseStart(
     toolName: string,
     input: unknown,
     groupId?: string,
   ): { logId: string; groupId: string | undefined } {
-    const id = randomUUID();
     const resolvedGroupId = groupId ?? this.resolveActiveGroupId();
     this.debug(`Tool started: ${toolName}`, { groupId: resolvedGroupId });
-    bus.emit('addLogMessage', {
-      streamId: this.streamId,
-      logMessage: {
-        id,
-        text: '',
-        level: 'info',
-        timestamp: Date.now(),
-        groupId: resolvedGroupId,
-        messageType: MESSAGE_TYPES.TOOL_USE,
-        data: { toolName, input, status: 'in_progress' },
-      },
-    });
-    return { logId: id, groupId: resolvedGroupId };
+    return this.emitToolUse(
+      { toolName, input, status: 'in_progress' } satisfies ToolUseLog,
+      resolvedGroupId,
+    );
   }
 
-  /**
-   * Update a tool use log entry with the completed result.
-   * Pass the groupId returned from logToolUseStart for consistency.
-   */
   updateToolUse(
     logId: string,
     toolUseLog: Omit<ToolUseLog, 'status'>,
-    groupId: string | undefined,
+    groupId?: string,
+    status: ToolUseLog['status'] = 'completed',
   ): void {
-    bus.emit('updateLogMessage', {
-      streamId: this.streamId,
-      logMessage: {
-        id: logId,
-        groupId,
-        messageType: MESSAGE_TYPES.TOOL_USE,
-        data: { ...toolUseLog, status: 'completed' },
-      },
+    this.updateStore(logId, {
+      groupId,
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      data: { ...toolUseLog, status } satisfies ToolUseLog,
     });
   }
 
   logWebSearch(data: unknown, groupId?: string): void {
-    this.info('', { groupId, messageType: MESSAGE_TYPES.WEB_SEARCH, data });
+    this.emitWebSearch(data, groupId);
+  }
+
+  emitWebSearch(data: unknown, groupId?: string): void {
+    this.appendToStore('info', MESSAGE_TYPES.WEB_SEARCH, {
+      id: randomUUID(),
+      timestamp: Date.now(),
+      groupId: groupId ?? this.resolveActiveGroupId(),
+      data,
+    });
   }
 
   withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined {
@@ -386,7 +466,7 @@ export class AgentLogger {
       parent?.id ?? parentGroupId ?? this.resolveActiveGroupId();
     const groupId = skip
       ? undefined
-      : await this.startGroup(groupName, id, resolvedParent);
+      : this.startGroup(groupName, id, resolvedParent);
 
     return new AgentLogStageHandle(this, {
       id: groupId,
@@ -401,80 +481,41 @@ export class AgentLogger {
     type: MessageType,
     options: AgentLogStreamOptions = {},
   ): AgentLogStream {
-    const { streamId } = this;
     const id = randomUUID();
     const level = options.level ?? 'info';
     const groupId = options.groupId ?? this.resolveActiveGroupId();
     const progressEnabled = options.progressViewEnabled ?? true;
 
-    const { shouldEmit, debugMode } = progressEnabled
-      ? getEmitFilter({ level, messageType: type })
-      : { shouldEmit: false, debugMode: false };
-
     let buffer = '';
-    let messageCreated = false;
-    let updateTimer: ReturnType<typeof setTimeout> | null = null;
+    let created = false;
 
     const emitNow = (): void => {
-      if (!shouldEmit) return;
+      if (!progressEnabled) return;
 
-      if (messageCreated) {
-        bus.emit('updateLogMessage', {
-          streamId,
-          logMessage: { id, text: buffer, groupId, messageType: type },
+      if (!created) {
+        const appended = this.appendToStore(level, type, {
+          id,
+          timestamp: Date.now(),
+          groupId,
+          text: buffer,
         });
-      } else {
-        bus.emit('addLogMessage', {
-          streamId,
-          logMessage: {
-            id,
-            text: buffer,
-            level,
-            timestamp: Date.now(),
-            groupId,
-            messageType: type,
-            verbose: debugMode,
-          },
-        });
-        messageCreated = true;
-      }
-    };
-
-    const cancelPendingUpdate = (): void => {
-      if (updateTimer !== null) {
-        clearTimeout(updateTimer);
-        updateTimer = null;
-      }
-    };
-
-    // First emission is always immediate; subsequent updates are throttled (100ms trailing edge).
-    const emitThrottled = (): void => {
-      if (!shouldEmit) return;
-
-      if (!messageCreated) {
-        emitNow();
+        if (appended) {
+          created = true;
+        }
         return;
       }
 
-      if (updateTimer === null) {
-        updateTimer = setTimeout(() => {
-          updateTimer = null;
-          emitNow();
-        }, 100);
-      }
+      this.updateStore(id, { text: buffer });
     };
 
     return {
       append: (text: string) => {
         if (!text) return;
         buffer += text;
-        emitThrottled();
+        emitNow();
       },
       finalize: (finalText?: string) => {
         if (typeof finalText === 'string') buffer = finalText;
-        // Flush: cancel any pending throttled update and emit final state immediately.
-        // This prevents a stale throttled emission from arriving after the final one.
-        cancelPendingUpdate();
         emitNow();
         this.debug(`Final ${type} length: ${buffer.length}`, { groupId });
         return buffer;
@@ -482,26 +523,29 @@ export class AgentLogger {
     };
   }
 
-  async startGroup(
-    groupName: string,
-    id?: string,
-    parentGroupId?: string,
-  ): Promise<string> {
-    await delay(SHORT_SLEEP_MS);
-    return logger.startGroup(
-      this.streamId,
-      groupName,
-      id,
-      parentGroupId,
-      this.isAgentLogger,
-    );
+  startGroup(groupName: string, id?: string, parentGroupId?: string): string {
+    const groupId = id ?? randomUUID();
+
+    this.appendToStore('info', MESSAGE_TYPES.DEFAULT, {
+      id: groupId,
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+      timestamp: Date.now(),
+      groupId: parentGroupId,
+      text: groupName,
+      data: { status: 'running' },
+    });
+
+    return groupId;
   }
 
   endGroup(
     groupId: string,
     status: EndGroupStatus = END_GROUP_STATUS.STOPPED,
   ): void {
-    logger.endGroup(this.streamId, groupId, status, this.isAgentLogger);
+    this.updateStore(groupId, {
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+      data: { status, endTime: Date.now() },
+    });
   }
 
   resolveActiveGroupId(): string | undefined {

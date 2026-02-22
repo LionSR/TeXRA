@@ -1,11 +1,6 @@
-/**
- * Sync handler: SYNC_STREAM_CONTENT.
- *
- * Batched content sync (tab switch: logs + todos + follow-ups + instruction in one message).
- */
-
 import { create } from 'mutative';
 
+import { sumUsageStats } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 import {
@@ -15,41 +10,69 @@ import {
   type WorkflowStreamState,
 } from '../store';
 import { updateParentStreamId } from '../stateUtils';
-import { applyLogUpdate } from './logSlice';
 import type { HandlerRegistry } from '../messageDispatcher';
 
 export const syncHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT]: (data, ctx) => {
-    // 1. Logs — shared logic with UPDATE_LOGS
-    applyLogUpdate(data, ctx);
-
     if (!data.stream || data.action === 'clear') return;
 
-    // 2-4. Consolidate stream state updates into a single create() call
-    const hasTodos = !!(data.todos || data.queuedFollowUps);
+    const hasRunData =
+      data.activeRunId !== undefined ||
+      data.runInstructions !== undefined ||
+      data.runUsage !== undefined ||
+      data.runFiles !== undefined ||
+      data.runMissingOutputs !== undefined ||
+      data.contextState !== undefined;
+    const hasTodos =
+      data.todos !== undefined || data.queuedFollowUps !== undefined;
     const hasInstruction = data.instruction !== undefined && !!data.runId;
-    const hasMeta = !!(data.conversationProgress || data.badges);
+    const hasMeta =
+      data.conversationProgress !== undefined || data.badges !== undefined;
 
-    if (hasTodos || hasInstruction || hasMeta) {
+    if (hasRunData || hasTodos || hasInstruction || hasMeta) {
       ctx.setStreamState(data.stream, (prev) =>
         create(prev, (draft) => {
-          if (isToolUseState(prev)) {
+          if (hasRunData) {
+            if (isWorkflowState(prev)) {
+              const d = draft as WorkflowStreamState;
+              if (data.activeRunId !== undefined)
+                d.activeRunId = data.activeRunId;
+              if (data.runInstructions) {
+                Object.assign(d.runInstructions, data.runInstructions);
+              }
+              if (data.runFiles) Object.assign(d.runFiles, data.runFiles);
+              if (data.runMissingOutputs) {
+                Object.assign(d.runMissingOutputs, data.runMissingOutputs);
+              }
+            }
+            if (data.runUsage) {
+              Object.assign(draft.runUsage, data.runUsage);
+              if (isToolUseState(prev)) {
+                (draft as ToolUseStreamState).sessionUsage = sumUsageStats(
+                  Object.values((draft as ToolUseStreamState).runUsage),
+                );
+              }
+            }
+            if (data.contextState) {
+              draft.contextState = data.contextState;
+            }
+          }
+
+          if (isToolUseState(prev) && hasTodos) {
             const d = draft as ToolUseStreamState;
             if (data.todos) d.todos = data.todos;
             if (data.queuedFollowUps) d.queuedFollowUps = data.queuedFollowUps;
           }
-          if (
-            isWorkflowState(prev) &&
-            data.instruction !== undefined &&
-            data.runId
-          ) {
+
+          if (isWorkflowState(prev) && hasInstruction) {
             const d = draft as WorkflowStreamState;
-            if (data.instruction) {
+            if (data.instruction && data.runId) {
               d.runInstructions[data.runId] = data.instruction;
-            } else {
+            } else if (data.runId) {
               delete d.runInstructions[data.runId];
             }
           }
+
           if (data.conversationProgress) {
             draft.conversationProgress = data.conversationProgress;
           }
@@ -63,7 +86,6 @@ export const syncHandlers: HandlerRegistry = {
       );
     }
 
-    // parentStreamId uses ctx.setState (different target) — stays separate
     if (data.parentStreamId !== undefined) {
       updateParentStreamId(ctx, data.stream as string, data.parentStreamId);
     }
