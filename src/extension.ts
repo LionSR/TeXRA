@@ -16,6 +16,7 @@ import { loadAgents } from '@agent/index';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import { toErrorMessage } from '@common/errors';
 import {
+  ensureTeXRAViewsCoLocated,
   getActiveSidebarView,
   SIDEBAR_VIEWS,
   setActiveSidebarView,
@@ -100,6 +101,7 @@ export async function activate(context: vscode.ExtensionContext) {
   dotenv.config({
     path: path.join(workspaceRoot, '.env'),
   });
+  await ensureTeXRAViewsCoLocated();
   await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
 
   // Initialize storage systems
@@ -276,6 +278,7 @@ export async function activate(context: vscode.ExtensionContext) {
       return;
     }
 
+    await ensureTeXRAViewsCoLocated();
     await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
     await vscode.commands.executeCommand('texra.mainView.focus');
   };

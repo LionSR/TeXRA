@@ -5,8 +5,10 @@ import type { IRunStorageService } from '@agent/runtime/RunStorageService';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
 import {
   BaseWebviewProvider,
+  ensureTeXRAViewsCoLocated,
   getSharedLocalResourceRoots,
   SIDEBAR_VIEWS,
+  TEXRA_VIEW_CONTAINER_COMMAND_ID,
   setActiveSidebarView,
 } from '@common/webview';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -445,14 +447,12 @@ export class ProgressViewProvider
   }
 
   public async showInSidebar(options?: { inPlace?: boolean }): Promise<void> {
+    await ensureTeXRAViewsCoLocated();
     this._activePlacement = 'sidebar';
     await setActiveSidebarView(SIDEBAR_VIEWS.PROGRESS);
+    await vscode.commands.executeCommand(TEXRA_VIEW_CONTAINER_COMMAND_ID);
     if (!options?.inPlace) {
       await vscode.commands.executeCommand('texra.progressView.focus');
-    } else {
-      // Keep view switching in the user's current TeXRA container location
-      // (primary sidebar or auxiliary bar) instead of forcing primary sidebar.
-      await vscode.commands.executeCommand('workbench.view.extension.texra');
     }
 
     if (this.isActivePlacementReady()) {

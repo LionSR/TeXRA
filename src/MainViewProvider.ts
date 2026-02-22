@@ -11,6 +11,7 @@ import { refresh, computeAgentOptionsData } from '@agent/index';
 // Local imports - common
 import {
   BaseWebviewProvider,
+  ensureTeXRAViewsCoLocated,
   getSharedLocalResourceRoots,
   MAIN_VIEW_COMMANDS,
   SIDEBAR_VIEWS,
@@ -221,6 +222,7 @@ export class MainViewProvider
   }
 
   public async showInSidebar(): Promise<void> {
+    await ensureTeXRAViewsCoLocated();
     await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
     await vscode.commands.executeCommand('texra.mainView.focus');
   }

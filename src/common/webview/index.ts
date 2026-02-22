@@ -13,8 +13,12 @@ export {
 } from './commands';
 export {
   TEXRA_ACTIVE_VIEW_CONTEXT_KEY,
+  TEXRA_VIEW_CONTAINER_ID,
+  TEXRA_VIEW_CONTAINER_COMMAND_ID,
+  TEXRA_VIEW_IDS,
   SIDEBAR_VIEWS,
   getActiveSidebarView,
+  ensureTeXRAViewsCoLocated,
   setActiveSidebarView,
   type SidebarView,
 } from './viewState';
