@@ -224,6 +224,9 @@ export class MainViewProvider
   protected override cleanupView(): void {
     this._messageDisposable?.dispose();
     this._messageDisposable = undefined;
+    if (this._activeMode === 'progress') {
+      this._progressViewProvider?.resetSidebarReady();
+    }
     this._activeMode = 'main';
     super.cleanupView();
   }
@@ -273,6 +276,14 @@ export class MainViewProvider
     const webviewView = this.getWebviewView();
     if (!webviewView || mode === this._activeMode) return;
 
+    // Guard provider availability before mutating any state.
+    if (
+      mode === 'progress' &&
+      (!this._progressContentProvider || !this._progressViewProvider)
+    ) {
+      return;
+    }
+
     this._activeMode = mode;
     await setActiveSidebarView(
       mode === 'progress' ? SIDEBAR_VIEWS.PROGRESS : SIDEBAR_VIEWS.MAIN,
@@ -282,11 +293,9 @@ export class MainViewProvider
     this._messageDisposable = undefined;
 
     if (mode === 'progress') {
-      if (!this._progressContentProvider || !this._progressViewProvider) return;
-      webviewView.webview.html = this._progressContentProvider.getHtmlContent(
-        webviewView.webview,
-      );
-      const pvp = this._progressViewProvider;
+      webviewView.webview.html =
+        this._progressContentProvider!.getHtmlContent(webviewView.webview);
+      const pvp = this._progressViewProvider!;
       this._messageDisposable = webviewView.webview.onDidReceiveMessage(
         (message) => pvp.handleSidebarMessage(message, webviewView),
       );
