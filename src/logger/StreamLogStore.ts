@@ -271,9 +271,11 @@ export class StreamLogStore {
       this.logs.set(streamId, new StreamLog(entries));
     }
 
-    if (this.logs.size > 0) {
-      void this.persistNow();
-    }
+    // Don't persist immediately — the legacy data in STREAM_TABS is still
+    // available as a fallback.  The migration will re-run (cheaply) on each
+    // activation until normal activity triggers a debounced save(), which
+    // writes STREAM_LOGS and avoids a 100+ MB synchronous serialisation at
+    // startup that can crash the extension host.
   }
 
   private async persistNow(): Promise<void> {
