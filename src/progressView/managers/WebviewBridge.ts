@@ -4,6 +4,7 @@ import type { StreamTabId } from '@shared/schemas';
 import type * as vscode from 'vscode';
 
 const FRAME_INTERVAL_MS = 16;
+const CHUNK_SIZE = 200;
 
 export class WebviewBridge {
   private pendingFlush = false;
@@ -70,8 +71,9 @@ export class WebviewBridge {
     }
 
     const cursor = this.cursors.get(activeStream) ?? 0;
-    const entries = log.getRange(cursor, log.head);
-    const updates = log.drainDirtyUpdates(cursor);
+    const chunkEnd = Math.min(cursor + CHUNK_SIZE, log.head);
+    const entries = log.getRange(cursor, chunkEnd);
+    const updates = log.drainDirtyUpdates(chunkEnd);
 
     if (entries.length === 0 && updates.length === 0) {
       this.changedStreams.delete(activeStream);
@@ -89,7 +91,12 @@ export class WebviewBridge {
       webview.postMessage(payload);
     }
 
-    this.cursors.set(activeStream, log.head);
-    this.changedStreams.delete(activeStream);
+    this.cursors.set(activeStream, chunkEnd);
+
+    if (chunkEnd < log.head) {
+      this.scheduleFlush();
+    } else {
+      this.changedStreams.delete(activeStream);
+    }
   }
 }
