@@ -9,6 +9,12 @@ export {
   type ExecutionMeta,
   type TodoEntry,
   type ChildRecord,
+  type ChildRecordData,
+  type ResultMeta,
+  ExecutionMetaSchema,
+  TodoEntrySchema,
+  ChildRecordDataSchema,
+  ResultMetaSchema,
   getExecutionStore,
   clearStoreCache,
 } from './ExecutionKVStore';

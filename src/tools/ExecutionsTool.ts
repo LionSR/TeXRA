@@ -26,6 +26,7 @@ import {
   type TodoEntry,
   listExecutions,
 } from '@agent/storage';
+import { flowKey } from '@agent/node/persisted-flow';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
   type ExecutionHandle,
@@ -483,7 +484,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     ]);
 
     if (!meta && !config) {
-      const hasFlow = await store.exists(`flow:${executionId}`);
+      const hasFlow = await store.exists(flowKey(executionId));
       if (!hasFlow) {
         throw new ToolError(`Execution not found: ${executionId}`);
       }
@@ -708,7 +709,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       // exists checks to distinguish "no execution" from "no messages yet"
       const exists =
         (await store.exists('meta')) ||
-        (await store.exists(`flow:${executionId}`));
+        (await store.exists(flowKey(executionId)));
       if (!exists) {
         throw new ToolError(`Execution not found: ${executionId}`);
       }

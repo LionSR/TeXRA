@@ -232,7 +232,7 @@ export class BashTool extends defineTool({
       .then(async (result) => {
         const wallTimeMs = Date.now() - startedAt;
         const store = getExecutionStore(executionId);
-        await store.write('result-meta', {
+        await store.writeResultMeta({
           exitCode: result.exitCode,
           wallTimeMs,
           success: result.success,
@@ -259,7 +259,7 @@ export class BashTool extends defineTool({
           outputTail,
           stderrTail,
         );
-        await store.write('report', msg);
+        await store.writeReport(msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
       })
       .catch(async (err: unknown) => {
@@ -267,7 +267,7 @@ export class BashTool extends defineTool({
         untrackExecution(executionId);
 
         const msg = formatBashError(executionId, command, err);
-        await getExecutionStore(executionId).write('report', msg);
+        await getExecutionStore(executionId).writeReport(msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
       })
       .finally(cleanupTempFiles);
