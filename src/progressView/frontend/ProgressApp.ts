@@ -368,10 +368,10 @@ export class ProgressApp extends ProgressAppBase {
 
     return {
       streamInfo: activeStreamInfo,
-      streamState: this.activeStreamState$.get(),
-      runId: this.activeRunId$.get(),
+      streamState,
+      runId,
       followupOptions,
-      isToolUse: this.activeIsToolUse$.get(),
+      isToolUse,
       hasStreams,
     };
   });
@@ -437,30 +437,6 @@ export class ProgressApp extends ProgressAppBase {
     this.streamContextValue = this.streamContext$.get();
     this.streamLogContextValue = this.logContext$.get();
     this.permissionsContextValue = this.permissions;
-  }
-
-  private rebuildFilteredStreams(): void {
-    this.cachedFilteredStreams = getFilteredStreams(this.appState);
-    this.cachedFilteredStreamMap = new Map(
-      this.cachedFilteredStreams.map((stream) => [stream.name, stream]),
-    );
-  }
-
-  /** Rebuild cached status and lastTimestamp Maps from current streamStates. */
-  private rebuildStreamMaps(): void {
-    this.cachedStreamStatusById = new Map();
-    this.cachedStreamLastTimestampById = new Map();
-    for (const stream of this.cachedFilteredStreams) {
-      const streamState = this.appState.streamStates.get(stream.name);
-      this.cachedStreamStatusById.set(
-        stream.name,
-        streamState?.status ?? STREAM_STATUS.READY,
-      );
-      this.cachedStreamLastTimestampById.set(
-        stream.name,
-        streamState?.lastTimestamp,
-      );
-    }
   }
 
   render(): TemplateResult {
