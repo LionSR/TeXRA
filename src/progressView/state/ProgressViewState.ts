@@ -710,12 +710,18 @@ export class ProgressViewState {
       );
     }
 
-    // Usage stats
+    // Usage stats — normalize legacy single-value format to run-map format
     const usageStatsData = data.usageStatsRaw[streamId];
     if (usageStatsData && typeof usageStatsData === 'object') {
+      const raw = usageStatsData as Record<string, unknown>;
+      // Legacy format: bare { inputTokens, outputTokens, cost } without run wrapper
+      const isLegacy = 'inputTokens' in raw || 'outputTokens' in raw || 'cost' in raw;
+      const normalized = isLegacy
+        ? { default: raw }
+        : raw;
       writes.push(
         store.writeUsageStats(
-          usageStatsData as Record<string, import('@shared/schemas').TokenUsageStats>,
+          normalized as Record<string, import('@shared/schemas').TokenUsageStats>,
         ),
       );
     }

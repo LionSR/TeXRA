@@ -3,6 +3,9 @@
  *
  * These schemas parse disk-backed JSON records into typed Map structures
  * used by OutputFilesManager, UsageStatsManager, and StreamTabStore.
+ *
+ * Design: Zod handles structural parsing (records, arrays, coercion).
+ * Transforms only convert Record→Map at the boundary. No manual safeParse loops.
  */
 
 import { z } from 'zod';
@@ -13,81 +16,84 @@ import {
   type OutputFileInfo,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { isPlainObject } from '@shared/utils/string';
 
-import { RoundKeySchema, createRoundMapSchema } from './schemaUtils';
+// ============================================================================
+// Shared: round key coercion
+// ============================================================================
+
+/** Coerces and validates integer round keys from string record keys. */
+export const RoundKeySchema = z.coerce.number().int();
 
 // ============================================================================
 // Output files
 // ============================================================================
 
-/** Schema for missing output paths (string arrays per round) */
-export const MissingOutputRoundMapSchema = createRoundMapSchema(z.string());
-
 /**
- * Schema for output files round map (filters invalid entries during parsing).
- * Parses { roundNum: OutputFileInfo[] } → Map<number, OutputFileInfo[]>
+ * Round map for output files: { roundNum: OutputFileInfo[] } → Map<number, OutputFileInfo[]>
+ *
+ * Per-item .catch(null) + .filter ensures one corrupt item doesn't drop the entire round.
  */
 export const OutputFilesRoundMapSchema = z
-  .record(z.string(), z.array(z.unknown()).catch([]))
+  .record(
+    z.string(),
+    z.array(OutputFileInfoSchema.catch(null as unknown as OutputFileInfo))
+      .transform((items) => items.filter((item): item is OutputFileInfo => item !== null))
+      .catch([]),
+  )
   .transform((record): Map<number, OutputFileInfo[]> => {
     const map = new Map<number, OutputFileInfo[]>();
     for (const [key, items] of Object.entries(record)) {
       const round = RoundKeySchema.safeParse(key);
-      if (!round.success) continue;
-      const parsed = items
-        .map((item) => OutputFileInfoSchema.safeParse(item))
-        .filter(
-          (result): result is { success: true; data: OutputFileInfo } =>
-            result.success,
-        )
-        .map((result) => result.data);
-      if (parsed.length > 0) {
-        map.set(round.data, parsed);
+      if (round.success && items.length > 0) {
+        map.set(round.data, items);
       }
     }
     return map;
   });
 
 /**
- * Schema for output files run map.
- * Parses { runId: { roundNum: OutputFileInfo[] } } → Map<string, Map<number, OutputFileInfo[]>>
+ * Run map for output files: { runId: roundMap } → Map<string, Map<number, OutputFileInfo[]>>
  */
 export const OutputFilesDataSchema = z
-  .unknown()
-  .transform((data): Map<string, Map<number, OutputFileInfo[]>> => {
-    if (!isPlainObject(data)) return new Map();
-
-    const runMap = new Map<string, Map<number, OutputFileInfo[]>>();
-    for (const [runId, value] of Object.entries(data)) {
-      if (!isPlainObject(value)) continue;
-      const result = OutputFilesRoundMapSchema.safeParse(value);
-      if (result.success && result.data.size > 0) {
-        runMap.set(runId, result.data);
-      }
+  .record(z.string(), OutputFilesRoundMapSchema.catch(new Map()))
+  .transform((record) => {
+    const map = new Map<string, Map<number, OutputFileInfo[]>>();
+    for (const [runId, rounds] of Object.entries(record)) {
+      if (rounds.size > 0) map.set(runId, rounds);
     }
-    return runMap;
-  }) as z.ZodType<Map<string, Map<number, OutputFileInfo[]>>>;
+    return map;
+  })
+  .catch(new Map()) as z.ZodType<Map<string, Map<number, OutputFileInfo[]>>>;
 
 /**
- * Schema for missing outputs run map.
- * Parses { runId: { roundNum: string[] } } → Map<string, Map<number, string[]>>
+ * Round map for missing outputs: { roundNum: string[] } → Map<number, string[]>
  */
-export const MissingOutputsDataSchema = z
-  .unknown()
-  .transform((data): Map<string, Map<number, string[]>> => {
-    if (!isPlainObject(data)) return new Map();
-
-    const runMap = new Map<string, Map<number, string[]>>();
-    for (const [runId, value] of Object.entries(data)) {
-      if (!isPlainObject(value)) continue;
-      const result = MissingOutputRoundMapSchema.safeParse(value);
-      if (result.success && result.data.size > 0) {
-        runMap.set(runId, result.data);
+const MissingOutputsRoundMapSchema = z
+  .record(z.string(), z.array(z.string()).catch([]))
+  .transform((record): Map<number, string[]> => {
+    const map = new Map<number, string[]>();
+    for (const [key, items] of Object.entries(record)) {
+      const round = RoundKeySchema.safeParse(key);
+      if (round.success && items.length > 0) {
+        map.set(round.data, items);
       }
     }
-    return runMap;
-  }) as z.ZodType<Map<string, Map<number, string[]>>>;
+    return map;
+  });
+
+/**
+ * Run map for missing outputs: { runId: roundMap } → Map<string, Map<number, string[]>>
+ */
+export const MissingOutputsDataSchema = z
+  .record(z.string(), MissingOutputsRoundMapSchema.catch(new Map()))
+  .transform((record) => {
+    const map = new Map<string, Map<number, string[]>>();
+    for (const [runId, rounds] of Object.entries(record)) {
+      if (rounds.size > 0) map.set(runId, rounds);
+    }
+    return map;
+  })
+  .catch(new Map()) as z.ZodType<Map<string, Map<number, string[]>>>;
 
 // ============================================================================
 // Usage stats
@@ -149,30 +155,18 @@ export function isEmptyUsage(usage: TokenUsageStats): boolean {
 }
 
 /**
- * Schema for run usage map format: { runId: TokenUsageStats }
- * Handles both new format (per-run object) and legacy single-value.
+ * Run usage map: { runId: TokenUsageStats } → Map<string, TokenUsageStats>
+ *
+ * Legacy single-value format (bare stats object without run wrapper) is handled
+ * during workspace-state migration, not here. Data on disk is always new format.
  */
-export const UsageDataSchema = z.unknown().transform(
-  (data): Map<string, TokenUsageStats> => {
-    if (!isPlainObject(data)) return new Map();
-
-    // Try new format first (per backward-compatibility guidance: new format first)
-    const runMap = new Map<string, TokenUsageStats>();
-    for (const [runId, value] of Object.entries(data)) {
-      if (!isPlainObject(value)) continue;
-      const result = TokenUsageStatsParsingSchema.safeParse(value);
-      if (result.success && !isEmptyUsage(result.data)) {
-        runMap.set(runId, result.data);
-      }
+export const UsageDataSchema = z
+  .record(z.string(), TokenUsageStatsParsingSchema)
+  .transform((record) => {
+    const map = new Map<string, TokenUsageStats>();
+    for (const [runId, stats] of Object.entries(record)) {
+      if (!isEmptyUsage(stats)) map.set(runId, stats);
     }
-    if (runMap.size > 0) return runMap;
-
-    // Fall back to legacy single-value format
-    const legacyResult = TokenUsageStatsParsingSchema.safeParse(data);
-    if (legacyResult.success && !isEmptyUsage(legacyResult.data)) {
-      return new Map([['default', legacyResult.data]]);
-    }
-
-    return runMap;
-  },
-) as z.ZodType<Map<string, TokenUsageStats>>;
+    return map;
+  })
+  .catch(new Map()) as z.ZodType<Map<string, TokenUsageStats>>;

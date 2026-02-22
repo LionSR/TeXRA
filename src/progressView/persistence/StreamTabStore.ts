@@ -21,8 +21,6 @@ import { z } from 'zod';
 
 import {
   InstructionUpdateSchema,
-  OutputFileInfoSchema,
-  TokenUsageStatsSchema,
   type InstructionUpdate,
   type OutputFileInfo,
   type StreamTabId,
@@ -65,32 +63,16 @@ export const StreamTabMetaSchema = z.object({
 
 export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
 
-/** Serialized output files on disk: Record<runId, Record<round, OutputFileInfo[]>> */
-const OutputFilesRecordSchema = z.record(
-  z.string(),
-  z.record(z.string(), z.array(OutputFileInfoSchema)),
-);
-
-type OutputFilesRecord = z.infer<typeof OutputFilesRecordSchema>;
-
-/** Serialized missing outputs on disk: Record<runId, Record<round, string[]>> */
-const MissingOutputsRecordSchema = z.record(
-  z.string(),
-  z.record(z.string(), z.array(z.string())),
-);
-
-type MissingOutputsRecord = z.infer<typeof MissingOutputsRecordSchema>;
-
-/** Serialized usage stats on disk: Record<runId, TokenUsageStats> */
-const UsageStatsRecordSchema = z.record(z.string(), TokenUsageStatsSchema);
-
-type UsageStatsRecord = z.infer<typeof UsageStatsRecordSchema>;
-
-/** Serialized run instructions on disk: Record<runId, InstructionUpdate> */
+/** Schema for run instructions record on disk. */
 const RunInstructionsRecordSchema = z
   .record(z.string(), InstructionUpdateSchema)
   .catch({});
 
+// -- Write-side types (no parsing needed, just shape contracts) ---------------
+
+type OutputFilesRecord = Record<string, Record<string, OutputFileInfo[]>>;
+type MissingOutputsRecord = Record<string, Record<string, string[]>>;
+type UsageStatsRecord = Record<string, TokenUsageStats>;
 type RunInstructionsRecord = z.infer<typeof RunInstructionsRecordSchema>;
 
 // ============================================================================
