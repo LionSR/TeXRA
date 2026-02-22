@@ -5,7 +5,7 @@
  * mid-session. These streams can be resumed when the user sends a follow-up.
  */
 
-import type { FlowRecord } from '@agent/node/persisted-flow';
+import { flowKey, type FlowRecord } from '@agent/node/persisted-flow';
 import { getExecutionStore } from './ExecutionKVStore';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
@@ -26,7 +26,7 @@ export async function hasPersistedFlowRecord(
 ): Promise<boolean> {
   try {
     const kv = getExecutionStore(executionId);
-    const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
+    const flowRecord = await kv.read<FlowRecord>(flowKey(executionId));
     // Use truthy check to match resume logic in SessionResumeRetrieval.ts
     // This rejects null, undefined, and empty objects consistently
     return !!flowRecord?.shared;

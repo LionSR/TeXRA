@@ -34,6 +34,7 @@ import {
   WORKFLOW_CONTEXT_TEMPLATE,
   type FollowupInstructionVars,
 } from '@progressView/templates/followupInstructionTemplates';
+import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import {
   cleanupAllApprovals,
   cleanupApprovalsForStream,
@@ -155,9 +156,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         ),
       [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: (data) => {
         this.provider.state.streamSortOrder = data.sortBy;
+        this.provider.syncFullView();
       },
       [PROGRESS_VIEW_COMMANDS.FILTER_STREAMS]: (data) => {
         this.provider.state.agentCategoryFilter = data.filter;
+        this.provider.syncFullView();
       },
       [PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST]: (data) =>
         this.handleRetryStreamRequest(data),
@@ -324,28 +327,31 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     const streamId = data.stream;
     const hasStream =
-      this.provider.state.streamTabs.has(streamId) ||
+      this.provider.state.streamLogs.has(streamId) ||
       Boolean(this.provider.state.getTaskState(streamId));
 
     if (!hasStream) {
       return;
     }
 
-    // Clear pending task groups, approvals, queued follow-ups, and YOLO state to prevent memory leaks
-    this.provider.eventHandler.clearPendingTaskGroups(streamId);
+    // Clear pending approvals, queued follow-ups, and YOLO state to prevent memory leaks
     cleanupApprovalsForStream(streamId);
     ToolUseFollowUpQueue.release(streamId);
     this.modelOutputBackups.delete(streamId);
+    this.provider.webviewBridge.clearStream(streamId);
 
     // Handle active stream rotation if the deleted stream was active
     const wasActive = this.provider.state.activeStream === streamId;
     await this.provider.state.clearStream(streamId);
 
     if (wasActive) {
-      // Pick next active from remaining streams
-      const remainingStreams = [...this.provider.state.streamTabs.keys()];
+      // Pick next active from remaining streams, respecting the current filter
+      const filtered = buildStreamInfos(
+        this.provider.state,
+        this.provider.state.agentCategoryFilter,
+      );
       this.provider.state.activeStream =
-        (remainingStreams[0] as StreamTabId) ?? ('' as StreamTabId);
+        this.provider.state.pickValidActiveStream(filtered.map((s) => s.name));
     }
 
     // Lightweight sync for dual-webview (frontend DELETE_STREAM handler is idempotent)
@@ -372,13 +378,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Clear all pending task groups, approvals, queued follow-ups, and YOLO state to prevent memory leaks
-    this.provider.eventHandler.clearAllPendingTaskGroups();
+    // Clear approvals, queued follow-ups, and YOLO state to prevent memory leaks
     cleanupAllApprovals();
-    for (const streamId of this.provider.state.streamTabs.keys()) {
+    for (const streamId of this.provider.state.streamLogs.keys()) {
       ToolUseFollowUpQueue.release(streamId);
     }
     this.modelOutputBackups.clear();
+    this.provider.webviewBridge.clearAll();
     await this.provider.state.clearAll();
     // Force rebuild since we deleted all streams
     this.provider.syncFullView({ forceRebuild: true });

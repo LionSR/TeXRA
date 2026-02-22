@@ -15,10 +15,6 @@ import {
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 import { firstStreamId, type ProgressState, type StreamState } from '../store';
-import {
-  clearPendingLogUpdatesForStream,
-  clearAllPendingLogUpdates,
-} from './logSlice';
 import { clearResolvedProposalIds } from './permissionSlice';
 import { clearCopyContentStore } from '../formatters/copyContentStore';
 import { clearProposalInputStore } from '../formatters/proposalInputStore';
@@ -82,7 +78,6 @@ function updateStreamInfo(
       if (!newStreamById.has(key)) {
         draft.streamStates.delete(key);
         draft.streamLogs.delete(key);
-        clearPendingLogUpdatesForStream(key);
       }
     }
 
@@ -144,7 +139,6 @@ export const streamLifecycleHandlers: HandlerRegistry = {
     const streamId = data.stream;
 
     // Always clear module-level caches for deleted stream
-    clearPendingLogUpdatesForStream(streamId);
     clearResolvedProposalIds();
     clearCopyContentStore();
     clearProposalInputStore();
@@ -163,7 +157,6 @@ export const streamLifecycleHandlers: HandlerRegistry = {
   },
 
   [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: (_data, ctx) => {
-    clearAllPendingLogUpdates();
     clearResolvedProposalIds();
     clearCopyContentStore();
     clearProposalInputStore();
