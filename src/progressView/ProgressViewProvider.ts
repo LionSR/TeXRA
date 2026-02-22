@@ -549,10 +549,6 @@ export class ProgressViewProvider
     }
   }
 
-  public showProgressViewAsPanel(): void {
-    void this.popOutToEditor();
-  }
-
   public async popBackToSidebar(): Promise<void> {
     this.disposePanelResources(true);
     await this.showInSidebar();
