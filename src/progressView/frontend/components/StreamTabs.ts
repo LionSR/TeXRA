@@ -214,7 +214,6 @@ export class StreamTab extends LitElement {
       .tab-delete:focus-within {
         color: var(--vscode-errorForeground);
       }
-
     `,
   ];
 

@@ -289,6 +289,10 @@ export class MainViewProvider
       mode === 'progress' ? SIDEBAR_VIEWS.PROGRESS : SIDEBAR_VIEWS.MAIN,
     );
 
+    // A concurrent switchMode call may have changed _activeMode while we awaited.
+    // Bail out so the newer call's HTML/listener wins.
+    if (this._activeMode !== mode) return;
+
     this._messageDisposable?.dispose();
     this._messageDisposable = undefined;
 

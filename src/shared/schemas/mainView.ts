@@ -673,7 +673,7 @@ const CommonMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.GET_DEBUG_MODE),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.SWITCH_VIEW),
-    view: z.enum(['main', 'progress']),
+    view: z.enum(['main', 'progress', 'dashboard']),
     openInEditor: z.boolean().nullish(),
   }),
   z.object({

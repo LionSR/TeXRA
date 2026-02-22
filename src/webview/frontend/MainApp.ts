@@ -1795,6 +1795,10 @@ export class MainApp extends MainAppBase {
     postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view });
   };
 
+  private onOpenDashboard = (): void => {
+    postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'dashboard' });
+  };
+
   private onPopOutProgress = (): void => {
     postMessage(COMMON_COMMANDS.SWITCH_VIEW, {
       view: 'progress',
@@ -1866,6 +1870,12 @@ export class MainApp extends MainAppBase {
               Progress
             </vscode-tab-header>
           </vscode-tabs>
+          <vscode-toolbar-button
+            class="header-action"
+            icon="gear"
+            title="Open dashboard"
+            @click=${this.onOpenDashboard}
+          ></vscode-toolbar-button>
           <vscode-toolbar-button
             class="header-action"
             icon="link-external"

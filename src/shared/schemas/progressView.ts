@@ -395,7 +395,7 @@ const WebviewReadyMessageSchema = z.object({
 
 const SwitchViewMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SWITCH_VIEW),
-  view: z.enum(['main', 'progress']),
+  view: z.enum(['main', 'progress', 'dashboard']),
   openInEditor: z.boolean().nullish(),
 });
 

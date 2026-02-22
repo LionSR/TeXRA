@@ -472,6 +472,12 @@ export class ProgressApp extends ProgressAppBase {
 
           <vscode-toolbar-button
             class="header-action"
+            icon="gear"
+            title="Open dashboard"
+            @click=${this.onOpenDashboard}
+          ></vscode-toolbar-button>
+          <vscode-toolbar-button
+            class="header-action"
             icon=${isEditorMode ? 'layout-sidebar-right' : 'link-external'}
             title=${isEditorMode ? 'Back to sidebar' : 'Open in editor'}
             @click=${isEditorMode ? this.onPopBack : this.onPopOut}
@@ -657,6 +663,10 @@ export class ProgressApp extends ProgressAppBase {
       tabs.selectedIndex = 1;
     });
   }
+
+  private onOpenDashboard = (): void => {
+    postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'dashboard' });
+  };
 
   private onPopOut = (): void => {
     postMessage(PROGRESS_VIEW_COMMANDS.POP_OUT);

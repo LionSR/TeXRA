@@ -92,6 +92,9 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.GET_THEME]: () => this.handleThemeRequest(),
       [MAIN_VIEW_COMMANDS.GET_DEBUG_MODE]: () => this.handleDebugModeRequest(),
       [COMMON_COMMANDS.SWITCH_VIEW]: (m) => {
+        if (m.view === 'dashboard') {
+          return safeExecuteCommand('texra.showDashboard', [], this.viewName);
+        }
         if (m.view === 'main') {
           return safeExecuteCommand('texra.showMainView', [], this.viewName);
         }

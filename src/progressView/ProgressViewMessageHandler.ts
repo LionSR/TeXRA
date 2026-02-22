@@ -131,6 +131,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET]: (data) =>
         this.postToActiveView(data),
       [COMMON_COMMANDS.SWITCH_VIEW]: async (data) => {
+        if (data.view === 'dashboard') {
+          await vscode.commands.executeCommand('texra.showDashboard');
+          return;
+        }
         if (data.view === 'main') {
           await vscode.commands.executeCommand('texra.showMainView');
           return;
