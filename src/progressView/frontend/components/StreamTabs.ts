@@ -215,36 +215,6 @@ export class StreamTab extends LitElement {
         color: var(--vscode-errorForeground);
       }
 
-      .status-dot {
-        display: inline-flex;
-        width: 7px;
-        min-width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        background: var(--color-border);
-      }
-
-      .status-dot.status-running {
-        background: var(--color-success);
-      }
-
-      .status-dot.status-error {
-        background: var(--color-error);
-      }
-
-      .status-dot.status-waiting,
-      .status-dot.status-resuming {
-        background: var(--vscode-textLink-foreground);
-      }
-
-      .status-dot.status-stopped,
-      .status-dot.status-ready {
-        background: var(--color-border);
-      }
-
-      .status-dot.status-initializing {
-        background: var(--color-warning);
-      }
     `,
   ];
 
@@ -281,12 +251,6 @@ export class StreamTab extends LitElement {
           title=${tooltip}
         >
           <div class="tab-header">
-            <span
-              class=${classMap({
-                'status-dot': true,
-                [`status-${status}`]: true,
-              })}
-            ></span>
             <span class="tab-title">
               ${this.compact
                 ? compactLabel

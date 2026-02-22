@@ -293,8 +293,9 @@ export class MainViewProvider
     this._messageDisposable = undefined;
 
     if (mode === 'progress') {
-      webviewView.webview.html =
-        this._progressContentProvider!.getHtmlContent(webviewView.webview);
+      webviewView.webview.html = this._progressContentProvider!.getHtmlContent(
+        webviewView.webview,
+      );
       const pvp = this._progressViewProvider!;
       this._messageDisposable = webviewView.webview.onDidReceiveMessage(
         (message) => pvp.handleSidebarMessage(message, webviewView),
