@@ -252,9 +252,9 @@ Never compensate for data model problems at render time. Renderers should only t
 
 **Fix:** Store data once at the source with all metadata (timestamps, IDs). If renderers need to generate or deduplicate, the upstream code path is missing data.
 
-### Platform Decoupling
+### Separation of Concerns: VS Code Coupling
 
-TeXRA is being prepared for multi-platform support (VS Code extension + standalone Electron app). To keep the codebase portable:
+For good separation of concerns, testability, and platform independence, core business logic should not depend on the `vscode` module. Keeping domain logic free of host-specific imports makes the code easier to test, reason about, and reuse.
 
 **VS Code-free zones** — these directories must NOT import `vscode`:
 
@@ -267,7 +267,7 @@ TeXRA is being prepared for multi-platform support (VS Code extension + standalo
 - `src/eventBus/` (progress event system)
 - Webview frontends (`src/webview/frontend/`, `src/progressView/frontend/`, `src/settingsView/frontend/`)
 
-**VS Code-allowed zones** — platform-specific wiring lives here:
+**VS Code-allowed zones** — platform-specific wiring belongs here:
 
 - `src/extension.ts` (entry point)
 - `src/commands/` (VS Code command handlers)
