@@ -6,10 +6,7 @@ export function registerProgressViewCommands(
   context: vscode.ExtensionContext,
 ): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand('texra.showProgressView', () =>
-      vscode.commands.executeCommand('texra.progressView.focus'),
-    ),
-    vscode.commands.registerCommand('texra.openProgressViewInTab', () => {
+    vscode.commands.registerCommand('texra.showProgressView', async () => {
       const provider = ProgressViewProvider.getInstance();
       if (!provider) {
         vscode.window.showErrorMessage(
@@ -17,7 +14,17 @@ export function registerProgressViewCommands(
         );
         return;
       }
-      provider.showProgressViewAsPanel();
+      await provider.showProgressView();
+    }),
+    vscode.commands.registerCommand('texra.openProgressViewInTab', async () => {
+      const provider = ProgressViewProvider.getInstance();
+      if (!provider) {
+        await vscode.window.showErrorMessage(
+          'Progress View is not available. Please try again.',
+        );
+        return;
+      }
+      await provider.popOutToEditor();
     }),
   );
 }

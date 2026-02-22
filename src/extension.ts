@@ -15,6 +15,11 @@ import { isSupabaseConfigured, setRuntimeExtensionId } from '@auth/config';
 import { loadAgents } from '@agent/index';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import { toErrorMessage } from '@common/errors';
+import {
+  getActiveSidebarView,
+  SIDEBAR_VIEWS,
+  setActiveSidebarView,
+} from '@common/webview';
 import { initializeStateManagers } from '@common/state';
 import { isTerminalStatus } from '@common/constants/streamStatus';
 import { SecretManager } from '@frontend/secretManager';
@@ -95,6 +100,7 @@ export async function activate(context: vscode.ExtensionContext) {
   dotenv.config({
     path: path.join(workspaceRoot, '.env'),
   });
+  await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
 
   // Initialize storage systems
   SecretManager.initialize(context);
@@ -263,9 +269,29 @@ export async function activate(context: vscode.ExtensionContext) {
     },
   );
 
+  const showMainView = async () => {
+    const mainViewProvider = getMainViewProvider();
+    if (mainViewProvider) {
+      await mainViewProvider.showInSidebar();
+      return;
+    }
+
+    await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
+    await vscode.commands.executeCommand('texra.mainView.focus');
+  };
+
   context.subscriptions.push(
     { dispose: disposeStatusListener },
     statusBarItem,
+    vscode.commands.registerCommand('texra.showMainView', showMainView),
+    vscode.commands.registerCommand('texra.toggleView', async () => {
+      const currentView = getActiveSidebarView();
+      if (currentView === SIDEBAR_VIEWS.MAIN) {
+        await vscode.commands.executeCommand('texra.showProgressView');
+        return;
+      }
+      await vscode.commands.executeCommand('texra.showMainView');
+    }),
     vscode.commands.registerCommand(
       'texra.refreshApiKeyStatus',
       refreshApiKeyStatus,

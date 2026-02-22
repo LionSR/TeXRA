@@ -1,5 +1,5 @@
 // Third-party imports
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -13,15 +13,15 @@ import {
 } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
-// Local imports - progress view styles
-import { layoutStyles } from '../styles/logStyles';
-
 // Local imports - shared utilities
 import { formatRelativeTime } from '@shared/utils/string';
 import {
   AGENT_DECORATORS,
   getAgentCategoryDecorator,
 } from '@shared/utils/icons';
+
+// Local imports - progress view styles
+import { layoutStyles } from '../styles/logStyles';
 
 // Local imports - progress view constants
 import {
@@ -40,9 +40,11 @@ import type { StreamTabInfo } from '@shared/schemas';
 function buildTooltip(
   info: StreamTabInfo,
   lastTimestamp: number | undefined,
+  status: string,
 ): string {
   const mainLine = [
     info.label,
+    `Status: ${status}`,
     info.model && `Model: ${info.model}`,
     info.inputFile && `Input: ${info.inputFile}`,
   ]
@@ -185,6 +187,14 @@ export class StreamTab extends LitElement {
         color: var(--vscode-list-activeSelectionForeground);
       }
 
+      .tab-container.is-compact .tab {
+        padding: var(--spacing-small) var(--spacing-tiny);
+      }
+
+      .tab-container.is-compact .tab-header {
+        gap: var(--spacing-tiny);
+      }
+
       .tab-delete::part(control) {
         padding: 0;
         border-radius: var(--border-radius-small);
@@ -204,6 +214,37 @@ export class StreamTab extends LitElement {
       .tab-delete:focus-within {
         color: var(--vscode-errorForeground);
       }
+
+      .status-dot {
+        display: inline-flex;
+        width: 7px;
+        min-width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--color-border);
+      }
+
+      .status-dot.status-running {
+        background: var(--color-success);
+      }
+
+      .status-dot.status-error {
+        background: var(--color-error);
+      }
+
+      .status-dot.status-waiting,
+      .status-dot.status-resuming {
+        background: var(--vscode-textLink-foreground);
+      }
+
+      .status-dot.status-stopped,
+      .status-dot.status-ready {
+        background: var(--color-border);
+      }
+
+      .status-dot.status-initializing {
+        background: var(--color-warning);
+      }
     `,
   ];
 
@@ -211,12 +252,17 @@ export class StreamTab extends LitElement {
   @property({ type: String }) status: string = STREAM_STATUS.READY;
   @property({ attribute: false }) lastTimestamp: number | undefined = undefined;
   @property({ type: Boolean }) active = false;
+  @property({ type: Boolean }) compact = false;
 
   override render(): TemplateResult {
     const stream = this.info;
-    const tooltip = buildTooltip(stream, this.lastTimestamp);
     const status = this.status || STREAM_STATUS.READY;
+    const tooltip = buildTooltip(stream, this.lastTimestamp, status);
     const agentDecorator = getAgentCategoryDecorator(stream.agentCategory);
+    const compactLabel =
+      `${stream.parentStreamId ? '↳' : ''}${stream.label || stream.name}`
+        .trim()
+        .slice(0, 5);
 
     return html`
       <div
@@ -224,6 +270,7 @@ export class StreamTab extends LitElement {
           'tab-container': true,
           'stream-tab': true,
           'is-active': this.active,
+          'is-compact': this.compact,
           [`status-${status}`]: Boolean(status),
         })}
       >
@@ -234,50 +281,66 @@ export class StreamTab extends LitElement {
           title=${tooltip}
         >
           <div class="tab-header">
-            <span class="tab-title"
-              >${stream.parentStreamId ? '↳ ' : ''}${stream.label ||
-              stream.name}</span
-            >
+            <span
+              class=${classMap({
+                'status-dot': true,
+                [`status-${status}`]: true,
+              })}
+            ></span>
+            <span class="tab-title">
+              ${this.compact
+                ? compactLabel
+                : `${stream.parentStreamId ? '↳ ' : ''}${stream.label || stream.name}`}
+            </span>
           </div>
-          <div class="tab-meta">
-            <span class="last-active"
-              >${this.lastTimestamp
-                ? formatRelativeTime(this.lastTimestamp)
-                : ''}</span
-            >
-            <span class="model">${stream.model ?? ''}</span>
-            <i
-              class=${`codicon codicon-${agentDecorator.icon} agent-category`}
-              title=${`Category: ${agentDecorator.label}`}
-            ></i>
-            ${when(
-              stream.isRemote,
-              () => html`
-                <i
-                  class=${`codicon codicon-${AGENT_DECORATORS.properties.remote.icon} remote-agent`}
-                  title=${AGENT_DECORATORS.properties.remote.hint}
-                ></i>
-              `,
-            )}
-            ${when(
-              stream.hasMultipleOutputs,
-              () => html`
-                <i
-                  class=${`codicon codicon-${AGENT_DECORATORS.properties.multipleOutputs.icon} multi-file`}
-                  title=${AGENT_DECORATORS.properties.multipleOutputs.hint}
-                ></i>
-              `,
-            )}
-          </div>
+          ${this.compact
+            ? nothing
+            : html`
+                <div class="tab-meta">
+                  <span class="last-active"
+                    >${this.lastTimestamp
+                      ? formatRelativeTime(this.lastTimestamp)
+                      : ''}</span
+                  >
+                  <span class="model">${stream.model ?? ''}</span>
+                  <i
+                    class=${`codicon codicon-${agentDecorator.icon} agent-category`}
+                    title=${`Category: ${agentDecorator.label}`}
+                  ></i>
+                  ${when(
+                    stream.isRemote,
+                    () => html`
+                      <i
+                        class=${`codicon codicon-${AGENT_DECORATORS.properties.remote.icon} remote-agent`}
+                        title=${AGENT_DECORATORS.properties.remote.hint}
+                      ></i>
+                    `,
+                  )}
+                  ${when(
+                    stream.hasMultipleOutputs,
+                    () => html`
+                      <i
+                        class=${`codicon codicon-${AGENT_DECORATORS.properties.multipleOutputs.icon} multi-file`}
+                        title=${AGENT_DECORATORS.properties.multipleOutputs
+                          .hint}
+                      ></i>
+                    `,
+                  )}
+                </div>
+              `}
         </button>
-        <vscode-toolbar-button
-          class="tab-delete"
-          icon="close"
-          title="Delete stream"
-          aria-label="Delete stream"
-          data-stream=${stream.name}
-          data-action="delete"
-        ></vscode-toolbar-button>
+        ${this.compact
+          ? nothing
+          : html`
+              <vscode-toolbar-button
+                class="tab-delete"
+                icon="close"
+                title="Delete stream"
+                aria-label="Delete stream"
+                data-stream=${stream.name}
+                data-action="delete"
+              ></vscode-toolbar-button>
+            `}
       </div>
     `;
   }
@@ -320,6 +383,10 @@ export class StreamTabs extends LitElement {
         background-color: var(--background-color);
       }
 
+      :host([compact]) .tabs {
+        border-left: none;
+      }
+
       .tabs-content {
         flex: 1;
         overflow-y: auto;
@@ -352,6 +419,7 @@ export class StreamTabs extends LitElement {
   ];
 
   @property({ attribute: false }) streams: StreamTabInfo[] = [];
+  @property({ type: Boolean, reflect: true }) compact = false;
   @property({ attribute: false }) activeStreamId: string | null = null;
   @property({ attribute: false }) filter: StreamFilter = 'all';
   @property({ attribute: false }) sort: StreamSort = 'time';
@@ -371,6 +439,7 @@ export class StreamTabs extends LitElement {
               (stream) => html`
                 <stream-tab
                   .info=${stream}
+                  .compact=${this.compact}
                   .status=${this.streamStatusById.get(stream.name) ??
                   STREAM_STATUS.READY}
                   .lastTimestamp=${this.streamLastTimestampById.get(
@@ -389,59 +458,61 @@ export class StreamTabs extends LitElement {
               </div>`,
           )}
         </div>
-        <div class="clear-all-container">
-          <vscode-radio-group
-            id=${ELEMENT_IDS.AGENT_FILTER_CONTAINER}
-            class="agent-filter-group"
-            .value=${this.filter}
-            @change=${this.handleFilterChange}
-          >
-            ${repeat(
-              FILTER_BUTTONS,
-              (btn) => btn.id,
-              (btn) => html`
-                <vscode-radio
-                  id=${btn.id}
-                  value=${btn.filter}
-                  ?checked=${this.filter === btn.filter}
-                >
-                  ${btn.label}
-                </vscode-radio>
-              `,
-            )}
-          </vscode-radio-group>
+        ${this.compact
+          ? nothing
+          : html`<div class="clear-all-container">
+              <vscode-radio-group
+                id=${ELEMENT_IDS.AGENT_FILTER_CONTAINER}
+                class="agent-filter-group"
+                .value=${this.filter}
+                @change=${this.handleFilterChange}
+              >
+                ${repeat(
+                  FILTER_BUTTONS,
+                  (btn) => btn.id,
+                  (btn) => html`
+                    <vscode-radio
+                      id=${btn.id}
+                      value=${btn.filter}
+                      ?checked=${this.filter === btn.filter}
+                    >
+                      ${btn.label}
+                    </vscode-radio>
+                  `,
+                )}
+              </vscode-radio-group>
 
-          <vscode-toolbar-container
-            id="sortButtons"
-            @click=${this.handleSortClick}
-          >
-            ${repeat(
-              SORT_BUTTONS,
-              (btn) => btn.id,
-              (btn) => html`
+              <vscode-toolbar-container
+                id="sortButtons"
+                @click=${this.handleSortClick}
+              >
+                ${repeat(
+                  SORT_BUTTONS,
+                  (btn) => btn.id,
+                  (btn) => html`
+                    <vscode-toolbar-button
+                      id=${btn.id}
+                      icon=${btn.icon}
+                      label=${btn.title}
+                      title=${btn.title}
+                      data-sort=${btn.sort}
+                      aria-pressed=${this.sort === btn.sort ? 'true' : 'false'}
+                      class=${classMap({
+                        'sort-btn': true,
+                        active: this.sort === btn.sort,
+                      })}
+                    ></vscode-toolbar-button>
+                  `,
+                )}
                 <vscode-toolbar-button
-                  id=${btn.id}
-                  icon=${btn.icon}
-                  label=${btn.title}
-                  title=${btn.title}
-                  data-sort=${btn.sort}
-                  aria-pressed=${this.sort === btn.sort ? 'true' : 'false'}
-                  class=${classMap({
-                    'sort-btn': true,
-                    active: this.sort === btn.sort,
-                  })}
+                  id=${ELEMENT_IDS.DELETE_ALL_BTN}
+                  icon="close-all"
+                  label="Clear all"
+                  title="Clear all streams"
+                  @click=${this.handleDeleteAll}
                 ></vscode-toolbar-button>
-              `,
-            )}
-            <vscode-toolbar-button
-              id=${ELEMENT_IDS.DELETE_ALL_BTN}
-              icon="close-all"
-              label="Clear all"
-              title="Clear all streams"
-              @click=${this.handleDeleteAll}
-            ></vscode-toolbar-button>
-          </vscode-toolbar-container>
-        </div>
+              </vscode-toolbar-container>
+            </div>`}
       </div>
     `;
   }

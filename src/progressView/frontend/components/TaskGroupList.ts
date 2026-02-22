@@ -211,24 +211,6 @@ export class TaskGroupList extends LitElement {
         // Append-only: add new ungrouped entries to timeline.
         // Grouped messages are already referenced via tree nodes in timeline entries.
         this.appendToTimeline(prevUngroupedCount);
-        // Also refresh refs for existing timeline entries updated in the same batch.
-        this.updateTimelineMessageRefs();
-      } else {
-        // Same-length (streaming update): update msg refs on timeline entries in-place.
-        // guard([item.msg]) in render() detects new refs.
-        this.updateTimelineMessageRefs();
-      }
-    }
-
-    // Recompute tool-use timeline incrementally when possible
-    if (this.isToolUse && (groupsChanged || messagesChanged)) {
-      if (groupsChanged) {
-        // Structural change — full timeline rebuild (rare)
-        this.cachedTimeline = this.buildFullTimeline();
-      } else if (this.messages.length > prevCount) {
-        // Append-only: add new ungrouped entries to timeline.
-        // Grouped messages are already referenced via tree nodes in timeline entries.
-        this.appendToTimeline(prevUngroupedCount);
       } else {
         // Same-length (streaming update): update msg refs on timeline entries in-place.
         // guard([item.msg]) in render() detects new refs.

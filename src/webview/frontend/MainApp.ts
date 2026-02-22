@@ -36,7 +36,7 @@ import {
 } from '@shared/schemas';
 
 // Local imports - webview commands
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - main view
 import {
@@ -89,6 +89,7 @@ import {
   ONBOARDING_PLACEHOLDERS,
   FILE_SELECT_CONFIGS,
 } from './store';
+import type { VscTabsSelectEvent } from '@vscode-elements/elements/dist/vscode-tabs/vscode-tabs.js';
 
 // Type imports
 import type {
@@ -1781,6 +1782,26 @@ export class MainApp extends MainAppBase {
     postMessage(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS);
   }
 
+  private onViewTabSelect = (event: VscTabsSelectEvent): void => {
+    const view = event.detail.selectedIndex === 0 ? 'main' : 'progress';
+    if (view === 'progress') {
+      postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view });
+      const tabs = event.currentTarget as { selectedIndex?: number };
+      requestAnimationFrame(() => {
+        tabs.selectedIndex = 0;
+      });
+      return;
+    }
+    postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view });
+  };
+
+  private onPopOutProgress = (): void => {
+    postMessage(COMMON_COMMANDS.SWITCH_VIEW, {
+      view: 'progress',
+      openInEditor: true,
+    });
+  };
+
   // =========================================================================
   // Existing Handler Methods
   // =========================================================================
@@ -1831,6 +1852,28 @@ export class MainApp extends MainAppBase {
 
     return html`
       <div class="content-wrapper">
+        <div class="view-header">
+          <vscode-tabs
+            .selectedIndex=${0}
+            @vsc-tabs-select=${this.onViewTabSelect}
+          >
+            <vscode-tab-header slot="header">
+              <span class="codicon codicon-edit"></span>
+              Launcher
+            </vscode-tab-header>
+            <vscode-tab-header slot="header">
+              <span class="codicon codicon-server-process"></span>
+              Progress
+            </vscode-tab-header>
+          </vscode-tabs>
+          <vscode-toolbar-button
+            class="header-action"
+            icon="link-external"
+            title="Open progress sessions in editor"
+            @click=${this.onPopOutProgress}
+          ></vscode-toolbar-button>
+        </div>
+
         <div class="main-content">
           <div class=${fileSelectionClasses}>
             ${repeat(

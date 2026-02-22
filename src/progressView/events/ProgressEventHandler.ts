@@ -661,7 +661,7 @@ export class ProgressEventHandler {
       });
       affectedStreams.push(streamId);
       this.logger.debug(
-        `Stream ${streamId} set to ERROR due to webview reload`,
+        `Stream ${streamId} set to ERROR during restart recovery`,
       );
     }
 

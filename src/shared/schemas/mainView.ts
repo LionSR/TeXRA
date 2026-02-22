@@ -672,6 +672,11 @@ const CommonMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.GET_THEME),
   commandOnly(MAIN_VIEW_COMMANDS.GET_DEBUG_MODE),
   z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.SWITCH_VIEW),
+    view: z.enum(['main', 'progress']),
+    openInEditor: z.boolean().nullish(),
+  }),
+  z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.THEME_SET),
     theme: z.enum(['dark', 'light']),
   }),

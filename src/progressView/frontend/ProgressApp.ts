@@ -5,27 +5,40 @@ import { html, css, type TemplateResult } from 'lit';
 import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
+import { classMap } from 'lit/directives/class-map.js';
 
 import { z } from 'zod';
 
 // Local imports - shared webview
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
-import { vscode } from '@shared/vscode';
+import { postMessage, vscode } from '@shared/vscode';
 import { PersistedState, createWebviewStorage } from '@shared/state';
 
 // Local imports - shared schemas
 import {
   AgentCategoryFilterSchema,
   createStreamState,
+  type ProgressViewPlacement,
   type ProgressViewOutboundMessage,
   type StreamTabId,
   type TaskGroup,
 } from '@shared/schemas';
 import { getEffectiveRunId } from '@shared/streams/runSelection';
 import { sortStreams, StreamSortSchema } from '@shared/streams/streamSort';
+import {
+  SignalWatcher,
+  signal,
+  Signal,
+  select,
+  combine,
+} from '@shared/signals';
+import { codiconStyles } from '@shared/styles/codiconStyles';
 
 // Local imports - webview commands
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import {
+  COMMON_COMMANDS,
+  PROGRESS_VIEW_COMMANDS,
+} from '@common/webview/commands';
 
 // Local imports - progress view frontend
 import { STREAM_STATUS } from './constants';
@@ -37,13 +50,6 @@ import {
   type StreamLogs,
   type StreamState,
 } from './store';
-import {
-  SignalWatcher,
-  signal,
-  Signal,
-  select,
-  combine,
-} from '@shared/signals';
 
 /** Stable empty array for activeTaskGroups$ default (avoids new [] per read). */
 const EMPTY_TASK_GROUPS: TaskGroup[] = [];
@@ -86,6 +92,7 @@ import {
   type StreamLogContextValue,
 } from './contexts/streamContexts';
 import type { FrontendEventHandlerContext } from './eventHandlers';
+import type { VscTabsSelectEvent } from '@vscode-elements/elements/dist/vscode-tabs/vscode-tabs.js';
 
 // Local imports - progress view message handlers
 import type { MessageHandlerContext } from './messageDispatcher';
@@ -114,49 +121,101 @@ const ProgressAppBase = SignalWatcher(
 @customElement('progress-app')
 export class ProgressApp extends ProgressAppBase {
   // Static 'styles' override lost through mixin type erasure; still works at runtime.
-  static styles = css`
-    :host {
-      display: flex;
-      flex: 1;
-      min-height: 0;
-      min-width: 0;
-    }
+  static styles = [
+    codiconStyles,
+    css`
+      :host {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+        min-width: 0;
+      }
 
-    .main-container {
-      display: flex;
-      flex: 1;
-      height: 100%;
-      overflow: hidden;
-    }
+      .main-container {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+        min-width: 0;
+        flex-direction: column;
+        overflow: hidden;
+      }
 
-    vscode-split-layout {
-      display: flex;
-      width: 100%;
-      height: 100vh;
-    }
+      .view-header {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        padding: var(--spacing-small) var(--spacing-small) var(--spacing-tiny);
+        border-bottom: var(--border-thin) solid var(--color-border);
+        flex-shrink: 0;
+      }
 
-    .content-area {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      min-width: 0;
-      min-height: 0;
-      overflow: hidden;
-    }
+      .view-header vscode-tabs {
+        flex: 1;
+        min-width: 0;
+        --panel-display: none;
+      }
 
-    /* Stream content containers - pass-through for layout */
-    tool-use-stream-content,
-    workflow-stream-content {
-      display: contents;
-    }
-  `;
+      .view-header vscode-tab-header.focus-sidebar-tab {
+        opacity: var(--opacity-subtle);
+        cursor: default;
+      }
+
+      .header-action {
+        flex-shrink: 0;
+      }
+
+      .split-container {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+      }
+
+      vscode-split-layout {
+        display: flex;
+        width: 100%;
+        height: 100%;
+      }
+
+      stream-tabs {
+        min-width: 180px;
+      }
+
+      .main-container.narrow stream-tabs {
+        width: 60px;
+        min-width: 48px;
+        max-width: 64px;
+      }
+
+      .content-area {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      /* Stream content containers - pass-through for layout */
+      tool-use-stream-content,
+      workflow-stream-content {
+        display: contents;
+      }
+    `,
+  ];
 
   // --- Signal-based state ---
   // Single source of truth: monolithic state wrapped in a signal.
   // Mutative's structural sharing ensures unchanged branches keep their
   // reference, so selector computeds auto-skip via Object.is().
   private appState = signal(createInitialState());
+  private placement = signal<ProgressViewPlacement>('sidebar');
+  private narrowLayout = signal(false);
   @state() private permissions: PermissionState[] = [];
+
+  private readonly resizeObserver = new ResizeObserver((entries) => {
+    const width = entries[0]?.contentRect.width ?? this.clientWidth;
+    this.narrowLayout.set(width < 500);
+  });
 
   @provide({ context: streamStateContext })
   @state()
@@ -355,6 +414,16 @@ export class ProgressApp extends ProgressAppBase {
     });
   }
 
+  override connectedCallback(): void {
+    super.connectedCallback();
+    this.resizeObserver.observe(this);
+  }
+
+  override disconnectedCallback(): void {
+    this.resizeObserver.disconnect();
+    super.disconnectedCallback();
+  }
+
   protected get readyCommand(): string | null {
     return PROGRESS_VIEW_COMMANDS.WEBVIEW_READY;
   }
@@ -395,32 +464,71 @@ export class ProgressApp extends ProgressAppBase {
   }
 
   render(): TemplateResult {
-    return html`
-      <div class="main-container">
-        <vscode-split-layout initial-handle-position="80%">
-          <div
-            slot="start"
-            class="content-area"
-            @stream-switch=${this.onStreamSwitch}
-          >
-            ${this.renderStreamContent()}
-          </div>
+    const isEditorMode = this.placement.get() === 'editor';
+    const compactTabs = this.narrowLayout.get() && !isEditorMode;
 
-          <stream-tabs
-            slot="end"
-            .streams=${this.filteredStreams$.get()}
-            .activeStreamId=${this.activeStreamId$.get()}
-            .filter=${this.streamFilter$.get()}
-            .sort=${this.streamSort$.get()}
-            .streamStatusById=${this.statusById$.get()}
-            .streamLastTimestampById=${this.timestampById$.get()}
-            @stream-switch=${this.onStreamSwitch}
-            @stream-delete=${this.onStreamDelete}
-            @filter-change=${this.onFilterChange}
-            @sort-change=${this.onSortChange}
-            @delete-all=${this.onDeleteAll}
-          ></stream-tabs>
-        </vscode-split-layout>
+    return html`
+      <div
+        class=${classMap({
+          'main-container': true,
+          narrow: compactTabs,
+        })}
+      >
+        <div class="view-header">
+          <vscode-tabs
+            .selectedIndex=${1}
+            @vsc-tabs-select=${this.onViewTabSelect}
+          >
+            <vscode-tab-header
+              slot="header"
+              class=${isEditorMode ? 'focus-sidebar-tab' : ''}
+              title=${isEditorMode ? 'Focus Launcher sidebar' : ''}
+              @click=${this.onFocusLauncherTab}
+            >
+              <span class="codicon codicon-edit"></span>
+              Launcher
+            </vscode-tab-header>
+            <vscode-tab-header slot="header">
+              <span class="codicon codicon-server-process"></span>
+              Progress
+            </vscode-tab-header>
+          </vscode-tabs>
+
+          <vscode-toolbar-button
+            class="header-action"
+            icon=${isEditorMode ? 'layout-sidebar-right' : 'link-external'}
+            title=${isEditorMode ? 'Back to sidebar' : 'Open in editor'}
+            @click=${isEditorMode ? this.onPopBack : this.onPopOut}
+          ></vscode-toolbar-button>
+        </div>
+
+        <div class="split-container">
+          <vscode-split-layout initial-handle-position="80%">
+            <div
+              slot="start"
+              class="content-area"
+              @stream-switch=${this.onStreamSwitch}
+            >
+              ${this.renderStreamContent()}
+            </div>
+
+            <stream-tabs
+              slot="end"
+              .compact=${compactTabs}
+              .streams=${this.filteredStreams$.get()}
+              .activeStreamId=${this.activeStreamId$.get()}
+              .filter=${this.streamFilter$.get()}
+              .sort=${this.streamSort$.get()}
+              .streamStatusById=${this.statusById$.get()}
+              .streamLastTimestampById=${this.timestampById$.get()}
+              @stream-switch=${this.onStreamSwitch}
+              @stream-delete=${this.onStreamDelete}
+              @filter-change=${this.onFilterChange}
+              @sort-change=${this.onSortChange}
+              @delete-all=${this.onDeleteAll}
+            ></stream-tabs>
+          </vscode-split-layout>
+        </div>
       </div>
     `;
   }
@@ -539,8 +647,48 @@ export class ProgressApp extends ProgressAppBase {
       setPermissions: (permissions) => {
         this.permissions = permissions;
       },
+      setPlacement: (placement) => {
+        this.placement.set(placement);
+      },
     };
   }
+
+  private onViewTabSelect = (event: VscTabsSelectEvent): void => {
+    const view = event.detail.selectedIndex === 0 ? 'main' : 'progress';
+    if (view === 'main' && this.placement.get() === 'editor') {
+      this.focusLauncherSidebar(
+        event.currentTarget as { selectedIndex?: number },
+      );
+      return;
+    }
+    postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view });
+  };
+
+  private onFocusLauncherTab = (event: Event): void => {
+    if (this.placement.get() !== 'editor') return;
+    event.preventDefault();
+    event.stopPropagation();
+    const tabs = (event.currentTarget as HTMLElement).closest(
+      'vscode-tabs',
+    ) as { selectedIndex?: number } | null;
+    this.focusLauncherSidebar(tabs ?? undefined);
+  };
+
+  private focusLauncherSidebar(tabs?: { selectedIndex?: number }): void {
+    postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'main' });
+    if (!tabs) return;
+    requestAnimationFrame(() => {
+      tabs.selectedIndex = 1;
+    });
+  }
+
+  private onPopOut = (): void => {
+    postMessage(PROGRESS_VIEW_COMMANDS.POP_OUT);
+  };
+
+  private onPopBack = (): void => {
+    postMessage(PROGRESS_VIEW_COMMANDS.POP_BACK);
+  };
 
   // Event handler wrappers - delegate to extracted handlers
   private onStreamSwitch = (e: CustomEvent): void =>

@@ -13,6 +13,8 @@ import {
   BaseWebviewProvider,
   getSharedLocalResourceRoots,
   MAIN_VIEW_COMMANDS,
+  SIDEBAR_VIEWS,
+  setActiveSidebarView,
 } from '@common/webview';
 import { consumePendingState } from '@common/state';
 
@@ -216,5 +218,10 @@ export class MainViewProvider
       });
       pendingData = consumePendingState();
     }
+  }
+
+  public async showInSidebar(): Promise<void> {
+    await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
+    await vscode.commands.executeCommand('texra.mainView.focus');
   }
 }

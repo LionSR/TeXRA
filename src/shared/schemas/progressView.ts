@@ -47,6 +47,9 @@ export const AgentCategoryFilterSchema = z.union([
 ]);
 export type AgentCategoryFilter = z.infer<typeof AgentCategoryFilterSchema>;
 
+export const ProgressViewPlacementSchema = z.enum(['sidebar', 'editor']);
+export type ProgressViewPlacement = z.infer<typeof ProgressViewPlacementSchema>;
+
 // ============================================================
 // Progress View Data Schemas
 // ============================================================
@@ -351,6 +354,11 @@ export const ProgressDeleteAllMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_ALL),
 });
 
+export const SetPlacementMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SET_PLACEMENT),
+  placement: ProgressViewPlacementSchema,
+});
+
 export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
   'command',
   [
@@ -373,6 +381,7 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateFollowUpTextMessageSchema,
     UpdateRecordingMessageSchema,
     SetFollowupOptionsMessageSchema,
+    SetPlacementMessageSchema,
     ProgressSetThemeMessageSchema,
     ProgressDeleteStreamMessageSchema,
     ProgressDeleteAllMessageSchema,
@@ -410,6 +419,12 @@ const WebviewReadyMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.WEBVIEW_READY),
 });
 
+const SwitchViewMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SWITCH_VIEW),
+  view: z.enum(['main', 'progress']),
+  openInEditor: z.boolean().nullish(),
+});
+
 const InboundDeleteAllMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_ALL),
 });
@@ -433,6 +448,14 @@ const StartRecordingMessageSchema = z.object({
 
 const StopRecordingMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.STOP_RECORDING),
+});
+
+const PopOutMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.POP_OUT),
+});
+
+const PopBackMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.POP_BACK),
 });
 
 const ThemeSetMessageSchema = z.object({
@@ -644,6 +667,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
   'command',
   [
     WebviewReadyMessageSchema,
+    SwitchViewMessageSchema,
     ThemeSetMessageSchema,
     DebugModeSetMessageSchema,
     SwitchStreamMessageSchema,
@@ -666,6 +690,8 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     CancelRetryRequestMessageSchema,
     StartRecordingMessageSchema,
     StopRecordingMessageSchema,
+    PopOutMessageSchema,
+    PopBackMessageSchema,
     ToolEditApprovalActionMessageSchema,
     ToggleToolEditApprovalBypassMessageSchema,
     ToggleSuperYoloBypassMessageSchema,
