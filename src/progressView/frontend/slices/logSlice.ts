@@ -86,11 +86,9 @@ function updateTaskGroups(
       streamState.taskGroups[groupIndex] = nextGroup;
     }
 
-    if (
-      !entry.groupId &&
-      'activeRunId' in streamState &&
-      !streamState.activeRunId
-    ) {
+    // Unconditionally track the latest root-level run so run-scoped
+    // panes (instruction, file context) always reflect the current run.
+    if (!entry.groupId && 'activeRunId' in streamState) {
       streamState.activeRunId = entry.id;
     }
     return true;
@@ -115,15 +113,21 @@ function updateTaskGroups(
       ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
       ...(endTime !== undefined ? { endTime } : {}),
     });
-    return true;
+  } else {
+    const current = streamState.taskGroups[groupIndex];
+    streamState.taskGroups[groupIndex] = {
+      ...current,
+      status,
+      ...(endTime !== undefined ? { endTime } : {}),
+    };
   }
 
-  const current = streamState.taskGroups[groupIndex];
-  streamState.taskGroups[groupIndex] = {
-    ...current,
-    status,
-    ...(endTime !== undefined ? { endTime } : {}),
-  };
+  // Seed activeRunId from root GROUP_END entries during hydration —
+  // completed runs are persisted as GROUP_END (overwritten from GROUP_START),
+  // so without this, activeRunId stays null after reload.
+  if (!entry.groupId && 'activeRunId' in streamState) {
+    streamState.activeRunId = entry.id;
+  }
   return true;
 }
 

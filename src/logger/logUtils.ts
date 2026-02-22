@@ -1,9 +1,8 @@
 import { AsyncLocalStorage } from 'async_hooks';
-import { randomUUID } from 'crypto';
 
 import * as vscode from 'vscode';
 
-import { type EndGroupStatus, type LogLevel } from '@shared/schemas';
+import { type LogLevel } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 import { serializeError } from '@utils/core';
 
@@ -88,25 +87,6 @@ function logWithGroup(
 
 export function initialize(channel: string, isAgent = false): void {
   ensureChannel(channel, isAgent);
-}
-
-export function startGroup(
-  _channel: string,
-  _groupName: string,
-  id?: string,
-  _parentGroupId?: string,
-  _isAgent = false,
-): string {
-  return id ?? randomUUID();
-}
-
-export function endGroup(
-  _channel: string,
-  _groupId: string,
-  _status: EndGroupStatus,
-  _isAgent = false,
-): void {
-  // Group lifecycle is handled by AgentLogger + StreamLogStore.
 }
 
 export function getActiveGroupId(

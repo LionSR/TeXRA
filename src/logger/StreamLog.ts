@@ -16,8 +16,15 @@ export class StreamLog {
       return;
     }
 
-    this.entries = entries.map((entry) => StreamLogEntrySchema.parse(entry));
-    this.seqCounter = this.entries.at(-1)?.seqNo ?? 0;
+    // Re-number seqNos sequentially (1-based) to close gaps from entries
+    // that were filtered out by safeParse during schema upgrades.
+    // This keeps the invariant: seqCounter === entries.length, which
+    // getRange() relies on when using seqNo as an array-index proxy.
+    this.entries = entries.map((entry, i) => {
+      const seqNo = i + 1;
+      return entry.seqNo === seqNo ? entry : { ...entry, seqNo };
+    });
+    this.seqCounter = this.entries.length;
 
     for (let i = 0; i < this.entries.length; i++) {
       this.indexById.set(this.entries[i].id, i);
@@ -56,12 +63,15 @@ export class StreamLog {
     if (index === undefined) return undefined;
 
     const current = this.entries[index];
-    const updated = StreamLogEntrySchema.parse({
+    // Direct merge — no Zod parse. update() is on the streaming hot path
+    // (tool output chunks at ~200/sec) and receives trusted data from
+    // AgentLogger. The schema boundary is append(), not update().
+    const updated: StreamLogEntry = {
       ...current,
       ...patch,
       id: current.id,
       seqNo: current.seqNo,
-    });
+    };
 
     this.entries[index] = updated;
     this.dirtyUpdates.add(id);

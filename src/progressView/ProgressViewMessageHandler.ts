@@ -351,9 +351,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.provider.state.agentCategoryFilter,
       );
       this.provider.state.activeStream =
-        this.provider.state.pickValidActiveStream(
-          filtered.map((s) => s.name),
-        );
+        this.provider.state.pickValidActiveStream(filtered.map((s) => s.name));
     }
 
     // Lightweight sync for dual-webview (frontend DELETE_STREAM handler is idempotent)
