@@ -193,7 +193,7 @@ export class ModelHandlerOpenAI<
     if (tools && tools.length > 0) {
       const parallelToolCalls = getConfig<boolean>(
         'texra.model.openaiParallelToolCalls',
-        true,
+        false,
       );
       if (!parallelToolCalls) {
         baseParams.parallel_tool_calls = false;

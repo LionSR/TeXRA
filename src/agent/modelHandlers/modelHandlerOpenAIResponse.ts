@@ -1253,7 +1253,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Phase 4: EXECUTE - Build final params and make the API call
     const parallelToolCalls = getConfig<boolean>(
       'texra.model.openaiParallelToolCalls',
-      true,
+      false,
     );
     const params: ResponseCreateParamsBase = {
       ...baseParams,

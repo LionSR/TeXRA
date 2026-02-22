@@ -109,8 +109,8 @@
           },
           "texra.model.openaiParallelToolCalls": {
             "type": "boolean",
-            "default": true,
-            "description": "Allow OpenAI models to call multiple tools in parallel within a single turn. Disable to force sequential (zero or one) tool calls per turn.",
+            "default": false,
+            "description": "Allow OpenAI models to call multiple tools in parallel within a single turn. When disabled (default), forces sequential tool calls to preserve existing behavior.",
             "scope": "resource"
           },
           "texra.model.compactionThresholdPercent": {

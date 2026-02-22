@@ -160,7 +160,7 @@ const PROVIDER_VSCODE_SETTINGS: Record<
       key: 'texra.model.openaiParallelToolCalls',
       label: 'Parallel Tool Calls',
       description:
-        'Allow the model to call multiple tools in parallel. Disable to force one tool call per turn.',
+        'Allow the model to call multiple tools in parallel. Off by default to preserve sequential tool execution.',
     },
   ],
   anthropic: [
