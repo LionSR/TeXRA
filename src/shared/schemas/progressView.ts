@@ -282,7 +282,7 @@ export const SetFollowupOptionsMessageSchema = z.object({
   defaultMergeModel: z.string().optional(),
 });
 
-export const SyncStreamContentMessageSchema = LogsPayloadSchema.extend({
+export const SyncStreamContentMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT),
   stream: z.union([StreamTabIdSchema, z.literal('')]),
   action: z.enum(['render', 'clear']).optional(),
