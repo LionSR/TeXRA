@@ -283,8 +283,16 @@ export class StreamLogStore {
    * Handles monolithic STREAM_LOGS and legacy STREAM_TABS formats.
    */
   private async migrateFromMemento(storage: MementoStorage): Promise<void> {
-    this.loadFromMementoRecord(storage, WorkspaceStateKey.STREAM_LOGS, 'monolithic') ||
-      this.loadFromMementoRecord(storage, WorkspaceStateKey.STREAM_TABS, 'legacy STREAM_TABS');
+    this.loadFromMementoRecord(
+      storage,
+      WorkspaceStateKey.STREAM_LOGS,
+      'monolithic',
+    ) ||
+      this.loadFromMementoRecord(
+        storage,
+        WorkspaceStateKey.STREAM_TABS,
+        'legacy STREAM_TABS',
+      );
 
     if (this.logs.size === 0) return;
 
