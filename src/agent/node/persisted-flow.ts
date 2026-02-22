@@ -71,6 +71,15 @@ export class PersistedFlow<
   private cachedRecord: FlowRecord | null = null;
 
   /**
+   * Optional write-through projection callback.
+   *
+   * Called (and awaited) after every persist (stepWithResult, setShared,
+   * resetNodeHistory) so derived views (todos, conversation) stay current.
+   * Errors are swallowed — the authoritative flow blob is already written.
+   */
+  private projection: ((shared: S, kv: ExecutionKVStore) => Promise<void>) | null = null;
+
+  /**
    * Create a new PersistedFlow.
    *
    * @param start - The starting node of the flow graph
@@ -81,6 +90,21 @@ export class PersistedFlow<
     super(start);
     this.kv = kv;
     this.runId = runId ?? kv.getExecutionId();
+  }
+
+  /** Register a write-through projection that fires after each persist. */
+  setProjection(fn: (shared: S, kv: ExecutionKVStore) => Promise<void>): void {
+    this.projection = fn;
+  }
+
+  /** Run projection best-effort (errors are swallowed and warned). */
+  private async fireProjection(shared: S): Promise<void> {
+    if (!this.projection) return;
+    try {
+      await this.projection(shared, this.kv);
+    } catch (err) {
+      console.warn('[PersistedFlow] projection failed:', err);
+    }
   }
 
   /**
@@ -158,6 +182,7 @@ export class PersistedFlow<
     flow.shared = this.serializeShared(shared);
     await this.kv.write(key, flow);
     this.cachedRecord = flow;
+    await this.fireProjection(shared);
 
     return {
       hasMore: true,
@@ -206,6 +231,7 @@ export class PersistedFlow<
     flow.shared = this.serializeShared(newShared);
     await this.kv.write(key, flow);
     this.cachedRecord = flow;
+    await this.fireProjection(newShared);
   }
 
   getRunId(): string {
@@ -225,6 +251,7 @@ export class PersistedFlow<
     flow.shared = this.serializeShared(shared);
     await this.kv.write(key, flow);
     this.cachedRecord = flow;
+    await this.fireProjection(shared);
   }
 
   async init(shared: S): Promise<void> {

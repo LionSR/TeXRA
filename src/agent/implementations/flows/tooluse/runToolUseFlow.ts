@@ -189,6 +189,11 @@ export async function runToolUseFlow<C = unknown>(
       ToolUseServices<C>
     >(prepareNode, kv);
     pf.setServices(services);
+    pf.setProjection(async (s, store) => {
+      const todos = s.stateSlices?.workspaceSnapshot?.todos?.todos;
+      if (Array.isArray(todos) && todos.length > 0) await store.writeTodos(todos);
+      if (s.messages.length > 0) await store.writeConversation(s.messages);
+    });
     await pf.run(shared);
     // Re-read shared from the flow record — PersistedFlow deep-clones the
     // initial shared via structuredClone, so nodes mutate the clone, not the
@@ -198,8 +203,8 @@ export async function runToolUseFlow<C = unknown>(
 
     if (shared.lastError) {
       status = END_GROUP_STATUS.ERROR;
-      // Re-throw after state persistence (handled in finally) so
-      // runFlowWithLifecycle logs the error and shows the user notification.
+      // Re-throw so runFlowWithLifecycle logs the error and shows
+      // the user notification. State was already projected per-step.
       throw new Error(shared.lastError.message);
     } else {
       const execStatus = input.checkInterruption()
@@ -211,22 +216,6 @@ export async function runToolUseFlow<C = unknown>(
     status = END_GROUP_STATUS.ERROR;
     throw error;
   } finally {
-    // Persist conversation and todos regardless of success or failure so
-    // the executions tool can show what happened before a crash.
-    try {
-      const writes: Promise<void>[] = [];
-      if (shared.messages.length > 0) {
-        writes.push(kv.writeConversation(shared.messages));
-      }
-      const todos = shared.stateSlices?.workspaceSnapshot?.todos?.todos;
-      if (Array.isArray(todos) && todos.length > 0) {
-        writes.push(kv.writeTodos(todos));
-      }
-      await Promise.all(writes);
-    } catch {
-      // Best-effort — don't mask the original error
-    }
-
     if (shared.userCancelledRetry) {
       logger.debug('Flow record preserved for resume after retry cancellation');
     } else {

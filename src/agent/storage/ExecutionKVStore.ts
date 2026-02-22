@@ -12,7 +12,6 @@ import { z } from 'zod';
 
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
 import { type AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
-import { flowKey } from '@agent/node/persisted-flow';
 import { KVStore } from '@common/storage';
 
 // ============================================================================
@@ -174,37 +173,15 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     return (await this.read<string>(KEYS.REPORT)) ?? null;
   }
 
-  /** Read todo items: direct key first, flow blob fallback. */
   async readTodos(): Promise<TodoEntry[]> {
-    const direct = await this.read<unknown[]>(KEYS.TODOS);
-    if (Array.isArray(direct) && direct.length > 0) {
-      return parseTodoArray(direct);
-    }
-
-    // Fallback: extract from flow blob (backward compat / running executions)
-    const flow = await this.read<{
-      shared?: {
-        stateSlices?: {
-          workspaceSnapshot?: { todos?: { todos?: unknown[] } };
-        };
-      };
-    }>(flowKey(this.executionId));
-
-    const raw = flow?.shared?.stateSlices?.workspaceSnapshot?.todos?.todos;
+    const raw = await this.read<unknown[]>(KEYS.TODOS);
     if (!Array.isArray(raw) || raw.length === 0) return [];
     return parseTodoArray(raw);
   }
 
-  /** Read conversation messages: direct key first, flow blob fallback. */
   async readConversation(): Promise<unknown[] | null> {
-    const direct = await this.read<unknown[]>(KEYS.CONVERSATION);
-    if (Array.isArray(direct) && direct.length > 0) return direct;
-
-    // Fallback: extract from flow blob (backward compat / running executions)
-    const flow = await this.read<{
-      shared?: { conversation?: unknown[]; messages?: unknown[] };
-    }>(flowKey(this.executionId));
-    return flow?.shared?.conversation ?? flow?.shared?.messages ?? null;
+    const raw = await this.read<unknown[]>(KEYS.CONVERSATION);
+    return Array.isArray(raw) && raw.length > 0 ? raw : null;
   }
 
   /** Read children: per-child KV keys with schema validation. */
