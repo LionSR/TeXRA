@@ -60,6 +60,8 @@ export interface RunReflectionFlowInput<
   getOutputFileLocation?: (round: number) => AgentFileLocation;
   usageMonitor?: UsageMonitor;
   onRoundCompleted?: (roundIndex: number, totalRounds: number) => void;
+  /** When true, outputs are routed to task-run storage by default. */
+  isSubagent?: boolean;
 }
 
 export interface RunReflectionFlowResult {
@@ -135,7 +137,9 @@ export async function runReflectionFlow<C = unknown>(
   let shared: ReflectionFlowShared | undefined;
   let services: ReflectionServices<C> | undefined;
 
-  const fileService = new TaskRunFileService(executionId);
+  const fileService = new TaskRunFileService(executionId, {
+    forceRunStorage: input.isSubagent,
+  });
 
   const baseFiles: WorkspaceFileLocation[] = (
     config.outputFiles.length > 0 ? config.outputFiles : [config.inputFile]
