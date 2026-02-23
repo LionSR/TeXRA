@@ -15,6 +15,11 @@ import { isSupabaseConfigured, setRuntimeExtensionId } from '@auth/config';
 import { loadAgents } from '@agent/index';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import { toErrorMessage } from '@common/errors';
+import {
+  getActiveSidebarView,
+  SIDEBAR_VIEWS,
+  setActiveSidebarView,
+} from '@common/webview';
 import { initializeStateManagers } from '@common/state';
 import { isTerminalStatus } from '@common/constants/streamStatus';
 import { SecretManager } from '@frontend/secretManager';
@@ -95,6 +100,7 @@ export async function activate(context: vscode.ExtensionContext) {
   dotenv.config({
     path: path.join(workspaceRoot, '.env'),
   });
+  await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
 
   // Initialize storage systems
   SecretManager.initialize(context);
@@ -263,23 +269,44 @@ export async function activate(context: vscode.ExtensionContext) {
     },
   );
 
+  const showMainView = async () => {
+    const mvp = getMainViewProvider();
+    if (mvp) {
+      await mvp.showInSidebar();
+      return;
+    }
+    // Fallback when MainViewProvider is not yet registered
+    await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
+    await vscode.commands.executeCommand('texra.mainView.focus');
+  };
+
   context.subscriptions.push(
     { dispose: disposeStatusListener },
     statusBarItem,
+    vscode.commands.registerCommand('texra.showMainView', showMainView),
+    vscode.commands.registerCommand('texra.toggleView', async () => {
+      const target =
+        getActiveSidebarView() === SIDEBAR_VIEWS.MAIN
+          ? 'texra.showProgressView'
+          : 'texra.showMainView';
+      await vscode.commands.executeCommand(target);
+    }),
     vscode.commands.registerCommand(
       'texra.refreshApiKeyStatus',
       refreshApiKeyStatus,
     ),
   );
 
-  // Register webview providers
-  context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(
-      'texra.progressView',
-      progressViewProvider,
-      { webviewOptions: { retainContextWhenHidden: true } },
-    ),
-  );
+  // Wire progress and main view providers together so the sidebar
+  // can switch between launcher and progress content.
+  const mainViewProvider = getMainViewProvider();
+  if (mainViewProvider) {
+    progressViewProvider.setSidebarWebviewGetter(
+      () => mainViewProvider.getWebviewView()?.webview,
+    );
+    progressViewProvider.setMainViewProvider(mainViewProvider);
+    mainViewProvider.setProgressViewProvider(progressViewProvider);
+  }
 
   const welcomeKey = 'texra.welcomeShown';
   if (!context.globalState.get<boolean>(welcomeKey)) {
