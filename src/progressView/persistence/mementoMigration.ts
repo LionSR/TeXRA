@@ -23,16 +23,13 @@ import type { MementoStorage } from './PersistentMapManager';
  */
 export async function needsMigrationFromMemento(
   storage: MementoStorage,
-  streamIds: StreamTabId[],
+  _streamIds: StreamTabId[],
 ): Promise<boolean> {
-  // If we already have data on disk for any stream, skip migration
-  if (streamIds.length > 0) {
-    const store = getStreamTabStore(streamIds[0]);
-    const meta = await store.readMeta();
-    if (meta) return false;
-  }
-
-  // Check if memento has any of the legacy keys with data
+  // Check if memento has any of the legacy keys with data.
+  // We intentionally do NOT short-circuit based on disk state: a partial
+  // migration (e.g. crash) could leave some streams on disk while the memento
+  // still holds data for un-migrated ones. Since migrateFromMemento() clears
+  // memento keys on success, presence of memento data is the reliable signal.
   const legacyKeys = [
     WorkspaceStateKey.TASK_STATES,
     WorkspaceStateKey.OUTPUT_FILES,
@@ -169,6 +166,25 @@ function loadRecord(
   return StorageRecordSchema.parse(storage.get(key));
 }
 
+/**
+ * Look up a stream's value in a record that may use the legacy
+ * `{ workflow: { ...}, toolUse: { ... } }` bucket format.
+ */
+function extractFromRecord(
+  record: Record<string, unknown>,
+  streamId: string,
+): unknown {
+  if (streamId in record) return record[streamId];
+  for (const bucket of ['workflow', 'toolUse'] as const) {
+    const sub = record[bucket];
+    if (typeof sub === 'object' && sub !== null) {
+      const inner = sub as Record<string, unknown>;
+      if (streamId in inner) return inner[streamId];
+    }
+  }
+  return undefined;
+}
+
 function extractTaskStateEntries(
   raw: Record<string, unknown>,
 ): [string, unknown][] {
@@ -208,9 +224,9 @@ async function migrateStreamToStore(
   const taskState = taskStateEntry
     ? TaskStateSchema.safeParse(taskStateEntry[1])
     : null;
-  const executionId = data.executionIdsRaw[streamId];
-  const activeRunId = data.activeRunIdsRaw[streamId];
-  const parentStreamId = data.parentStreamIdsRaw[streamId];
+  const executionId = extractFromRecord(data.executionIdsRaw, streamId);
+  const activeRunId = extractFromRecord(data.activeRunIdsRaw, streamId);
+  const parentStreamId = extractFromRecord(data.parentStreamIdsRaw, streamId);
 
   const meta: StreamTabMeta = {};
   if (taskState?.success) {
@@ -230,7 +246,7 @@ async function migrateStreamToStore(
   }
 
   // Output files
-  const outputFilesData = data.outputFilesRaw[streamId];
+  const outputFilesData = extractFromRecord(data.outputFilesRaw, streamId);
   if (outputFilesData && typeof outputFilesData === 'object') {
     writes.push(
       store.writeOutputFiles(
@@ -240,7 +256,10 @@ async function migrateStreamToStore(
   }
 
   // Missing outputs
-  const missingOutputsData = data.missingOutputsRaw[streamId];
+  const missingOutputsData = extractFromRecord(
+    data.missingOutputsRaw,
+    streamId,
+  );
   if (missingOutputsData && typeof missingOutputsData === 'object') {
     writes.push(
       store.writeMissingOutputs(
@@ -250,7 +269,7 @@ async function migrateStreamToStore(
   }
 
   // Usage stats — normalize legacy single-value format to run-map format
-  const usageStatsData = data.usageStatsRaw[streamId];
+  const usageStatsData = extractFromRecord(data.usageStatsRaw, streamId);
   if (usageStatsData && typeof usageStatsData === 'object') {
     const raw = usageStatsData as Record<string, unknown>;
     // Legacy format: bare { inputTokens, outputTokens, cost } without run wrapper
@@ -263,7 +282,10 @@ async function migrateStreamToStore(
   }
 
   // Run instructions
-  const runInstructionsData = data.runInstructionsRaw[streamId];
+  const runInstructionsData = extractFromRecord(
+    data.runInstructionsRaw,
+    streamId,
+  );
   if (runInstructionsData && typeof runInstructionsData === 'object') {
     writes.push(
       store.writeRunInstructions(

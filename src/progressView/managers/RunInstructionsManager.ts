@@ -17,6 +17,7 @@ export class RunInstructionsManager {
   private items = new Map<StreamTabId, Map<string, InstructionUpdate>>();
   private loaded = false;
   private readonly logger: AgentLogger;
+  private readonly pendingWrites = new Map<StreamTabId, Promise<void>>();
 
   constructor() {
     this.logger = new AgentLogger('RunInstructionsManager');
@@ -56,11 +57,13 @@ export class RunInstructionsManager {
   /** Remove a stream from in-memory state. Disk cleanup owned by caller. */
   evict(stream: StreamTabId): void {
     this.items.delete(stream);
+    this.pendingWrites.delete(stream);
   }
 
   /** Clear all in-memory state. Disk cleanup owned by caller. */
   evictAll(): void {
     this.items.clear();
+    this.pendingWrites.clear();
   }
 
   /** Load run instructions from disk-backed StreamTabStore. */
@@ -86,14 +89,27 @@ export class RunInstructionsManager {
     }
   }
 
+  /** Await all pending disk writes. */
+  async flush(): Promise<void> {
+    await Promise.all([...this.pendingWrites.values()]);
+  }
+
   // -- Per-stream persistence -------------------------------------------------
 
   private save(stream: StreamTabId): void {
     if (!this.loaded) return;
-    const data = this.items.get(stream);
-    const store = getStreamTabStore(stream);
-    void store.writeRunInstructions(
-      data && data.size > 0 ? mapToRecord(data) : {},
+    const prev = this.pendingWrites.get(stream) ?? Promise.resolve();
+    const next = prev.then(() => {
+      if (!this.pendingWrites.has(stream)) return;
+      const data = this.items.get(stream);
+      const store = getStreamTabStore(stream);
+      return store.writeRunInstructions(
+        data && data.size > 0 ? mapToRecord(data) : {},
+      );
+    });
+    this.pendingWrites.set(
+      stream,
+      next.catch(() => {}),
     );
   }
 }

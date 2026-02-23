@@ -376,7 +376,11 @@ export class ProgressViewState {
    * Flush pending writes from all managers.
    */
   async flush(): Promise<void> {
-    await this.streamLogs.flush();
+    await Promise.all([
+      this.streamLogs.flush(),
+      this.meta.flush(),
+      this.runInstructions.flush(),
+    ]);
   }
 
   // -- Private helpers --------------------------------------------------------

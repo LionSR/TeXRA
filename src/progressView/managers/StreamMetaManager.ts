@@ -93,6 +93,7 @@ export class StreamMetaManager {
     this.executionIds.delete(stream);
     this.activeRunIds.delete(stream);
     this.parentStreamIds.delete(stream);
+    this.pendingWrites.delete(stream);
   }
 
   /** Clear all in-memory state. Disk cleanup owned by caller. */
@@ -101,6 +102,7 @@ export class StreamMetaManager {
     this.executionIds.clear();
     this.activeRunIds.clear();
     this.parentStreamIds.clear();
+    this.pendingWrites.clear();
   }
 
   /** Load metadata from disk-backed StreamTabStore for all known streams. */
@@ -154,6 +156,11 @@ export class StreamMetaManager {
     );
   }
 
+  /** Await all pending disk writes. */
+  async flush(): Promise<void> {
+    await Promise.all([...this.pendingWrites.values()]);
+  }
+
   // -- Per-stream persistence -------------------------------------------------
 
   private save(stream: StreamTabId): void {
@@ -162,6 +169,9 @@ export class StreamMetaManager {
     // Each new save chains after the previous pending write for that stream.
     const prev = this.pendingWrites.get(stream) ?? Promise.resolve();
     const next = prev.then(() => {
+      // Skip write if the stream was evicted while this write was queued.
+      // evict() deletes from pendingWrites, so absence means eviction.
+      if (!this.pendingWrites.has(stream)) return;
       const meta = this.buildMeta(stream);
       const store = getStreamTabStore(stream);
       return store.writeMeta(meta);
