@@ -11,8 +11,10 @@ import { refresh, computeAgentOptionsData } from '@agent/index';
 // Local imports - common
 import {
   BaseWebviewProvider,
-  getSharedLocalResourceRoots,
+  getCombinedLocalResourceRoots,
   MAIN_VIEW_COMMANDS,
+  SIDEBAR_VIEWS,
+  setActiveSidebarView,
 } from '@common/webview';
 import { consumePendingState } from '@common/state';
 
@@ -26,6 +28,11 @@ import { debounce } from '@utils/core';
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
 import { MainViewContentProvider } from './webview/MainViewContentProvider';
 
+import type { ProgressViewProvider } from './progressView/ProgressViewProvider';
+import type { ProgressViewContentProvider } from './progressView/ProgressViewContentProvider';
+
+export type SidebarMode = 'main' | 'progress';
+
 export class MainViewProvider
   extends BaseWebviewProvider
   implements vscode.WebviewViewProvider
@@ -36,8 +43,12 @@ export class MainViewProvider
   private fileWatcher: vscode.FileSystemWatcher | undefined;
   private agentWatcher: vscode.Disposable | undefined;
 
-  // Static flag to track if commands have been registered
   private static commandsRegistered = false;
+
+  private _activeMode: SidebarMode = 'main';
+  private _messageDisposable?: vscode.Disposable;
+  private _progressViewProvider?: ProgressViewProvider;
+  private _progressContentProvider?: ProgressViewContentProvider;
 
   // Debounced refresh for agent option changes
   private debouncedRefreshAgentOptions = debounce(
@@ -62,12 +73,11 @@ export class MainViewProvider
     }
     MainViewProvider.commandsRegistered = true;
 
-    // Register command asynchronously only if it doesn't already exist
     void vscode.commands.getCommands(true).then((commands) => {
       if (!commands.includes('texra.getWebviewView')) {
         this.context.subscriptions.push(
           vscode.commands.registerCommand('texra.getWebviewView', () => {
-            return this._view as vscode.WebviewView;
+            return this.getMainModeView();
           }),
         );
       }
@@ -75,7 +85,6 @@ export class MainViewProvider
   }
 
   private setupConfigurationWatcher() {
-    // Watch for file configuration changes - only refresh file list
     watchConfig(this.context, ['texra.files'], this.refreshFiles.bind(this));
   }
 
@@ -98,23 +107,24 @@ export class MainViewProvider
     );
   }
 
+  /** Returns the sidebar webview, but only when in main mode. */
+  private getMainModeView(): vscode.WebviewView | undefined {
+    if (this._activeMode !== 'main') return undefined;
+    return this._view as vscode.WebviewView | undefined;
+  }
+
   /**
    * Refresh both agent and model options.
    * Called when auth state changes (login/logout affects both).
    */
   async refreshOptionsAndView() {
-    if (!this._view) {
-      return;
-    }
-    // Refresh the agent index to pick up any configuration changes
-    // (e.g., tool-use agent overrides)
-    await refresh();
+    const view = this.getMainModeView();
+    if (!view) return;
 
-    // Send delta messages instead of regenerating entire HTML
-    // This preserves webview state and avoids unnecessary DOM recreation
+    await refresh();
     await this.messageHandler.handleMessage(
       { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY },
-      this._view as vscode.WebviewView,
+      view,
     );
   }
 
@@ -123,14 +133,12 @@ export class MainViewProvider
    * Called when agent visibility changes.
    */
   async refreshAgentOptions() {
-    if (!this._view) {
-      return;
-    }
-    // Refresh the agent index to pick up configuration changes
-    await refresh();
+    const view = this.getMainModeView();
+    if (!view) return;
 
+    await refresh();
     const optionsData = await computeAgentOptionsData();
-    this._view.webview.postMessage({
+    view.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       optionsData,
     });
@@ -141,11 +149,11 @@ export class MainViewProvider
    * Called via texra.refreshAllOptions when model selection changes in Settings View.
    */
   async refreshModelOptions() {
-    if (!this._view) {
-      return;
-    }
+    const view = this.getMainModeView();
+    if (!view) return;
+
     const optionsData = await computeModelOptionsData();
-    this._view.webview.postMessage({
+    view.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
       optionsData,
     });
@@ -175,24 +183,53 @@ export class MainViewProvider
   }
 
   private async refreshFiles() {
-    if (this._view) {
-      await this.messageHandler.handleMessage(
-        { command: MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES },
-        this._view as vscode.WebviewView,
-      );
-    }
+    const view = this.getMainModeView();
+    if (!view) return;
+
+    await this.messageHandler.handleMessage(
+      { command: MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES },
+      view,
+    );
   }
 
   resolveWebviewView(webviewView: vscode.WebviewView) {
     webviewView.webview.options = {
       enableScripts: true,
       enableCommandUris: true,
-      localResourceRoots: getSharedLocalResourceRoots(this.context, 'webview'),
+      localResourceRoots: getCombinedLocalResourceRoots(this.context, [
+        'webview',
+        'progressView',
+      ]),
     };
 
-    super.resolveWebviewViewInternal(webviewView);
+    // Manage message listener via _messageDisposable so it can be swapped on mode switch.
+    this.cleanupView();
+    this._view = webviewView;
+
+    webviewView.webview.html = this.contentProvider.getHtmlContent(
+      webviewView.webview,
+    );
+
+    this._messageDisposable = webviewView.webview.onDidReceiveMessage(
+      (message) => this.messageHandler.handleMessage(message, webviewView),
+    );
+
+    this._viewDisposables.push(
+      webviewView.onDidDispose(this.cleanupView.bind(this)),
+    );
 
     this.setupInitialState(webviewView);
+  }
+
+  protected override cleanupView(): void {
+    this._messageDisposable?.dispose();
+    this._messageDisposable = undefined;
+    if (this._activeMode === 'progress') {
+      this._progressViewProvider?.resetSidebarReady();
+      void setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
+    }
+    this._activeMode = 'main';
+    super.cleanupView();
   }
 
   private async setupInitialState(webviewView: vscode.WebviewView) {
@@ -200,7 +237,6 @@ export class MainViewProvider
       command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
     });
 
-    // Check if there's state to restore (consume it from pending state)
     let pendingData = consumePendingState();
     while (pendingData) {
       const parsed = MainViewPersistedStateSchema.safeParse(pendingData.state);
@@ -216,5 +252,72 @@ export class MainViewProvider
       });
       pendingData = consumePendingState();
     }
+  }
+
+  // --- Mode switching ---
+
+  public setProgressViewProvider(pvp: ProgressViewProvider): void {
+    this._progressViewProvider = pvp;
+    this._progressContentProvider = pvp.getContentProvider();
+  }
+
+  public getActiveMode(): SidebarMode {
+    return this._activeMode;
+  }
+
+  public getWebviewView(): vscode.WebviewView | undefined {
+    return this._view as vscode.WebviewView | undefined;
+  }
+
+  /**
+   * Switch the single sidebar view between 'main' (launcher) and 'progress' content.
+   * Swaps HTML and message listener so both bundles share one VS Code view slot.
+   */
+  public async switchMode(mode: SidebarMode): Promise<void> {
+    const webviewView = this.getWebviewView();
+    if (!webviewView || mode === this._activeMode) return;
+
+    // Guard provider availability before mutating any state.
+    if (
+      mode === 'progress' &&
+      (!this._progressContentProvider || !this._progressViewProvider)
+    ) {
+      return;
+    }
+
+    this._activeMode = mode;
+    await setActiveSidebarView(
+      mode === 'progress' ? SIDEBAR_VIEWS.PROGRESS : SIDEBAR_VIEWS.MAIN,
+    );
+
+    // A concurrent switchMode call may have changed _activeMode while we awaited.
+    // Bail out so the newer call's HTML/listener wins.
+    if (this._activeMode !== mode) return;
+
+    this._messageDisposable?.dispose();
+    this._messageDisposable = undefined;
+
+    if (mode === 'progress') {
+      webviewView.webview.html = this._progressContentProvider!.getHtmlContent(
+        webviewView.webview,
+      );
+      const pvp = this._progressViewProvider!;
+      this._messageDisposable = webviewView.webview.onDidReceiveMessage(
+        (message) => pvp.handleSidebarMessage(message, webviewView),
+      );
+    } else {
+      this._progressViewProvider?.resetSidebarReady();
+      webviewView.webview.html = this.contentProvider.getHtmlContent(
+        webviewView.webview,
+      );
+      this._messageDisposable = webviewView.webview.onDidReceiveMessage(
+        (message) => this.messageHandler.handleMessage(message, webviewView),
+      );
+    }
+  }
+
+  public async showInSidebar(): Promise<void> {
+    await this.switchMode('main');
+    await vscode.commands.executeCommand('texra.mainView.focus');
   }
 }
