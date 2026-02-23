@@ -12,10 +12,13 @@ All notable changes to this project will be documented in this file.
 - **Parallel tool call limits** — configure how many tools OpenAI models can call at once in Multi-Agent settings.
 - **Orchestrator kill toggle** — control whether the orchestrator can terminate subagent runs from Multi-Agent settings.
 - **Tool availability checks** — missing dependencies (Wolfram, Lean) are detected automatically with one-click install prompts instead of confusing errors.
+- **leanBlueprint agent** — new Lean 4 agent for blueprint-driven formalization, available in the lean-project and mathematician presets.
+- **Presenter bash support** — the presenter agent can now run bash commands for building and previewing slides.
 
 ### Bug Fixes
 
 - Fixed user messages appearing out of order in tool-use conversations instead of interleaving chronologically with tool outputs.
+- Fixed arXiv fetcher not reporting already-downloaded papers and incorrectly rejecting PDF-only papers.
 
 ### Improvements
 
