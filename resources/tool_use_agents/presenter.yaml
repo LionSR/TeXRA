@@ -13,6 +13,7 @@ settings:
     - glob
     - grep
     - ls
+    - bash
     - extract_figures
     - extract_bib_entries
     - extract_tikz_figures
