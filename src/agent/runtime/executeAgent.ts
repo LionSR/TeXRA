@@ -692,6 +692,7 @@ export async function executeAgent(
           setting: ctx.setting as AgentWorkflowSetting,
           parentStage: ctx.parentStage,
           onRoundCompleted,
+          isSubagent,
         });
         return {
           category: 'workflow' as const,
