@@ -21,7 +21,6 @@ import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { AgentLogger } from '@logger/AgentLogger';
 import { StreamLogStore } from '@logger/StreamLogStore';
-import type { TaskState } from '@logger/TaskState';
 import { OutputFilesManager } from '@progressView/managers/OutputFilesManager';
 import { UsageStatsManager } from '@progressView/managers/UsageStatsManager';
 import { StreamMetaManager } from '@progressView/managers/StreamMetaManager';
@@ -92,6 +91,11 @@ function createExecutionState(
   };
 }
 
+/** Clean up tool-use agent registry based on currently active streams. */
+export function cleanupToolUseAgentRegistry(meta: StreamMetaManager): void {
+  cleanupInactiveAgents(meta.getActiveToolUseStreams());
+}
+
 /**
  * Core state management for the progress view.
  *
@@ -100,11 +104,11 @@ function createExecutionState(
  */
 export class ProgressViewState {
   // -- Persistence managers ---------------------------------------------------
-  private _streamLogs: StreamLogStore;
-  private _outputFiles: OutputFilesManager;
-  private _usageStats: UsageStatsManager;
-  private _meta: StreamMetaManager;
-  private _runInstructions: RunInstructionsManager;
+  readonly streamLogs: StreamLogStore;
+  readonly outputFiles: OutputFilesManager;
+  readonly usageStats: UsageStatsManager;
+  readonly meta: StreamMetaManager;
+  readonly runInstructions: RunInstructionsManager;
 
   // -- Preferences ------------------------------------------------------------
   private _prefs!: PersistedState<ProgressViewPrefs>;
@@ -129,34 +133,12 @@ export class ProgressViewState {
       WorkspaceStateKey.PROGRESS_VIEW_PREFS,
       ProgressViewPrefsSchema,
     );
-    this._streamLogs = new StreamLogStore();
-    AgentLogger.setStreamLogStore(this._streamLogs);
-    this._outputFiles = new OutputFilesManager();
-    this._usageStats = new UsageStatsManager();
-    this._meta = new StreamMetaManager();
-    this._runInstructions = new RunInstructionsManager();
-  }
-
-  // -- Manager accessors (consistent pattern: consumers access directly) ------
-
-  get streamLogs(): StreamLogStore {
-    return this._streamLogs;
-  }
-
-  get outputFiles(): OutputFilesManager {
-    return this._outputFiles;
-  }
-
-  get usageStats(): UsageStatsManager {
-    return this._usageStats;
-  }
-
-  get meta(): StreamMetaManager {
-    return this._meta;
-  }
-
-  get runInstructions(): RunInstructionsManager {
-    return this._runInstructions;
+    this.streamLogs = new StreamLogStore();
+    AgentLogger.setStreamLogStore(this.streamLogs);
+    this.outputFiles = new OutputFilesManager();
+    this.usageStats = new UsageStatsManager();
+    this.meta = new StreamMetaManager();
+    this.runInstructions = new RunInstructionsManager();
   }
 
   // -- Preferences ------------------------------------------------------------
@@ -241,10 +223,6 @@ export class ProgressViewState {
     return this._sessionState.get(stream)?.todos ?? [];
   }
 
-  setContextState(stream: StreamTabId, contextState: ContextStateData): void {
-    this.getOrCreateSession(stream).contextState = contextState;
-  }
-
   getContextState(stream: StreamTabId): ContextStateData | undefined {
     return this._sessionState.get(stream)?.contextState ?? undefined;
   }
@@ -303,31 +281,10 @@ export class ProgressViewState {
     return Object.fromEntries(this._streamStates.entries());
   }
 
-  getStreamLastTimestamp(stream: StreamTabId): number | undefined {
-    return this._streamLogs.getLastTimestamp(stream);
-  }
-
-  // -- Coordinator methods (cross-cutting side effects) -----------------------
-
-  /**
-   * Store task state and trigger coordination side effects.
-   * Delegates storage to StreamMetaManager, then updates ephemeral state.
-   */
-  setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
-    this._meta.setTaskState(streamTabId, taskState);
-    this.clearStreamHints(streamTabId);
-
-    const agentCategory = taskState.agentConfig.agentCategory;
-    this.getOrCreateStreamState(streamTabId, agentCategory);
-
-    this.resetFinishedChildCounters(streamTabId);
-    this.cleanupToolUseAgentRegistry();
-  }
-
   async endRunningTaskGroups(now: number = Date.now()): Promise<StreamTabId[]> {
-    const affectedFromLogs = this._streamLogs.endRunningGroups(now);
+    const affectedFromLogs = this.streamLogs.endRunningGroups(now);
     if (affectedFromLogs.length > 0) {
-      await this._streamLogs.save();
+      await this.streamLogs.save();
     }
     return affectedFromLogs;
   }
@@ -336,25 +293,25 @@ export class ProgressViewState {
 
   async clearStream(stream: StreamTabId): Promise<void> {
     // Clear in-memory state
-    this._outputFiles.evict(stream);
-    this._usageStats.evict(stream);
-    this._meta.evict(stream);
-    this._runInstructions.evict(stream);
+    this.outputFiles.evict(stream);
+    this.usageStats.evict(stream);
+    this.meta.evict(stream);
+    this.runInstructions.evict(stream);
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
 
     // Delete from disk: stream log file + stream data directory
     const store = getStreamTabStore(stream);
-    await Promise.all([this._streamLogs.delete(stream), store.clear()]);
+    await Promise.all([this.streamLogs.delete(stream), store.clear()]);
 
     // Update active stream *after* deletion so keys() no longer includes it
     if (this._prefs.get('activeStream') === stream) {
       this._prefs.update({
-        activeStream: this._streamLogs.keys()[0] || '',
+        activeStream: this.streamLogs.keys()[0] || '',
       });
     }
 
-    this.cleanupToolUseAgentRegistry();
+    cleanupToolUseAgentRegistry(this.meta);
   }
 
   async clearAll(): Promise<void> {
@@ -364,25 +321,25 @@ export class ProgressViewState {
     );
 
     // Clear in-memory state
-    this._outputFiles.evictAll();
-    this._usageStats.evictAll();
-    this._meta.evictAll();
-    this._runInstructions.evictAll();
+    this.outputFiles.evictAll();
+    this.usageStats.evictAll();
+    this.meta.evictAll();
+    this.runInstructions.evictAll();
     this._sessionState.clear();
     this._streamStates.clear();
     this._prefs.reset();
 
     // Delete from disk
-    await Promise.all([this._streamLogs.clear(), deleteAllStreamData()]);
+    await Promise.all([this.streamLogs.clear(), deleteAllStreamData()]);
 
-    this.cleanupToolUseAgentRegistry();
+    cleanupToolUseAgentRegistry(this.meta);
   }
 
   async load(): Promise<void> {
     this.logger.info('[Persistence] Starting state load from storage');
 
     // Load stream logs first — they define the set of known streams
-    await this._streamLogs.load(this.storage);
+    await this.streamLogs.load(this.storage);
 
     // Discover all stream IDs from stream logs
     const streamIds = this.discoverStreamIds();
@@ -397,7 +354,7 @@ export class ProgressViewState {
     if (shouldMigrate) {
       await migrateFromMemento(
         this.storage,
-        this._streamLogs.keys(),
+        this.streamLogs.keys(),
         this.logger,
       );
       // Re-discover after migration
@@ -410,7 +367,7 @@ export class ProgressViewState {
     this.logger.info('[Persistence] Managers loaded');
 
     this.validateActiveStream();
-    this.cleanupToolUseAgentRegistry();
+    cleanupToolUseAgentRegistry(this.meta);
 
     this.logger.info('[Persistence] State load complete');
   }
@@ -419,25 +376,25 @@ export class ProgressViewState {
    * Flush pending writes from all managers.
    */
   async flush(): Promise<void> {
-    await this._streamLogs.flush();
+    await this.streamLogs.flush();
   }
 
   // -- Private helpers --------------------------------------------------------
 
   private async loadManagers(streamIds: StreamTabId[]): Promise<void> {
     await Promise.all([
-      this._outputFiles.load(streamIds),
-      this._usageStats.load(streamIds),
-      this._meta.load(streamIds),
-      this._runInstructions.load(streamIds),
+      this.outputFiles.load(streamIds),
+      this.usageStats.load(streamIds),
+      this.meta.load(streamIds),
+      this.runInstructions.load(streamIds),
     ]);
   }
 
   /** Validate activeStream against available streams after load */
   private validateActiveStream(): void {
     const savedActiveStream = this._prefs.get('activeStream');
-    if (!savedActiveStream || !this._streamLogs.has(savedActiveStream)) {
-      const fallback = this._streamLogs.keys()[0] ?? '';
+    if (!savedActiveStream || !this.streamLogs.has(savedActiveStream)) {
+      const fallback = this.streamLogs.keys()[0] ?? '';
       if (fallback !== savedActiveStream) {
         this._prefs.update({ activeStream: fallback });
       }
@@ -448,10 +405,6 @@ export class ProgressViewState {
    * Discover all known stream IDs from stream logs.
    */
   private discoverStreamIds(): StreamTabId[] {
-    return [...this._streamLogs.keys()];
-  }
-
-  private cleanupToolUseAgentRegistry(): void {
-    cleanupInactiveAgents(this._meta.getActiveToolUseStreams());
+    return [...this.streamLogs.keys()];
   }
 }

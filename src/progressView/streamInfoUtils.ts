@@ -98,6 +98,6 @@ export function buildStreamInfos(
 
   return sortStreams(infos, state.streamSortOrder, {
     getLastActivityTimestamp: (stream) =>
-      state.getStreamLastTimestamp(stream.name),
+      state.streamLogs.getLastTimestamp(stream.name),
   });
 }

@@ -21,6 +21,7 @@ import {
 } from '@progressView/persistence/serializationUtils';
 import {
   ProgressViewState,
+  cleanupToolUseAgentRegistry,
   type ActiveStreamId,
   type StreamExecutionState,
 } from '@progressView/state/ProgressViewState';
@@ -265,7 +266,12 @@ export class ProgressEventHandler {
     const category = taskState.agentConfig.agentCategory;
     const previousFilter = this.state.agentCategoryFilter;
 
-    this.state.setTaskState(streamId, taskState);
+    // Coordinate persistence + ephemeral side effects (formerly state.setTaskState)
+    this.state.meta.setTaskState(streamId, taskState);
+    this.state.clearStreamHints(streamId);
+    this.state.getOrCreateStreamState(streamId, category);
+    this.state.resetFinishedChildCounters(streamId);
+    cleanupToolUseAgentRegistry(this.state.meta);
 
     if (isActiveStream) {
       this.maybeUpdateFilterForCategory(category);
