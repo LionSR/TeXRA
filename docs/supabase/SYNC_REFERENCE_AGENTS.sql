@@ -292,17 +292,22 @@ ON CONFLICT (name) DO UPDATE SET
   agent_category = EXCLUDED.agent_category,
   tools          = EXCLUDED.tools;
 
+-- ---------------------------------------------------------------------------
+-- Tool-use agents (Lean — stored in tool-use-lean/)
+-- ---------------------------------------------------------------------------
+
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
-  'leanSimplifier',
-  'Simplifies Lean 4 proofs and code to Mathlib-quality standards — clear, general, and ready to upstream.',
-  'tool_use/leanSimplifier.yaml',
+  'lean',
+  'Lean 4 proof assistant with VS Code integration and CLI fallback.',
+  'tool-use-lean/lean.yaml',
   ARRAY['researcher'],
   'toolUse',
-  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle']
+  ARRAY['todo_write', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
+  storage_path   = EXCLUDED.storage_path,
   agent_category = EXCLUDED.agent_category,
   tools          = EXCLUDED.tools;
 
@@ -310,13 +315,44 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'leanSearch',
   'Lean 4 and Mathlib research assistant — finds lemmas, explores APIs, and answers formalization questions.',
-  'tool_use/leanSearch.yaml',
+  'tool-use-lean/leanSearch.yaml',
   ARRAY['researcher'],
   'toolUse',
   ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'web_search', 'web_fetch', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
+  storage_path   = EXCLUDED.storage_path,
+  agent_category = EXCLUDED.agent_category,
+  tools          = EXCLUDED.tools;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'leanSimplifier',
+  'Simplifies Lean 4 proofs and code to Mathlib-quality standards — clear, general, and ready to upstream.',
+  'tool-use-lean/leanSimplifier.yaml',
+  ARRAY['researcher'],
+  'toolUse',
+  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle']
+)
+ON CONFLICT (name) DO UPDATE SET
+  description    = EXCLUDED.description,
+  storage_path   = EXCLUDED.storage_path,
+  agent_category = EXCLUDED.agent_category,
+  tools          = EXCLUDED.tools;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'leanBlueprint',
+  'Creates and maintains LeanBlueprint documents — dependency-tracked LaTeX that bridges informal math and Lean 4 formalization.',
+  'tool-use-lean/leanBlueprint.yaml',
+  ARRAY['researcher'],
+  'toolUse',
+  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'web_search', 'web_fetch', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source', 'crossref_search', 'crossref_doi', 'zotero_add', 'zotero_search', 'zotero_export']
+)
+ON CONFLICT (name) DO UPDATE SET
+  description    = EXCLUDED.description,
+  storage_path   = EXCLUDED.storage_path,
   agent_category = EXCLUDED.agent_category,
   tools          = EXCLUDED.tools;
 
