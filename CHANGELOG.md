@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.36.3] - 2026-02-23
+
+### Features
+
+- **Resume agent tool** — the orchestrator can now send follow-up instructions to paused subagents, continuing where they left off without starting over.
+- **LaTeX settings tab** — new Settings tab showing recommended LaTeX configuration with one-click apply, plus dependency status for LaTeX Workshop and latexdiff.
+- **Gemini 3.1 Pro** — added as default Google model, replacing the deprecated Gemini 3 Pro.
+- **Parallel tool call limits** — configure how many tools OpenAI models can call at once in Multi-Agent settings.
+- **Orchestrator kill toggle** — control whether the orchestrator can terminate subagent runs from Multi-Agent settings.
+- **Tool availability checks** — missing dependencies (Wolfram, Lean) are detected automatically with one-click install prompts instead of confusing errors.
+
+### Bug Fixes
+
+- Fixed user messages appearing out of order in tool-use conversations instead of interleaving chronologically with tool outputs.
+
+### Improvements
+
+- **Progress Board is noticeably faster** — streaming updates, tab switching, and large conversations all render more smoothly.
+- **Keyboard accessibility** — added focus indicators, hover states on interactive elements, and a confirmation dialog before API key removal.
+- **Better tool error messages** — clearer installation guides and actionable steps when external tools are missing.
+- Updated dependencies.
+
 ## [0.36.2] - 2026-02-17
 
 ### Features
