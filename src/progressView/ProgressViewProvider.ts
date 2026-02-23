@@ -29,7 +29,6 @@ import type {
   AgentProposalPermission,
   BashPermission,
   ModelOptionData,
-  OutputFileInfo,
   ProgressViewPlacement,
   StorageKey,
   StreamTabId,
@@ -400,14 +399,7 @@ export class ProgressViewProvider
   }
 
   public getActiveRunId(stream: StreamTabId): StorageKey | null {
-    return this.state.getActiveRunId(stream);
-  }
-
-  public getRunOutputFiles(
-    stream: StreamTabId,
-    options: { storageKey: StorageKey },
-  ): Map<number, OutputFileInfo[]> | undefined {
-    return this.state.getRunOutputFiles(stream, options);
+    return this.state.meta.getActiveRunId(stream);
   }
 
   private async resetRunningStreamStatuses(
