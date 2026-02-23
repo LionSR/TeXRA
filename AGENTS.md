@@ -93,7 +93,7 @@ The project has two build systems with different trade-offs:
   - `utils/text/` - Text and XML processing utilities
   - `utils/prompt/` - Prompt builder utilities
 - `src/explorer/` - VS Code file explorer integration and watchers
-- `src/settingsView/` - Unified settings webview combining Memory, History, Models, and Agents tabs
+- `src/settingsView/` - Unified settings webview combining History, Memory, Models, Agents, Multi-Agent, LaTeX, and Tools tabs
 
 ### Pragmatic implementations
 
@@ -282,7 +282,7 @@ See `docs/pocketflow/` for full framework documentation.
 
 **Progress view**
 
-- Extend the existing Lit components in `src/progressView/frontend/components/` (`StreamTabs`, `LogEntry`, `LogList`, `UsagePanel`, `TaskGroupList`, etc.) and managers in `src/progressView/managers/` (`OutputFilesManager`, `UsageStatsManager`, `WebviewUpdater`) — augment them rather than manipulating the DOM directly.
+- Extend the existing Lit components in `src/progressView/frontend/components/` (`StreamTabs`, `LogList`, `UsagePanel`, `TaskGroupList`, etc.) and managers in `src/progressView/managers/` (`OutputFilesManager`, `UsageStatsManager`, `WebviewUpdater`) — augment them rather than manipulating the DOM directly.
 - Tool-use and workflow sessions surface in separate filters; continue emitting usage, status, and log events through the established progress event commands so filters, counts, and badges update automatically.
 
 **Error handling and types**

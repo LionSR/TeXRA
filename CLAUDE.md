@@ -96,7 +96,7 @@ Key directories in `src/`:
 - `latex/` - LaTeX processing (formatting, diff, TikZ, PDF)
 - `webview/` - Main agent interaction interface
 - `progressView/` - Task tracking board
-- `settingsView/` - Unified settings webview (History, Memory, Models, Agents tabs)
+- `settingsView/` - Unified settings webview (History, Memory, Models, Agents, Multi-Agent, LaTeX, Tools tabs)
 - `shared/` - Shared schemas and message handlers across webviews
 - `explorer/` - VS Code file explorer integration
 - `auth/` - Authentication logic
