@@ -226,6 +226,7 @@ export class MainViewProvider
     this._messageDisposable = undefined;
     if (this._activeMode === 'progress') {
       this._progressViewProvider?.resetSidebarReady();
+      void setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
     }
     this._activeMode = 'main';
     super.cleanupView();
