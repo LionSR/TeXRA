@@ -1,15 +1,11 @@
 /**
  * Decouples agent runtime from ProgressView UI layer.
  */
-import type { OutputFileInfo, StreamTabId, StorageKey } from '@shared/schemas';
+import type { StreamTabId, StorageKey } from '@shared/schemas';
 
 /** Interface for run state access - implemented by ProgressViewProvider */
 export interface IRunStorageService {
   getActiveRunId(stream: StreamTabId): StorageKey | null;
-  getRunOutputFiles(
-    stream: StreamTabId,
-    options: { storageKey: StorageKey },
-  ): Map<number, OutputFileInfo[]> | undefined;
   isViewVisible(): boolean;
 }
 
@@ -18,7 +14,6 @@ let service: IRunStorageService | null = null;
 /** Default no-op service when ProgressView is not registered */
 const DEFAULT_SERVICE: IRunStorageService = {
   getActiveRunId: () => null,
-  getRunOutputFiles: () => undefined,
   isViewVisible: () => false,
 };
 
