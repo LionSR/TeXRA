@@ -77,7 +77,7 @@ export class MainViewProvider
       if (!commands.includes('texra.getWebviewView')) {
         this.context.subscriptions.push(
           vscode.commands.registerCommand('texra.getWebviewView', () => {
-            return this._view as vscode.WebviewView;
+            return this.getMainModeView();
           }),
         );
       }
