@@ -12,7 +12,7 @@ import {
 } from '@common/errors';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import * as logger from '@logger/logUtils';
-import { RoundKeySchema } from '@progressView/persistence/schemaUtils';
+import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
 import { getConfig } from '@utils/config';
 import {
   WorkspaceFS,
