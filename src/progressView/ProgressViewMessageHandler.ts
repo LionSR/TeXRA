@@ -186,7 +186,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         retryCoordinator.cancelRetry(data.stream);
       },
       [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]: async (data) => {
-        const taskState = this.provider.state.getTaskState(data.stream);
+        const taskState = this.provider.state.meta.getTaskState(data.stream);
         if (taskState) {
           await vscode.commands.executeCommand('texra.restoreState', taskState);
         }
@@ -346,7 +346,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const streamId = data.stream;
     const hasStream =
       this.provider.state.streamLogs.has(streamId) ||
-      Boolean(this.provider.state.getTaskState(streamId));
+      Boolean(this.provider.state.meta.getTaskState(streamId));
 
     if (!hasStream) {
       return;
@@ -415,11 +415,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleResume(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RESUME>,
   ): Promise<void> {
-    const taskState = this.provider.state.getTaskState(data.stream);
+    const taskState = this.provider.state.meta.getTaskState(data.stream);
     if (!taskState) return;
 
     const executionId = isWorkflowTaskState(taskState)
-      ? this.provider.state.getExecutionId(data.stream)
+      ? this.provider.state.meta.getExecutionId(data.stream)
       : undefined;
 
     await this.executeValidated({
@@ -431,7 +431,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleRunNew(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RUN_NEW>,
   ): Promise<void> {
-    const taskState = this.provider.state.getTaskState(data.stream);
+    const taskState = this.provider.state.meta.getTaskState(data.stream);
     if (!taskState) {
       return;
     }
@@ -454,13 +454,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     const streamId = data.stream;
     await this.withToolbarTaskState(streamId, async (taskState) => {
-      const executionId = this.provider.state.getExecutionId(streamId);
-      const activeRunId = this.provider.state.getActiveRunId(streamId);
+      const executionId = this.provider.state.meta.getExecutionId(streamId);
+      const activeRunId = this.provider.state.meta.getActiveRunId(streamId);
       const storageKey = (activeRunId ??
         executionId ??
         null) as StorageKey | null;
       const runOutputs = storageKey
-        ? this.provider.state.getRunOutputFiles(streamId, { storageKey })
+        ? this.provider.state.outputFiles.getRun(streamId, storageKey)
         : undefined;
       const outputsByRound = runOutputs
         ? Object.fromEntries(runOutputs.entries())
@@ -482,7 +482,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handlePolishFollowUp(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP>,
   ): Promise<void> {
-    const taskState = this.provider.state.getTaskState(data.stream);
+    const taskState = this.provider.state.meta.getTaskState(data.stream);
     if (!taskState) return;
 
     const fileContext = buildFileContextFromTaskState(taskState);
@@ -663,12 +663,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE>,
   ): Promise<void> {
     const streamId = data.stream;
-    const storageKey = this.provider.state.getActiveRunId(streamId);
+    const storageKey = this.provider.state.meta.getActiveRunId(streamId);
     const runOutputs = storageKey
-      ? this.provider.state.getRunOutputFiles(streamId, { storageKey })
+      ? this.provider.state.outputFiles.getRun(streamId, storageKey)
       : undefined;
 
-    const executionId = this.provider.state.getExecutionId(streamId);
+    const executionId = this.provider.state.meta.getExecutionId(streamId);
 
     try {
       let directoryToReveal: string | undefined;
@@ -925,7 +925,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     taskState: WorkflowTaskState,
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
-    const storageKey = this.provider.state.getActiveRunId(streamId);
+    const storageKey = this.provider.state.meta.getActiveRunId(streamId);
     const generatedPaths = this.provider.state.outputFiles.getKnownFilePaths(
       streamId,
       { storageKey, workspaceOnly: true },
@@ -957,7 +957,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     streamId: StreamTabId,
     action: (taskState: WorkflowTaskState) => Promise<void>,
   ): Promise<void> {
-    const taskState = this.provider.state.getTaskState(streamId);
+    const taskState = this.provider.state.meta.getTaskState(streamId);
     if (!taskState || !isWorkflowTaskState(taskState)) {
       return;
     }
@@ -1092,7 +1092,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     streamId: StreamTabId,
     agent: string,
   ): Promise<{ taskState: WorkflowTaskState; outputFiles: string[] } | null> {
-    const taskState = this.provider.state.getTaskState(streamId);
+    const taskState = this.provider.state.meta.getTaskState(streamId);
     if (!taskState || !isWorkflowTaskState(taskState)) {
       this.logger.warn(this.channel, 'Followup: No task state found', {
         data: { stream: streamId },
@@ -1114,9 +1114,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return null;
     }
 
-    const storageKey = this.provider.state.getActiveRunId(streamId);
+    const storageKey = this.provider.state.meta.getActiveRunId(streamId);
     const runOutputs = storageKey
-      ? this.provider.state.getRunOutputFiles(streamId, { storageKey })
+      ? this.provider.state.outputFiles.getRun(streamId, storageKey)
       : null;
     const outputFiles = this.extractOutputFilePaths(runOutputs);
 

@@ -48,21 +48,3 @@ export function nestedMapToRecord<
 >(outer: Map<K1, Map<K2, V>>): Record<string, Record<string, V>> {
   return mapsToRecords(outer, 2) as Record<string, Record<string, V>>;
 }
-
-/**
- * Serialize a deeply nested Map (stream → run → round → value).
- * Used for missing outputs tracking which is keyed by stream, then run, then round.
- */
-export function tripleNestedMapToRecord<
-  K1 extends string,
-  K2 extends string,
-  K3 extends string | number,
-  V,
->(
-  outer: Map<K1, Map<K2, Map<K3, V>>>,
-): Record<string, Record<string, Record<string, V>>> {
-  return mapsToRecords(outer, 3) as Record<
-    string,
-    Record<string, Record<string, V>>
-  >;
-}

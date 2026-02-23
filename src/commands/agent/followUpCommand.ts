@@ -43,7 +43,7 @@ async function lazyDetectWaitingStatus(
 
   // Get execution ID to check for persisted flow
   const executionId =
-    ProgressViewProvider.getInstance()?.state?.getExecutionId(streamId);
+    ProgressViewProvider.getInstance()?.state?.meta.getExecutionId(streamId);
   if (!executionId) {
     return false;
   }
@@ -80,8 +80,8 @@ async function tryAutoResume(streamId: StreamTabId): Promise<boolean> {
 
   // Get state dependencies - ProgressViewState handles legacy storage structure
   const progressState = ProgressViewProvider.getInstance()?.state;
-  const executionId = progressState?.getExecutionId(streamId);
-  const taskState = progressState?.getTaskState(streamId);
+  const executionId = progressState?.meta.getExecutionId(streamId);
+  const taskState = progressState?.meta.getTaskState(streamId);
 
   if (!progressState || !executionId || !taskState) {
     let missing: string;
