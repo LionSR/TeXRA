@@ -23,6 +23,7 @@ export class StreamMetaManager {
   private parentStreamIds = new Map<StreamTabId, StreamTabId>();
   private loaded = false;
   private readonly logger: AgentLogger;
+  private readonly pendingWrites = new Map<StreamTabId, Promise<void>>();
 
   constructor() {
     this.logger = new AgentLogger('StreamMetaManager');
@@ -157,9 +158,18 @@ export class StreamMetaManager {
 
   private save(stream: StreamTabId): void {
     if (!this.loaded) return;
-    const meta = this.buildMeta(stream);
-    const store = getStreamTabStore(stream);
-    void store.writeMeta(meta);
+    // Serialize writes per stream to avoid concurrent writes to the same meta.json.
+    // Each new save chains after the previous pending write for that stream.
+    const prev = this.pendingWrites.get(stream) ?? Promise.resolve();
+    const next = prev.then(() => {
+      const meta = this.buildMeta(stream);
+      const store = getStreamTabStore(stream);
+      return store.writeMeta(meta);
+    });
+    this.pendingWrites.set(
+      stream,
+      next.catch(() => {}),
+    );
   }
 
   private buildMeta(stream: StreamTabId): StreamTabMeta {

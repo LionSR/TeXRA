@@ -8,12 +8,8 @@ import {
   type AgentCategoryFilter,
   type ConversationProgress,
   type ContextStateData,
-  type OutputFileInfo,
-  type StorageKey,
   type StreamTabId,
-  type TaskGroup,
   type TodoItem,
-  type UpdateTaskGroupPayload,
 } from '@shared/schemas';
 import { StreamSortSchema, type StreamSort } from '@shared/streams/streamSort';
 import {
@@ -34,13 +30,11 @@ import type { MementoStorage } from '@progressView/persistence/PersistentMapMana
 import {
   getStreamTabStore,
   deleteAllStreamData,
-  STREAM_DATA_DIR,
 } from '@progressView/persistence/StreamTabStore';
 import {
   needsMigrationFromMemento,
   migrateFromMemento,
 } from '@progressView/persistence/mementoMigration';
-import { KVStore } from '@common/storage';
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
 export const StreamHintsSchema = z.object({
@@ -330,13 +324,6 @@ export class ProgressViewState {
     this.cleanupToolUseAgentRegistry();
   }
 
-  getRunOutputFiles(
-    stream: StreamTabId,
-    options: { storageKey: StorageKey },
-  ): Map<number, OutputFileInfo[]> | undefined {
-    return this._outputFiles.getRun(stream, options.storageKey);
-  }
-
   async endRunningTaskGroups(now: number = Date.now()): Promise<StreamTabId[]> {
     const affectedFromLogs = this._streamLogs.endRunningGroups(now);
     if (affectedFromLogs.length > 0) {
@@ -356,15 +343,16 @@ export class ProgressViewState {
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
 
+    // Delete from disk: stream log file + stream data directory
+    const store = getStreamTabStore(stream);
+    await Promise.all([this._streamLogs.delete(stream), store.clear()]);
+
+    // Update active stream *after* deletion so keys() no longer includes it
     if (this._prefs.get('activeStream') === stream) {
       this._prefs.update({
         activeStream: this._streamLogs.keys()[0] || '',
       });
     }
-
-    // Delete from disk: stream log file + stream data directory
-    const store = getStreamTabStore(stream);
-    await Promise.all([this._streamLogs.delete(stream), store.clear()]);
 
     this.cleanupToolUseAgentRegistry();
   }
