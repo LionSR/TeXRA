@@ -213,9 +213,7 @@ export class UsagePanel extends LitElement {
         <span class="context-gauge__track">
           <span
             class="context-gauge__fill"
-            style="width: ${clamped}%; background-color: ${fillColor(
-              clamped,
-            )}"
+            style="width: ${clamped}%; background-color: ${fillColor(clamped)}"
           ></span>
           <span
             class="context-gauge__tick"
