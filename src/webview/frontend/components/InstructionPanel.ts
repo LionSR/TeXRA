@@ -151,8 +151,8 @@ export class InstructionPanel extends LitElement {
         align-items: center;
         gap: var(--spacing-small);
         flex: 0 1 auto;
-        min-width: 10rem;
-        max-width: 14rem;
+        min-width: 7rem;
+        max-width: 10rem;
         position: relative;
       }
 
@@ -164,8 +164,8 @@ export class InstructionPanel extends LitElement {
 
       .model-selection-footer .select-group select,
       .model-selection-footer .select-group vscode-single-select {
-        min-width: 6rem;
-        max-width: 10rem;
+        min-width: 4rem;
+        max-width: 7rem;
       }
 
       .agent-select--hidden {

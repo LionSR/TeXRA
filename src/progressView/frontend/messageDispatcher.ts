@@ -18,8 +18,12 @@ import { runTrackingHandlers } from './slices/runTrackingSlice';
 import { permissionHandlers } from './slices/permissionSlice';
 import { followUpHandlers } from './slices/followUpSlice';
 import { syncHandlers } from './slices/syncSlice';
+import { uiHandlers } from './slices/uiSlice';
 
-import type { ProgressViewOutboundMessage } from '@shared/schemas';
+import type {
+  ProgressViewOutboundMessage,
+  ProgressViewPlacement,
+} from '@shared/schemas';
 import type { FrontendEventHandlerContext } from './eventHandlers';
 import type { PermissionState } from './components/PermissionCard';
 
@@ -34,6 +38,7 @@ import type { PermissionState } from './components/PermissionCard';
 export interface MessageHandlerContext extends FrontendEventHandlerContext {
   getPermissions(): PermissionState[];
   setPermissions(permissions: PermissionState[]): void;
+  setPlacement(placement: ProgressViewPlacement): void;
 }
 
 /**
@@ -67,6 +72,7 @@ const handlers: HandlerRegistry = {
   ...permissionHandlers,
   ...followUpHandlers,
   ...syncHandlers,
+  ...uiHandlers,
 };
 
 // ============================================================

@@ -666,7 +666,7 @@
         }
       },
       {
-        "title": "Progress Board",
+        "title": "Progress",
         "properties": {
           "texra.progressBoard.streamSortOrder": {
             "type": "string",
@@ -683,7 +683,7 @@
               "Sort alphabetically by input file name",
               "Sort alphabetically by agent type"
             ],
-            "description": "Default sort order for streams in the Progress Board",
+            "description": "Default sort order for streams in Progress",
             "scope": "resource"
           }
         }
@@ -994,14 +994,26 @@
         "icon": "$(settings-gear)"
       },
       {
+        "command": "texra.showMainView",
+        "title": "Show Launcher",
+        "category": "TeXRA",
+        "icon": "$(edit)"
+      },
+      {
         "command": "texra.showProgressView",
-        "title": "Show Tasks",
+        "title": "Show Progress",
         "category": "TeXRA",
         "icon": "$(eye)"
       },
       {
+        "command": "texra.toggleView",
+        "title": "Toggle Launcher/Progress View",
+        "category": "TeXRA",
+        "icon": "$(split-horizontal)"
+      },
+      {
         "command": "texra.openProgressViewInTab",
-        "title": "Open Tasks in Editor Tab",
+        "title": "Open Progress in Editor Tab",
         "shortTitle": "Open in Tab",
         "category": "TeXRA",
         "icon": "$(multiple-windows)"
@@ -1010,7 +1022,7 @@
         "command": "texra.showDashboard",
         "title": "Show Dashboard",
         "category": "TeXRA",
-        "icon": "$(settings)"
+        "icon": "$(gear)"
       },
       {
         "command": "texra.showSettingsView",
@@ -1051,13 +1063,13 @@
           {
             "id": "texra.gettingStarted.stageFiles",
             "title": "Stage your files",
-            "description": "Use the Input, Reference, Auxiliary, and Media pickers to tell TeXRA what to read.\n[Open the TeXRA main view](command:texra.mainView.focus) and choose whether you want a single output or multiple outputs for parallel drafts.",
+            "description": "Use the Input, Reference, Auxiliary, and Media pickers to tell TeXRA what to read.\n[Open the TeXRA main view](command:texra.showMainView) and choose whether you want a single output or multiple outputs for parallel drafts.",
             "media": {
               "image": "resources/walkthroughs/media/file-selection.png",
               "altText": "Screenshot of the file selection interface"
             },
             "completionEvents": [
-              "onCommand:texra.mainView.focus"
+              "onCommand:texra.showMainView"
             ]
           },
           {
@@ -1085,10 +1097,10 @@
           {
             "id": "texra.gettingStarted.progress",
             "title": "Execute and watch progress",
-            "description": "Kick off your run and watch logs, tool calls, and outputs stream into the ProgressBoard.\n[Execute the agent](command:texra.execute) and keep an eye on [Show Tasks](command:texra.showProgressView) for status updates.",
+            "description": "Kick off your run and watch logs, tool calls, and outputs stream into Progress.\n[Execute the agent](command:texra.execute) and keep an eye on [Show Progress](command:texra.showProgressView) for status updates.",
             "media": {
               "image": "resources/walkthroughs/media/texra-progressboard.png",
-              "altText": "Screenshot of the ProgressBoard view"
+              "altText": "Screenshot of the Progress view"
             },
             "completionEvents": [
               "onCommand:texra.execute"
@@ -1106,10 +1118,10 @@
           {
             "id": "texra.gettingStarted.housekeeping",
             "title": "Pack and clean up",
-            "description": "After reviewing, use **Pack** $(archive) to archive outputs into a timestamped `History/` folder, or **Clean** $(trash) to delete generated files.\n\nFind these actions in:\n- The **ProgressBoard toolbar** on each completed run\n- The **editor title menu** (overflow `...`) when editing a `.tex` file\n- The **right-click context menu** on `.tex` files\n\nOr try the workspace-wide commands: [Clean all LLM outputs](command:texra.cleanOutput) | [Clean all build files](command:texra.cleanBuild)",
+            "description": "After reviewing, use **Pack** $(archive) to archive outputs into a timestamped `History/` folder, or **Clean** $(trash) to delete generated files.\n\nFind these actions in:\n- The **Progress toolbar** on each completed run\n- The **editor title menu** (overflow `...`) when editing a `.tex` file\n- The **right-click context menu** on `.tex` files\n\nOr try the workspace-wide commands: [Clean all LLM outputs](command:texra.cleanOutput) | [Clean all build files](command:texra.cleanBuild)",
             "media": {
               "image": "resources/walkthroughs/media/texra-progressboard.png",
-              "altText": "Screenshot showing pack and clean buttons in the ProgressBoard toolbar"
+              "altText": "Screenshot showing pack and clean buttons in the Progress toolbar"
             },
             "completionEvents": [
               "onCommand:texra.cleanOutput",
@@ -1128,13 +1140,6 @@
           "title": "TeXRA",
           "icon": "resources/logo-128x128.svg"
         }
-      ],
-      "panel": [
-        {
-          "id": "texra-panel",
-          "title": "TeXRA ProgressBoard",
-          "icon": "$(server-process)"
-        }
       ]
     },
     "views": {
@@ -1144,15 +1149,6 @@
           "id": "texra.mainView",
           "name": "TeXRA",
           "contextualTitle": "TeXRA"
-        }
-      ],
-      "texra-panel": [
-        {
-          "type": "webview",
-          "id": "texra.progressView",
-          "name": "TeXRA: ProgressBoard",
-          "contextualTitle": "ProgressBoard",
-          "icon": "$(server-process)"
         }
       ]
     },
@@ -1187,37 +1183,32 @@
       "view/title": [
         {
           "command": "texra.indentTeX",
-          "when": "view == texra.progressView",
+          "when": "view == texra.mainView && texra.activeView == 'progress'",
           "group": "navigation@1"
         },
         {
           "command": "texra.cleanOutput",
-          "when": "view == texra.progressView",
+          "when": "view == texra.mainView && texra.activeView == 'progress'",
           "group": "navigation@2"
         },
         {
           "command": "texra.cleanBuild",
-          "when": "view == texra.progressView",
+          "when": "view == texra.mainView && texra.activeView == 'progress'",
           "group": "navigation@3"
         },
         {
           "command": "texra.showDashboard",
-          "when": "view == texra.progressView",
+          "when": "view == texra.mainView && texra.activeView == 'progress'",
           "group": "navigation@4"
         },
         {
-          "command": "texra.openProgressViewInTab",
-          "when": "view == texra.progressView",
-          "group": "navigation@7"
-        },
-        {
           "command": "texra.mainView.reset",
-          "when": "view == texra.mainView",
+          "when": "view == texra.mainView && texra.activeView != 'progress'",
           "group": "navigation@0"
         },
         {
           "command": "texra.showDashboard",
-          "when": "view == texra.mainView",
+          "when": "view == texra.mainView && texra.activeView != 'progress'",
           "group": "navigation@1"
         }
       ],
@@ -1248,7 +1239,7 @@
     },
     "keybindings": [
       {
-        "command": "texra.mainView.focus",
+        "command": "texra.showMainView",
         "key": "ctrl+alt+m",
         "mac": "cmd+option+m"
       },
@@ -1266,6 +1257,12 @@
         "command": "texra.cleanBuild",
         "key": "ctrl+alt+shift+b",
         "mac": "cmd+option+shift+b"
+      },
+      {
+        "command": "texra.toggleView",
+        "key": "ctrl+alt+t",
+        "mac": "cmd+option+t",
+        "when": "focusedView == texra.mainView"
       },
       {
         "command": "texra.execute",

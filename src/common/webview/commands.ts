@@ -9,6 +9,7 @@ export const COMMON_COMMANDS = {
   STATE_RESTORE: 'restoreState',
   WEBVIEW_READY: 'webviewReady',
   ERROR: 'error',
+  SWITCH_VIEW: 'switchView',
 } as const;
 
 // Main view specific commands
@@ -239,6 +240,9 @@ export const PROGRESS_VIEW_COMMANDS = {
   RUN_FOLLOWUP: 'runFollowup',
   GET_FOLLOWUP_OPTIONS: 'getFollowupOptions',
   SET_FOLLOWUP_OPTIONS: 'setFollowupOptions',
+  POP_OUT: 'popOut',
+  POP_BACK: 'popBack',
+  SET_PLACEMENT: 'setPlacement',
 } as const;
 
 // History view specific commands

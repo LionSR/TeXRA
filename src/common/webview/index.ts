@@ -11,4 +11,14 @@ export {
   MEMORY_VIEW_COMMANDS,
   SETTINGS_VIEW_COMMANDS,
 } from './commands';
-export { getSharedLocalResourceRoots } from './resourceRoots';
+export {
+  TEXRA_ACTIVE_VIEW_CONTEXT_KEY,
+  SIDEBAR_VIEWS,
+  getActiveSidebarView,
+  setActiveSidebarView,
+  type SidebarView,
+} from './viewState';
+export {
+  getSharedLocalResourceRoots,
+  getCombinedLocalResourceRoots,
+} from './resourceRoots';

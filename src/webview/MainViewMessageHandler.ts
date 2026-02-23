@@ -5,7 +5,11 @@ import {
   MainViewInboundHandlerRegistry,
 } from '@shared/schemas';
 import { toErrorMessage } from '@common/errors';
-import { BaseViewMessageHandler, MAIN_VIEW_COMMANDS } from '@common/webview';
+import {
+  BaseViewMessageHandler,
+  COMMON_COMMANDS,
+  MAIN_VIEW_COMMANDS,
+} from '@common/webview';
 import { RecordingManager } from '@common/managers/RecordingManager';
 import { agentDirectories } from '@frontend/agents';
 import { loadOptions } from '@frontend/agents/optionsLoader';
@@ -87,6 +91,26 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         showInstructionWithSuppress(m.key, m.text),
       [MAIN_VIEW_COMMANDS.GET_THEME]: () => this.handleThemeRequest(),
       [MAIN_VIEW_COMMANDS.GET_DEBUG_MODE]: () => this.handleDebugModeRequest(),
+      [COMMON_COMMANDS.SWITCH_VIEW]: (m) => {
+        if (m.view === 'dashboard') {
+          return safeExecuteCommand('texra.showDashboard', [], this.viewName);
+        }
+        if (m.view === 'main') {
+          return safeExecuteCommand('texra.showMainView', [], this.viewName);
+        }
+        if (m.openInEditor) {
+          return safeExecuteCommand(
+            'texra.openProgressViewInTab',
+            [],
+            this.viewName,
+          );
+        }
+        return safeExecuteCommand(
+          'texra.showProgressView',
+          [{ inPlace: true }],
+          this.viewName,
+        );
+      },
 
       // Settings messages
       [MAIN_VIEW_COMMANDS.MODEL_SELECTED]: (m) =>
