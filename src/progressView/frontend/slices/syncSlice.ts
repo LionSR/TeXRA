@@ -63,7 +63,6 @@ export const syncHandlers: HandlerRegistry = {
             if (data.todos) d.todos = data.todos;
             if (data.queuedFollowUps) d.queuedFollowUps = data.queuedFollowUps;
           }
-
           if (isWorkflowState(prev) && hasInstruction) {
             const d = draft as WorkflowStreamState;
             if (data.instruction && data.runId) {

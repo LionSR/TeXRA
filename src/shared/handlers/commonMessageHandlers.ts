@@ -41,6 +41,8 @@ export function handleCommonMessage(
       return true;
     case COMMON_COMMANDS.WEBVIEW_READY:
       return true;
+    case COMMON_COMMANDS.SWITCH_VIEW:
+      return false;
     default:
       return false;
   }

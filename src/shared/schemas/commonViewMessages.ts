@@ -28,6 +28,15 @@ export const WebviewReadyMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.WEBVIEW_READY),
 });
 
+export const SwitchViewTargetSchema = z.enum(['main', 'progress', 'dashboard']);
+export type SwitchViewTarget = z.infer<typeof SwitchViewTargetSchema>;
+
+export const SwitchViewMessageSchema = z.object({
+  command: z.literal(COMMON_COMMANDS.SWITCH_VIEW),
+  view: SwitchViewTargetSchema,
+  openInEditor: z.boolean().nullish(),
+});
+
 export const ErrorMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.ERROR),
   message: z.string(),
@@ -39,6 +48,7 @@ export const CommonViewMessageSchema = z.discriminatedUnion('command', [
   SetDebugModeMessageSchema,
   StateRestoreMessageSchema,
   WebviewReadyMessageSchema,
+  SwitchViewMessageSchema,
   ErrorMessageSchema,
 ]);
 
@@ -46,5 +56,6 @@ export type SetThemeMessage = z.infer<typeof SetThemeMessageSchema>;
 export type SetDebugModeMessage = z.infer<typeof SetDebugModeMessageSchema>;
 export type StateRestoreMessage = z.infer<typeof StateRestoreMessageSchema>;
 export type WebviewReadyMessage = z.infer<typeof WebviewReadyMessageSchema>;
+export type SwitchViewMessage = z.infer<typeof SwitchViewMessageSchema>;
 export type ErrorMessage = z.infer<typeof ErrorMessageSchema>;
 export type CommonViewMessage = z.infer<typeof CommonViewMessageSchema>;
