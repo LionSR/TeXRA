@@ -25,6 +25,7 @@ export class UsageStatsManager {
   private items: Map<StreamTabId, RunUsageMap> = new Map();
   private loaded = false;
   private readonly logger: AgentLogger;
+  private readonly pendingWrites = new Map<StreamTabId, Promise<void>>();
 
   constructor() {
     this.logger = new AgentLogger('UsageStatsManager');
@@ -53,7 +54,7 @@ export class UsageStatsManager {
     current.set(storageKey, accumulated);
     this.items.set(stream, current);
 
-    await this.saveStream(stream);
+    this.saveStream(stream);
     return accumulated;
   }
 
@@ -65,11 +66,13 @@ export class UsageStatsManager {
   /** Remove a stream from in-memory state. Disk cleanup owned by caller. */
   evict(stream: StreamTabId): void {
     this.items.delete(stream);
+    this.pendingWrites.delete(stream);
   }
 
   /** Clear all in-memory state. Disk cleanup owned by caller. */
   evictAll(): void {
     this.items.clear();
+    this.pendingWrites.clear();
   }
 
   /** Load usage stats from disk-backed StreamTabStore */
@@ -95,12 +98,25 @@ export class UsageStatsManager {
     }
   }
 
+  /** Await all pending disk writes. */
+  async flush(): Promise<void> {
+    await Promise.all([...this.pendingWrites.values()]);
+  }
+
   // -- Per-stream persistence -----------------------------------------------
 
-  private async saveStream(stream: StreamTabId): Promise<void> {
+  private saveStream(stream: StreamTabId): void {
     if (!this.loaded) return;
-    const data = this.items.get(stream);
-    const store = getStreamTabStore(stream);
-    await store.writeUsageStats(data ? mapToRecord(data) : {});
+    const prev = this.pendingWrites.get(stream) ?? Promise.resolve();
+    const next = prev.then(() => {
+      if (!this.pendingWrites.has(stream)) return;
+      const data = this.items.get(stream);
+      const store = getStreamTabStore(stream);
+      return store.writeUsageStats(data ? mapToRecord(data) : {});
+    });
+    this.pendingWrites.set(
+      stream,
+      next.catch(() => {}),
+    );
   }
 }

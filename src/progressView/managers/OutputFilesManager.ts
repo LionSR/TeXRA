@@ -25,6 +25,8 @@ export class OutputFilesManager {
   > = new Map();
   private loaded = false;
   private readonly logger: AgentLogger;
+  private readonly pendingWrites = new Map<StreamTabId, Promise<void>>();
+  private readonly pendingMissingWrites = new Map<StreamTabId, Promise<void>>();
 
   constructor() {
     this.logger = new AgentLogger('OutputFilesManager');
@@ -77,7 +79,7 @@ export class OutputFilesManager {
       runRounds.set(roundResult.data, normalizedFiles);
     }
 
-    await this.saveStream(stream);
+    this.saveStream(stream);
   }
 
   /**
@@ -110,7 +112,7 @@ export class OutputFilesManager {
       runMissing.set(roundResult.data, files);
     }
 
-    await this.saveMissingOutputs(stream);
+    this.saveMissingOutputs(stream);
   }
 
   /** Get output files for a stream */
@@ -188,19 +190,23 @@ export class OutputFilesManager {
     if (!this._missingOutputs.delete(stream)) {
       return;
     }
-    await this.saveMissingOutputs(stream);
+    this.saveMissingOutputs(stream);
   }
 
   /** Remove a stream from in-memory state. Disk cleanup owned by caller. */
   evict(stream: StreamTabId): void {
     this.items.delete(stream);
     this._missingOutputs.delete(stream);
+    this.pendingWrites.delete(stream);
+    this.pendingMissingWrites.delete(stream);
   }
 
   /** Clear all in-memory state. Disk cleanup owned by caller. */
   evictAll(): void {
     this.items.clear();
     this._missingOutputs.clear();
+    this.pendingWrites.clear();
+    this.pendingMissingWrites.clear();
   }
 
   /** Load output files from disk-backed StreamTabStore */
@@ -227,19 +233,43 @@ export class OutputFilesManager {
     this.loaded = true;
   }
 
-  // -- Per-stream persistence -----------------------------------------------
-
-  private async saveStream(stream: StreamTabId): Promise<void> {
-    if (!this.loaded) return;
-    const data = this.items.get(stream);
-    const store = getStreamTabStore(stream);
-    await store.writeOutputFiles(data ? nestedMapToRecord(data) : {});
+  /** Await all pending disk writes. */
+  async flush(): Promise<void> {
+    await Promise.all([
+      ...this.pendingWrites.values(),
+      ...this.pendingMissingWrites.values(),
+    ]);
   }
 
-  private async saveMissingOutputs(stream: StreamTabId): Promise<void> {
+  // -- Per-stream persistence -----------------------------------------------
+
+  private saveStream(stream: StreamTabId): void {
     if (!this.loaded) return;
-    const data = this._missingOutputs.get(stream);
-    const store = getStreamTabStore(stream);
-    await store.writeMissingOutputs(data ? nestedMapToRecord(data) : {});
+    const prev = this.pendingWrites.get(stream) ?? Promise.resolve();
+    const next = prev.then(() => {
+      if (!this.pendingWrites.has(stream)) return;
+      const data = this.items.get(stream);
+      const store = getStreamTabStore(stream);
+      return store.writeOutputFiles(data ? nestedMapToRecord(data) : {});
+    });
+    this.pendingWrites.set(
+      stream,
+      next.catch(() => {}),
+    );
+  }
+
+  private saveMissingOutputs(stream: StreamTabId): void {
+    if (!this.loaded) return;
+    const prev = this.pendingMissingWrites.get(stream) ?? Promise.resolve();
+    const next = prev.then(() => {
+      if (!this.pendingMissingWrites.has(stream)) return;
+      const data = this._missingOutputs.get(stream);
+      const store = getStreamTabStore(stream);
+      return store.writeMissingOutputs(data ? nestedMapToRecord(data) : {});
+    });
+    this.pendingMissingWrites.set(
+      stream,
+      next.catch(() => {}),
+    );
   }
 }

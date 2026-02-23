@@ -380,6 +380,8 @@ export class ProgressViewState {
       this.streamLogs.flush(),
       this.meta.flush(),
       this.runInstructions.flush(),
+      this.outputFiles.flush(),
+      this.usageStats.flush(),
     ]);
   }
 

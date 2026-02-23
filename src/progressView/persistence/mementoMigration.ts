@@ -10,6 +10,7 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
+import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state';
 import { AgentLogger } from '@logger/AgentLogger';
 import { TaskStateSchema, type TaskState } from '@logger/TaskState';
@@ -275,7 +276,7 @@ async function migrateStreamToStore(
     // Legacy format: bare { inputTokens, outputTokens, cost } without run wrapper
     const isLegacy =
       'inputTokens' in raw || 'outputTokens' in raw || 'cost' in raw;
-    const normalized = isLegacy ? { default: raw } : raw;
+    const normalized = isLegacy ? { [normalizeRunId(null)]: raw } : raw;
     writes.push(
       store.writeUsageStats(normalized as Record<string, TokenUsageStats>),
     );
