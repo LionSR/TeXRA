@@ -39,7 +39,7 @@ import type { ToolDefinition } from '@model';
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
-import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
+import { K_SLICE, MESSAGE_PREVIEW_LENGTH, getConfig } from '@utils/config';
 import { flexibleFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import { computeCachePercentage } from './utils/usageNormalization';
@@ -191,7 +191,13 @@ export class ModelHandlerOpenAI<
     }
 
     if (tools && tools.length > 0) {
-      baseParams.parallel_tool_calls = false;
+      const parallelToolCalls = getConfig<boolean>(
+        'texra.model.openaiParallelToolCalls',
+        false,
+      );
+      if (!parallelToolCalls) {
+        baseParams.parallel_tool_calls = false;
+      }
       baseParams.tools = toOpenAITools(tools);
       baseParams.tool_choice = 'auto';
     }
