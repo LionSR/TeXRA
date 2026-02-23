@@ -42,7 +42,7 @@ async function restoreState(
     const nextState = buildMainViewState(state);
 
     // Focus the webview panel first to make sure it's visible
-    await vscode.commands.executeCommand('texra.mainView.focus');
+    await vscode.commands.executeCommand('texra.showMainView');
 
     const webviewView = await getMainWebview(CHANNEL);
     if (webviewView) {
@@ -57,7 +57,7 @@ async function restoreState(
 
     // Store the state in memory for the MainViewProvider to pick up
     setPendingState(nextState, executeImmediately);
-    await vscode.commands.executeCommand('texra.mainView.focus');
+    await vscode.commands.executeCommand('texra.showMainView');
     logger.info(CHANNEL, 'State stored for later restoration', {
       data: { executeImmediately },
     });

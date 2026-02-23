@@ -7,6 +7,7 @@ import {
   StorageKeySchema,
   StorageRecordSchema,
   StreamTabIdSchema,
+  TaskGroupSchema,
   TodoItemSchema,
   type ActiveChildInfo,
   type AgentCategoryFilter,
@@ -17,7 +18,9 @@ import {
   type OutputFileInfo,
   type StorageKey,
   type StreamTabId,
+  type TaskGroup,
   type TodoItem,
+  type UpdateTaskGroupPayload,
 } from '@shared/schemas';
 import { StreamSortSchema, type StreamSort } from '@shared/streams/streamSort';
 import {
@@ -445,6 +448,7 @@ export class ProgressViewState {
   }
 
   async clearStream(stream: StreamTabId): Promise<void> {
+    this._taskGroups.delete(stream);
     await Promise.all([
       this._streamLogs.delete(stream),
       this._outputFiles.deleteStream(stream),
@@ -479,6 +483,7 @@ export class ProgressViewState {
       { data: { stack: new Error().stack } },
     );
 
+    this._taskGroups.clear();
     await Promise.all([
       this._streamLogs.clear(),
       this._outputFiles.clear(),
