@@ -30,13 +30,14 @@ VALUES (
   'lean',
   'Lean 4 proof assistant with VS Code integration and CLI fallback.',
   'tool-use-lean/lean.yaml',
-  ARRAY['researcher'],
+  ARRAY['researcher', 'lean'],
   'toolUse',
   ARRAY['todo_write', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
   storage_path   = EXCLUDED.storage_path,
+  visibility     = EXCLUDED.visibility,
   agent_category = EXCLUDED.agent_category,
   tools          = EXCLUDED.tools;
 
@@ -45,13 +46,14 @@ VALUES (
   'leanBlueprint',
   'Creates and maintains LeanBlueprint documents — dependency-tracked LaTeX that bridges informal math and Lean 4 formalization.',
   'tool-use-lean/leanBlueprint.yaml',
-  ARRAY['researcher'],
+  ARRAY['researcher', 'lean'],
   'toolUse',
   ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'web_search', 'web_fetch', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source', 'crossref_search', 'crossref_doi', 'zotero_add', 'zotero_search', 'zotero_export']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
   storage_path   = EXCLUDED.storage_path,
+  visibility     = EXCLUDED.visibility,
   agent_category = EXCLUDED.agent_category,
   tools          = EXCLUDED.tools;
 
