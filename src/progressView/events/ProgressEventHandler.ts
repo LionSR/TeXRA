@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import {
+  MESSAGE_TYPES,
   STREAM_STATUS,
   type ConversationProgress,
   type StorageKey,
@@ -660,7 +661,7 @@ export class ProgressEventHandler {
       });
       affectedStreams.push(streamId);
       this.logger.debug(
-        `Stream ${streamId} set to ERROR due to webview reload`,
+        `Stream ${streamId} set to ERROR during restart recovery`,
       );
     }
 

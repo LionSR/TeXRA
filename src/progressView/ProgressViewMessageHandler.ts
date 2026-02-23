@@ -15,6 +15,7 @@ import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager
 import { toErrorMessage } from '@common/errors';
 import {
   BaseViewMessageHandler,
+  COMMON_COMMANDS,
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview';
 import {
@@ -129,6 +130,23 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.THEME_SET]: (data) => this.postToActiveView(data),
       [PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET]: (data) =>
         this.postToActiveView(data),
+      [COMMON_COMMANDS.SWITCH_VIEW]: async (data) => {
+        if (data.view === 'dashboard') {
+          await vscode.commands.executeCommand('texra.showDashboard');
+          return;
+        }
+        if (data.view === 'main') {
+          await vscode.commands.executeCommand('texra.showMainView');
+          return;
+        }
+        if (data.openInEditor) {
+          await this.provider.popOutToEditor();
+          return;
+        }
+        await vscode.commands.executeCommand('texra.showProgressView');
+      },
+      [PROGRESS_VIEW_COMMANDS.POP_OUT]: () => this.provider.popOutToEditor(),
+      [PROGRESS_VIEW_COMMANDS.POP_BACK]: () => this.provider.popBackToSidebar(),
 
       // Stream management
       [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (data) =>
@@ -354,10 +372,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.provider.state.pickValidActiveStream(filtered.map((s) => s.name));
     }
 
-    // Lightweight sync for dual-webview (frontend DELETE_STREAM handler is idempotent)
+    // Lightweight sync for the currently active progress target.
     this.provider.webviewUpdater.deleteStream(streamId);
 
-    // Broadcast the replacement active stream so secondary webviews stay consistent
+    // Sync replacement active stream in the active progress target.
     if (wasActive && this.provider.state.activeStream) {
       this.provider.setActiveStream(
         this.provider.state.activeStream as StreamTabId,
@@ -636,7 +654,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         : { agentConfig: result.data }
     ) as TaskState;
 
-    await vscode.commands.executeCommand('texra.mainView.focus');
+    await vscode.commands.executeCommand('texra.showMainView');
     await vscode.commands.executeCommand('texra.restoreState', taskState);
     return true;
   }
@@ -1048,7 +1066,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         },
       );
 
-      await vscode.commands.executeCommand('texra.mainView.focus');
+      await vscode.commands.executeCommand('texra.showMainView');
       await vscode.commands.executeCommand(
         'texra.restoreState',
         newTaskState,

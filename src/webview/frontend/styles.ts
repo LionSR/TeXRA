@@ -26,6 +26,24 @@ export const mainViewStyles: CSSResult = css`
     min-height: 0;
   }
 
+  .view-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    padding: 0 var(--spacing-tiny) var(--spacing-small);
+    flex-shrink: 0;
+  }
+
+  .view-header vscode-tabs {
+    flex: 1;
+    min-width: 0;
+    --panel-display: none;
+  }
+
+  .header-action {
+    flex-shrink: 0;
+  }
+
   .main-content {
     flex: 1;
     display: flex;

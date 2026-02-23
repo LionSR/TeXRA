@@ -32,3 +32,25 @@ export function getSharedLocalResourceRoots(
     ),
   ];
 }
+
+/**
+ * Build local resource roots covering multiple view folders.
+ * The per-folder src/dist entries are unique; shared roots are deduplicated.
+ */
+export function getCombinedLocalResourceRoots(
+  context: vscode.ExtensionContext,
+  viewFolders: string[],
+): vscode.Uri[] {
+  const seen = new Set<string>();
+  const roots: vscode.Uri[] = [];
+  for (const folder of viewFolders) {
+    for (const uri of getSharedLocalResourceRoots(context, folder)) {
+      const key = uri.toString();
+      if (!seen.has(key)) {
+        seen.add(key);
+        roots.push(uri);
+      }
+    }
+  }
+  return roots;
+}
