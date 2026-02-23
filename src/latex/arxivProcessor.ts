@@ -37,8 +37,15 @@ export class ArxivSourceProcessor {
   /**
    * Determine file extension from content-type header.
    * Handles tar, gzip, and tex content types.
+   * Throws if the response is a PDF (no LaTeX source available).
    */
   private getExtensionFromContentType(contentType: string): string {
+    if (contentType.includes('pdf')) {
+      throw new Error(
+        'This arXiv paper only has a PDF submission — no LaTeX source is available for download',
+      );
+    }
+
     const isTar = contentType.includes('tar');
     const isGzip = contentType.includes('gzip') || contentType.includes('gz');
     const isTex = contentType.includes('tex') || contentType.includes('plain');
@@ -181,7 +188,7 @@ export class ArxivSourceProcessor {
     input: string,
     progressCallback?: (msg: string, increment?: number) => void,
     autoIndent = true,
-  ): Promise<string> {
+  ): Promise<{ path: string; alreadyExisted: boolean }> {
     // Normalize input (URL or ID) to plain arXiv ID
     const id = this.normalizeInput(input);
     if (!id) {
@@ -234,6 +241,20 @@ export class ArxivSourceProcessor {
         downloadUrl,
         downloadBasePath,
       );
+
+      // Detect PDF-only submissions (no LaTeX source available)
+      if (downloadedPath.endsWith('.pdf')) {
+        await AbsoluteFS.delete(downloadedPath);
+        await AbsoluteFS.delete(downloadDirFull, { recursive: true }).catch(
+          () => undefined,
+        );
+        await AbsoluteFS.delete(paperDirFull, { recursive: true }).catch(
+          () => undefined,
+        );
+        throw new Error(
+          'This arXiv paper only has a PDF submission — no LaTeX source is available for download',
+        );
+      }
 
       const isArchive =
         downloadedPath.endsWith('.tar') ||
@@ -324,7 +345,7 @@ export class ArxivSourceProcessor {
 
     logger.info(this.channel, `arXiv source downloaded to: ${paperDirFull}`);
 
-    return paperDirFull;
+    return { path: paperDirFull, alreadyExisted: !needsDownload };
   }
 }
 
