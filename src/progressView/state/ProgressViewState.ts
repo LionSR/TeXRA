@@ -3,47 +3,37 @@ import { z } from 'zod';
 import {
   AgentCategoryFilterSchema,
   ContextStateDataSchema,
-  InstructionUpdateSchema,
-  StorageKeySchema,
-  StorageRecordSchema,
-  StreamTabIdSchema,
-  TaskGroupSchema,
   TodoItemSchema,
   type ActiveChildInfo,
   type AgentCategoryFilter,
   type ConversationProgress,
   type ContextStateData,
-  type ExecutionId,
-  type InstructionUpdate,
-  type OutputFileInfo,
-  type StorageKey,
   type StreamTabId,
-  type TaskGroup,
   type TodoItem,
-  type UpdateTaskGroupPayload,
 } from '@shared/schemas';
 import { StreamSortSchema, type StreamSort } from '@shared/streams/streamSort';
 import {
   PersistedState,
   createBackendStorage,
 } from '@shared/state/PersistedState';
-import { isPlainObject } from '@shared/utils/string';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
-import { normalizeRunId } from '@common/constants/runIds';
 import { AgentLogger } from '@logger/AgentLogger';
 import { StreamLogStore } from '@logger/StreamLogStore';
-import {
-  TaskState,
-  TaskStateSchema,
-  isToolUseTaskState,
-} from '@logger/TaskState';
 import { OutputFilesManager } from '@progressView/managers/OutputFilesManager';
 import { UsageStatsManager } from '@progressView/managers/UsageStatsManager';
+import { StreamMetaManager } from '@progressView/managers/StreamMetaManager';
+import { RunInstructionsManager } from '@progressView/managers/RunInstructionsManager';
 import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
-import { createRecordToMapSchema } from '@progressView/persistence/schemaUtils';
-import { mapToRecord } from '@progressView/persistence/serializationUtils';
+import {
+  getStreamTabStore,
+  deleteAllStreamData,
+} from '@progressView/persistence/StreamTabStore';
+import {
+  needsMigrationFromMemento,
+  migrateFromMemento,
+} from '@progressView/persistence/mementoMigration';
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
 export const StreamHintsSchema = z.object({
@@ -55,13 +45,11 @@ export const StreamHintsSchema = z.object({
 
 export type StreamHints = z.infer<typeof StreamHintsSchema>;
 
-/** Consolidated session state per stream. Schema provides defaults via .prefault(). */
-export const StreamSessionStateSchema = z.object({
+/** Ephemeral session state per stream (not persisted). */
+const StreamSessionStateSchema = z.object({
   hints: StreamHintsSchema.prefault({}),
   todos: z.array(TodoItemSchema).prefault([]),
   contextState: ContextStateDataSchema.nullable().prefault(null),
-  activeRunId: StorageKeySchema.nullable().prefault(null),
-  parentStreamId: StreamTabIdSchema.optional(),
 });
 
 type StreamSessionState = z.output<typeof StreamSessionStateSchema>;
@@ -77,15 +65,9 @@ const ProgressViewPrefsSchema = z.object({
 });
 
 type ProgressViewPrefs = z.infer<typeof ProgressViewPrefsSchema>;
-const RunInstructionsByStreamSchema = z.record(
-  z.string(),
-  createRecordToMapSchema(InstructionUpdateSchema),
-);
 
 /**
  * Backend-owned ephemeral counters, updated during streaming.
- * This is the narrowed type replacing the full StreamState in _streamStates.
- * The frontend owns the full StreamState (todos, ui, taskGroups, etc.).
  */
 export interface StreamExecutionState {
   kind: (typeof AgentCategory)[keyof typeof AgentCategory];
@@ -109,18 +91,29 @@ function createExecutionState(
   };
 }
 
-/** Core state management for the progress view. */
+/** Clean up tool-use agent registry based on currently active streams. */
+export function cleanupToolUseAgentRegistry(meta: StreamMetaManager): void {
+  cleanupInactiveAgents(meta.getActiveToolUseStreams());
+}
+
+/**
+ * Core state management for the progress view.
+ *
+ * Coordinates five persistence managers (streamLogs, outputFiles, usageStats,
+ * meta, runInstructions) plus ephemeral in-memory state and preferences.
+ */
 export class ProgressViewState {
-  private _streamLogs: StreamLogStore;
-  private _outputFiles: OutputFilesManager;
-  private _usageStats: UsageStatsManager;
-  private _runInstructions = new Map<
-    StreamTabId,
-    Map<string, InstructionUpdate>
-  >();
+  // -- Persistence managers ---------------------------------------------------
+  readonly streamLogs: StreamLogStore;
+  readonly outputFiles: OutputFilesManager;
+  readonly usageStats: UsageStatsManager;
+  readonly meta: StreamMetaManager;
+  readonly runInstructions: RunInstructionsManager;
+
+  // -- Preferences ------------------------------------------------------------
   private _prefs!: PersistedState<ProgressViewPrefs>;
-  private readonly taskStates = new Map<StreamTabId, TaskState>();
-  private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
+
+  // -- Ephemeral state (session-only, not persisted) --------------------------
   private _streamStates = new Map<StreamTabId, StreamExecutionState>();
   private _sessionState = new Map<StreamTabId, StreamSessionState>();
 
@@ -140,23 +133,15 @@ export class ProgressViewState {
       WorkspaceStateKey.PROGRESS_VIEW_PREFS,
       ProgressViewPrefsSchema,
     );
-    this._streamLogs = new StreamLogStore();
-    AgentLogger.setStreamLogStore(this._streamLogs);
-    this._outputFiles = new OutputFilesManager(resolvedStorage);
-    this._usageStats = new UsageStatsManager(resolvedStorage);
+    this.streamLogs = new StreamLogStore();
+    AgentLogger.setStreamLogStore(this.streamLogs);
+    this.outputFiles = new OutputFilesManager();
+    this.usageStats = new UsageStatsManager();
+    this.meta = new StreamMetaManager();
+    this.runInstructions = new RunInstructionsManager();
   }
 
-  get streamLogs(): StreamLogStore {
-    return this._streamLogs;
-  }
-
-  get outputFiles(): OutputFilesManager {
-    return this._outputFiles;
-  }
-
-  get usageStats(): UsageStatsManager {
-    return this._usageStats;
-  }
+  // -- Preferences ------------------------------------------------------------
 
   get activeStream(): ActiveStreamId {
     return this._prefs.get('activeStream');
@@ -168,10 +153,6 @@ export class ProgressViewState {
 
   /**
    * Compute which stream should be active given available streams (pure query).
-   * Returns current if valid, otherwise first available, otherwise current as fallback.
-   *
-   * Preserves current when availableStreams is empty to avoid clearing content
-   * during temporary filter mismatches.
    */
   pickValidActiveStream(availableStreams: StreamTabId[]): StreamTabId {
     const current = this._prefs.get('activeStream');
@@ -201,6 +182,8 @@ export class ProgressViewState {
     this._prefs.update({ agentCategoryFilter: filter });
   }
 
+  // -- Ephemeral session state ------------------------------------------------
+
   private getOrCreateSession(stream: StreamTabId): StreamSessionState {
     let state = this._sessionState.get(stream);
     if (!state) {
@@ -212,7 +195,6 @@ export class ProgressViewState {
 
   updateStreamHints(streamTabId: StreamTabId, hints: StreamHints): void {
     const state = this.getOrCreateSession(streamTabId);
-    // Auto-set creationTimestamp for new streams (first call to updateStreamHints)
     const creationTimestamp =
       state.hints.creationTimestamp ?? hints.creationTimestamp ?? Date.now();
     state.hints = StreamHintsSchema.parse({
@@ -241,42 +223,17 @@ export class ProgressViewState {
     return this._sessionState.get(stream)?.todos ?? [];
   }
 
-  setContextState(stream: StreamTabId, contextState: ContextStateData): void {
-    this.getOrCreateSession(stream).contextState = contextState;
-  }
-
   getContextState(stream: StreamTabId): ContextStateData | undefined {
     return this._sessionState.get(stream)?.contextState ?? undefined;
   }
 
-  setActiveRunId(stream: StreamTabId, runId: string | null): void {
-    const storageKey = runId ? normalizeRunId(runId) : null;
-    this.getOrCreateSession(stream).activeRunId = storageKey;
-    this.saveActiveRunIds();
-  }
-
-  getActiveRunId(stream: StreamTabId): StorageKey | null {
-    return this._sessionState.get(stream)?.activeRunId ?? null;
-  }
-
-  setParentStream(
-    childStreamId: StreamTabId,
-    parentStreamId: StreamTabId,
-  ): void {
-    this.getOrCreateSession(childStreamId).parentStreamId = parentStreamId;
-    this.saveParentStreamIds();
-  }
-
-  getParentStreamId(streamId: StreamTabId): StreamTabId | undefined {
-    return this._sessionState.get(streamId)?.parentStreamId;
-  }
+  // -- Ephemeral execution state ----------------------------------------------
 
   getOrCreateStreamState(
     stream: StreamTabId,
     agentCategory: (typeof AgentCategory)[keyof typeof AgentCategory],
   ): StreamExecutionState {
     const existing = this._streamStates.get(stream);
-    // Create new state, or replace if kind doesn't match the agent category
     if (!existing || existing.kind !== agentCategory) {
       const state = createExecutionState(agentCategory);
       this._streamStates.set(stream, state);
@@ -324,157 +281,37 @@ export class ProgressViewState {
     return Object.fromEntries(this._streamStates.entries());
   }
 
-  getStreamLastTimestamp(stream: StreamTabId): number | undefined {
-    return this._streamLogs.getLastTimestamp(stream);
-  }
-
-  getRunInstructions(stream: StreamTabId): Map<string, InstructionUpdate> {
-    return new Map(this._runInstructions.get(stream) ?? []);
-  }
-
-  getRunInstruction(
-    stream: StreamTabId,
-    runId: StorageKey,
-  ): InstructionUpdate | undefined {
-    return this._runInstructions.get(stream)?.get(runId);
-  }
-
-  setRunInstruction(
-    stream: StreamTabId,
-    runId: StorageKey,
-    instruction: InstructionUpdate | null,
-  ): void {
-    const existing = this._runInstructions.get(stream) ?? new Map();
-    if (instruction) {
-      existing.set(runId, instruction);
-      this._runInstructions.set(stream, existing);
-    } else {
-      existing.delete(runId);
-      if (existing.size === 0) {
-        this._runInstructions.delete(stream);
-      } else {
-        this._runInstructions.set(stream, existing);
-      }
-    }
-    this.saveRunInstructions();
-  }
-
-  private loadActiveRunIds(): void {
-    const stored = this.loadRecord(WorkspaceStateKey.ACTIVE_RUN_IDS);
-
-    // Restore active run IDs into consolidated ephemeral state
-    for (const [stream, runId] of Object.entries(stored)) {
-      if (typeof runId === 'string' && runId.length > 0) {
-        this.getOrCreateSession(stream as StreamTabId).activeRunId =
-          normalizeRunId(runId);
-      }
-    }
-  }
-
-  private saveActiveRunIds(): void {
-    // Extract active run IDs from consolidated ephemeral state
-    const record: Record<string, string | null> = {};
-    for (const [stream, state] of this._sessionState.entries()) {
-      if (state.activeRunId !== null) {
-        record[stream] = state.activeRunId;
-      }
-    }
-    void this.storage.update(WorkspaceStateKey.ACTIVE_RUN_IDS, record);
-  }
-
-  private loadParentStreamIds(): void {
-    const stored = this.loadRecord(WorkspaceStateKey.PARENT_STREAM_IDS);
-
-    for (const [stream, parentId] of Object.entries(stored)) {
-      if (typeof parentId === 'string' && parentId.length > 0) {
-        this.getOrCreateSession(stream as StreamTabId).parentStreamId =
-          parentId as StreamTabId;
-      }
-    }
-  }
-
-  private saveParentStreamIds(): void {
-    const record: Record<string, string> = {};
-    for (const [stream, state] of this._sessionState.entries()) {
-      if (state.parentStreamId) {
-        record[stream] = state.parentStreamId;
-      }
-    }
-    void this.storage.update(WorkspaceStateKey.PARENT_STREAM_IDS, record);
-  }
-
-  // Task state management
-  setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
-    this.taskStates.set(streamTabId, taskState);
-    this.clearStreamHints(streamTabId);
-
-    // Create or update frontend stream state with correct discriminated type
-    const agentCategory = taskState.agentConfig.agentCategory;
-    this.getOrCreateStreamState(streamTabId, agentCategory);
-
-    // Reset finished child counters for the new run (they are per-run, not per-stream)
-    this.resetFinishedChildCounters(streamTabId);
-
-    this.saveTaskStates();
-    this.cleanupToolUseAgentRegistry();
-  }
-
-  getTaskState(streamTabId: StreamTabId): TaskState | undefined {
-    return this.taskStates.get(streamTabId);
-  }
-
-  getRunOutputFiles(
-    stream: StreamTabId,
-    options: { storageKey: StorageKey },
-  ): Map<number, OutputFileInfo[]> | undefined {
-    return this._outputFiles.getRun(stream, options.storageKey);
-  }
-
   async endRunningTaskGroups(now: number = Date.now()): Promise<StreamTabId[]> {
-    const affectedFromLogs = this._streamLogs.endRunningGroups(now);
+    const affectedFromLogs = this.streamLogs.endRunningGroups(now);
     if (affectedFromLogs.length > 0) {
-      await this._streamLogs.save();
+      await this.streamLogs.save();
     }
     return affectedFromLogs;
   }
 
-  setExecutionId(streamTabId: StreamTabId, executionId: ExecutionId): void {
-    this._executionIds.set(streamTabId, executionId);
-    this.saveExecutionIds();
-  }
-
-  getExecutionId(streamTabId: StreamTabId): ExecutionId | undefined {
-    return this._executionIds.get(streamTabId);
-  }
+  // -- Lifecycle --------------------------------------------------------------
 
   async clearStream(stream: StreamTabId): Promise<void> {
-    this._taskGroups.delete(stream);
-    await Promise.all([
-      this._streamLogs.delete(stream),
-      this._outputFiles.deleteStream(stream),
-      this._usageStats.delete(stream),
-    ]);
-
-    const removedState = this.taskStates.delete(stream);
-    this._executionIds.delete(stream);
+    // Clear in-memory state
+    this.outputFiles.evict(stream);
+    this.usageStats.evict(stream);
+    this.meta.evict(stream);
+    this.runInstructions.evict(stream);
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
-    this._runInstructions.delete(stream);
 
+    // Delete from disk: stream log file + stream data directory
+    const store = getStreamTabStore(stream);
+    await Promise.all([this.streamLogs.delete(stream), store.clear()]);
+
+    // Update active stream *after* deletion so keys() no longer includes it
     if (this._prefs.get('activeStream') === stream) {
       this._prefs.update({
-        activeStream: this._streamLogs.keys()[0] || '',
+        activeStream: this.streamLogs.keys()[0] || '',
       });
     }
 
-    if (removedState) {
-      this.saveTaskStates();
-      this.cleanupToolUseAgentRegistry();
-    }
-    this.saveExecutionIds();
-    this.saveActiveRunIds();
-    this.saveParentStreamIds();
-    this.saveRunInstructions();
+    cleanupToolUseAgentRegistry(this.meta);
   }
 
   async clearAll(): Promise<void> {
@@ -483,181 +320,97 @@ export class ProgressViewState {
       { data: { stack: new Error().stack } },
     );
 
-    this._taskGroups.clear();
-    await Promise.all([
-      this._streamLogs.clear(),
-      this._outputFiles.clear(),
-      this._usageStats.clear(),
-    ]);
-    this.taskStates.clear();
-    this._executionIds.clear();
+    // Clear in-memory state
+    this.outputFiles.evictAll();
+    this.usageStats.evictAll();
+    this.meta.evictAll();
+    this.runInstructions.evictAll();
     this._sessionState.clear();
     this._streamStates.clear();
-    this._runInstructions.clear();
     this._prefs.reset();
-    this.saveTaskStates();
-    this.saveExecutionIds();
-    this.saveActiveRunIds();
-    this.saveParentStreamIds();
-    this.saveRunInstructions();
-    this.cleanupToolUseAgentRegistry();
+
+    // Delete from disk
+    await Promise.all([this.streamLogs.clear(), deleteAllStreamData()]);
+
+    cleanupToolUseAgentRegistry(this.meta);
   }
 
   async load(): Promise<void> {
-    this.logger.info(
-      '[Persistence] Starting state load from workspace storage',
-    );
+    this.logger.info('[Persistence] Starting state load from storage');
 
-    await Promise.all([
-      this._streamLogs.load(this.storage),
-      this._outputFiles.load(),
-      this._usageStats.load(),
-    ]);
+    // Load stream logs first — they define the set of known streams
+    await this.streamLogs.load(this.storage);
+
+    // Discover all stream IDs from stream logs
+    const streamIds = this.discoverStreamIds();
+
+    this.logger.info(`[Persistence] Discovered ${streamIds.length} stream(s)`);
+
+    // Check if we need one-time migration from workspace state
+    const shouldMigrate = await needsMigrationFromMemento(
+      this.storage,
+      streamIds,
+    );
+    if (shouldMigrate) {
+      await migrateFromMemento(
+        this.storage,
+        this.streamLogs.keys(),
+        this.logger,
+      );
+      // Re-discover after migration
+      const migratedIds = this.discoverStreamIds();
+      await this.loadManagers(migratedIds);
+    } else {
+      await this.loadManagers(streamIds);
+    }
 
     this.logger.info('[Persistence] Managers loaded');
 
-    // Prefs loaded automatically via PersistedState constructor
     this.validateActiveStream();
-    this.loadTaskStates();
-    this.loadExecutionIds();
-    this.loadRunInstructions();
-    this.loadActiveRunIds();
-    this.loadParentStreamIds();
+    cleanupToolUseAgentRegistry(this.meta);
 
-    this.logger.info(
-      `[Persistence] State load complete - taskStates: ${this.taskStates.size}, executionIds: ${this._executionIds.size}`,
-    );
+    this.logger.info('[Persistence] State load complete');
   }
 
   /**
    * Flush pending writes from all managers.
-   * StreamLogStore has debounced writes; other managers write immediately.
    */
   async flush(): Promise<void> {
-    await this._streamLogs.flush();
+    await Promise.all([
+      this.streamLogs.flush(),
+      this.meta.flush(),
+      this.runInstructions.flush(),
+      this.outputFiles.flush(),
+      this.usageStats.flush(),
+    ]);
+  }
+
+  // -- Private helpers --------------------------------------------------------
+
+  private async loadManagers(streamIds: StreamTabId[]): Promise<void> {
+    await Promise.all([
+      this.outputFiles.load(streamIds),
+      this.usageStats.load(streamIds),
+      this.meta.load(streamIds),
+      this.runInstructions.load(streamIds),
+    ]);
   }
 
   /** Validate activeStream against available streams after load */
   private validateActiveStream(): void {
     const savedActiveStream = this._prefs.get('activeStream');
-    if (!savedActiveStream || !this._streamLogs.has(savedActiveStream)) {
-      const fallback = this._streamLogs.keys()[0] ?? '';
+    if (!savedActiveStream || !this.streamLogs.has(savedActiveStream)) {
+      const fallback = this.streamLogs.keys()[0] ?? '';
       if (fallback !== savedActiveStream) {
         this._prefs.update({ activeStream: fallback });
       }
     }
   }
 
-  private loadTaskStates(): void {
-    const raw = this.loadRecord(WorkspaceStateKey.TASK_STATES);
-    this.taskStates.clear();
-
-    const rawKeys = Object.keys(raw);
-    this.logger.info(
-      `[Persistence] Loading task states - found ${rawKeys.length} keys: ${rawKeys.slice(0, 5).join(', ')}${rawKeys.length > 5 ? '...' : ''}`,
-    );
-
-    if (rawKeys.length === 0) {
-      this.logger.info('[Persistence] No task states found in storage');
-      this.cleanupToolUseAgentRegistry();
-      return;
-    }
-
-    // Collect entries from legacy format (workflow/toolUse sub-objects) or flat format
-    const entries = this.extractTaskStateEntries(raw);
-    this.logger.info(
-      `[Persistence] Extracted ${entries.length} task state entries (legacy format: ${rawKeys.includes('workflow') || rawKeys.includes('toolUse')})`,
-    );
-
-    let loaded = 0;
-    let skipped = 0;
-    for (const [stream, rawState] of entries) {
-      const parseResult = TaskStateSchema.safeParse(rawState);
-      if (!parseResult.success) {
-        this.logger.warn(
-          `[Persistence] Skipping invalid task state for stream ${stream}: ${parseResult.error.message}`,
-        );
-        skipped += 1;
-        continue;
-      }
-
-      this.taskStates.set(stream as StreamTabId, parseResult.data as TaskState);
-      loaded += 1;
-    }
-
-    this.logger.info(
-      `[Persistence] Task states loaded: ${loaded} successful, ${skipped} skipped`,
-    );
-
-    this.cleanupToolUseAgentRegistry();
-  }
-
-  private extractTaskStateEntries(
-    raw: Record<string, unknown>,
-  ): [string, unknown][] {
-    const legacyBuckets = [raw.workflow, raw.toolUse].filter(isPlainObject);
-    if (legacyBuckets.length > 0) {
-      return legacyBuckets.flatMap((bucket) =>
-        Object.entries(bucket).filter(([, v]) => isPlainObject(v)),
-      );
-    }
-
-    return Object.entries(raw).filter(([, v]) => isPlainObject(v));
-  }
-
-  private loadExecutionIds(): void {
-    const savedIdsRecord = this.loadRecord(WorkspaceStateKey.EXECUTION_IDS);
-
-    const entries = Object.entries(savedIdsRecord).filter(
-      (entry): entry is [StreamTabId, ExecutionId] =>
-        typeof entry[1] === 'string' && entry[1].length > 0,
-    );
-
-    this._executionIds = new Map(entries);
-    if (entries.length > 0) {
-      this.logger.debug(`Loaded execution IDs for ${entries.length} streams`);
-    }
-  }
-
-  private loadRunInstructions(): void {
-    const stored = this.loadRecord(WorkspaceStateKey.RUN_INSTRUCTIONS);
-    const parsed = RunInstructionsByStreamSchema.parse(stored);
-    this._runInstructions = new Map(
-      Object.entries(parsed).map(([stream, instructions]) => [
-        stream as StreamTabId,
-        instructions,
-      ]),
-    );
-  }
-
-  private loadRecord(key: WorkspaceStateKey): Record<string, unknown> {
-    return StorageRecordSchema.parse(this.storage.get(key));
-  }
-
-  private saveTaskStates(): void {
-    const serialized = Object.fromEntries(this.taskStates);
-    void this.storage.update(WorkspaceStateKey.TASK_STATES, serialized);
-  }
-
-  private cleanupToolUseAgentRegistry(): void {
-    const activeStreams = new Set<StreamTabId>();
-    for (const [stream, state] of this.taskStates) {
-      if (isToolUseTaskState(state)) activeStreams.add(stream);
-    }
-    cleanupInactiveAgents(activeStreams);
-  }
-
-  private saveExecutionIds(): void {
-    const executionIdsObj = mapToRecord(this._executionIds);
-    void this.storage.update(WorkspaceStateKey.EXECUTION_IDS, executionIdsObj);
-  }
-
-  private saveRunInstructions(): void {
-    const serialized: Record<string, Record<string, InstructionUpdate>> = {};
-    for (const [stream, instructions] of this._runInstructions.entries()) {
-      if (instructions.size === 0) continue;
-      serialized[stream] = mapToRecord(instructions);
-    }
-    void this.storage.update(WorkspaceStateKey.RUN_INSTRUCTIONS, serialized);
+  /**
+   * Discover all known stream IDs from stream logs.
+   */
+  private discoverStreamIds(): StreamTabId[] {
+    return [...this.streamLogs.keys()];
   }
 }
