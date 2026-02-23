@@ -6,6 +6,8 @@ import { setRunStorageService } from '@agent/runtime/RunStorageService';
 import {
   BaseWebviewProvider,
   getSharedLocalResourceRoots,
+  SIDEBAR_VIEWS,
+  setActiveSidebarView,
 } from '@common/webview';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
@@ -28,20 +30,28 @@ import type {
   BashPermission,
   ModelOptionData,
   OutputFileInfo,
+  ProgressViewPlacement,
   StorageKey,
   StreamTabId,
   ToolEditPermission,
 } from '@shared/schemas';
 
+import type { MainViewProvider } from '../MainViewProvider';
+
 /**
- * Orchestrates the progress view webview (sidebar and panel).
+ * Orchestrates the progress view webview with exclusive rendering:
+ * sidebar OR editor panel, never both as active targets.
+ *
+ * In sidebar mode, the single `texra.mainView` hosts progress content —
+ * MainViewProvider owns the WebviewView and delegates messages here.
+ *
  * Implements IRunStorageService for agent runtime integration.
  */
 export class ProgressViewProvider
   extends BaseWebviewProvider
-  implements vscode.WebviewViewProvider, IRunStorageService
+  implements IRunStorageService
 {
-  public static readonly viewType = 'texra.progressView';
+  public static readonly viewType = 'texra.progress';
   private static _instance: ProgressViewProvider | undefined;
 
   public readonly state: ProgressViewState;
@@ -52,14 +62,16 @@ export class ProgressViewProvider
   protected readonly contentProvider: ProgressViewContentProvider;
   protected readonly messageHandler: ProgressViewMessageHandler;
 
-  private readonly _viewTitle: string;
   private _sidebarReady = false;
   private _panelReady = false;
   private _panelView?: vscode.WebviewPanel;
   private _panelDisposables: vscode.Disposable[] = [];
+  private _activePlacement: ProgressViewPlacement = 'sidebar';
   private _pendingUpdateOptions: { forceRebuild: boolean } | null = null;
-  private _hasResolved = false;
   private readonly logger: AgentLogger;
+
+  private _sidebarWebviewGetter?: () => vscode.Webview | undefined;
+  private _mainViewProvider?: MainViewProvider;
 
   /** TTL-cached model options to avoid redundant async work for rapid proposals. */
   private static readonly MODEL_OPTIONS_TTL_MS = 30_000;
@@ -85,26 +97,16 @@ export class ProgressViewProvider
     'proposalId'
   >;
 
-  constructor(
-    protected readonly context: vscode.ExtensionContext,
-    title: string = 'Tasks',
-  ) {
+  constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
-    this._viewTitle = title;
     this.logger = new AgentLogger('ProgressViewProvider');
 
     this.state = new ProgressViewState();
-    this.webviewUpdater = new WebviewUpdater(() => [
-      this._view?.webview,
-      this._panelView?.webview,
-    ]);
+    this.webviewUpdater = new WebviewUpdater(() => [this.getActiveWebview()]);
     this.webviewBridge = new WebviewBridge(
       this.state.streamLogs,
-      () => [this._view?.webview, this._panelView?.webview],
-      () => {
-        const active = this.state.activeStream;
-        return active || null;
-      },
+      () => [this.getActiveWebview()],
+      () => this.state.activeStream || null,
     );
 
     const canSend = () => this.canSendToWebview();
@@ -200,6 +202,35 @@ export class ProgressViewProvider
     this.logger.debug('ProgressViewProvider initialized');
   }
 
+  // --- Wiring from extension.ts ---
+
+  public setSidebarWebviewGetter(
+    getter: () => vscode.Webview | undefined,
+  ): void {
+    this._sidebarWebviewGetter = getter;
+  }
+
+  public setMainViewProvider(mvp: MainViewProvider): void {
+    this._mainViewProvider = mvp;
+  }
+
+  public getContentProvider(): ProgressViewContentProvider {
+    return this.contentProvider;
+  }
+
+  /** Routes a sidebar message to the progress view message handler. */
+  public handleSidebarMessage(
+    message: unknown,
+    view: vscode.WebviewView,
+  ): void {
+    void this.messageHandler.handleMessage(message, view);
+  }
+
+  public resetSidebarReady(): void {
+    this._sidebarReady = false;
+    this._pendingUpdateOptions = null;
+  }
+
   /**
    * Load model options and re-send the proposal with the dropdown data.
    * Sent as a second SHOW message — the frontend upserts it over the initial
@@ -249,12 +280,6 @@ export class ProgressViewProvider
     return this._instance;
   }
 
-  protected override cleanupView(): void {
-    super.cleanupView();
-    this._sidebarReady = false;
-    this._pendingUpdateOptions = null;
-  }
-
   private setupWebviewContent(
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): vscode.Disposable {
@@ -264,45 +289,10 @@ export class ProgressViewProvider
     );
   }
 
-  public resolveWebviewView(webviewView: vscode.WebviewView): void {
-    if (this._hasResolved) {
-      this.resetRunningStreamStatuses();
-    }
-    this._hasResolved = true;
-
-    this._sidebarReady = false;
-    this._pendingUpdateOptions = null;
-
-    webviewView.webview.options = {
-      enableScripts: true,
-      enableCommandUris: true,
-      localResourceRoots: getSharedLocalResourceRoots(
-        this.context,
-        'progressView',
-      ),
-    };
-    webviewView.title = this._viewTitle;
-
-    this.cleanupView();
-    this._view = webviewView;
-
-    this._viewDisposables.push(
-      this.setupWebviewContent(webviewView),
-      webviewView.onDidChangeVisibility(() => {
-        if (webviewView.visible) {
-          this.syncFullView();
-        }
-      }),
-      webviewView.onDidDispose(this.cleanupView.bind(this)),
-    );
-    // No syncFullView here — the webview JS hasn't loaded yet.
-    // markWebviewReady() handles the initial sync when WEBVIEW_READY fires.
-  }
-
   public syncFullView(options?: { forceRebuild?: boolean }): void {
-    if (!this._view && !this._panelView) return;
+    if (!this.getActiveWebview()) return;
 
-    if (!this.isAnyViewReady()) {
+    if (!this.isActivePlacementReady()) {
       const currentForce = this._pendingUpdateOptions?.forceRebuild ?? false;
       this._pendingUpdateOptions = {
         forceRebuild: currentForce || !!options?.forceRebuild,
@@ -310,9 +300,12 @@ export class ProgressViewProvider
       return;
     }
 
-    const isDarkTheme =
-      vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark;
-    const theme = isDarkTheme ? 'dark' : 'light';
+    const theme =
+      vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
+        ? 'dark'
+        : 'light';
+
+    this.webviewUpdater.setPlacement(this._activePlacement);
 
     const activeStream = this.webviewUpdater.sendStreamMetadata(
       this.state,
@@ -328,7 +321,6 @@ export class ProgressViewProvider
 
     this._pendingUpdateOptions = null;
 
-    // Send YOLO/Super YOLO bypass state for the active stream
     if (this.canSendToWebview()) {
       this.sendBypassStates(activeStream || ('' as StreamTabId));
     }
@@ -341,6 +333,10 @@ export class ProgressViewProvider
       this._panelReady = true;
     } else {
       this._sidebarReady = true;
+    }
+
+    if (!this.isViewActiveTarget(view)) {
+      return;
     }
 
     this._pendingUpdateOptions = null;
@@ -369,10 +365,9 @@ export class ProgressViewProvider
   }
 
   private canSendToWebview(): boolean {
-    return this.isAnyViewReady() && this.webviewUpdater.isAvailable();
+    return this.isActivePlacementReady() && this.webviewUpdater.isAvailable();
   }
 
-  /** Send YOLO / Super YOLO bypass state for a given stream. */
   private sendBypassStates(streamId: StreamTabId): void {
     this.webviewUpdater.updateBypassState(
       streamId,
@@ -394,7 +389,14 @@ export class ProgressViewProvider
   }
 
   public isViewVisible(): boolean {
-    return this._view?.visible === true || this._panelView?.visible === true;
+    if (this._activePlacement === 'editor') {
+      return this._panelView?.visible === true;
+    }
+    // Sidebar mode: visible only when MainViewProvider is in progress mode
+    return (
+      this._mainViewProvider?.getActiveMode() === 'progress' &&
+      this._mainViewProvider.getWebviewView()?.visible === true
+    );
   }
 
   public getActiveRunId(stream: StreamTabId): StorageKey | null {
@@ -432,23 +434,68 @@ export class ProgressViewProvider
 
     if (!this.canSendToWebview()) return;
 
-    // Lightweight sync for dual-webview: notify the other webview of the switch
     this.webviewUpdater.setActiveStream(streamId);
     this.sendBypassStates(streamId);
     // Hydrate content (logs, todos, follow-ups, instruction) + active-state metadata
     this.eventHandler.syncStreamContent(streamId, { includeActiveState: true });
   }
 
-  public showProgressViewAsPanel(): void {
+  public isEditorMode(): boolean {
+    return this._activePlacement === 'editor' && this._panelView !== undefined;
+  }
+
+  public async showInSidebar(options?: { inPlace?: boolean }): Promise<void> {
+    this._activePlacement = 'sidebar';
+
+    if (this._mainViewProvider) {
+      // Focus first to ensure VS Code resolves the webview before switching content.
+      // Without this, switchMode no-ops on first use (view not yet created).
+      if (!options?.inPlace) {
+        await vscode.commands.executeCommand('texra.mainView.focus');
+      }
+      await this._mainViewProvider.switchMode('progress');
+    } else {
+      await setActiveSidebarView(SIDEBAR_VIEWS.PROGRESS);
+    }
+
+    if (this.isActivePlacementReady()) {
+      this.syncFullView({ forceRebuild: true });
+      this.replayPendingPrompts();
+    }
+  }
+
+  public async showProgressView(options?: {
+    inPlace?: boolean;
+  }): Promise<void> {
+    if (this.isEditorMode()) {
+      this.revealEditorPanel();
+      if (this.isActivePlacementReady()) {
+        this.syncFullView({ forceRebuild: true });
+      }
+      return;
+    }
+    await this.showInSidebar(options);
+  }
+
+  public revealEditorPanel(): void {
     if (this._panelView) {
       this._panelView.reveal(vscode.ViewColumn.One);
+    }
+  }
+
+  public async popOutToEditor(): Promise<void> {
+    if (this._panelView) {
+      this._activePlacement = 'editor';
+      await this.restoreSidebarToLauncher();
+      this.revealEditorPanel();
       this.syncFullView({ forceRebuild: true });
+      this.replayPendingPrompts();
       return;
     }
 
     this._panelView = vscode.window.createWebviewPanel(
       ProgressViewProvider.viewType + '.panel',
-      'TeXRA ProgressBoard',
+      'TeXRA Progress',
       vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -474,7 +521,13 @@ export class ProgressViewProvider
       }),
     );
 
-    this.syncFullView();
+    this._activePlacement = 'editor';
+    await this.restoreSidebarToLauncher();
+  }
+
+  public async popBackToSidebar(): Promise<void> {
+    this.disposePanelResources(true);
+    await this.showInSidebar();
   }
 
   public async flushState(): Promise<void> {
@@ -487,8 +540,37 @@ export class ProgressViewProvider
     super.dispose();
   }
 
-  private isAnyViewReady(): boolean {
-    return this._sidebarReady || this._panelReady;
+  private async restoreSidebarToLauncher(): Promise<void> {
+    if (this._mainViewProvider) {
+      await this._mainViewProvider.switchMode('main');
+    } else {
+      await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
+    }
+  }
+
+  private isActivePlacementReady(): boolean {
+    return this._activePlacement === 'editor'
+      ? this._panelReady
+      : this._sidebarReady;
+  }
+
+  private getActiveWebview(): vscode.Webview | undefined {
+    if (this._activePlacement === 'editor') {
+      return this._panelView?.webview;
+    }
+    // Only return the sidebar webview when it's actually showing progress content.
+    // Otherwise progress messages would be routed to the launcher webview.
+    if (this._mainViewProvider?.getActiveMode() !== 'progress')
+      return undefined;
+    return this._sidebarWebviewGetter?.();
+  }
+
+  private isViewActiveTarget(
+    view: vscode.WebviewView | vscode.WebviewPanel,
+  ): boolean {
+    return this.isPanelView(view)
+      ? this._activePlacement === 'editor'
+      : this._activePlacement === 'sidebar';
   }
 
   private isPanelView(
@@ -503,6 +585,9 @@ export class ProgressViewProvider
     for (const d of this._panelDisposables) d.dispose();
     this._panelDisposables = [];
     this._panelReady = false;
+    if (this._activePlacement === 'editor') {
+      this._activePlacement = 'sidebar';
+    }
     if (disposeView) {
       panelView?.dispose();
     }

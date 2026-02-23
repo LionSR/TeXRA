@@ -16,6 +16,7 @@ import type {
   OutputFileInfo,
   PermissionPayload,
   ProgressPermissionKind,
+  ProgressViewPlacement,
   ProgressViewOutboundMessage,
   StreamMetadata,
   StreamStatus,
@@ -79,13 +80,13 @@ export interface SyncStreamContentPayload {
  * Manages webview updates for the progress view.
  * Provides a clean interface for updating different parts of the webview
  * without coupling business logic to DOM operations.
- * Supports multiple webviews (e.g., sidebar + editor tab panel).
+ * Targets a single active webview at a time (sidebar OR editor panel).
  */
 export class WebviewUpdater {
   constructor(private getWebviews: () => (vscode.Webview | undefined)[]) {}
 
   /**
-   * Helper to send typed messages to all registered webviews.
+   * Helper to send typed messages to the current active webview target.
    * Uses ProgressViewOutboundMessage union type for compile-time safety.
    */
   private sendMessage(message: ProgressViewOutboundMessage): void {
@@ -243,6 +244,13 @@ export class WebviewUpdater {
     });
   }
 
+  setPlacement(placement: ProgressViewPlacement): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.SET_PLACEMENT,
+      placement,
+    });
+  }
+
   /**
    * Update a single stream's status in the stream tabs.
    * More efficient than updateStreams when only status changed.
@@ -268,7 +276,7 @@ export class WebviewUpdater {
     });
   }
 
-  /** Send lightweight delete notification to all webviews (dual-webview sync). */
+  /** Send lightweight delete notification to the current active target. */
   deleteStream(stream: StreamTabId): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,

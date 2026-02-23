@@ -107,7 +107,7 @@ async function handleCompare(
     try {
       const location: string | undefined = await vscode.commands.executeCommand(
         contextKeyCommandId,
-        'viewContainerLocation:texra-panel',
+        'viewContainerLocation:texra',
       );
 
       if (location === 'secondarySideBar') {

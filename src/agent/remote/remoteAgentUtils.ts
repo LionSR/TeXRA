@@ -36,7 +36,7 @@ export async function selectAgentInMainView(
   const agentValue = createKey(source as AgentSource, agentName);
 
   // Focus main view first - triggers initialization if needed
-  await vscode.commands.executeCommand('texra.mainView.focus');
+  await vscode.commands.executeCommand('texra.showMainView');
 
   // Brief delay to ensure webview handlers are ready
   await delay(100);
