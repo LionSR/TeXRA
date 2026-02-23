@@ -24,7 +24,7 @@ export type ArxivDownloadInput = z.infer<typeof ArxivDownloadInputSchema>;
 export class ArxivDownloadTool extends defineTool({
   name: 'download_arxiv_source',
   description:
-    'Download an arXiv paper source archive into the workspace and list the extracted files.',
+    'Download an arXiv paper source archive into the workspace and list the extracted files. If the source was already downloaded, it skips re-downloading and indicates that the source already exists.',
   schema: ArxivDownloadInputSchema,
 }) {
   protected async execute(input: ArxivDownloadInput): Promise<ToolResult> {
@@ -34,9 +34,9 @@ export class ArxivDownloadTool extends defineTool({
       throw new ToolError(validationError);
     }
 
-    let downloadPath: string;
+    let downloadResult: { path: string; alreadyExisted: boolean };
     try {
-      downloadPath = await arxivProcessor.downloadSource(
+      downloadResult = await arxivProcessor.downloadSource(
         arxivId,
         undefined,
         input.autoIndent,
@@ -47,7 +47,7 @@ export class ArxivDownloadTool extends defineTool({
       );
     }
 
-    const relativePath = WorkspaceFS.relativePath(downloadPath) || '.';
+    const relativePath = WorkspaceFS.relativePath(downloadResult.path) || '.';
     const displayPath = toPosixPath(relativePath);
 
     const lsTool = new LsTool();
@@ -63,7 +63,9 @@ export class ArxivDownloadTool extends defineTool({
       listingOutput = `Failed to list directory: ${toErrorMessage(err)}`;
     }
 
-    const summary = `arXiv source available at ${displayPath}`;
+    const summary = downloadResult.alreadyExisted
+      ? `arXiv source already downloaded at ${displayPath}`
+      : `arXiv source downloaded to ${displayPath}`;
     const output = [
       summary,
       '',

@@ -15,7 +15,7 @@ declare module '@latex/arxivProcessor' {
       id: string,
       progress?: (msg: string, increment?: number) => void,
       autoIndent?: boolean,
-    ): Promise<string>;
+    ): Promise<{ path: string; alreadyExisted: boolean }>;
   }
 }
 
@@ -69,7 +69,7 @@ describe('ArxivDownloadTool', () => {
     ).downloadSource = async (id, _progress, autoIndent) => {
       receivedId = id;
       receivedAutoIndent = autoIndent;
-      return '/workspace/project/sample';
+      return { path: '/workspace/project/sample', alreadyExisted: false };
     };
 
     (
@@ -93,7 +93,7 @@ describe('ArxivDownloadTool', () => {
     assert.strictEqual(validateCalls, 1);
     assert.strictEqual(receivedId, '2401.12345v2');
     assert.strictEqual(receivedAutoIndent, false);
-    assert.strictEqual(result.summary, 'arXiv source available at sample');
+    assert.strictEqual(result.summary, 'arXiv source downloaded to sample');
     assert.ok(result.output?.includes('Listing for sample'));
     assert.ok(result.output?.includes('file main.tex'));
   });

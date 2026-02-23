@@ -58,13 +58,14 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
                 logger.info(CHANNEL, 'User cancelled the download');
               });
 
-              extractedPath = await arxivProcessor.downloadSource(
+              const downloadResult = await arxivProcessor.downloadSource(
                 arxivId,
                 (message: string, increment?: number) => {
                   progress.report({ message, increment });
                 },
                 autoIndent,
               );
+              extractedPath = downloadResult.path;
             },
           );
 
