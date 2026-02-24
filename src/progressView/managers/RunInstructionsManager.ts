@@ -74,7 +74,7 @@ export class RunInstructionsManager {
       streamIds.map(async (streamId) => {
         const store = getStreamTabStore(streamId);
         const runInstructions = await store.readRunInstructions();
-        if (runInstructions && runInstructions.size > 0) {
+        if (runInstructions?.size) {
           this.items.set(streamId, runInstructions);
         }
       }),
@@ -91,7 +91,7 @@ export class RunInstructionsManager {
 
   /** Await all pending disk writes. */
   async flush(): Promise<void> {
-    await Promise.all([...this.pendingWrites.values()]);
+    await Promise.all(this.pendingWrites.values());
   }
 
   // -- Per-stream persistence -------------------------------------------------
@@ -104,7 +104,7 @@ export class RunInstructionsManager {
       const data = this.items.get(stream);
       const store = getStreamTabStore(stream);
       return store.writeRunInstructions(
-        data && data.size > 0 ? mapToRecord(data) : {},
+        data?.size ? mapToRecord(data) : {},
       );
     });
     this.pendingWrites.set(

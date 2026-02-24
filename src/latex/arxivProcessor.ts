@@ -58,8 +58,7 @@ export class ArxivSourceProcessor {
   }
 
   public isValidId(id: string): boolean {
-    const extractedIds = arxivIdentifiers.extract(id);
-    return extractedIds.length > 0 && extractedIds.includes(id);
+    return arxivIdentifiers.extract(id).includes(id);
   }
 
   /**
@@ -142,7 +141,7 @@ export class ArxivSourceProcessor {
       shouldCleanup = false;
       return destPath;
     } finally {
-      if (shouldCleanup && destPath) {
+      if (shouldCleanup) {
         void AbsoluteFS.delete(destPath).catch(() => undefined);
       }
     }

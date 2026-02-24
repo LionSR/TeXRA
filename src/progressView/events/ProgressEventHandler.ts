@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 
 import {
-  MESSAGE_TYPES,
   STREAM_STATUS,
   type ConversationProgress,
   type StorageKey,
@@ -86,8 +85,8 @@ export class ProgressEventHandler {
         // Stream lifecycle — these handlers use this.state/this.webviewUpdater
         // (same objects as ctx), so ctx is unused but required by the signature.
         setActiveStream: (_, payload) => this.handleSetActiveStream(payload),
-        updateStreamStatus: (_, payload) =>
-          this.handleUpdateStreamStatus(payload),
+        updateStreamStatus: (_, { streamId, status, previousStatus }) =>
+          this.setStreamStatus(streamId, status, previousStatus),
         setTaskState: (_, data) => this.handleSetTaskState(data),
         updateConversationProgress: (_, data) =>
           this.handleUpdateConversationProgress(data),
@@ -95,7 +94,15 @@ export class ProgressEventHandler {
           this.handleUpdateActiveSubagents(data),
         updateActiveProcesses: (_, data) =>
           this.handleUpdateActiveProcesses(data),
-        setParentStream: (_, data) => this.handleSetParentStream(data),
+        setParentStream: (_, { childStreamId, parentStreamId }) => {
+          this.state.meta.setParentStream(childStreamId, parentStreamId);
+          if (this.webviewUpdater.isAvailable()) {
+            this.webviewUpdater.updateParentStream(
+              childStreamId,
+              parentStreamId,
+            );
+          }
+        },
         extensionDeactivating: () => this.markAllRunningTasksAsCancelled(),
         // Output events
         addOutputFiles: async (ctx, { streamId, storageKey, filesByRound }) => {
@@ -248,16 +255,6 @@ export class ProgressEventHandler {
     });
   }
 
-  private handleUpdateStreamStatus(
-    payload: ProgressEventPayloads['updateStreamStatus'],
-  ): void {
-    this.setStreamStatus(
-      payload.streamId,
-      payload.status,
-      payload.previousStatus,
-    );
-  }
-
   private handleSetTaskState(
     data: ProgressEventPayloads['setTaskState'],
   ): void {
@@ -334,9 +331,7 @@ export class ProgressEventHandler {
 
     // Push a targeted update only for the active stream.
     const activeStream = this.state.activeStream;
-    const progress = activeStream
-      ? this.pendingProgressUpdates.get(activeStream)
-      : undefined;
+    const progress = this.pendingProgressUpdates.get(activeStream);
     if (activeStream && progress) {
       this.webviewUpdater.updateConversationProgress(activeStream, progress);
     }
@@ -399,19 +394,6 @@ export class ProgressEventHandler {
       nextBadges
     ) {
       this.webviewUpdater.updateStreamBadges(parentStreamId, nextBadges);
-    }
-  }
-
-  private handleSetParentStream(
-    data: ProgressEventPayloads['setParentStream'],
-  ): void {
-    this.state.meta.setParentStream(data.childStreamId, data.parentStreamId);
-
-    if (this.webviewUpdater.isAvailable()) {
-      this.webviewUpdater.updateParentStream(
-        data.childStreamId,
-        data.parentStreamId,
-      );
     }
   }
 
@@ -618,9 +600,9 @@ export class ProgressEventHandler {
     this.state.getOrCreateStreamState(streamId, category);
 
     if (!streamExists) {
-      const streamCategory = this.getStreamCategory(streamId);
-      if (streamCategory) {
-        this.maybeUpdateFilterForCategory(streamCategory);
+      if (category !== AgentCategory.Workflow) {
+        // category defaults to Workflow above, so only update filter for non-default
+        this.maybeUpdateFilterForCategory(category);
       }
       const statusesForRefresh = StreamStatusService.getAll();
       statusesForRefresh.set(streamId, status);

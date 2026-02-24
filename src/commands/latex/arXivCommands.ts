@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import * as logger from '@logger/logUtils';
+import { toErrorMessage } from '@common/errors';
 import { arxivProcessor } from '@latex/arxivProcessor';
 
 const CHANNEL = 'arXivCommands';
@@ -36,15 +37,11 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
             return;
           }
 
-          const shouldAutoIndent = await vscode.window.showQuickPick(
-            ['Yes', 'No'],
-            {
+          const autoIndent =
+            (await vscode.window.showQuickPick(['Yes', 'No'], {
               placeHolder: 'Auto-indent LaTeX files after download?',
               canPickMany: false,
-            },
-          );
-
-          const autoIndent = shouldAutoIndent === 'Yes';
+            })) === 'Yes';
           let extractedPath = '';
 
           await vscode.window.withProgress(
@@ -60,9 +57,7 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
 
               const downloadResult = await arxivProcessor.downloadSource(
                 arxivId,
-                (message: string, increment?: number) => {
-                  progress.report({ message, increment });
-                },
+                (message, increment) => progress.report({ message, increment }),
                 autoIndent,
               );
               extractedPath = downloadResult.path;
@@ -83,10 +78,7 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
             );
           }
         } catch (error) {
-          const message =
-            error instanceof Error
-              ? error.message
-              : 'An unknown error occurred';
+          const message = toErrorMessage(error);
           vscode.window.showErrorMessage(
             `Failed to download arXiv source: ${message}`,
           );

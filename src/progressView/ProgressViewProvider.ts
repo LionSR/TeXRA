@@ -312,9 +312,9 @@ export class ProgressViewProvider
       theme,
     );
 
+    // Skip content sync when streams exist but filter excludes all of them
     const hasStreams = this.state.streamLogs.keys().length > 0;
-    const isFilterMismatch = !activeStream && hasStreams;
-    if (!isFilterMismatch) {
+    if (activeStream || !hasStreams) {
       this.eventHandler.syncStreamContent(activeStream);
     }
 

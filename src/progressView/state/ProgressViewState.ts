@@ -341,9 +341,7 @@ export class ProgressViewState {
     // Load stream logs first — they define the set of known streams
     await this.streamLogs.load(this.storage);
 
-    // Discover all stream IDs from stream logs
-    const streamIds = this.discoverStreamIds();
-
+    const streamIds = this.streamLogs.keys();
     this.logger.info(`[Persistence] Discovered ${streamIds.length} stream(s)`);
 
     // Check if we need one-time migration from workspace state
@@ -357,9 +355,7 @@ export class ProgressViewState {
         this.streamLogs.keys(),
         this.logger,
       );
-      // Re-discover after migration
-      const migratedIds = this.discoverStreamIds();
-      await this.loadManagers(migratedIds);
+      await this.loadManagers(this.streamLogs.keys());
     } else {
       await this.loadManagers(streamIds);
     }
@@ -407,10 +403,4 @@ export class ProgressViewState {
     }
   }
 
-  /**
-   * Discover all known stream IDs from stream logs.
-   */
-  private discoverStreamIds(): StreamTabId[] {
-    return [...this.streamLogs.keys()];
-  }
 }

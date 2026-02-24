@@ -158,7 +158,7 @@ export class StreamMetaManager {
 
   /** Await all pending disk writes. */
   async flush(): Promise<void> {
-    await Promise.all([...this.pendingWrites.values()]);
+    await Promise.all(this.pendingWrites.values());
   }
 
   // -- Per-stream persistence -------------------------------------------------
