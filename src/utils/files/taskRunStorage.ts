@@ -327,20 +327,21 @@ export class TaskRunFileService {
         const snapshotRelative = path.join('original', target.relativePath);
         const snapshotPaths = getRunStoragePaths(executionId, snapshotRelative);
 
-        try {
-          await fs.stat(snapshotPaths.absolute);
-          return;
-        } catch (error) {
-          const err = error as NodeJS.ErrnoException;
-          if (err.code && err.code !== 'ENOENT') {
-            throw Object.assign(
-              new Error(
-                `Failed to inspect snapshot destination ${snapshotPaths.absolute}: ${err.message}`,
-              ),
-              { cause: err },
-            );
-          }
-        }
+        const alreadyCaptured = await fs.stat(snapshotPaths.absolute).then(
+          () => true,
+          (err: NodeJS.ErrnoException) => {
+            if (err.code !== 'ENOENT') {
+              throw Object.assign(
+                new Error(
+                  `Failed to inspect snapshot destination ${snapshotPaths.absolute}: ${err.message}`,
+                ),
+                { cause: err },
+              );
+            }
+            return false;
+          },
+        );
+        if (alreadyCaptured) return;
 
         await ensureParentDir(snapshotPaths.absolute);
         await fs.copyFile(target.absolutePath, snapshotPaths.absolute);

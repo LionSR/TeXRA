@@ -628,8 +628,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       }),
     );
 
-    const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
-    const apiAccessMode = useIncludedAccess ? 'included' : 'personal';
+    const apiAccessMode = serverSideKeyService.getUseIncludedModelAccess()
+      ? 'included'
+      : 'personal';
 
     const allowedModels = hasServerSideAccess
       ? serverSideKeyService.getAllowedModelsForCurrentUser()
@@ -1088,9 +1089,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetApiAccessMode(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_API_ACCESS_MODE>,
   ): Promise<void> {
-    const useIncludedAccess = data.mode === 'included';
     await getServerSideKeyService().setUseIncludedModelAccess(
-      useIncludedAccess,
+      data.mode === 'included',
     );
 
     await this.withActiveWebview((w) => this.sendProfileData(w));
@@ -1787,16 +1787,12 @@ prompts:
       if (typeof current !== 'object' || current === null) return false;
       const cur = current as Record<string, unknown>;
       const rec = setting.value as Record<string, unknown>;
-      const hasRecommended = Object.entries(rec).every(
-        ([k, v]) => cur[k] === v,
-      );
-      if (hasRecommended) return true;
       // Also treat legacy keys as "set" so existing users see the check mark
       // (they'll get migrated to the new key on next Apply).
-      if (setting.legacyKeys?.length) {
-        return setting.legacyKeys.some((k) => cur[k] !== undefined);
-      }
-      return false;
+      return (
+        Object.entries(rec).every(([k, v]) => cur[k] === v) ||
+        (setting.legacyKeys?.some((k) => cur[k] !== undefined) ?? false)
+      );
     }
     return current === setting.value;
   }

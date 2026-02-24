@@ -796,8 +796,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const roundContent: ResponseInputMessageContentList = [];
 
     if (
-      mediaFiles &&
-      mediaFiles.length > 0 &&
+      mediaFiles?.length &&
       (this.capabilities.supportsVision ||
         this.capabilities.supportsNativeAudio)
     ) {
@@ -1077,9 +1076,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     // Convert tools early so they're available for both compaction token counting and the API call
-    const convertedTools =
-      tools && tools.length > 0
-        ? toOpenAIResponseTools(tools, {
+    const convertedTools = tools?.length
+      ? toOpenAIResponseTools(tools, {
             supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
             supportsFunctionCalling: this.capabilities.supportsFunctionCalling,
           })
@@ -2330,10 +2328,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       try {
-        const filename =
-          typeof attachment.path === 'string' && attachment.path.length > 0
-            ? path.basename(attachment.path)
-            : 'attachment';
+        const filename = isNonEmptyString(attachment.path)
+          ? path.basename(attachment.path)
+          : 'attachment';
         const mimeType = attachment.mimeType ?? 'application/octet-stream';
 
         const uploadedFile = await client.files.create({

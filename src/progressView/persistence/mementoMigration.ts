@@ -104,10 +104,8 @@ export async function migrateFromMemento(
       // Skip legacy bucket keys
       if (key === 'workflow' || key === 'toolUse') {
         const bucket = record[key];
-        if (typeof bucket === 'object' && bucket !== null) {
-          for (const innerKey of Object.keys(
-            bucket as Record<string, unknown>,
-          )) {
+        if (isNonNullObject(bucket)) {
+          for (const innerKey of Object.keys(bucket)) {
             allStreamIds.add(innerKey as StreamTabId);
           }
         }
@@ -178,10 +176,7 @@ function extractFromRecord(
   if (streamId in record) return record[streamId];
   for (const bucket of ['workflow', 'toolUse'] as const) {
     const sub = record[bucket];
-    if (typeof sub === 'object' && sub !== null) {
-      const inner = sub as Record<string, unknown>;
-      if (streamId in inner) return inner[streamId];
-    }
+    if (isNonNullObject(sub) && streamId in sub) return sub[streamId];
   }
   return undefined;
 }
@@ -252,7 +247,7 @@ async function migrateStreamToStore(
 
   // Output files
   const outputFilesData = extractFromRecord(data.outputFilesRaw, streamId);
-  if (outputFilesData && typeof outputFilesData === 'object') {
+  if (isNonNullObject(outputFilesData)) {
     writes.push(
       store.writeOutputFiles(
         outputFilesData as Record<string, Record<string, OutputFileInfo[]>>,
@@ -265,7 +260,7 @@ async function migrateStreamToStore(
     data.missingOutputsRaw,
     streamId,
   );
-  if (missingOutputsData && typeof missingOutputsData === 'object') {
+  if (isNonNullObject(missingOutputsData)) {
     writes.push(
       store.writeMissingOutputs(
         missingOutputsData as Record<string, Record<string, string[]>>,
@@ -275,12 +270,15 @@ async function migrateStreamToStore(
 
   // Usage stats — normalize legacy single-value format to run-map format
   const usageStatsData = extractFromRecord(data.usageStatsRaw, streamId);
-  if (usageStatsData && typeof usageStatsData === 'object') {
-    const raw = usageStatsData as Record<string, unknown>;
+  if (isNonNullObject(usageStatsData)) {
     // Legacy format: bare { inputTokens, outputTokens, cost } without run wrapper
     const isLegacy =
-      'inputTokens' in raw || 'outputTokens' in raw || 'cost' in raw;
-    const normalized = isLegacy ? { [normalizeRunId(null)]: raw } : raw;
+      'inputTokens' in usageStatsData ||
+      'outputTokens' in usageStatsData ||
+      'cost' in usageStatsData;
+    const normalized = isLegacy
+      ? { [normalizeRunId(null)]: usageStatsData }
+      : usageStatsData;
     writes.push(
       store.writeUsageStats(normalized as Record<string, TokenUsageStats>),
     );
@@ -291,7 +289,7 @@ async function migrateStreamToStore(
     data.runInstructionsRaw,
     streamId,
   );
-  if (runInstructionsData && typeof runInstructionsData === 'object') {
+  if (isNonNullObject(runInstructionsData)) {
     writes.push(
       store.writeRunInstructions(
         runInstructionsData as Record<string, InstructionUpdate>,

@@ -556,9 +556,6 @@ export class ModelHandlerOpenAI<
     mediaFiles?: FileLocation[],
   ): Promise<any[]> {
     const roundContent: ChatCompletionContentPart[] = [];
-    // OpenAI API: system role does not support images/audio
-    // Error: 400 Invalid 'messages[N]'. Image URLs are only allowed for messages with role 'user'
-    const role = 'user';
 
     if (
       mediaFiles?.length &&
@@ -582,7 +579,7 @@ export class ModelHandlerOpenAI<
 
     // Only push message if there's content (media or text)
     if (roundContent.length > 0) {
-      messages.push({ role, content: roundContent });
+      messages.push({ role: 'user', content: roundContent });
     }
     return messages;
   }
@@ -710,11 +707,9 @@ export class ModelHandlerOpenAI<
           'Using direct response format (streaming style) as fallback',
         );
         let newResponse = responseObject.content.trim();
-        // Since we don't have a stop reason in this format, assume stop
-        let stopReason = OPENAI_CHAT_FINISH.STOP;
-        if (responseObject.choices?.[0]?.finish_reason) {
-          stopReason = responseObject.choices[0].finish_reason;
-        }
+        // Use finish_reason from choices if available, otherwise assume stop
+        const stopReason =
+          responseObject.choices?.[0]?.finish_reason ?? OPENAI_CHAT_FINISH.STOP;
 
         // For usage, we'll use empty values since they're not provided; TODO needs to test at some points
         const usage = responseObject.usage ?? {
