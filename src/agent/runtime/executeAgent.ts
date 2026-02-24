@@ -552,7 +552,6 @@ async function prepareAgentUI(
 ): Promise<void> {
   if (executionId) await ensureRunDir(executionId);
   const { streamId, config } = ctx;
-  const agentName = config.agent;
 
   const runStorage = getRunStorageService();
   StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
@@ -560,7 +559,7 @@ async function prepareAgentUI(
   logger.info(`Starting task execution for ${streamId}`);
   logger.info(`Input file: ${config.inputFile}`);
   logger.debug(
-    `Stream ID: ${streamId}, Agent: ${agentName}, Model: ${config.model}`,
+    `Stream ID: ${streamId}, Agent: ${config.agent}, Model: ${config.model}`,
   );
   logger.debug(
     `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
@@ -582,14 +581,9 @@ async function prepareAgentUI(
     taskState: agentConfigToTaskState(config),
   });
 
-  const { outputFiles, useMultipleOutputs } = config;
-  if (
-    Array.isArray(outputFiles) &&
-    outputFiles.length > 1 &&
-    !useMultipleOutputs
-  ) {
+  if (config.outputFiles.length > 1 && !config.useMultipleOutputs) {
     logger.warn(
-      `Multiple output files provided (${outputFiles.length}) but useMultipleOutputs flag is disabled.`,
+      `Multiple output files provided (${config.outputFiles.length}) but useMultipleOutputs flag is disabled.`,
     );
   }
 }

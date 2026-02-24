@@ -155,19 +155,11 @@ export class ProgressViewProvider
         resolveToolEditPermission: (id) => this.toolEditHandler.resolve(id),
         updateToolEditApprovalBypassState: (streamId, bypassActive) => {
           if (canSend())
-            u.updateBypassState(
-              streamId as StreamTabId,
-              'toolEdit',
-              bypassActive,
-            );
+            u.updateBypassState(streamId, 'toolEdit', bypassActive);
         },
         updateSuperYoloBypassState: (streamId, bypassActive) => {
           if (canSend())
-            u.updateBypassState(
-              streamId as StreamTabId,
-              'superYolo',
-              bypassActive,
-            );
+            u.updateBypassState(streamId, 'superYolo', bypassActive);
         },
         showBashPermission: (p) => this.bashApprovalHandler.show(p),
         resolveBashPermission: (id) => this.bashApprovalHandler.resolve(id),

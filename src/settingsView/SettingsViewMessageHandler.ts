@@ -945,8 +945,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleDeleteMemory(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.DELETE_MEMORY>,
   ): Promise<void> {
-    const view = this.getActiveView();
-
     const confirm = await vscode.window.showWarningMessage(
       `Delete "${data.displayPath}"?`,
       { modal: true },
@@ -967,9 +965,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         error,
       );
     } finally {
-      if (view) {
-        await this.sendMemoryData(view.webview);
-      }
+      await this.withActiveWebview((w) => this.sendMemoryData(w));
     }
   }
 
@@ -1015,7 +1011,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleDeleteAgent(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.DELETE_AGENT>,
   ): Promise<void> {
-    const view = this.getActiveView();
     try {
       const activeIds = getActiveExecutionIds();
       if (activeIds.includes(data.historyId)) {
@@ -1025,9 +1020,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         return;
       }
       const deleted = await deleteExecution(data.historyId as ExecutionId);
-      if (deleted && view) {
-        await this.sendHistoryData(view.webview);
-      } else if (!deleted) {
+      if (deleted) {
+        await this.withActiveWebview((w) => this.sendHistoryData(w));
+      } else {
         await vscode.window.showWarningMessage(
           `History item not found: ${data.historyId}`,
         );
@@ -1042,13 +1037,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleClearHistory(): Promise<void> {
-    const view = this.getActiveView();
     try {
       await deleteAllExecutions(new Set(getActiveExecutionIds()));
       await vscode.window.showInformationMessage('Agent history cleared');
-      await view?.webview.postMessage({
-        command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
-      });
+      await this.withActiveWebview((w) =>
+        w.postMessage({ command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED }),
+      );
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,

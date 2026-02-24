@@ -190,7 +190,7 @@ export class ModelHandlerOpenAI<
       (baseParams as Record<string, unknown>).thinking = thinking;
     }
 
-    if (tools && tools.length > 0) {
+    if (tools?.length) {
       const parallelToolCalls = getConfig<boolean>(
         'texra.model.openaiParallelToolCalls',
         false,
@@ -492,20 +492,14 @@ export class ModelHandlerOpenAI<
     const messages: any[] = [];
 
     // Handle system prompt differently for O1 models
+    // O1 mini and O1 preview models do not support system prompt; use 'user' role instead.
+    // For openai native o1 full or above reasoning models, "developer" is the new name but "system" still works.
     if (systemPrompt) {
-      if (this.capabilities.supportsSystemPrompt) {
-        // note that for openai native o1 full or above reasoning models, they have been renamed to "developer" but "system" still works
-        messages.push({
-          role: 'system',
-          content: [{ type: 'text', text: systemPrompt }],
-        });
-      } else {
-        // e.g., O1 mini and O1 preview models do not support system prompt
-        messages.push({
-          role: 'user',
-          content: [{ type: 'text', text: systemPrompt }],
-        });
-      }
+      const role = this.capabilities.supportsSystemPrompt ? 'system' : 'user';
+      messages.push({
+        role,
+        content: [{ type: 'text', text: systemPrompt }],
+      });
     }
 
     // Create content list for the user message (only add non-empty prefix)
@@ -516,7 +510,7 @@ export class ModelHandlerOpenAI<
 
     // Add media if provided
     if (
-      mediaFiles &&
+      mediaFiles?.length &&
       (this.capabilities.supportsVision ||
         this.capabilities.supportsNativeAudio)
     ) {
@@ -567,8 +561,7 @@ export class ModelHandlerOpenAI<
     const role = 'user';
 
     if (
-      mediaFiles &&
-      mediaFiles.length > 0 &&
+      mediaFiles?.length &&
       (this.capabilities.supportsVision ||
         this.capabilities.supportsNativeAudio)
     ) {
@@ -899,12 +892,8 @@ export class ModelHandlerOpenAI<
 
   /** Computes cost based on token usage and model pricing. */
   computePrice(responseUsage: ExtendedCompletionUsage | null): number {
-    // Handle models that return None for usage
-    if (!responseUsage) {
-      return 0.0;
-    }
+    if (!responseUsage) return 0;
 
-    // Get token counts
     const promptTokens = responseUsage.prompt_tokens ?? 0;
     const completionTokens = responseUsage.completion_tokens ?? 0;
     // Note: OpenAI doesn't provide tool_use_tokens in their API response
@@ -1114,10 +1103,7 @@ export class ModelHandlerOpenAI<
     message: Record<string, unknown> | undefined,
   ): string | null {
     const reasoning = message?.reasoning_content;
-    if (isNonEmptyString(reasoning)) {
-      return reasoning;
-    }
-    return null;
+    return isNonEmptyString(reasoning) ? reasoning : null;
   }
 
   /**
@@ -1150,12 +1136,8 @@ export class ModelHandlerOpenAI<
   }
 
   private ensureStringifiedArguments(value: unknown): string {
-    if (typeof value === 'string') {
-      return value;
-    }
-    if (value === undefined) {
-      return '{}';
-    }
+    if (typeof value === 'string') return value;
+    if (value === undefined) return '{}';
     try {
       return JSON.stringify(value);
     } catch (err) {

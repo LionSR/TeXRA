@@ -186,6 +186,10 @@ function extractFromRecord(
   return undefined;
 }
 
+function isNonNullObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 function extractTaskStateEntries(
   raw: Record<string, unknown>,
 ): [string, unknown][] {
