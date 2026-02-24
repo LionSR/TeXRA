@@ -98,12 +98,11 @@ function deriveConfig(
   }
 
   const { userRequest } = prompt;
-  let requestCount = 0;
-  if (Array.isArray(userRequest)) {
-    requestCount = userRequest.length;
-  } else if (userRequest) {
-    requestCount = 1;
-  }
+  const requestCount = Array.isArray(userRequest)
+    ? userRequest.length
+    : userRequest
+      ? 1
+      : 0;
   const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
 
   return {
