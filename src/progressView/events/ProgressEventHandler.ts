@@ -585,11 +585,7 @@ export class ProgressEventHandler {
     );
 
     // Persist instruction
-    if (instructionUpdate) {
-      this.state.runInstructions.set(stream, runId, instructionUpdate);
-    } else {
-      this.state.runInstructions.set(stream, runId, null);
-    }
+    this.state.runInstructions.set(stream, runId, instructionUpdate ?? null);
 
     return {
       instruction: instructionUpdate ?? null,

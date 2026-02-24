@@ -60,10 +60,6 @@ export const STREAM_DATA_DIR = 'streamData';
 // ============================================================================
 
 /**
- * Disk-backed store for a single stream tab.
- * Extends KVStore with typed accessors for each data category.
- */
-/**
  * Encode a stream tab ID for safe use as a filesystem directory name.
  * Stream IDs can contain `:`, `/`, and other unsafe characters
  * (e.g. `agent@model: path/to/file.tex`).
@@ -72,6 +68,10 @@ function encodeStreamId(id: string): string {
   return encodeURIComponent(id);
 }
 
+/**
+ * Disk-backed store for a single stream tab.
+ * Extends KVStore with typed accessors for each data category.
+ */
 class StreamTabKVStore extends KVStore {
   constructor(private readonly streamTabId: StreamTabId) {
     super(path.join(STREAM_DATA_DIR, encodeStreamId(streamTabId)));

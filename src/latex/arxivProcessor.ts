@@ -232,9 +232,7 @@ export class ArxivSourceProcessor {
       const downloadDirFull = path.join(paperDirFull, 'download');
       const downloadBasePath = path.join(downloadDirFull, 'source');
 
-      if (progressCallback) {
-        progressCallback(`Downloading arXiv source for ${id}...`, 20);
-      }
+      progressCallback?.(`Downloading arXiv source for ${id}...`, 20);
 
       const downloadUrl = `https://arxiv.org/src/${id}`;
       const downloadedPath = await this.downloadFile(
@@ -265,9 +263,7 @@ export class ArxivSourceProcessor {
       const isGzipOnly = !isArchive && downloadedPath.endsWith('.gz');
 
       if (isArchive) {
-        if (progressCallback) {
-          progressCallback('Extracting source files...', 60);
-        }
+        progressCallback?.('Extracting source files...', 60);
 
         const extractResult = await this.extractTarFile(
           downloadedPath,
@@ -281,9 +277,7 @@ export class ArxivSourceProcessor {
           );
         }
 
-        if (progressCallback) {
-          progressCallback('Cleaning up...', 80);
-        }
+        progressCallback?.('Cleaning up...', 80);
 
         // Remove the downloaded archive file
         await AbsoluteFS.delete(downloadedPath);
@@ -291,9 +285,7 @@ export class ArxivSourceProcessor {
         // For gzip-compressed single files, decompress first
         let sourceFilePath = downloadedPath;
         if (isGzipOnly) {
-          if (progressCallback) {
-            progressCallback('Decompressing source file...', 60);
-          }
+          progressCallback?.('Decompressing source file...', 60);
           const decompressedPath = downloadedPath.replace(/\.gz$/, '');
           await pipeline(
             AbsoluteFS.createReadStream(downloadedPath),
@@ -325,23 +317,17 @@ export class ArxivSourceProcessor {
     }
 
     if (autoIndent) {
-      if (progressCallback) {
-        progressCallback('Formatting LaTeX files...', 85);
-      }
+      progressCallback?.('Formatting LaTeX files...', 85);
 
       const indentedCount = await indentLatexFilesInDirectory(
         paperDirRelative,
         progressCallback,
       );
 
-      if (progressCallback) {
-        progressCallback(`Formatted ${indentedCount} LaTeX files`, 95);
-      }
+      progressCallback?.(`Formatted ${indentedCount} LaTeX files`, 95);
     }
 
-    if (progressCallback) {
-      progressCallback('arXiv source downloaded successfully!', 100);
-    }
+    progressCallback?.('arXiv source downloaded successfully!', 100);
 
     logger.info(this.channel, `arXiv source downloaded to: ${paperDirFull}`);
 

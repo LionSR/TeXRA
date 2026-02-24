@@ -766,12 +766,10 @@ async function runLatexdiffViaWorkspaceScan(params: {
   }
 
   let totalOperations = 0;
-  for (const [, roundOutputs] of inputToOutputsMap.entries()) {
+  for (const roundOutputs of inputToOutputsMap.values()) {
     totalOperations += roundOutputs.size;
-
-    const rounds = [...roundOutputs.keys()].sort((a, b) => a - b);
-    if (generateBetweenRoundDiffs && rounds.length > 1) {
-      totalOperations += rounds.length - 1;
+    if (generateBetweenRoundDiffs && roundOutputs.size > 1) {
+      totalOperations += roundOutputs.size - 1;
     }
   }
 
