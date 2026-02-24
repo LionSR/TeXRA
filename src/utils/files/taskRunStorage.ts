@@ -139,12 +139,11 @@ function getRunStoragePaths(
   id: ExecutionId,
   workspaceRelative: string,
 ): { absolute: string; storageRelative: string; runRelative: string } {
-  const relative = workspaceRelative || '';
-  const storageRelative = path.join(TASK_RUNS_DIR, id, relative);
+  const storageRelative = path.join(TASK_RUNS_DIR, id, workspaceRelative);
   return {
     absolute: StorageFS.fullPath(storageRelative),
     storageRelative,
-    runRelative: relative,
+    runRelative: workspaceRelative,
   };
 }
 

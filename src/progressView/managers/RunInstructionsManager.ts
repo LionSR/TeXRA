@@ -103,9 +103,7 @@ export class RunInstructionsManager {
       if (!this.pendingWrites.has(stream)) return;
       const data = this.items.get(stream);
       const store = getStreamTabStore(stream);
-      return store.writeRunInstructions(
-        data?.size ? mapToRecord(data) : {},
-      );
+      return store.writeRunInstructions(data?.size ? mapToRecord(data) : {});
     });
     this.pendingWrites.set(
       stream,

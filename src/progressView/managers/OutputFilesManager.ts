@@ -275,6 +275,9 @@ export class OutputFilesManager {
       if (!writesMap.has(stream)) return;
       return write();
     });
-    writesMap.set(stream, next.catch(() => {}));
+    writesMap.set(
+      stream,
+      next.catch(() => {}),
+    );
   }
 }

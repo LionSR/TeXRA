@@ -47,7 +47,7 @@ export async function needsMigrationFromMemento(
     if (
       raw &&
       typeof raw === 'object' &&
-      Object.keys(raw as object).length > 0
+      Object.keys(raw).length > 0
     ) {
       return true;
     }
