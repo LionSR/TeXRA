@@ -91,9 +91,17 @@ export class ProgressEventHandler {
         updateConversationProgress: (_, data) =>
           this.handleUpdateConversationProgress(data),
         updateActiveSubagents: (_, data) =>
-          this.handleUpdateActiveSubagents(data),
+          this.updateActiveChildren(data.parentStreamId, {
+            activeField: 'activeSubagents',
+            countField: 'finishedSubagentCount',
+            next: data.children,
+          }),
         updateActiveProcesses: (_, data) =>
-          this.handleUpdateActiveProcesses(data),
+          this.updateActiveChildren(data.parentStreamId, {
+            activeField: 'activeProcesses',
+            countField: 'finishedProcessCount',
+            next: data.processes,
+          }),
         setParentStream: (_, { childStreamId, parentStreamId }) => {
           this.state.meta.setParentStream(childStreamId, parentStreamId);
           if (this.webviewUpdater.isAvailable()) {
@@ -338,26 +346,6 @@ export class ProgressEventHandler {
     this.pendingProgressUpdates.clear();
   }
 
-  private handleUpdateActiveSubagents(
-    data: ProgressEventPayloads['updateActiveSubagents'],
-  ): void {
-    this.updateActiveChildren(data.parentStreamId, {
-      activeField: 'activeSubagents',
-      countField: 'finishedSubagentCount',
-      next: data.children,
-    });
-  }
-
-  private handleUpdateActiveProcesses(
-    data: ProgressEventPayloads['updateActiveProcesses'],
-  ): void {
-    this.updateActiveChildren(data.parentStreamId, {
-      activeField: 'activeProcesses',
-      countField: 'finishedProcessCount',
-      next: data.processes,
-    });
-  }
-
   private updateActiveChildren(
     parentStreamId: StreamTabId,
     opts: {
@@ -600,10 +588,7 @@ export class ProgressEventHandler {
     this.state.getOrCreateStreamState(streamId, category);
 
     if (!streamExists) {
-      if (category !== AgentCategory.Workflow) {
-        // category defaults to Workflow above, so only update filter for non-default
-        this.maybeUpdateFilterForCategory(category);
-      }
+      this.maybeUpdateFilterForCategory(this.getStreamCategory(streamId));
       const statusesForRefresh = StreamStatusService.getAll();
       statusesForRefresh.set(streamId, status);
       this.webviewUpdater.sendStreamMetadata(this.state, statusesForRefresh);

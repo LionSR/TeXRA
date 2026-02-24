@@ -146,8 +146,8 @@ class StreamTabKVStore extends KVStore {
     if (!raw) return null;
     const result = RunInstructionsRecordSchema.safeParse(raw);
     if (!result.success) return null;
-    const entries = Object.entries(result.data);
-    return entries.length > 0 ? new Map(entries) : null;
+    const map = new Map(Object.entries(result.data));
+    return map.size > 0 ? map : null;
   }
 
   async writeRunInstructions(data: RunInstructionsRecord): Promise<void> {

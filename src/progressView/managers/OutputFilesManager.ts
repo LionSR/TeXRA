@@ -181,8 +181,7 @@ export class OutputFilesManager {
     if (!this.loaded) {
       throw new Error('Missing outputs requested before load completed');
     }
-    const missing = this._missingOutputs.get(stream);
-    return missing ? new Map(missing) : new Map();
+    return new Map(this._missingOutputs.get(stream) ?? []);
   }
 
   /** Clear missing outputs for a stream (in-memory + disk) */

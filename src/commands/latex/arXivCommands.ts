@@ -3,8 +3,8 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
-import * as logger from '@logger/logUtils';
 import { toErrorMessage } from '@common/errors';
+import * as logger from '@logger/logUtils';
 import { arxivProcessor } from '@latex/arxivProcessor';
 
 const CHANNEL = 'arXivCommands';
@@ -42,9 +42,7 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
               placeHolder: 'Auto-indent LaTeX files after download?',
               canPickMany: false,
             })) === 'Yes';
-          let extractedPath = '';
-
-          await vscode.window.withProgress(
+          const extractedPath = await vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
               title: 'Downloading arXiv Source',
@@ -60,7 +58,7 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
                 (message, increment) => progress.report({ message, increment }),
                 autoIndent,
               );
-              extractedPath = downloadResult.path;
+              return downloadResult.path;
             },
           );
 

@@ -583,11 +583,10 @@ async function runLatexdiffFromMetadata(params: {
         info.location.kind === 'external'
           ? info.location.absolutePath
           : info.location.relativePath;
-      const group = groupedByRelative.get(key) ?? [];
       if (!groupedByRelative.has(key)) {
-        groupedByRelative.set(key, group);
+        groupedByRelative.set(key, []);
       }
-      group.push({ round, info });
+      groupedByRelative.get(key)!.push({ round, info });
     }
   }
 

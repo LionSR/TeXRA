@@ -321,7 +321,7 @@ export class ProgressViewProvider
     this._pendingUpdateOptions = null;
 
     if (this.canSendToWebview()) {
-      this.sendBypassStates(activeStream || ('' as StreamTabId));
+      this.sendBypassStates(activeStream);
     }
   }
 

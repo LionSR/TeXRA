@@ -152,10 +152,8 @@ export class ArxivSourceProcessor {
     destDir: string,
     options: ExtractOptions = {},
   ): Promise<ExtractResult> {
-    logger.debug(
-      options.channel ?? this.channel,
-      `Extracting tar file: ${tarPath} to ${destDir}`,
-    );
+    const channel = options.channel ?? this.channel;
+    logger.debug(channel, `Extracting tar file: ${tarPath} to ${destDir}`);
 
     try {
       const extraction = tar.x({ file: tarPath, cwd: destDir });
@@ -175,10 +173,7 @@ export class ArxivSourceProcessor {
       return { success: true };
     } catch (err) {
       const errorMsg = toErrorMessage(err);
-      logger.error(
-        options.channel ?? this.channel,
-        `Failed to extract tar file: ${errorMsg}`,
-      );
+      logger.error(channel, `Failed to extract tar file: ${errorMsg}`);
       return { success: false, error: errorMsg };
     }
   }
@@ -305,14 +300,9 @@ export class ArxivSourceProcessor {
       }
 
       // Remove the temporary download directory (files are now in paper root)
-      try {
-        await AbsoluteFS.delete(downloadDirFull, { recursive: true });
-      } catch (err) {
-        logger.debug(
-          this.channel,
-          `Could not remove download directory: ${toErrorMessage(err)}`,
-        );
-      }
+      await AbsoluteFS.delete(downloadDirFull, { recursive: true }).catch(
+        () => undefined,
+      );
     }
 
     if (autoIndent) {
