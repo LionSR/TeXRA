@@ -382,7 +382,7 @@ class ResponseProcessNode<C> extends BaseNode<
 
     const result = execRes.value;
 
-    if (shared.responseTimeMs !== undefined) {
+    if (shared.responseTimeMs != null) {
       round.responseTimeMs += shared.responseTimeMs;
     }
 
@@ -489,9 +489,7 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
   async exec(): Promise<void> {
     const { round, run, onRoundFinalized } = this.services;
     recordRound(run, round);
-    if (onRoundFinalized) {
-      await onRoundFinalized(run);
-    }
+    await onRoundFinalized?.(run);
   }
 }
 

@@ -430,7 +430,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     workspace.serverToolContent.lastAssistantContent =
       execRes.lastAssistantContent ?? [];
 
-    if (shared.responseTimeMs !== undefined) {
+    if (shared.responseTimeMs != null) {
       shared.cycleResponseTimeMs += shared.responseTimeMs;
     }
     if (execRes.normalizedUsage) {
@@ -443,9 +443,7 @@ class ToolUseProcessNode<C> extends BaseNode<
       shared.cycleResponseTimeMs,
       shared.cycleNormalizedUsage ?? null,
     );
-    if (onRoundFinalized) {
-      await onRoundFinalized(run);
-    }
+    await onRoundFinalized?.(run);
     run.totalRounds += 1;
 
     shared.stopReason = execRes.stopReason;

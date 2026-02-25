@@ -106,7 +106,7 @@ function resolveTools(
     }
   }
 
-  if (excluded.length > 0) {
+  if (excluded.length) {
     notifyUnavailableTools(excluded);
   }
 

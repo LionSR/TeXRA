@@ -413,7 +413,7 @@ export class FileManager extends BaseWebviewManager {
     });
   }
 
-  async handleUpdateFiles(message: UpdateFilesMessage): Promise<void> {
+  handleUpdateFiles(message: UpdateFilesMessage): void {
     const fileType = message.command.replace('update', '');
     logger.debug(
       CHANNEL,

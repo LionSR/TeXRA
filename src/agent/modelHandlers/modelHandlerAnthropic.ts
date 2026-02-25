@@ -262,9 +262,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /** Sum of all tracked PDF page counts across uploaded files. */
   private getTrackedPdfPageCount(): number {
     let total = 0;
-    for (const count of this.uploadedPdfPageCounts.values()) {
-      total += count;
-    }
+    for (const count of this.uploadedPdfPageCounts.values()) total += count;
     return total;
   }
 
@@ -572,7 +570,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         beta === CONTEXT_MANAGEMENT_BETA ||
         beta === COMPACTION_BETA,
     );
-    if (countTokenBetas && countTokenBetas.length > 0) {
+    if (countTokenBetas?.length) {
       countTokensParams.betas = countTokenBetas;
     }
 
@@ -673,12 +671,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // budget_tokens must be < max_tokens; use 50% to leave room for actual output
         const maxBudget = Math.floor(options.max_tokens * 0.5);
 
-        let defaultBudget: number;
-        if (useStreaming) {
-          defaultBudget = 32768;
-        } else {
-          defaultBudget = 4096;
-        }
+        const defaultBudget = useStreaming ? 32768 : 4096;
         const thinkingBudget = Math.min(defaultBudget, maxBudget);
 
         options.thinking = {
@@ -2340,7 +2333,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
     }
 
-    const isError = Boolean(result.isError);
     const resultMsg: MessageParam = {
       role: 'user',
       content: [
@@ -2348,7 +2340,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           type: 'tool_result',
           tool_use_id: call.callId,
           content: toolResultContent,
-          is_error: isError || undefined,
+          is_error: result.isError || undefined,
         },
       ],
     };

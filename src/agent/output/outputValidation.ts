@@ -51,7 +51,7 @@ export async function checkExpectedOutputs(
     async (): Promise<ValidationResult> => {
       const storageKey = getStorageKey(state);
       const expected = deps.config.outputFiles;
-      if (!expected || expected.length === 0) {
+      if (!expected?.length) {
         deps.logger.debug(
           `No expected outputs for round ${currRound} storageKey=${storageKey}`,
           { messageType: MESSAGE_TYPES.INTERNAL },

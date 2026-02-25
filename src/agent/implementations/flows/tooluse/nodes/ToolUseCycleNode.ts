@@ -48,7 +48,7 @@ export class ToolUseCycleNode<C> extends Node<
       this.services;
 
     if (prepRes.shouldSkip) {
-      if (prepRes.workspaceState.todos.todos.length > 0) {
+      if (prepRes.workspaceState.todos.todos.length) {
         bus.emit('updateTodos', {
           streamId,
           todos: prepRes.workspaceState.todos.todos,
@@ -131,10 +131,10 @@ export class ToolUseCycleNode<C> extends Node<
       userChannels: prepRes.userChannels,
     };
 
-    if (execRes.outcome === 'completed' && this.services.onProgress) {
+    if (execRes.outcome === 'completed') {
       const { interactions } = prepRes.workspaceState;
       const cost = prepRes.runState.usageAccumulator.totals.totalCost;
-      this.services.onProgress({
+      this.services.onProgress?.({
         kind: 'overview',
         toolCallCount: interactions.toolCallCount,
         filesChanged: interactions.editedFilePaths,
