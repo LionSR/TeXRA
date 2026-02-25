@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { arxivProcessor } from '@latex/arxivProcessor';
 
@@ -36,18 +37,12 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
             return;
           }
 
-          const shouldAutoIndent = await vscode.window.showQuickPick(
-            ['Yes', 'No'],
-            {
+          const autoIndent =
+            (await vscode.window.showQuickPick(['Yes', 'No'], {
               placeHolder: 'Auto-indent LaTeX files after download?',
               canPickMany: false,
-            },
-          );
-
-          const autoIndent = shouldAutoIndent === 'Yes';
-          let extractedPath = '';
-
-          await vscode.window.withProgress(
+            })) === 'Yes';
+          const extractedPath = await vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
               title: 'Downloading arXiv Source',
@@ -60,12 +55,10 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
 
               const downloadResult = await arxivProcessor.downloadSource(
                 arxivId,
-                (message: string, increment?: number) => {
-                  progress.report({ message, increment });
-                },
+                (message, increment) => progress.report({ message, increment }),
                 autoIndent,
               );
-              extractedPath = downloadResult.path;
+              return downloadResult.path;
             },
           );
 
@@ -83,10 +76,7 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
             );
           }
         } catch (error) {
-          const message =
-            error instanceof Error
-              ? error.message
-              : 'An unknown error occurred';
+          const message = toErrorMessage(error);
           vscode.window.showErrorMessage(
             `Failed to download arXiv source: ${message}`,
           );

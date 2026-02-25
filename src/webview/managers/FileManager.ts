@@ -26,7 +26,7 @@ import {
 } from '@utils/files';
 
 import { BaseWebviewManager } from './BaseWebviewManager';
-import type { ExtendedFileType, MainViewInboundMessage } from '@shared/schemas';
+import type { MainViewInboundMessage } from '@shared/schemas';
 
 type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
   MainViewInboundMessage,
@@ -413,7 +413,7 @@ export class FileManager extends BaseWebviewManager {
     });
   }
 
-  async handleUpdateFiles(message: UpdateFilesMessage): Promise<void> {
+  handleUpdateFiles(message: UpdateFilesMessage): void {
     const fileType = message.command.replace('update', '');
     logger.debug(
       CHANNEL,

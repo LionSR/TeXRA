@@ -83,16 +83,16 @@ async function tryAutoResume(streamId: StreamTabId): Promise<boolean> {
   const executionId = progressState?.meta.getExecutionId(streamId);
   const taskState = progressState?.meta.getTaskState(streamId);
 
-  if (!progressState || !executionId || !taskState) {
-    let missing: string;
-    if (!progressState) {
-      missing = 'ProgressViewProvider';
-    } else if (!executionId) {
-      missing = 'execution ID';
-    } else {
-      missing = 'task state';
-    }
-    logger.warn(`No ${missing} found for stream: ${streamId}`);
+  if (!progressState) {
+    logger.warn(`No ProgressViewProvider found for stream: ${streamId}`);
+    return false;
+  }
+  if (!executionId) {
+    logger.warn(`No execution ID found for stream: ${streamId}`);
+    return false;
+  }
+  if (!taskState) {
+    logger.warn(`No task state found for stream: ${streamId}`);
     return false;
   }
 

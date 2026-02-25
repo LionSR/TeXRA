@@ -155,19 +155,11 @@ export class ProgressViewProvider
         resolveToolEditPermission: (id) => this.toolEditHandler.resolve(id),
         updateToolEditApprovalBypassState: (streamId, bypassActive) => {
           if (canSend())
-            u.updateBypassState(
-              streamId as StreamTabId,
-              'toolEdit',
-              bypassActive,
-            );
+            u.updateBypassState(streamId, 'toolEdit', bypassActive);
         },
         updateSuperYoloBypassState: (streamId, bypassActive) => {
           if (canSend())
-            u.updateBypassState(
-              streamId as StreamTabId,
-              'superYolo',
-              bypassActive,
-            );
+            u.updateBypassState(streamId, 'superYolo', bypassActive);
         },
         showBashPermission: (p) => this.bashApprovalHandler.show(p),
         resolveBashPermission: (id) => this.bashApprovalHandler.resolve(id),
@@ -312,16 +304,16 @@ export class ProgressViewProvider
       theme,
     );
 
+    // Skip content sync when streams exist but filter excludes all of them
     const hasStreams = this.state.streamLogs.keys().length > 0;
-    const isFilterMismatch = !activeStream && hasStreams;
-    if (!isFilterMismatch) {
+    if (activeStream || !hasStreams) {
       this.eventHandler.syncStreamContent(activeStream);
     }
 
     this._pendingUpdateOptions = null;
 
     if (this.canSendToWebview()) {
-      this.sendBypassStates(activeStream || ('' as StreamTabId));
+      this.sendBypassStates(activeStream);
     }
   }
 

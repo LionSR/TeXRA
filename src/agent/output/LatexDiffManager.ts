@@ -59,7 +59,7 @@ export class LatexDiffManager {
       return;
     }
 
-    if (result.message && result.message.includes('document environment')) {
+    if (result.message?.includes('document environment')) {
       this.logger.debug(`Skipping ${operation}: ${result.message}`, {
         messageType: MESSAGE_TYPES.INTERNAL,
       });
