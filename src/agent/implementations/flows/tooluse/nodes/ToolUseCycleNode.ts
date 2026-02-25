@@ -16,7 +16,6 @@ import {
   assertPreparedShared,
 } from './types';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
-import type { TodoItem } from '@shared/schemas';
 
 type ToolUseCycleOutcome =
   | { outcome: 'completed'; messages: ProviderMessage[] }
@@ -74,7 +73,7 @@ export class ToolUseCycleNode<C> extends Node<
     );
 
     const { onProgress } = this.services;
-    prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {
+    prepRes.workspaceState.todos.setOnUpdate((todos) => {
       bus.emit('updateTodos', {
         streamId,
         todos,

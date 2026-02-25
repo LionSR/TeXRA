@@ -26,7 +26,7 @@ import {
 } from '@utils/files';
 
 import { BaseWebviewManager } from './BaseWebviewManager';
-import type { ExtendedFileType, MainViewInboundMessage } from '@shared/schemas';
+import type { MainViewInboundMessage } from '@shared/schemas';
 
 type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
   MainViewInboundMessage,

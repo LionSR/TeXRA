@@ -128,7 +128,7 @@ export class ModelInvocationNode<
       return FlowTransition.COMPLETE;
     }
 
-    if (successRes.updatedMessages !== undefined) {
+    if (successRes.updatedMessages != null) {
       replaceMessagesInPlace(shared.messages, successRes.updatedMessages);
     }
 

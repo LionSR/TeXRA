@@ -2,8 +2,7 @@ import { dirname } from 'path';
 
 import { z } from 'zod';
 
-import { MESSAGE_TYPES } from '@shared/schemas';
-import { AgentFileLocationSchema } from '@shared/schemas';
+import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
 import { isRemoteAgent } from '@agent/index';
 import { BaseNode, Flow } from '@agent/node';
 import { recordRound } from '@agent/core/AgentState';
@@ -259,7 +258,7 @@ class ResponseProcessNode<C> extends BaseNode<
         logger.debug(`Model response: ${newResponse.slice(0, 100)}`);
       }
 
-      if (prepRes.responseTimeMs !== undefined) {
+      if (prepRes.responseTimeMs != null) {
         logger.debug(
           `Response time: ${(prepRes.responseTimeMs / 1000).toFixed(2)}s`,
         );
@@ -361,13 +360,6 @@ class ResponseProcessNode<C> extends BaseNode<
     });
   }
 
-  /** Mark the cycle as stopped without completing the turn. */
-  private stopWithoutEndTurn(shared: ResponseCycleShared): string {
-    shared.endTurn = false;
-    shared.shouldStop = true;
-    return FlowTransition.COMPLETE;
-  }
-
   async post(
     shared: ResponseCycleShared,
     prepRes: ProcessPrepResult,
@@ -390,11 +382,11 @@ class ResponseProcessNode<C> extends BaseNode<
       round.normalizedUsage = result.normalizedUsage;
     }
 
-    if (result.updatedLastResponse !== undefined) {
+    if (result.updatedLastResponse != null) {
       workspace.assembly.lastResponse = result.updatedLastResponse;
     }
 
-    if (result.updatedAccumulatedOutput !== undefined) {
+    if (result.updatedAccumulatedOutput != null) {
       workspace.assembly.accumulatedOutput = result.updatedAccumulatedOutput;
     }
 
@@ -402,7 +394,9 @@ class ResponseProcessNode<C> extends BaseNode<
     shared.processedResponse = result.processedResponse;
 
     if (result.repetitionDetected || !result.processedResponse) {
-      return this.stopWithoutEndTurn(shared);
+      shared.endTurn = false;
+      shared.shouldStop = true;
+      return FlowTransition.COMPLETE;
     }
 
     const outputLocation = shared.outputLocation!;
