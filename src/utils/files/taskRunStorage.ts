@@ -139,12 +139,11 @@ function getRunStoragePaths(
   id: ExecutionId,
   workspaceRelative: string,
 ): { absolute: string; storageRelative: string; runRelative: string } {
-  const relative = workspaceRelative || '';
-  const storageRelative = path.join(TASK_RUNS_DIR, id, relative);
+  const storageRelative = path.join(TASK_RUNS_DIR, id, workspaceRelative);
   return {
     absolute: StorageFS.fullPath(storageRelative),
     storageRelative,
-    runRelative: relative,
+    runRelative: workspaceRelative,
   };
 }
 
@@ -197,17 +196,8 @@ async function createSymlink(
 const IGNORED_WORKSPACE_ROOTS = new Set(['History', 'history']);
 
 function shouldSkipRelocation(relativePath: string): boolean {
-  if (!relativePath) {
-    return false;
-  }
-
-  // Use centralized path segment extraction
   const segments = getPathSegments(relativePath);
-  if (segments.length === 0) {
-    return false;
-  }
-
-  return IGNORED_WORKSPACE_ROOTS.has(segments[0]);
+  return segments.length > 0 && IGNORED_WORKSPACE_ROOTS.has(segments[0]);
 }
 
 export class TaskRunFileService {
@@ -241,7 +231,7 @@ export class TaskRunFileService {
     this.updateRunContext(executionId);
   }
 
-  private applyExecutionContext(executionId?: ExecutionId | null): void {
+  public updateRunContext(executionId?: ExecutionId | null): void {
     const storageMode = getConfig<'workspace' | 'taskRunStorage'>(
       'texra.agentOutputs.storageMode',
       'workspace',
@@ -250,11 +240,10 @@ export class TaskRunFileService {
       (storageMode === 'taskRunStorage' || this.forceRunStorage) &&
       Boolean(executionId);
 
-    const nextMode: 'workspace' | 'taskRunStorage' = shouldUseRunStorage
-      ? 'taskRunStorage'
-      : 'workspace';
-    const nextRunDirectory =
-      shouldUseRunStorage && executionId ? getRunDir(executionId) : undefined;
+    const nextMode = shouldUseRunStorage ? 'taskRunStorage' : 'workspace';
+    const nextRunDirectory = shouldUseRunStorage
+      ? getRunDir(executionId!)
+      : undefined;
 
     const contextChanged =
       this.metadata.mode !== nextMode ||
@@ -270,10 +259,6 @@ export class TaskRunFileService {
       this.hasPreparedSnapshot = false;
       this.mirroredDependencies.clear();
     }
-  }
-
-  public updateRunContext(executionId?: ExecutionId | null): void {
-    this.applyExecutionContext(executionId);
   }
 
   public getExecutionId(): ExecutionId | undefined {
@@ -315,11 +300,9 @@ export class TaskRunFileService {
 
     await this.ensureRunDirectory();
 
-    const linkTargets = new Set<FileLocation>();
-
-    if (options.mirrorBaseFiles !== false) {
-      baseFiles.forEach((base) => linkTargets.add(base));
-    }
+    const linkTargets = new Set<FileLocation>(
+      options.mirrorBaseFiles !== false ? baseFiles : [],
+    );
 
     // Add extra link files, filtering out any null/undefined entries
     for (const extra of options.linkFiles ?? []) {
@@ -344,20 +327,21 @@ export class TaskRunFileService {
         const snapshotRelative = path.join('original', target.relativePath);
         const snapshotPaths = getRunStoragePaths(executionId, snapshotRelative);
 
-        try {
-          await fs.stat(snapshotPaths.absolute);
-          return;
-        } catch (error) {
-          const err = error as NodeJS.ErrnoException;
-          if (err.code && err.code !== 'ENOENT') {
-            throw Object.assign(
-              new Error(
-                `Failed to inspect snapshot destination ${snapshotPaths.absolute}: ${err.message}`,
-              ),
-              { cause: err },
-            );
-          }
-        }
+        const alreadyCaptured = await fs.stat(snapshotPaths.absolute).then(
+          () => true,
+          (err: NodeJS.ErrnoException) => {
+            if (err.code !== 'ENOENT') {
+              throw Object.assign(
+                new Error(
+                  `Failed to inspect snapshot destination ${snapshotPaths.absolute}: ${err.message}`,
+                ),
+                { cause: err },
+              );
+            }
+            return false;
+          },
+        );
+        if (alreadyCaptured) return;
 
         await ensureParentDir(snapshotPaths.absolute);
         await fs.copyFile(target.absolutePath, snapshotPaths.absolute);
@@ -377,21 +361,18 @@ export class TaskRunFileService {
 
     await Promise.all(captureTasks);
 
-    if (linkTargets.size > 0) {
-      const candidates = [...linkTargets];
-      await Promise.all(
-        candidates.map(async (candidate) => {
-          try {
-            await this.mirrorWorkspaceFile(candidate);
-          } catch (error) {
-            logger.warn(
-              CHANNEL,
-              `Failed to mirror workspace dependency ${candidate.absolutePath}: ${toErrorMessage(error)}`,
-            );
-          }
-        }),
-      );
-    }
+    await Promise.all(
+      [...linkTargets].map(async (candidate) => {
+        try {
+          await this.mirrorWorkspaceFile(candidate);
+        } catch (error) {
+          logger.warn(
+            CHANNEL,
+            `Failed to mirror workspace dependency ${candidate.absolutePath}: ${toErrorMessage(error)}`,
+          );
+        }
+      }),
+    );
 
     this.hasPreparedSnapshot = true;
   }

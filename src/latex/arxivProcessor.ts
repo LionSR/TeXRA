@@ -58,8 +58,7 @@ export class ArxivSourceProcessor {
   }
 
   public isValidId(id: string): boolean {
-    const extractedIds = arxivIdentifiers.extract(id);
-    return extractedIds.length > 0 && extractedIds.includes(id);
+    return arxivIdentifiers.extract(id).includes(id);
   }
 
   /**
@@ -142,7 +141,7 @@ export class ArxivSourceProcessor {
       shouldCleanup = false;
       return destPath;
     } finally {
-      if (shouldCleanup && destPath) {
+      if (shouldCleanup) {
         void AbsoluteFS.delete(destPath).catch(() => undefined);
       }
     }
@@ -153,10 +152,8 @@ export class ArxivSourceProcessor {
     destDir: string,
     options: ExtractOptions = {},
   ): Promise<ExtractResult> {
-    logger.debug(
-      options.channel ?? this.channel,
-      `Extracting tar file: ${tarPath} to ${destDir}`,
-    );
+    const channel = options.channel ?? this.channel;
+    logger.debug(channel, `Extracting tar file: ${tarPath} to ${destDir}`);
 
     try {
       const extraction = tar.x({ file: tarPath, cwd: destDir });
@@ -176,10 +173,7 @@ export class ArxivSourceProcessor {
       return { success: true };
     } catch (err) {
       const errorMsg = toErrorMessage(err);
-      logger.error(
-        options.channel ?? this.channel,
-        `Failed to extract tar file: ${errorMsg}`,
-      );
+      logger.error(channel, `Failed to extract tar file: ${errorMsg}`);
       return { success: false, error: errorMsg };
     }
   }
@@ -232,9 +226,7 @@ export class ArxivSourceProcessor {
       const downloadDirFull = path.join(paperDirFull, 'download');
       const downloadBasePath = path.join(downloadDirFull, 'source');
 
-      if (progressCallback) {
-        progressCallback(`Downloading arXiv source for ${id}...`, 20);
-      }
+      progressCallback?.(`Downloading arXiv source for ${id}...`, 20);
 
       const downloadUrl = `https://arxiv.org/src/${id}`;
       const downloadedPath = await this.downloadFile(
@@ -265,9 +257,7 @@ export class ArxivSourceProcessor {
       const isGzipOnly = !isArchive && downloadedPath.endsWith('.gz');
 
       if (isArchive) {
-        if (progressCallback) {
-          progressCallback('Extracting source files...', 60);
-        }
+        progressCallback?.('Extracting source files...', 60);
 
         const extractResult = await this.extractTarFile(
           downloadedPath,
@@ -281,9 +271,7 @@ export class ArxivSourceProcessor {
           );
         }
 
-        if (progressCallback) {
-          progressCallback('Cleaning up...', 80);
-        }
+        progressCallback?.('Cleaning up...', 80);
 
         // Remove the downloaded archive file
         await AbsoluteFS.delete(downloadedPath);
@@ -291,9 +279,7 @@ export class ArxivSourceProcessor {
         // For gzip-compressed single files, decompress first
         let sourceFilePath = downloadedPath;
         if (isGzipOnly) {
-          if (progressCallback) {
-            progressCallback('Decompressing source file...', 60);
-          }
+          progressCallback?.('Decompressing source file...', 60);
           const decompressedPath = downloadedPath.replace(/\.gz$/, '');
           await pipeline(
             AbsoluteFS.createReadStream(downloadedPath),
@@ -314,34 +300,23 @@ export class ArxivSourceProcessor {
       }
 
       // Remove the temporary download directory (files are now in paper root)
-      try {
-        await AbsoluteFS.delete(downloadDirFull, { recursive: true });
-      } catch (err) {
-        logger.debug(
-          this.channel,
-          `Could not remove download directory: ${toErrorMessage(err)}`,
-        );
-      }
+      await AbsoluteFS.delete(downloadDirFull, { recursive: true }).catch(
+        () => undefined,
+      );
     }
 
     if (autoIndent) {
-      if (progressCallback) {
-        progressCallback('Formatting LaTeX files...', 85);
-      }
+      progressCallback?.('Formatting LaTeX files...', 85);
 
       const indentedCount = await indentLatexFilesInDirectory(
         paperDirRelative,
         progressCallback,
       );
 
-      if (progressCallback) {
-        progressCallback(`Formatted ${indentedCount} LaTeX files`, 95);
-      }
+      progressCallback?.(`Formatted ${indentedCount} LaTeX files`, 95);
     }
 
-    if (progressCallback) {
-      progressCallback('arXiv source downloaded successfully!', 100);
-    }
+    progressCallback?.('arXiv source downloaded successfully!', 100);
 
     logger.info(this.channel, `arXiv source downloaded to: ${paperDirFull}`);
 
