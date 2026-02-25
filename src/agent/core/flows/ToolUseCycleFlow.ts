@@ -597,12 +597,11 @@ class ToolUseDispatchNode<C> extends BatchNode<
 
     this.services.workspace.interactions.recordToolCall();
 
-    const services = this.services;
-    const { workspace } = services;
+    const { workspace } = this.services;
 
     return this.executeToolCall(
       call,
-      services,
+      this.services,
       workspace.interactions,
       workspace.todos,
     );
@@ -771,9 +770,8 @@ class ToolUseDispatchNode<C> extends BatchNode<
 
     // Collect and add valid media file locations
     if (result.files?.length) {
-      const files = result.files;
       const validLocations: FileLocation[] = [];
-      for (const attachment of files) {
+      for (const attachment of result.files) {
         if (!isNonEmptyString(attachment.path)) {
           continue;
         }
@@ -844,7 +842,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
         extracted.map((e) => e.sanitizedResult),
         extracted.map((e) => e.attachments),
         workspace,
-        assistantText.length > 0 ? assistantText : undefined,
+        assistantText || undefined,
       );
       shared.messages.push(...followUpMsgs);
     } else {
@@ -857,7 +855,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
             sanitizedResult,
             attachments,
             workspace,
-            index === 0 && assistantText.length > 0 ? assistantText : undefined,
+            index === 0 ? assistantText || undefined : undefined,
           );
         shared.messages.push(...followUpMsgs);
       }

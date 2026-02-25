@@ -193,7 +193,7 @@ export async function runToolUseFlow<C = unknown>(
       const todos = s.stateSlices?.workspaceSnapshot?.todos?.todos;
       if (Array.isArray(todos) && todos.length)
         await store.writeTodos(todos);
-      if (s.messages.length > 0) await store.writeConversation(s.messages);
+      if (s.messages.length) await store.writeConversation(s.messages);
     });
     await pf.run(shared);
     // Re-read shared from the flow record — PersistedFlow deep-clones the
