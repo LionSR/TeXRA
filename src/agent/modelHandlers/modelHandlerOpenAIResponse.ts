@@ -4,6 +4,8 @@ import * as path from 'path';
 
 // Third-party imports
 import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
+import { ResponsesWS } from 'openai/resources/responses/ws';
+import { WebSocketError } from 'openai/resources/responses/internal-base';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -86,6 +88,11 @@ import type {
   ResponseInputMessageContentList,
   ResponseInputFile,
   ResponseStreamEvent,
+  ResponsesClientEvent,
+  ResponsesServerEvent,
+  ResponseCompletedEvent,
+  ResponseFailedEvent,
+  ResponseIncompleteEvent,
   ResponseStatus,
   ResponseFunctionCallOutputItemList,
   ResponseOutputItem,
@@ -205,6 +212,261 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Clears the pending background response ID. Single point of mutation. */
   private clearPendingBackgroundResponse(): void {
     this.pendingBackgroundResponseId = null;
+  }
+
+  // =========================================================================
+  // WebSocket transport
+  // =========================================================================
+
+  /** WebSocket connection for persistent transport mode. */
+  private wsConnection: ResponsesWS | null = null;
+  /** Timestamp when the WebSocket connection was created (for 60-min limit). */
+  private wsConnectionCreatedAt = 0;
+  /** Keepalive interval for the WebSocket connection. */
+  private wsKeepaliveInterval: ReturnType<typeof setInterval> | null = null;
+  /** Maximum WebSocket connection age before reconnecting (55 min, 5-min buffer before 60-min server limit). */
+  private static readonly WS_MAX_AGE_MS = 55 * 60 * 1000;
+  /** Keepalive ping interval to prevent idle timeouts (30 seconds). */
+  private static readonly WS_KEEPALIVE_INTERVAL_MS = 30_000;
+
+  /**
+   * Whether WebSocket transport is enabled for this handler.
+   * Incompatible with OpenRouter routing (custom base URL not supported by WS)
+   * and background mode (polling-based, doesn't benefit from persistent connection).
+   */
+  private isWebSocketModeEnabled(): boolean {
+    return (
+      getConfig<boolean>('texra.model.useWebSocket', false) &&
+      !this.isOpenRouterRoutingEnabled()
+    );
+  }
+
+  /**
+   * Get or create a WebSocket connection, reusing an existing one if still valid.
+   * Reconnects if the connection is approaching the 60-minute server limit.
+   */
+  private async getOrCreateWebSocket(client: OpenAI): Promise<ResponsesWS> {
+    // Check if existing connection is still valid
+    if (this.wsConnection) {
+      const age = Date.now() - this.wsConnectionCreatedAt;
+      const socketReady = this.wsConnection.socket.readyState === 1; // WebSocket.OPEN
+      if (age < ModelHandlerOpenAIResponse.WS_MAX_AGE_MS && socketReady) {
+        return this.wsConnection;
+      }
+      // Connection expired or closed — reconnect
+      this.logger.debug(
+        `WebSocket connection stale (age: ${Math.round(age / 1000)}s, ready: ${socketReady}) — reconnecting`,
+      );
+      this.closeWebSocket();
+    }
+
+    this.logger.debug('Opening WebSocket connection to Responses API');
+    const ws = new ResponsesWS(client);
+
+    // Wait for the socket to open before returning
+    await new Promise<void>((resolve, reject) => {
+      if (ws.socket.readyState === 1) {
+        resolve();
+        return;
+      }
+      const onOpen = (): void => {
+        ws.socket.removeListener('error', onError);
+        resolve();
+      };
+      const onError = (err: Error): void => {
+        ws.socket.removeListener('open', onOpen);
+        reject(err);
+      };
+      ws.socket.once('open', onOpen);
+      ws.socket.once('error', onError);
+    });
+
+    this.wsConnection = ws;
+    this.wsConnectionCreatedAt = Date.now();
+    this.startWsKeepalive(ws);
+
+    this.logger.debug('WebSocket connection established');
+    return ws;
+  }
+
+  /**
+   * Execute a response request via WebSocket transport.
+   * Sends a response.create event and collects streaming events until
+   * a terminal event (completed, failed, incomplete) is received.
+   */
+  private async executeViaWebSocket(
+    ws: ResponsesWS,
+    params: ResponseCreateParamsBase,
+    signal?: AbortSignal,
+  ): Promise<Response> {
+    const state = {
+      thinkingStream: this.createThinkingStream(),
+      outputStream: this.isOutputStreamingEnabled()
+        ? this.createOutputStream()
+        : null,
+      emittedWebSearchIds: new Set<string>(),
+      hasThinkingContent: false,
+    };
+
+    return new Promise<Response>((resolve, reject) => {
+      let settled = false;
+
+      const onAbort = (): void => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new DOMException('The operation was aborted', 'AbortError'));
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
+
+      // Process streaming events — same logic as the HTTP streaming path.
+      // ResponsesServerEvent and ResponseStreamEvent are the same union type.
+      const onEvent = (event: ResponsesServerEvent): void => {
+        const e = event as ResponseStreamEvent;
+        if (this.isReasoningDeltaEvent(e)) {
+          state.thinkingStream.append(e.delta);
+          state.hasThinkingContent = true;
+        } else if (this.isTextDeltaEvent(e)) {
+          state.outputStream?.append(e.delta);
+        } else if (this.isWebSearchInProgressEvent(e)) {
+          if (state.hasThinkingContent) {
+            state.thinkingStream.finalize();
+            state.hasThinkingContent = false;
+            state.thinkingStream = this.createThinkingStream();
+          }
+        } else if (this.isOutputItemDoneEvent(e)) {
+          const item = e.item;
+          if (
+            this.isWebSearchItem(item) &&
+            !state.emittedWebSearchIds.has(item.id) &&
+            hasOpenAIWebSearchData(item)
+          ) {
+            if (state.hasThinkingContent) {
+              state.thinkingStream.finalize();
+              state.hasThinkingContent = false;
+              state.thinkingStream = this.createThinkingStream();
+            }
+            this.emitOpenAIWebSearch(item);
+            state.emittedWebSearchIds.add(item.id);
+          }
+        }
+      };
+
+      const finalize = (response: Response): void => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        if (state.hasThinkingContent) {
+          state.thinkingStream.finalize();
+        }
+        const { text: finalText } = this.extractResponse(response, '');
+        if (state.outputStream) state.outputStream.finalize(finalText);
+        this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
+        resolve(response);
+      };
+
+      const onCompleted = (event: ResponseCompletedEvent): void =>
+        finalize(event.response);
+
+      const onFailed = (event: ResponseFailedEvent): void =>
+        finalize(event.response);
+
+      const onIncomplete = (event: ResponseIncompleteEvent): void =>
+        finalize(event.response);
+
+      const onWsError = (error: WebSocketError): void => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error);
+      };
+
+      // Handle unexpected socket close during a request
+      const onSocketClose = (code: number, reason: Buffer): void => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        // Invalidate the connection so the next call reconnects
+        this.wsConnection = null;
+        this.stopWsKeepalive();
+        reject(
+          new Error(
+            `WebSocket closed unexpectedly (code: ${code}, reason: ${reason.toString()})`,
+          ),
+        );
+      };
+
+      const cleanup = (): void => {
+        signal?.removeEventListener('abort', onAbort);
+        ws.off('event', onEvent);
+        ws.off('response.completed', onCompleted);
+        // Type assertion needed: the EventEmitter generic maps event names to
+        // handler signatures via Extract<ResponsesServerEvent, {type?: EventType}>.
+        // Our handler types are compatible but TS can't prove it through the indirection.
+        ws.off('response.failed', onFailed as Parameters<typeof ws.off>[1]);
+        ws.off(
+          'response.incomplete',
+          onIncomplete as Parameters<typeof ws.off>[1],
+        );
+        ws.off('error', onWsError);
+        ws.socket.off('close', onSocketClose);
+      };
+
+      ws.on('event', onEvent);
+      ws.on('response.completed', onCompleted);
+      ws.on('response.failed', onFailed as Parameters<typeof ws.on>[1]);
+      ws.on(
+        'response.incomplete',
+        onIncomplete as Parameters<typeof ws.on>[1],
+      );
+      ws.on('error', onWsError);
+      ws.socket.on('close', onSocketClose);
+
+      // Build and send the WebSocket client event.
+      // ResponsesClientEvent mirrors ResponseCreateParamsBase fields with type: 'response.create'.
+      // Transport-specific fields (stream, background) are included but ignored by the server.
+      ws.send({
+        type: 'response.create',
+        ...params,
+      } as ResponsesClientEvent);
+    });
+  }
+
+  /** Close the WebSocket connection and clean up resources. */
+  closeWebSocket(): void {
+    this.stopWsKeepalive();
+    if (this.wsConnection) {
+      try {
+        this.wsConnection.close();
+      } catch {
+        // Ignore close errors
+      }
+      this.wsConnection = null;
+      this.wsConnectionCreatedAt = 0;
+      this.logger.debug('WebSocket connection closed');
+    }
+  }
+
+  /** Start keepalive pings on the WebSocket connection. */
+  private startWsKeepalive(ws: ResponsesWS): void {
+    this.stopWsKeepalive();
+    this.wsKeepaliveInterval = setInterval(() => {
+      try {
+        if (ws.socket.readyState === 1) {
+          ws.socket.ping();
+        }
+      } catch {
+        // Ignore ping errors
+      }
+    }, ModelHandlerOpenAIResponse.WS_KEEPALIVE_INTERVAL_MS);
+  }
+
+  /** Stop keepalive pings. */
+  private stopWsKeepalive(): void {
+    if (this.wsKeepaliveInterval) {
+      clearInterval(this.wsKeepaliveInterval);
+      this.wsKeepaliveInterval = null;
+    }
   }
 
   /**
@@ -727,6 +989,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.previousResponseId = null;
     this.resetConversationState();
     this.clearPendingBackgroundResponse();
+    this.closeWebSocket();
 
     const messages: ResponseInputItem[] = [];
 
@@ -1062,6 +1325,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       backgroundToggleEnabled &&
       this.isBackgroundModeEligible();
     const useStreaming = streamingToggleEnabled && !useBackgroundResponses;
+    const useWebSocket =
+      this.isWebSocketModeEnabled() && !useBackgroundResponses;
 
     if (backgroundToggleEnabled && !useBackgroundResponses) {
       const reason = !this.backgroundModeSupported
@@ -1325,6 +1590,34 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           };
         }
         // Resume failed or response failed remotely - fall through to create new request
+      }
+
+      // WebSocket transport: persistent connection for lower-latency tool-use loops
+      if (useWebSocket) {
+        const ws = await this.getOrCreateWebSocket(client);
+        let response = await this.executeViaWebSocket(ws, params, signal);
+
+        // Safety net: handle unexpected pending status (shouldn't happen without background mode)
+        if (this.isBackgroundPending(response)) {
+          this.logger.warn(
+            `WebSocket response ${response.id} ended with pending status "${response.status}" — polling for completion`,
+          );
+          response = await this.waitForBackgroundCompletion(
+            client,
+            response,
+            signal,
+          );
+        }
+
+        this.finalizeResponse(
+          response,
+          effectiveMessages.length,
+          compactedThisCall,
+        );
+        return {
+          response,
+          updatedMessages: compactedMessages,
+        };
       }
 
       if (useStreaming) {
