@@ -73,7 +73,7 @@ export class LoginBanner extends LitElement {
       }
 
       .login-banner-title {
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
         font-size: 1em;
       }
 

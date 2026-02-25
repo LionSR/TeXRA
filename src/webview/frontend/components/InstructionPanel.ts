@@ -66,7 +66,7 @@ export class InstructionPanel extends LitElement {
         align-items: center;
         gap: var(--spacing-medium);
         margin-bottom: var(--spacing-small);
-        line-height: 1.5;
+        line-height: var(--line-height-relaxed);
         flex-wrap: wrap;
       }
 
@@ -196,7 +196,7 @@ export class InstructionPanel extends LitElement {
           opacity: 1;
         }
         50% {
-          opacity: 0.5;
+          opacity: var(--opacity-disabled);
         }
       }
     `,

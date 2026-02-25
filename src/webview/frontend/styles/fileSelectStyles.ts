@@ -27,7 +27,7 @@ export const fileSelectLayoutStyles = css`
     align-items: center;
     margin-bottom: var(--spacing-small);
     flex-wrap: nowrap;
-    line-height: 1.5;
+    line-height: var(--line-height-relaxed);
     gap: var(--spacing-small);
   }
 

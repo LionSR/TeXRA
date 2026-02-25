@@ -333,7 +333,7 @@ export const profileViewStyles: CSSResult = css`
   .provider-setting-description {
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
-    line-height: 1.4;
+    line-height: var(--line-height-normal);
     padding-left: 22px;
   }
 
@@ -343,7 +343,7 @@ export const profileViewStyles: CSSResult = css`
       var(--vscode-editorWarning-foreground)
     );
     font-size: var(--font-size-sm);
-    line-height: 1.4;
+    line-height: var(--line-height-normal);
     padding-left: 22px;
   }
 

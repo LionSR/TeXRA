@@ -141,7 +141,7 @@ export class MultiAgentTab extends LitElement {
       .preset-card-description {
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
-        line-height: 1.4;
+        line-height: var(--line-height-normal);
         margin: 0;
       }
 
