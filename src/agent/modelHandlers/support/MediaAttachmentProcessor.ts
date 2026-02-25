@@ -101,7 +101,7 @@ export class MediaAttachmentProcessor {
       mediaData = pdfResult;
     } else {
       const mimeType = getMimeType(mediaFile);
-      if (mimeType && mimeType.startsWith('image/')) {
+      if (mimeType?.startsWith('image/')) {
         mediaType = mimeType;
         this.logger.debug(
           `Processing as image: ${mediaFile}, type: ${mediaType}`,
@@ -123,8 +123,7 @@ export class MediaAttachmentProcessor {
   ): Promise<ProcessAudioResult> {
     const mimeType = getMimeType(mediaFile);
     if (
-      !mimeType ||
-      !mimeType.startsWith('audio/') ||
+      !mimeType?.startsWith('audio/') ||
       !this.capabilities.supportsNativeAudio
     ) {
       throw new Error(
@@ -132,8 +131,7 @@ export class MediaAttachmentProcessor {
       );
     }
 
-    const mediaType = mimeType;
-    this.logger.debug(`Processing as audio: ${mediaFile}, type: ${mediaType}`);
+    this.logger.debug(`Processing as audio: ${mediaFile}, type: ${mimeType}`);
     let mediaData = await getBase64EncodedMedia(mediaFile);
     if (Array.isArray(mediaData)) {
       this.logger.warn(
@@ -142,7 +140,7 @@ export class MediaAttachmentProcessor {
       mediaData = mediaData[0];
     }
 
-    return { kind: 'audio', mediaType, data: mediaData };
+    return { kind: 'audio', mediaType: mimeType, data: mediaData };
   }
 
   public async loadEntries(
@@ -370,8 +368,7 @@ export class MediaAttachmentProcessor {
   }
 
   private isAudio(ext: string): boolean {
-    const mimeType = getMimeType(ext);
-    return mimeType !== null && mimeType.startsWith('audio/');
+    return getMimeType(ext)?.startsWith('audio/') ?? false;
   }
 
   /** Normalize data to array for consistent processing */

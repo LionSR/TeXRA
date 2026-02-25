@@ -83,7 +83,7 @@ export class UsageStatsManager {
       streamIds.map(async (streamId) => {
         const store = getStreamTabStore(streamId);
         const usageStats = await store.readUsageStats();
-        if (usageStats && usageStats.size > 0) {
+        if (usageStats?.size) {
           this.items.set(streamId, usageStats);
         }
       }),
@@ -100,7 +100,7 @@ export class UsageStatsManager {
 
   /** Await all pending disk writes. */
   async flush(): Promise<void> {
-    await Promise.all([...this.pendingWrites.values()]);
+    await Promise.all(this.pendingWrites.values());
   }
 
   // -- Per-stream persistence -----------------------------------------------

@@ -226,10 +226,7 @@ const MAX_CACHE_CONTROLLED_BLOCKS = 4;
 const isCacheControlEligibleBlock = (
   block: CacheControlInspectableBlock,
 ): block is CacheControlEligibleBlock => {
-  if (!block || typeof block !== 'object') {
-    return false;
-  }
-
+  if (block == null || typeof block !== 'object') return false;
   const blockType = (block as { type?: string }).type;
   return blockType === 'text' || blockType === 'tool_result';
 };
@@ -237,9 +234,7 @@ const isCacheControlEligibleBlock = (
 const isCompactionCacheControlBlock = (
   block: CacheControlInspectableBlock,
 ): block is CacheControlCompactionBlock => {
-  if (!block || typeof block !== 'object') {
-    return false;
-  }
+  if (block == null || typeof block !== 'object') return false;
   return (block as { type?: string }).type === 'compaction';
 };
 
@@ -262,9 +257,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /** Sum of all tracked PDF page counts across uploaded files. */
   private getTrackedPdfPageCount(): number {
     let total = 0;
-    for (const count of this.uploadedPdfPageCounts.values()) {
-      total += count;
-    }
+    for (const count of this.uploadedPdfPageCounts.values()) total += count;
     return total;
   }
 
@@ -536,7 +529,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Include tools in token counting for accurate measurement.
     // Tool schemas can be substantial and affect context utilization.
-    if (options?.anthropicTools && options.anthropicTools.length > 0) {
+    if (options?.anthropicTools?.length) {
       // Filter out memory tool as countTokens API doesn't support it yet
       const countableTools = options.anthropicTools.filter(
         (tool) => !('type' in tool && tool.type === 'memory_20250818'),
@@ -572,7 +565,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         beta === CONTEXT_MANAGEMENT_BETA ||
         beta === COMPACTION_BETA,
     );
-    if (countTokenBetas && countTokenBetas.length > 0) {
+    if (countTokenBetas?.length) {
       countTokensParams.betas = countTokenBetas;
     }
 
@@ -628,7 +621,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       system: systemPrompt,
     };
 
-    if (tools && tools.length > 0) {
+    if (tools?.length) {
       options.tools = toAnthropicTools(tools, {
         supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
       });
@@ -673,12 +666,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // budget_tokens must be < max_tokens; use 50% to leave room for actual output
         const maxBudget = Math.floor(options.max_tokens * 0.5);
 
-        let defaultBudget: number;
-        if (useStreaming) {
-          defaultBudget = 32768;
-        } else {
-          defaultBudget = 4096;
-        }
+        const defaultBudget = useStreaming ? 32768 : 4096;
         const thinkingBudget = Math.min(defaultBudget, maxBudget);
 
         options.thinking = {
@@ -981,7 +969,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     for (const message of messages) {
       const content = message.content;
-      if (!Array.isArray(content) || content.length === 0) {
+      if (!Array.isArray(content) || !content.length) {
         continue;
       }
 
@@ -1324,7 +1312,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Add media if provided (images and native PDFs)
-    if (mediaFiles && this.capabilities.supportsVision) {
+    if (mediaFiles?.length && this.capabilities.supportsVision) {
       const formattedMediaContent = (await this.createMediaMessage(
         mediaFiles,
       )) as ContentBlockParam[];
@@ -1361,11 +1349,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const roundContent: ContentBlockParam[] = [];
 
     // Add media if provided (images and native PDFs)
-    if (
-      mediaFiles &&
-      mediaFiles.length > 0 &&
-      this.capabilities.supportsVision
-    ) {
+    if (mediaFiles?.length && this.capabilities.supportsVision) {
       try {
         const formattedMediaContent = (await this.createMediaMessage(
           mediaFiles,
@@ -1496,7 +1480,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         if (isSupportedImageMediaType(resolvedMediaType)) {
           imageMediaType = resolvedMediaType;
         } else {
-          if (resolvedMediaType && resolvedMediaType !== 'image/png') {
+          if (resolvedMediaType !== 'image/png') {
             this.logger.warn(
               `Unsupported image media type ${resolvedMediaType} for ${media.file_name}, defaulting to image/png`,
             );
@@ -1993,7 +1977,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       [];
     let regularThinkingContent: string | null = null;
 
-    if (responseObject.content && Array.isArray(responseObject.content)) {
+    if (Array.isArray(responseObject.content)) {
       for (const item of responseObject.content) {
         if (item.type === 'thinking' && item.thinking) {
           thinkingBlocks.push(item);
@@ -2052,19 +2036,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     return toolUseBlocks
-      .map((toolUseBlock) => {
-        if (!toolUseBlock.id || !toolUseBlock.name) {
-          return null;
-        }
-        return {
-          provider: 'anthropic',
-          callId: toolUseBlock.id,
-          name: toolUseBlock.name,
-          input: toolUseBlock.input,
-          raw: toolUseBlock,
-        } satisfies AnthropicToolCall;
-      })
-      .filter((call): call is AnthropicToolCall => call !== null);
+      .filter((b) => b.id && b.name)
+      .map(
+        (toolUseBlock) =>
+          ({
+            provider: 'anthropic',
+            callId: toolUseBlock.id,
+            name: toolUseBlock.name,
+            input: toolUseBlock.input,
+            raw: toolUseBlock,
+          }) satisfies AnthropicToolCall,
+      );
   }
 
   /**
@@ -2340,7 +2322,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
     }
 
-    const isError = Boolean(result.isError);
     const resultMsg: MessageParam = {
       role: 'user',
       content: [
@@ -2348,7 +2329,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           type: 'tool_result',
           tool_use_id: call.callId,
           content: toolResultContent,
-          is_error: isError || undefined,
+          is_error: result.isError || undefined,
         },
       ],
     };

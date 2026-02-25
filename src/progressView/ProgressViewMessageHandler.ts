@@ -105,7 +105,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       buildRecordingMessage: ({ status, error }) => ({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING,
         status,
-        ...(error ? { error } : {}),
+        ...(error && { error }),
       }),
       buildTranscriptionMessage: (text) => ({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
@@ -377,9 +377,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     // Sync replacement active stream in the active progress target.
     if (wasActive && this.provider.state.activeStream) {
-      this.provider.setActiveStream(
-        this.provider.state.activeStream as StreamTabId,
-      );
+      this.provider.setActiveStream(this.provider.state.activeStream);
     }
   }
 
@@ -987,10 +985,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private findOutputDirectory(
     runOutputs: Map<number, OutputFileInfo[]>,
   ): string | undefined {
-    for (const info of [...runOutputs.values()].flat()) {
-      const kind = info.location.kind;
-      if (kind === 'runStorage' || kind === 'workspace') {
-        return path.dirname(info.location.absolutePath);
+    for (const infos of runOutputs.values()) {
+      for (const info of infos) {
+        const kind = info.location.kind;
+        if (kind === 'runStorage' || kind === 'workspace') {
+          return path.dirname(info.location.absolutePath);
+        }
       }
     }
     return undefined;
@@ -1187,13 +1187,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const toRelative = (p: string): string => WorkspaceFS.relativePath(p);
     const mapOutputToRelative = (p: string): string =>
       toRelative(fileMapping.get(p) ?? p);
+    const mapFile = attachAgentOutputs ? toRelative : mapOutputToRelative;
 
-    const newInputFile = attachAgentOutputs
-      ? toRelative(originalConfig.inputFile)
-      : mapOutputToRelative(originalConfig.inputFile);
-    const newInputFiles = attachAgentOutputs
-      ? originalConfig.inputFiles.map(toRelative)
-      : originalConfig.inputFiles.map(mapOutputToRelative);
+    const newInputFile = mapFile(originalConfig.inputFile);
+    const newInputFiles = originalConfig.inputFiles.map(mapFile);
 
     const outputsAsReference = attachAgentOutputs
       ? [...fileMapping.values()].map(toRelative)
@@ -1362,10 +1359,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     runOutputs: Map<number, OutputFileInfo[]> | null | undefined,
   ): string[] {
     if (!runOutputs) return [];
-    return [...runOutputs.values()].flatMap((infos) =>
-      infos
-        .map((info) => info.location?.absolutePath)
-        .filter((path): path is string => Boolean(path)),
-    );
+    const paths: string[] = [];
+    for (const infos of runOutputs.values()) {
+      for (const info of infos) {
+        if (info.location?.absolutePath) {
+          paths.push(info.location.absolutePath);
+        }
+      }
+    }
+    return paths;
   }
 }

@@ -60,10 +60,6 @@ export const STREAM_DATA_DIR = 'streamData';
 // ============================================================================
 
 /**
- * Disk-backed store for a single stream tab.
- * Extends KVStore with typed accessors for each data category.
- */
-/**
  * Encode a stream tab ID for safe use as a filesystem directory name.
  * Stream IDs can contain `:`, `/`, and other unsafe characters
  * (e.g. `agent@model: path/to/file.tex`).
@@ -72,6 +68,10 @@ function encodeStreamId(id: string): string {
   return encodeURIComponent(id);
 }
 
+/**
+ * Disk-backed store for a single stream tab.
+ * Extends KVStore with typed accessors for each data category.
+ */
 class StreamTabKVStore extends KVStore {
   constructor(private readonly streamTabId: StreamTabId) {
     super(path.join(STREAM_DATA_DIR, encodeStreamId(streamTabId)));
@@ -145,8 +145,9 @@ class StreamTabKVStore extends KVStore {
     const raw = await this.read(KEYS.RUN_INSTRUCTIONS);
     if (!raw) return null;
     const result = RunInstructionsRecordSchema.safeParse(raw);
-    if (!result.success || Object.keys(result.data).length === 0) return null;
-    return new Map(Object.entries(result.data));
+    if (!result.success) return null;
+    const map = new Map(Object.entries(result.data));
+    return map.size > 0 ? map : null;
   }
 
   async writeRunInstructions(data: RunInstructionsRecord): Promise<void> {

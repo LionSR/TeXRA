@@ -307,7 +307,7 @@ export class AnthropicStreamHandler {
       case 'input_json_delta':
         this.diagnostics.toolInputChars += event.delta.partial_json.length;
         // Accumulate input JSON for web search to get query (with size limit)
-        for (const [, searchData] of this.state.pendingSearches) {
+        for (const searchData of this.state.pendingSearches.values()) {
           if (searchData.index === event.index) {
             // Apply size limit to prevent memory growth
             if (searchData.input.length < MAX_SEARCH_INPUT_SIZE) {
@@ -416,10 +416,8 @@ export class AnthropicStreamHandler {
    * Finalizes the output stream if present and clears it.
    */
   private finalizeOutputStream(): void {
-    if (this.state.outputStream) {
-      this.state.outputStream.finalize();
-      this.state.outputStream = null;
-    }
+    this.state.outputStream?.finalize();
+    this.state.outputStream = null;
   }
 
   /**
