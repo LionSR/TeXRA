@@ -1,15 +1,9 @@
-// Standard library imports
 import * as path from 'path';
 
-// Local imports - shared schemas
 import { sortStreams } from '@shared/streams/streamSort';
-
-// Local imports - progress view
 import { getCleanAgentName, isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
-
-// Type imports
 import type { ProgressViewState } from './state/ProgressViewState';
 
 /**

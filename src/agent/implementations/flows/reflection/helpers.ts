@@ -26,7 +26,7 @@ export function getFilesForRound(
   }
 
   // Fallback to configured output files
-  if (config.outputFiles.length > 0) {
+  if (config.outputFiles.length) {
     return config.outputFiles.map((f) => fileService.createLocation(f));
   }
 
