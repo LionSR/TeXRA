@@ -89,7 +89,7 @@ export function normalizeOpenAIMessageContent<T extends MessageLike>(
   messages: T[],
   options?: NormalizeOpenAIMessageContentOptions,
 ): T[] {
-  if (!Array.isArray(messages) || messages.length === 0 || !options) {
+  if (!Array.isArray(messages) || !messages.length || !options) {
     return messages;
   }
 
