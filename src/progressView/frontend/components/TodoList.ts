@@ -82,7 +82,7 @@ export class TodoList extends LitElement {
       }
 
       .todo-item--in-progress {
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
       }
 
       .todo-item--in-progress .todo-item__icon {

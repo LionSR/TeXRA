@@ -32,7 +32,7 @@ export const fileSelectLayoutStyles = css`
   }
 
   .file-select-header > vscode-toolbar-button {
-    opacity: 1;
+    opacity: var(--opacity-full);
     flex-shrink: 0;
   }
 
@@ -57,7 +57,7 @@ export const fileSelectLayoutStyles = css`
   }
 
   .file-select-label-group vscode-toolbar-button {
-    opacity: 1;
+    opacity: var(--opacity-full);
   }
 
   .file-select-label-group vscode-textfield {
@@ -78,7 +78,7 @@ export const fileSelectLayoutStyles = css`
   }
 
   .file-select-actions vscode-toolbar-button {
-    opacity: 1;
+    opacity: var(--opacity-full);
     width: var(--height-control);
     height: var(--height-control);
     min-width: var(--height-control);
@@ -194,11 +194,11 @@ export const multiFilesStyles = css`
   }
 
   .remove-button:hover {
-    opacity: 1;
+    opacity: var(--opacity-full);
   }
 
   .remove-button:focus-visible {
-    opacity: 1;
+    opacity: var(--opacity-full);
     outline: var(--border-thin) solid var(--vscode-focusBorder);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);

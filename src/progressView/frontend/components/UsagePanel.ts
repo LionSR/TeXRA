@@ -93,7 +93,7 @@ export class UsagePanel extends LitElement {
         position: absolute;
         top: 0;
         bottom: 0;
-        width: 1px;
+        width: var(--border-thin);
         background: var(--vscode-foreground);
         opacity: var(--opacity-separator);
       }

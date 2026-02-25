@@ -180,7 +180,7 @@ export class LaTeXTab extends LitElement {
         margin-bottom: var(--spacing-large);
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
-        line-height: 1.5;
+        line-height: var(--line-height-relaxed);
       }
 
       .dependency-card {
@@ -255,7 +255,7 @@ export class LaTeXTab extends LitElement {
         border-radius: var(--border-radius-medium);
         font-size: var(--font-size-sm);
         color: var(--vscode-foreground);
-        line-height: 1.5;
+        line-height: var(--line-height-relaxed);
         white-space: pre-wrap;
       }
 
@@ -275,7 +275,7 @@ export class LaTeXTab extends LitElement {
       .install-command-text {
         flex: 1;
         min-width: 0;
-        padding: 4px 8px;
+        padding: var(--spacing-small) var(--spacing-medium);
         background: var(
           --vscode-textCodeBlock-background,
           rgba(128, 128, 128, 0.08)
@@ -320,13 +320,13 @@ export class LaTeXTab extends LitElement {
       .prerequisite-hint .hint-title {
         font-weight: var(--font-weight-medium);
         color: var(--vscode-foreground);
-        margin-bottom: 2px;
+        margin-bottom: var(--spacing-tiny);
       }
 
       .prerequisite-hint .hint-description {
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
-        line-height: 1.4;
+        line-height: var(--line-height-normal);
       }
 
       .prerequisite-hint .hint-actions {
@@ -402,14 +402,14 @@ export class LaTeXTab extends LitElement {
       .setting-description {
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
-        line-height: 1.4;
+        line-height: var(--line-height-normal);
         margin-top: var(--spacing-small);
       }
 
       .setting-badge {
         flex-shrink: 0;
         font-size: var(--font-size-xs, 11px);
-        padding: 2px 6px;
+        padding: var(--spacing-tiny) var(--border-radius-large);
         border-radius: var(--border-radius-small, 3px);
         font-weight: var(--font-weight-medium);
       }

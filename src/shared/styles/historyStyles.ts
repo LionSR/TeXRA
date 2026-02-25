@@ -69,7 +69,7 @@ export const historyListStyles: CSSResult = css`
   }
 
   .history-label {
-    font-weight: bold;
+    font-weight: var(--font-weight-bold);
     color: var(--vscode-editor-foreground);
   }
 
@@ -103,7 +103,7 @@ export const historyListStyles: CSSResult = css`
     color: var(--vscode-descriptionForeground);
     font-style: italic;
     margin-top: var(--spacing-small);
-    line-height: 1.4;
+    line-height: var(--line-height-normal);
   }
 
   .config-section {

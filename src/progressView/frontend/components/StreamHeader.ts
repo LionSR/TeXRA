@@ -192,7 +192,7 @@ export class StreamHeader extends LitElement {
         gap: var(--spacing-tiny);
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         white-space: nowrap;
       }
 
@@ -342,7 +342,7 @@ export class StreamHeader extends LitElement {
         gap: var(--spacing-tiny);
         padding: 1px var(--spacing-small);
         font-size: var(--font-size-xs, 10px);
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
         color: var(--_badge-color);
         background: color-mix(in srgb, var(--_badge-color) 12%, transparent);
         border-radius: var(--border-radius-small);

@@ -198,7 +198,7 @@ export const toolUseStyles = css`
     background-color: var(--vscode-editor-background, #1e1e1e);
     white-space: pre-wrap;
     word-break: break-word;
-    line-height: 1.5;
+    line-height: var(--line-height-relaxed);
   }
 
   :is(.diff-inline-del, .diff-inline-add) {

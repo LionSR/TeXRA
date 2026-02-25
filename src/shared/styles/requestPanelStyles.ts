@@ -315,7 +315,7 @@ export const requestPanelStyles: CSSResult = css`
     font-weight: var(--font-weight-semibold);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    padding: var(--spacing-tiny) 6px;
+    padding: var(--spacing-tiny) var(--border-radius-large);
     border-radius: var(--border-radius);
     white-space: nowrap;
   }
@@ -371,7 +371,7 @@ export const requestPanelStyles: CSSResult = css`
     white-space: pre-wrap;
     max-height: 12em;
     overflow-y: auto;
-    line-height: 1.4;
+    line-height: var(--line-height-normal);
     padding: var(--spacing-small) 0;
     border-bottom: var(--border-thin) solid var(--vscode-editorWidget-border);
   }
@@ -386,7 +386,7 @@ export const requestPanelStyles: CSSResult = css`
   .workflow-proposal__files > div {
     font-size: var(--font-size-sm);
     color: var(--vscode-editor-foreground);
-    line-height: 1.4;
+    line-height: var(--line-height-normal);
   }
 
   .workflow-proposal__file-label {

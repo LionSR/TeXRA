@@ -34,7 +34,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .label {
-    font-weight: bold;
+    font-weight: var(--font-weight-bold);
     color: var(--vscode-textPreformat-foreground);
     min-width: 80px;
   }
