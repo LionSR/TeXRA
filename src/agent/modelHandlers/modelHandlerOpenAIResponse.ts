@@ -1078,10 +1078,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Convert tools early so they're available for both compaction token counting and the API call
     const convertedTools = tools?.length
       ? toOpenAIResponseTools(tools, {
-            supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
-            supportsFunctionCalling: this.capabilities.supportsFunctionCalling,
-          })
-        : undefined;
+          supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
+          supportsFunctionCalling: this.capabilities.supportsFunctionCalling,
+        })
+      : undefined;
 
     // Check if compaction is needed before processing the request
     let effectiveMessages = messages;

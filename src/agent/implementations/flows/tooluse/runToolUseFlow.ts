@@ -191,8 +191,7 @@ export async function runToolUseFlow<C = unknown>(
     pf.setServices(services);
     pf.setProjection(async (s, store) => {
       const todos = s.stateSlices?.workspaceSnapshot?.todos?.todos;
-      if (Array.isArray(todos) && todos.length)
-        await store.writeTodos(todos);
+      if (Array.isArray(todos) && todos.length) await store.writeTodos(todos);
       if (s.messages.length) await store.writeConversation(s.messages);
     });
     await pf.run(shared);

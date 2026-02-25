@@ -2037,13 +2037,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     return toolUseBlocks
       .filter((b) => b.id && b.name)
-      .map((toolUseBlock) => ({
-        provider: 'anthropic',
-        callId: toolUseBlock.id,
-        name: toolUseBlock.name,
-        input: toolUseBlock.input,
-        raw: toolUseBlock,
-      }) satisfies AnthropicToolCall);
+      .map(
+        (toolUseBlock) =>
+          ({
+            provider: 'anthropic',
+            callId: toolUseBlock.id,
+            name: toolUseBlock.name,
+            input: toolUseBlock.input,
+            raw: toolUseBlock,
+          }) satisfies AnthropicToolCall,
+      );
   }
 
   /**

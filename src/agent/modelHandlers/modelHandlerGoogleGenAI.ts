@@ -324,7 +324,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   private resolveUploadMimeType(entry: MediaEntry, uploaded: File): string {
-    return uploaded.mimeType || entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
+    return (
+      uploaded.mimeType || entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE
+    );
   }
 
   async getClient(): Promise<GoogleGenAI> {

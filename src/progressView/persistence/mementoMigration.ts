@@ -44,11 +44,7 @@ export async function needsMigrationFromMemento(
 
   for (const key of legacyKeys) {
     const raw = storage.get(key);
-    if (
-      raw &&
-      typeof raw === 'object' &&
-      Object.keys(raw).length > 0
-    ) {
+    if (raw && typeof raw === 'object' && Object.keys(raw).length > 0) {
       return true;
     }
   }
