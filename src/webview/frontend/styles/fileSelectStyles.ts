@@ -184,7 +184,7 @@ export const multiFilesStyles = css`
     color: var(--vscode-icon-foreground, var(--vscode-foreground));
     cursor: pointer;
     flex-shrink: 0;
-    opacity: 0.7;
+    opacity: var(--opacity-subtle);
     background: none;
     border: none;
     padding: 0;

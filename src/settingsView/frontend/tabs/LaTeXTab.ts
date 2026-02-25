@@ -223,7 +223,7 @@ export class LaTeXTab extends LitElement {
       .dependency-description {
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
-        margin-top: 2px;
+        margin-top: var(--spacing-tiny);
       }
 
       .dependency-guide-toggle {
@@ -238,11 +238,11 @@ export class LaTeXTab extends LitElement {
         background: none;
         border: none;
         cursor: pointer;
-        transition: opacity 0.1s ease;
+        transition: opacity var(--transition-fast);
       }
 
       .dependency-guide-toggle:hover {
-        opacity: 0.8;
+        opacity: var(--opacity-hover);
       }
 
       .dependency-guide {

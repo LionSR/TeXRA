@@ -234,7 +234,7 @@ export class StreamHeader extends LitElement {
         white-space: nowrap;
         opacity: 0;
         pointer-events: none;
-        transition: opacity 0.2s ease;
+        transition: opacity var(--transition-normal);
         z-index: 100;
       }
 
@@ -268,9 +268,9 @@ export class StreamHeader extends LitElement {
       .super-yolo-toggle-button {
         flex-shrink: 0;
         transition:
-          color 0.2s ease,
-          background-color 0.2s ease,
-          box-shadow 0.2s ease;
+          color var(--transition-normal),
+          background-color var(--transition-normal),
+          box-shadow var(--transition-normal);
       }
 
       .yolo-toggle-button.is-active,
@@ -318,7 +318,7 @@ export class StreamHeader extends LitElement {
         cursor: pointer;
         white-space: nowrap;
         opacity: var(--opacity-subtle);
-        transition: opacity 0.15s ease;
+        transition: opacity var(--transition-fast);
       }
 
       .parent-link:hover {

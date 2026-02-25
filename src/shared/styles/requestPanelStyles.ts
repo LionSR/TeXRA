@@ -100,18 +100,23 @@ export const requestPanelStyles: CSSResult = css`
     gap: var(--spacing-small);
   }
 
-  /* Approval requests */
-  .approval-requests {
+  /* Shared container chrome — approval, bash, and retry all use the same border/bg */
+  .approval-requests,
+  .bash-approval-requests,
+  .retry-requests {
     border: var(--border-thin) solid var(--vscode-input-border);
     background: var(--vscode-editor-background);
   }
 
-  .approval-requests__header .codicon {
-    color: var(--vscode-editor-foreground);
+  /* Shared action button width — approval and bash use the same flex-basis */
+  .approval-request__actions vscode-toolbar-button,
+  .bash-approval-request__actions vscode-toolbar-button {
+    flex: 1 1 12rem;
   }
 
-  .approval-request__actions vscode-toolbar-button {
-    flex: 1 1 12rem;
+  /* Approval requests */
+  .approval-requests__header .codicon {
+    color: var(--vscode-editor-foreground);
   }
 
   .approval-request__path {
@@ -190,11 +195,6 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   /* Bash approval requests */
-  .bash-approval-requests {
-    border: var(--border-thin) solid var(--vscode-input-border);
-    background: var(--vscode-editor-background);
-  }
-
   .bash-approval-requests__header .codicon {
     color: var(--vscode-terminal-ansiYellow);
   }
@@ -213,16 +213,7 @@ export const requestPanelStyles: CSSResult = css`
     word-break: break-word;
   }
 
-  .bash-approval-request__actions vscode-toolbar-button {
-    flex: 1 1 12rem;
-  }
-
   /* Retry requests */
-  .retry-requests {
-    border: var(--border-thin) solid var(--vscode-input-border);
-    background: var(--vscode-editor-background);
-  }
-
   .retry-requests__header .codicon {
     color: var(--color-warning);
   }
@@ -289,7 +280,7 @@ export const requestPanelStyles: CSSResult = css`
     position: absolute;
     left: 0;
     inset-block: 0;
-    width: 3px;
+    width: var(--border-thick);
     background: var(--vscode-editorWarning-foreground, #ff8c00);
     border-radius: var(--border-radius-small) 0 0 var(--border-radius-small);
   }

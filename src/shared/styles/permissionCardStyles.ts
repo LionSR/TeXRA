@@ -91,7 +91,7 @@ export const permissionCardStyles: CSSResult = css`
   }
 
   .action-button:active {
-    opacity: 0.85;
+    opacity: var(--opacity-normal);
   }
 
   .action-button:focus-visible {

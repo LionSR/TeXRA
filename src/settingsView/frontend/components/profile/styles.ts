@@ -154,7 +154,7 @@ export const profileViewStyles: CSSResult = css`
     border: var(--border-thin) solid var(--color-border);
     border-radius: var(--border-radius);
     cursor: pointer;
-    transition: border-color 0.2s ease;
+    transition: border-color var(--transition-normal);
   }
 
   .api-access-option:hover {
@@ -210,7 +210,7 @@ export const profileViewStyles: CSSResult = css`
     align-items: center;
     gap: var(--spacing-small);
     font-size: var(--font-size-sm);
-    padding: 2px var(--spacing-small);
+    padding: var(--spacing-tiny) var(--spacing-small);
     border-radius: var(--border-radius);
   }
 

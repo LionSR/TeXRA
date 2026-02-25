@@ -137,7 +137,7 @@ export class ToolCard extends LitElement {
       }
 
       .tool-guide-toggle:hover {
-        opacity: 0.8;
+        opacity: var(--opacity-hover);
       }
 
       .tool-guide-toggle:focus-visible {

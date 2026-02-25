@@ -49,7 +49,7 @@ export const toolUseStyles = css`
     margin: var(--spacing-small) 0;
     border: none;
     border-top: var(--border-thin) solid var(--color-border);
-    opacity: 0.3;
+    opacity: var(--opacity-separator);
   }
 
   :is(.tool-use-error, .banner-details--error)

@@ -71,8 +71,10 @@ export const designTokens: CSSResult = css`
     --border-thick: 3px;
 
     /* Opacity levels */
+    --opacity-separator: 0.3;
     --opacity-disabled: 0.5;
     --opacity-subtle: 0.7;
+    --opacity-hover: 0.8;
     --opacity-normal: 0.85;
     --opacity-full: 1;
 

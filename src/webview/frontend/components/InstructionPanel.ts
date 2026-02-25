@@ -368,7 +368,7 @@ export class InstructionPanel extends LitElement {
                 width: '16px',
                 height: '16px',
                 opacity: session.isPolishing ? '1' : '0',
-                transition: 'opacity 0.2s ease',
+                transition: 'opacity var(--transition-normal)',
                 ...(session.isPolishing ? {} : { pointerEvents: 'none' }),
               })}
             ></vscode-progress-ring>
