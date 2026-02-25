@@ -80,17 +80,15 @@ export class DiffManager extends BaseWebviewManager {
   }
 
   async handleRequestRecentCommits(message: unknown): Promise<void> {
-    const parsed =
-      mainViewMessages.RequestRecentCommitsMessageSchema.safeParse(message);
-    if (!parsed.success) {
-      logger.warn(CHANNEL, 'Invalid request recent commits message', {
-        data: parsed.error,
-      });
-      return;
-    }
+    const data = this.parseMessage(
+      mainViewMessages.RequestRecentCommitsMessageSchema,
+      message,
+      'request recent commits',
+    );
+    if (!data) return;
 
     // Convert null to undefined (schema uses .nullish(), function expects boolean | undefined)
-    await this.postRecentCommits(parsed.data.notifyWhenEmpty ?? undefined);
+    await this.postRecentCommits(data.notifyWhenEmpty ?? undefined);
   }
 
   async handleRefreshCommits(): Promise<void> {

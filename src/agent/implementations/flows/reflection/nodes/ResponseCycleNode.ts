@@ -112,9 +112,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
       return { outcome: 'completed', endTurn: cycleShared.endTurn };
     } catch (error) {
       recordRound(prepRes.run, prepRes.round);
-      if (this.services.onRoundFinalized) {
-        await this.services.onRoundFinalized(prepRes.run);
-      }
+      await this.services.onRoundFinalized(prepRes.run);
       const formatted = formatProviderHttpError(error);
       return {
         outcome: 'failed',

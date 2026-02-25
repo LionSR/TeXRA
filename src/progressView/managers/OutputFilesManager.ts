@@ -181,8 +181,7 @@ export class OutputFilesManager {
     if (!this.loaded) {
       throw new Error('Missing outputs requested before load completed');
     }
-    const missing = this._missingOutputs.get(stream);
-    return missing ? new Map(missing) : new Map();
+    return new Map(this._missingOutputs.get(stream) ?? []);
   }
 
   /** Clear missing outputs for a stream (in-memory + disk) */
@@ -221,10 +220,10 @@ export class OutputFilesManager {
           store.readOutputFiles(),
           store.readMissingOutputs(),
         ]);
-        if (outputFiles && outputFiles.size > 0) {
+        if (outputFiles?.size) {
           this.items.set(streamId, outputFiles);
         }
-        if (missingOutputs && missingOutputs.size > 0) {
+        if (missingOutputs?.size) {
           this._missingOutputs.set(streamId, missingOutputs);
         }
       }),
@@ -244,30 +243,39 @@ export class OutputFilesManager {
   // -- Per-stream persistence -----------------------------------------------
 
   private saveStream(stream: StreamTabId): void {
-    if (!this.loaded) return;
-    const prev = this.pendingWrites.get(stream) ?? Promise.resolve();
-    const next = prev.then(() => {
-      if (!this.pendingWrites.has(stream)) return;
+    this.chainWrite(stream, this.pendingWrites, () => {
       const data = this.items.get(stream);
-      const store = getStreamTabStore(stream);
-      return store.writeOutputFiles(data ? nestedMapToRecord(data) : {});
+      return getStreamTabStore(stream).writeOutputFiles(
+        data ? nestedMapToRecord(data) : {},
+      );
     });
-    this.pendingWrites.set(
-      stream,
-      next.catch(() => {}),
-    );
   }
 
   private saveMissingOutputs(stream: StreamTabId): void {
-    if (!this.loaded) return;
-    const prev = this.pendingMissingWrites.get(stream) ?? Promise.resolve();
-    const next = prev.then(() => {
-      if (!this.pendingMissingWrites.has(stream)) return;
+    this.chainWrite(stream, this.pendingMissingWrites, () => {
       const data = this._missingOutputs.get(stream);
-      const store = getStreamTabStore(stream);
-      return store.writeMissingOutputs(data ? nestedMapToRecord(data) : {});
+      return getStreamTabStore(stream).writeMissingOutputs(
+        data ? nestedMapToRecord(data) : {},
+      );
     });
-    this.pendingMissingWrites.set(
+  }
+
+  /**
+   * Chain a write operation after any pending write for the same stream,
+   * skipping if the stream was evicted while queued.
+   */
+  private chainWrite(
+    stream: StreamTabId,
+    writesMap: Map<StreamTabId, Promise<void>>,
+    write: () => Promise<void> | void,
+  ): void {
+    if (!this.loaded) return;
+    const prev = writesMap.get(stream) ?? Promise.resolve();
+    const next = prev.then(() => {
+      if (!writesMap.has(stream)) return;
+      return write();
+    });
+    writesMap.set(
       stream,
       next.catch(() => {}),
     );

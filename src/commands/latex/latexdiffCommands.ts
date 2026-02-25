@@ -420,11 +420,11 @@ async function handleRunLatexdiff(
       `Between-round diffs enabled: ${generateBetweenRoundDiffs}`,
     );
 
-    const runId = config.runId || undefined;
+    const runId = config.runId ?? undefined;
 
     // Normalize outputsByRound from raw config
     let outputsByRound: Map<number, OutputFileInfo[]> | null = null;
-    if (config.outputsByRound && typeof config.outputsByRound === 'object') {
+    if (config.outputsByRound) {
       const roundMap = new Map<number, OutputFileInfo[]>();
       for (const [roundKey, value] of Object.entries(config.outputsByRound)) {
         const roundResult = RoundKeySchema.safeParse(roundKey);
@@ -455,7 +455,7 @@ async function handleRunLatexdiff(
             : 'Scanning workspace for LaTeX outputs...',
         });
 
-        if (outputsByRound && outputsByRound.size > 0) {
+        if (outputsByRound) {
           return runLatexdiffFromMetadata({
             rounds: outputsByRound,
             mathMarkup,
@@ -504,20 +504,20 @@ async function handleRunLatexdiff(
     }
 
     for (const result of results) {
+      const suffix = result.description ? ` (${result.description})` : '';
+
       if (result.success && result.basePath && result.diffFileName) {
         const diffFilePath = await openLatexdiffResult(
           pathToLocation(result.basePath),
           result.diffFileName,
         );
         if (diffFilePath) {
-          const suffix = result.description ? ` (${result.description})` : '';
           logger.debug(
             CHANNEL,
             `Successfully generated diff: ${diffFilePath}${suffix}`,
           );
         }
       } else if (!result.success) {
-        const suffix = result.description ? ` (${result.description})` : '';
         logger.warn(
           CHANNEL,
           `Failed to generate diff${suffix}: ${result.message ?? 'Unknown error'}`,
@@ -766,12 +766,10 @@ async function runLatexdiffViaWorkspaceScan(params: {
   }
 
   let totalOperations = 0;
-  for (const [, roundOutputs] of inputToOutputsMap.entries()) {
+  for (const roundOutputs of inputToOutputsMap.values()) {
     totalOperations += roundOutputs.size;
-
-    const rounds = [...roundOutputs.keys()].sort((a, b) => a - b);
-    if (generateBetweenRoundDiffs && rounds.length > 1) {
-      totalOperations += rounds.length - 1;
+    if (generateBetweenRoundDiffs && roundOutputs.size > 1) {
+      totalOperations += roundOutputs.size - 1;
     }
   }
 

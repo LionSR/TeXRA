@@ -41,6 +41,33 @@ export const StreamTabMetaSchema = z.object({
 export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
 
 // ============================================================================
+// Shared transform helpers for record → Map conversions
+// ============================================================================
+
+/** Convert { stringKey: items[] } record to Map<number, items[]>, coercing keys to round numbers. */
+function recordToRoundMap<T>(record: Record<string, T[]>): Map<number, T[]> {
+  const map = new Map<number, T[]>();
+  for (const [key, items] of Object.entries(record)) {
+    const round = RoundKeySchema.safeParse(key);
+    if (round.success && items.length > 0) {
+      map.set(round.data, items);
+    }
+  }
+  return map;
+}
+
+/** Convert { runId: innerMap } record to Map, filtering out empty inner maps. */
+function recordToRunMap<V>(
+  record: Record<string, Map<number, V>>,
+): Map<string, Map<number, V>> {
+  const map = new Map<string, Map<number, V>>();
+  for (const [runId, rounds] of Object.entries(record)) {
+    if (rounds.size > 0) map.set(runId, rounds);
+  }
+  return map;
+}
+
+// ============================================================================
 // Output files
 // ============================================================================
 
@@ -59,27 +86,12 @@ export const OutputFilesRoundMapSchema = z
       )
       .catch([]),
   )
-  .transform((record): Map<number, OutputFileInfo[]> => {
-    const map = new Map<number, OutputFileInfo[]>();
-    for (const [key, items] of Object.entries(record)) {
-      const round = RoundKeySchema.safeParse(key);
-      if (round.success && items.length > 0) {
-        map.set(round.data, items);
-      }
-    }
-    return map;
-  });
+  .transform(recordToRoundMap);
 
 /** Run map: { runId: roundMap } → Map<string, Map<number, OutputFileInfo[]>> */
 export const OutputFilesDataSchema = z
   .record(z.string(), OutputFilesRoundMapSchema.catch(new Map()))
-  .transform((record) => {
-    const map = new Map<string, Map<number, OutputFileInfo[]>>();
-    for (const [runId, rounds] of Object.entries(record)) {
-      if (rounds.size > 0) map.set(runId, rounds);
-    }
-    return map;
-  })
+  .transform(recordToRunMap)
   .catch(new Map()) as z.ZodType<Map<string, Map<number, OutputFileInfo[]>>>;
 
 // ============================================================================
@@ -89,27 +101,12 @@ export const OutputFilesDataSchema = z
 /** Round map: { roundNum: string[] } → Map<number, string[]> */
 const MissingOutputsRoundMapSchema = z
   .record(z.string(), z.array(z.string()).catch([]))
-  .transform((record): Map<number, string[]> => {
-    const map = new Map<number, string[]>();
-    for (const [key, items] of Object.entries(record)) {
-      const round = RoundKeySchema.safeParse(key);
-      if (round.success && items.length > 0) {
-        map.set(round.data, items);
-      }
-    }
-    return map;
-  });
+  .transform(recordToRoundMap);
 
 /** Run map: { runId: roundMap } → Map<string, Map<number, string[]>> */
 export const MissingOutputsDataSchema = z
   .record(z.string(), MissingOutputsRoundMapSchema.catch(new Map()))
-  .transform((record) => {
-    const map = new Map<string, Map<number, string[]>>();
-    for (const [runId, rounds] of Object.entries(record)) {
-      if (rounds.size > 0) map.set(runId, rounds);
-    }
-    return map;
-  })
+  .transform(recordToRunMap)
   .catch(new Map()) as z.ZodType<Map<string, Map<number, string[]>>>;
 
 // ============================================================================
