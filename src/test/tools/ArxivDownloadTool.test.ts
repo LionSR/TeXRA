@@ -19,33 +19,29 @@ declare module '@latex/arxivProcessor' {
   }
 }
 
+// Mutable references for stubbing
+const processor = arxivModule.arxivProcessor as {
+  validateId: typeof arxivModule.arxivProcessor.validateId;
+  downloadSource: typeof arxivModule.arxivProcessor.downloadSource;
+};
+const wsFS = WorkspaceFS as unknown as {
+  relativePath: typeof WorkspaceFS.relativePath;
+};
+const lsProto = LsTool.prototype as unknown as {
+  call: typeof LsTool.prototype.call;
+};
+
 describe('ArxivDownloadTool', () => {
-  const originalValidateId = arxivModule.arxivProcessor.validateId;
-  const originalDownloadSource = arxivModule.arxivProcessor.downloadSource;
-  const originalRelativePath = WorkspaceFS.relativePath;
-  const originalLsCall = LsTool.prototype.call;
+  const originalValidateId = processor.validateId;
+  const originalDownloadSource = processor.downloadSource;
+  const originalRelativePath = wsFS.relativePath;
+  const originalLsCall = lsProto.call;
 
   afterEach(() => {
-    (
-      arxivModule.arxivProcessor as {
-        validateId: typeof originalValidateId;
-      }
-    ).validateId = originalValidateId;
-    (
-      arxivModule.arxivProcessor as {
-        downloadSource: typeof originalDownloadSource;
-      }
-    ).downloadSource = originalDownloadSource;
-    (
-      WorkspaceFS as unknown as {
-        relativePath: typeof originalRelativePath;
-      }
-    ).relativePath = originalRelativePath;
-    (
-      LsTool.prototype as unknown as {
-        call: typeof originalLsCall;
-      }
-    ).call = originalLsCall;
+    processor.validateId = originalValidateId;
+    processor.downloadSource = originalDownloadSource;
+    wsFS.relativePath = originalRelativePath;
+    lsProto.call = originalLsCall;
   });
 
   it('returns download summary and listing from ls tool', async () => {
@@ -53,36 +49,20 @@ describe('ArxivDownloadTool', () => {
     let receivedAutoIndent: boolean | undefined;
     let validateCalls = 0;
 
-    (
-      arxivModule.arxivProcessor as {
-        validateId: typeof originalValidateId;
-      }
-    ).validateId = (id: string) => {
+    processor.validateId = () => {
       validateCalls += 1;
       return null;
     };
 
-    (
-      arxivModule.arxivProcessor as {
-        downloadSource: typeof originalDownloadSource;
-      }
-    ).downloadSource = async (id, _progress, autoIndent) => {
+    processor.downloadSource = async (id, _progress, autoIndent) => {
       receivedId = id;
       receivedAutoIndent = autoIndent;
       return { path: '/workspace/project/sample', alreadyExisted: false };
     };
 
-    (
-      WorkspaceFS as unknown as {
-        relativePath: typeof originalRelativePath;
-      }
-    ).relativePath = () => 'sample';
+    wsFS.relativePath = () => 'sample';
 
-    (
-      LsTool.prototype as unknown as {
-        call: typeof originalLsCall;
-      }
-    ).call = async (): Promise<ToolResult> => ({
+    lsProto.call = async (): Promise<ToolResult> => ({
       summary: 'Listing for sample',
       output: 'dir src\nfile main.tex',
     });

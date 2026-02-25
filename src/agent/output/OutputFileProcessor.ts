@@ -249,13 +249,12 @@ export class OutputFileProcessor {
     switch (xmlMode) {
       case 'always':
         return true;
-      case 'scratchpadOnly': {
-        const hasDocumentTag = Boolean(agentSetting.documentTag);
-        const hasScratchpadPrefill =
-          agentSetting.prefills?.some((p) => SCRATCHPAD_TAG_PATTERN.test(p)) ??
-          false;
-        return hasDocumentTag || hasScratchpadPrefill;
-      }
+      case 'scratchpadOnly':
+        return (
+          Boolean(agentSetting.documentTag) ||
+          (agentSetting.prefills?.some((p) => SCRATCHPAD_TAG_PATTERN.test(p)) ??
+            false)
+        );
       default:
         return false;
     }

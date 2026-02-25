@@ -324,13 +324,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   private resolveUploadMimeType(entry: MediaEntry, uploaded: File): string {
-    if (uploaded.mimeType && uploaded.mimeType.length > 0) {
-      return uploaded.mimeType;
-    }
-    if (entry.media_type && entry.media_type.length > 0) {
-      return entry.media_type;
-    }
-    return DEFAULT_ATTACHMENT_MIME_TYPE;
+    return (
+      uploaded.mimeType || entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE
+    );
   }
 
   async getClient(): Promise<GoogleGenAI> {
@@ -463,7 +459,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const generationConfig: GenerateContentConfig = {
-      temperature: temperature,
+      temperature,
       maxOutputTokens: this.getEffectiveMaxOutputTokens(),
       ...(endTag && { stopSequences: [endTag] }),
     };
@@ -477,7 +473,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       };
     }
 
-    if (tools && tools.length > 0) {
+    if (tools?.length) {
       generationConfig.tools = toGoogleTools(tools);
     }
 
@@ -717,7 +713,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   ): Promise<Content[]> {
     const userContentParts: Part[] = [createPartFromText(userPrefix)];
 
-    if (mediaFiles && mediaFiles.length > 0 && this.supportsFileUploads()) {
+    if (mediaFiles?.length && this.supportsFileUploads()) {
       const formattedMedia = await this.createMediaMessage(mediaFiles);
       if (formattedMedia.length > 0) {
         const pluralSuffix = mediaFiles.length > 1 ? 's' : '';
@@ -746,7 +742,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   ): Promise<Content[]> {
     const roundParts: Part[] = [];
 
-    if (mediaFiles && mediaFiles.length > 0 && this.supportsFileUploads()) {
+    if (mediaFiles?.length && this.supportsFileUploads()) {
       const formattedMedia = await this.createMediaMessage(mediaFiles);
       if (formattedMedia.length > 0) {
         const pluralSuffix = mediaFiles.length > 1 ? 's' : '';
@@ -805,7 +801,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   override async createMediaMessage(
     mediaFiles: FileLocation[],
   ): Promise<Part[]> {
-    if (!mediaFiles || mediaFiles.length === 0 || !this.supportsFileUploads()) {
+    if (!mediaFiles?.length || !this.supportsFileUploads()) {
       return [];
     }
 
@@ -846,7 +842,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         );
         return {
           text: '',
-          usage: responseObject.usageMetadata || undefined,
+          usage: responseObject.usageMetadata ?? undefined,
           stopReason: `Blocked: ${blockReason}`,
         };
       }
@@ -1078,7 +1074,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, Content[]]> {
-    let endTurn = false;
     this.logger.debug(
       `Initializing output and prefill for ${outputLocation.absolutePath}. Prefill content: "${prefill.slice(0, 100)}..."`,
     );
@@ -1103,7 +1098,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
 
       this.logger.debug(`Added pseudo-prefill message: "${pseudoPrefillMsg}"`);
-      return [endTurn, messages];
+      return [false, messages];
     }
 
     this.logger.debug(
@@ -1126,8 +1121,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger.debug(
         'End tag detected in existing file content - skipping generation.',
       );
-      endTurn = true;
-      return [endTurn, messages];
+      return [true, messages];
     }
 
     this.logger.debug(
@@ -1138,7 +1132,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       workspaceState,
       agentSetting,
     );
-    return [endTurn, messages];
+    return [false, messages];
   }
 
   shouldContinue(
@@ -1238,11 +1232,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         return null;
       }
 
-      const mimeType =
-        typeof attachment.mimeType === 'string' &&
-        attachment.mimeType.length > 0
-          ? attachment.mimeType
-          : DEFAULT_ATTACHMENT_MIME_TYPE;
+      const mimeType = attachment.mimeType ?? DEFAULT_ATTACHMENT_MIME_TYPE;
 
       // Use SDK's native FunctionResponsePart for function response attachments
       return createFunctionResponsePartFromBase64(
@@ -1250,12 +1240,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         mimeType,
       );
     } catch (attachmentError) {
-      const message =
-        attachmentError instanceof Error
-          ? attachmentError.message
-          : String(attachmentError);
       this.logger.warn(
-        `Failed to encode attachment '${attachment.path}' for Google function response: ${message}`,
+        `Failed to encode attachment '${attachment.path}' for Google function response: ${getSdkErrorMessage(attachmentError)}`,
       );
       return null;
     }
