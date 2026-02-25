@@ -31,7 +31,7 @@ export function validateExecutionRequest(
   const parseResult = AgentConfigSchema.safeParse(request.config);
   if (!parseResult.success) {
     const issue = parseResult.error.issues[0];
-    const errorPath = issue?.path.join('.') || 'unknown';
+    const errorPath = issue?.path.join('.') ?? 'unknown';
     return {
       valid: false,
       message: `Invalid configuration (${errorPath}): ${issue?.message ?? 'validation failed'}`,

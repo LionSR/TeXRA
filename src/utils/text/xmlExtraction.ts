@@ -99,20 +99,14 @@ export function extractMultipleTextFromTag(
   const extractNamedDocuments = (
     content: string,
   ): Array<{ content: string; name: string }> => {
-    const results: Array<{ content: string; name: string }> = [];
     // Full extraction pattern - case-sensitive to match CDATA wrapping behavior
     const documentRegex =
       /<document[^>]*name="([^"]*)"[^>]*>(.*?)<\/document>/gs;
 
-    let documentMatch;
-    while ((documentMatch = documentRegex.exec(content)) !== null) {
-      const name = documentMatch[1] || 'unnamed';
-      // Use centralized CDATA removal
-      const docContent = removeCDATA(documentMatch[2] || '');
-      results.push({ name, content: docContent });
-    }
-
-    return results;
+    return [...content.matchAll(documentRegex)].map((match) => ({
+      name: match[1] ?? 'unnamed',
+      content: removeCDATA(match[2] ?? ''),
+    }));
   };
 
   // If containerTag is provided, try to extract content from within that container

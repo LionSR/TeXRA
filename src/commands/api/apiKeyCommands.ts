@@ -131,12 +131,12 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext): void {
           `${provider} API key has been removed`,
         );
         await refreshApiKeyUI();
-        const hasAnyKey = await SecretManager.anyApiKeyExists();
-        const bannerCommand = hasAnyKey
-          ? MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER
-          : MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER;
         const view = await getMainWebview();
-        view?.webview.postMessage({ command: bannerCommand });
+        view?.webview.postMessage({
+          command: (await SecretManager.anyApiKeyExists())
+            ? MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER
+            : MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
+        });
       } catch (err) {
         await showLoggedErrorMessage(
           CHANNEL,

@@ -64,12 +64,12 @@ export class SecretManager {
 
   public static async getApiKey(provider: ApiProvider): Promise<string> {
     const key = await this.lookupApiKey(provider);
-    if (key) {
-      return key;
+    if (!key) {
+      throw new Error(
+        `No API key found for ${provider}. Please set it using the "Set API Key" command or ${provider.toUpperCase()}_API_KEY environment variable.`,
+      );
     }
-    throw new Error(
-      `No API key found for ${provider}. Please set it using the "Set API Key" command or ${provider.toUpperCase()}_API_KEY environment variable.`,
-    );
+    return key;
   }
 
   public static async anyApiKeyExists(): Promise<boolean> {
@@ -92,16 +92,14 @@ export class SecretManager {
   public static async getApiProviderQuickPickItems(): Promise<
     ApiProviderQuickPickItem[]
   > {
-    const checks = this.API_PROVIDERS.map(async (provider) => ({
-      provider,
-      exists: await this.apiKeyExists(provider),
-    }));
-
-    const results = await Promise.all(checks);
-    return results.map(({ provider, exists }) => ({
-      label: provider,
-      description: exists ? 'key set' : 'not set',
-      provider,
-    }));
+    return Promise.all(
+      this.API_PROVIDERS.map(async (provider) => ({
+        label: provider,
+        description: (await this.apiKeyExists(provider))
+          ? 'key set'
+          : 'not set',
+        provider,
+      })),
+    );
   }
 }

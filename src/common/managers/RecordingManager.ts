@@ -41,12 +41,12 @@ export class RecordingManager {
       return this.commandConfig.buildRecordingMessage({ status, error });
     }
 
-    const command =
-      status === 'started'
-        ? this.commandConfig.recordingStartedCommand
-        : status === 'stopped'
-          ? this.commandConfig.recordingStoppedCommand
-          : this.commandConfig.recordingErrorCommand;
+    const commandMap = {
+      started: this.commandConfig.recordingStartedCommand,
+      stopped: this.commandConfig.recordingStoppedCommand,
+      error: this.commandConfig.recordingErrorCommand,
+    };
+    const command = commandMap[status];
     if (!command) return null;
 
     return error ? { command, error } : { command };

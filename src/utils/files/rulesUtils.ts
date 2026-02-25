@@ -21,10 +21,10 @@ export async function loadTexraRules(): Promise<string> {
     const workspacePath = WorkspaceFS.getPath();
 
     if (workspacePath && (await WorkspaceFS.exists(RULES_FILE))) {
-      const content = await WorkspaceFS.read(RULES_FILE);
-      if (content.trim()) {
+      const trimmed = (await WorkspaceFS.read(RULES_FILE)).trim();
+      if (trimmed) {
         logger.debug(CHANNEL, `Loaded workspace ${RULES_FILE}`);
-        return content.trim();
+        return trimmed;
       }
     }
 
@@ -32,10 +32,10 @@ export async function loadTexraRules(): Promise<string> {
     if (homeDir) {
       const homeFile = path.join(homeDir, RULES_FILE);
       if (await AbsoluteFS.exists(homeFile)) {
-        const content = await AbsoluteFS.read(homeFile);
-        if (content.trim()) {
+        const trimmed = (await AbsoluteFS.read(homeFile)).trim();
+        if (trimmed) {
           logger.debug(CHANNEL, `Loaded home ${RULES_FILE}`);
-          return content.trim();
+          return trimmed;
         }
       }
     }

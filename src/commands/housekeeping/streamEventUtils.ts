@@ -21,7 +21,7 @@ export function emitClearMissingOutputs(
   const { streamConfig, useMultipleOutputs, streamIdOverride } = options;
   bus.emit('clearMissingOutputs', {
     streamId:
-      streamIdOverride ||
+      streamIdOverride ??
       getStreamTabId(
         streamConfig.agent,
         streamConfig.model,
