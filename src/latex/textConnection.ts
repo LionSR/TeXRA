@@ -67,7 +67,7 @@ export async function bestConnectionMethod(
   try {
     const prompt = buildPrompt(str1, str2);
     const handler = new ModelHandlerOpenAI(MODEL_CONFIGS['gpt41']);
-    const baseURL = handler.getBaseUrl() || undefined;
+    const baseURL = handler.getBaseUrl() ?? undefined;
     const client = openaiApiKey
       ? new OpenAI({ apiKey: openaiApiKey, baseURL })
       : await handler.getClient();
@@ -111,7 +111,7 @@ export async function bestConnectionMethodAnthropic(
   try {
     const prompt = buildPrompt(str1, str2);
     const handler = new ModelHandlerAnthropic(MODEL_CONFIGS['sonnet37']);
-    const baseURL = handler.getBaseUrl() || undefined;
+    const baseURL = handler.getBaseUrl() ?? undefined;
     const client = anthropicApiKey
       ? new Anthropic({ apiKey: anthropicApiKey, baseURL })
       : await handler.getClient();
