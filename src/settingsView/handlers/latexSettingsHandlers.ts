@@ -152,9 +152,7 @@ export class LatexSettingsHandlers {
         });
       }
 
-      await this.ctx.withActiveWebview((w) =>
-        this.sendLatexSettingsStatus(w),
-      );
+      await this.ctx.withActiveWebview((w) => this.sendLatexSettingsStatus(w));
       const verb = data.reset ? 'reset' : 'applied';
       void vscode.window.showInformationMessage(
         data.field
@@ -205,9 +203,7 @@ export class LatexSettingsHandlers {
   private isRecommendedValueSet(
     field: 'outDir' | 'autoRevealExclude',
   ): boolean {
-    const setting = LATEX_RECOMMENDED_SETTINGS.find(
-      (s) => s.field === field,
-    );
+    const setting = LATEX_RECOMMENDED_SETTINGS.find((s) => s.field === field);
     if (!setting) return false;
     if (!isConfigExplicitlySet(setting.key)) return false;
 
