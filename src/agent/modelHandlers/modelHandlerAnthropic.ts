@@ -851,6 +851,33 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Note that there is no second consumption problem as per anthropic sdk examples
         response = await stream.finalMessage();
 
+        // Validate stream completeness: when a relay proxy gracefully closes the
+        // connection mid-thinking, the SDK's for-await loop ends normally and
+        // finalMessage() resolves with a partial response (stop_reason: null,
+        // no message_stop event). Detect this and throw a retryable error
+        // instead of silently returning truncated output.
+        if (!streamHandler.getDiagnostics().messageStopReceived) {
+          const diagnostics = streamHandler.getDiagnostics();
+          const truncatedError = new Error(
+            `Stream ended without message_stop after ${diagnostics.elapsedSecs}s ` +
+              `(${diagnostics.eventsProcessed} events, ` +
+              `${diagnostics.thinkingChars} thinking chars, ` +
+              `${diagnostics.textChars} text chars). ` +
+              `Likely relay timeout during extended streaming.`,
+          );
+          attachStreamDiagnostics(truncatedError, diagnostics);
+          this.logger.warn(
+            'Stream truncated: response received without message_stop',
+            {
+              data: {
+                model: this.config.fullName,
+                streamDiagnostics: diagnostics,
+              },
+            },
+          );
+          throw truncatedError;
+        }
+
         // Store thinking blocks for API conversation continuation
         this.processThinkingBlock(response);
       } catch (streamError) {
