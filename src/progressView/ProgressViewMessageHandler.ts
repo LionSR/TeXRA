@@ -154,8 +154,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: (data) =>
         this.handleDeleteStream(data),
       [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
-      [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: async (data) =>
-        vscode.commands.executeCommand('texra.stopAgent', data.stream),
+      [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: async (data) => {
+        // Clear pending retry requests so the UI panel is dismissed alongside the stop
+        retryCoordinator.clearRequest(data.stream);
+        await vscode.commands.executeCommand('texra.stopAgent', data.stream);
+      },
       [PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE]: async (data) =>
         vscode.commands.executeCommand('texra.compactResponse', data.stream),
 
@@ -352,8 +355,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Clear pending approvals, queued follow-ups, and YOLO state to prevent memory leaks
+    // Clear pending approvals, retry requests, queued follow-ups, and YOLO state
     cleanupApprovalsForStream(streamId);
+    retryCoordinator.clearRequest(streamId);
     ToolUseFollowUpQueue.release(streamId);
     this.modelOutputBackups.delete(streamId);
     this.provider.webviewBridge.clearStream(streamId);
@@ -394,9 +398,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Clear approvals, queued follow-ups, and YOLO state to prevent memory leaks
+    // Clear approvals, retry requests, queued follow-ups, and YOLO state
     cleanupAllApprovals();
     for (const streamId of this.provider.state.streamLogs.keys()) {
+      retryCoordinator.clearRequest(streamId);
       ToolUseFollowUpQueue.release(streamId);
     }
     this.modelOutputBackups.clear();

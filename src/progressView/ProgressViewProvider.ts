@@ -166,6 +166,7 @@ export class ProgressViewProvider
         showAgentProposal: (p) => this.agentProposalHandler.show(p),
         resolveAgentProposal: (id) => this.agentProposalHandler.resolve(id),
       },
+      (streamId) => this.hasPendingPermissionsForStream(streamId),
     );
 
     this.contentProvider = new ProgressViewContentProvider(context);
@@ -353,6 +354,19 @@ export class ProgressViewProvider
     proposalId: string,
   ): AgentProposalPermission | undefined {
     return this.agentProposalHandler.get(proposalId);
+  }
+
+  /**
+   * Check if a stream has any pending approval requests (tool-edit, bash,
+   * retry, or proposal) that require user interaction.
+   */
+  public hasPendingPermissionsForStream(streamId: string): boolean {
+    return (
+      this.retryRequestHandler.hasPendingForStream(streamId) ||
+      this.toolEditHandler.hasPendingForStream(streamId) ||
+      this.bashApprovalHandler.hasPendingForStream(streamId) ||
+      this.agentProposalHandler.hasPendingForStream(streamId)
+    );
   }
 
   private canSendToWebview(): boolean {

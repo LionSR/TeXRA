@@ -3,7 +3,7 @@
  * Eliminates duplication across tool edit, bash approval, retry, and proposal handlers.
  */
 export class ApprovalRequestHandler<
-  T extends Record<string, unknown>,
+  T extends { streamId: string },
   K extends keyof T,
 > {
   private readonly pending = new Map<string, T>();
@@ -34,5 +34,13 @@ export class ApprovalRequestHandler<
 
   get(id: string): T | undefined {
     return this.pending.get(id);
+  }
+
+  /** Check if any pending item is associated with the given stream. */
+  hasPendingForStream(streamId: string): boolean {
+    for (const item of this.pending.values()) {
+      if (!item.streamId || item.streamId === streamId) return true;
+    }
+    return false;
   }
 }
