@@ -14,7 +14,7 @@ import {
   PersistedFlow,
   flowKey,
   type FlowRecord,
-} from '@agent/node/persisted-flow';
+} from '@agent/node/persistedFlow';
 
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';

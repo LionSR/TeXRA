@@ -13,17 +13,8 @@ import type {
   OutputFileSummary,
 } from '@agent/runtime/AgentFlowResult';
 import type { ExecResult } from '@agent/types/ResultTypes';
-import type { SubagentProgressUpdate } from '@shared/schemas';
 import { formatDuration } from '@utils/core';
-
-// Re-export progress types from their canonical location in @shared/schemas
-export type {
-  TodoProgressUpdate,
-  RoundProgressUpdate,
-  OverviewProgressUpdate,
-  StartedProgressUpdate,
-  SubagentProgressUpdate,
-} from '@shared/schemas';
+import type { SubagentProgressUpdate } from '@shared/schemas';
 
 // ============================================================================
 // Formatting helpers
