@@ -346,6 +346,15 @@ export class AgentWorkspaceState {
     );
   }
 
+  /**
+   * Create an empty snapshot without instantiating a full class.
+   * Use at initialization sites that only need the serializable shape
+   * (e.g., constructing initial ReflectionFlowShared).
+   */
+  static emptySnapshot(): AgentWorkspaceSnapshot {
+    return AgentWorkspaceStateSnapshotSchema.parse({});
+  }
+
   static fromSnapshot(snapshot: unknown): AgentWorkspaceState {
     const parsed = AgentWorkspaceStateSnapshotSchema.parse(snapshot);
     return new AgentWorkspaceState(
