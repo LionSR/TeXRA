@@ -35,7 +35,6 @@ import {
   deleteExecution,
   deleteAllExecutions,
 } from '@agent/storage';
-import { selectAgentInMainView } from '@frontend/agents/remoteAgentUtils';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
 import { getHelperModelName } from '@agent/runtime/helperModel';
@@ -51,6 +50,7 @@ import {
   workspaceSM,
 } from '@common/state';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
+import { selectAgentInMainView } from '@frontend/agents/remoteAgentUtils';
 import {
   DEFAULT_MODELS,
   formatContext,
