@@ -854,8 +854,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Validate stream completeness: when a relay proxy gracefully closes the
         // connection mid-thinking, the SDK's for-await loop ends normally and
         // finalMessage() resolves with a partial response (stop_reason: null,
-        // no message_stop event). Detect this and throw a retryable error
-        // instead of silently returning truncated output.
+        // no message_stop event). Detect this and throw instead of silently
+        // returning truncated output. Retryability is determined downstream
+        // based on elapsed time (long streams = relay wall clock limit, not transient).
         if (!streamHandler.getDiagnostics().messageStopReceived) {
           const diagnostics = streamHandler.getDiagnostics();
           const truncatedError = new Error(

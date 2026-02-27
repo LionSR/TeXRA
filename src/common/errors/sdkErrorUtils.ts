@@ -416,11 +416,20 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
 
   if (!statusCode) {
-    // Unrecognized errors without status codes are likely network errors - retry
+    // Unrecognized errors without status codes are likely network errors - retry.
+    // Exception: if stream diagnostics show a long-running stream that received
+    // substantial data before truncation, this is likely a relay wall clock timeout
+    // (Supabase Edge Functions cap at ~400s). Retrying will just burn the same
+    // tokens and hit the same wall, so mark non-retryable.
+    const isLikelyRelayTimeout =
+      streamDiagnostics &&
+      streamDiagnostics.elapsedSecs >= 120 &&
+      streamDiagnostics.eventsProcessed > 0;
+
     return {
       message: finalMessage,
       provider,
-      retryable: true,
+      retryable: !isLikelyRelayTimeout,
       isRelayError: isRelay,
       requestId,
       rawErrorBody,
