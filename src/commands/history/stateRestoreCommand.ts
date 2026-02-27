@@ -3,7 +3,8 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { showLoggedErrorMessage } from '@common/errors';
-import { setPendingState, buildMainViewState } from '@common/state';
+import { setPendingState } from '@common/state';
+import { buildMainViewState } from '@frontend/mainViewStateUtils';
 import { COMMON_COMMANDS } from '@common/webview/commands';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';

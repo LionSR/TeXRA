@@ -69,6 +69,8 @@ import { agentConfigToTaskState } from '@utils/config/configConversion';
 import {
   getToolUseMemoryEnabled,
   setToolUseMemoryEnabled,
+} from '@utils/config/constants';
+import {
   getGlobalStreaming,
   setGlobalStreaming,
   getProviderStreaming,
@@ -76,7 +78,7 @@ import {
   getProviderEndpoint,
   setProviderEndpoint,
   supportsCustomEndpoint,
-} from '@utils/config/constants';
+} from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import { loadMemoryItems } from './utils/memoryFileSystem';

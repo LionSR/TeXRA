@@ -21,7 +21,7 @@ import {
 import {
   validateExecutionRequest,
   type ExecutionRequest,
-} from '@common/execution/executionRequests';
+} from '@agent/core/executionRequests';
 import { RecordingManager } from '@common/managers/RecordingManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';

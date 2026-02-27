@@ -12,9 +12,6 @@ import * as logger from '@logger/logUtils';
 const CHANNEL = 'ApiKeyCommands';
 logger.initialize(CHANNEL);
 
-// Re-export for backward compatibility
-export { PROVIDER_URLS };
-
 export const apiKeyCommands = {
   setApiKey: 'texra.setApiKey',
   removeApiKey: 'texra.removeApiKey',

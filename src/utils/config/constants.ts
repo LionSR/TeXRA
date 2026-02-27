@@ -37,13 +37,6 @@ export const SHORT_SLEEP_MS = 50;
 export const REFRESH_THRESHOLD_MS = 200;
 export const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
-// LaTeX timing constants moved to @shared/constants/latex
-export {
-  DIFF_REGISTRATION_DELAY_MS,
-  LATEX_VIEWER_OPEN_DELAY_MS,
-  LATEX_VIEWER_REFRESH_DELAY_MS,
-} from '@shared/constants/latex';
-
 // Debounce delay constants for UI responsiveness
 export const DEBOUNCE_WATCHER_MS = 200; // File system watchers (fast response)
 export const DEBOUNCE_OPTIONS_MS = 300; // Dropdown options refresh
@@ -89,17 +82,6 @@ export function getToolUseMemoryEnabled(): boolean {
 export async function setToolUseMemoryEnabled(enabled: boolean): Promise<void> {
   await globalSM?.update(GlobalStateKey.MEMORY_ENABLED, enabled);
 }
-
-// Provider streaming/endpoint config moved to providerConfig.ts
-export {
-  getGlobalStreaming,
-  setGlobalStreaming,
-  getProviderStreaming,
-  setProviderStreaming,
-  getProviderEndpoint,
-  setProviderEndpoint,
-  supportsCustomEndpoint,
-} from './providerConfig';
 
 /** Get the maximum number of automatic retry attempts for model calls. */
 export function getModelRetryMaxAttempts(): number {
