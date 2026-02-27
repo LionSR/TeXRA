@@ -23,17 +23,14 @@ export interface WolframScriptResult {
 /**
  * Internal helper to run wolframscript commands with installation check.
  * @param commandArgs Array of command-line arguments to pass to wolframscript (e.g., ['-code', 'expr'] or ['-file', 'path'])
- * @param opts Execution options including timeout and error display settings
+ * @param timeout Execution timeout in milliseconds
  * @returns Promise resolving to execution result with success status, output, and error information
  */
 async function runWolfram(
   commandArgs: string[],
-  opts: { timeout?: number; showErrorsToUser?: boolean } = {},
+  timeout?: number,
 ): Promise<WolframScriptResult> {
-  const isInstalled = await checkToolInstalled(
-    'wolframscript',
-    opts.showErrorsToUser,
-  );
+  const isInstalled = await checkToolInstalled('wolframscript', false);
   if (!isInstalled) {
     return {
       success: false,
@@ -48,7 +45,7 @@ async function runWolfram(
     const command = ['wolframscript', ...commandArgs];
     const result = await executeCommand(command, {
       truncate: false,
-      timeout: opts.timeout,
+      timeout,
       channel: WOLFRAM_CHANNEL,
     });
 
@@ -73,39 +70,28 @@ async function runWolfram(
 }
 
 /**
- * Execute Wolfram Language code through wolframscript
+ * Execute Wolfram Language code through wolframscript.
  * @param code The Wolfram Language code to execute
- * @param options Additional options for execution
- * @returns A promise that resolves to the execution result
+ * @param options.timeout Execution timeout in milliseconds (default: 30 s)
  */
 export async function executeWolframCode(
   code: string,
-  options: {
-    timeout?: number;
-    showErrorsToUser?: boolean;
-  } = {},
+  options: { timeout?: number } = {},
 ): Promise<WolframScriptResult> {
-  return runWolfram(['-code', code], {
-    timeout: options.timeout ?? WOLFRAM_CODE_TIMEOUT_MS,
-    showErrorsToUser: options.showErrorsToUser,
-  });
+  return runWolfram(['-code', code], options.timeout ?? WOLFRAM_CODE_TIMEOUT_MS);
 }
 
 /**
- * Execute a Wolfram Language script file
+ * Execute a Wolfram Language script file.
  * @param filePath Path to the Wolfram Language script file
- * @param options Additional options for execution
- * @returns A promise that resolves to the execution result
+ * @param options.timeout Execution timeout in milliseconds (default: 60 s)
  */
 export async function executeWolframScriptFile(
   filePath: string,
-  options: {
-    timeout?: number;
-    showErrorsToUser?: boolean;
-  } = {},
+  options: { timeout?: number } = {},
 ): Promise<WolframScriptResult> {
-  return runWolfram(['-file', filePath], {
-    timeout: options.timeout ?? WOLFRAM_FILE_TIMEOUT_MS,
-    showErrorsToUser: options.showErrorsToUser,
-  });
+  return runWolfram(
+    ['-file', filePath],
+    options.timeout ?? WOLFRAM_FILE_TIMEOUT_MS,
+  );
 }
