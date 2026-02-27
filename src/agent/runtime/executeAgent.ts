@@ -51,11 +51,8 @@ import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { normalizeRunId } from '@common/constants/runIds';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
-import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { getMainWebview } from '@frontend/system/commandUtils';
 import {
   AgentLogger,
   AgentUsageReporter,
@@ -78,7 +75,7 @@ import {
   AgentExecutionHandle,
 } from './executionRegistry';
 import type { AgentFlowResult, OutputFileSummary } from './AgentFlowResult';
-import type { SubagentProgressUpdate } from '@tools/subagentResults';
+import type { SubagentProgressUpdate } from '@shared/schemas';
 import { generateSessionDescription } from './sessionDescription';
 
 const CHANNEL = 'executeAgent';
@@ -120,30 +117,21 @@ export async function getAgentPath(
   const result = resolveAgent(agentIdentifier, options?.preferMultiple);
   if (result) return result;
 
-  const view = await getMainWebview(CHANNEL);
-  view?.webview.postMessage({
-    command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
-    agentName: agentIdentifier,
-    customDirSet: true,
-  });
+  bus.emit('showAgentConfigBanner', { agentName: agentIdentifier });
   throw new Error(`Could not find agent: ${agentIdentifier}`);
 }
 
 async function validateAndGetModelConfig(modelName: string): Promise<void> {
   if (modelName in MODEL_CONFIGS) return;
 
-  await showInstructionWithSuppress(
-    'modelNotRecognized',
-    `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
-    [
-      {
-        title: 'Model Documentation',
-        callback: () =>
-          void vscode.commands.executeCommand('texra.openDoc', 'models'),
-      },
+  bus.emit('requestShowInstruction', {
+    key: 'modelNotRecognized',
+    message: `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
+    actions: [
+      { title: 'Model Documentation', command: 'texra.openDoc', args: ['models'] },
     ],
-    false,
-  );
+    showSuppress: false,
+  });
   throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
 }
 
@@ -429,7 +417,7 @@ async function runFlowWithLifecycle(
         msg.includes('Missing API key') ||
         msg.includes('API key not found')
       ) {
-        await showApiKeyErrorNotification();
+        showApiKeyErrorNotification();
       } else {
         vscode.window.showErrorMessage(errorMsg);
       }
@@ -465,23 +453,16 @@ async function showAgentNotification(config: AgentConfig): Promise<void> {
   }
 }
 
-async function showApiKeyErrorNotification(): Promise<void> {
-  await showInstructionWithSuppress(
-    'missingApiKey',
-    'API key not found. Set your API key in the extension settings and run again.',
-    [
-      {
-        title: 'Set API Key',
-        callback: () => void vscode.commands.executeCommand('texra.setApiKey'),
-      },
-      {
-        title: 'Open Settings Guide',
-        callback: () =>
-          void vscode.commands.executeCommand('texra.openDoc', 'configuration'),
-      },
+function showApiKeyErrorNotification(): void {
+  bus.emit('requestShowInstruction', {
+    key: 'missingApiKey',
+    message: 'API key not found. Set your API key in the extension settings and run again.',
+    actions: [
+      { title: 'Set API Key', command: 'texra.setApiKey' },
+      { title: 'Open Settings Guide', command: 'texra.openDoc', args: ['configuration'] },
     ],
-    false,
-  );
+    showSuppress: false,
+  });
 }
 
 // ============================================================================
