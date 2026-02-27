@@ -20,6 +20,7 @@ import {
   type WorkflowAgentProposal,
   type ToolUseAgentProposal,
   type StreamTabId,
+  type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { getExecutionStore, registerExecution } from '@agent/storage';
 import { getAgent, getVisibleAgents } from '@agent/index/agentRegistry';
@@ -62,7 +63,6 @@ import {
   formatSubagentError,
   formatSubagentProgress,
   formatFollowUpInstruction,
-  type SubagentProgressUpdate,
 } from '@tools/subagentResults';
 import { defineTool } from '@tools/core/define';
 

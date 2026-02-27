@@ -25,8 +25,7 @@ import type { ExecutionKVStore } from '@agent/storage';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
 import { BaseNode } from './index';
-import { PersistedFlow } from './persisted-flow';
-import { isRoundAtOrBeyondLimit } from './round-bounds';
+import { PersistedFlow } from './persistedFlow';
 
 // ============================================================================
 // Round-Aware State Interface
@@ -207,7 +206,7 @@ export class RoundPersistedFlow<
       !shared.lastError &&
       !this.callbacks.checkInterruption?.() &&
       shared.continueRounds &&
-      !isRoundAtOrBeyondLimit(shared.currentRound + 1, shared.totalRounds)
+      shared.currentRound + 1 < shared.totalRounds
     );
   }
 
