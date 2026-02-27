@@ -85,6 +85,15 @@ const RELAY_VERSION = '1.8.2';
 // Upstream request timeout (390s to fit within Supabase's 400s wall clock limit)
 const UPSTREAM_TIMEOUT_MS = 390000;
 
+/**
+ * Interval for SSE keepalive comments during streaming (30 seconds).
+ * Intermediate proxies (Cloudflare, CDN) may drop idle connections after ~100s.
+ * Extended thinking can have long pauses between events. Periodic keepalive
+ * comments (`: keepalive\n\n`) are ignored by SSE parsers but keep the
+ * connection alive through proxy idle timeouts.
+ */
+const SSE_KEEPALIVE_INTERVAL_MS = 30_000;
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -154,6 +163,46 @@ const PROVIDER_CONFIGS: Record<ProviderKey, ProviderConfig> = {
 
 function getProviderConfig(provider: string): ProviderConfig | null {
   return PROVIDER_CONFIGS[provider as ProviderKey] || null;
+}
+
+/**
+ * Wraps an SSE response body stream to inject periodic keepalive comments.
+ * This prevents intermediate proxies (Cloudflare, load balancers) from dropping
+ * idle connections during long AI thinking pauses.
+ *
+ * SSE keepalive comments (`: keepalive\n\n`) are valid SSE and ignored by parsers.
+ */
+function wrapWithKeepalive(body: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const keepaliveBytes = encoder.encode(': keepalive\n\n');
+  let keepaliveTimer: ReturnType<typeof setInterval> | undefined;
+  const reader = body.getReader();
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      keepaliveTimer = setInterval(() => {
+        try {
+          controller.enqueue(keepaliveBytes);
+        } catch {
+          // Stream already closed — clean up
+          clearInterval(keepaliveTimer);
+        }
+      }, SSE_KEEPALIVE_INTERVAL_MS);
+    },
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) {
+        clearInterval(keepaliveTimer);
+        controller.close();
+        return;
+      }
+      controller.enqueue(value);
+    },
+    cancel() {
+      clearInterval(keepaliveTimer);
+      reader.cancel();
+    },
+  });
 }
 
 function getEnabledProviders(): string[] {
@@ -695,7 +744,16 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
   responseHeaders.set('X-Accel-Buffering', 'no');
 
-  return new Response(upstreamResponse.body, {
+  // For SSE streaming responses, inject periodic keepalive comments to prevent
+  // intermediate proxies from dropping idle connections during long thinking pauses.
+  const contentType = upstreamResponse.headers.get('content-type') ?? '';
+  const isSSE = contentType.includes('text/event-stream');
+  const responseBody =
+    isSSE && upstreamResponse.body
+      ? wrapWithKeepalive(upstreamResponse.body)
+      : upstreamResponse.body;
+
+  return new Response(responseBody, {
     status: upstreamResponse.status,
     headers: responseHeaders,
   });
