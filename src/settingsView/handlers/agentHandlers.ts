@@ -31,7 +31,12 @@ import {
 } from '@agent/index';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
 import { showLoggedErrorMessage } from '@common/errors';
-import { WorkspaceStateKey, GlobalStateKey, workspaceSM, globalSM } from '@common/state';
+import {
+  WorkspaceStateKey,
+  GlobalStateKey,
+  workspaceSM,
+  globalSM,
+} from '@common/state';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { AbsoluteFS } from '@utils/files';
 

@@ -229,7 +229,7 @@ export async function runReflectionFlow<C = unknown>(
       shared = {
         currentRound: 0,
         totalRounds,
-        workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+        workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
         context: null,
         outputLocation: null,
         conversation: [],
@@ -267,7 +267,7 @@ export async function runReflectionFlow<C = unknown>(
           usageMonitor?.setActiveGroupId(stage.id);
         },
         resetForNextRound: (s) => {
-          s.workspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
+          s.workspaceSnapshot = AgentWorkspaceState.emptySnapshot();
         },
         checkInterruption,
         onRoundCompleted: (roundIndex, s) => {
