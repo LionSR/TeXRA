@@ -4,14 +4,16 @@
  * Provides the minimal surface that handler implementations need
  * from the main SettingsViewMessageHandler.
  */
+import type { LogUtilsOptions } from '@logger/logOptions';
+
 import type * as vscode from 'vscode';
 
 export interface SettingsHandlerContext {
   readonly channel: string;
   readonly logger: {
-    warn: (channel: string, msg: string) => void;
-    error: (channel: string, msg: string, data?: unknown) => void;
-    debug: (channel: string, msg: string, data?: { data?: unknown }) => void;
+    warn: (channel: string, msg: string, options?: LogUtilsOptions) => void;
+    error: (channel: string, msg: string, options?: LogUtilsOptions) => void;
+    debug: (channel: string, msg: string, options?: LogUtilsOptions) => void;
   };
   /** Run a callback with the active webview, if available. */
   withActiveWebview: (
