@@ -12,8 +12,6 @@ import {
 } from '@agent/output/roundSummary';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { toErrorMessage } from '@common/errors';
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -211,11 +209,7 @@ export class OutputNode<C = unknown> extends Node<
 
     // Open files that haven't been opened yet
     for (const location of summary.filesToOpen) {
-      await tryOperation(
-        `Open file ${location.absolutePath}`,
-        () => openBuildDisplayIfTex(location, { preserveFocus: true }),
-        logger,
-      );
+      bus.emit('requestOpenFile', { location, preserveFocus: true });
     }
 
     // Validate expected outputs if turn ended
@@ -238,10 +232,10 @@ export class OutputNode<C = unknown> extends Node<
           });
 
           if (validationResult.missing.length > 0) {
-            await showInstructionWithSuppress(
-              'missingOutputsInfo',
-              'Missing output files detected',
-            );
+            bus.emit('requestShowInstruction', {
+              key: 'missingOutputsInfo',
+              message: 'Missing output files detected',
+            });
           }
         },
         logger,
