@@ -18,7 +18,7 @@ import {
 } from '@shared/schemas';
 import { getExecutionStore } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
-import { flowKey, type FlowRecord } from '@agent/node/persisted-flow';
+import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
 import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/AgentWorkspaceState';
 import { UserVariableChannelsSchema } from '@agent/core/AgentCycleOptions';

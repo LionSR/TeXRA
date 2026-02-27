@@ -13,44 +13,8 @@ import type {
   OutputFileSummary,
 } from '@agent/runtime/AgentFlowResult';
 import type { ExecResult } from '@agent/types/ResultTypes';
-import type { TodoItem } from '@shared/schemas';
 import { formatDuration } from '@utils/core';
-
-// ============================================================================
-// Subagent progress types (typed internally, formatted to XML at boundary)
-// ============================================================================
-
-/** Todo state changed in a tool-use subagent. */
-export interface TodoProgressUpdate {
-  readonly kind: 'todos';
-  readonly todos: TodoItem[];
-}
-
-/** Workflow round completed. */
-export interface RoundProgressUpdate {
-  readonly kind: 'round';
-  readonly currentRound: number;
-  readonly totalRounds: number;
-}
-
-/** Periodic overview of tool-use subagent activity. */
-export interface OverviewProgressUpdate {
-  readonly kind: 'overview';
-  readonly toolCallCount: number;
-  readonly filesChanged: string[];
-  readonly cost?: number;
-}
-
-/** Subagent has finished initialization and is about to call the model. */
-export interface StartedProgressUpdate {
-  readonly kind: 'started';
-}
-
-export type SubagentProgressUpdate =
-  | TodoProgressUpdate
-  | RoundProgressUpdate
-  | OverviewProgressUpdate
-  | StartedProgressUpdate;
+import type { SubagentProgressUpdate } from '@shared/schemas';
 
 // ============================================================================
 // Formatting helpers
