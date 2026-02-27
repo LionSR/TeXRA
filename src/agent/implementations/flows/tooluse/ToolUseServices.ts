@@ -2,7 +2,7 @@ import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ToolDefinition } from '@model';
-import type { SubagentProgressUpdate } from '@tools/subagentResults';
+import type { SubagentProgressUpdate } from '@shared/schemas';
 import type {
   BaseFlowContextInit,
   FlowParams,

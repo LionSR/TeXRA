@@ -5,7 +5,7 @@
  * mid-session. These streams can be resumed when the user sends a follow-up.
  */
 
-import { flowKey, type FlowRecord } from '@agent/node/persisted-flow';
+import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { getExecutionStore } from './ExecutionKVStore';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
