@@ -8,6 +8,7 @@ import type {
   BashPermission,
   ConversationProgress,
   ExecutionId,
+  FileLocation,
   OutputFileInfo,
   RetryPermission,
   StorageKey,
@@ -97,6 +98,28 @@ export interface ProgressEventPayloads {
     parentStreamId: StreamTabId;
   };
   extensionDeactivating: undefined;
+
+  // ── Frontend-bound events ──
+  // Emitted by agent core/runtime; consumed by frontend listeners.
+  // Keeps @agent/ free of @frontend/ imports.
+
+  /** Request the frontend to open a file (and build+display if LaTeX). */
+  requestOpenFile: {
+    location: FileLocation;
+    preserveFocus: boolean;
+  };
+  /** Request the frontend to show a suppressible instruction message. */
+  requestShowInstruction: {
+    key: string;
+    message: string;
+    /** Actions rendered as buttons. Each maps to a VS Code command. */
+    actions?: { title: string; command: string; args?: unknown[] }[];
+    showSuppress?: boolean;
+  };
+  /** Request the frontend to show the agent-config banner in the main webview. */
+  showAgentConfigBanner: {
+    agentName: string;
+  };
 }
 
 export type ProgressEvent = keyof ProgressEventPayloads;

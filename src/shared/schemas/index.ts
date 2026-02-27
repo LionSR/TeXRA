@@ -19,6 +19,7 @@ export * from './output';
 export * from './log';
 export * from './taskGroup';
 export * from './todo';
+export * from './subagentProgress';
 export * from './prompts';
 export * from './diffResult';
 

@@ -38,7 +38,7 @@ import {
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
-import type { SubagentProgressUpdate } from '@tools/subagentResults';
+import type { SubagentProgressUpdate } from '@shared/schemas';
 
 export interface RunToolUseFlowInput<
   C = unknown,
