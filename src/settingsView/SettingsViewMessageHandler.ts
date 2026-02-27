@@ -274,9 +274,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       withActiveWebview: (fn) => this.withActiveWebview(fn),
     };
 
-    this.agentHandlers = new AgentHandlers(
-      ctx,
-      () => this.refreshAfterAgentMutation(),
+    this.agentHandlers = new AgentHandlers(ctx, () =>
+      this.refreshAfterAgentMutation(),
     );
     this.latexHandlers = new LatexSettingsHandlers(ctx);
 
@@ -383,9 +382,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       // Custom agent directory
       [SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR]: () =>
-        this.withActiveWebview((w) =>
-          this.agentHandlers.sendCustomAgentDir(w),
-        ),
+        this.withActiveWebview((w) => this.agentHandlers.sendCustomAgentDir(w)),
       [SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR]: () =>
         this.agentHandlers.handleSetCustomAgentDir(),
       [SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR]: () =>
@@ -812,9 +809,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     try {
       await deleteAllExecutions(new Set(getActiveExecutionIds()));
       await vscode.window.showInformationMessage('Agent history cleared');
-      await this.withActiveWebview((w) =>
-        w.postMessage({ command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED }),
-      );
+      await this.withActiveWebview(async (w) => {
+        await w.postMessage({
+          command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
+        });
+      });
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
