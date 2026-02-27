@@ -79,11 +79,11 @@ export function resetListingState(): void {
  */
 export async function listExecutions(): Promise<ExecutionListingEntry[]> {
   // Invalidate if workspace changed since last cache build
-  const currentUri = getWorkspacePath();
-  if (currentUri !== cachedWorkspacePath) {
+  const currentPath = getWorkspacePath();
+  if (currentPath !== cachedWorkspacePath) {
     cache = null;
     migrated = false;
-    cachedWorkspacePath = currentUri;
+    cachedWorkspacePath = currentPath;
   }
 
   if (cache) return cache;

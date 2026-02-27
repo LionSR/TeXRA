@@ -24,7 +24,7 @@ export interface LatexPreviewEntry {
   workspaceTempCleanup: Array<() => Promise<void>>;
   latexOperationInProgress: boolean;
   /** Platform-specific error reporter, injected by the caller. */
-  onError?: (message: string) => void;
+  onError: (message: string) => void;
 }
 
 /** Temp file location options */
@@ -77,7 +77,7 @@ async function withLatexOperation(
     await operation();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    entry.onError?.(`${operationName} failed: ${message}`);
+    entry.onError(`${operationName} failed: ${message}`);
   } finally {
     entry.latexOperationInProgress = false;
   }
@@ -201,7 +201,7 @@ export async function runLatexdiff(
     );
 
     if (!result.success || !result.diffFileName) {
-      entry.onError?.(result.message ?? 'Failed to generate LaTeXdiff');
+      entry.onError(result.message ?? 'Failed to generate LaTeXdiff');
       return;
     }
 
@@ -211,7 +211,7 @@ export async function runLatexdiff(
       result.diffFileName.includes('\\') ||
       result.diffFileName.includes('..')
     ) {
-      entry.onError?.('LaTeXdiff failed: invalid output filename');
+      entry.onError('LaTeXdiff failed: invalid output filename');
       return;
     }
 
