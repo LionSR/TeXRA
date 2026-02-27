@@ -128,7 +128,11 @@ async function validateAndGetModelConfig(modelName: string): Promise<void> {
     key: 'modelNotRecognized',
     message: `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
     actions: [
-      { title: 'Model Documentation', command: 'texra.openDoc', args: ['models'] },
+      {
+        title: 'Model Documentation',
+        command: 'texra.openDoc',
+        args: ['models'],
+      },
     ],
     showSuppress: false,
   });
@@ -456,10 +460,15 @@ async function showAgentNotification(config: AgentConfig): Promise<void> {
 function showApiKeyErrorNotification(): void {
   bus.emit('requestShowInstruction', {
     key: 'missingApiKey',
-    message: 'API key not found. Set your API key in the extension settings and run again.',
+    message:
+      'API key not found. Set your API key in the extension settings and run again.',
     actions: [
       { title: 'Set API Key', command: 'texra.setApiKey' },
-      { title: 'Open Settings Guide', command: 'texra.openDoc', args: ['configuration'] },
+      {
+        title: 'Open Settings Guide',
+        command: 'texra.openDoc',
+        args: ['configuration'],
+      },
     ],
     showSuppress: false,
   });
