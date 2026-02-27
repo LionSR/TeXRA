@@ -865,7 +865,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     }
 
     const stats = await StorageFS.stat(fullPath);
-    if (stats.isDirectory(type)) {
+    if (isDirectory(stats.type)) {
       throw new ToolError(
         `Path is a directory: /executions/${executionId}/files/${filePath}. Use without trailing path to list.`,
       );

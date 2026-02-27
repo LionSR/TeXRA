@@ -35,7 +35,7 @@ import {
   deleteExecution,
   deleteAllExecutions,
 } from '@agent/storage';
-import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
+import { selectAgentInMainView } from '@frontend/agents/remoteAgentUtils';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
 import { getHelperModelName } from '@agent/runtime/helperModel';
