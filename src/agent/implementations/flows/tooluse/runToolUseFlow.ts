@@ -14,7 +14,7 @@ import {
   PersistedFlow,
   flowKey,
   type FlowRecord,
-} from '@agent/node/persisted-flow';
+} from '@agent/node/persistedFlow';
 
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
@@ -38,7 +38,7 @@ import {
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
-import type { SubagentProgressUpdate } from '@tools/subagentResults';
+import type { SubagentProgressUpdate } from '@shared/schemas';
 
 export interface RunToolUseFlowInput<
   C = unknown,

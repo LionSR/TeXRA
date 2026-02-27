@@ -32,6 +32,7 @@ import { FileLister } from '@frontend/files';
 import { agentDirectories } from '@frontend/agents';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { registerAgentEventListeners } from '@frontend/events/agentEventListeners';
 import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
 import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
@@ -280,7 +281,11 @@ export async function activate(context: vscode.ExtensionContext) {
     await vscode.commands.executeCommand('texra.mainView.focus');
   };
 
+  // Bridge agent core/runtime events to frontend UI operations
+  const agentEventDisposable = registerAgentEventListeners();
+
   context.subscriptions.push(
+    agentEventDisposable,
     { dispose: disposeStatusListener },
     statusBarItem,
     vscode.commands.registerCommand('texra.showMainView', showMainView),
