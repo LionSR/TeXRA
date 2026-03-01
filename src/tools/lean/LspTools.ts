@@ -1,18 +1,13 @@
-import * as vscode from 'vscode';
 import { z } from 'zod';
 
 import { toErrorMessage } from '@common/errors';
-import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import {
-  waitForDiagnosticsChange,
   countBySeverity,
   formatCounts,
   formatGroupedSections,
-  DiagnosticSeverity,
 } from '@frontend/vscode/vscodeDiagnostics';
 import { ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
-import { WorkspaceFS } from '@utils/files';
 import * as vscodeIntegration from './VscodeIntegration';
 
 const LeanDiagnosticsInputSchema = z.strictObject({
@@ -160,19 +155,6 @@ If you expected errors:
 2. Make sure the file is saved
 3. Try \`lean_file\` with command "restart" to refresh the Lean server`;
 
-/** Navigate editor to first error location if present. */
-async function navigateToFirstError(
-  filePath: string,
-  diagnostics: vscode.Diagnostic[],
-): Promise<void> {
-  const firstError = diagnostics.find(
-    (d) => d.severity === DiagnosticSeverity.Error,
-  );
-  if (firstError) {
-    await openFileInEditor(filePath, firstError.range.start.line + 1);
-  }
-}
-
 export class LeanDiagnosticsTool extends defineTool({
   name: 'lean_diagnostics',
   description: `Get diagnostic messages (errors, warnings, info) for a Lean 4 file.
@@ -196,7 +178,8 @@ Tips:
     const { command, file } = input;
 
     try {
-      const diagnostics = await this.fetchDiagnostics(file);
+      const diagnostics =
+        await vscodeIntegration.fetchDiagnosticsForFile(file);
       if (!diagnostics) {
         return {
           summary: 'Failed to open file',
@@ -205,7 +188,7 @@ Tips:
         };
       }
 
-      await navigateToFirstError(file, diagnostics);
+      await vscodeIntegration.navigateToFirstError(file, diagnostics);
 
       const counts = countBySeverity(diagnostics);
       const countsStr = formatCounts(counts);
@@ -236,20 +219,6 @@ Tips:
         isError: true,
       };
     }
-  }
-
-  /** Open file and wait for diagnostics to be published. */
-  private async fetchDiagnostics(
-    file: string,
-  ): Promise<vscode.Diagnostic[] | null> {
-    const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(file));
-    const diagnosticsWait = waitForDiagnosticsChange(uri, 10000);
-
-    const openedPath = await openFileInEditor(file);
-    if (!openedPath) return null;
-
-    await diagnosticsWait;
-    return vscodeIntegration.getDiagnostics(openedPath);
   }
 }
 
@@ -324,7 +293,7 @@ Requires: Lean 4 VS Code extension installed.`,
     const config = PROJECT_COMMAND_CONFIG[command];
 
     try {
-      await vscode.commands.executeCommand(config.vscode);
+      await vscodeIntegration.executeGlobalCommand(config.vscode);
 
       if (command === 'build') {
         return {

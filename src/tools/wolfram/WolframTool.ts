@@ -34,7 +34,6 @@ export class WolframTool extends defineTool({
     const effectiveTimeout = input.timeout ?? WOLFRAM_CODE_TIMEOUT_MS;
     const result = await executeWolframCode(input.code, {
       timeout: effectiveTimeout,
-      showErrorsToUser: false,
     });
     if (result.success) {
       return {

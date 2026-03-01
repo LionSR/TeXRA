@@ -2,7 +2,6 @@
 import { z } from 'zod';
 
 // Type imports
-import type { Diagnostic } from 'vscode';
 import type { ZodIssue } from 'zod';
 
 // ============================================================================
@@ -149,7 +148,8 @@ export interface DiagnosticsPayload {
   path: string;
   command: 'list' | 'count';
   severity: Record<string, number>;
-  messages?: Diagnostic[];
+  /** Diagnostic messages from the linter (platform-specific type at runtime). */
+  messages?: unknown[];
 }
 
 /**
