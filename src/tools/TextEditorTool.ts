@@ -2,10 +2,10 @@
 import * as path from 'path';
 
 // Third-party imports
-import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - tool definitions
+import { isDirectory } from '@common/files/fsEntryType';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
@@ -170,7 +170,7 @@ export class TextEditorTool extends defineTool({
     if (exists) {
       try {
         const stats = await AbsoluteFS.stat(WorkspaceFS.fullPath(filePath));
-        if (stats.type === vscode.FileType.Directory && command !== 'view') {
+        if (isDirectory(stats.type) && command !== 'view') {
           throw new ToolError(
             `The path ${filePath} is a directory and only the 'view' command can be used on directories`,
           );
@@ -188,7 +188,7 @@ export class TextEditorTool extends defineTool({
     try {
       const stats = await AbsoluteFS.stat(WorkspaceFS.fullPath(filePath));
 
-      if (stats.type === vscode.FileType.Directory) {
+      if (isDirectory(stats.type)) {
         if (viewRange) {
           throw new ToolError(
             'The `view_range` parameter is not allowed when `path` points to a directory.',
@@ -199,7 +199,7 @@ export class TextEditorTool extends defineTool({
         const formattedContents = dirContents
           .map(([fileName, fileType]) => {
             const type =
-              fileType === vscode.FileType.Directory ? 'dir' : 'file';
+              isDirectory(fileType) ? 'dir' : 'file';
             return `[${type}] ${fileName}`;
           })
           .join('\n');
