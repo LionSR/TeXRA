@@ -21,7 +21,20 @@ import { profileViewStyles } from './styles';
 import { ModelSelectionEvents } from './events';
 
 // Local imports - shared schemas
-import type { ModelSelectionItem } from '@shared/schemas/settingsViewMessages';
+import type {
+  ModelSelectionItem,
+  ReasoningLevel,
+} from '@shared/schemas/settingsViewMessages';
+
+/** Display labels for reasoning level options. */
+const REASONING_LEVEL_LABELS: Record<ReasoningLevel, string> = {
+  none: 'None',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+};
+
+const REASONING_LEVELS: ReasoningLevel[] = ['none', 'low', 'medium', 'high'];
 
 interface ProviderGroup {
   provider: string;
@@ -101,6 +114,48 @@ export class ModelSelectionList extends LitElement {
     );
   }
 
+  private handleReasoningLevelChange(modelName: string, e: Event): void {
+    const value = (e.currentTarget as HTMLSelectElement).value;
+    this.dispatchEvent(
+      ModelSelectionEvents.setReasoningLevel({
+        modelName,
+        level: value === '' ? null : value,
+      }),
+    );
+  }
+
+  private renderReasoningDropdown(model: ModelSelectionItem): TemplateResult {
+    if (!model.supportsReasoningLevel) return html`${nothing}`;
+
+    const currentValue = model.reasoningLevel ?? '';
+    const defaultLabel = model.defaultReasoningLevel
+      ? `Default (${REASONING_LEVEL_LABELS[model.defaultReasoningLevel]})`
+      : 'Default';
+
+    return html`
+      <vscode-single-select
+        class="reasoning-level-select"
+        .value=${currentValue}
+        title="Reasoning level"
+        @change=${(e: Event) => this.handleReasoningLevelChange(model.name, e)}
+      >
+        <vscode-option value="" ?selected=${currentValue === ''}>
+          ${defaultLabel}
+        </vscode-option>
+        ${REASONING_LEVELS.map(
+          (level) => html`
+            <vscode-option
+              value=${level}
+              ?selected=${currentValue === level}
+            >
+              ${REASONING_LEVEL_LABELS[level]}
+            </vscode-option>
+          `,
+        )}
+      </vscode-single-select>
+    `;
+  }
+
   private renderModelRow(model: ModelSelectionItem): TemplateResult {
     const available = this.isRelayAvailable(model.name);
     const unavailableClass = !available ? ' model-row--unavailable' : '';
@@ -127,6 +182,7 @@ export class ModelSelectionList extends LitElement {
               ></span>`
             : nothing}
         </vscode-checkbox>
+        ${this.renderReasoningDropdown(model)}
         <span class="model-metadata">
           ${model.contextWindow
             ? html`<span>${model.contextWindow}</span>`
