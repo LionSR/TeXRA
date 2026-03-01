@@ -252,6 +252,41 @@ Never compensate for data model problems at render time. Renderers should only t
 
 **Fix:** Store data once at the source with all metadata (timestamps, IDs). If renderers need to generate or deduplicate, the upstream code path is missing data.
 
+### Separation of Concerns: VS Code Coupling
+
+For good separation of concerns, testability, and platform independence, core business logic should not depend on the `vscode` module. Keeping domain logic free of host-specific imports makes the code easier to test, reason about, and reuse.
+
+**VS Code-free zones** — these directories must NOT import `vscode`:
+
+- `src/agent/` (core logic, model handlers, PocketFlow flows)
+- `src/model/` (model registry, capabilities, pricing)
+- `src/latex/` (LaTeX processing, formatting, diff)
+- `src/tools/` (tool implementations — use `@common/files/fsEntryType` instead of `vscode.FileType`)
+- `src/shared/` (IPC schemas, message types)
+- `src/replacement/` (text cleanup rules)
+- `src/eventBus/` (progress event system)
+- Webview frontends (`src/webview/frontend/`, `src/progressView/frontend/`, `src/settingsView/frontend/`)
+
+**VS Code-allowed zones** — platform-specific wiring belongs here:
+
+- `src/extension.ts` (entry point)
+- `src/commands/` (VS Code command handlers)
+- `src/frontend/` (VS Code UI utilities)
+- `src/common/webview/` (webview base classes)
+- `src/common/state/` (state managers backed by VS Code Memento)
+- `src/utils/config/` (wraps `vscode.workspace.getConfiguration`)
+- `src/utils/files/workspaceFS.ts`, `storageFS.ts` (wraps `vscode.workspace.fs`)
+- `src/auth/` (authentication providers)
+- `src/explorer/` (file explorer integration)
+- `src/logger/LogChannelRegistry.ts` (creates `vscode.OutputChannel`)
+
+**Patterns for keeping code platform-agnostic:**
+
+- Use `isFile()` / `isDirectory()` from `@common/files/fsEntryType` instead of `vscode.FileType`
+- Use `isFileNotFoundError()` from `@common/errors` instead of `instanceof vscode.FileSystemError`
+- Return error results instead of calling `vscode.window.show*Message()` from business logic — let the caller (command layer) handle UI
+- Use injectable callbacks (like `setExtensionChecker()` in `externalToolDefs.ts`) for platform-specific capabilities needed in agnostic code
+
 ### Path Aliases
 
 Common aliases (full list in `tsconfig.json`):
