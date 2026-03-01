@@ -2,7 +2,6 @@
 import * as path from 'path';
 
 // Third-party imports
-import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - log
@@ -170,11 +169,9 @@ export class LaTeXdiffService {
     try {
       const inputFile = inputLocation.absolutePath;
       if (!(await this.validateDocumentStructure(inputLocation))) {
-        const message = 'File missing document environment';
+        const message =
+          'File missing document environment (must contain \\begin{document} and \\end{document})';
         logger.error(this.channel, message);
-        vscode.window.showWarningMessage(
-          'File must contain \\begin{document} and \\end{document}',
-        );
         return { success: false, message };
       }
 

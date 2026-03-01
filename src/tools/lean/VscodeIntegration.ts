@@ -11,6 +11,11 @@ import { Hover } from 'vscode-languageserver-protocol';
 
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
+import {
+  waitForDiagnosticsChange,
+  DiagnosticSeverity,
+} from '@frontend/vscode/vscodeDiagnostics';
 import { WorkspaceFS } from '@utils/files';
 
 // ============================================================================
@@ -324,4 +329,43 @@ export async function getHoverInfo(
     column,
     'textDocument/hover',
   );
+}
+
+// ============================================================================
+// VS Code Wrappers (keep vscode imports out of LspTools.ts)
+// ============================================================================
+
+/**
+ * Open a Lean file, wait for diagnostics, and return them.
+ * Returns null if the file could not be opened.
+ */
+export async function fetchDiagnosticsForFile(
+  file: string,
+): Promise<vscode.Diagnostic[] | null> {
+  const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(file));
+  const diagnosticsWait = waitForDiagnosticsChange(uri, 10000);
+
+  const openedPath = await openFileInEditor(file);
+  if (!openedPath) return null;
+
+  await diagnosticsWait;
+  return getDiagnostics(openedPath);
+}
+
+/** Navigate editor to first error location if present. */
+export async function navigateToFirstError(
+  filePath: string,
+  diagnostics: vscode.Diagnostic[],
+): Promise<void> {
+  const firstError = diagnostics.find(
+    (d) => d.severity === DiagnosticSeverity.Error,
+  );
+  if (firstError) {
+    await openFileInEditor(filePath, firstError.range.start.line + 1);
+  }
+}
+
+/** Execute a global VS Code command by its command ID. */
+export async function executeGlobalCommand(commandId: string): Promise<void> {
+  await vscode.commands.executeCommand(commandId);
 }

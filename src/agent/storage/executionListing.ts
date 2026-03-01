@@ -9,14 +9,12 @@
  * into per-execution KV stores, then deletes the legacy sources.
  */
 
-import * as vscode from 'vscode';
-
 import { type AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
 import { isFileNotFoundError } from '@common/errors';
 import { isDirectory } from '@common/files/fsEntryType';
 import { workspaceSM } from '@common/state/stateManager';
 import * as logger from '@logger/logUtils';
-import { StorageFS } from '@utils/files';
+import { StorageFS, WorkspaceFS } from '@utils/files';
 
 import {
   type ExecutionMeta,
@@ -53,11 +51,11 @@ export interface ExecutionListingEntry {
 
 let cache: ExecutionListingEntry[] | null = null;
 let migrated = false;
-let cachedWorkspaceUri: string | undefined;
+let cachedWorkspacePath: string | undefined;
 
-/** Get the current workspace folder URI for cache keying. */
-function getWorkspaceUri(): string | undefined {
-  return vscode.workspace.workspaceFolders?.[0]?.uri.toString();
+/** Get the current workspace path for cache keying. */
+function getWorkspacePath(): string | undefined {
+  return WorkspaceFS.getPath();
 }
 
 export function invalidateListingCache(): void {
@@ -68,7 +66,7 @@ export function invalidateListingCache(): void {
 export function resetListingState(): void {
   cache = null;
   migrated = false;
-  cachedWorkspaceUri = undefined;
+  cachedWorkspacePath = undefined;
 }
 
 // ============================================================================
@@ -81,11 +79,11 @@ export function resetListingState(): void {
  */
 export async function listExecutions(): Promise<ExecutionListingEntry[]> {
   // Invalidate if workspace changed since last cache build
-  const currentUri = getWorkspaceUri();
-  if (currentUri !== cachedWorkspaceUri) {
+  const currentPath = getWorkspacePath();
+  if (currentPath !== cachedWorkspacePath) {
     cache = null;
     migrated = false;
-    cachedWorkspaceUri = currentUri;
+    cachedWorkspacePath = currentPath;
   }
 
   if (cache) return cache;
@@ -95,7 +93,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     migrated = true;
   }
 
-  let entries: [string, vscode.FileType][];
+  let entries: [string, number][];
   try {
     entries = await StorageFS.readDir(EXECUTIONS_DIR);
   } catch (error) {
@@ -175,7 +173,7 @@ export async function deleteExecution(
 export async function deleteAllExecutions(
   exclude?: ReadonlySet<string>,
 ): Promise<void> {
-  let entries: [string, vscode.FileType][];
+  let entries: [string, number][];
   try {
     entries = await StorageFS.readDir(EXECUTIONS_DIR);
   } catch (error) {
@@ -246,9 +244,9 @@ async function migrateWorkspaceState(): Promise<void> {
 }
 
 function getWorkspaceStorageKey(): string {
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-  return workspaceFolder
-    ? `${LEGACY_HISTORY_KEY}.${workspaceFolder.uri.fsPath}`
+  const workspacePath = WorkspaceFS.getPath();
+  return workspacePath
+    ? `${LEGACY_HISTORY_KEY}.${workspacePath}`
     : LEGACY_HISTORY_KEY;
 }
 

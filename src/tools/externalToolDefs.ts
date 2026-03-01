@@ -12,7 +12,6 @@
  */
 
 // Third-party imports
-import * as vscode from 'vscode';
 import axios from 'axios';
 
 // Local imports
@@ -22,6 +21,19 @@ import { checkToolInstalled } from '@utils/system/toolUtils';
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 
 const LEAN4_EXT_ID = 'leanprover.lean4';
+
+/**
+ * Pluggable check for VS Code extension availability.
+ * Set by the extension host at activation; defaults to false (not available).
+ */
+let extensionChecker: (extensionId: string) => boolean = () => false;
+
+/** Register a platform-specific extension availability checker. */
+export function setExtensionChecker(
+  checker: (extensionId: string) => boolean,
+): void {
+  extensionChecker = checker;
+}
 
 // ============================================================
 // Type
@@ -190,10 +202,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'https://marketplace.visualstudio.com/items?itemName=leanprover.lean4',
     installExtensionId: LEAN4_EXT_ID,
     configNotes: 'Lean 4 VS Code extension must be installed and active.',
-    check: async () => {
-      const lean4Ext = vscode.extensions.getExtension(LEAN4_EXT_ID);
-      return lean4Ext !== undefined;
-    },
+    check: async () => extensionChecker(LEAN4_EXT_ID),
   },
 
   // System dependencies (latexindent, image processing) have moved to the

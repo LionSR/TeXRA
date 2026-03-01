@@ -1,15 +1,30 @@
 /**
- * VS Code notification for unavailable external tools.
+ * Notification for unavailable external tools.
  *
  * Separated from the tool-use flow so the flow runner stays decoupled from
- * the VS Code UI layer.
+ * the host UI layer. The notification callback is injected at activation.
  */
-import * as vscode from 'vscode';
 
 import { mapToolNamesToGroups } from '@tools/toolAvailability';
 
 /** Groups already surfaced in a notification this session — avoids repeat popups. */
 const notifiedGroups = new Set<string>();
+
+/**
+ * Pluggable notification handler for unavailable tools.
+ * Set by the extension host at activation; defaults to no-op.
+ */
+let notificationHandler: (
+  message: string,
+  actionCommand?: string,
+) => void = () => {};
+
+/** Register a platform-specific notification handler. */
+export function setToolNotificationHandler(
+  handler: (message: string, actionCommand?: string) => void,
+): void {
+  notificationHandler = handler;
+}
 
 /**
  * Show notifications for tool groups excluded due to missing dependencies.
@@ -31,21 +46,15 @@ export function notifyUnavailableTools(excludedToolNames: string[]): void {
 
   if (dashboardGroups.length > 0) {
     const label = formatGroupLabel(dashboardGroups.map((g) => g.name));
-    void vscode.window
-      .showInformationMessage(
-        `${label} excluded — external dependencies not installed.`,
-        'Open Tools Dashboard',
-      )
-      .then((choice) => {
-        if (choice === 'Open Tools Dashboard') {
-          void vscode.commands.executeCommand('texra.showTools');
-        }
-      });
+    notificationHandler(
+      `${label} excluded — external dependencies not installed.`,
+      'texra.showTools',
+    );
   }
 
   if (hiddenGroups.length > 0) {
     const label = formatGroupLabel(hiddenGroups.map((g) => g.name));
-    void vscode.window.showInformationMessage(
+    notificationHandler(
       `${label} excluded — external dependencies not installed.`,
     );
   }
