@@ -242,8 +242,6 @@ export class ProgressEventHandler {
     if (agentCategory) {
       this.state.getOrCreateStreamState(streamId, agentCategory);
     }
-    this.maybeUpdateFilterForCategory(agentCategory);
-
     // Don't switch away from the current stream if it has pending permissions
     // (retry, tool-edit, bash approval, or agent proposal) — the user needs to
     // interact with the approval panel before losing sight of it.
@@ -251,6 +249,12 @@ export class ProgressEventHandler {
     const shouldSwitch =
       !currentStream || !this.hasPendingPermissions(currentStream);
     if (shouldSwitch) {
+      // Update the category filter only when actually switching. If we change
+      // the filter while suppressing the switch, sendStreamMetadata →
+      // pickValidActiveStream rebuilds the stream list with the new filter,
+      // which may exclude the current stream and override state.activeStream —
+      // completely bypassing the pending-permissions guard.
+      this.maybeUpdateFilterForCategory(agentCategory);
       this.state.activeStream = streamId;
     }
 
