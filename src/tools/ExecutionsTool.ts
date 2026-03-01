@@ -10,7 +10,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // Third-party imports
-import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - agent
@@ -19,6 +18,7 @@ import {
   ExecutionIdSchema,
   type ExecutionId,
 } from '@shared/schemas';
+import { isDirectory } from '@common/files/fsEntryType';
 import {
   getExecutionStore,
   type ExecutionListingEntry,
@@ -827,7 +827,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
         const entryRaw = relativePath ? path.join(relativePath, name) : name;
         const entryRelative = entryRaw.replaceAll('\\', '/');
         const entryFull = path.join(basePath, entryRaw);
-        const isDir = type === vscode.FileType.Directory;
+        const isDir = isDirectory(type);
 
         try {
           const stats = await StorageFS.stat(entryFull);
@@ -865,7 +865,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     }
 
     const stats = await StorageFS.stat(fullPath);
-    if (stats.type === vscode.FileType.Directory) {
+    if (isDirectory(stats.type)) {
       throw new ToolError(
         `Path is a directory: /executions/${executionId}/files/${filePath}. Use without trailing path to list.`,
       );

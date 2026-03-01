@@ -6,7 +6,6 @@
 import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
-import * as vscode from 'vscode';
 
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { getConfig } from '@utils/config';
@@ -17,13 +16,15 @@ import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 /** Interface for entries that support LaTeX preview operations */
 export interface LatexPreviewEntry {
   request: { path: string };
-  originalUri: vscode.Uri;
-  proposedUri: vscode.Uri;
+  originalUri: { fsPath: string };
+  proposedUri: { fsPath: string };
   originalContent: string;
   proposedContent: string;
   isSettled: () => boolean;
   workspaceTempCleanup: Array<() => Promise<void>>;
   latexOperationInProgress: boolean;
+  /** Platform-specific error reporter, injected by the caller. */
+  onError: (message: string) => void;
 }
 
 /** Temp file location options */
@@ -76,7 +77,7 @@ async function withLatexOperation(
     await operation();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    vscode.window.showErrorMessage(`${operationName} failed: ${message}`);
+    entry.onError(`${operationName} failed: ${message}`);
   } finally {
     entry.latexOperationInProgress = false;
   }
@@ -84,7 +85,7 @@ async function withLatexOperation(
 
 /** Read file content with fallback to provided default */
 async function readFileWithFallback(
-  uri: vscode.Uri,
+  uri: { fsPath: string },
   fallback: string,
 ): Promise<string> {
   return fs.readFile(uri.fsPath, 'utf8').catch(() => fallback);
@@ -200,9 +201,7 @@ export async function runLatexdiff(
     );
 
     if (!result.success || !result.diffFileName) {
-      vscode.window.showErrorMessage(
-        result.message ?? 'Failed to generate LaTeXdiff',
-      );
+      entry.onError(result.message ?? 'Failed to generate LaTeXdiff');
       return;
     }
 
@@ -212,9 +211,7 @@ export async function runLatexdiff(
       result.diffFileName.includes('\\') ||
       result.diffFileName.includes('..')
     ) {
-      vscode.window.showErrorMessage(
-        'LaTeXdiff failed: invalid output filename',
-      );
+      entry.onError('LaTeXdiff failed: invalid output filename');
       return;
     }
 

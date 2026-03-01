@@ -2,12 +2,12 @@
 import * as path from 'path';
 
 // Third-party imports
-import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports
-import { formatRelativeTime } from '@shared/utils/string';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { isDirectory } from '@common/files/fsEntryType';
+import { formatRelativeTime } from '@shared/utils/string';
 import { StorageFS } from '@utils/files';
 import { splitContentLines } from '@utils/text/stringUtils';
 
@@ -178,7 +178,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
   ): Promise<void> {
     try {
       const stats = await StorageFS.stat(resolvedPath);
-      if (stats.type === vscode.FileType.Directory) {
+      if (isDirectory(stats.type)) {
         throw new ToolError(
           `The path ${inputPath} does not exist or is a directory.`,
         );
@@ -213,7 +213,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     }
 
     const stats = await StorageFS.stat(resolvedPath);
-    if (stats.type === vscode.FileType.Directory) {
+    if (isDirectory(stats.type)) {
       const listing = await this.buildDirectoryListing(resolvedPath);
       recordToolFileRead(inputPath);
       return {
@@ -456,7 +456,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
       if (shouldSkipEntry(name)) continue;
       const childPath = path.join(currentPath, name);
       const stats = await StorageFS.stat(childPath);
-      const isDir = type === vscode.FileType.Directory;
+      const isDir = isDirectory(type);
       entries.push({
         path: childPath,
         size: stats.size,
