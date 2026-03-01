@@ -370,6 +370,19 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
 };
 
 // ============================================================
+// LaTeX-specific timing constants
+// ============================================================
+
+/** Delay before registering a diff document for side-by-side view. */
+export const DIFF_REGISTRATION_DELAY_MS = 300;
+
+/** Delay before auto-opening the LaTeX viewer after build. */
+export const LATEX_VIEWER_OPEN_DELAY_MS = 5000;
+
+/** Delay before refreshing the LaTeX viewer after build. */
+export const LATEX_VIEWER_REFRESH_DELAY_MS = 5000;
+
+// ============================================================
 // Utility functions
 // ============================================================
 
