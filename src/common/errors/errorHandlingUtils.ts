@@ -55,8 +55,8 @@ export async function parseWithErrorDisplay<T>(
 
 /** Check if an error represents a file-not-found condition (ENOENT or VS Code FileNotFound). */
 export function isFileNotFoundError(err: unknown): boolean {
-  if (err instanceof vscode.FileSystemError) return err.code === 'FileNotFound';
-  return (err as { code?: string })?.code === 'ENOENT';
+  const code = (err as { code?: string })?.code;
+  return code === 'ENOENT' || code === 'FileNotFound';
 }
 
 /** Log a formatted error message and return it. */

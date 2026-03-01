@@ -52,6 +52,8 @@ const REVEAL_TIMEOUT_MS = 1500;
 
 interface PendingApprovalEntry extends LatexPreviewEntry {
   request: ToolEditApprovalRequest;
+  originalUri: vscode.Uri;
+  proposedUri: vscode.Uri;
   title: string;
   streamId?: StreamTabId;
   lineChanges: LineChanges;
@@ -473,6 +475,7 @@ async function nativeRequestApproval(
         settle,
         workspaceTempCleanup: [],
         latexOperationInProgress: false,
+        onError: (msg) => vscode.window.showErrorMessage(msg),
       };
 
       pendingApprovals.set(requestId, entry);

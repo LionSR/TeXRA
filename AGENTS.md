@@ -235,6 +235,23 @@ Aim for code that looks like it was designed correctly from the start:
 - **Normalize at the edge**: Convert legacy formats once at load time (Zod schemas work well), then use only the current format everywhere else.
 - **Extract only when repeated**: Create a helper when the same logic appears in multiple places—not before.
 
+### Platform decoupling rules
+
+For good separation of concerns and platform independence, core business logic should stay free of host-specific imports. This improves testability and keeps the door open for future reuse outside VS Code.
+
+1. **Never import `vscode` in VS Code-free zones.** See CLAUDE.md "Separation of Concerns: VS Code Coupling" for the full list. The key ones: `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/shared/`.
+
+2. **Use platform-agnostic helpers instead of VS Code types:**
+   - `isFile(type)` / `isDirectory(type)` from `@common/files/fsEntryType` — not `vscode.FileType.File` / `vscode.FileType.Directory`
+   - `isFileNotFoundError(err)` from `@common/errors` — not `instanceof vscode.FileSystemError`
+   - Use `number` for file type annotations instead of `vscode.FileType` — the numeric values are compatible
+
+3. **Push UI side-effects to the caller.** Business logic functions should return error information (result objects, thrown errors) instead of calling `vscode.window.show*Message()` directly. The command/frontend layer handles user-facing notifications.
+
+4. **Use injectable callbacks for platform capabilities.** When agnostic code needs something only the host provides (e.g., checking if a VS Code extension is installed), expose a setter function (e.g., `setExtensionChecker()`) and register the implementation from `extension.ts`.
+
+5. **Prefer `WorkspaceFS.getPath()` over `vscode.workspace.workspaceFolders`.** The former is already available and returns the same value.
+
 ### Patterns across the codebase
 
 **Configuration, storage, and workspace files**
