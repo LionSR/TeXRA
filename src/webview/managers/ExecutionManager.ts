@@ -6,7 +6,7 @@ import {
 } from '@shared/schemas/toolConfig';
 import type { AgentConfigInput } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { validateExecutionRequest } from '@common/execution/executionRequests';
+import { validateExecutionRequest } from '@agent/core/executionRequests';
 import * as logger from '@logger/logUtils';
 import {
   getPastedImageFullPath,

@@ -23,6 +23,8 @@ import {
   PROVIDER_DISPLAY_NAMES,
   MODEL_PROVIDERS_ORDER,
   DEFAULT_HELPER_MODEL,
+  PROVIDER_URLS,
+  PROVIDER_VSCODE_SETTINGS,
 } from '@shared/constants/providers';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, MAX_TIER } from '@auth/config';
@@ -67,6 +69,8 @@ import { agentConfigToTaskState } from '@utils/config/configConversion';
 import {
   getToolUseMemoryEnabled,
   setToolUseMemoryEnabled,
+} from '@utils/config/constants';
+import {
   getGlobalStreaming,
   setGlobalStreaming,
   getProviderStreaming,
@@ -74,9 +78,8 @@ import {
   getProviderEndpoint,
   setProviderEndpoint,
   supportsCustomEndpoint,
-} from '@utils/config/constants';
+} from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
-import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
@@ -96,52 +99,6 @@ type MessageFor<C extends SettingsViewInboundMessage['command']> = Extract<
   SettingsViewInboundMessage,
   { command: C }
 >;
-
-/** VS Code config settings to surface per provider in the Models tab. */
-const PROVIDER_VSCODE_SETTINGS: Record<
-  string,
-  Omit<ProviderVscodeSetting, 'value'>[]
-> = {
-  openai: [
-    {
-      key: 'texra.model.gpt5ReasoningSummary',
-      label: 'GPT-5 Reasoning Summary',
-      description:
-        'Request reasoning summaries from GPT-5 models. Only available on OpenAI API Tier 3+.',
-      warning:
-        'New accounts with $20 credit are typically Tier 1 and will hit rate limits.',
-      warningUrl:
-        'https://platform.openai.com/settings/organization/billing/overview',
-      warningUrlLabel: 'Check your tier',
-    },
-    {
-      key: 'texra.model.useOpenAIResponsesAPI',
-      label: 'Use Responses API',
-      description:
-        'Use the OpenAI Responses API instead of Chat Completions when available.',
-    },
-    {
-      key: 'texra.model.useBackgroundResponses',
-      label: 'Background Responses',
-      description:
-        'Handle long-running generations (>10 min) via polling to prevent timeouts. Adds polling overhead.',
-    },
-    {
-      key: 'texra.model.openaiParallelToolCalls',
-      label: 'Parallel Tool Calls',
-      description:
-        'Allow the model to call multiple tools in parallel. Off by default to preserve sequential tool execution.',
-    },
-  ],
-  anthropic: [
-    {
-      key: 'texra.model.useAnthropic1MBeta',
-      label: '1M Context Window Beta',
-      description:
-        'Enable the 1M-token context window for Claude Opus 4.6, Sonnet 4.6, and Sonnet 4 (usage capped at 200K by extension).',
-    },
-  ],
-};
 
 /** Reliability settings surfaced in the Multi-Agent tab. */
 const RELIABILITY_SETTINGS: (Omit<NumberVscodeSetting, 'value'> & {
