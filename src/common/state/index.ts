@@ -11,4 +11,3 @@ export {
   consumePendingState,
   type PendingStateData,
 } from './pendingStateManager';
-export { buildMainViewState } from './mainViewStateUtils';
