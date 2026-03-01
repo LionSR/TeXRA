@@ -87,10 +87,12 @@ const UPSTREAM_TIMEOUT_MS = 390000;
 
 /**
  * Interval for SSE keepalive comments during streaming (30 seconds).
- * Intermediate proxies (Cloudflare, CDN) may drop idle connections after ~100s.
- * Extended thinking can have long pauses between events. Periodic keepalive
- * comments (`: keepalive\n\n`) are ignored by SSE parsers but keep the
- * connection alive through proxy idle timeouts.
+ * Extended thinking emits deltas at a much lower rate than regular text
+ * generation — the model does more computation per token. When the gap
+ * between consecutive SSE events exceeds an intermediate proxy's idle
+ * timeout (Cloudflare ~100s), the proxy drops the connection and truncates
+ * the stream. Periodic keepalive comments (`: keepalive\n\n`) are valid SSE
+ * that parsers ignore, but they keep data flowing to prevent idle drops.
  */
 const SSE_KEEPALIVE_INTERVAL_MS = 30_000;
 
@@ -167,10 +169,10 @@ function getProviderConfig(provider: string): ProviderConfig | null {
 
 /**
  * Wraps an SSE response body stream to inject periodic keepalive comments.
- * This prevents intermediate proxies (Cloudflare, load balancers) from dropping
- * idle connections during long AI thinking pauses.
- *
- * SSE keepalive comments (`: keepalive\n\n`) are valid SSE and ignored by parsers.
+ * Extended thinking streams emit deltas at a much lower rate than text
+ * generation, and gaps between events can exceed proxy idle timeouts.
+ * SSE comments (`: keepalive\n\n`) are valid SSE ignored by parsers but
+ * keep data flowing to prevent intermediate proxies from dropping the connection.
  */
 function wrapWithKeepalive(body: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -744,8 +746,8 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
   responseHeaders.set('X-Accel-Buffering', 'no');
 
-  // For SSE streaming responses, inject periodic keepalive comments to prevent
-  // intermediate proxies from dropping idle connections during long thinking pauses.
+  // For SSE streaming responses, inject periodic keepalive comments. Extended
+  // thinking emits deltas at a lower rate; gaps can exceed proxy idle timeouts.
   const contentType = upstreamResponse.headers.get('content-type') ?? '';
   const isSSE = contentType.includes('text/event-stream');
   const responseBody =

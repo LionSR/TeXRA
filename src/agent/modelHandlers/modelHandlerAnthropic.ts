@@ -855,8 +855,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // connection mid-thinking, the SDK's for-await loop ends normally and
         // finalMessage() resolves with a partial response (stop_reason: null,
         // no message_stop event). Detect this and throw instead of silently
-        // returning truncated output. Retryability is determined downstream
-        // based on elapsed time (long streams = relay wall clock limit, not transient).
+        // returning truncated output.
         const diagnostics = streamHandler.getDiagnostics();
         if (!diagnostics.messageStopReceived) {
           const truncatedError = new Error(
@@ -864,7 +863,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
               `(${diagnostics.eventsProcessed} events, ` +
               `${diagnostics.thinkingChars} thinking chars, ` +
               `${diagnostics.textChars} text chars). ` +
-              `Likely relay timeout during extended streaming.`,
+              `Stream truncated, likely proxy idle timeout during extended thinking.`,
           );
           attachStreamDiagnostics(truncatedError, diagnostics);
           this.logger.warn(
