@@ -5,5 +5,3 @@ export {
 } from './types';
 
 export { RemoteAgentLoader } from './RemoteAgentLoader';
-
-export { selectAgentInMainView } from './remoteAgentUtils';

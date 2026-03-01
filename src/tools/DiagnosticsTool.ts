@@ -1,5 +1,4 @@
 // Third-party imports
-import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Internal imports
