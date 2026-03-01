@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { PROVIDER_URLS } from '@shared/constants/providers';
 import { showLoggedErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
@@ -10,18 +11,6 @@ import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'ApiKeyCommands';
 logger.initialize(CHANNEL);
-
-export const PROVIDER_URLS: Record<ApiProvider, string> = {
-  openai: 'https://platform.openai.com/api-keys',
-  anthropic: 'https://console.anthropic.com/',
-  openRouter: 'https://openrouter.ai/keys',
-  google: 'https://aistudio.google.com/app/apikey',
-  xai: 'https://console.x.ai/',
-  deepseek: 'https://platform.deepseek.com/api_keys',
-  moonshot: 'https://platform.moonshot.cn/console',
-  dashscope: 'https://dashscope.aliyun.com/api-console/',
-  wolframllmapp: 'https://llm-api.wolframalpha.com/',
-};
 
 export const apiKeyCommands = {
   setApiKey: 'texra.setApiKey',

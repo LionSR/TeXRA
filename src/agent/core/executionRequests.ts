@@ -1,6 +1,9 @@
-// Local imports - agent config
-import { AgentConfigSchema } from '@agent/core';
-import type { AgentConfig, AgentConfigInput } from '@agent/core/AgentConfig';
+// Local imports - agent config (sibling module)
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+  type AgentConfigInput,
+} from './AgentConfig';
 
 // Local imports - shared schemas
 import type { ExecutionId } from '@shared/schemas';

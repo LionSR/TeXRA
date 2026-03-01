@@ -1,0 +1,98 @@
+/**
+ * Command constants for the settings view.
+ */
+import { COMMON_COMMANDS } from './commonCommands';
+
+/**
+ * Command string literals for settings view schema definitions.
+ * Defined here (not in settingsViewMessages.ts) to avoid circular dependency:
+ * commands.ts → settingsViewMessages.ts → memoryViewMessages.ts → commands.ts
+ */
+export const SETTINGS_VIEW_CMD = {
+  // Navigation commands
+  SET_TAB: 'setTab',
+  OPEN_VSCODE_SETTINGS: 'openVscodeSettings',
+  // Memory commands
+  GET_MEMORY_DATA: 'getMemoryData',
+  OPEN_MEMORY_FILE: 'openMemoryFile',
+  OPEN_MEMORY_FOLDER: 'openMemoryFolder',
+  DELETE_MEMORY: 'deleteMemory',
+  GET_MEMORY_ENABLED: 'getMemoryEnabled',
+  SET_MEMORY_ENABLED: 'setMemoryEnabled',
+  // History commands
+  GET_HISTORY_DATA: 'getHistoryData',
+  RERUN_AGENT: 'rerunAgent',
+  RESTORE_AGENT: 'restoreAgent',
+  DELETE_AGENT: 'deleteAgent',
+  CLEAR_HISTORY: 'clearHistory',
+  // Profile commands
+  GET_PROFILE_DATA: 'getProfileData',
+  SELECT_AGENT: 'selectAgent',
+  SIGN_IN: 'signIn',
+  SIGN_OUT: 'signOut',
+  SET_API_ACCESS_MODE: 'setApiAccessMode',
+  SET_PROVIDER_KEY: 'setProviderKey',
+  REMOVE_PROVIDER_KEY: 'removeProviderKey',
+  OPEN_PROVIDER_KEY_URL: 'openProviderKeyUrl',
+  SET_PROVIDER_STREAMING: 'setProviderStreaming',
+  SET_PROVIDER_ENDPOINT: 'setProviderEndpoint',
+  SET_GLOBAL_STREAMING: 'setGlobalStreaming',
+  SET_PROVIDER_VSCODE_SETTING: 'setProviderVscodeSetting',
+  OPEN_EXTERNAL_URL: 'openExternalUrl',
+  // Model selection commands
+  GET_MODEL_SELECTION: 'getModelSelection',
+  SET_MODEL_ENABLED: 'setModelEnabled',
+  SET_HELPER_MODEL: 'setPolishModel',
+  // Agent selection commands
+  GET_AGENT_SELECTION: 'getAgentSelection',
+  OPEN_AGENT_YAML: 'openAgentYaml',
+  SET_AGENT_ENABLED: 'setAgentEnabled',
+  SET_ALL_AGENTS_ENABLED: 'setAllAgentsEnabled',
+  OPEN_AGENT_FOLDER: 'openAgentFolder',
+  CREATE_AGENT: 'createAgent',
+  CUSTOMIZE_AGENT: 'customizeAgent',
+  DELETE_CUSTOM_AGENT: 'deleteCustomAgent',
+  REVEAL_AGENT_FILE: 'revealAgentFile',
+  // Custom agent directory commands
+  GET_CUSTOM_AGENT_DIR: 'getCustomAgentDir',
+  SET_CUSTOM_AGENT_DIR: 'setCustomAgentDir',
+  RESET_CUSTOM_AGENT_DIR: 'resetCustomAgentDir',
+  // Multi-Agent commands
+  GET_SUPER_YOLO_ENABLED: 'getSuperYoloEnabled',
+  SET_SUPER_YOLO_ENABLED: 'setSuperYoloEnabled',
+  SET_ALLOW_ORCHESTRATOR_KILL: 'setAllowOrchestratorKill',
+  APPLY_AGENT_MODE_PRESET: 'applyAgentModePreset',
+  SAVE_AGENT_MODE_PRESET: 'saveAgentModePreset',
+  DELETE_AGENT_MODE_PRESET: 'deleteAgentModePreset',
+  GET_AGENT_MODE_PRESETS: 'getAgentModePresets',
+  // Tool dashboard commands
+  GET_TOOL_DASHBOARD_DATA: 'getToolDashboardData',
+  OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',
+  INSTALL_TOOL_EXTENSION: 'installToolExtension',
+  RECHECK_TOOL_STATUS: 'recheckToolStatus',
+  // LaTeX settings commands
+  GET_LATEX_SETTINGS_STATUS: 'getLatexSettingsStatus',
+  APPLY_LATEX_SETTINGS: 'applyLatexSettings',
+  INSTALL_LATEX_WORKSHOP: 'installLatexWorkshop',
+  RUN_INSTALL_COMMAND: 'runInstallCommand',
+} as const;
+
+// Settings view specific commands (combines Memory, History, and Profile views)
+// SETTINGS_VIEW_CMD is the source of truth; outbound-only commands are added here
+export const SETTINGS_VIEW_COMMANDS = {
+  ...COMMON_COMMANDS,
+  ...SETTINGS_VIEW_CMD,
+  // Outbound-only commands (backend → frontend, not schema-validated)
+  UPDATE_MEMORY: 'updateMemory',
+  UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
+  UPDATE_HISTORY: 'updateHistory',
+  HISTORY_CLEARED: 'historyCleared',
+  UPDATE_PROFILE: 'updateProfile',
+  UPDATE_MODEL_SELECTION: 'updateModelSelection',
+  UPDATE_AGENT_SELECTION: 'updateAgentSelection',
+  UPDATE_CUSTOM_AGENT_DIR: 'updateCustomAgentDir',
+  UPDATE_SUPER_YOLO_ENABLED: 'updateSuperYoloEnabled',
+  UPDATE_AGENT_MODE_PRESETS: 'updateAgentModePresets',
+  UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
+  UPDATE_LATEX_SETTINGS_STATUS: 'updateLatexSettingsStatus',
+} as const;
