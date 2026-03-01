@@ -16,7 +16,7 @@ import type { FileLocation } from '@utils/files';
 import {
   LATEX_VIEWER_OPEN_DELAY_MS,
   LATEX_VIEWER_REFRESH_DELAY_MS,
-} from '@utils/config';
+} from '@shared/constants/latex';
 
 // Local imports - latex
 import { compileLatex2Pdf } from '@latex/texTools';
