@@ -16,7 +16,7 @@ import {
   createExternalLocation,
 } from '@utils/files';
 import type { FileLocation } from '@utils/files';
-import { DIFF_REGISTRATION_DELAY_MS } from '@utils/config';
+import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latex';
 
 const CHANNEL = 'CompareCommands';
 logger.initialize(CHANNEL);
