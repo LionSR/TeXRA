@@ -857,8 +857,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // no message_stop event). Detect this and throw instead of silently
         // returning truncated output. Retryability is determined downstream
         // based on elapsed time (long streams = relay wall clock limit, not transient).
-        if (!streamHandler.getDiagnostics().messageStopReceived) {
-          const diagnostics = streamHandler.getDiagnostics();
+        const diagnostics = streamHandler.getDiagnostics();
+        if (!diagnostics.messageStopReceived) {
           const truncatedError = new Error(
             `Stream ended without message_stop after ${diagnostics.elapsedSecs}s ` +
               `(${diagnostics.eventsProcessed} events, ` +
