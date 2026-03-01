@@ -9,7 +9,7 @@
  * - LatexSettingsHandlers: LaTeX tool detection and recommended settings
  */
 import * as vscode from 'vscode';
-import { MODELS, MODEL_CONFIGS, ReasoningEffort } from 'llm-zoo';
+import { MODELS, MODEL_CONFIGS, type ReasoningEffort } from 'llm-zoo';
 
 // Shared schemas and dispatchers
 import {
@@ -17,7 +17,9 @@ import {
   type SettingsViewInboundHandlerRegistry,
   type SettingsViewInboundMessage,
   SETTINGS_VIEW_CMD,
+  ReasoningLevelSchema,
   type ModelSelectionItem,
+  type ReasoningLevel,
 } from '@shared/schemas/settingsViewMessages';
 import {
   PROVIDER_DISPLAY_NAMES,
@@ -40,6 +42,7 @@ import {
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
 import { getHelperModelName } from '@agent/runtime/helperModel';
+import { LEVEL_TO_EFFORT } from '@agent/runtime/ModelFactory';
 import {
   BaseViewMessageHandler,
   SETTINGS_VIEW_COMMANDS,
@@ -190,17 +193,20 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
 
 const modelProvidersSet = new Set<string>(MODEL_PROVIDERS_ORDER);
 
-/** Map ReasoningEffort enum values to the ReasoningLevel schema values used in the UI. */
-const REASONING_EFFORT_TO_LEVEL: Record<string, ModelSelectionItem['defaultReasoningLevel']> = {
-  [ReasoningEffort.NONE]: 'none',
-  [ReasoningEffort.LOW]: 'low',
-  [ReasoningEffort.MEDIUM]: 'medium',
-  [ReasoningEffort.HIGH]: 'high',
-  [ReasoningEffort.XHIGH]: 'high', // xhigh shown as high in UI (tier-gated at runtime)
-};
+/**
+ * Reverse of LEVEL_TO_EFFORT: maps ReasoningEffort enum values → UI level strings.
+ * Derived from the canonical map in ModelFactory so there's one source of truth.
+ * Efforts not in LEVEL_TO_EFFORT (e.g. XHIGH) intentionally have no entry —
+ * the UI will show a plain "Default" label instead of lying about the level.
+ */
+const EFFORT_TO_LEVEL = new Map<ReasoningEffort, ReasoningLevel>(
+  Object.entries(LEVEL_TO_EFFORT).map(
+    ([level, effort]) => [effort, level as ReasoningLevel] as const,
+  ),
+);
 
 /** Read persisted reasoning level overrides from global state. */
-export function getReasoningLevelOverrides(): Record<string, string> {
+function getReasoningLevelOverrides(): Record<string, string> {
   return globalSM.get<Record<string, string>>(GlobalStateKey.REASONING_LEVELS, {});
 }
 
@@ -228,10 +234,16 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
 
     if (supportsReasoningEffort) {
       item.supportsReasoningLevel = true;
-      item.defaultReasoningLevel = REASONING_EFFORT_TO_LEVEL[reasoningEffort] ?? 'high';
-      const override = reasoningOverrides[name];
-      if (override) {
-        item.reasoningLevel = override as ModelSelectionItem['reasoningLevel'];
+      // Only set defaultReasoningLevel when the effort has a UI-level equivalent.
+      // XHIGH and unknown efforts get no label — the UI shows plain "Default".
+      const defaultLevel = EFFORT_TO_LEVEL.get(reasoningEffort);
+      if (defaultLevel) {
+        item.defaultReasoningLevel = defaultLevel;
+      }
+      // Validate persisted override against the schema instead of blindly casting.
+      const parsed = ReasoningLevelSchema.safeParse(reasoningOverrides[name]);
+      if (parsed.success) {
+        item.reasoningLevel = parsed.data;
       }
     }
 

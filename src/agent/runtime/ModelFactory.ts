@@ -35,8 +35,11 @@ const PROVIDER_HANDLERS = new Map<
   [ModelProvider.OTHERS, ModelHandlerOpenRouter],
 ]);
 
-/** Map user-facing reasoning level strings to the ReasoningEffort enum. */
-const LEVEL_TO_EFFORT: Record<string, ReasoningEffort> = {
+/**
+ * Single source of truth: user-facing reasoning level strings → ReasoningEffort enum.
+ * The reverse mapping (for the settings UI) is derived from this in SettingsViewMessageHandler.
+ */
+export const LEVEL_TO_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
   none: ReasoningEffort.NONE,
   low: ReasoningEffort.LOW,
   medium: ReasoningEffort.MEDIUM,
@@ -44,28 +47,29 @@ const LEVEL_TO_EFFORT: Record<string, ReasoningEffort> = {
 };
 
 /**
- * Apply the user's reasoning level override to a handler's capabilities.
- * Only applies if the model supports configurable reasoning effort and the
- * user has set an override for this model.
+ * Apply the user's reasoning level override to a handler, returning it for chaining.
+ * Only mutates capabilities when the model supports configurable effort and the
+ * user has set an override.
  */
-function applyReasoningLevelOverride(handler: ModelHandler): void {
-  if (!handler.capabilities.supportsReasoningEffort) return;
+function withReasoningOverride<T extends ModelHandler>(handler: T): T {
+  if (!handler.capabilities.supportsReasoningEffort) return handler;
 
   const overrides = globalSM.get<Record<string, string>>(
     GlobalStateKey.REASONING_LEVELS,
     {},
   );
   const level = overrides[handler.config.name];
-  if (!level) return;
+  if (!level) return handler;
 
   const effort = LEVEL_TO_EFFORT[level];
-  if (effort === undefined) return;
+  if (effort === undefined) return handler;
 
   logger.debug(
     CHANNEL,
     `Applying reasoning level override for ${handler.config.name}: ${level}`,
   );
   handler.capabilities.reasoningEffort = effort;
+  return handler;
 }
 
 /** Check if OpenAI Responses API should be used for this config. */
@@ -95,36 +99,34 @@ function shouldUseResponsesAPI(
 export function createModelHandler(config: ModelConfig): ModelHandler {
   const useOpenRouter = getConfig<boolean>('texra.model.useOpenRouter', false);
 
-  let handler: ModelHandler;
-
   // OpenAI Responses API (required or optional)
   if (shouldUseResponsesAPI(config, useOpenRouter)) {
     logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
-    handler = new ModelHandlerOpenAIResponse(config);
-  } else if (config.openRouterOnly || useOpenRouter) {
-    // Route through OpenRouter if configured
+    return withReasoningOverride(new ModelHandlerOpenAIResponse(config));
+  }
+
+  // Route through OpenRouter if configured
+  if (config.openRouterOnly || useOpenRouter) {
     const openrouterFullName =
       config.openrouterFullName ?? `${config.provider}/${config.fullName}`;
     if (config.provider === ModelProvider.ANTHROPIC) {
-      handler = new ModelHandlerAnthropicViaOpenRouter({
-        ...config,
-        openrouterFullName,
-      });
-    } else {
-      handler = new ModelHandlerOpenRouter({ ...config, openrouterFullName });
+      return withReasoningOverride(
+        new ModelHandlerAnthropicViaOpenRouter({
+          ...config,
+          openrouterFullName,
+        }),
+      );
     }
-  } else {
-    // Direct provider handler
-    const HandlerClass = PROVIDER_HANDLERS.get(config.provider);
-    if (!HandlerClass) {
-      throw new Error(`Unsupported model provider: ${config.provider}`);
-    }
-    logger.debug(CHANNEL, `Using Handler: ${HandlerClass.name}`);
-    handler = new HandlerClass(config);
+    return withReasoningOverride(
+      new ModelHandlerOpenRouter({ ...config, openrouterFullName }),
+    );
   }
 
-  // Apply user reasoning level override (if configured for this model)
-  applyReasoningLevelOverride(handler);
-
-  return handler;
+  // Direct provider handler
+  const HandlerClass = PROVIDER_HANDLERS.get(config.provider);
+  if (!HandlerClass) {
+    throw new Error(`Unsupported model provider: ${config.provider}`);
+  }
+  logger.debug(CHANNEL, `Using Handler: ${HandlerClass.name}`);
+  return withReasoningOverride(new HandlerClass(config));
 }
