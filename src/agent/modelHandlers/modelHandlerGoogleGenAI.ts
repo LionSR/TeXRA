@@ -196,9 +196,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           this.logger.warn(
             "Gemini 3 models can't fully disable thinking. Using thinking_level 'LOW'.",
           );
-          return ThinkingLevel.LOW;
         }
-        return undefined;
+        // Use LOW as the minimum supported level across all thinking models.
+        // Returning undefined would omit thinkingLevel entirely, making the
+        // API fall back to its default (medium/high) — defeating the user's intent.
+        return ThinkingLevel.LOW;
 
       case ReasoningEffort.LOW:
         return ThinkingLevel.LOW;
