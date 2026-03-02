@@ -60,13 +60,14 @@ export class ExtractLatexFiguresTool extends defineTool({
       limitedPaths.length === 1 ? '' : 's'
     } in ${display}.`;
 
+    const fullOutput = limitReached
+      ? `${output}\n\nNote: Limited attachments to ${attachments.length} files.`
+      : output;
+
     return {
       summary,
-      output,
+      output: fullOutput,
       files: attachments,
-      ...(limitReached && {
-        userInstruction: `Limited attachments to ${attachments.length} files.`,
-      }),
     };
   }
 }
