@@ -89,8 +89,7 @@ export class TikzPictureManager {
 
     const labeledTikzPictures: [string, string[]][] = [];
 
-    let figureMatch;
-    while ((figureMatch = figurePattern.exec(content)) !== null) {
+    for (const figureMatch of content.matchAll(figurePattern)) {
       const figureContent = figureMatch[0];
       const label = figureMatch[1];
 
