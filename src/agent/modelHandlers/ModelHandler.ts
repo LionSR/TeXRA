@@ -484,9 +484,9 @@ export abstract class ModelHandler<
       return null;
     }
 
-    if (reasoningEffort === ReasoningEffort.NONE) {
-      return null;
-    }
+    // NONE is a deliberate user choice ("minimize reasoning"), not "no preference".
+    // Providers map it to their minimum effort level (e.g. Anthropic → 'low').
+    // Returning null here would silently fall back to high/default effort.
 
     const isGpt5 = this.config.name.startsWith('gpt5');
     if (
