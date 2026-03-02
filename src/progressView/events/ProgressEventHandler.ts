@@ -286,22 +286,17 @@ export class ProgressEventHandler {
       this.state.meta.setExecutionId(streamId, executionId);
     }
 
-    // Set activeRunId early from storageKey so instruction persistence works
-    // immediately — without waiting for the first updateStreamUsage event.
-    // This is critical for subagents launched by orchestrators: by the time
-    // the user switches to the subagent tab, the instruction must already be
-    // persisted with the correct run key.
-    if (storageKey) {
-      this.state.meta.setActiveRunId(streamId, storageKey);
-    }
+    // Set activeRunId from storageKey (= root group ID) immediately.
+    // Without this, activeRunId only gets set on the first updateStreamUsage
+    // event — long after setTaskState fires. That made sendInstructionUpdate
+    // bail out (no runId), so subagent instructions were never persisted.
+    this.state.meta.setActiveRunId(streamId, storageKey);
 
     if (isActiveStream) {
-      // Active stream: persist + send instruction to webview
-      this.sendInstructionUpdate(streamId, storageKey ?? undefined);
-    } else if (storageKey) {
-      // Non-active stream: persist instruction so it's available on tab switch.
-      // Without this, subagent instructions are missing when the user clicks
-      // on a subagent tab that wasn't active during setTaskState.
+      this.sendInstructionUpdate(streamId, storageKey);
+    } else {
+      // Non-active stream (e.g. subagent while orchestrator is active):
+      // persist instruction so it's available when the user switches tabs.
       this.prepareInstructionUpdate(streamId, storageKey);
     }
 
