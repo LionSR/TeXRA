@@ -12,6 +12,8 @@ export const ModelSelectionEvents = {
     createEvent('model-enabled-set', detail),
   setHelperModel: (detail: { modelName: string }) =>
     createEvent('helper-model-set', detail),
+  setReasoningLevel: (detail: { modelName: string; level: string | null }) =>
+    createEvent('model-reasoning-level-set', detail),
 } as const;
 
 export const ProviderKeyEvents = {
