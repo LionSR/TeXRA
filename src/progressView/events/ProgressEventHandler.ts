@@ -55,6 +55,7 @@ export class ProgressEventHandler {
     private webviewUpdater: WebviewUpdater,
     private webviewBridge: WebviewBridge,
     private readonly uiCallbacks: UICallbacks,
+    private readonly hasPendingPermissions: (streamId: string) => boolean,
   ) {
     this.logger = new AgentLogger('ProgressEventHandler');
     this.ctx = { state: this.state, webviewUpdater: this.webviewUpdater };
@@ -241,8 +242,21 @@ export class ProgressEventHandler {
     if (agentCategory) {
       this.state.getOrCreateStreamState(streamId, agentCategory);
     }
-    this.maybeUpdateFilterForCategory(agentCategory);
-    this.state.activeStream = streamId;
+    // Don't switch away from the current stream if it has pending permissions
+    // (retry, tool-edit, bash approval, or agent proposal) — the user needs to
+    // interact with the approval panel before losing sight of it.
+    const currentStream = this.state.activeStream;
+    const shouldSwitch =
+      !currentStream || !this.hasPendingPermissions(currentStream);
+    if (shouldSwitch) {
+      // Update the category filter only when actually switching. If we change
+      // the filter while suppressing the switch, sendStreamMetadata →
+      // pickValidActiveStream rebuilds the stream list with the new filter,
+      // which may exclude the current stream and override state.activeStream —
+      // completely bypassing the pending-permissions guard.
+      this.maybeUpdateFilterForCategory(agentCategory);
+      this.state.activeStream = streamId;
+    }
 
     if (!this.webviewUpdater.isAvailable()) return;
 
@@ -252,14 +266,15 @@ export class ProgressEventHandler {
         this.state,
         StreamStatusService.getAll(),
       );
-    } else {
+    } else if (shouldSwitch) {
       this.webviewUpdater.setActiveStream(streamId);
     }
-    // Known-stream path: include active-stream state in the batch
-    // so we don't need separate progress/badges/parent messages.
+    // Always sync content for the new stream so instruction/badges/parent
+    // info reaches the webview — even when we suppress the view switch.
+    // includeActiveState is only relevant when this IS the active stream.
     this.syncStreamContent(streamId, {
       updateInstruction: true,
-      includeActiveState: wasKnownStream && !filterChanged,
+      includeActiveState: shouldSwitch && wasKnownStream && !filterChanged,
     });
   }
 
