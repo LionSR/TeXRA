@@ -145,6 +145,15 @@ export type UpdateAgentSelectionMessage = z.infer<
 // Model selection data schema
 // ============================================================
 
+/** Reasoning effort levels that a user can select. */
+export const ReasoningLevelSchema = z.enum([
+  'none',
+  'low',
+  'medium',
+  'high',
+]);
+export type ReasoningLevel = z.infer<typeof ReasoningLevelSchema>;
+
 export const ModelSelectionItemSchema = z.object({
   name: z.string(),
   provider: z.string(),
@@ -152,6 +161,12 @@ export const ModelSelectionItemSchema = z.object({
   deprecated: z.boolean(),
   contextWindow: z.string().optional(),
   cost: z.string().optional(),
+  /** Whether this model supports user-configurable reasoning effort. */
+  supportsReasoningLevel: z.boolean().optional(),
+  /** The model's default reasoning level from its static config. */
+  defaultReasoningLevel: ReasoningLevelSchema.optional(),
+  /** The user's chosen reasoning level override (undefined = use default). */
+  reasoningLevel: ReasoningLevelSchema.optional(),
 });
 export type ModelSelectionItem = z.infer<typeof ModelSelectionItemSchema>;
 
@@ -384,6 +399,13 @@ const SetHelperModelMessageSchema = z.object({
   modelName: z.string().min(1),
 });
 
+const SetModelReasoningLevelMessageSchema = z.object({
+  command: z.literal(CMD.SET_MODEL_REASONING_LEVEL),
+  modelName: z.string().min(1),
+  /** The reasoning level to set, or undefined/null to reset to model default. */
+  level: ReasoningLevelSchema.nullable(),
+});
+
 // Agent selection inbound messages
 const GetAgentSelectionMessageSchema = commandOnly(CMD.GET_AGENT_SELECTION);
 
@@ -566,6 +588,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     GetModelSelectionMessageSchema,
     SetModelEnabledMessageSchema,
     SetHelperModelMessageSchema,
+    SetModelReasoningLevelMessageSchema,
     // Agent selection messages
     GetAgentSelectionMessageSchema,
     OpenAgentYamlMessageSchema,

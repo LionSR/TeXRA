@@ -496,6 +496,12 @@ export const profileViewStyles: CSSResult = css`
     margin-left: auto;
   }
 
+  .reasoning-level-select {
+    flex-shrink: 0;
+    max-width: 160px;
+    font-size: var(--font-size-xs);
+  }
+
   .deprecated-toggle {
     display: flex;
     align-items: center;

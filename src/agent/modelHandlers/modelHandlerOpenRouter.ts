@@ -133,11 +133,14 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
         this.capabilities.supportsReasoningEffort &&
         this.capabilities.reasoningEffort
       ) {
-        // O1-style models with effort levels
+        // O1-style models with effort levels.
+        // OpenRouter doesn't support 'none'; clamp to 'low'.
+        const effort =
+          this.capabilities.reasoningEffort === 'none'
+            ? 'low'
+            : this.capabilities.reasoningEffort;
         kwargs.reasoning = {
-          effort: this.validateReasoningEffort(
-            this.capabilities.reasoningEffort,
-          ),
+          effort: this.validateReasoningEffort(effort),
         };
         kwargs.include_reasoning = true;
       } else {

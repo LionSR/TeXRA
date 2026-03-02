@@ -179,8 +179,10 @@ export class ModelHandlerOpenAI<
 
     const reasoningEffort = this.getEffectiveReasoningEffort();
     if (this.capabilities.supportsReasoning && reasoningEffort) {
+      // OpenAI doesn't support 'none'; clamp to 'low' (the minimum).
+      const effective = reasoningEffort === 'none' ? 'low' : reasoningEffort;
       baseParams.reasoning_effort = this.validateReasoningEffort(
-        reasoningEffort,
+        effective,
       ) as ChatCompletionRequestBase['reasoning_effort'];
     }
 
