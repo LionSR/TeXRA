@@ -97,6 +97,7 @@ import type {
   ResponseReasoningSummaryTextDeltaEvent,
   ResponseOutputItemDoneEvent,
   ResponseWebSearchCallInProgressEvent,
+  ResponseFunctionCallArgumentsDoneEvent,
 } from 'openai/resources/responses/responses';
 
 interface UploadedOpenAIResponseAttachment {
@@ -1341,6 +1342,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           hasThinkingContent: false,
         };
 
+        /** Finalize and reset the thinking stream if it has content. */
+        const rotateThinkingStream = (): void => {
+          if (!state.hasThinkingContent) return;
+          state.thinkingStream.finalize();
+          state.hasThinkingContent = false;
+          state.thinkingStream = this.createThinkingStream();
+        };
+
         for await (const event of stream) {
           if (this.isReasoningDeltaEvent(event)) {
             state.thinkingStream.append(event.delta);
@@ -1350,12 +1359,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           } else if (this.isWebSearchInProgressEvent(event)) {
             // Web search starting - finalize current thinking stream
             // Don't emit placeholder here - wait for output_item.done with full data
-            if (state.hasThinkingContent) {
-              state.thinkingStream.finalize();
-              state.hasThinkingContent = false;
-              // Create new thinking stream for potential continuation after search
-              state.thinkingStream = this.createThinkingStream();
-            }
+            rotateThinkingStream();
+          } else if (this.isFunctionCallArgumentsDoneEvent(event)) {
+            // Function call arguments complete - finalize streams since no more
+            // text/thinking deltas will arrive after tool calls begin.
+            rotateThinkingStream();
+            this.logger.debug(
+              `Tool call ready during streaming: ${event.name}`,
+            );
           } else if (this.isOutputItemDoneEvent(event)) {
             // When output item is done, we can get the full web search data
             const item = event.item;
@@ -1365,11 +1376,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
               hasOpenAIWebSearchData(item)
             ) {
               // Finalize thinking if we have content (in case in_progress didn't fire)
-              if (state.hasThinkingContent) {
-                state.thinkingStream.finalize();
-                state.hasThinkingContent = false;
-                state.thinkingStream = this.createThinkingStream();
-              }
+              rotateThinkingStream();
               this.emitOpenAIWebSearch(item);
               state.emittedWebSearchIds.add(item.id);
             }
@@ -2261,7 +2268,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     // Build tool result as plain text - JSON wastes tokens
-    const combinedText = formatToolResultAsText(
+    let combinedText = formatToolResultAsText(
       result,
       finalResult.attachmentSummary,
     );
@@ -2287,6 +2294,33 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       outputPayload = parts;
+    } else if (attachments.length > 0 && this.canProcessToolResultAttachments) {
+      // Inline base64 fallback: when file uploads are unavailable (e.g. OpenRouter)
+      // but the model supports visual content, embed images/PDFs directly.
+      const { parts: inlineParts, inlined, skipped } =
+        await this.buildInlineAttachmentParts(attachments);
+      if (inlineParts.length > 0) {
+        // Build summary that accurately reflects which attachments were inlined
+        // vs. skipped, so the model only gets a read_file hint for skipped ones.
+        const summaryParts: string[] = [];
+        if (inlined.length > 0) {
+          summaryParts.push(
+            formatAttachmentSummary(inlined, 'included-inline'),
+          );
+        }
+        if (skipped.length > 0) {
+          summaryParts.push(formatAttachmentSummary(skipped, 'metadata-only'));
+        }
+        const inlineSummary = summaryParts.join('\n');
+        finalResult.attachmentSummary = inlineSummary;
+        combinedText = formatToolResultAsText(result, inlineSummary);
+        outputPayload = [
+          { type: 'input_text', text: combinedText },
+          ...inlineParts,
+        ];
+      } else {
+        outputPayload = combinedText;
+      }
     } else {
       outputPayload = combinedText;
     }
@@ -2356,6 +2390,81 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     return uploaded;
+  }
+
+  /**
+   * Build inline base64 content parts for tool attachments when file uploads
+   * are unavailable (e.g., OpenRouter routing). Images use data URI in
+   * `image_url`; PDFs use `file_data`. Non-visual attachments are skipped.
+   */
+  private async buildInlineAttachmentParts(
+    attachments: ToolFileAttachment[],
+  ): Promise<{
+    parts: ResponseFunctionCallOutputItemList;
+    inlined: ToolFileAttachment[];
+    skipped: ToolFileAttachment[];
+  }> {
+    const MAX_INLINE_BYTES = 20 * 1024 * 1024; // 20 MiB cap per attachment
+    const parts: ResponseFunctionCallOutputItemList = [];
+    const inlined: ToolFileAttachment[] = [];
+    const skipped: ToolFileAttachment[] = [];
+
+    for (const attachment of attachments) {
+      const mimeType = attachment.mimeType ?? 'application/octet-stream';
+      const isImage = mimeType.startsWith('image/');
+      const isPdf = mimeType === 'application/pdf';
+
+      if (!isImage && !isPdf) {
+        skipped.push(attachment);
+        continue;
+      }
+
+      let buffer: Buffer | undefined;
+      try {
+        buffer = await loadAttachmentBuffer(attachment);
+        if (buffer.length > MAX_INLINE_BYTES) {
+          this.logger.debug(
+            `Skipping inline attachment ${attachment.path ?? 'attachment'}: ${buffer.length} bytes exceeds limit`,
+          );
+          skipped.push(attachment);
+          continue;
+        }
+
+        const base64 = buffer.toString('base64');
+
+        if (isImage) {
+          parts.push({
+            type: 'input_image',
+            detail: 'auto',
+            image_url: `data:${mimeType};base64,${base64}`,
+          });
+        } else {
+          // PDF
+          const filename =
+            typeof attachment.path === 'string' && attachment.path.length > 0
+              ? path.basename(attachment.path)
+              : 'attachment.pdf';
+          parts.push({
+            type: 'input_file',
+            file_data: `data:application/pdf;base64,${base64}`,
+            filename,
+          });
+        }
+        inlined.push(attachment);
+      } catch (err) {
+        this.logger.debug(
+          `Unable to inline attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
+        );
+        skipped.push(attachment);
+      } finally {
+        if (buffer) {
+          buffer.fill(0);
+          buffer = undefined;
+        }
+      }
+    }
+
+    return { parts, inlined, skipped };
   }
 
   async createUserFollowUpMessages(
@@ -2477,6 +2586,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     event: ResponseStreamEvent,
   ): event is ResponseOutputItemDoneEvent {
     return event.type === 'response.output_item.done';
+  }
+
+  /** Type guard for function call arguments done events. */
+  private isFunctionCallArgumentsDoneEvent(
+    event: ResponseStreamEvent,
+  ): event is ResponseFunctionCallArgumentsDoneEvent {
+    return event.type === 'response.function_call_arguments.done';
   }
 
   /** Type guard for web search output items. */
