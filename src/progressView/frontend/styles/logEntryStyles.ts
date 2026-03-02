@@ -21,7 +21,7 @@ export const logEntryStyles = css`
   }
 
   .log-line {
-    line-height: 1.4;
+    line-height: var(--line-height-normal);
     margin: 0;
     padding: calc(var(--spacing-tiny) / 2) 0;
     display: block;
@@ -110,7 +110,7 @@ export const logEntryStyles = css`
   }
 
   .xml-link-container .xml-fix-hint .codicon {
-    opacity: 1;
+    opacity: var(--opacity-full);
     color: var(--color-text-link);
   }
 
@@ -190,12 +190,12 @@ export const logEntryStyles = css`
   .details-summary:hover .banner-content-copy,
   .banner-details:focus-within .banner-content-copy,
   .banner-content-copy:focus-visible {
-    opacity: 1;
+    opacity: var(--opacity-full);
     outline: var(--border-thin) solid var(--vscode-focusBorder);
   }
 
   .banner-content-copy.copy-success {
-    opacity: 1;
+    opacity: var(--opacity-full);
     color: var(--color-success);
   }
 
@@ -205,7 +205,7 @@ export const logEntryStyles = css`
 
   /* Log level badges */
   :is(.level-debug, .level-info, .level-warn, .level-error) {
-    font-weight: bold;
+    font-weight: var(--font-weight-bold);
   }
 
   .level-debug {

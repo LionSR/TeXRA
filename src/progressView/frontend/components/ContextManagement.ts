@@ -58,7 +58,7 @@ export class ContextManagement extends LitElement {
       }
 
       .context-title {
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
       }
 
       .context-content {
@@ -89,7 +89,7 @@ export class ContextManagement extends LitElement {
         align-items: center;
         gap: var(--spacing-tiny);
         font-size: var(--font-size-sm);
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         margin-bottom: var(--spacing-tiny);
       }
 

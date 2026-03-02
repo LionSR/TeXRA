@@ -50,13 +50,13 @@ export class InstructionPanel extends LitElement {
         display: inline-flex;
         align-items: center;
         gap: var(--spacing-tiny);
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         color: var(--color-text-secondary);
       }
 
       .instruction-panel__title .codicon {
         font-size: var(--font-size-icon);
-        line-height: 1;
+        line-height: var(--line-height-tight);
       }
 
       .instruction-panel__actions {
@@ -70,7 +70,7 @@ export class InstructionPanel extends LitElement {
       }
 
       :host(:hover) .instruction-panel__copy {
-        opacity: 1;
+        opacity: var(--opacity-full);
       }
 
       .instruction-panel__body {
@@ -82,7 +82,7 @@ export class InstructionPanel extends LitElement {
         max-height: 12rem;
         font-family: var(--vscode-editor-font-family);
         font-size: var(--vscode-editor-font-size);
-        line-height: 1.45;
+        line-height: var(--line-height-normal);
       }
 
       .instruction-panel__text::part(control) {
