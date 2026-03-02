@@ -223,7 +223,10 @@ export function isOpenAIServerToolContent(
  */
 export function isAnthropicServerToolContent(
   block: unknown,
-): block is ServerToolUseBlock | WebSearchToolResultBlock | WebFetchToolResultBlock {
+): block is
+  | ServerToolUseBlock
+  | WebSearchToolResultBlock
+  | WebFetchToolResultBlock {
   return (
     isAnthropicServerToolUse(block) ||
     isAnthropicWebSearchResult(block) ||

@@ -307,9 +307,7 @@ export class AnthropicStreamHandler {
         event.content_block as WebSearchToolResultBlock,
       );
     } else if (blockType === 'web_fetch_tool_result') {
-      this.handleWebFetchResult(
-        event.content_block as WebFetchToolResultBlock,
-      );
+      this.handleWebFetchResult(event.content_block as WebFetchToolResultBlock);
     }
 
     // Always update lastBlockIndex for ALL block types

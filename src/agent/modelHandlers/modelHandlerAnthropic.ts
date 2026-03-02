@@ -2104,7 +2104,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Cast needed because BetaContentBlock has slightly different types than the regular API
     let contentBlocks = responseObject.content.filter(
       isAnthropicServerToolContent,
-    ) as (ServerToolUseBlock | WebSearchToolResultBlock | WebFetchToolResultBlock)[];
+    ) as (
+      | ServerToolUseBlock
+      | WebSearchToolResultBlock
+      | WebFetchToolResultBlock
+    )[];
 
     // Collect IDs of result blocks that have matching server_tool_use calls.
     const searchResultIds = new Set(
@@ -2113,9 +2117,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         .map((b) => b.tool_use_id),
     );
     const fetchResultIds = new Set(
-      contentBlocks
-        .filter(isAnthropicWebFetchResult)
-        .map((b) => b.tool_use_id),
+      contentBlocks.filter(isAnthropicWebFetchResult).map((b) => b.tool_use_id),
     );
 
     // Strip orphaned server_tool_use blocks that lack a matching result.

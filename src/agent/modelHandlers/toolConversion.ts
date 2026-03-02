@@ -138,10 +138,8 @@ export function toAnthropicTools(
   defs: ToolDefinition[],
   options: AnthropicToolOptions = {},
 ): ToolUnion[] {
-  const {
-    supportsNativeWebSearch = false,
-    supportsNativeWebFetch = false,
-  } = options;
+  const { supportsNativeWebSearch = false, supportsNativeWebFetch = false } =
+    options;
 
   /** Tools that require an explicit capability flag to use as native. */
   const CONDITIONAL_NATIVE_TOOLS: Record<string, boolean> = {
