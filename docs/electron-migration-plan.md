@@ -82,9 +82,7 @@ export interface PlatformFS {
   delete(path: string, options?: { recursive?: boolean }): Promise<void>;
   createDir(path: string): Promise<void>;
   readDir(path: string): Promise<{ name: string; isDirectory: boolean }[]>;
-  stat(
-    path: string,
-  ): Promise<{
+  stat(path: string): Promise<{
     size: number;
     mtime: number;
     isDirectory: boolean;
