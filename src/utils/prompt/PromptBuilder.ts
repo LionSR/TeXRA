@@ -122,11 +122,11 @@ export class PromptBuilder {
     const template = this.getRoundTemplate(currRound);
 
     if (!template) {
-      const message =
+      this.logger?.warn(
         currRound === 0
           ? 'No initial user request configured. Returning empty prompt.'
-          : `No prompt configured for round ${currRound}. Returning empty prompt.`;
-      this.logger?.warn(message);
+          : `No prompt configured for round ${currRound}. Returning empty prompt.`,
+      );
       return '';
     }
 

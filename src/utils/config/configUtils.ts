@@ -66,10 +66,9 @@ export async function updateConfig<T>(
   if (ifUnset) {
     const setting = vscode.workspace.getConfiguration().inspect(key);
     if (
-      setting &&
-      (setting.globalValue !== undefined ||
-        setting.workspaceValue !== undefined ||
-        setting.workspaceFolderValue !== undefined)
+      setting?.globalValue !== undefined ||
+      setting?.workspaceValue !== undefined ||
+      setting?.workspaceFolderValue !== undefined
     ) {
       return; // Setting already exists, don't update
     }

@@ -139,8 +139,7 @@ async function executeSubagent(
 ): Promise<ToolResult> {
   const executionId = generateExecutionId();
 
-  const ctx = getCurrentToolFileInteractionContext();
-  const parentExecutionId = ctx?.executionId;
+  const parentExecutionId = getCurrentToolFileInteractionContext()?.executionId;
   const syntheticConfig = AgentConfigSchema.parse(configPayload);
   await registerExecution(
     executionId,

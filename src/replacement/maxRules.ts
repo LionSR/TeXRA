@@ -350,7 +350,7 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
       Object.fromEntries(
         tildeGreekLetters.map((letter) => [
           `\\tilde{\\${letter}}`,
-          `\\t${GREEK_LETTER_SHORTCUTS[letter] || letter}`,
+          `\\t${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
         ]),
       ),
     );
@@ -365,7 +365,7 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
       Object.fromEntries(
         tildeGreekBoldLetters.map((letter) => [
           `\\tilde{\\boldsymbol{\\${letter}}}`,
-          `\\tb${GREEK_LETTER_SHORTCUTS[letter] || letter}`,
+          `\\tb${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
         ]),
       ),
     );
@@ -383,7 +383,7 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
       Object.fromEntries(
         hatGreekLetters.map((letter) => [
           `\\hat{\\${letter}}`,
-          `\\h${GREEK_LETTER_SHORTCUTS[letter] || letter}`,
+          `\\h${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
         ]),
       ),
     );
@@ -410,7 +410,7 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
       Object.fromEntries(
         hatBoldsymbolLetters.map((letter) => [
           `\\hat{\\boldsymbol{\\${letter}}}`,
-          `\\hb${GREEK_LETTER_SHORTCUTS[letter] || letter}`,
+          `\\hb${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
         ]),
       ),
     );
