@@ -308,13 +308,17 @@ export function handlePermissionAction(
         action,
         feedback,
       });
-      // Optimistic removal — backend RESOLVE will be a no-op
-      removePrompt(
-        ctx,
-        permission.kind,
-        'requestId',
-        permission.data.requestId,
-      );
+      // Only remove for terminal actions (approve/reject).
+      // Non-terminal actions like openDiff, previewProposed, showLatexdiff
+      // just open editors without settling the approval.
+      if (action === 'approve' || action === 'reject') {
+        removePrompt(
+          ctx,
+          permission.kind,
+          'requestId',
+          permission.data.requestId,
+        );
+      }
       break;
     }
     case PERMISSION_KIND.RETRY:
