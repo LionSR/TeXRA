@@ -56,6 +56,16 @@ function formatWorkflowOutputs(outputs: OutputFileSummary[]): string[] {
   return lines;
 }
 
+/** Map internal end-group statuses to agent-friendly labels. */
+function agentFriendlyStatus(status: string): string {
+  switch (status) {
+    case 'stopped':
+      return 'completed';
+    default:
+      return status;
+  }
+}
+
 /**
  * Format an AgentFlowResult as a delivery message.
  * Injected into the orchestrator's FollowUpQueue as a user-role message.
@@ -64,8 +74,9 @@ export function formatSubagentDelivery(
   agentName: string,
   result: AgentFlowResult,
 ): string {
+  const displayStatus = agentFriendlyStatus(result.status);
   const lines = [
-    `<subagent-result id="${escapeAttr(result.executionId)}" agent="${escapeAttr(agentName)}" category="${escapeAttr(result.category)}" status="${escapeAttr(result.status)}">`,
+    `<subagent-result id="${escapeAttr(result.executionId)}" agent="${escapeAttr(agentName)}" category="${escapeAttr(result.category)}" status="${escapeAttr(displayStatus)}">`,
   ];
 
   if (result.category === 'workflow' && result.outputs.length > 0) {
