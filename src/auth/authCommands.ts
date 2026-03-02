@@ -86,7 +86,7 @@ export async function signIn(): Promise<void> {
     if (existing) {
       const user = await SupabaseClient.getUser();
       void vscode.window.showInformationMessage(
-        `Already signed in as ${user?.email ?? 'unknown user'}`,
+        `Already signed in as ${user?.email || 'unknown user'}`,
       );
       return;
     }
@@ -112,7 +112,7 @@ export async function signIn(): Promise<void> {
       const user = await SupabaseClient.getUser();
       const tier = await SupabaseClient.getUserTier();
       void vscode.window.showInformationMessage(
-        `Signed in as ${user?.email ?? 'unknown user'} (${tier} tier)`,
+        `Signed in as ${user?.email || 'unknown user'} (${tier} tier)`,
       );
     }
   } catch (error) {
