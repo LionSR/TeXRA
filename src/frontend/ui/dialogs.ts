@@ -55,7 +55,7 @@ export async function selectFiles(
     filters: options.filters,
   });
 
-  if (!fileUris || fileUris.length === 0) {
+  if (!fileUris?.length) {
     return null;
   }
   return fileUris.map((uri) => WorkspaceFS.relativePath(uri.fsPath));

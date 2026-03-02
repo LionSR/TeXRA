@@ -553,9 +553,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     if (children.length === 0) return;
     lines.push('', `Children (${children.length}):`);
     const formatted = await this.formatChildren(children);
-    for (const line of formatted) {
-      lines.push(`  ${line}`);
-    }
+    lines.push(...formatted.map((line) => `  ${line}`));
   }
 
   private handleKill(executionId: ExecutionId): ToolResult {

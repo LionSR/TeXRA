@@ -57,16 +57,13 @@ logger.initialize(CHANNEL);
 let pandocCheckPromise: Promise<boolean> | null = null;
 
 async function isPandocAvailable(): Promise<boolean> {
-  if (pandocCheckPromise === null) {
-    pandocCheckPromise = checkToolInstalled('pandoc', false).then((result) => {
+  return (pandocCheckPromise ??= checkToolInstalled('pandoc', false).then(
+    (result) => {
       // Clear cache on negative result to allow retry next time
-      if (!result) {
-        pandocCheckPromise = null;
-      }
+      if (!result) pandocCheckPromise = null;
       return result;
-    });
-  }
-  return pandocCheckPromise;
+    },
+  ));
 }
 
 const LATEX_REPLACEMENTS: Array<[RegExp, string]> = [
@@ -213,25 +210,14 @@ async function convertWithPandoc(text: string): Promise<string | null> {
  * @param content The raw content to format
  */
 export async function formatContent(content: string): Promise<string> {
-  if (!content) {
-    return '';
-  }
+  if (!content) return '';
 
-  // Format the content for improved rendering
-  let formattedContent = content.trim();
+  const trimmed = content.trim();
+  const pandocResult = await convertWithPandoc(trimmed);
+  if (pandocResult !== null) return pandocResult;
 
-  const pandocResult = await convertWithPandoc(formattedContent);
-
-  if (pandocResult !== null) {
-    formattedContent = pandocResult;
-  } else {
-    if (containsHtml(formattedContent)) {
-      formattedContent = convertHtmlToMarkdown(formattedContent);
-    }
-
-    if (containsLatex(formattedContent)) {
-      formattedContent = convertLatexToMarkdown(formattedContent);
-    }
-  }
-  return formattedContent;
+  let result = trimmed;
+  if (containsHtml(result)) result = convertHtmlToMarkdown(result);
+  if (containsLatex(result)) result = convertLatexToMarkdown(result);
+  return result;
 }
