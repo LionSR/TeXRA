@@ -370,6 +370,9 @@ class ToolUseProcessNode<C> extends BaseNode<
       for (const searchResult of serverToolData.webSearchResults) {
         services.logger.logWebSearch(searchResult);
       }
+      for (const fetchResult of serverToolData.webFetchResults) {
+        services.logger.logWebFetch(fetchResult);
+      }
     }
 
     const lastAssistantContent = services.modelHandler.extractAssistantContent(
