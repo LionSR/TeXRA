@@ -40,7 +40,7 @@ export const permissionCardStyles: CSSResult = css`
 
   .permission-body {
     font-size: var(--font-size);
-    line-height: 1.5;
+    line-height: var(--line-height-relaxed);
   }
 
   .code-block {
@@ -91,7 +91,7 @@ export const permissionCardStyles: CSSResult = css`
   }
 
   .action-button:active {
-    opacity: 0.85;
+    opacity: var(--opacity-normal);
   }
 
   .action-button:focus-visible {

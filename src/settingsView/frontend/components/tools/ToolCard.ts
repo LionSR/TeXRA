@@ -59,7 +59,7 @@ export class ToolCard extends LitElement {
       }
 
       .tool-name {
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         font-size: var(--font-size);
         color: var(--vscode-foreground);
         white-space: nowrap;
@@ -69,11 +69,11 @@ export class ToolCard extends LitElement {
         display: inline-flex;
         align-items: center;
         gap: var(--spacing-small);
-        padding: 1px var(--spacing-small);
+        padding: var(--border-thin) var(--spacing-small);
         font-size: var(--font-size-xs, 11px);
         border-radius: var(--border-radius);
         white-space: nowrap;
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
       }
 
       .tool-badge--available {
@@ -103,7 +103,7 @@ export class ToolCard extends LitElement {
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
         margin-bottom: var(--spacing-small);
-        line-height: 1.4;
+        line-height: var(--line-height-normal);
       }
 
       .tool-ids {
@@ -116,7 +116,7 @@ export class ToolCard extends LitElement {
       .tool-id-tag {
         font-family: var(--vscode-editor-font-family, monospace);
         font-size: var(--font-size-xs, 11px);
-        padding: 1px 6px;
+        padding: var(--border-thin) var(--border-radius-large);
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
         color: var(--color-text-secondary);
         border-radius: var(--border-radius);
@@ -137,7 +137,7 @@ export class ToolCard extends LitElement {
       }
 
       .tool-guide-toggle:hover {
-        opacity: 0.8;
+        opacity: var(--opacity-hover);
       }
 
       .tool-guide-toggle:focus-visible {
@@ -156,7 +156,7 @@ export class ToolCard extends LitElement {
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
         color: var(--vscode-foreground);
-        line-height: 1.5;
+        line-height: var(--line-height-relaxed);
         white-space: pre-wrap;
       }
 

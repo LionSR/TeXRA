@@ -187,7 +187,7 @@ export class AgentSelectionPanel extends LitElement {
 
       .agent-detail-description {
         color: var(--vscode-foreground);
-        line-height: 1.5;
+        line-height: var(--line-height-relaxed);
         margin-bottom: var(--spacing-large);
       }
 
