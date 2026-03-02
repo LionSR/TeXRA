@@ -19,7 +19,7 @@ All notable changes to this project will be documented in this file.
 ### Improvements
 
 - **Inline base64 fallback for tool attachments** — images and PDFs from tool results are now embedded inline when routed through providers (e.g., OpenRouter) that lack file-upload support, so the model can see visual content.
-- **Lean blueprint notation** — the leanBlueprint agent now translates Lean syntax into standard mathematical notation in informal text, keeping Lean identifiers only inside `\lean{}` macros.
+- **Clearer delegation feedback** — the orchestrator now receives more accurate status signals, rejection details, and approval metadata when delegating to subagents, improving multi-agent coordination.
 
 ## [0.36.3] - 2026-02-23
 
