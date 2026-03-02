@@ -85,17 +85,6 @@ const RELAY_VERSION = '1.8.2';
 // Upstream request timeout (390s to fit within Supabase's 400s wall clock limit)
 const UPSTREAM_TIMEOUT_MS = 390000;
 
-/**
- * Interval for SSE keepalive comments during streaming (30 seconds).
- * Extended thinking emits deltas at a much lower rate than regular text
- * generation — the model does more computation per token. When the gap
- * between consecutive SSE events exceeds an intermediate proxy's idle
- * timeout (Cloudflare ~100s), the proxy drops the connection and truncates
- * the stream. Periodic keepalive comments (`: keepalive\n\n`) are valid SSE
- * that parsers ignore, but they keep data flowing to prevent idle drops.
- */
-const SSE_KEEPALIVE_INTERVAL_MS = 30_000;
-
 // =============================================================================
 // Types
 // =============================================================================
@@ -165,46 +154,6 @@ const PROVIDER_CONFIGS: Record<ProviderKey, ProviderConfig> = {
 
 function getProviderConfig(provider: string): ProviderConfig | null {
   return PROVIDER_CONFIGS[provider as ProviderKey] || null;
-}
-
-/**
- * Wraps an SSE response body stream to inject periodic keepalive comments.
- * Extended thinking streams emit deltas at a much lower rate than text
- * generation, and gaps between events can exceed proxy idle timeouts.
- * SSE comments (`: keepalive\n\n`) are valid SSE ignored by parsers but
- * keep data flowing to prevent intermediate proxies from dropping the connection.
- */
-function wrapWithKeepalive(body: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder();
-  const keepaliveBytes = encoder.encode(': keepalive\n\n');
-  let keepaliveTimer: ReturnType<typeof setInterval> | undefined;
-  const reader = body.getReader();
-
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      keepaliveTimer = setInterval(() => {
-        try {
-          controller.enqueue(keepaliveBytes);
-        } catch {
-          // Stream already closed — clean up
-          clearInterval(keepaliveTimer);
-        }
-      }, SSE_KEEPALIVE_INTERVAL_MS);
-    },
-    async pull(controller) {
-      const { done, value } = await reader.read();
-      if (done) {
-        clearInterval(keepaliveTimer);
-        controller.close();
-        return;
-      }
-      controller.enqueue(value);
-    },
-    cancel() {
-      clearInterval(keepaliveTimer);
-      reader.cancel();
-    },
-  });
 }
 
 function getEnabledProviders(): string[] {
@@ -746,16 +695,28 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
   responseHeaders.set('X-Accel-Buffering', 'no');
 
-  // For SSE streaming responses, inject periodic keepalive comments. Extended
-  // thinking emits deltas at a lower rate; gaps can exceed proxy idle timeouts.
-  const contentType = upstreamResponse.headers.get('content-type') ?? '';
-  const isSSE = contentType.includes('text/event-stream');
-  const responseBody =
-    isSSE && upstreamResponse.body
-      ? wrapWithKeepalive(upstreamResponse.body)
-      : upstreamResponse.body;
+  // FUTURE: SSE keepalive injection to prevent proxy idle timeouts.
+  //
+  // Extended thinking emits deltas at a much lower rate than text generation.
+  // Gaps between SSE events can exceed intermediate proxy idle timeouts
+  // (e.g. Cloudflare ~100s), causing the proxy to drop the connection and
+  // truncate the stream. Injecting periodic SSE comments (`: keepalive\n\n`)
+  // would keep data flowing, since parsers ignore comment lines.
+  //
+  // A previous setInterval-based approach was removed because the timer could
+  // fire mid-chunk, injecting `: keepalive\n\n` between two halves of a split
+  // SSE event and corrupting the stream. A safe implementation would need to:
+  //   1. Track whether the last forwarded chunk ended on an event boundary
+  //      (i.e. ended with `\n\n`), and only inject keepalives at clean boundaries.
+  //   2. Or use a pull-based approach that emits a keepalive only when the
+  //      upstream read has been pending longer than the threshold, ensuring
+  //      no interleaving with real data.
+  //
+  // The client-side AnthropicStreamHandler already detects truncated streams
+  // via the `messageStopReceived` diagnostic and throws a retryable error,
+  // so the impact of not having keepalives is a retry, not silent data loss.
 
-  return new Response(responseBody, {
+  return new Response(upstreamResponse.body, {
     status: upstreamResponse.status,
     headers: responseHeaders,
   });
