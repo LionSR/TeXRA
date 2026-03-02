@@ -10,10 +10,11 @@ export {
   formatModelResponseTemplate,
 } from './bannerFormatters';
 
-// Tool formatters (tool use, web search)
+// Tool formatters (tool use, web search, web fetch)
 export {
   formatToolUseTemplate,
   formatWebSearchTemplate,
+  formatWebFetchTemplate,
 } from './toolFormatters';
 
 // Data formatters (file list, missing outputs, latexdiff, statistics)
