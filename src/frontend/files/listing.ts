@@ -164,14 +164,14 @@ export async function getFilesRecursively(
   return files
     .map((uri) => getRelativePathPreservingSymlinks(uri.fsPath, root))
     .filter((relativePath) => {
-      if (!relativePath) return false;
-      if (containsHiddenSegment(relativePath)) return false;
+      if (!relativePath || containsHiddenSegment(relativePath)) return false;
       if (containsExcludedDirectory(relativePath, filters.excludeDirs))
         return false;
 
       const fileNameLower = path.basename(relativePath).toLowerCase();
-      if (filters.excludeFiles.includes(fileNameLower)) return false;
-
-      return passesFileFilters(fileNameLower, filters);
+      return (
+        !filters.excludeFiles.includes(fileNameLower) &&
+        passesFileFilters(fileNameLower, filters)
+      );
     });
 }

@@ -126,7 +126,7 @@ export class BashTool extends defineTool({
         command.length > 60 ? `${command.slice(0, 57)}…` : command;
       return {
         summary: `Executed: ${preview} (exit 0)`,
-        output: result.stdout || '',
+        output: result.stdout ?? '',
       };
     }
     // Many CLI tools (including latexmk) write errors to stdout, not stderr

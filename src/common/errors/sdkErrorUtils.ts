@@ -169,7 +169,9 @@ function matchSdkError(err: unknown): SdkMatchResult | undefined {
     };
   }
 
-  const prefix = `HTTP ${statusCode}${statusText ? ` ${statusText}` : ''}`;
+  const prefix = statusText
+    ? `HTTP ${statusCode} ${statusText}`
+    : `HTTP ${statusCode}`;
   return {
     message: `${prefix} – ${finalMessage}`,
     statusCode,
@@ -241,14 +243,12 @@ function detectProvider(err: unknown): string | undefined {
     return candidate.provider;
   }
 
-  const name = candidate.constructor?.name;
-  if (!name) {
-    return undefined;
-  }
+  const lowered = candidate.constructor?.name?.toLowerCase();
+  if (!lowered) return undefined;
 
-  const lowered = name.toLowerCase();
-  const providers = ['openai', 'anthropic', 'google', 'kimi'] as const;
-  return providers.find((p) => lowered.includes(p));
+  return (['openai', 'anthropic', 'google', 'kimi'] as const).find((p) =>
+    lowered.includes(p),
+  );
 }
 
 /** Extract request ID from SDK errors (property or headers). */
@@ -428,7 +428,9 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     };
   }
 
-  const prefix = `HTTP ${statusCode}${statusText ? ` ${statusText}` : ''}`;
+  const prefix = statusText
+    ? `HTTP ${statusCode} ${statusText}`
+    : `HTTP ${statusCode}`;
   return {
     message: `${prefix} – ${finalMessage}`,
     statusCode,

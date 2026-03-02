@@ -61,8 +61,7 @@ export class FlexibleFS {
     try {
       await AbsoluteFS.write(absolutePath, content);
     } catch (error) {
-      const err = error as NodeJS.ErrnoException;
-      if (err.code !== 'ELOOP') {
+      if ((error as NodeJS.ErrnoException).code !== 'ELOOP') {
         throw error;
       }
 
