@@ -1135,9 +1135,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     // Build shared params used by both token counting and API call
 
-    const reasoningEffort = this.capabilities.supportsReasoning
+    // OpenAI Responses API doesn't support 'none'; clamp to 'low'.
+    const rawEffort = this.capabilities.supportsReasoning
       ? this.getEffectiveReasoningEffort()
       : undefined;
+    const reasoningEffort =
+      rawEffort === 'none' ? ('low' as const) : rawEffort;
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const baseParams = {
