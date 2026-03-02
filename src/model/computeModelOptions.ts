@@ -22,6 +22,7 @@ export const DEFAULT_MODELS = [
   'opus46T',
   'gpt52',
   'gpt52pro',
+  'gpt53codex',
   'gpt41',
   'deepseekT',
   'kimi25T',
