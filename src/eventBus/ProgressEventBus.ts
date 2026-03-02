@@ -39,6 +39,9 @@ interface SetTaskStatePayload {
   streamId: StreamTabId;
   executionId?: ExecutionId;
   taskState: TaskState;
+  /** Storage key for this run (root group ID). Allows setting activeRunId early
+   *  so that instruction persistence doesn't require a usage event first. */
+  storageKey?: StorageKey;
 }
 
 const MAX_BUFFER_SIZE = 1000;
