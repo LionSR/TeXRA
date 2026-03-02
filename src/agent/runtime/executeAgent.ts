@@ -541,7 +541,7 @@ async function prepareAgentUI(
   options?: { isSubagent?: boolean },
 ): Promise<void> {
   if (executionId) await ensureRunDir(executionId);
-  const { streamId, config } = ctx;
+  const { streamId, config, storageKey } = ctx;
 
   const runStorage = getRunStorageService();
   StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
@@ -569,6 +569,7 @@ async function prepareAgentUI(
     streamId,
     executionId,
     taskState: agentConfigToTaskState(config),
+    storageKey,
   });
 
   if (config.outputFiles.length > 1 && !config.useMultipleOutputs) {
