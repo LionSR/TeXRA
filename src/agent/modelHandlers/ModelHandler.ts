@@ -74,6 +74,7 @@ import type {
 } from './types/IModelHandler';
 import type {
   ServerToolExtractionResult,
+  WebFetchResult,
   WebSearchResult,
 } from './types/ServerToolTypes';
 
@@ -257,6 +258,17 @@ export abstract class ModelHandler<
   protected emitWebSearchResult(result: WebSearchResult): void {
     if (this.progressViewEnabled) {
       this.logger.logWebSearch(result);
+    }
+  }
+
+  /**
+   * Emit web fetch result to progress view during streaming.
+   * This allows fetch results to appear in correct order based on when
+   * they occurred in the response, rather than being logged after streaming.
+   */
+  protected emitWebFetchResult(result: WebFetchResult): void {
+    if (this.progressViewEnabled) {
+      this.logger.logWebFetch(result);
     }
   }
 
@@ -793,7 +805,7 @@ export abstract class ModelHandler<
    * Override in handlers that support server tools.
    */
   extractServerToolData(_responseObject: Resp): ServerToolExtractionResult {
-    return { webSearchResults: [], contentBlocks: [] };
+    return { webSearchResults: [], webFetchResults: [], contentBlocks: [] };
   }
 
   /** Check if stop reason signals end-turn. */

@@ -18,6 +18,7 @@ import {
   formatStatisticsTemplate,
   formatToolUseTemplate,
   formatUserMessageTemplate,
+  formatWebFetchTemplate,
   formatWebSearchTemplate,
 } from './logFormatters';
 
@@ -73,9 +74,10 @@ const TEMPLATE_FORMATTERS: Record<string, TemplateFormatterFn | null> = {
   thinking: wrapWithErrorHandling(formatBannerContentTemplate, 'thinking'),
   scratchpad: wrapWithErrorHandling(formatBannerContentTemplate, 'scratchpad'),
 
-  // Tool/search results
+  // Tool/search/fetch results
   toolUse: wrapWithErrorHandling(formatToolUseTemplate, 'tool use'),
   webSearch: wrapWithErrorHandling(formatWebSearchTemplate, 'web search'),
+  webFetch: wrapWithErrorHandling(formatWebFetchTemplate, 'web fetch'),
 
   // Model response
   modelResponse: wrapWithErrorHandling(
