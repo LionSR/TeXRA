@@ -106,6 +106,15 @@ export const WebSearchPayloadSchema = z.object({
 });
 export type WebSearchPayload = z.infer<typeof WebSearchPayloadSchema>;
 
+export const WebFetchPayloadSchema = z.object({
+  url: z.string().optional(),
+  title: z.string().optional(),
+  provider: z.string().optional(),
+  status: z.string().optional(),
+  errorCode: z.string().optional(),
+});
+export type WebFetchPayload = z.infer<typeof WebFetchPayloadSchema>;
+
 // ============================================================
 // Outbound Message Schemas (backend -> frontend)
 // ============================================================
