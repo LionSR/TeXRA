@@ -105,6 +105,20 @@ export function filterPermissionsForStream(
   );
 }
 
+/**
+ * Remove all permissions associated with a specific stream.
+ * Keeps permissions that have no streamId (global) or belong to a different stream.
+ */
+export function removePermissionsForStream(
+  permissions: PermissionState[],
+  streamId: string,
+): PermissionState[] {
+  return permissions.filter(
+    (permission) =>
+      !permission.data.streamId || permission.data.streamId !== streamId,
+  );
+}
+
 // =============================================================================
 // Typed State Updaters
 // =============================================================================
