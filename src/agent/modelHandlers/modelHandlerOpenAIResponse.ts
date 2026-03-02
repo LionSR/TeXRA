@@ -2297,14 +2297,21 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     } else if (attachments.length > 0 && this.canProcessToolResultAttachments) {
       // Inline base64 fallback: when file uploads are unavailable (e.g. OpenRouter)
       // but the model supports visual content, embed images/PDFs directly.
-      const inlineParts = await this.buildInlineAttachmentParts(attachments);
+      const { parts: inlineParts, inlined, skipped } =
+        await this.buildInlineAttachmentParts(attachments);
       if (inlineParts.length > 0) {
-        // Rebuild text with 'included-inline' variant so the model doesn't get
-        // a misleading "use read_file" hint alongside the actual inline content.
-        const inlineSummary = formatAttachmentSummary(
-          attachments,
-          'included-inline',
-        );
+        // Build summary that accurately reflects which attachments were inlined
+        // vs. skipped, so the model only gets a read_file hint for skipped ones.
+        const summaryParts: string[] = [];
+        if (inlined.length > 0) {
+          summaryParts.push(
+            formatAttachmentSummary(inlined, 'included-inline'),
+          );
+        }
+        if (skipped.length > 0) {
+          summaryParts.push(formatAttachmentSummary(skipped, 'metadata-only'));
+        }
+        const inlineSummary = summaryParts.join('\n');
         finalResult.attachmentSummary = inlineSummary;
         combinedText = formatToolResultAsText(result, inlineSummary);
         outputPayload = [
@@ -2392,16 +2399,25 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    */
   private async buildInlineAttachmentParts(
     attachments: ToolFileAttachment[],
-  ): Promise<ResponseFunctionCallOutputItemList> {
+  ): Promise<{
+    parts: ResponseFunctionCallOutputItemList;
+    inlined: ToolFileAttachment[];
+    skipped: ToolFileAttachment[];
+  }> {
     const MAX_INLINE_BYTES = 20 * 1024 * 1024; // 20 MiB cap per attachment
     const parts: ResponseFunctionCallOutputItemList = [];
+    const inlined: ToolFileAttachment[] = [];
+    const skipped: ToolFileAttachment[] = [];
 
     for (const attachment of attachments) {
       const mimeType = attachment.mimeType ?? 'application/octet-stream';
       const isImage = mimeType.startsWith('image/');
       const isPdf = mimeType === 'application/pdf';
 
-      if (!isImage && !isPdf) continue;
+      if (!isImage && !isPdf) {
+        skipped.push(attachment);
+        continue;
+      }
 
       let buffer: Buffer | undefined;
       try {
@@ -2410,6 +2426,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           this.logger.debug(
             `Skipping inline attachment ${attachment.path ?? 'attachment'}: ${buffer.length} bytes exceeds limit`,
           );
+          skipped.push(attachment);
           continue;
         }
 
@@ -2429,14 +2446,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
               : 'attachment.pdf';
           parts.push({
             type: 'input_file',
-            file_data: base64,
+            file_data: `data:application/pdf;base64,${base64}`,
             filename,
           });
         }
+        inlined.push(attachment);
       } catch (err) {
         this.logger.debug(
           `Unable to inline attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
         );
+        skipped.push(attachment);
       } finally {
         if (buffer) {
           buffer.fill(0);
@@ -2445,7 +2464,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
     }
 
-    return parts;
+    return { parts, inlined, skipped };
   }
 
   async createUserFollowUpMessages(
