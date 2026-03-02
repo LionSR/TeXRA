@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.36.4] - 2026-03-02
+
+### Features
+
+- **Reasoning level overrides** — configure the reasoning effort (Low / Medium / High) per model in the Models settings tab, overriding each provider's default.
+- **GPT-5.3 Codex** — added OpenAI's GPT-5.3-Codex (`gpt53codex`) to the default model list.
+
+### Bug Fixes
+
+- Fixed **incomplete Anthropic responses** not being detected — truncated streams are now caught and retried automatically.
+- Fixed **image uploads rejected** when the configured resize dimension exceeded 8000 px — the limit is now capped to stay within API bounds.
+- Fixed **approval and instruction panels** disappearing or not appearing in the progress board — diff previews, subagent launches, and stream switches no longer dismiss pending approvals or drop instruction data.
+- Fixed **Google GenAI retry multiplication** — the configured retry count is now respected instead of being silently multiplied.
+
+### Improvements
+
+- **Inline base64 fallback for tool attachments** — images and PDFs from tool results are now embedded inline when routed through providers (e.g., OpenRouter) that lack file-upload support, so the model can see visual content.
+- **Clearer delegation feedback** — the orchestrator now receives more accurate status signals, rejection details, and approval metadata when delegating to subagents, improving multi-agent coordination.
+
 ## [0.36.3] - 2026-02-23
 
 ### Features
