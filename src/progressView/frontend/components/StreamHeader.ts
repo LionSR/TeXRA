@@ -192,7 +192,7 @@ export class StreamHeader extends LitElement {
         gap: var(--spacing-tiny);
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         white-space: nowrap;
       }
 
@@ -234,7 +234,7 @@ export class StreamHeader extends LitElement {
         white-space: nowrap;
         opacity: 0;
         pointer-events: none;
-        transition: opacity 0.2s ease;
+        transition: opacity var(--transition-normal);
         z-index: 100;
       }
 
@@ -268,9 +268,9 @@ export class StreamHeader extends LitElement {
       .super-yolo-toggle-button {
         flex-shrink: 0;
         transition:
-          color 0.2s ease,
-          background-color 0.2s ease,
-          box-shadow 0.2s ease;
+          color var(--transition-normal),
+          background-color var(--transition-normal),
+          box-shadow var(--transition-normal);
       }
 
       .yolo-toggle-button.is-active,
@@ -318,7 +318,7 @@ export class StreamHeader extends LitElement {
         cursor: pointer;
         white-space: nowrap;
         opacity: var(--opacity-subtle);
-        transition: opacity 0.15s ease;
+        transition: opacity var(--transition-fast);
       }
 
       .parent-link:hover {
@@ -342,7 +342,7 @@ export class StreamHeader extends LitElement {
         gap: var(--spacing-tiny);
         padding: 1px var(--spacing-small);
         font-size: var(--font-size-xs, 10px);
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
         color: var(--_badge-color);
         background: color-mix(in srgb, var(--_badge-color) 12%, transparent);
         border-radius: var(--border-radius-small);

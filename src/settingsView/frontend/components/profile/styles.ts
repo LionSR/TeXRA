@@ -34,7 +34,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .label {
-    font-weight: bold;
+    font-weight: var(--font-weight-bold);
     color: var(--vscode-textPreformat-foreground);
     min-width: 80px;
   }
@@ -154,7 +154,7 @@ export const profileViewStyles: CSSResult = css`
     border: var(--border-thin) solid var(--color-border);
     border-radius: var(--border-radius);
     cursor: pointer;
-    transition: border-color 0.2s ease;
+    transition: border-color var(--transition-normal);
   }
 
   .api-access-option:hover {
@@ -210,7 +210,7 @@ export const profileViewStyles: CSSResult = css`
     align-items: center;
     gap: var(--spacing-small);
     font-size: var(--font-size-sm);
-    padding: 2px var(--spacing-small);
+    padding: var(--spacing-tiny) var(--spacing-small);
     border-radius: var(--border-radius);
   }
 
@@ -333,7 +333,7 @@ export const profileViewStyles: CSSResult = css`
   .provider-setting-description {
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
-    line-height: 1.4;
+    line-height: var(--line-height-normal);
     padding-left: 22px;
   }
 
@@ -343,7 +343,7 @@ export const profileViewStyles: CSSResult = css`
       var(--vscode-editorWarning-foreground)
     );
     font-size: var(--font-size-sm);
-    line-height: 1.4;
+    line-height: var(--line-height-normal);
     padding-left: 22px;
   }
 
