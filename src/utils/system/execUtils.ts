@@ -102,9 +102,7 @@ export async function executeCommand(
       throw new Error('No workspace path found');
     }
 
-    const env = options.env
-      ? { ...process.env, ...options.env }
-      : { ...process.env };
+    const env = { ...process.env, ...options.env };
     env.PATH = extendEnvPath(env.PATH);
 
     // Normalize 'utf-8' to 'utf8' for execa compatibility

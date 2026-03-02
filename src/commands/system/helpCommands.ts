@@ -13,8 +13,7 @@ export function registerHelpCommands(context: vscode.ExtensionContext): void {
         if (!page) {
           return;
         }
-        const baseUrl = 'https://texra.ai/guide/';
-        const url = `${baseUrl}${page}.html`;
+        const url = `https://texra.ai/guide/${page}.html`;
         await vscode.env.openExternal(vscode.Uri.parse(url));
       },
     ),
