@@ -38,12 +38,16 @@ function convertToolSchema(
   return (def.parameters ?? null) as Record<string, unknown> | null;
 }
 
-// Map local tool names to Anthropic remote tool types
+// Map local tool names to Anthropic remote tool types.
+// The 20260209 versions of web_search and web_fetch add dynamic filtering support
+// (Claude can write code to filter results before they enter context). These are
+// backward-compatible: models without dynamic filtering simply ignore the capability.
 const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
   bash: 'bash_20250124',
   str_replace_editor: 'text_editor_20250429',
   str_replace_based_edit_tool: 'text_editor_20250429',
-  web_search: 'web_search_20250305',
+  web_search: 'web_search_20260209',
+  web_fetch: 'web_fetch_20260209',
   memory: 'memory_20250818',
 };
 
@@ -123,6 +127,8 @@ export function toOpenAIResponseTools(
 interface AnthropicToolOptions {
   /** Whether the model supports native web search. Defaults to false. */
   supportsNativeWebSearch?: boolean;
+  /** Whether the model supports native web fetch. Defaults to false. */
+  supportsNativeWebFetch?: boolean;
 }
 
 /**
@@ -132,13 +138,24 @@ export function toAnthropicTools(
   defs: ToolDefinition[],
   options: AnthropicToolOptions = {},
 ): ToolUnion[] {
-  const { supportsNativeWebSearch = false } = options;
+  const { supportsNativeWebSearch = false, supportsNativeWebFetch = false } =
+    options;
+
+  /** Tools that require an explicit capability flag to use as native. */
+  const CONDITIONAL_NATIVE_TOOLS: Record<string, boolean> = {
+    web_search: supportsNativeWebSearch,
+    web_fetch: supportsNativeWebFetch,
+  };
 
   return defs.map<ToolUnion>((d) => {
     // Check for native/server tools
     const remoteType = ANTHROPIC_TOOL_TYPE_MAP[d.name];
-    if (remoteType && (d.name !== 'web_search' || supportsNativeWebSearch)) {
-      return { name: d.name, type: remoteType } as ToolUnion;
+    if (remoteType) {
+      const gated = CONDITIONAL_NATIVE_TOOLS[d.name];
+      // If not gated (undefined) or explicitly enabled, use native tool
+      if (gated !== false) {
+        return { name: d.name, type: remoteType } as ToolUnion;
+      }
     }
 
     // Use Zod schema with ref support for complex types, else fallback
