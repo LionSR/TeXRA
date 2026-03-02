@@ -23,7 +23,7 @@ import { extendEnvPath } from '@utils/system/platformPaths';
  * Version number for the default model list.
  * Increment this when adding new models to force existing users to get the updated defaults.
  */
-const MODEL_LIST_VERSION = 5;
+const MODEL_LIST_VERSION = 6;
 
 /**
  * Version number for LaTeX-related VS Code config setup.
