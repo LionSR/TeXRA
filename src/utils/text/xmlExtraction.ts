@@ -104,7 +104,7 @@ export function extractMultipleTextFromTag(
       /<document[^>]*name="([^"]*)"[^>]*>(.*?)<\/document>/gs;
 
     return [...content.matchAll(documentRegex)].map((match) => ({
-      name: match[1] ?? 'unnamed',
+      name: match[1] || 'unnamed',
       content: removeCDATA(match[2] ?? ''),
     }));
   };
