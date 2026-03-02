@@ -695,6 +695,27 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
   responseHeaders.set('X-Accel-Buffering', 'no');
 
+  // FUTURE: SSE keepalive injection to prevent proxy idle timeouts.
+  //
+  // Extended thinking emits deltas at a much lower rate than text generation.
+  // Gaps between SSE events can exceed intermediate proxy idle timeouts
+  // (e.g. Cloudflare ~100s), causing the proxy to drop the connection and
+  // truncate the stream. Injecting periodic SSE comments (`: keepalive\n\n`)
+  // would keep data flowing, since parsers ignore comment lines.
+  //
+  // A previous setInterval-based approach was removed because the timer could
+  // fire mid-chunk, injecting `: keepalive\n\n` between two halves of a split
+  // SSE event and corrupting the stream. A safe implementation would need to:
+  //   1. Track whether the last forwarded chunk ended on an event boundary
+  //      (i.e. ended with `\n\n`), and only inject keepalives at clean boundaries.
+  //   2. Or use a pull-based approach that emits a keepalive only when the
+  //      upstream read has been pending longer than the threshold, ensuring
+  //      no interleaving with real data.
+  //
+  // The client-side AnthropicStreamHandler already detects truncated streams
+  // via the `messageStopReceived` diagnostic and throws a retryable error,
+  // so the impact of not having keepalives is a retry, not silent data loss.
+
   return new Response(upstreamResponse.body, {
     status: upstreamResponse.status,
     headers: responseHeaders,
