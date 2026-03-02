@@ -165,6 +165,9 @@ export class ProgressEventHandler {
             storageKey,
             usage,
           );
+          // Workflow streams get activeRunId from handleSetTaskState (fires
+          // before any usage event). This guard only triggers for tool-use
+          // streams, which skip the handleSetTaskState instruction block.
           if (!ctx.state.meta.getActiveRunId(streamId)) {
             ctx.state.meta.setActiveRunId(streamId, storageKey);
           }
