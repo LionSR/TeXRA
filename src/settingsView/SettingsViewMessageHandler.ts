@@ -207,7 +207,10 @@ const EFFORT_TO_LEVEL = new Map<ReasoningEffort, ReasoningLevel>(
 
 /** Read persisted reasoning level overrides from global state. */
 function getReasoningLevelOverrides(): Record<string, string> {
-  return globalSM.get<Record<string, string>>(GlobalStateKey.REASONING_LEVELS, {});
+  return globalSM.get<Record<string, string>>(
+    GlobalStateKey.REASONING_LEVELS,
+    {},
+  );
 }
 
 function buildModelSelectionItems(): ModelSelectionItem[] {
