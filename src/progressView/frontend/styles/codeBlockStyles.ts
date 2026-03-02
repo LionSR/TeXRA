@@ -192,7 +192,7 @@ export const codeBlockStyles = css`
   }
 
   .hljs-strong {
-    font-weight: bold;
+    font-weight: var(--font-weight-bold);
   }
 
   .hljs-symbol,

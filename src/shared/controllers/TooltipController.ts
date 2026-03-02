@@ -5,7 +5,7 @@ const TOOLTIP_SHOW_DELAY_MS = 500;
 
 const TOOLTIP_STYLES: Partial<CSSStyleDeclaration> = {
   position: 'fixed',
-  padding: '4px 8px',
+  padding: 'var(--spacing-small, 4px) var(--spacing-medium, 8px)',
   fontSize: 'var(--vscode-font-size, 13px)',
   fontFamily: 'var(--vscode-font-family)',
   color: 'var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground))',
@@ -13,12 +13,12 @@ const TOOLTIP_STYLES: Partial<CSSStyleDeclaration> = {
     'var(--vscode-editorHoverWidget-background, var(--vscode-editor-background))',
   border:
     '1px solid var(--vscode-editorHoverWidget-border, var(--vscode-contrastBorder, transparent))',
-  borderRadius: '3px',
+  borderRadius: 'var(--border-radius, 3px)',
   whiteSpace: 'nowrap',
   pointerEvents: 'none',
   zIndex: '10000',
   opacity: '0',
-  transition: 'opacity 0.15s ease',
+  transition: 'opacity var(--transition-fast, 0.15s ease)',
 };
 
 /**

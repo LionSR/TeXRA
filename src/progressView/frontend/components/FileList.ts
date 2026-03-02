@@ -84,7 +84,7 @@ export class FileList extends LitElement {
       }
 
       .file-basename {
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
       }
 
       .file-stats {

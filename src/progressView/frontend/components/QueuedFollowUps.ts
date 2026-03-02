@@ -38,7 +38,7 @@ export class QueuedFollowUps extends LitElement {
 
       .queued-collapsible::part(header) {
         padding: var(--spacing-small) var(--spacing-medium);
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         background-color: transparent;
       }
 
@@ -58,7 +58,7 @@ export class QueuedFollowUps extends LitElement {
         gap: var(--spacing-small);
         padding: var(--spacing-tiny) var(--spacing-small);
         font-size: var(--font-size);
-        line-height: 1.4;
+        line-height: var(--line-height-normal);
         background-color: var(--vscode-editor-background);
         border-radius: var(--border-radius-small);
         border: var(--border-thin) solid var(--color-border);
@@ -67,7 +67,7 @@ export class QueuedFollowUps extends LitElement {
       .queued-follow-up-icon {
         flex-shrink: 0;
         font-size: var(--font-size-icon-sm);
-        line-height: 1.4;
+        line-height: var(--line-height-normal);
         margin-top: var(--border-thin);
         color: var(--vscode-inputValidation-infoBorder);
       }

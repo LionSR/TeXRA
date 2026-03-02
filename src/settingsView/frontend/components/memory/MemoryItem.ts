@@ -34,7 +34,7 @@ export class MemoryItem extends LitElement {
       .memory-path {
         font-family: var(--vscode-editor-font-family), monospace;
         font-size: var(--font-size);
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
         color: var(--vscode-textLink-foreground);
         word-break: break-all;
       }
@@ -46,7 +46,7 @@ export class MemoryItem extends LitElement {
       .memory-preview {
         font-family: var(--vscode-editor-font-family), monospace;
         font-size: var(--font-size-sm);
-        line-height: 1.4;
+        line-height: var(--line-height-normal);
         white-space: pre-wrap;
         word-wrap: break-word;
         background-color: var(--vscode-editor-inactiveSelectionBackground);

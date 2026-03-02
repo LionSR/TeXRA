@@ -58,13 +58,13 @@ export class TodoList extends LitElement {
         gap: var(--spacing-small);
         padding: var(--spacing-tiny) 0;
         font-size: var(--font-size);
-        line-height: 1.4;
+        line-height: var(--line-height-normal);
       }
 
       .todo-item__icon {
         flex-shrink: 0;
         font-size: var(--font-size-icon-sm);
-        line-height: 1.4;
+        line-height: var(--line-height-normal);
         margin-top: var(--border-thin);
       }
 
@@ -82,7 +82,7 @@ export class TodoList extends LitElement {
       }
 
       .todo-item--in-progress {
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
       }
 
       .todo-item--in-progress .todo-item__icon {

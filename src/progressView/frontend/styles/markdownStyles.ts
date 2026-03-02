@@ -48,7 +48,7 @@ export const markdownStyles = css`
     color: var(--vscode-textLink-foreground, #3794ff);
     font-size: var(--font-size-lg);
     font-weight: var(--font-weight-semibold);
-    line-height: 1.25;
+    line-height: var(--line-height-heading);
     margin: 1em 0 0.5em;
   }
 
@@ -84,7 +84,7 @@ export const markdownStyles = css`
 
   .markdown-content li {
     margin: 0 0 0.2em 0;
-    line-height: 1.25;
+    line-height: var(--line-height-heading);
 
     & + li {
       margin-top: 0.1em;
@@ -113,7 +113,7 @@ export const markdownStyles = css`
     background-color: transparent;
     padding: 0;
     display: block;
-    line-height: 1.4;
+    line-height: var(--line-height-normal);
   }
 
   .markdown-content .latex-ref {

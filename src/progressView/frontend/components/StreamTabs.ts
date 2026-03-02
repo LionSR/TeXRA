@@ -84,7 +84,7 @@ export class StreamTab extends LitElement {
         position: relative;
         width: 100%;
         gap: var(--spacing-tiny);
-        border-left: 3px solid transparent;
+        border-left: var(--border-thick) solid transparent;
         transition:
           border-left-color var(--transition-normal),
           background-color var(--transition-fast);
@@ -162,7 +162,7 @@ export class StreamTab extends LitElement {
         flex-shrink: 0;
         display: flex !important;
         visibility: visible !important;
-        opacity: 1 !important;
+        opacity: var(--opacity-full) !important;
         align-items: center;
         justify-content: center;
         width: var(--height-control);

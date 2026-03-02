@@ -77,14 +77,14 @@ export class UsagePanel extends LitElement {
         width: 80px;
         height: 6px;
         background: var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.3));
-        border-radius: 3px;
+        border-radius: var(--border-radius);
         overflow: hidden;
       }
 
       .context-gauge__fill {
         display: block;
         height: 100%;
-        border-radius: 3px;
+        border-radius: var(--border-radius);
         transition: width var(--transition-slow);
       }
 
@@ -93,9 +93,9 @@ export class UsagePanel extends LitElement {
         position: absolute;
         top: 0;
         bottom: 0;
-        width: 1px;
+        width: var(--border-thin);
         background: var(--vscode-foreground);
-        opacity: 0.35;
+        opacity: var(--opacity-separator);
       }
 
       .run-summary {
