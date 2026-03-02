@@ -343,6 +343,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         apiKey: credential,
         httpOptions: {
           baseUrl: baseUrl ?? undefined,
+          // Disable SDK-level retries so that only the flow-level retry loop
+          // (RetryState.getNodeRetryConfig) manages the user's retry budget.
+          // Without this, transient errors would be retried by BOTH the SDK and
+          // the flow, multiplying the configured attempt count.
+          retryOptions: { attempts: 1 },
         },
       });
     }
@@ -357,6 +362,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         apiKey: credential,
         httpOptions: {
           baseUrl: baseUrl ?? undefined,
+          retryOptions: { attempts: 1 },
         },
       });
     }
