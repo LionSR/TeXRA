@@ -78,7 +78,10 @@ export async function executeWolframCode(
   code: string,
   options: { timeout?: number } = {},
 ): Promise<WolframScriptResult> {
-  return runWolfram(['-code', code], options.timeout ?? WOLFRAM_CODE_TIMEOUT_MS);
+  return runWolfram(
+    ['-code', code],
+    options.timeout ?? WOLFRAM_CODE_TIMEOUT_MS,
+  );
 }
 
 /**

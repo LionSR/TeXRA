@@ -8,21 +8,21 @@ Make TeXRA a standalone Electron app **while keeping the VS Code extension worki
 
 ## Current State: VS Code Coupling Audit
 
-| Layer | Files importing `vscode` | Severity |
-|---|---|---|
-| `src/agent/` (core logic) | **3** (runtime, storage, remote) | Low — easily decoupled |
-| `src/model/` | **0** | None |
-| `src/latex/` | **1** (latexdiff) | Low |
-| `src/tools/` | **10** | Medium — approval UI, editor tools |
-| `src/utils/` | **5** (config, FS, system) | **High** — used everywhere |
-| `src/common/` | **7** (webview bases, state, errors) | **High** — foundational |
-| `src/frontend/` | **16** | **High** — all VS Code UI |
-| `src/commands/` | **42** | **High** — all VS Code commands |
-| `src/webview/` (extension-host side) | **8** | High |
-| `src/progressView/` | **6** | High |
-| `src/settingsView/` | **5** | High |
-| `src/auth/` | **7** | Medium |
-| Webview frontends (Lit components) | **0** (browser-only) | None |
+| Layer                                | Files importing `vscode`             | Severity                           |
+| ------------------------------------ | ------------------------------------ | ---------------------------------- |
+| `src/agent/` (core logic)            | **3** (runtime, storage, remote)     | Low — easily decoupled             |
+| `src/model/`                         | **0**                                | None                               |
+| `src/latex/`                         | **1** (latexdiff)                    | Low                                |
+| `src/tools/`                         | **10**                               | Medium — approval UI, editor tools |
+| `src/utils/`                         | **5** (config, FS, system)           | **High** — used everywhere         |
+| `src/common/`                        | **7** (webview bases, state, errors) | **High** — foundational            |
+| `src/frontend/`                      | **16**                               | **High** — all VS Code UI          |
+| `src/commands/`                      | **42**                               | **High** — all VS Code commands    |
+| `src/webview/` (extension-host side) | **8**                                | High                               |
+| `src/progressView/`                  | **6**                                | High                               |
+| `src/settingsView/`                  | **5**                                | High                               |
+| `src/auth/`                          | **7**                                | Medium                             |
+| Webview frontends (Lit components)   | **0** (browser-only)                 | None                               |
 
 **Total: ~112 files** import `vscode`, with **~613 individual API call sites**.
 
@@ -82,7 +82,14 @@ export interface PlatformFS {
   delete(path: string, options?: { recursive?: boolean }): Promise<void>;
   createDir(path: string): Promise<void>;
   readDir(path: string): Promise<{ name: string; isDirectory: boolean }[]>;
-  stat(path: string): Promise<{ size: number; mtime: number; isDirectory: boolean; isFile: boolean }>;
+  stat(
+    path: string,
+  ): Promise<{
+    size: number;
+    mtime: number;
+    isDirectory: boolean;
+    isFile: boolean;
+  }>;
   copy(source: string, destination: string): Promise<void>;
   rename(source: string, destination: string): Promise<void>;
   // Sync variants
@@ -98,7 +105,11 @@ export interface PlatformFS {
 ```typescript
 export interface PlatformConfig {
   get<T>(path: string, defaultValue?: T): T;
-  update<T>(path: string, value: T, scope?: 'global' | 'workspace'): Promise<void>;
+  update<T>(
+    path: string,
+    value: T,
+    scope?: 'global' | 'workspace',
+  ): Promise<void>;
   isExplicitlySet(key: string): boolean;
   onChange(keys: string[], callback: () => void): Disposable;
 }
@@ -118,10 +129,19 @@ export interface PlatformSecrets {
 
 ```typescript
 export interface PlatformUI {
-  showInformation(message: string, ...actions: string[]): Promise<string | undefined>;
-  showWarning(message: string, ...actions: string[]): Promise<string | undefined>;
+  showInformation(
+    message: string,
+    ...actions: string[]
+  ): Promise<string | undefined>;
+  showWarning(
+    message: string,
+    ...actions: string[]
+  ): Promise<string | undefined>;
   showError(message: string, ...actions: string[]): Promise<string | undefined>;
-  showQuickPick<T extends QuickPickItem>(items: T[], options?: QuickPickOptions): Promise<T | undefined>;
+  showQuickPick<T extends QuickPickItem>(
+    items: T[],
+    options?: QuickPickOptions,
+  ): Promise<T | undefined>;
   showInputBox(options?: InputBoxOptions): Promise<string | undefined>;
   showOpenDialog(options?: OpenDialogOptions): Promise<string[] | undefined>;
   showSaveDialog(options?: SaveDialogOptions): Promise<string | undefined>;
@@ -133,7 +153,10 @@ export interface PlatformUI {
 
 ```typescript
 export interface PlatformEditor {
-  openFile(path: string, options?: { preview?: boolean; selection?: Range }): Promise<void>;
+  openFile(
+    path: string,
+    options?: { preview?: boolean; selection?: Range },
+  ): Promise<void>;
   getActiveFilePath(): string | undefined;
   showDiff(original: string, modified: string, title: string): Promise<void>;
   applyEdit(path: string, edits: TextEdit[]): Promise<boolean>;
@@ -144,7 +167,10 @@ export interface PlatformEditor {
 
 ```typescript
 export interface PlatformShell {
-  exec(command: string, options?: { cwd?: string; timeout?: number }): Promise<{ stdout: string; stderr: string; exitCode: number }>;
+  exec(
+    command: string,
+    options?: { cwd?: string; timeout?: number },
+  ): Promise<{ stdout: string; stderr: string; exitCode: number }>;
   spawn(command: string, args: string[], options?: SpawnOptions): ChildProcess;
 }
 ```
@@ -171,7 +197,11 @@ export interface PlatformContext {
 
   // State persistence (replaces globalState/workspaceState)
   getState<T>(key: string, scope?: 'global' | 'workspace'): T | undefined;
-  setState<T>(key: string, value: T, scope?: 'global' | 'workspace'): Promise<void>;
+  setState<T>(
+    key: string,
+    value: T,
+    scope?: 'global' | 'workspace',
+  ): Promise<void>;
 }
 ```
 
@@ -190,8 +220,12 @@ export interface Platform {
 }
 
 let _platform: Platform;
-export function setPlatform(p: Platform): void { _platform = p; }
-export function platform(): Platform { return _platform; }
+export function setPlatform(p: Platform): void {
+  _platform = p;
+}
+export function platform(): Platform {
+  return _platform;
+}
 ```
 
 ---
@@ -200,16 +234,16 @@ export function platform(): Platform { return _platform; }
 
 Wrap existing VS Code API calls behind the platform interfaces. This is a **mechanical refactor** — behavior stays identical.
 
-| File | Wraps |
-|---|---|
-| `vscodeFS.ts` | `vscode.workspace.fs` + `vscode.Uri.file()` |
-| `vscodeConfig.ts` | `vscode.workspace.getConfiguration()` |
-| `vscodeSecrets.ts` | `context.secrets` |
-| `vscodeUI.ts` | `vscode.window.show*`, quick picks, dialogs |
-| `vscodeEditor.ts` | `vscode.window.activeTextEditor`, `vscode.workspace.applyEdit` |
-| `vscodeShell.ts` | `child_process` (already used) |
-| `vscodeAuth.ts` | `vscode.authentication` |
-| `vscodeContext.ts` | `vscode.ExtensionContext` properties |
+| File               | Wraps                                                          |
+| ------------------ | -------------------------------------------------------------- |
+| `vscodeFS.ts`      | `vscode.workspace.fs` + `vscode.Uri.file()`                    |
+| `vscodeConfig.ts`  | `vscode.workspace.getConfiguration()`                          |
+| `vscodeSecrets.ts` | `context.secrets`                                              |
+| `vscodeUI.ts`      | `vscode.window.show*`, quick picks, dialogs                    |
+| `vscodeEditor.ts`  | `vscode.window.activeTextEditor`, `vscode.workspace.applyEdit` |
+| `vscodeShell.ts`   | `child_process` (already used)                                 |
+| `vscodeAuth.ts`    | `vscode.authentication`                                        |
+| `vscodeContext.ts` | `vscode.ExtensionContext` properties                           |
 
 **Key principle**: `extension.ts` calls `setPlatform(createVSCodePlatform(context))` at activation. Everything downstream uses `platform()`.
 
@@ -221,15 +255,15 @@ Migrate imports file-by-file, prioritizing the most-used modules first.
 
 #### 3.1 High Priority: Foundation Layer
 
-| Current | Change to |
-|---|---|
-| `src/utils/config/configUtils.ts` | Use `platform().config` |
-| `src/utils/files/baseFS.ts` | Use `platform().fs` |
-| `src/utils/files/storageFS.ts` | Use `platform().fs` + `platform().context` |
-| `src/utils/files/workspaceFS.ts` | Use `platform().fs` + `platform().context` |
-| `src/frontend/secretManager.ts` | Use `platform().secrets` |
-| `src/common/state/stateManager.ts` | Use `platform().context.getState/setState` |
-| `src/common/errors/errorHandlingUtils.ts` | Use `platform().ui` for error dialogs |
+| Current                                   | Change to                                  |
+| ----------------------------------------- | ------------------------------------------ |
+| `src/utils/config/configUtils.ts`         | Use `platform().config`                    |
+| `src/utils/files/baseFS.ts`               | Use `platform().fs`                        |
+| `src/utils/files/storageFS.ts`            | Use `platform().fs` + `platform().context` |
+| `src/utils/files/workspaceFS.ts`          | Use `platform().fs` + `platform().context` |
+| `src/frontend/secretManager.ts`           | Use `platform().secrets`                   |
+| `src/common/state/stateManager.ts`        | Use `platform().context.getState/setState` |
+| `src/common/errors/errorHandlingUtils.ts` | Use `platform().ui` for error dialogs      |
 
 This alone removes ~30 transitive `vscode` dependencies.
 
@@ -244,6 +278,7 @@ Only 3 files in `src/agent/` import vscode:
 #### 3.3 Medium Priority: Tools
 
 Tools use VS Code for:
+
 - **Edit approval** (`toolEditApproval.ts`) — Diff views via `vscode.commands.executeCommand('vscode.diff')`. Abstract via `platform().editor.showDiff()`.
 - **Diagnostics** (`DiagnosticsTool.ts`) — `vscode.languages.getDiagnostics()`. Abstract via `platform().editor`.
 - **Text editor** (`TextEditorTool.ts`) — Direct editor manipulation. Abstract via `platform().editor`.
@@ -252,6 +287,7 @@ Tools use VS Code for:
 #### 3.4 Lower Priority: Commands & Frontend
 
 The `src/commands/` and `src/frontend/` directories are **inherently platform-specific** — they bridge UI actions to core logic. For these:
+
 - Extract the **core logic** (the "what") into platform-agnostic functions
 - Keep the **wiring** (the "how to trigger") platform-specific
 - Both VS Code commands and Electron IPC handlers call the same core functions
@@ -279,16 +315,16 @@ The existing message schemas in `src/shared/schemas/` stay unchanged — they de
 
 ### Phase 5: Implement Electron Platform (`src/platform/electron/`)
 
-| File | Implementation |
-|---|---|
-| `electronFS.ts` | Node.js `fs/promises` (direct — no VS Code wrapper needed) |
-| `electronConfig.ts` | `electron-store` or JSON file in `app.getPath('userData')` |
-| `electronSecrets.ts` | `safeStorage.encryptString()` + file storage, or `keytar` |
-| `electronUI.ts` | `dialog.showMessageBox`, `dialog.showOpenDialog`, custom notification windows |
-| `electronEditor.ts` | Monaco Editor or CodeMirror in a BrowserWindow |
-| `electronShell.ts` | Node.js `child_process` (same as VS Code) |
-| `electronAuth.ts` | OAuth via system browser + custom protocol handler (`app.setAsDefaultProtocolClient`) |
-| `electronContext.ts` | `app.getPath()` for storage paths, JSON-backed state |
+| File                 | Implementation                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------- |
+| `electronFS.ts`      | Node.js `fs/promises` (direct — no VS Code wrapper needed)                            |
+| `electronConfig.ts`  | `electron-store` or JSON file in `app.getPath('userData')`                            |
+| `electronSecrets.ts` | `safeStorage.encryptString()` + file storage, or `keytar`                             |
+| `electronUI.ts`      | `dialog.showMessageBox`, `dialog.showOpenDialog`, custom notification windows         |
+| `electronEditor.ts`  | Monaco Editor or CodeMirror in a BrowserWindow                                        |
+| `electronShell.ts`   | Node.js `child_process` (same as VS Code)                                             |
+| `electronAuth.ts`    | OAuth via system browser + custom protocol handler (`app.setAsDefaultProtocolClient`) |
+| `electronContext.ts` | `app.getPath()` for storage paths, JSON-backed state                                  |
 
 ---
 
@@ -323,6 +359,7 @@ npm run compile:fast      # Builds both (or the default target)
 ```
 
 Shared config:
+
 - **esbuild** compiles `src/` for both targets. Use `--define` to set `PLATFORM=vscode|electron` at build time for tree-shaking dead platform code.
 - **Vite** builds webview frontends unchanged (same Lit components).
 - **electron-builder** packages the Electron app for Windows/macOS/Linux.
@@ -332,7 +369,7 @@ Shared config:
 ```json
 // package.json changes
 {
-  "main": "dist/extension.js",           // VS Code entry (existing)
+  "main": "dist/extension.js", // VS Code entry (existing)
   "electron-main": "dist/electron/main.js", // Electron entry (new)
   "scripts": {
     "electron:dev": "electron dist/electron/main.js",
@@ -362,27 +399,35 @@ These require **zero changes** for Electron:
 ## Recommended Execution Order
 
 ### Step 1: Create `src/platform/` interfaces (Phase 1)
+
 Non-breaking. Add files, no existing code changes.
 
 ### Step 2: Create VS Code implementations (Phase 2)
+
 Non-breaking. Wrap existing APIs behind interfaces.
 
 ### Step 3: Migrate foundation layer (Phase 3.1)
+
 **This is the big one.** Change `configUtils`, `baseFS`, `storageFS`, `secretManager`, `stateManager` to use `platform()`. All 112 files that transitively depend on these get decoupled automatically.
 
 ### Step 4: Migrate agent runtime (Phase 3.2)
+
 Small — only 3 files.
 
 ### Step 5: Migrate tools (Phase 3.3)
+
 ~10 files, mostly replacing `vscode.window.show*` calls.
 
 ### Step 6: Extract command core logic (Phase 3.4)
+
 Ongoing — extract reusable logic from commands as needed for Electron.
 
 ### Step 7: IPC abstraction (Phase 4)
+
 Small — bridge interface + two implementations.
 
 ### Step 8: Electron platform + app shell (Phases 5-6)
+
 Build the Electron-specific code.
 
 ---
@@ -390,28 +435,36 @@ Build the Electron-specific code.
 ## Electron-Specific Considerations
 
 ### File/Project Management
+
 VS Code provides workspace management. In Electron you need:
+
 - "Open Folder" dialog → set working directory
 - Recent projects list
 - File watching (`chokidar` or `fs.watch`)
 - Project-scoped settings (stored alongside workspace)
 
 ### Text Editing
+
 The Electron app needs a code editor component for viewing/editing LaTeX. Options:
+
 - **Monaco Editor** (VS Code's editor, MIT licensed) — Full-featured, familiar
 - **CodeMirror 6** — Lighter weight, excellent LaTeX mode
 - **Read-only** initially — Just display outputs, let users use their preferred editor
 
 ### Native Menus & Shortcuts
+
 Replace the VS Code command palette with:
+
 - Native application menu (File, Edit, Agent, LaTeX, Help)
 - Keyboard shortcuts mapped to the same core functions
 - Context menus on file lists
 
 ### Auto-Update
+
 Use `electron-updater` with GitHub Releases (already used for `.vsix` distribution).
 
 ### Code Signing
+
 Required for macOS notarization and Windows SmartScreen. Budget for Apple Developer ($99/year) and Windows code signing certificates.
 
 ---
@@ -420,22 +473,22 @@ Required for macOS notarization and Windows SmartScreen. Budget for Apple Develo
 
 Approximate effort per directory:
 
-| Directory | Files to Migrate | Effort | Notes |
-|---|---|---|---|
-| `src/platform/` | 0 → ~20 new | Medium | New interfaces + 2 implementations |
-| `src/utils/config/` | 1 | Small | `configUtils.ts` → `platform().config` |
-| `src/utils/files/` | 3 | Medium | `baseFS`, `storageFS`, `workspaceFS` |
-| `src/common/state/` | 1 | Small | `stateManager.ts` |
-| `src/common/errors/` | 1 | Small | Error dialog calls |
-| `src/common/webview/` | 4 | Medium | Base classes need IPC abstraction |
-| `src/frontend/` | 16 | Large | Most VS Code-heavy; extract core logic |
-| `src/commands/` | 42 | Large | Extract business logic from command wiring |
-| `src/tools/` | 10 | Medium | Approval UI, editor integration |
-| `src/agent/` | 3 | Small | Minimal VS Code coupling |
-| `src/auth/` | 7 | Medium | OAuth flow differs per platform |
-| `src/webview/` (host) | 8 | Medium | Provider + message handler adaptation |
-| `src/progressView/` | 6 | Medium | Same pattern as webview |
-| `src/settingsView/` | 5 | Medium | Same pattern as webview |
+| Directory             | Files to Migrate | Effort | Notes                                      |
+| --------------------- | ---------------- | ------ | ------------------------------------------ |
+| `src/platform/`       | 0 → ~20 new      | Medium | New interfaces + 2 implementations         |
+| `src/utils/config/`   | 1                | Small  | `configUtils.ts` → `platform().config`     |
+| `src/utils/files/`    | 3                | Medium | `baseFS`, `storageFS`, `workspaceFS`       |
+| `src/common/state/`   | 1                | Small  | `stateManager.ts`                          |
+| `src/common/errors/`  | 1                | Small  | Error dialog calls                         |
+| `src/common/webview/` | 4                | Medium | Base classes need IPC abstraction          |
+| `src/frontend/`       | 16               | Large  | Most VS Code-heavy; extract core logic     |
+| `src/commands/`       | 42               | Large  | Extract business logic from command wiring |
+| `src/tools/`          | 10               | Medium | Approval UI, editor integration            |
+| `src/agent/`          | 3                | Small  | Minimal VS Code coupling                   |
+| `src/auth/`           | 7                | Medium | OAuth flow differs per platform            |
+| `src/webview/` (host) | 8                | Medium | Provider + message handler adaptation      |
+| `src/progressView/`   | 6                | Medium | Same pattern as webview                    |
+| `src/settingsView/`   | 5                | Medium | Same pattern as webview                    |
 
 ---
 
