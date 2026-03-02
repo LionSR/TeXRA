@@ -178,8 +178,7 @@ Tips:
     const { command, file } = input;
 
     try {
-      const diagnostics =
-        await vscodeIntegration.fetchDiagnosticsForFile(file);
+      const diagnostics = await vscodeIntegration.fetchDiagnosticsForFile(file);
       if (!diagnostics) {
         return {
           summary: 'Failed to open file',
