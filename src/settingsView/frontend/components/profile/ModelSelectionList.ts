@@ -21,9 +21,10 @@ import { profileViewStyles } from './styles';
 import { ModelSelectionEvents } from './events';
 
 // Local imports - shared schemas
-import type {
-  ModelSelectionItem,
-  ReasoningLevel,
+import {
+  ReasoningLevelSchema,
+  type ModelSelectionItem,
+  type ReasoningLevel,
 } from '@shared/schemas/settingsViewMessages';
 
 /** Display labels for reasoning level options. */
@@ -34,7 +35,7 @@ const REASONING_LEVEL_LABELS: Record<ReasoningLevel, string> = {
   high: 'High',
 };
 
-const REASONING_LEVELS: ReasoningLevel[] = ['none', 'low', 'medium', 'high'];
+const REASONING_LEVELS = ReasoningLevelSchema.options;
 
 interface ProviderGroup {
   provider: string;
