@@ -32,11 +32,16 @@ export const designTokens: CSSResult = css`
     --font-weight: var(--vscode-font-weight);
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
+    --font-weight-bold: 700;
     --font-size-lg: calc(var(--font-size) * 1.2);
     --font-size-sm: calc(var(--font-size) * 0.9);
     --font-size-xs: calc(var(--font-size) * 0.8);
     --font-size-icon: var(--font-size-lg);
     --font-size-icon-sm: var(--font-size);
+    --line-height-tight: 1;
+    --line-height-heading: 1.25;
+    --line-height-normal: 1.4;
+    --line-height-relaxed: 1.5;
 
     /* Spacing */
     --spacing-tiny: 2px;
@@ -71,8 +76,10 @@ export const designTokens: CSSResult = css`
     --border-thick: 3px;
 
     /* Opacity levels */
+    --opacity-separator: 0.3;
     --opacity-disabled: 0.5;
     --opacity-subtle: 0.7;
+    --opacity-hover: 0.8;
     --opacity-normal: 0.85;
     --opacity-full: 1;
 

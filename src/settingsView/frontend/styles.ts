@@ -34,7 +34,7 @@ const settingsHeaderStyles: CSSResult = css`
   }
 
   .settings-header-email {
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
     color: var(--vscode-foreground);
   }
 

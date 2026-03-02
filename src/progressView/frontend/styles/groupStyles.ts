@@ -69,7 +69,7 @@ export const groupStyles = css`
   }
 
   .group-title {
-    font-weight: bold;
+    font-weight: var(--font-weight-bold);
     flex-grow: 1;
   }
 

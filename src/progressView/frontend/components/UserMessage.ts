@@ -56,7 +56,7 @@ export class UserMessage extends LitElement {
         color: var(--vscode-foreground);
         white-space: pre-wrap;
         word-wrap: break-word;
-        line-height: 1.5;
+        line-height: var(--line-height-relaxed);
         font-size: var(--font-size-sm);
       }
 

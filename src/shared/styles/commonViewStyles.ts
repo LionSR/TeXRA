@@ -131,7 +131,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .details-summary:hover {
-    opacity: 1;
+    opacity: var(--opacity-full);
   }
 
   .details-summary:focus-visible {
@@ -168,7 +168,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .empty-state .codicon {
-    font-size: 32px;
+    font-size: calc(var(--font-size) * 2.5);
     opacity: var(--opacity-disabled);
   }
 
@@ -271,6 +271,33 @@ export const commonViewStyles: CSSResult = css`
   .icon-btn-reset:focus-visible {
     outline: var(--border-thin) solid var(--vscode-focusBorder);
     outline-offset: 1px;
+    border-radius: var(--border-radius-small);
+  }
+`;
+
+/**
+ * Reusable focus-visible ring styles.
+ *
+ * Apply via Lit's static styles array:
+ *   static override styles = [designTokens, focusRingStyles, css`...`];
+ *
+ * Then add the `.focus-ring` class to any interactive element that needs
+ * a standard keyboard-focus outline:
+ *   <button class="focus-ring" ...>
+ *
+ * Variants:
+ *   `.focus-ring--inset`  — outline-offset: -1px (inner focus ring)
+ */
+export const focusRingStyles: CSSResult = css`
+  .focus-ring:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
+  }
+
+  .focus-ring--inset:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: -1px;
     border-radius: var(--border-radius-small);
   }
 `;
