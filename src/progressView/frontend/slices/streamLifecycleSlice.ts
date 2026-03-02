@@ -147,10 +147,7 @@ export const streamLifecycleHandlers: HandlerRegistry = {
     clearProposalInputStore();
 
     // Remove permissions for the deleted stream to prevent orphaned entries
-    const cleaned = removePermissionsForStream(
-      ctx.getPermissions(),
-      streamId,
-    );
+    const cleaned = removePermissionsForStream(ctx.getPermissions(), streamId);
     ctx.setPermissions(cleaned);
 
     ctx.setState((prev) =>
