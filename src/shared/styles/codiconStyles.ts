@@ -20,6 +20,8 @@ export const codiconStyles: CSSResult = css`
   ${unsafeCSS(iconClassesCss)}
 `;
 
-export const codiconIconClasses: CSSResult = css`
-  ${unsafeCSS(iconClassesCss)}
-`;
+/**
+ * Alias for codiconStyles — kept for backward compatibility.
+ * The @font-face is harmless if duplicated (browsers deduplicate).
+ */
+export const codiconIconClasses: CSSResult = codiconStyles;

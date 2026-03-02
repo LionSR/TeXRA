@@ -49,7 +49,7 @@ export const toolUseStyles = css`
     margin: var(--spacing-small) 0;
     border: none;
     border-top: var(--border-thin) solid var(--color-border);
-    opacity: 0.3;
+    opacity: var(--opacity-separator);
   }
 
   :is(.tool-use-error, .banner-details--error)
@@ -198,7 +198,7 @@ export const toolUseStyles = css`
     background-color: var(--vscode-editor-background, #1e1e1e);
     white-space: pre-wrap;
     word-break: break-word;
-    line-height: 1.5;
+    line-height: var(--line-height-relaxed);
   }
 
   :is(.diff-inline-del, .diff-inline-add) {
