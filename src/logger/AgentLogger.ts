@@ -425,7 +425,12 @@ export class AgentLogger {
   }
 
   logWebFetch(data: unknown, groupId?: string): void {
-    this.info('', { groupId, messageType: MESSAGE_TYPES.WEB_FETCH, data });
+    this.appendToStore('info', MESSAGE_TYPES.WEB_FETCH, {
+      id: randomUUID(),
+      timestamp: Date.now(),
+      groupId: groupId ?? this.resolveActiveGroupId(),
+      data,
+    });
   }
 
   withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined {
