@@ -18,6 +18,8 @@ import type {
   ServerToolUseBlock,
   WebSearchToolResultBlock,
   WebSearchResultBlock,
+  WebFetchToolResultBlock,
+  WebFetchBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 import type {
   ResponseFunctionWebSearch,
@@ -68,6 +70,32 @@ export const WebSearchResultSchema = z.object({
 export type WebSearchResult = z.infer<typeof WebSearchResultSchema>;
 
 // ============================================================================
+// Web Fetch Result Schemas - Single Source of Truth
+// ============================================================================
+
+/**
+ * Schema for unified web fetch result.
+ * Represents a single URL fetch performed by the Anthropic server-side tool.
+ */
+export const WebFetchResultSchema = z.object({
+  /** The URL that was fetched */
+  url: z.string(),
+  /** Title of the fetched document (if available) */
+  title: z.string().optional(),
+  /** Provider that executed the fetch */
+  provider: z.literal('anthropic'),
+  /** Unique identifier for this fetch call */
+  callId: z.string(),
+  /** Status of the fetch */
+  status: z.enum(['completed', 'failed']),
+  /** Error code if fetch failed */
+  errorCode: z.string().optional(),
+});
+
+/** Unified web fetch result - derived from schema. */
+export type WebFetchResult = z.infer<typeof WebFetchResultSchema>;
+
+// ============================================================================
 // Server Tool Content Block Types
 // ============================================================================
 
@@ -75,23 +103,28 @@ export type WebSearchResult = z.infer<typeof WebSearchResultSchema>;
  * Union of all raw content block types that can be returned by server tools.
  * These blocks need to be preserved in conversation context for follow-up messages.
  *
- * - Anthropic: ServerToolUseBlock (the call) and WebSearchToolResultBlock (the result)
+ * - Anthropic: ServerToolUseBlock (the call), WebSearchToolResultBlock, and
+ *   WebFetchToolResultBlock (the results)
  * - OpenAI: ResponseFunctionWebSearch (combined call/result) and ResponseReasoningItem
  *   (reasoning items must be included when web_search_call references them)
  */
 export type ServerToolContentBlock =
   | ServerToolUseBlock
   | WebSearchToolResultBlock
+  | WebFetchToolResultBlock
   | ResponseFunctionWebSearch
   | ResponseReasoningItem;
 
 /**
  * Combined result from server tool extraction.
- * Single source of truth for both display (webSearchResults) and context (contentBlocks).
+ * Single source of truth for both display (webSearchResults/webFetchResults)
+ * and context (contentBlocks).
  */
 export interface ServerToolExtractionResult {
   /** Normalized web search results for display in progress view */
   webSearchResults: WebSearchResult[];
+  /** Normalized web fetch results for display in progress view */
+  webFetchResults: WebFetchResult[];
   /** Raw content blocks to preserve in conversation context */
   contentBlocks: ServerToolContentBlock[];
 }
@@ -125,6 +158,20 @@ export function isAnthropicWebSearchResult(
     typeof block === 'object' &&
     block !== null &&
     (block as { type?: string }).type === 'web_search_tool_result'
+  );
+}
+
+/**
+ * Type guard for Anthropic web fetch result block.
+ * Uses SDK's WebFetchToolResultBlock type for proper typing.
+ */
+export function isAnthropicWebFetchResult(
+  block: unknown,
+): block is WebFetchToolResultBlock {
+  return (
+    typeof block === 'object' &&
+    block !== null &&
+    (block as { type?: string }).type === 'web_fetch_tool_result'
   );
 }
 
@@ -171,13 +218,20 @@ export function isOpenAIServerToolContent(
 
 /**
  * Type guard for Anthropic server tool content blocks.
- * Checks if a block is either a server tool use or web search result.
+ * Checks if a block is a server tool use, web search result, or web fetch result.
  * Used to identify content that needs to be preserved in conversation context.
  */
 export function isAnthropicServerToolContent(
   block: unknown,
-): block is ServerToolUseBlock | WebSearchToolResultBlock {
-  return isAnthropicServerToolUse(block) || isAnthropicWebSearchResult(block);
+): block is
+  | ServerToolUseBlock
+  | WebSearchToolResultBlock
+  | WebFetchToolResultBlock {
+  return (
+    isAnthropicServerToolUse(block) ||
+    isAnthropicWebSearchResult(block) ||
+    isAnthropicWebFetchResult(block)
+  );
 }
 
 // ============================================================================
@@ -251,6 +305,75 @@ export function extractAnthropicWebSearchResults(
         provider: 'anthropic',
         callId: block.tool_use_id,
         status: 'completed',
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Type guard for WebFetchBlock (successful fetch) content.
+ * The SDK's WebFetchToolResultBlock.content is a union of error or fetch result.
+ */
+function isWebFetchBlock(
+  content: WebFetchToolResultBlock['content'],
+): content is WebFetchBlock {
+  return (
+    typeof content === 'object' &&
+    content !== null &&
+    content.type === 'web_fetch_result'
+  );
+}
+
+/**
+ * Extract web fetch results from Anthropic response content.
+ * Uses SDK's WebFetchToolResultBlock type.
+ * Correlates server_tool_use blocks (which contain the URL) with
+ * web_fetch_tool_result blocks (which contain the fetched content).
+ */
+export function extractAnthropicWebFetchResults(
+  content: unknown[],
+): WebFetchResult[] {
+  const results: WebFetchResult[] = [];
+
+  // First pass: build a map of tool_use_id → url from server_tool_use blocks
+  const urlMap = new Map<string, string>();
+  for (const block of content) {
+    if (isAnthropicServerToolUse(block) && block.name === 'web_fetch') {
+      const input = block.input as { url?: string } | undefined;
+      if (input?.url) {
+        urlMap.set(block.id, input.url);
+      }
+    }
+  }
+
+  // Second pass: extract results from web_fetch_tool_result blocks
+  for (const block of content) {
+    if (!isAnthropicWebFetchResult(block)) {
+      continue;
+    }
+
+    const fetchUrl = urlMap.get(block.tool_use_id) ?? '';
+
+    if (isWebFetchBlock(block.content)) {
+      // Successful fetch
+      results.push({
+        url: block.content.url || fetchUrl,
+        title: block.content.content?.title ?? undefined,
+        provider: 'anthropic',
+        callId: block.tool_use_id,
+        status: 'completed',
+      });
+    } else {
+      // Error result
+      const errorBlock = block.content as { error_code?: string };
+      results.push({
+        url: fetchUrl,
+        provider: 'anthropic',
+        callId: block.tool_use_id,
+        status: 'failed',
+        errorCode: errorBlock.error_code,
       });
     }
   }
