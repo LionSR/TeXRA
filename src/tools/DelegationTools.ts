@@ -121,6 +121,13 @@ function toConfigPayload(
   };
 }
 
+/** Metadata about how the delegation was approved, included in the tool result. */
+interface ApprovalMeta {
+  autoApproved: boolean;
+  modelOverride?: string;
+  requestedModel?: string;
+}
+
 /**
  * Execute a subagent asynchronously.
  * Pre-generates executionId so all IDs (tool return, XML delivery, error)
@@ -135,7 +142,7 @@ async function executeSubagent(
   configPayload: AgentConfigPayload,
   agentName: string,
   orchestratorStreamId: StreamTabId,
-  options?: { enableYoloOnChild?: boolean },
+  options?: { enableYoloOnChild?: boolean; approvalMeta?: ApprovalMeta },
 ): Promise<ToolResult> {
   const executionId = generateExecutionId();
 
@@ -210,11 +217,22 @@ async function executeSubagent(
       activeSubagentDelivery.delete(executionId);
     });
   const isToolUse = configPayload.agentCategory === AgentCategory.ToolUse;
+  const meta = options?.approvalMeta;
+  const metaLines: string[] = [];
+  if (meta) {
+    const modelInfo = meta.modelOverride
+      ? `Model: ${meta.modelOverride} (overridden from ${meta.requestedModel ?? 'default'})`
+      : `Model: ${configPayload.model}`;
+    metaLines.push(
+      `Approval: ${meta.autoApproved ? 'auto-approved' : 'user-approved'}. ${modelInfo}.`,
+    );
+  }
   return {
     summary: `Launched '${agentName}' (async)`,
     output: [
       `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,
       `Execution ID: ${executionId}`,
+      ...metaLines,
       `To check intermediate progress: executions tool with path=/executions/${executionId} and action=wait (waits for next status change).`,
       ...(isToolUse
         ? [
@@ -240,35 +258,52 @@ function formatAgentList(
     .join('\n');
 }
 
+/** Build a concise summary of proposal parameters for rejection echo. */
+function summarizeProposal(
+  proposal: WorkflowAgentProposal | ToolUseAgentProposal,
+): string {
+  const parts = [`Agent: ${proposal.agent}`, `Model: ${proposal.model}`];
+  if ('inputFile' in proposal && proposal.inputFile) {
+    parts.push(`File: ${proposal.inputFile}`);
+  }
+  const instrPreview =
+    proposal.instruction.length > 120
+      ? `${proposal.instruction.slice(0, 117)}...`
+      : proposal.instruction;
+  parts.push(`Instruction: "${instrPreview}"`);
+  return parts.join(', ');
+}
+
 /** Convert proposal result to ToolResult. Returns null if approved. */
 function proposalResultToToolResult(
   result: Awaited<ReturnType<typeof proposalCoordinator.waitForProposal>>,
   agentName: string,
-  context: 'workflow' | 'delegation',
+  proposal: WorkflowAgentProposal | ToolUseAgentProposal,
 ): ToolResult | null {
-  const label = context === 'workflow' ? 'proposal' : 'delegation';
+  const echo = summarizeProposal(proposal);
 
   switch (result.action) {
     case 'reject': {
       const feedback = result.feedback?.trim();
+      const feedbackLine = feedback
+        ? `\nUser feedback: ${feedback}`
+        : '\nNo feedback provided. Consider asking the user for guidance.';
       return {
-        summary: `User rejected '${agentName}' ${label}`,
-        output: `The ${label} was rejected.`,
+        summary: `User rejected delegation to '${agentName}'`,
+        output: `Delegation to '${agentName}' was rejected.\nYour delegation was: ${echo}${feedbackLine}`,
         isError: true,
-        ...(feedback ? { userInstruction: feedback } : {}),
       };
     }
     case 'timeout':
       return {
-        summary: `'${agentName}' ${label} timed out`,
-        output: 'The proposal timed out waiting for user approval.',
+        summary: `Delegation to '${agentName}' timed out`,
+        output: `Delegation to '${agentName}' timed out waiting for user approval.\nYour delegation was: ${echo}`,
         isError: true,
       };
     case 'setup':
       return {
         summary: `User opened '${agentName}' for editing`,
-        output:
-          'Proposal opened for editing. The user will run it manually when ready.',
+        output: `Delegation opened for editing. The user will run it manually when ready.\nYour delegation was: ${echo}`,
       };
     case 'approve':
       return null;
@@ -285,11 +320,11 @@ async function proposeAndExecute(
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
   agentName: string,
   streamId: StreamTabId,
-  context: 'workflow' | 'delegation',
 ): Promise<ToolResult> {
   if (isSuperYoloFeatureEnabled() && isProposalBypassedForStream(streamId)) {
     return executeSubagent(toConfigPayload(proposal), agentName, streamId, {
       enableYoloOnChild: true,
+      approvalMeta: { autoApproved: true },
     });
   }
 
@@ -303,16 +338,26 @@ async function proposeAndExecute(
   const nonApproveResult = proposalResultToToolResult(
     result,
     agentName,
-    context,
+    proposal,
   );
   if (nonApproveResult) return nonApproveResult;
 
   // At this point result.action === 'approve' (all other cases returned above)
-  const effective =
-    result.action === 'approve' && result.model
-      ? { ...proposal, model: result.model }
-      : proposal;
-  return executeSubagent(toConfigPayload(effective), agentName, streamId);
+  const modelOverridden =
+    result.action === 'approve' && result.model ? result.model : undefined;
+  const effective = modelOverridden
+    ? { ...proposal, model: modelOverridden }
+    : proposal;
+  const approvalMeta: ApprovalMeta = {
+    autoApproved: false,
+    ...(modelOverridden && {
+      modelOverride: modelOverridden,
+      requestedModel: proposal.model,
+    }),
+  };
+  return executeSubagent(toConfigPayload(effective), agentName, streamId, {
+    approvalMeta,
+  });
 }
 
 // ============================================================================
@@ -480,7 +525,7 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       useMultipleOutputs: input.useMultipleOutputs,
     } satisfies WorkflowAgentProposal);
 
-    return proposeAndExecute(proposal, input.agent, ctx.streamId, 'workflow');
+    return proposeAndExecute(proposal, input.agent, ctx.streamId);
   }
 }
 
@@ -550,7 +595,7 @@ Example: agent=chat, instruction="The presentation at slides/talk.tex has incorr
       instruction: input.instruction,
     } satisfies ToolUseAgentProposal);
 
-    return proposeAndExecute(proposal, input.agent, ctx.streamId, 'delegation');
+    return proposeAndExecute(proposal, input.agent, ctx.streamId);
   }
 }
 

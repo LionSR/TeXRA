@@ -1139,8 +1139,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const rawEffort = this.capabilities.supportsReasoning
       ? this.getEffectiveReasoningEffort()
       : undefined;
-    const reasoningEffort =
-      rawEffort === 'none' ? ('low' as const) : rawEffort;
+    const reasoningEffort = rawEffort === 'none' ? ('low' as const) : rawEffort;
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const baseParams = {
@@ -2300,8 +2299,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     } else if (attachments.length > 0 && this.canProcessToolResultAttachments) {
       // Inline base64 fallback: when file uploads are unavailable (e.g. OpenRouter)
       // but the model supports visual content, embed images/PDFs directly.
-      const { parts: inlineParts, inlined, skipped } =
-        await this.buildInlineAttachmentParts(attachments);
+      const {
+        parts: inlineParts,
+        inlined,
+        skipped,
+      } = await this.buildInlineAttachmentParts(attachments);
       if (inlineParts.length > 0) {
         // Build summary that accurately reflects which attachments were inlined
         // vs. skipped, so the model only gets a read_file hint for skipped ones.
