@@ -121,6 +121,13 @@ function toConfigPayload(
   };
 }
 
+/** Metadata about how the delegation was approved, included in the tool result. */
+interface ApprovalMeta {
+  autoApproved: boolean;
+  modelOverride?: string;
+  requestedModel?: string;
+}
+
 /**
  * Execute a subagent asynchronously.
  * Pre-generates executionId so all IDs (tool return, XML delivery, error)
@@ -131,13 +138,6 @@ function toConfigPayload(
  * so the orchestrator gets the response without waiting for flow exit.
  * For workflow subagents, delivery happens when the promise resolves.
  */
-/** Metadata about how the delegation was approved, included in the tool result. */
-interface ApprovalMeta {
-  autoApproved: boolean;
-  modelOverride?: string;
-  requestedModel?: string;
-}
-
 async function executeSubagent(
   configPayload: AgentConfigPayload,
   agentName: string,
@@ -292,7 +292,6 @@ function proposalResultToToolResult(
         summary: `User rejected delegation to '${agentName}'`,
         output: `Delegation to '${agentName}' was rejected.\nYour delegation was: ${echo}${feedbackLine}`,
         isError: true,
-        ...(feedback ? { userInstruction: feedback } : {}),
       };
     }
     case 'timeout':
