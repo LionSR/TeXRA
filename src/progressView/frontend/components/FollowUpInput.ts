@@ -69,7 +69,7 @@ export class FollowUpInput extends LitElement {
         display: block;
         flex: 1;
         min-width: 0;
-        line-height: 1.4;
+        line-height: var(--line-height-normal);
         min-height: 106px;
         max-height: var(--height-xlarge);
         height: auto;

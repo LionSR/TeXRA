@@ -66,7 +66,7 @@ export class InstructionPanel extends LitElement {
         align-items: center;
         gap: var(--spacing-medium);
         margin-bottom: var(--spacing-small);
-        line-height: 1.5;
+        line-height: var(--line-height-relaxed);
         flex-wrap: wrap;
       }
 
@@ -196,7 +196,7 @@ export class InstructionPanel extends LitElement {
           opacity: 1;
         }
         50% {
-          opacity: 0.5;
+          opacity: var(--opacity-disabled);
         }
       }
     `,
@@ -368,7 +368,7 @@ export class InstructionPanel extends LitElement {
                 width: '16px',
                 height: '16px',
                 opacity: session.isPolishing ? '1' : '0',
-                transition: 'opacity 0.2s ease',
+                transition: 'opacity var(--transition-normal)',
                 ...(session.isPolishing ? {} : { pointerEvents: 'none' }),
               })}
             ></vscode-progress-ring>

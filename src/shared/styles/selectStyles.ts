@@ -74,7 +74,7 @@ export const selectStyles: CSSResult = css`
 
   .api-key-missing {
     color: var(--vscode-errorForeground);
-    opacity: 1;
+    opacity: var(--opacity-full);
     font-style: normal;
     margin-left: var(--spacing-tiny);
   }
