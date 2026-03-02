@@ -198,8 +198,7 @@ export class TextEditorTool extends defineTool({
         const dirContents = await WorkspaceFS.readDir(filePath);
         const formattedContents = dirContents
           .map(([fileName, fileType]) => {
-            const type =
-              isDirectory(fileType) ? 'dir' : 'file';
+            const type = isDirectory(fileType) ? 'dir' : 'file';
             return `[${type}] ${fileName}`;
           })
           .join('\n');

@@ -94,9 +94,7 @@ export class LsTool extends defineTool({
         gitignore.ignores(resolved.relative) ||
         matchesCustomIgnore(display) ||
         matchesCustomIgnore(relativePosix);
-      return makeResult(
-        isIgnored ? null : formatEntry(display, statType),
-      );
+      return makeResult(isIgnored ? null : formatEntry(display, statType));
     }
 
     if (resolved.relative !== '.' && gitignore.ignores(resolved.relative)) {
