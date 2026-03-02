@@ -166,6 +166,9 @@ export class ProgressEventHandler {
             storageKey,
             usage,
           );
+          // Workflow streams get activeRunId from handleSetTaskState (fires
+          // before any usage event). This guard only triggers for tool-use
+          // streams, which skip the handleSetTaskState instruction block.
           if (!ctx.state.meta.getActiveRunId(streamId)) {
             ctx.state.meta.setActiveRunId(streamId, storageKey);
           }
@@ -281,7 +284,7 @@ export class ProgressEventHandler {
   private handleSetTaskState(
     data: ProgressEventPayloads['setTaskState'],
   ): void {
-    const { streamId, executionId, taskState } = data;
+    const { streamId, executionId, taskState, storageKey } = data;
     const isActiveStream = this.state.activeStream === streamId;
     const category = taskState.agentConfig.agentCategory;
     const previousFilter = this.state.agentCategoryFilter;
@@ -301,8 +304,20 @@ export class ProgressEventHandler {
       this.state.meta.setExecutionId(streamId, executionId);
     }
 
-    if (isActiveStream) {
-      this.sendInstructionUpdate(streamId);
+    // Instruction panel is only rendered for workflow streams.
+    // Set activeRunId from storageKey (= root group ID) so the instruction
+    // can be persisted immediately — not after the first usage event.
+    // Without this, subagent instructions were never persisted because
+    // sendInstructionUpdate bailed out on a null runId.
+    if (category !== AgentCategory.ToolUse) {
+      this.state.meta.setActiveRunId(streamId, storageKey);
+      if (isActiveStream) {
+        this.sendInstructionUpdate(streamId, storageKey);
+      } else {
+        // Non-active stream (e.g. subagent while orchestrator is active):
+        // persist so the instruction is available when the user switches tabs.
+        this.prepareInstructionUpdate(streamId, storageKey);
+      }
     }
 
     if (this.webviewUpdater.isAvailable()) {
