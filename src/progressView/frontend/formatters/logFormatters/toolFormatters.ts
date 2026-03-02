@@ -682,7 +682,7 @@ export function formatWebFetchTemplate(
   message: LogMessageData,
   options?: { defaultOpen?: boolean },
 ): FormatResult {
-  const { id, groupId, timestamp, data } = message;
+  const { data } = message;
   if (!data || typeof data !== 'object') return null;
 
   const { url, title, status, errorCode } = data as WebFetchPayload;
@@ -725,10 +725,8 @@ export function formatWebFetchTemplate(
       ? html`<pre>Web fetch executed</pre>`
       : joinWithSeparator(sections);
 
-  const fullTimestamp = new Date(timestamp).toISOString();
   const shouldOpen = options?.defaultOpen ?? false;
-  // prettier-ignore
-  const bannerContentTemplate = html`<div class="banner-content log-entry-content" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${contentTemplate}</div>`;
+  const bannerContentTemplate = buildBannerContent(message, contentTemplate);
 
   // prettier-ignore
   return html`<details class=${classMap({
