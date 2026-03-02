@@ -40,7 +40,10 @@ export interface ProviderVscodeSettingDef {
 }
 
 /** VS Code config settings to surface per provider in the Models tab. */
-export const PROVIDER_VSCODE_SETTINGS: Record<string, ProviderVscodeSettingDef[]> = {
+export const PROVIDER_VSCODE_SETTINGS: Record<
+  string,
+  ProviderVscodeSettingDef[]
+> = {
   openai: [
     {
       key: 'texra.model.gpt5ReasoningSummary',
