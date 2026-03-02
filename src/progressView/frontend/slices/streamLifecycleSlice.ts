@@ -18,7 +18,10 @@ import { firstStreamId, type ProgressState, type StreamState } from '../store';
 import { clearResolvedProposalIds } from './permissionSlice';
 import { clearCopyContentStore } from '../formatters/copyContentStore';
 import { clearProposalInputStore } from '../formatters/proposalInputStore';
-import { updateParentStreamId } from '../stateUtils';
+import {
+  removePermissionsForStream,
+  updateParentStreamId,
+} from '../stateUtils';
 import type { HandlerRegistry } from '../messageDispatcher';
 
 // ============================================================
@@ -143,6 +146,13 @@ export const streamLifecycleHandlers: HandlerRegistry = {
     clearCopyContentStore();
     clearProposalInputStore();
 
+    // Remove permissions for the deleted stream to prevent orphaned entries
+    const cleaned = removePermissionsForStream(
+      ctx.getPermissions(),
+      streamId,
+    );
+    ctx.setPermissions(cleaned);
+
     ctx.setState((prev) =>
       create(prev, (draft) => {
         draft.streamStates.delete(streamId);
@@ -160,6 +170,10 @@ export const streamLifecycleHandlers: HandlerRegistry = {
     clearResolvedProposalIds();
     clearCopyContentStore();
     clearProposalInputStore();
+
+    // Clear all permissions — no streams means no valid permissions
+    ctx.setPermissions([]);
+
     ctx.setState((prev) =>
       create(prev, (draft) => {
         draft.streamById = new Map();
