@@ -106,8 +106,8 @@ describe('ExtractBibliographyTool', () => {
       ),
     );
     assert.ok(result.output?.includes('No matching entries found.'));
-    assert.ok(result.userInstruction?.includes('Missing bibliography files'));
-    assert.ok(result.userInstruction?.includes('Missing citation keys'));
+    assert.ok(result.output?.includes('Missing bibliography files'));
+    assert.ok(result.output?.includes('Missing citation keys'));
   });
 
   it('returns error when tex file is missing', async () => {
