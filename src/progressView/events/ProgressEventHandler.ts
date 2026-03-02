@@ -286,18 +286,20 @@ export class ProgressEventHandler {
       this.state.meta.setExecutionId(streamId, executionId);
     }
 
-    // Set activeRunId from storageKey (= root group ID) immediately.
-    // Without this, activeRunId only gets set on the first updateStreamUsage
-    // event — long after setTaskState fires. That made sendInstructionUpdate
-    // bail out (no runId), so subagent instructions were never persisted.
-    this.state.meta.setActiveRunId(streamId, storageKey);
-
-    if (isActiveStream) {
-      this.sendInstructionUpdate(streamId, storageKey);
-    } else {
-      // Non-active stream (e.g. subagent while orchestrator is active):
-      // persist instruction so it's available when the user switches tabs.
-      this.prepareInstructionUpdate(streamId, storageKey);
+    // Instruction panel is only rendered for workflow streams.
+    // Set activeRunId from storageKey (= root group ID) so the instruction
+    // can be persisted immediately — not after the first usage event.
+    // Without this, subagent instructions were never persisted because
+    // sendInstructionUpdate bailed out on a null runId.
+    if (category !== AgentCategory.ToolUse) {
+      this.state.meta.setActiveRunId(streamId, storageKey);
+      if (isActiveStream) {
+        this.sendInstructionUpdate(streamId, storageKey);
+      } else {
+        // Non-active stream (e.g. subagent while orchestrator is active):
+        // persist so the instruction is available when the user switches tabs.
+        this.prepareInstructionUpdate(streamId, storageKey);
+      }
     }
 
     if (this.webviewUpdater.isAvailable()) {
