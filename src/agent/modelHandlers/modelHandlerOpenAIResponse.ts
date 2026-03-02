@@ -2168,7 +2168,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): ServerToolExtractionResult {
     const output = response?.output;
     if (!Array.isArray(output)) {
-      return { webSearchResults: [], contentBlocks: [] };
+      return { webSearchResults: [], webFetchResults: [], contentBlocks: [] };
     }
 
     // Extract content blocks that need to be preserved
@@ -2190,7 +2190,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Extract normalized web search results for display
     const webSearchResults = extractOpenAIWebSearchResults(output);
 
-    return { webSearchResults, contentBlocks };
+    return { webSearchResults, webFetchResults: [], contentBlocks };
   }
 
   async createToolUseFollowUpMessages(

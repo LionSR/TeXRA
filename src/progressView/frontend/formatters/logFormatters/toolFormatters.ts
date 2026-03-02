@@ -58,7 +58,11 @@ import {
   TRIVIAL_WRITE_OUTPUT,
   getLanguageFromPath,
 } from '../constants';
-import type { WebSearchPayload, LogMessageData } from '@shared/schemas';
+import type {
+  WebSearchPayload,
+  WebFetchPayload,
+  LogMessageData,
+} from '@shared/schemas';
 
 // Side-effect import to register <tool-timer> custom element
 import '../../components/ToolTimer';
@@ -653,6 +657,82 @@ export function formatWebSearchTemplate(
     'banner-details': true,
     'tool-use-details': true,
     'tool-use-error': statusKey === 'failed',
+  })} ?open=${shouldOpen}>${buildDetailsSummary({
+    iconClass,
+    label: titleText,
+    labelClass: 'tool-use-title',
+    includeIconClass: false,
+  })}${bannerContentTemplate}</details>`;
+}
+
+// Web fetch error code display labels
+const FETCH_ERROR_LABELS: Record<string, string> = {
+  invalid_tool_input: 'Invalid URL format',
+  url_too_long: 'URL exceeds maximum length',
+  url_not_allowed: 'URL blocked by domain filter',
+  url_not_accessible: 'Failed to access URL',
+  unsupported_content_type: 'Unsupported content type',
+  too_many_requests: 'Rate limit exceeded',
+  max_uses_exceeded: 'Maximum fetch uses exceeded',
+  unavailable: 'Service unavailable',
+};
+
+/** Format web fetch results as TemplateResult. */
+export function formatWebFetchTemplate(
+  message: LogMessageData,
+  options?: { defaultOpen?: boolean },
+): FormatResult {
+  const { data } = message;
+  if (!data || typeof data !== 'object') return null;
+
+  const { url, title, status, errorCode } = data as WebFetchPayload;
+  const statusKey = typeof status === 'string' ? status : '';
+  const isFailed = statusKey === 'failed';
+
+  const iconClass = isFailed
+    ? 'codicon codicon-error'
+    : 'codicon codicon-cloud-download';
+
+  let titleText = 'Web Fetch';
+  if (url) {
+    try {
+      titleText += `: ${new URL(url).hostname}`;
+    } catch {
+      titleText += `: ${url}`;
+    }
+  }
+  if (isFailed) titleText += ' (failed)';
+
+  // Build content sections
+  const sections: TemplateResult[] = [];
+
+  if (url) {
+    // prettier-ignore
+    sections.push(buildToolUseSection('URL:', html`<a href=${url} class="web-search-link" target="_blank" rel="noopener noreferrer">${url}</a>`));
+  }
+
+  if (title) {
+    sections.push(buildToolUseSection('Title:', wrapInPre(title)));
+  }
+
+  if (isFailed && errorCode) {
+    const errorLabel = FETCH_ERROR_LABELS[errorCode] ?? errorCode;
+    sections.push(buildToolUseSection('Error:', wrapInPre(errorLabel)));
+  }
+
+  const contentTemplate =
+    sections.length === 0
+      ? html`<pre>Web fetch executed</pre>`
+      : joinWithSeparator(sections);
+
+  const shouldOpen = options?.defaultOpen ?? false;
+  const bannerContentTemplate = buildBannerContent(message, contentTemplate);
+
+  // prettier-ignore
+  return html`<details class=${classMap({
+    'banner-details': true,
+    'tool-use-details': true,
+    'tool-use-error': isFailed,
   })} ?open=${shouldOpen}>${buildDetailsSummary({
     iconClass,
     label: titleText,
