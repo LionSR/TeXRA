@@ -145,10 +145,7 @@ export class ModelSelectionList extends LitElement {
         </vscode-option>
         ${REASONING_LEVELS.map(
           (level) => html`
-            <vscode-option
-              value=${level}
-              ?selected=${currentValue === level}
-            >
+            <vscode-option value=${level} ?selected=${currentValue === level}>
               ${REASONING_LEVEL_LABELS[level]}
             </vscode-option>
           `,
