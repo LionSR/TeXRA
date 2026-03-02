@@ -146,12 +146,7 @@ export type UpdateAgentSelectionMessage = z.infer<
 // ============================================================
 
 /** Reasoning effort levels that a user can select. */
-export const ReasoningLevelSchema = z.enum([
-  'none',
-  'low',
-  'medium',
-  'high',
-]);
+export const ReasoningLevelSchema = z.enum(['none', 'low', 'medium', 'high']);
 export type ReasoningLevel = z.infer<typeof ReasoningLevelSchema>;
 
 export const ModelSelectionItemSchema = z.object({
