@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.36.4] - 2026-03-02
+
+### Features
+
+- **Reasoning level overrides** — configure the reasoning effort (Low / Medium / High) per model in the Models settings tab, overriding each provider's default.
+- **GPT-5.3 Codex** — added OpenAI's GPT-5.3-Codex (`gpt53codex`) to the default model list.
+- **BYOK spending analytics** — new database views for tracking Bring-Your-Own-Key spending by model, day, and month alongside existing relay usage.
+
+### Bug Fixes
+
+- Fixed **truncated Anthropic responses** — relay proxy timeouts during extended thinking could silently cut off output; now detected and retried automatically.
+- Fixed **image uploads rejected** when the configured resize dimension exceeded 8000 px — the limit is now capped to stay within API bounds.
+- Fixed **approval panel disappearing** when opening a diff preview — "Open Diff", "Preview Proposed", and "Show LaTeXDiff" no longer dismiss the approve/reject buttons.
+- Fixed **approval panel disappearing** when an orchestrator launches a new subagent — the view now stays on the current stream until the user responds to a pending approval.
+- Fixed **subagent instruction panel** not appearing — `activeRunId` is now set immediately when an agent starts so instructions are persisted before the first event.
+- Fixed **Google GenAI retry multiplication** — SDK-level retries are now disabled so the application's retry loop respects the user's configured retry count instead of multiplying it.
+
+### Improvements
+
+- **Inline base64 fallback for tool attachments** — images and PDFs from tool results are now embedded inline when routed through providers (e.g., OpenRouter) that lack file-upload support, so the model can see visual content.
+- **Lean blueprint notation** — the leanBlueprint agent now translates Lean syntax into standard mathematical notation in informal text, keeping Lean identifiers only inside `\lean{}` macros.
+- Consolidated CSS magic numbers into design tokens.
+- Decoupled agent core from frontend and broke circular dependency chains.
+- Updated dependencies.
+
 ## [0.36.3] - 2026-02-23
 
 ### Features
