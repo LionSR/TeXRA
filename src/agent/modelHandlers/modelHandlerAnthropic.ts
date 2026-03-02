@@ -345,6 +345,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
       case 'medium':
         return 'medium';
       case 'low':
+      case 'none':
+        // Anthropic doesn't support fully disabling thinking; 'low' is the minimum.
         return 'low';
       default:
         return 'high';

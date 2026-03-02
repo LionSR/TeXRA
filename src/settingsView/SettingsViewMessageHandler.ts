@@ -9,7 +9,7 @@
  * - LatexSettingsHandlers: LaTeX tool detection and recommended settings
  */
 import * as vscode from 'vscode';
-import { MODELS, MODEL_CONFIGS } from 'llm-zoo';
+import { MODELS, MODEL_CONFIGS, type ReasoningEffort } from 'llm-zoo';
 
 // Shared schemas and dispatchers
 import {
@@ -17,7 +17,9 @@ import {
   type SettingsViewInboundHandlerRegistry,
   type SettingsViewInboundMessage,
   SETTINGS_VIEW_CMD,
+  ReasoningLevelSchema,
   type ModelSelectionItem,
+  type ReasoningLevel,
 } from '@shared/schemas/settingsViewMessages';
 import {
   PROVIDER_DISPLAY_NAMES,
@@ -40,6 +42,7 @@ import {
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
 import { getHelperModelName } from '@agent/runtime/helperModel';
+import { LEVEL_TO_EFFORT } from '@agent/runtime/ModelFactory';
 import {
   BaseViewMessageHandler,
   SETTINGS_VIEW_COMMANDS,
@@ -190,24 +193,61 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
 
 const modelProvidersSet = new Set<string>(MODEL_PROVIDERS_ORDER);
 
+/**
+ * Reverse of LEVEL_TO_EFFORT: maps ReasoningEffort enum values → UI level strings.
+ * Derived from the canonical map in ModelFactory so there's one source of truth.
+ * Efforts not in LEVEL_TO_EFFORT (e.g. XHIGH) intentionally have no entry —
+ * the UI will show a plain "Default" label instead of lying about the level.
+ */
+const EFFORT_TO_LEVEL = new Map<ReasoningEffort, ReasoningLevel>(
+  Object.entries(LEVEL_TO_EFFORT).map(
+    ([level, effort]) => [effort, level as ReasoningLevel] as const,
+  ),
+);
+
+/** Read persisted reasoning level overrides from global state. */
+function getReasoningLevelOverrides(): Record<string, string> {
+  return globalSM.get<Record<string, string>>(GlobalStateKey.REASONING_LEVELS, {});
+}
+
 function buildModelSelectionItems(): ModelSelectionItem[] {
   const enabledSet = new Set(
     globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS, DEFAULT_MODELS),
   );
+  const reasoningOverrides = getReasoningLevelOverrides();
 
   const items: ModelSelectionItem[] = [];
   for (const name of MODELS) {
     const config = MODEL_CONFIGS[name];
     if (!config || !modelProvidersSet.has(config.provider)) continue;
 
-    items.push({
+    const { supportsReasoningEffort, reasoningEffort } = config.capabilities;
+
+    const item: ModelSelectionItem = {
       name,
       provider: config.provider,
       enabled: enabledSet.has(name),
       deprecated: config.deprecated ?? false,
       contextWindow: formatContext(config.contextWindow),
       cost: formatCost(config.inputPrice, config.outputPrice),
-    });
+    };
+
+    if (supportsReasoningEffort) {
+      item.supportsReasoningLevel = true;
+      // Only set defaultReasoningLevel when the effort has a UI-level equivalent.
+      // XHIGH and unknown efforts get no label — the UI shows plain "Default".
+      const defaultLevel = EFFORT_TO_LEVEL.get(reasoningEffort);
+      if (defaultLevel) {
+        item.defaultReasoningLevel = defaultLevel;
+      }
+      // Validate persisted override against the schema instead of blindly casting.
+      const parsed = ReasoningLevelSchema.safeParse(reasoningOverrides[name]);
+      if (parsed.success) {
+        item.reasoningLevel = parsed.data;
+      }
+    }
+
+    items.push(item);
   }
 
   return items.sort((a, b) => a.name.localeCompare(b.name));
@@ -305,6 +345,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleSetModelEnabled(data),
       [SETTINGS_VIEW_COMMANDS.SET_HELPER_MODEL]: (data) =>
         this.handleSetHelperModel(data),
+      [SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL]: (data) =>
+        this.handleSetModelReasoningLevel(data),
 
       // Super YOLO handlers
       [SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED]: () =>
@@ -1002,6 +1044,21 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_HELPER_MODEL>,
   ): Promise<void> {
     await globalSM.update(GlobalStateKey.HELPER_MODEL, data.modelName);
+    await this.withActiveWebview((w) => this.sendModelSelectionData(w));
+  }
+
+  private async handleSetModelReasoningLevel(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MODEL_REASONING_LEVEL>,
+  ): Promise<void> {
+    const overrides = getReasoningLevelOverrides();
+
+    if (data.level) {
+      overrides[data.modelName] = data.level;
+    } else {
+      delete overrides[data.modelName];
+    }
+
+    await globalSM.update(GlobalStateKey.REASONING_LEVELS, overrides);
     await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
