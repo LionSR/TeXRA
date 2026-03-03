@@ -211,6 +211,8 @@ export class ProgressApp extends ProgressAppBase {
   private placement = signal<ProgressViewPlacement>('sidebar');
   private narrowLayout = signal(false);
   @state() private permissions: PermissionState[] = [];
+  /** Stream IDs with pending approval requests — drives tab orange indicator. */
+  private pendingApprovalStreamIds: Set<string> = new Set();
 
   private readonly resizeObserver = new ResizeObserver((entries) => {
     const width = entries[0]?.contentRect.width ?? this.clientWidth;
@@ -437,6 +439,29 @@ export class ProgressApp extends ProgressAppBase {
     this.streamContextValue = this.streamContext$.get();
     this.streamLogContextValue = this.logContext$.get();
     this.permissionsContextValue = this.permissions;
+    this.pendingApprovalStreamIds = this.computePendingApprovalStreamIds();
+  }
+
+  /**
+   * Derive stream IDs with pending approval requests from the permission list.
+   * Returns a stable Set reference when the set of IDs hasn't changed.
+   */
+  private _prevApprovalIds: Set<string> = new Set();
+  private computePendingApprovalStreamIds(): Set<string> {
+    const ids = new Set<string>();
+    for (const p of this.permissions) {
+      const streamId = p.data.streamId;
+      if (streamId) ids.add(streamId);
+    }
+    // Return stable reference if unchanged to avoid unnecessary child re-renders
+    if (
+      ids.size === this._prevApprovalIds.size &&
+      [...ids].every((id) => this._prevApprovalIds.has(id))
+    ) {
+      return this._prevApprovalIds;
+    }
+    this._prevApprovalIds = ids;
+    return ids;
   }
 
   render(): TemplateResult {
@@ -503,6 +528,7 @@ export class ProgressApp extends ProgressAppBase {
               .sort=${this.streamSort$.get()}
               .streamStatusById=${this.statusById$.get()}
               .streamLastTimestampById=${this.timestampById$.get()}
+              .pendingApprovalStreamIds=${this.pendingApprovalStreamIds}
               @stream-switch=${this.onStreamSwitch}
               @stream-delete=${this.onStreamDelete}
               @filter-change=${this.onFilterChange}
