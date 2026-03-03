@@ -132,7 +132,7 @@ export const TIER_CONFIG: TierModelConfig = {
 export const TIER_SPENDING_LIMITS: TierSpendingLimits = {
   free: 10, // $10/month - trial/evaluation access (temporarily increased)
   Max: 50, // $50/month - researcher access
-  Ultra: 500, // $500/month - sponsor access
+  Ultra: 1500, // $1500/month - sponsor access
 };
 
 // =============================================================================
