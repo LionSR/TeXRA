@@ -112,9 +112,19 @@ export class StreamTab extends LitElement {
         border-left-color: var(--color-warning);
       }
 
-      /* Pending approval overrides status color — orange draws attention */
+      /* Pending approval — pulsing orange, visually distinct from all status colors */
+      @keyframes pulse-border {
+        0%,
+        100% {
+          border-left-color: var(--vscode-charts-orange, #d18616);
+        }
+        50% {
+          border-left-color: transparent;
+        }
+      }
+
       .tab-container.has-pending-approval {
-        border-left-color: var(--color-warning, var(--vscode-charts-orange));
+        animation: pulse-border 2s ease-in-out infinite;
       }
 
       .tab {
