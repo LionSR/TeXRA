@@ -303,7 +303,7 @@ export class AgentHandlers {
     data: MessageFor<typeof SETTINGS_VIEW_CMD.CREATE_AGENT>,
   ): Promise<void> {
     if (data.mode === 'template') {
-      await this.createAgentFromTemplate();
+      await this.createAgentFromTemplate(data.category);
     } else {
       await vscode.commands.executeCommand(
         'texra.createAgentWithAI',
@@ -630,10 +630,14 @@ export class AgentHandlers {
 
   // ── Private helpers ──
 
-  private async createAgentFromTemplate(): Promise<void> {
+  private async createAgentFromTemplate(
+    category: 'workflow' | 'toolUse',
+  ): Promise<void> {
     try {
+      const categoryLabel =
+        category === 'toolUse' ? 'Tool Use' : 'Workflow';
       const name = await vscode.window.showInputBox({
-        prompt: 'Enter a name for the new agent (without .yaml extension)',
+        prompt: `Enter a name for the new ${categoryLabel} agent (without .yaml extension)`,
         placeHolder: 'my_agent',
         validateInput: (value) => {
           if (!value) return 'Name cannot be empty';
@@ -661,13 +665,34 @@ export class AgentHandlers {
       }
 
       const baseName = name.replace(/\.yaml$/, '');
-      const template = `# --- Agent Inheritance (Optional) ---
+      const template =
+        category === 'toolUse'
+          ? this.toolUseTemplate(baseName)
+          : this.workflowTemplate(baseName);
+
+      await AbsoluteFS.write(filePath, template);
+      const doc = await vscode.workspace.openTextDocument(
+        vscode.Uri.file(filePath),
+      );
+      await vscode.window.showTextDocument(doc);
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.ctx.channel,
+        'Failed to create agent from template',
+        error,
+      );
+    }
+  }
+
+  private workflowTemplate(baseName: string): string {
+    return `# --- Agent Inheritance (Optional) ---
 # inherits: base
 
 name: ${baseName}
 
 # --- Agent Settings ---
 settings:
+  agentCategory: workflow
   temperature: 0.1
   isRewrite: true
   documentTag: document
@@ -690,19 +715,33 @@ prompts:
     - |
         [Optional reflection prompt — remove this item if you only need one round]
 `;
+  }
 
-      await AbsoluteFS.write(filePath, template);
-      const doc = await vscode.workspace.openTextDocument(
-        vscode.Uri.file(filePath),
-      );
-      await vscode.window.showTextDocument(doc);
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to create agent from template',
-        error,
-      );
-    }
+  private toolUseTemplate(baseName: string): string {
+    return `name: ${baseName}
+description: [One-line description of what this agent does]
+
+# --- Agent Settings ---
+settings:
+  agentCategory: toolUse
+  temperature: 0.7
+  tools:
+    - bash
+    - read_file
+    - write_file
+    - edit_file
+    - glob
+    - grep
+    - ls
+
+# --- Agent Prompts ---
+prompts:
+  systemPrompt: |
+    [Define the AI's role, capabilities, and how to use its tools]
+
+  userRequest: |
+    {{ INSTRUCTION }}
+`;
   }
 
   /** Refresh agent dir + selection after a directory change. */
