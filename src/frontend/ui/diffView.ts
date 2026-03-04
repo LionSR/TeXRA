@@ -37,6 +37,7 @@ function refreshDiff(): void {
     diffInfo.left,
     diffInfo.right,
     diffInfo.title,
+    { preserveFocus: true } satisfies vscode.TextDocumentShowOptions,
   );
   logger.debug(CHANNEL, 'Refreshed diff view');
 }
