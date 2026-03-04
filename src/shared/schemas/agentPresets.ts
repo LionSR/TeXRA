@@ -27,6 +27,19 @@ export type AgentModePreset = z.infer<typeof AgentModePresetSchema>;
  * Agent names listed here are matched by name (not source:name key)
  * so custom agents that override a built-in are included automatically.
  */
+/**
+ * Agents disabled by default — present in the registry but excluded
+ * from the dropdown until explicitly enabled or activated via a preset.
+ *
+ * Matched by plain agent name (not source-prefixed key).
+ */
+export const DISABLED_BY_DEFAULT_AGENTS: ReadonlySet<string> = new Set([
+  'lean',
+  'leanSearch',
+  'leanSimplifier',
+  'leanBlueprint',
+]);
+
 export const AGENT_MODE_PRESETS: AgentModePreset[] = [
   {
     id: 'lean-project',

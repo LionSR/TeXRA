@@ -53,11 +53,12 @@ function entryToSelectionItem(
   enabledKeys: string[] | undefined,
 ): AgentSelectionItem {
   const key = createKey(entry.source, entry.name);
-  // undefined = never configured → all enabled; [] = explicitly empty → none enabled
+  // undefined = never configured → all enabled EXCEPT disabled-by-default;
+  // [] = explicitly empty → none enabled
   const enabled =
-    enabledKeys === undefined ||
-    enabledKeys.includes(key) ||
-    enabledKeys.includes(entry.name);
+    enabledKeys === undefined
+      ? !entry.disabledByDefault
+      : enabledKeys.includes(key) || enabledKeys.includes(entry.name);
   return {
     name: entry.name,
     source: entry.source,
@@ -69,6 +70,7 @@ function entryToSelectionItem(
     hasMultiple: entry.isMultiple ?? Boolean(entry.multiplePath),
     hasMultiplePath: Boolean(entry.multiplePath),
     enabled,
+    disabledByDefault: entry.disabledByDefault ?? false,
   };
 }
 
@@ -171,13 +173,14 @@ export class AgentHandlers {
           updated = [...current, key];
         }
       } else if (raw === undefined) {
-        // Never configured (undefined) = "all enabled". To disable one agent,
-        // seed the config with all OTHER agents: undefined → [all except this one].
+        // Never configured (undefined) = "all enabled except disabled-by-default".
+        // To disable one agent, seed the config with all enabled agents minus this one.
         const allAgents =
           data.category === 'workflow'
             ? getWorkflowAgents()
             : getToolUseAgents();
         updated = allAgents
+          .filter((e) => !e.disabledByDefault)
           .map((e) => createKey(e.source, e.name))
           .filter((k) => k !== key);
       } else {
@@ -219,9 +222,13 @@ export class AgentHandlers {
       // Legacy entries may use plain agent names without source prefix
       const targetLegacyNames = new Set(sourceAgents.map((e) => e.name));
 
-      // Resolve current state: undefined means "all enabled" (never configured)
+      // Resolve current state: undefined means "all enabled except disabled-by-default"
       const raw = workspaceSM.get<string[]>(stateKey);
-      const current = raw ?? allAgents.map((e) => createKey(e.source, e.name));
+      const current =
+        raw ??
+        allAgents
+          .filter((e) => !e.disabledByDefault)
+          .map((e) => createKey(e.source, e.name));
 
       let updated: string[];
       if (data.enabled) {

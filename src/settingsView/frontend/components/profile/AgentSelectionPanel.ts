@@ -306,6 +306,20 @@ export class AgentSelectionPanel extends LitElement {
         color: var(--color-text-secondary);
       }
 
+      .agent-opt-in-badge {
+        display: inline-block;
+        padding: 0 var(--spacing-small);
+        font-size: 10px;
+        font-weight: var(--font-weight-medium);
+        border-radius: var(--border-radius);
+        background: var(
+          --vscode-inputValidation-warningBackground,
+          rgba(255, 200, 0, 0.15)
+        );
+        color: var(--color-text-secondary);
+        white-space: nowrap;
+      }
+
       .agent-detail-path {
         font-size: var(--font-size-xs);
         font-family: var(--vscode-editor-font-family, monospace);
@@ -563,6 +577,13 @@ export class AgentSelectionPanel extends LitElement {
         />
         <span class="agent-list-item-name">${agent.name}</span>
         <span class="agent-list-item-badges">
+          ${agent.disabledByDefault
+            ? html`<span
+                class="agent-opt-in-badge"
+                title="Opt-in agent — enable via presets or toggle"
+                >opt-in</span
+              >`
+            : nothing}
           ${agent.hasMultiple
             ? html`<span title="Multiple outputs">⧉</span>`
             : nothing}
@@ -676,6 +697,9 @@ export class AgentSelectionPanel extends LitElement {
           <span class="agent-detail-meta-label">In dropdown</span>
           <span class="agent-detail-meta-value">
             ${agent.enabled ? 'Yes' : 'No'}
+            ${agent.disabledByDefault
+              ? ' (opt-in — enable via preset or toggle)'
+              : ''}
           </span>
 
           <span class="agent-detail-meta-label">Multi-output</span>

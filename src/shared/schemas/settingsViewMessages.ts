@@ -128,6 +128,7 @@ export const AgentSelectionItemSchema = z.object({
   hasMultiple: z.boolean(), // supports multiple outputs (informational)
   hasMultiplePath: z.boolean(), // has openable _multiple YAML file
   enabled: z.boolean(),
+  disabledByDefault: z.boolean(), // opt-in agent: hidden until enabled via preset or toggle
 });
 export type AgentSelectionItem = z.infer<typeof AgentSelectionItemSchema>;
 

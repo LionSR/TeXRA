@@ -20,6 +20,7 @@ import {
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
+import { DISABLED_BY_DEFAULT_AGENTS } from '@shared/schemas/agentPresets';
 import type { AgentOptionData } from '@shared/schemas';
 
 const CHANNEL = 'agentRegistry';
@@ -79,6 +80,7 @@ export interface AgentEntry {
   tools?: string[]; // tool names for tool-use agents
   defaultOutputFiles?: string[];
   visibility?: string[]; // remote only: group names that can access the agent
+  disabledByDefault?: boolean; // opt-in agent: hidden until enabled via preset or toggle
 }
 
 /**
@@ -463,6 +465,10 @@ async function scanYaml(
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
 
+    const disabledByDefault =
+      (rawSettings.disabledByDefault as boolean | undefined) === true ||
+      DISABLED_BY_DEFAULT_AGENTS.has(name);
+
     return {
       name,
       source,
@@ -474,6 +480,7 @@ async function scanYaml(
       defaultOutputFiles: defaultOutputFiles?.length
         ? defaultOutputFiles
         : undefined,
+      disabledByDefault: disabledByDefault || undefined,
     };
   } catch (err) {
     logger.warn(CHANNEL, `Failed to scan ${yamlPath}: ${err}`);
@@ -540,6 +547,7 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
       // Tools: prefer DB column (authoritative), fall back to persistent cache.
       // defaultOutputFiles: from persistent cache (no DB column yet).
       const dbTools = primary.tools?.length ? primary.tools : undefined;
+      const disabledByDefault = DISABLED_BY_DEFAULT_AGENTS.has(name);
       entries.push({
         name,
         source: 'remote',
@@ -550,6 +558,7 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
         visibility: primary.visibility ?? undefined,
         tools: dbTools ?? cached?.tools,
         defaultOutputFiles: cached?.defaultOutputFiles,
+        disabledByDefault: disabledByDefault || undefined,
       });
     }
 
@@ -623,6 +632,12 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
   return entry?.source === 'remote';
 }
 
+/** Check if an agent is disabled by default (opt-in only). */
+export function isAgentDisabledByDefault(identifier: string): boolean {
+  const entry = getAgent(identifier);
+  return entry?.disabledByDefault === true;
+}
+
 // =============================================================================
 // VISIBLE AGENTS (for dropdowns)
 // =============================================================================
@@ -677,8 +692,11 @@ function filterVisible(
   entries: AgentEntry[],
   configured: string[] | undefined,
 ): AgentEntry[] {
-  // undefined = never configured → show all; [] = explicitly empty → show none
-  if (configured === undefined) return entries;
+  // undefined = never configured → show all except disabled-by-default;
+  // [] = explicitly empty → show none
+  if (configured === undefined) {
+    return entries.filter((entry) => !entry.disabledByDefault);
+  }
   const configuredSet = new Set(configured);
 
   // All agents (including remote) are filtered by the configured visibility set.
