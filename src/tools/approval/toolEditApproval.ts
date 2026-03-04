@@ -446,6 +446,7 @@ async function nativeRequestApproval(
       originalUri,
       proposedUri,
       title,
+      { preserveFocus: true } satisfies vscode.TextDocumentShowOptions,
     );
 
     await revealFirstChange(proposedUri, originalContent, proposedContent);
@@ -681,6 +682,7 @@ export async function handleProgressViewToolEditApprovalAction(
         entry.originalUri,
         entry.proposedUri,
         entry.title,
+        { preserveFocus: true } satisfies vscode.TextDocumentShowOptions,
       );
       await revealFirstChange(
         entry.proposedUri,
