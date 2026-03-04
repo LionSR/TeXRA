@@ -236,11 +236,18 @@ export class ProgressEventHandler {
     const wasKnownStream = this.state.streamLogs.has(streamId);
     const previousFilter = this.state.agentCategoryFilter;
     this.state.streamLogs.ensureStream(streamId);
-    this.state.updateStreamHints(streamId, {
-      agentCategory: payload.agentCategory,
-      isRemote,
-      hasMultipleOutputs,
-    });
+    // Only pass defined hint fields — spreading {key: undefined} over existing
+    // hints would clear previously-set values (isRemote, hasMultipleOutputs).
+    const hints = Object.fromEntries(
+      Object.entries({
+        agentCategory: payload.agentCategory,
+        isRemote,
+        hasMultipleOutputs,
+      }).filter(([, v]) => v !== undefined),
+    );
+    if (Object.keys(hints).length > 0) {
+      this.state.updateStreamHints(streamId, hints);
+    }
     // Resolve category: use payload hint, fall back to existing stream state.
     // Approval flows (proposal, tool-edit, bash) emit without agentCategory;
     // the stream already exists by then so getStreamCategory() finds it.
