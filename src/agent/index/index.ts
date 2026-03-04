@@ -28,7 +28,7 @@ export {
   getMultipleName,
   // Source helpers
   isRemoteAgent,
-  isAgentDisabledByDefault,
+  isAgentOptIn,
   // Visible agents (for dropdowns and tools)
   getVisibleAgents,
   // Deduplication

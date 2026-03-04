@@ -577,7 +577,7 @@ export class AgentSelectionPanel extends LitElement {
         />
         <span class="agent-list-item-name">${agent.name}</span>
         <span class="agent-list-item-badges">
-          ${agent.disabledByDefault
+          ${agent.optIn
             ? html`<span
                 class="agent-opt-in-badge"
                 title="Opt-in agent — enable via presets or toggle"
@@ -697,7 +697,7 @@ export class AgentSelectionPanel extends LitElement {
           <span class="agent-detail-meta-label">In dropdown</span>
           <span class="agent-detail-meta-value">
             ${agent.enabled ? 'Yes' : 'No'}
-            ${agent.disabledByDefault
+            ${agent.optIn
               ? ' (opt-in — enable via preset or toggle)'
               : ''}
           </span>

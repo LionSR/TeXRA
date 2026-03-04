@@ -20,7 +20,7 @@ import {
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
-import { DISABLED_BY_DEFAULT_AGENTS } from '@shared/schemas/agentPresets';
+import { OPT_IN_AGENTS } from '@shared/schemas/agentPresets';
 import type { AgentOptionData } from '@shared/schemas';
 
 const CHANNEL = 'agentRegistry';
@@ -80,7 +80,7 @@ export interface AgentEntry {
   tools?: string[]; // tool names for tool-use agents
   defaultOutputFiles?: string[];
   visibility?: string[]; // remote only: group names that can access the agent
-  disabledByDefault?: boolean; // opt-in agent: hidden until enabled via preset or toggle
+  optIn?: boolean; // opt-in agent: hidden until enabled via preset or toggle
 }
 
 /**
@@ -465,9 +465,9 @@ async function scanYaml(
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
 
-    const disabledByDefault =
-      (rawSettings.disabledByDefault as boolean | undefined) === true ||
-      DISABLED_BY_DEFAULT_AGENTS.has(name);
+    const optIn =
+      (rawSettings.optIn as boolean | undefined) === true ||
+      OPT_IN_AGENTS.has(name);
 
     return {
       name,
@@ -480,7 +480,7 @@ async function scanYaml(
       defaultOutputFiles: defaultOutputFiles?.length
         ? defaultOutputFiles
         : undefined,
-      disabledByDefault: disabledByDefault || undefined,
+      optIn: optIn || undefined,
     };
   } catch (err) {
     logger.warn(CHANNEL, `Failed to scan ${yamlPath}: ${err}`);
@@ -547,7 +547,7 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
       // Tools: prefer DB column (authoritative), fall back to persistent cache.
       // defaultOutputFiles: from persistent cache (no DB column yet).
       const dbTools = primary.tools?.length ? primary.tools : undefined;
-      const disabledByDefault = DISABLED_BY_DEFAULT_AGENTS.has(name);
+      const optIn = OPT_IN_AGENTS.has(name);
       entries.push({
         name,
         source: 'remote',
@@ -558,7 +558,7 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
         visibility: primary.visibility ?? undefined,
         tools: dbTools ?? cached?.tools,
         defaultOutputFiles: cached?.defaultOutputFiles,
-        disabledByDefault: disabledByDefault || undefined,
+        optIn: optIn || undefined,
       });
     }
 
@@ -632,10 +632,10 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
   return entry?.source === 'remote';
 }
 
-/** Check if an agent is disabled by default (opt-in only). */
-export function isAgentDisabledByDefault(identifier: string): boolean {
+/** Check if an agent is opt-in only. */
+export function isAgentOptIn(identifier: string): boolean {
   const entry = getAgent(identifier);
-  return entry?.disabledByDefault === true;
+  return entry?.optIn === true;
 }
 
 // =============================================================================
@@ -695,7 +695,7 @@ function filterVisible(
   // undefined = never configured → show all except disabled-by-default;
   // [] = explicitly empty → show none
   if (configured === undefined) {
-    return entries.filter((entry) => !entry.disabledByDefault);
+    return entries.filter((entry) => !entry.optIn);
   }
   const configuredSet = new Set(configured);
 

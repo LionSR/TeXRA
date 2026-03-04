@@ -53,11 +53,11 @@ function entryToSelectionItem(
   enabledKeys: string[] | undefined,
 ): AgentSelectionItem {
   const key = createKey(entry.source, entry.name);
-  // undefined = never configured → all enabled EXCEPT disabled-by-default;
+  // undefined = never configured → all enabled EXCEPT opt-in agents;
   // [] = explicitly empty → none enabled
   const enabled =
     enabledKeys === undefined
-      ? !entry.disabledByDefault
+      ? !entry.optIn
       : enabledKeys.includes(key) || enabledKeys.includes(entry.name);
   return {
     name: entry.name,
@@ -70,7 +70,7 @@ function entryToSelectionItem(
     hasMultiple: entry.isMultiple ?? Boolean(entry.multiplePath),
     hasMultiplePath: Boolean(entry.multiplePath),
     enabled,
-    disabledByDefault: entry.disabledByDefault ?? false,
+    optIn: entry.optIn ?? false,
   };
 }
 
@@ -180,7 +180,7 @@ export class AgentHandlers {
             ? getWorkflowAgents()
             : getToolUseAgents();
         updated = allAgents
-          .filter((e) => !e.disabledByDefault)
+          .filter((e) => !e.optIn)
           .map((e) => createKey(e.source, e.name))
           .filter((k) => k !== key);
       } else {
@@ -227,7 +227,7 @@ export class AgentHandlers {
       const current =
         raw ??
         allAgents
-          .filter((e) => !e.disabledByDefault)
+          .filter((e) => !e.optIn)
           .map((e) => createKey(e.source, e.name));
 
       let updated: string[];

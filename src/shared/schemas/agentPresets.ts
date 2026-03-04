@@ -28,12 +28,12 @@ export type AgentModePreset = z.infer<typeof AgentModePresetSchema>;
  * so custom agents that override a built-in are included automatically.
  */
 /**
- * Agents disabled by default — present in the registry but excluded
- * from the dropdown until explicitly enabled or activated via a preset.
+ * Opt-in agents — present in the registry but excluded from the
+ * dropdown until explicitly enabled or activated via a preset.
  *
  * Matched by plain agent name (not source-prefixed key).
  */
-export const DISABLED_BY_DEFAULT_AGENTS: ReadonlySet<string> = new Set([
+export const OPT_IN_AGENTS: ReadonlySet<string> = new Set([
   'lean',
   'leanSearch',
   'leanSimplifier',

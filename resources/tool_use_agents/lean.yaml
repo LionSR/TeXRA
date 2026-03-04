@@ -3,7 +3,7 @@ description: Lean 4 proof assistant with VS Code integration and CLI fallback.
 
 settings:
   agentCategory: toolUse
-  disabledByDefault: true
+  optIn: true
   tools:
     - todo_write
     - lean_diagnostics
