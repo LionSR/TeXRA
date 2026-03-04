@@ -587,10 +587,14 @@ export class MainApp extends MainAppBase {
     const optionsData = message.optionsData ?? {};
 
     if (optionsData.workflow) {
-      this.workflowAgentOptions.set(optionsData.workflow);
+      const options = this.preserveCurrentAgent(
+        optionsData.workflow,
+        this.workflowAgent.get(),
+      );
+      this.workflowAgentOptions.set(options);
       this.workflowAgent.set(
         this.validateSelection(
-          optionsData.workflow,
+          options,
           this.workflowAgent.get(),
           true, // preferEnabled for consistency (agents don't have disabled, but future-proof)
         ),
@@ -598,15 +602,42 @@ export class MainApp extends MainAppBase {
     }
 
     if (optionsData.toolUse) {
-      this.toolUseAgentOptions.set(optionsData.toolUse);
+      const options = this.preserveCurrentAgent(
+        optionsData.toolUse,
+        this.toolUseAgent.get(),
+      );
+      this.toolUseAgentOptions.set(options);
       this.toolUseAgent.set(
         this.validateSelection(
-          optionsData.toolUse,
+          options,
           this.toolUseAgent.get(),
           true,
         ),
       );
     }
+  }
+
+  /**
+   * If the currently selected agent is not in the options list, add it as a
+   * synthetic entry so the user's selection is preserved. This prevents opt-in
+   * agents (hidden by default) from being silently replaced when the user had
+   * previously selected them.
+   */
+  private preserveCurrentAgent(
+    options: AgentOptionData[],
+    currentValue: string,
+  ): AgentOptionData[] {
+    if (!currentValue || options.some((opt) => opt.value === currentValue)) {
+      return options;
+    }
+    // Extract agent name from source:name key (e.g., "builtIn:lean" → "lean")
+    const name = currentValue.includes(':')
+      ? currentValue.split(':').pop()!
+      : currentValue;
+    return [
+      ...options,
+      { value: currentValue, label: name },
+    ];
   }
 
   private handleSetSingleFileOptions(
