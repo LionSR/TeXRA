@@ -159,10 +159,17 @@ export class AgentHandlers {
         data.category === 'workflow'
           ? WorkspaceStateKey.ENABLED_AGENTS
           : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS;
-      // No default → undefined means "never configured" (all enabled)
+      // No default → undefined means "never configured" (all enabled except opt-in)
       const raw = workspaceSM.get<string[]>(stateKey);
-      const current = raw ?? [];
       const key = createKey(data.agentSource, data.agentName);
+
+      // When raw is undefined, seed with all non-opt-in agents to materialize
+      // the implicit "all enabled" state before modifying it.
+      const current =
+        raw ??
+        (data.category === 'workflow' ? getWorkflowAgents() : getToolUseAgents())
+          .filter((e) => !e.optIn)
+          .map((e) => createKey(e.source, e.name));
 
       let updated: string[];
       if (data.enabled) {
@@ -172,17 +179,6 @@ export class AgentHandlers {
         } else {
           updated = [...current, key];
         }
-      } else if (raw === undefined) {
-        // Never configured (undefined) = "all enabled except disabled-by-default".
-        // To disable one agent, seed the config with all enabled agents minus this one.
-        const allAgents =
-          data.category === 'workflow'
-            ? getWorkflowAgents()
-            : getToolUseAgents();
-        updated = allAgents
-          .filter((e) => !e.optIn)
-          .map((e) => createKey(e.source, e.name))
-          .filter((k) => k !== key);
       } else {
         // Remove both name and source:name formats.
         // An empty result means "nothing enabled" (not "all enabled").

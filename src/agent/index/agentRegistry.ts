@@ -632,11 +632,6 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
   return entry?.source === 'remote';
 }
 
-/** Check if an agent is opt-in only. */
-export function isAgentOptIn(identifier: string): boolean {
-  const entry = getAgent(identifier);
-  return entry?.optIn === true;
-}
 
 // =============================================================================
 // VISIBLE AGENTS (for dropdowns)
