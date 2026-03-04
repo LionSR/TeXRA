@@ -213,12 +213,22 @@ export class ProgressApp extends ProgressAppBase {
   private permissions$ = signal<PermissionState[]>([]);
 
   /** Stream IDs with pending approval requests — drives tab pulse indicator. */
+  private _prevApprovalIds: Set<string> = new Set();
   private pendingApprovalIds$ = new Signal.Computed(() => {
     const ids = new Set<string>();
     for (const p of this.permissions$.get()) {
       const streamId = p.data.streamId;
       if (streamId) ids.add(streamId);
     }
+    // Return stable reference when unchanged — Signal.Computed uses Object.is(),
+    // so a new Set with identical contents would still propagate.
+    if (
+      ids.size === this._prevApprovalIds.size &&
+      [...ids].every((id) => this._prevApprovalIds.has(id))
+    ) {
+      return this._prevApprovalIds;
+    }
+    this._prevApprovalIds = ids;
     return ids;
   });
 
