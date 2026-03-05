@@ -3,6 +3,10 @@ import { ModelProvider } from 'llm-zoo';
 import { getConfig } from '@utils/config';
 import { getProviderEndpoint } from '@utils/config/providerConfig';
 
+// NOTE: getProviderEndpoint reads from globalSM (VS Code global state), which is
+// where the Settings dashboard writes custom endpoints. The legacy settings.json
+// keys (texra.model.baseUrl*) are no longer read — globalSM is the single source.
+
 const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
 
 /**
@@ -28,17 +32,6 @@ const PROXY_PATHS: Partial<Record<ModelProvider, string>> = {
   [ModelProvider.OPENAI]: 'openai/v1',
   [ModelProvider.ANTHROPIC]: 'anthropic',
   [ModelProvider.XAI]: 'xai',
-};
-
-/** Per-provider custom endpoint config keys. OpenRouter/Copilot/Others have no custom endpoint. */
-const ENDPOINT_CONFIG_KEYS: Partial<Record<ModelProvider, string>> = {
-  [ModelProvider.OPENAI]: 'texra.model.baseUrlOpenai',
-  [ModelProvider.ANTHROPIC]: 'texra.model.baseUrlAnthropic',
-  [ModelProvider.GOOGLE]: 'texra.model.baseUrlGoogle',
-  [ModelProvider.DEEPSEEK]: 'texra.model.baseUrlDeepSeek',
-  [ModelProvider.XAI]: 'texra.model.baseUrlXai',
-  [ModelProvider.MOONSHOT]: 'texra.model.baseUrlMoonshot',
-  [ModelProvider.DASHSCOPE]: 'texra.model.baseUrlDashscope',
 };
 
 const BASE_URLS: Record<ModelProvider, string | null> = {
@@ -88,7 +81,8 @@ export function shouldUseOpenRouter(config: {
  * 2. Server-side keys relay (experimental, for Ultra users)
  * 3. Improved connection proxy (proxy.texra.ai)
  * 4. OpenRouter
- * 5. Provider default URLs
+ * 5. Per-provider custom endpoint (dashboard settings)
+ * 6. Provider default URLs
  *
  * Note: Server-side keys and proxy.texra.ai are MUTUALLY EXCLUSIVE.
  * When server-side keys are enabled, the relay handles everything
@@ -152,14 +146,8 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
 
   if (useOpenRouter) return 'https://openrouter.ai/api/v1';
 
-  // Per-provider custom base URL override (all providers except OpenRouter)
-  // Check both the dashboard settings (globalSM) and workspace config (settings.json)
-  const dashboardEndpoint = getProviderEndpoint(config.provider);
-  const endpointKey = ENDPOINT_CONFIG_KEYS[config.provider];
-  const workspaceEndpoint = endpointKey
-    ? getConfig<string>(endpointKey, '').trim()
-    : '';
-  const customUrl = dashboardEndpoint || workspaceEndpoint;
+  // Per-provider custom endpoint from dashboard settings (globalSM)
+  const customUrl = getProviderEndpoint(config.provider);
   if (customUrl) {
     config.logger?.debug(
       `Using custom base URL for ${config.provider}: ${customUrl}`,
