@@ -1,6 +1,5 @@
 name: lean
 description: Lean 4 proof assistant with VS Code integration and CLI fallback.
-optIn: true
 
 settings:
   agentCategory: toolUse
