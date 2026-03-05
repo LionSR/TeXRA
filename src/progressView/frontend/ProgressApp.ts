@@ -210,7 +210,27 @@ export class ProgressApp extends ProgressAppBase {
   private appState = signal(createInitialState());
   private placement = signal<ProgressViewPlacement>('sidebar');
   private narrowLayout = signal(false);
-  @state() private permissions: PermissionState[] = [];
+  private permissions$ = signal<PermissionState[]>([]);
+
+  /** Stream IDs with pending approval requests — drives tab pulse indicator. */
+  private _prevApprovalIds: Set<string> = new Set();
+  private pendingApprovalIds$ = new Signal.Computed(() => {
+    const ids = new Set<string>();
+    for (const p of this.permissions$.get()) {
+      const streamId = p.data.streamId;
+      if (streamId) ids.add(streamId);
+    }
+    // Return stable reference when unchanged — Signal.Computed uses Object.is(),
+    // so a new Set with identical contents would still propagate.
+    if (
+      ids.size === this._prevApprovalIds.size &&
+      [...ids].every((id) => this._prevApprovalIds.has(id))
+    ) {
+      return this._prevApprovalIds;
+    }
+    this._prevApprovalIds = ids;
+    return ids;
+  });
 
   private readonly resizeObserver = new ResizeObserver((entries) => {
     const width = entries[0]?.contentRect.width ?? this.clientWidth;
@@ -436,7 +456,7 @@ export class ProgressApp extends ProgressAppBase {
   protected override willUpdate(): void {
     this.streamContextValue = this.streamContext$.get();
     this.streamLogContextValue = this.logContext$.get();
-    this.permissionsContextValue = this.permissions;
+    this.permissionsContextValue = this.permissions$.get();
   }
 
   render(): TemplateResult {
@@ -503,6 +523,7 @@ export class ProgressApp extends ProgressAppBase {
               .sort=${this.streamSort$.get()}
               .streamStatusById=${this.statusById$.get()}
               .streamLastTimestampById=${this.timestampById$.get()}
+              .pendingApprovalStreamIds=${this.pendingApprovalIds$.get()}
               @stream-switch=${this.onStreamSwitch}
               @stream-delete=${this.onStreamDelete}
               @filter-change=${this.onFilterChange}
@@ -625,9 +646,9 @@ export class ProgressApp extends ProgressAppBase {
   private createMessageHandlerContext(): MessageHandlerContext {
     return {
       ...this.getEventHandlerContext(),
-      getPermissions: () => this.permissions,
+      getPermissions: () => this.permissions$.get(),
       setPermissions: (permissions) => {
-        this.permissions = permissions;
+        this.permissions$.set(permissions);
       },
       setPlacement: (placement) => {
         this.placement.set(placement);
