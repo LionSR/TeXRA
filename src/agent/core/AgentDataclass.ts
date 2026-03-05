@@ -133,6 +133,7 @@ export const AgentDefinitionSchema = z.strictObject({
   name: z.string().trim().min(1),
   description: z.string().optional(),
   inherits: z.string().optional(),
+  optIn: z.boolean().optional(),
   settings: z.record(z.string(), z.unknown()).prefault({}),
   prompts: z.record(z.string(), z.unknown()).prefault({}),
 });

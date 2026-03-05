@@ -465,9 +465,7 @@ async function scanYaml(
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
 
-    const optIn =
-      (rawSettings.optIn as boolean | undefined) === true ||
-      OPT_IN_AGENTS.has(name);
+    const optIn = validated.optIn === true || OPT_IN_AGENTS.has(name);
 
     return {
       name,
