@@ -276,6 +276,22 @@ export class HistoryItem extends LitElement {
               title="Rerun"
               data-action="rerun"
             ></vscode-toolbar-button>
+            ${isToolUse
+              ? html`
+                  <vscode-toolbar-button
+                    icon="markdown"
+                    label="Export MD"
+                    title="Export as Markdown"
+                    data-action="export-md"
+                  ></vscode-toolbar-button>
+                  <vscode-toolbar-button
+                    icon="file-pdf"
+                    label="Export PDF"
+                    title="Export as LaTeX/PDF"
+                    data-action="export-tex"
+                  ></vscode-toolbar-button>
+                `
+              : nothing}
           </vscode-toolbar-container>
         </div>
         ${descriptionText
