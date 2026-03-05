@@ -112,6 +112,21 @@ export class StreamTab extends LitElement {
         border-left-color: var(--color-warning);
       }
 
+      /* Pending approval — pulsing orange, visually distinct from all status colors */
+      @keyframes pulse-border {
+        0%,
+        100% {
+          border-left-color: var(--vscode-charts-orange, #d18616);
+        }
+        50% {
+          border-left-color: transparent;
+        }
+      }
+
+      .tab-container.has-pending-approval {
+        animation: pulse-border 2s ease-in-out infinite;
+      }
+
       .tab {
         flex: 1;
         display: flex;
@@ -222,6 +237,7 @@ export class StreamTab extends LitElement {
   @property({ attribute: false }) lastTimestamp: number | undefined = undefined;
   @property({ type: Boolean }) active = false;
   @property({ type: Boolean }) compact = false;
+  @property({ type: Boolean }) hasPendingApproval = false;
 
   override render(): TemplateResult {
     const stream = this.info;
@@ -241,6 +257,7 @@ export class StreamTab extends LitElement {
           'is-active': this.active,
           'is-compact': this.compact,
           [`status-${status}`]: Boolean(status),
+          'has-pending-approval': this.hasPendingApproval,
         })}
       >
         <button
@@ -390,6 +407,8 @@ export class StreamTabs extends LitElement {
   streamStatusById: Map<string, string> = new Map();
   @property({ attribute: false })
   streamLastTimestampById: Map<string, number | undefined> = new Map();
+  @property({ attribute: false })
+  pendingApprovalStreamIds: Set<string> = new Set();
 
   override render(): TemplateResult {
     return html`
@@ -409,6 +428,9 @@ export class StreamTabs extends LitElement {
                     stream.name,
                   )}
                   ?active=${stream.name === this.activeStreamId}
+                  .hasPendingApproval=${this.pendingApprovalStreamIds.has(
+                    stream.name,
+                  )}
                 ></stream-tab>
               `,
             )}
