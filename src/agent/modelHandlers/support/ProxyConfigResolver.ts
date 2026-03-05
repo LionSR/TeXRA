@@ -1,6 +1,7 @@
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { ModelProvider } from 'llm-zoo';
 import { getConfig } from '@utils/config';
+import { getProviderEndpoint } from '@utils/config/providerConfig';
 
 const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
 
@@ -152,15 +153,18 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
   if (useOpenRouter) return 'https://openrouter.ai/api/v1';
 
   // Per-provider custom base URL override (all providers except OpenRouter)
+  // Check both the dashboard settings (globalSM) and workspace config (settings.json)
+  const dashboardEndpoint = getProviderEndpoint(config.provider);
   const endpointKey = ENDPOINT_CONFIG_KEYS[config.provider];
-  if (endpointKey) {
-    const customUrl = getConfig<string>(endpointKey, '').trim();
-    if (customUrl) {
-      config.logger?.debug(
-        `Using custom base URL for ${config.provider}: ${customUrl}`,
-      );
-      return `https://${normalizeUrl(customUrl)}`;
-    }
+  const workspaceEndpoint = endpointKey
+    ? getConfig<string>(endpointKey, '').trim()
+    : '';
+  const customUrl = dashboardEndpoint || workspaceEndpoint;
+  if (customUrl) {
+    config.logger?.debug(
+      `Using custom base URL for ${config.provider}: ${customUrl}`,
+    );
+    return `https://${normalizeUrl(customUrl)}`;
   }
 
   return BASE_URLS[config.provider];
