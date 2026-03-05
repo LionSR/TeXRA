@@ -76,16 +76,6 @@ function latexListing(text: string): string {
 }
 
 // ============================================================
-// Markdown escaping (minimal — preserve readability)
-// ============================================================
-
-function escapeMarkdownInline(text: string): string {
-  // Only escape characters that would create unintended formatting
-  // Don't escape backticks or * inside code blocks
-  return text;
-}
-
-// ============================================================
 // Block extraction helpers
 // ============================================================
 
@@ -100,23 +90,6 @@ function extractBlocks(msg: ConversationMessage): ContentBlock[] {
     return [{ type: 'text', text: JSON.stringify(msg.content, null, 2) }];
   }
   return [];
-}
-
-/**
- * Check if a user message is a tool result (contains tool_result blocks
- * or follows a tool_use in the conversation).
- */
-function isToolResultMessage(msg: ConversationMessage): boolean {
-  if (msg.role !== 'user') return false;
-  const blocks = extractBlocks(msg);
-  // Anthropic tool results are sent as user messages whose content
-  // follows a tool_use assistant message. They typically contain
-  // text blocks with the result. We detect them by checking if they
-  // are preceded by a tool_use block in the prior assistant message,
-  // but since we process sequentially, we use a simpler heuristic:
-  // user messages with role 'user' that appear after a tool_use
-  // are tracked by the caller.
-  return blocks.some((b) => b.type === 'tool_result');
 }
 
 // ============================================================
@@ -224,7 +197,7 @@ export function formatChatAsMarkdown(input: ChatExportInput): string {
         lines.push('');
         for (const block of blocks) {
           if (block.type === 'text' && block.text) {
-            lines.push(escapeMarkdownInline(block.text));
+            lines.push(block.text);
             lines.push('');
           } else if (block.type === 'image') {
             lines.push('*[Image attachment]*');
