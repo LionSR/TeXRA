@@ -1,5 +1,6 @@
 name: leanSearch
 description: Lean 4 and Mathlib research assistant — finds lemmas, explores APIs, and answers formalization questions.
+enabledByDefault: false
 
 settings:
   agentCategory: toolUse
