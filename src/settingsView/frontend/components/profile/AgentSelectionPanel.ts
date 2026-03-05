@@ -697,7 +697,7 @@ export class AgentSelectionPanel extends LitElement {
           <span class="agent-detail-meta-label">In dropdown</span>
           <span class="agent-detail-meta-value">
             ${agent.enabled ? 'Yes' : 'No'}
-            ${agent.optIn
+            ${agent.optIn && !agent.enabled
               ? ' (opt-in — enable via preset or toggle)'
               : ''}
           </span>
