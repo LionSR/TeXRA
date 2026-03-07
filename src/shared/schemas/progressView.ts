@@ -321,6 +321,9 @@ export const SyncStreamContentMessageSchema = z.object({
     })
     .optional(),
   parentStreamId: StreamTabIdSchema.optional(),
+  // Toggle bypass state (hydrated on tab switch so toggles display correctly)
+  toolEditBypass: z.boolean().optional(),
+  superYoloBypass: z.boolean().optional(),
 });
 
 export const ProgressSetThemeMessageSchema = z.object({
