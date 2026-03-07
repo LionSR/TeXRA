@@ -16,11 +16,11 @@ import { codiconStyles, designTokens, commonViewStyles } from '@shared/styles';
 import { createEvent } from '@shared/utils/events';
 
 // Local imports - shared schemas
-import type { NumberVscodeSetting } from '@shared/schemas/settingsViewMessages';
 import {
   AGENT_MODE_PRESETS,
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
+import type { NumberVscodeSetting } from '@shared/schemas/settingsViewMessages';
 
 @customElement('multi-agent-tab')
 export class MultiAgentTab extends LitElement {

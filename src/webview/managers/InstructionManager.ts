@@ -10,6 +10,7 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
+import type { MainViewInboundMessage } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
 import { THREE_DAYS_MS } from '@utils/config';
 import { PASTED_DIR } from '@utils/files/pastedImageUtils';
@@ -18,7 +19,6 @@ import {
   FileContext,
 } from '@utils/text/textEnhancementUtils';
 import { BaseWebviewManager } from './BaseWebviewManager';
-import type { MainViewInboundMessage } from '@shared/schemas';
 
 const CHANNEL = 'InstructionManager';
 logger.initialize(CHANNEL);

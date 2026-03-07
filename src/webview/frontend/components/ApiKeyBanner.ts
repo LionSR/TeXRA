@@ -13,6 +13,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
+import type { ApiKeyBannerState } from '@shared/schemas';
 import { capitalize } from '@shared/utils/string';
 
 // Local imports - shared banner styles
@@ -20,7 +21,6 @@ import { warningBannerStyles } from '../styles/warningBannerStyles';
 
 // Local imports - main view events and schemas
 import { MainViewEvents } from '../events';
-import type { ApiKeyBannerState } from '@shared/schemas';
 
 @customElement('api-key-banner')
 export class ApiKeyBanner extends LitElement {

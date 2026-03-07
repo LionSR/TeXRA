@@ -14,12 +14,6 @@ import { z } from 'zod';
 
 // Local imports - agent
 import {
-  EXECUTION_STATUS,
-  ExecutionIdSchema,
-  type ExecutionId,
-} from '@shared/schemas';
-import { isDirectory } from '@common/files/fsEntryType';
-import {
   getExecutionStore,
   type ExecutionListingEntry,
   type ChildRecord,
@@ -43,10 +37,16 @@ import { ProcessExecutionHandle } from '@agent/runtime/ExecutionHandle';
 
 // Local imports - utils
 import { WorkspaceStateKey, workspaceSM } from '@common/state';
+import { isDirectory } from '@common/files/fsEntryType';
+import { STREAM_STATUS } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  ExecutionIdSchema,
+  type ExecutionId,
+} from '@shared/schemas';
 import { StorageFS } from '@utils/files';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
-import { STREAM_STATUS } from '@shared/schemas';
 import { ToolError, type ToolResult } from './result';
 import { defineTool } from './core/define';
 

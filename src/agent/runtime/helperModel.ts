@@ -8,10 +8,10 @@
 
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import type { ModelHandler } from '@agent/modelHandlers';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { GlobalStateKey, globalSM } from '@common/state';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { isNonEmptyString } from '@utils/core';
 
 /**

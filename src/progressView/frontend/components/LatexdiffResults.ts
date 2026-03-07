@@ -12,6 +12,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
+import type { DiffResultDisplay, DiffStatus } from '@shared/schemas';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared utilities
@@ -21,7 +22,6 @@ import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 import { ProgressEvents } from '../events';
 
 // Local imports - schemas
-import type { DiffResultDisplay, DiffStatus } from '@shared/schemas';
 
 /** Status icon class lookup for latexdiff entries. */
 const LATEXDIFF_STATUS_ICONS: Record<DiffStatus, string> = {

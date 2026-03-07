@@ -2,8 +2,8 @@
 import { strict as assert } from 'assert';
 
 // Local imports
-import { MESSAGE_TYPES } from '@shared/schemas';
 import { getEmitFilter } from '@logger/filterUtils';
+import { MESSAGE_TYPES } from '@shared/schemas';
 
 describe('getEmitFilter', () => {
   describe('debug mode filtering', () => {

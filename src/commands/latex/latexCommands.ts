@@ -8,12 +8,12 @@ import {
   showLoggedMessage,
 } from '@common/errors';
 import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
+import { runIndentTeX } from '@housekeeping';
+import { runLatexFormatter } from '@latex/texFormatter';
+import { getTeXCount, type TexcountMode } from '@latex/texcount';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
 import { delay } from '@utils/core';
-import { runLatexFormatter } from '@latex/texFormatter';
-import { getTeXCount, type TexcountMode } from '@latex/texcount';
-import { runIndentTeX } from '@housekeeping';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);

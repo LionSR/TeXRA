@@ -1,10 +1,6 @@
 import * as vscode from 'vscode';
 
-import {
-  dispatchMainViewInbound,
-  MainViewInboundHandlerRegistry,
-} from '@shared/schemas';
-import { PROVIDER_URLS } from '@shared/constants/providers';
+import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 import { toErrorMessage } from '@common/errors';
 import {
   BaseViewMessageHandler,
@@ -16,9 +12,13 @@ import { agentDirectories } from '@frontend/agents';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import {
+  dispatchMainViewInbound,
+  MainViewInboundHandlerRegistry,
+} from '@shared/schemas';
+import { PROVIDER_URLS } from '@shared/constants/providers';
 import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
 import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
-import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 
 import { DiffManager } from './managers/DiffManager';
 import { ExecutionManager } from './managers/ExecutionManager';

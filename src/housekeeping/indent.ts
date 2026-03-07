@@ -6,11 +6,11 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import { showLoggedErrorMessage } from '@common/errors';
+import { runLatexFormatter } from '@latex/texFormatter';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { hasExtension } from '@utils/core/pathCore';
-import { runLatexFormatter } from '@latex/texFormatter';
 
 // Local imports - housekeeping
 import { EXCLUDED_DIRS } from './constants';

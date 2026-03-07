@@ -8,13 +8,13 @@
 import { createContext } from '@lit/context';
 
 // Local imports - progress view
+import type { LogMessageData, StreamTabInfo, TaskGroup } from '@shared/schemas';
 import type { FollowupOptionsState, StreamState } from '../store';
 
 // Local imports - progress view components
 import type { PermissionState } from '../components/PermissionCard';
 
 // Local imports - shared schemas
-import type { LogMessageData, StreamTabInfo, TaskGroup } from '@shared/schemas';
 
 /** Context value for stream state, providing all data needed by stream content components. */
 export interface StreamContextValue {

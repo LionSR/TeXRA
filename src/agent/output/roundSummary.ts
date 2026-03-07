@@ -5,6 +5,7 @@
  * diff stats and preparing data for event emission and file opening.
  */
 
+import type { AgentLogStage } from '@logger/AgentLogger';
 import {
   MESSAGE_TYPES,
   type FileLocation,
@@ -12,7 +13,6 @@ import {
   type RoundOutput,
   type StorageKey,
 } from '@shared/schemas';
-import type { AgentLogStage } from '@logger/AgentLogger';
 
 import { computeOutputDiffStats } from './diffComputation';
 import {

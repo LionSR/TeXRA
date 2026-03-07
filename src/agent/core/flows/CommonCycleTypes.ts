@@ -2,13 +2,13 @@
 
 import { z } from 'zod';
 
-import { RetryErrorInfoSchema } from '@shared/schemas';
 import {
   ProviderMessageSchema,
   type ProviderMessage,
 } from '@agent/modelHandlers/types/ProviderMessage';
 import type { DebugContext } from '@agent/utils/debugMessageSaver';
 import type { AgentLogger } from '@logger/AgentLogger';
+import { RetryErrorInfoSchema } from '@shared/schemas';
 import type { ExecutionId } from '@shared/schemas';
 
 /** Base schema for fields common to all cycle flows. */

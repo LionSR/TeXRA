@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 
-import { STREAM_STATUS } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { TaskState } from '@logger/TaskState';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
@@ -8,6 +7,7 @@ import {
   ProgressViewState,
   type StreamExecutionState,
 } from '@progressView/state/ProgressViewState';
+import { STREAM_STATUS } from '@shared/schemas';
 import type {
   AgentCategoryFilter,
   ConversationProgress,

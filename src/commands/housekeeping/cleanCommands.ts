@@ -5,13 +5,13 @@ import { z } from 'zod';
 // Local imports
 import type { FileOpResult } from '@agent/types';
 import { parseWithErrorDisplay } from '@common/errors';
-import * as logger from '@logger/logUtils';
 import {
   runCleanSingle,
   runCleanMultiple,
   runCleanBuild,
   runCleanOutput,
 } from '@housekeeping';
+import * as logger from '@logger/logUtils';
 import { emitClearMissingOutputs } from './streamEventUtils';
 
 const CHANNEL = 'cleanCommands';

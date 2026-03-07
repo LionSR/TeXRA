@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 
+import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
 import {
   END_GROUP_STATUS,
   MESSAGE_TYPES,
@@ -14,7 +15,6 @@ import {
   type StreamLogEntry,
   type ToolUseLog,
 } from '@shared/schemas';
-import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
 import { serializeError } from '@utils/core';
 
 import { getEmitFilter } from './filterUtils';

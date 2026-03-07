@@ -9,7 +9,6 @@ import {
   AgentSource,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
-import { agentKey as createKey } from '@shared/schemas/agent';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import {
   GlobalStateKey,
@@ -19,8 +18,9 @@ import {
 } from '@common/state';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import * as logger from '@logger/logUtils';
-import { AbsoluteFS } from '@utils/files';
 import type { AgentOptionData } from '@shared/schemas';
+import { agentKey as createKey } from '@shared/schemas/agent';
+import { AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'agentRegistry';
 logger.initialize(CHANNEL);

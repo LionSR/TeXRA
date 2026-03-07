@@ -1,11 +1,5 @@
 import * as path from 'path';
 
-import {
-  END_GROUP_STATUS,
-  type EndGroupStatus,
-  type RoundOutput,
-  type StorageKey,
-} from '@shared/schemas';
 import { getExecutionStore } from '@agent/storage';
 import {
   createOutputState,
@@ -29,7 +23,14 @@ import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { RoundPersistedFlow } from '@agent/node/roundPersistedFlow';
 import type { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { executionToEndStatus } from '@common/constants/streamStatus';
+import { LatexMediaManager } from '@latex';
 import type { AgentLogStage } from '@logger/AgentLogger';
+import {
+  END_GROUP_STATUS,
+  type EndGroupStatus,
+  type RoundOutput,
+  type StorageKey,
+} from '@shared/schemas';
 import {
   TaskRunFileService,
   WorkspaceFS,
@@ -38,7 +39,6 @@ import {
   type WorkspaceFileLocation,
 } from '@utils/files';
 import { PromptBuilder } from '@utils/prompt';
-import { LatexMediaManager } from '@latex';
 
 import { TeXCountNode } from './nodes/TeXCountNode';
 import { MediaExtractionNode } from './nodes/MediaExtractionNode';

@@ -5,9 +5,6 @@
  */
 
 // Local imports - shared utilities
-import { createEvent } from '@shared/utils/events';
-
-// Local imports - shared schemas (types)
 import type {
   ActionDetail,
   AgentChangeDetail,
@@ -30,6 +27,9 @@ import type {
   RemoveFileDetail,
   SessionTypeChangeDetail,
 } from '@shared/schemas';
+import { createEvent } from '@shared/utils/events';
+
+// Local imports - shared schemas (types)
 
 // =============================================================================
 // Event Creators - use these to dispatch typed events

@@ -8,8 +8,8 @@
  */
 
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { ExecutionId } from '@shared/schemas';
 
+import type { ExecutionId } from '@shared/schemas';
 import { type ExecutionMeta, getExecutionStore } from './ExecutionKVStore';
 import { invalidateListingCache } from './executionListing';
 

@@ -2,7 +2,6 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { STREAM_STATUS } from '@shared/schemas';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   sendFollowUp,
@@ -10,11 +9,12 @@ import {
 } from '@agent/toolUse/ToolUseFollowUp';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { hasPersistedFlowRecord } from '@agent/storage/detectWaitingStreams';
+import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { bus } from '@eventBus/ProgressEventBus';
-import { ResumeAgentResultSchema } from './resumeCommand';
+import { STREAM_STATUS } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
+import { ResumeAgentResultSchema } from './resumeCommand';
 
 const logger = new AgentLogger('followUpCommand');
 

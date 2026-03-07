@@ -11,10 +11,10 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas
+import { createEvent } from '@shared/utils/events';
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - shared utilities
-import { createEvent } from '@shared/utils/events';
 
 @customElement('tool-card')
 export class ToolCard extends LitElement {

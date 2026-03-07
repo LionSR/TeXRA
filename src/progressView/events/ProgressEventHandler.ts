@@ -1,16 +1,10 @@
 import * as vscode from 'vscode';
 
-import {
-  STREAM_STATUS,
-  type ConversationProgress,
-  type StorageKey,
-  type StreamStatus,
-  type StreamTabId,
-  type TokenUsageStats,
-} from '@shared/schemas';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { bus } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewBridge } from '@progressView/managers/WebviewBridge';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
@@ -24,9 +18,14 @@ import {
   type ActiveStreamId,
   type StreamExecutionState,
 } from '@progressView/state/ProgressViewState';
-import { bus } from '@eventBus/ProgressEventBus';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-
+import {
+  STREAM_STATUS,
+  type ConversationProgress,
+  type StorageKey,
+  type StreamStatus,
+  type StreamTabId,
+  type TokenUsageStats,
+} from '@shared/schemas';
 import {
   isApprovalBypassedForStream,
   isProposalBypassedForStream,

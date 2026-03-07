@@ -1,6 +1,6 @@
 // Local imports - shared schemas
-import { createEvent } from '@shared/utils/events';
 import type { MemoryItemActionDetail } from '@shared/schemas';
+import { createEvent } from '@shared/utils/events';
 
 export const MemoryViewEvents = {
   refresh: () => createEvent('memory-refresh', undefined),

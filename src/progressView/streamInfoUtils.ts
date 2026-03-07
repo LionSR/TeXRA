@@ -1,9 +1,9 @@
 import * as path from 'path';
 
-import { sortStreams } from '@shared/streams/streamSort';
 import { getCleanAgentName, isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
+import { sortStreams } from '@shared/streams/streamSort';
 import type { ProgressViewState } from './state/ProgressViewState';
 
 /**

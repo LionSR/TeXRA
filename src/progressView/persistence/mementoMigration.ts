@@ -3,6 +3,10 @@
  * StreamTabStore. This module can be deleted once all users have migrated.
  */
 
+import { WorkspaceStateKey } from '@common/state';
+import { normalizeRunId } from '@common/constants/runIds';
+import { AgentLogger } from '@logger/AgentLogger';
+import { TaskStateSchema, type TaskState } from '@logger/TaskState';
 import {
   StorageRecordSchema,
   type InstructionUpdate,
@@ -10,10 +14,6 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { normalizeRunId } from '@common/constants/runIds';
-import { WorkspaceStateKey } from '@common/state';
-import { AgentLogger } from '@logger/AgentLogger';
-import { TaskStateSchema, type TaskState } from '@logger/TaskState';
 import { getStreamTabStore } from './StreamTabStore';
 import type { StreamTabMeta } from './streamTabSchemas';
 import type { MementoStorage } from './PersistentMapManager';
