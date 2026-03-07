@@ -123,6 +123,23 @@ export interface ProgressEventPayloads {
   showAgentConfigBanner: {
     agentName: string;
   };
+  /** Request the frontend to show an error message via VS Code notification. */
+  requestShowError: {
+    message: string;
+  };
+  /**
+   * Request the frontend to ensure the progress view is visible.
+   * If the view cannot be opened and a fallback notification is provided,
+   * show a toast notification as a last resort.
+   */
+  requestEnsureProgressView: {
+    fallbackNotification?: {
+      agentName: string;
+      modelName: string;
+      inputName: string;
+      outputInfo: string;
+    };
+  };
 }
 
 export type ProgressEvent = keyof ProgressEventPayloads;
