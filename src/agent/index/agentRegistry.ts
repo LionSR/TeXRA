@@ -79,7 +79,6 @@ export interface AgentEntry {
   tools?: string[]; // tool names for tool-use agents
   defaultOutputFiles?: string[];
   visibility?: string[]; // remote only: group names that can access the agent
-  enabledByDefault?: boolean; // false = hidden when user never configured visibility
 }
 
 /**
@@ -475,7 +474,6 @@ async function scanYaml(
       defaultOutputFiles: defaultOutputFiles?.length
         ? defaultOutputFiles
         : undefined,
-      enabledByDefault: validated.enabledByDefault,
     };
   } catch (err) {
     logger.warn(CHANNEL, `Failed to scan ${yamlPath}: ${err}`);
@@ -679,15 +677,12 @@ function filterVisible(
   entries: AgentEntry[],
   configured: string[] | undefined,
 ): AgentEntry[] {
-  // undefined = never configured → show all *except* agents with enabledByDefault: false
-  if (configured === undefined) {
-    return entries.filter((entry) => entry.enabledByDefault !== false);
-  }
-
-  // [] = explicitly empty → show none
+  // undefined = never configured → show all; [] = explicitly empty → show none
+  if (configured === undefined) return entries;
   const configuredSet = new Set(configured);
 
   // All agents (including remote) are filtered by the configured visibility set.
+  // Remote agents are visible by default when never configured (handled above).
   return entries.filter(
     (entry) =>
       configuredSet.has(createKey(entry.source, entry.name)) ||

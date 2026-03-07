@@ -1,6 +1,5 @@
 name: leanBlueprint
 description: Creates and maintains LeanBlueprint documents — dependency-tracked LaTeX that bridges informal math and Lean 4 formalization.
-enabledByDefault: false
 
 settings:
   agentCategory: toolUse

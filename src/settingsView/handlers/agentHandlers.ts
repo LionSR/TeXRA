@@ -53,12 +53,11 @@ function entryToSelectionItem(
   enabledKeys: string[] | undefined,
 ): AgentSelectionItem {
   const key = createKey(entry.source, entry.name);
-  // undefined = never configured → all enabled *except* enabledByDefault: false
-  // [] = explicitly empty → none enabled
+  // undefined = never configured → all enabled; [] = explicitly empty → none enabled
   const enabled =
-    enabledKeys === undefined
-      ? entry.enabledByDefault !== false
-      : enabledKeys.includes(key) || enabledKeys.includes(entry.name);
+    enabledKeys === undefined ||
+    enabledKeys.includes(key) ||
+    enabledKeys.includes(entry.name);
   return {
     name: entry.name,
     source: entry.source,
@@ -172,14 +171,13 @@ export class AgentHandlers {
           updated = [...current, key];
         }
       } else if (raw === undefined) {
-        // Never configured (undefined) = "enabled by default". To disable one agent,
-        // seed the config with all agents that were visible: undefined → [all default-enabled except this one].
+        // Never configured (undefined) = "all enabled". To disable one agent,
+        // seed the config with all OTHER agents: undefined → [all except this one].
         const allAgents =
           data.category === 'workflow'
             ? getWorkflowAgents()
             : getToolUseAgents();
         updated = allAgents
-          .filter((e) => e.enabledByDefault !== false)
           .map((e) => createKey(e.source, e.name))
           .filter((k) => k !== key);
       } else {
@@ -221,13 +219,9 @@ export class AgentHandlers {
       // Legacy entries may use plain agent names without source prefix
       const targetLegacyNames = new Set(sourceAgents.map((e) => e.name));
 
-      // Resolve current state: undefined means "default-enabled" (never configured)
+      // Resolve current state: undefined means "all enabled" (never configured)
       const raw = workspaceSM.get<string[]>(stateKey);
-      const current =
-        raw ??
-        allAgents
-          .filter((e) => e.enabledByDefault !== false)
-          .map((e) => createKey(e.source, e.name));
+      const current = raw ?? allAgents.map((e) => createKey(e.source, e.name));
 
       let updated: string[];
       if (data.enabled) {

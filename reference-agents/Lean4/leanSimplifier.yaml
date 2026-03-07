@@ -1,6 +1,5 @@
 name: leanSimplifier
 description: Simplifies Lean 4 proofs and code to Mathlib-quality standards — clear, general, and ready to upstream.
-enabledByDefault: false
 
 settings:
   agentCategory: toolUse
