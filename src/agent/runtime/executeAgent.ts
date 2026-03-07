@@ -1,6 +1,5 @@
 import * as path from 'path';
 
-import * as vscode from 'vscode';
 import { ZodError } from 'zod';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
@@ -423,7 +422,7 @@ async function runFlowWithLifecycle(
       ) {
         showApiKeyErrorNotification();
       } else {
-        vscode.window.showErrorMessage(errorMsg);
+        bus.emit('requestShowError', { message: errorMsg });
       }
     }
 
@@ -431,7 +430,7 @@ async function runFlowWithLifecycle(
   }
 }
 
-async function showAgentNotification(config: AgentConfig): Promise<void> {
+function buildFallbackNotification(config: AgentConfig) {
   const inputName = config.inputFile
     ? path.basename(config.inputFile)
     : 'selected input';
@@ -442,19 +441,7 @@ async function showAgentNotification(config: AgentConfig): Promise<void> {
   } else {
     outputInfo = outputFiles[0] ? `to ${path.basename(outputFiles[0])}` : '';
   }
-
-  const selection = await vscode.window.showInformationMessage(
-    `TeXRA Agent Started: "${config.agent}" is processing ${inputName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
-    {
-      modal: false,
-      detail:
-        'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
-    },
-    'Show ProgressBoard',
-  );
-  if (selection) {
-    await vscode.commands.executeCommand('texra.showProgressView');
-  }
+  return { agentName: config.agent, modelName: config.model, inputName, outputInfo };
 }
 
 function showApiKeyErrorNotification(): void {
@@ -511,7 +498,7 @@ async function resolveAndAcquireStream(
   } catch (err) {
     StreamStatusService.releaseIfInitializing(preliminaryStreamId);
     if (!(err instanceof ZodError)) {
-      void vscode.window.showErrorMessage(toErrorMessage(err));
+      bus.emit('requestShowError', { message: toErrorMessage(err) });
     }
     throw err;
   }
@@ -557,13 +544,10 @@ async function prepareAgentUI(
 
   // Subagents don't need to force-open the progress board or show notifications —
   // the orchestrator's stream is already visible.
-  if (!options?.isSubagent) {
-    if (!runStorage.isViewVisible()) {
-      await vscode.commands.executeCommand('texra.showProgressView');
-    }
-    if (!runStorage.isViewVisible()) {
-      showAgentNotification(config);
-    }
+  if (!options?.isSubagent && !runStorage.isViewVisible()) {
+    bus.emit('requestEnsureProgressView', {
+      fallbackNotification: buildFallbackNotification(config),
+    });
   }
   bus.emit('setTaskState', {
     streamId,
