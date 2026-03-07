@@ -24,13 +24,48 @@ interface ProviderDef {
  * hasServerKey: true → automatically included in SERVER_SIDE_PROVIDERS.
  */
 const PROVIDER_REGISTRY = [
-  { id: ModelProvider.OPENAI, displayName: 'OpenAI', hasServerKey: true, keyUrl: 'https://platform.openai.com/api-keys' },
-  { id: ModelProvider.ANTHROPIC, displayName: 'Anthropic', hasServerKey: true, keyUrl: 'https://console.anthropic.com/' },
-  { id: ModelProvider.GOOGLE, displayName: 'Google', hasServerKey: true, keyUrl: 'https://aistudio.google.com/app/apikey' },
-  { id: ModelProvider.XAI, displayName: 'xAI', hasServerKey: true, keyUrl: 'https://console.x.ai/' },
-  { id: ModelProvider.DEEPSEEK, displayName: 'DeepSeek', hasServerKey: true, keyUrl: 'https://platform.deepseek.com/api_keys' },
-  { id: ModelProvider.MOONSHOT, displayName: 'Moonshot', hasServerKey: true, keyUrl: 'https://platform.moonshot.cn/console' },
-  { id: ModelProvider.DASHSCOPE, displayName: 'DashScope', hasServerKey: true, keyUrl: 'https://dashscope.aliyun.com/api-console/' },
+  {
+    id: ModelProvider.OPENAI,
+    displayName: 'OpenAI',
+    hasServerKey: true,
+    keyUrl: 'https://platform.openai.com/api-keys',
+  },
+  {
+    id: ModelProvider.ANTHROPIC,
+    displayName: 'Anthropic',
+    hasServerKey: true,
+    keyUrl: 'https://console.anthropic.com/',
+  },
+  {
+    id: ModelProvider.GOOGLE,
+    displayName: 'Google',
+    hasServerKey: true,
+    keyUrl: 'https://aistudio.google.com/app/apikey',
+  },
+  {
+    id: ModelProvider.XAI,
+    displayName: 'xAI',
+    hasServerKey: true,
+    keyUrl: 'https://console.x.ai/',
+  },
+  {
+    id: ModelProvider.DEEPSEEK,
+    displayName: 'DeepSeek',
+    hasServerKey: true,
+    keyUrl: 'https://platform.deepseek.com/api_keys',
+  },
+  {
+    id: ModelProvider.MOONSHOT,
+    displayName: 'Moonshot',
+    hasServerKey: true,
+    keyUrl: 'https://platform.moonshot.cn/console',
+  },
+  {
+    id: ModelProvider.DASHSCOPE,
+    displayName: 'DashScope',
+    hasServerKey: true,
+    keyUrl: 'https://dashscope.aliyun.com/api-console/',
+  },
 ] as const satisfies readonly ProviderDef[];
 
 /** Providers not in the main registry (no server-side keys, no model selection). */
@@ -148,4 +183,3 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
     },
   ],
 };
-

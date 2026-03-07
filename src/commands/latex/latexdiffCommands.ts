@@ -673,7 +673,12 @@ async function runLatexdiffFromMetadata(params: {
     }
   }
 
-  return executeDiffOperations(operations, mathMarkup, progress, immediateResults);
+  return executeDiffOperations(
+    operations,
+    mathMarkup,
+    progress,
+    immediateResults,
+  );
 }
 
 async function runLatexdiffViaWorkspaceScan(params: {
