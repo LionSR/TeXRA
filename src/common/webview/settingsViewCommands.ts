@@ -25,6 +25,8 @@ export const SETTINGS_VIEW_CMD = {
   RESTORE_AGENT: 'restoreAgent',
   DELETE_AGENT: 'deleteAgent',
   CLEAR_HISTORY: 'clearHistory',
+  EXPORT_CHAT_MD: 'exportChatMd',
+  EXPORT_CHAT_TEX: 'exportChatTex',
   // Profile commands
   GET_PROFILE_DATA: 'getProfileData',
   SELECT_AGENT: 'selectAgent',
