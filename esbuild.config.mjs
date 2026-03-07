@@ -116,6 +116,7 @@ const extensionConfig = {
     'bufferutil', // Optional native module
     'utf-8-validate', // Optional native module
   ],
+  loader: { '.tex': 'text' },
   plugins: [aliasPlugin, progressPlugin],
   logLevel: 'warning',
   define: {
