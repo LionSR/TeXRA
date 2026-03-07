@@ -23,7 +23,7 @@ interface ProviderDef {
  * To add a new provider: add a single entry here.
  * hasServerKey: true → automatically included in SERVER_SIDE_PROVIDERS.
  */
-const PROVIDER_REGISTRY: readonly ProviderDef[] = [
+const PROVIDER_REGISTRY = [
   { id: ModelProvider.OPENAI, displayName: 'OpenAI', hasServerKey: true, keyUrl: 'https://platform.openai.com/api-keys' },
   { id: ModelProvider.ANTHROPIC, displayName: 'Anthropic', hasServerKey: true, keyUrl: 'https://console.anthropic.com/' },
   { id: ModelProvider.GOOGLE, displayName: 'Google', hasServerKey: true, keyUrl: 'https://aistudio.google.com/app/apikey' },
@@ -31,7 +31,7 @@ const PROVIDER_REGISTRY: readonly ProviderDef[] = [
   { id: ModelProvider.DEEPSEEK, displayName: 'DeepSeek', hasServerKey: true, keyUrl: 'https://platform.deepseek.com/api_keys' },
   { id: ModelProvider.MOONSHOT, displayName: 'Moonshot', hasServerKey: true, keyUrl: 'https://platform.moonshot.cn/console' },
   { id: ModelProvider.DASHSCOPE, displayName: 'DashScope', hasServerKey: true, keyUrl: 'https://dashscope.aliyun.com/api-console/' },
-] as const;
+] as const satisfies readonly ProviderDef[];
 
 /** Providers not in the main registry (no server-side keys, no model selection). */
 const EXTRA_DISPLAY_NAMES: Record<string, string> = {
@@ -53,12 +53,19 @@ export const MODEL_PROVIDERS_ORDER: ModelProvider[] = PROVIDER_REGISTRY.map(
 /**
  * All providers that support server-side API keys.
  * Derived from PROVIDER_REGISTRY — no manual sync needed.
+ *
+ * Note: We use a type-level extraction so ServerSideProvider is a proper
+ * union of literal ModelProvider values, not just `ModelProvider`.
  */
-export const SERVER_SIDE_PROVIDER_IDS: readonly ModelProvider[] =
+type ServerKeyEntry = Extract<
+  (typeof PROVIDER_REGISTRY)[number],
+  { hasServerKey: true }
+>;
+export const SERVER_SIDE_PROVIDER_IDS: readonly ServerKeyEntry['id'][] =
   PROVIDER_REGISTRY.filter((p) => p.hasServerKey).map((p) => p.id);
 
-/** Type for providers that support server-side keys. */
-export type ServerSideProvider = (typeof SERVER_SIDE_PROVIDER_IDS)[number];
+/** Type for providers that support server-side keys (narrow union, not just ModelProvider). */
+export type ServerSideProvider = ServerKeyEntry['id'];
 
 /** Consolidated provider display names used across settings UI and model selection. */
 export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
@@ -69,7 +76,7 @@ export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
 /** URLs for obtaining API keys from each provider. */
 export const PROVIDER_URLS: Record<string, string> = {
   ...Object.fromEntries(
-    PROVIDER_REGISTRY.filter((p) => p.keyUrl).map((p) => [p.id, p.keyUrl!]),
+    PROVIDER_REGISTRY.flatMap((p) => (p.keyUrl ? [[p.id, p.keyUrl]] : [])),
   ),
   openRouter: 'https://openrouter.ai/keys',
   wolframllmapp: 'https://llm-api.wolframalpha.com/',

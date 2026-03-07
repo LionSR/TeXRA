@@ -373,8 +373,6 @@ interface DiffOperation {
   round?: number;
   fromRound?: number;
   toRound?: number;
-  info?: OutputFileInfo;
-  prevInfo?: OutputFileInfo;
 }
 
 async function handleRunLatexdiff(
@@ -540,8 +538,8 @@ async function executeDiffOperations(
   immediateResults: DiffRunResult[] = [],
 ): Promise<DiffRunOutcome> {
   const results: DiffRunResult[] = [...immediateResults];
-  const operationCount = operations.length;
-  const incrementPct = operationCount > 0 ? 100 / operationCount : 0;
+  const totalOperations = operations.length + immediateResults.length;
+  const incrementPct = operations.length > 0 ? 100 / totalOperations : 0;
 
   for (const operation of operations) {
     progress.report({
@@ -591,10 +589,7 @@ async function executeDiffOperations(
     });
   }
 
-  return {
-    results,
-    totalOperations: operationCount + immediateResults.length,
-  };
+  return { results, totalOperations };
 }
 
 async function runLatexdiffFromMetadata(params: {
@@ -642,7 +637,6 @@ async function runLatexdiffFromMetadata(params: {
         description,
         cwd: WorkspaceFS.getPath() ?? path.dirname(base.absolutePath),
         round,
-        info,
       });
 
       const key =
@@ -674,8 +668,6 @@ async function runLatexdiffFromMetadata(params: {
           cwd: WorkspaceFS.getPath() ?? path.dirname(base.absolutePath),
           fromRound: previous.round,
           toRound: current.round,
-          info: current.info,
-          prevInfo: previous.info,
         });
       }
     }
