@@ -40,7 +40,10 @@ import {
   isApprovalBypassedForStream,
 } from '@tools/approval/toolEditApproval';
 
-import { runLatexdiff, previewProposedLatex } from '@tools/approval/latexPreview';
+import {
+  runLatexdiff,
+  previewProposedLatex,
+} from '@tools/approval/latexPreview';
 
 import type { StreamTabId, ToolEditPermission } from '@shared/schemas';
 import type { LineChanges } from '@tools/result';
@@ -227,8 +230,16 @@ async function nativeRequestApproval(
   } = request;
 
   const requestId = nextApprovalId();
-  const originalUri = await createTempFile('original', filePath, originalContent);
-  const proposedUri = await createTempFile('proposed', filePath, proposedContent);
+  const originalUri = await createTempFile(
+    'original',
+    filePath,
+    originalContent,
+  );
+  const proposedUri = await createTempFile(
+    'proposed',
+    filePath,
+    proposedContent,
+  );
 
   const description = vscode.workspace.asRelativePath(
     WorkspaceFS.fullPath(filePath),
@@ -273,8 +284,8 @@ async function nativeRequestApproval(
 
       const entry: PendingApprovalEntry = {
         request,
-        originalUri: { fsPath: originalUri.fsPath },
-        proposedUri: { fsPath: proposedUri.fsPath },
+        originalUri,
+        proposedUri,
         originalContent,
         proposedContent,
         title,
@@ -284,7 +295,7 @@ async function nativeRequestApproval(
         settle,
         workspaceTempCleanup: [],
         latexOperationInProgress: false,
-        onError: (msg) => vscode.window.showErrorMessage(msg),
+        onError: (msg: string) => vscode.window.showErrorMessage(msg),
       };
 
       setPendingApproval(requestId, entry);

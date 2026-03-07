@@ -50,7 +50,7 @@ export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
 
 const REVEAL_TIMEOUT_MS = 1500;
 
-interface PendingApprovalEntry extends LatexPreviewEntry {
+export interface PendingApprovalEntry extends LatexPreviewEntry {
   request: ToolEditApprovalRequest;
   originalUri: vscode.Uri;
   proposedUri: vscode.Uri;
@@ -87,6 +87,11 @@ const pendingApprovals = new Map<string, PendingApprovalEntry>();
 const approvalsBypassedByStream = new Map<StreamTabId, boolean>();
 let storageDirectory: string | undefined;
 const activePreviewFiles = new Set<string>();
+
+export function nextApprovalId(): string {
+  approvalCounter += 1;
+  return `approval-${Date.now().toString(36)}-${approvalCounter}`;
+}
 
 // -- Pending approvals accessors --
 
@@ -132,14 +137,14 @@ function notifyApprovalBypassState(streamId: StreamTabId): void {
   });
 }
 
-function getStorageDir(): string {
+export function getStorageDir(): string {
   if (!storageDirectory) {
     throw new Error('Tool edit approval has not been initialized.');
   }
   return storageDirectory;
 }
 
-async function ensureStorageDir(): Promise<string> {
+export async function ensureStorageDir(): Promise<string> {
   const dir = getStorageDir();
   await fs.mkdir(dir, { recursive: true });
   return dir;
@@ -207,14 +212,11 @@ export function _clearAllApprovalBypass(): void {
   approvalsBypassedByStream.clear();
 }
 
-export function initializeToolEditApproval(
-  context: vscode.ExtensionContext,
-): void {
+export function initializeToolEditApprovalCore(storagePath: string): void {
   if (initialized) {
     return;
   }
-  const baseDir = context.storageUri ?? context.globalStorageUri;
-  storageDirectory = path.join(baseDir.fsPath, 'tool-edit-previews');
+  storageDirectory = storagePath;
   initialized = true;
 }
 
@@ -254,7 +256,7 @@ async function showProgressViewApprovalPrompt(
   });
 }
 
-function resolveProgressViewApprovalPrompt(requestId: string): void {
+export function resolveProgressViewApprovalPrompt(requestId: string): void {
   bus.emit('resolveToolEditPermission', { requestId });
 }
 
@@ -268,7 +270,7 @@ function createSemanticDiffs(
   return diffs;
 }
 
-function computeLineChangeSummary(
+export function computeLineChangeSummary(
   original: string,
   proposed: string,
 ): LineChanges {
@@ -296,7 +298,10 @@ function computeLineChangeSummary(
  * Compute the 0-based line number where the first change occurs.
  * Returns null if the content is identical.
  */
-function firstChangedLine(original: string, proposed: string): number | null {
+export function firstChangedLine(
+  original: string,
+  proposed: string,
+): number | null {
   if (original === proposed) {
     return null;
   }
@@ -319,7 +324,7 @@ function firstChangedLine(original: string, proposed: string): number | null {
   return 0;
 }
 
-function computeUserPatch(
+export function computeUserPatch(
   suggestedContent: string,
   appliedContent: string,
 ): string | undefined {

@@ -441,7 +441,12 @@ function buildFallbackNotification(config: AgentConfig) {
   } else {
     outputInfo = outputFiles[0] ? `to ${path.basename(outputFiles[0])}` : '';
   }
-  return { agentName: config.agent, modelName: config.model, inputName, outputInfo };
+  return {
+    agentName: config.agent,
+    modelName: config.model,
+    inputName,
+    outputInfo,
+  };
 }
 
 function showApiKeyErrorNotification(): void {
