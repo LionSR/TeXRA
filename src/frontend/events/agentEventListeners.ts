@@ -13,6 +13,7 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
+import { getRunStorageService } from '@agent/runtime/RunStorageService';
 import { bus } from '@eventBus/ProgressEventBus';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
@@ -61,6 +62,37 @@ async function handleShowAgentConfigBanner(
   });
 }
 
+function handleRequestShowError(
+  payload: ProgressEventPayloads['requestShowError'],
+): void {
+  vscode.window.showErrorMessage(payload.message);
+}
+
+async function handleRequestEnsureProgressView(
+  payload: ProgressEventPayloads['requestEnsureProgressView'],
+): Promise<void> {
+  await vscode.commands.executeCommand('texra.showProgressView');
+
+  // If the view is still not visible after attempting to open it and a
+  // fallback notification was provided, show a toast as a last resort.
+  // This preserves the original two-check semantics that relied on await.
+  const fb = payload.fallbackNotification;
+  if (fb && !getRunStorageService().isViewVisible()) {
+    const selection = await vscode.window.showInformationMessage(
+      `TeXRA Agent Started: "${fb.agentName}" is processing ${fb.inputName} with ${fb.modelName} ${fb.outputInfo}. View in ProgressBoard for progress.`,
+      {
+        modal: false,
+        detail:
+          'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
+      },
+      'Show ProgressBoard',
+    );
+    if (selection) {
+      await vscode.commands.executeCommand('texra.showProgressView');
+    }
+  }
+}
+
 /**
  * Register all agent→frontend event listeners.
  * Returns a Disposable that cleans up all subscriptions.
@@ -74,6 +106,12 @@ export function registerAgentEventListeners(): vscode.Disposable {
   bus.on(
     'showAgentConfigBanner',
     (payload) => void handleShowAgentConfigBanner(payload),
+    { signal },
+  );
+  bus.on('requestShowError', handleRequestShowError, { signal });
+  bus.on(
+    'requestEnsureProgressView',
+    (payload) => void handleRequestEnsureProgressView(payload),
     { signal },
   );
 
