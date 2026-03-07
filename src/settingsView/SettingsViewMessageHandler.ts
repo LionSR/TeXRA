@@ -29,6 +29,12 @@ import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import {
+  formatChatAsMarkdown,
+  formatChatAsLatex,
+  generateExportFilename,
+  type ChatExportInput,
+} from '@commands/history/chatExportFormatter';
+import {
   BaseViewMessageHandler,
   SETTINGS_VIEW_COMMANDS,
 } from '@common/webview';
@@ -41,6 +47,7 @@ import {
 } from '@common/state';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { selectAgentInMainView } from '@frontend/agents/remoteAgentUtils';
+import { compileLatex2Pdf } from '@latex/texTools';
 import {
   DEFAULT_MODELS,
   formatContext,
@@ -90,13 +97,6 @@ import {
   setProviderEndpoint,
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
-import {
-  formatChatAsMarkdown,
-  formatChatAsLatex,
-  generateExportFilename,
-  type ChatExportInput,
-} from '@commands/history/chatExportFormatter';
-import { compileLatex2Pdf } from '@latex/texTools';
 import { getConfig } from '@utils/config/configUtils';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
@@ -919,9 +919,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         // Open Markdown file
         const doc = await vscode.workspace.openTextDocument(absolutePath);
         await vscode.window.showTextDocument(doc, { preview: false });
-        void vscode.window.showInformationMessage(
-          `Chat exported: ${filename}`,
-        );
+        void vscode.window.showInformationMessage(`Chat exported: ${filename}`);
       }
     } catch (error) {
       await showLoggedErrorMessage(
