@@ -1,12 +1,19 @@
 /**
- * Pure-data formatters for exporting tool-use chat conversations
+ * Template-driven formatters for exporting chat conversations
  * as Markdown or LaTeX documents.
+ *
+ * Architecture (pandoc-style):
+ *   raw messages → normalizeMessages() → ExportNode[] → FormatSpec → string
+ *
+ * Each output format is a FormatSpec: a header template, a footer string,
+ * and a node-renderer table. Adding a new block type means adding one case
+ * to assistantBlockToNode() and one entry per renderer table.
  *
  * This module is VS Code-free — all platform wiring lives in the caller.
  */
 
 // ============================================================
-// Types for the raw conversation messages
+// Input types
 // ============================================================
 
 interface ContentBlock {
@@ -18,7 +25,6 @@ interface ContentBlock {
   input?: unknown;
   content?: unknown;
   source?: { type: string; media_type?: string };
-  // Web search / fetch
   query?: string;
   search_results?: Array<{ title?: string; url?: string }>;
   url?: string;
@@ -54,7 +60,48 @@ export interface ChatExportInput {
 }
 
 // ============================================================
-// LaTeX escaping
+// Intermediate representation — format-agnostic
+// ============================================================
+
+type UserPart =
+  | { type: 'text'; text: string }
+  | { type: 'attachment'; attachmentType: 'image' | 'document' };
+
+type ExportNode =
+  | { kind: 'user-message'; parts: UserPart[] }
+  | { kind: 'assistant-text'; text: string }
+  | { kind: 'tool-call'; name: string; input: string }
+  | { kind: 'tool-result'; text: string }
+  | { kind: 'web-search'; query: string }
+  | { kind: 'web-search-results'; results: Array<{ title: string; url: string }> }
+  | { kind: 'web-fetch'; url: string; title?: string; content?: string };
+
+// ============================================================
+// Format specification
+// ============================================================
+
+/** Compile-time guarantee: every node kind has a renderer. */
+type NodeRenderers = {
+  [K in ExportNode['kind']]: (node: Extract<ExportNode, { kind: K }>) => string;
+};
+
+interface DocumentMeta {
+  date: string;
+  agent?: string;
+  model?: string;
+  description?: string;
+  instruction?: string;
+  files: Array<[string, string]>;
+}
+
+interface FormatSpec {
+  header: (meta: DocumentMeta) => string;
+  footer: string;
+  nodes: NodeRenderers;
+}
+
+// ============================================================
+// Escape utilities
 // ============================================================
 
 function escapeLatex(text: string): string {
@@ -65,18 +112,14 @@ function escapeLatex(text: string): string {
     .replace(/\^/g, '\\textasciicircum{}');
 }
 
-/**
- * Wrap text in a lstlisting environment for verbatim code display.
- * Handles cases where the text itself contains \end{lstlisting}.
- */
+/** Wrap text in lstlisting, handling nested end markers. */
 function latexListing(text: string): string {
-  // If content contains the lstlisting end marker, escape it
   const safeText = text.replace(/\\end\{lstlisting\}/g, '\\end {lstlisting}');
   return `\\begin{lstlisting}\n${safeText}\n\\end{lstlisting}`;
 }
 
 // ============================================================
-// Block extraction helpers
+// Message normalization (raw messages → ExportNode[])
 // ============================================================
 
 function extractBlocks(msg: ConversationMessage): ContentBlock[] {
@@ -92,9 +135,141 @@ function extractBlocks(msg: ConversationMessage): ContentBlock[] {
   return [];
 }
 
+function blocksToUserParts(blocks: ContentBlock[]): UserPart[] {
+  const parts: UserPart[] = [];
+  for (const b of blocks) {
+    if (b.type === 'text' && b.text) {
+      parts.push({ type: 'text', text: b.text });
+    } else if (b.type === 'image') {
+      parts.push({ type: 'attachment', attachmentType: 'image' });
+    } else if (b.type === 'document') {
+      parts.push({ type: 'attachment', attachmentType: 'document' });
+    }
+  }
+  return parts;
+}
+
+function extractToolResultText(block: ContentBlock): string | undefined {
+  if (block.type === 'tool_result') {
+    return typeof block.content === 'string'
+      ? block.content
+      : JSON.stringify(block.content, null, 2);
+  }
+  if (block.type === 'text' && block.text) {
+    return block.text;
+  }
+  return undefined;
+}
+
+function assistantBlockToNode(block: ContentBlock): ExportNode | null {
+  switch (block.type) {
+    case 'thinking':
+      return null;
+
+    case 'text':
+      return block.text?.trim()
+        ? { kind: 'assistant-text', text: block.text }
+        : null;
+
+    case 'tool_use':
+      return {
+        kind: 'tool-call',
+        name: block.name ?? 'unknown',
+        input: JSON.stringify(block.input ?? {}, null, 2),
+      };
+
+    case 'server_tool_use':
+      if (block.name === 'web_search') {
+        const query =
+          block.input && typeof block.input === 'object'
+            ? (block.input as { query?: string }).query
+            : undefined;
+        return query ? { kind: 'web-search', query } : null;
+      }
+      return null;
+
+    case 'web_search_tool_result': {
+      if (!Array.isArray(block.content)) return null;
+      const results = (block.content as ContentBlock[])
+        .filter((e) => e.type === 'web_search_result' && e.url)
+        .map((e) => ({ title: e.title ?? e.url!, url: e.url! }));
+      return results.length
+        ? { kind: 'web-search-results', results }
+        : null;
+    }
+
+    case 'web_fetch_tool_result':
+      return {
+        kind: 'web-fetch',
+        url: block.url ?? '',
+        title: block.title,
+        content: block.page_content,
+      };
+
+    default:
+      return null;
+  }
+}
+
+function normalizeMessages(messages: unknown[]): ExportNode[] {
+  const nodes: ExportNode[] = [];
+  let lastAssistantHadToolUse = false;
+
+  for (const raw of messages) {
+    const msg = raw as ConversationMessage;
+    const role = msg.role ?? 'unknown';
+    const blocks = extractBlocks(msg);
+
+    if (role === 'user') {
+      if (lastAssistantHadToolUse) {
+        for (const block of blocks) {
+          const text = extractToolResultText(block);
+          if (text) nodes.push({ kind: 'tool-result', text });
+        }
+        lastAssistantHadToolUse = false;
+      } else {
+        const parts = blocksToUserParts(blocks);
+        if (parts.length) nodes.push({ kind: 'user-message', parts });
+      }
+      continue;
+    }
+
+    if (role === 'assistant') {
+      lastAssistantHadToolUse = false;
+      for (const block of blocks) {
+        const node = assistantBlockToNode(block);
+        if (node) {
+          if (node.kind === 'tool-call') lastAssistantHadToolUse = true;
+          nodes.push(node);
+        }
+      }
+      continue;
+    }
+
+    // OpenAI tool role
+    if (role === 'tool') {
+      const text =
+        typeof msg.content === 'string'
+          ? msg.content
+          : JSON.stringify(msg.content, null, 2);
+      nodes.push({ kind: 'tool-result', text });
+    }
+  }
+
+  return nodes;
+}
+
 // ============================================================
-// File list formatting
+// Shared helpers
 // ============================================================
+
+/** Metadata fields rendered in the document header. */
+const HEADER_FIELDS: Array<{ key: keyof DocumentMeta; label: string }> = [
+  { key: 'date', label: 'Date' },
+  { key: 'agent', label: 'Agent' },
+  { key: 'model', label: 'Model' },
+  { key: 'description', label: 'Summary' },
+];
 
 function collectFiles(config: ExportConfig): Array<[string, string]> {
   const files: Array<[string, string]> = [];
@@ -119,452 +294,268 @@ function collectFiles(config: ExportConfig): Array<[string, string]> {
   return files;
 }
 
-// ============================================================
-// Markdown formatter
-// ============================================================
+function extractMeta(input: ChatExportInput): DocumentMeta {
+  return {
+    date: new Date(input.timestamp).toLocaleString(),
+    agent: input.config.agent,
+    model: input.config.model,
+    description: input.description,
+    instruction: input.config.instruction?.trim() || undefined,
+    files: collectFiles(input.config),
+  };
+}
 
-export function formatChatAsMarkdown(input: ChatExportInput): string {
-  const { timestamp, description, config, messages } = input;
-  const date = new Date(timestamp).toLocaleString();
-  const lines: string[] = [];
+/** Render nodes through a format spec's renderer table. */
+function renderNode(node: ExportNode, renderers: NodeRenderers): string {
+  // TypeScript can't narrow discriminated unions through record access,
+  // so we cast here. NodeRenderers ensures every kind has a handler.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (renderers as Record<string, (n: any) => string>)[node.kind](node);
+}
 
-  // Header
-  lines.push('# TeXRA Chat Export');
-  lines.push('');
-  lines.push(`**Date:** ${date}  `);
-  if (config.agent) lines.push(`**Agent:** ${config.agent}  `);
-  if (config.model) lines.push(`**Model:** ${config.model}  `);
-  if (description) lines.push(`**Summary:** ${description}  `);
-  lines.push('');
-
-  // Instruction
-  if (config.instruction?.trim()) {
-    lines.push(`**Instruction:** ${config.instruction}`);
-    lines.push('');
-  }
-
-  // Files
-  const files = collectFiles(config);
-  if (files.length) {
-    lines.push('**Files:**');
-    for (const [label, value] of files) {
-      lines.push(`- ${label}: \`${value}\``);
-    }
-    lines.push('');
-  }
-
-  lines.push('---');
-  lines.push('');
-  lines.push('## Conversation');
-  lines.push('');
-
-  // Messages
-  let lastAssistantHadToolUse = false;
-
-  for (const raw of messages) {
-    const msg = raw as ConversationMessage;
-    const role = msg.role ?? 'unknown';
-    const blocks = extractBlocks(msg);
-
-    if (role === 'user') {
-      if (lastAssistantHadToolUse) {
-        // This is a tool result message
-        for (const block of blocks) {
-          if (block.type === 'tool_result') {
-            const resultText =
-              typeof block.content === 'string'
-                ? block.content
-                : JSON.stringify(block.content, null, 2);
-            lines.push('#### Tool Result');
-            lines.push('');
-            lines.push('```');
-            lines.push(resultText);
-            lines.push('```');
-            lines.push('');
-          } else if (block.type === 'text' && block.text) {
-            lines.push('#### Tool Result');
-            lines.push('');
-            lines.push('```');
-            lines.push(block.text);
-            lines.push('```');
-            lines.push('');
-          }
-        }
-        lastAssistantHadToolUse = false;
-      } else {
-        // Regular user message
-        lines.push('### User');
-        lines.push('');
-        for (const block of blocks) {
-          if (block.type === 'text' && block.text) {
-            lines.push(block.text);
-            lines.push('');
-          } else if (block.type === 'image') {
-            lines.push('*[Image attachment]*');
-            lines.push('');
-          } else if (block.type === 'document') {
-            lines.push('*[Document attachment]*');
-            lines.push('');
-          }
-        }
-      }
-      continue;
-    }
-
-    if (role === 'assistant') {
-      lastAssistantHadToolUse = false;
-
-      for (const block of blocks) {
-        if (block.type === 'thinking') {
-          // Skip thinking blocks per design decision
-          continue;
-        }
-
-        if (block.type === 'text' && block.text?.trim()) {
-          lines.push('### Assistant');
-          lines.push('');
-          lines.push(block.text);
-          lines.push('');
-        }
-
-        if (block.type === 'tool_use') {
-          lastAssistantHadToolUse = true;
-          lines.push(`#### Tool: \`${block.name}\``);
-          lines.push('');
-          lines.push('```json');
-          lines.push(JSON.stringify(block.input ?? {}, null, 2));
-          lines.push('```');
-          lines.push('');
-        }
-
-        if (
-          block.type === 'server_tool_use' &&
-          block.name === 'web_search'
-        ) {
-          lines.push('#### Web Search');
-          lines.push('');
-          if (block.input && typeof block.input === 'object') {
-            const query = (block.input as { query?: string }).query;
-            if (query) lines.push(`**Query:** ${query}`);
-          }
-          lines.push('');
-        }
-
-        if (block.type === 'web_search_tool_result') {
-          if (block.content && Array.isArray(block.content)) {
-            for (const entry of block.content as ContentBlock[]) {
-              if (entry.type === 'web_search_result' && entry.url) {
-                lines.push(
-                  `- [${entry.title ?? entry.url}](${entry.url})`,
-                );
-              }
-            }
-            lines.push('');
-          }
-        }
-
-        if (block.type === 'web_fetch_tool_result') {
-          lines.push('#### Web Fetch');
-          lines.push('');
-          if (block.url) lines.push(`**URL:** ${block.url}`);
-          if (block.title) lines.push(`**Title:** ${block.title}`);
-          if (block.page_content) {
-            lines.push('');
-            lines.push('```');
-            lines.push(block.page_content);
-            lines.push('```');
-          }
-          lines.push('');
-        }
-      }
-      continue;
-    }
-
-    // Other roles (e.g., 'tool' for OpenAI format)
-    if (role === 'tool') {
-      const text =
-        typeof msg.content === 'string'
-          ? msg.content
-          : JSON.stringify(msg.content, null, 2);
-      lines.push('#### Tool Result');
-      lines.push('');
-      lines.push('```');
-      lines.push(text);
-      lines.push('```');
-      lines.push('');
-    }
-  }
-
-  return lines.join('\n');
+function renderDocument(input: ChatExportInput, spec: FormatSpec): string {
+  const meta = extractMeta(input);
+  const nodes = normalizeMessages(input.messages);
+  return [
+    spec.header(meta),
+    ...nodes.map((n) => renderNode(n, spec.nodes)),
+    spec.footer,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 // ============================================================
-// LaTeX formatter
+// Markdown format spec
 // ============================================================
 
+function markdownHeader(meta: DocumentMeta): string {
+  const fields = HEADER_FIELDS.filter((f) => meta[f.key])
+    .map((f) => `**${f.label}:** ${meta[f.key]}  `)
+    .join('\n');
+
+  const instruction = meta.instruction
+    ? `**Instruction:** ${meta.instruction}\n`
+    : '';
+
+  const fileList = meta.files.length
+    ? ['**Files:**', ...meta.files.map(([l, v]) => `- ${l}: \`${v}\``), ''].join(
+        '\n',
+      )
+    : '';
+
+  return [fields, '', instruction, fileList, '---', '', '## Conversation', '']
+    .filter((line) => line !== undefined)
+    .join('\n');
+}
+
+const ATTACHMENT_LABELS: Record<string, string> = {
+  image: 'Image attachment',
+  document: 'Document attachment',
+};
+
+const MD_NODES: NodeRenderers = {
+  'user-message': ({ parts }) => {
+    const body = parts
+      .map((p) =>
+        p.type === 'text'
+          ? p.text
+          : `*[${ATTACHMENT_LABELS[p.attachmentType]}]*`,
+      )
+      .join('\n\n');
+    return `### User\n\n${body}\n`;
+  },
+
+  'assistant-text': ({ text }) => `### Assistant\n\n${text}\n`,
+
+  'tool-call': ({ name, input }) =>
+    `#### Tool: \`${name}\`\n\n\`\`\`json\n${input}\n\`\`\`\n`,
+
+  'tool-result': ({ text }) => `#### Tool Result\n\n\`\`\`\n${text}\n\`\`\`\n`,
+
+  'web-search': ({ query }) => `#### Web Search\n\n**Query:** ${query}\n`,
+
+  'web-search-results': ({ results }) =>
+    results.map((r) => `- [${r.title}](${r.url})`).join('\n') + '\n',
+
+  'web-fetch': ({ url, title, content }) =>
+    [
+      '#### Web Fetch',
+      '',
+      url ? `**URL:** ${url}` : undefined,
+      title ? `**Title:** ${title}` : undefined,
+      content ? `\n\`\`\`\n${content}\n\`\`\`` : undefined,
+      '',
+    ]
+      .filter((l): l is string => l !== undefined)
+      .join('\n'),
+};
+
+const markdownSpec: FormatSpec = {
+  header: (meta) => `# TeXRA Chat Export\n\n${markdownHeader(meta)}`,
+  footer: '',
+  nodes: MD_NODES,
+};
+
+// ============================================================
+// LaTeX format spec
+// ============================================================
+
+const LATEX_PREAMBLE = `\\documentclass[11pt,a4paper]{article}
+\\usepackage[utf8]{inputenc}
+\\usepackage[T1]{fontenc}
+\\usepackage[most]{tcolorbox}
+\\usepackage{listings}
+\\usepackage{hyperref}
+\\usepackage{geometry}
+\\usepackage{xcolor}
+\\geometry{margin=2.5cm}
+
+\\lstset{
+  basicstyle=\\ttfamily\\small,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=none,
+  aboveskip=0pt,
+  belowskip=0pt,
+}
+
+% ── Chat message environments ──
+\\newtcolorbox{usermessage}{
+  colback=blue!5, colframe=blue!40, title={\\textbf{User}},
+  breakable, before skip=8pt, after skip=8pt
+}
+
+\\newtcolorbox{assistantmessage}{
+  colback=green!5, colframe=green!40, title={\\textbf{Assistant}},
+  breakable, before skip=8pt, after skip=8pt
+}
+
+\\newtcolorbox{toolcallbox}[1]{
+  colback=orange!5, colframe=orange!40, title={\\textbf{Tool: \\texttt{#1}}},
+  breakable, before skip=8pt, after skip=8pt
+}
+
+\\newtcolorbox{toolresultbox}{
+  colback=yellow!5, colframe=yellow!30, title={\\textbf{Tool Result}},
+  breakable, before skip=8pt, after skip=8pt, fontupper=\\small
+}
+
+\\newtcolorbox{websearchbox}{
+  colback=violet!5, colframe=violet!30, title={\\textbf{Web Search}},
+  breakable, before skip=8pt, after skip=8pt
+}`;
+
+function latexHeader(meta: DocumentMeta): string {
+  const esc = escapeLatex;
+
+  const rows = HEADER_FIELDS.filter(
+    (f) => f.key === 'date' || meta[f.key],
+  ).map(
+    (f) =>
+      `\\textbf{${f.label}:} & ${esc(String(meta[f.key] ?? 'Unknown'))} \\\\`,
+  );
+
+  const instruction = meta.instruction
+    ? `\n\\medskip\\noindent\\textbf{Instruction:} ${esc(meta.instruction)}\n`
+    : '';
+
+  const fileList = meta.files.length
+    ? [
+        '\n\\medskip\\noindent\\textbf{Files:}',
+        '\\begin{itemize}',
+        ...meta.files.map(
+          ([l, v]) => `  \\item ${esc(l)}: \\texttt{${esc(v)}}`,
+        ),
+        '\\end{itemize}',
+      ].join('\n')
+    : '';
+
+  return [
+    LATEX_PREAMBLE,
+    '',
+    '\\begin{document}',
+    '',
+    '\\section*{TeXRA Chat Export}',
+    '',
+    '\\begin{tabular}{@{}ll}',
+    ...rows,
+    '\\end{tabular}',
+    instruction,
+    fileList,
+    '',
+    '\\bigskip\\hrule\\bigskip',
+    '',
+  ].join('\n');
+}
+
+const LATEX_ATTACHMENT_LABELS: Record<string, string> = {
+  image: '\\textit{[Image attachment]}',
+  document: '\\textit{[Document attachment]}',
+};
+
+const TEX_NODES: NodeRenderers = {
+  'user-message': ({ parts }) => {
+    const body = parts
+      .map((p) =>
+        p.type === 'text'
+          ? escapeLatex(p.text)
+          : LATEX_ATTACHMENT_LABELS[p.attachmentType],
+      )
+      .join('\n\n');
+    return `\\begin{usermessage}\n${body}\n\\end{usermessage}\n`;
+  },
+
+  'assistant-text': ({ text }) =>
+    `\\begin{assistantmessage}\n${escapeLatex(text)}\n\\end{assistantmessage}\n`,
+
+  'tool-call': ({ name, input }) =>
+    `\\begin{toolcallbox}{${escapeLatex(name)}}\n${latexListing(input)}\n\\end{toolcallbox}\n`,
+
+  'tool-result': ({ text }) =>
+    `\\begin{toolresultbox}\n${latexListing(text)}\n\\end{toolresultbox}\n`,
+
+  'web-search': ({ query }) =>
+    `\\begin{websearchbox}\n\\textbf{Query:} ${escapeLatex(query)}\n\\end{websearchbox}\n`,
+
+  'web-search-results': ({ results }) => {
+    const items = results
+      .map((r) => `  \\item \\href{${r.url}}{${escapeLatex(r.title)}}`)
+      .join('\n');
+    return `\\begin{websearchbox}\n\\begin{itemize}\n${items}\n\\end{itemize}\n\\end{websearchbox}\n`;
+  },
+
+  'web-fetch': ({ url, title, content }) =>
+    [
+      '\\begin{websearchbox}',
+      url ? `\\textbf{URL:} \\url{${url}}` : undefined,
+      title ? `\\\\\\textbf{Title:} ${escapeLatex(title)}` : undefined,
+      content ? `\n${latexListing(content)}` : undefined,
+      '\\end{websearchbox}',
+      '',
+    ]
+      .filter((l): l is string => l !== undefined)
+      .join('\n'),
+};
+
+const latexSpec: FormatSpec = {
+  header: latexHeader,
+  footer: '\\end{document}',
+  nodes: TEX_NODES,
+};
+
+// ============================================================
+// Public API
+// ============================================================
+
+export function formatChatAsMarkdown(input: ChatExportInput): string {
+  return renderDocument(input, markdownSpec);
+}
+
 export function formatChatAsLatex(input: ChatExportInput): string {
-  const { timestamp, description, config, messages } = input;
-  const date = new Date(timestamp).toLocaleString();
-  const lines: string[] = [];
-
-  // Preamble
-  lines.push('\\documentclass[11pt,a4paper]{article}');
-  lines.push('\\usepackage[utf8]{inputenc}');
-  lines.push('\\usepackage[T1]{fontenc}');
-  lines.push('\\usepackage[most]{tcolorbox}');
-  lines.push('\\usepackage{listings}');
-  lines.push('\\usepackage{hyperref}');
-  lines.push('\\usepackage{geometry}');
-  lines.push('\\usepackage{xcolor}');
-  lines.push('\\geometry{margin=2.5cm}');
-  lines.push('');
-
-  // Listings setup
-  lines.push('\\lstset{');
-  lines.push('  basicstyle=\\ttfamily\\small,');
-  lines.push('  breaklines=true,');
-  lines.push('  breakatwhitespace=false,');
-  lines.push('  columns=fullflexible,');
-  lines.push('  keepspaces=true,');
-  lines.push('  frame=none,');
-  lines.push('  aboveskip=0pt,');
-  lines.push('  belowskip=0pt,');
-  lines.push('}');
-  lines.push('');
-
-  // tcolorbox environment definitions
-  lines.push('% ── Chat message environments ──');
-  lines.push('\\newtcolorbox{usermessage}{');
-  lines.push(
-    '  colback=blue!5, colframe=blue!40, title={\\textbf{User}},',
-  );
-  lines.push('  breakable, before skip=8pt, after skip=8pt');
-  lines.push('}');
-  lines.push('');
-  lines.push('\\newtcolorbox{assistantmessage}{');
-  lines.push(
-    '  colback=green!5, colframe=green!40, title={\\textbf{Assistant}},',
-  );
-  lines.push('  breakable, before skip=8pt, after skip=8pt');
-  lines.push('}');
-  lines.push('');
-  lines.push('\\newtcolorbox{toolcallbox}[1]{');
-  lines.push(
-    '  colback=orange!5, colframe=orange!40, title={\\textbf{Tool: \\texttt{#1}}},',
-  );
-  lines.push('  breakable, before skip=8pt, after skip=8pt');
-  lines.push('}');
-  lines.push('');
-  lines.push('\\newtcolorbox{toolresultbox}{');
-  lines.push(
-    '  colback=yellow!5, colframe=yellow!30, title={\\textbf{Tool Result}},',
-  );
-  lines.push(
-    '  breakable, before skip=8pt, after skip=8pt, fontupper=\\small',
-  );
-  lines.push('}');
-  lines.push('');
-  lines.push('\\newtcolorbox{websearchbox}{');
-  lines.push(
-    '  colback=violet!5, colframe=violet!30, title={\\textbf{Web Search}},',
-  );
-  lines.push('  breakable, before skip=8pt, after skip=8pt');
-  lines.push('}');
-  lines.push('');
-
-  // Title
-  const safeAgent = escapeLatex(config.agent ?? 'Unknown');
-  const safeModel = escapeLatex(config.model ?? 'Unknown');
-  lines.push('\\begin{document}');
-  lines.push('');
-  lines.push('\\section*{TeXRA Chat Export}');
-  lines.push('');
-  lines.push('\\begin{tabular}{@{}ll}');
-  lines.push(`\\textbf{Date:}  & ${escapeLatex(date)} \\\\`);
-  lines.push(`\\textbf{Agent:} & ${safeAgent} \\\\`);
-  lines.push(`\\textbf{Model:} & ${safeModel} \\\\`);
-  if (description) {
-    lines.push(
-      `\\textbf{Summary:} & ${escapeLatex(description)} \\\\`,
-    );
-  }
-  lines.push('\\end{tabular}');
-  lines.push('');
-
-  // Instruction
-  if (config.instruction?.trim()) {
-    lines.push(
-      `\\medskip\\noindent\\textbf{Instruction:} ${escapeLatex(config.instruction)}`,
-    );
-    lines.push('');
-  }
-
-  // Files
-  const files = collectFiles(config);
-  if (files.length) {
-    lines.push('\\medskip\\noindent\\textbf{Files:}');
-    lines.push('\\begin{itemize}');
-    for (const [label, value] of files) {
-      lines.push(
-        `  \\item ${escapeLatex(label)}: \\texttt{${escapeLatex(value)}}`,
-      );
-    }
-    lines.push('\\end{itemize}');
-    lines.push('');
-  }
-
-  lines.push('\\bigskip\\hrule\\bigskip');
-  lines.push('');
-
-  // Messages
-  let lastAssistantHadToolUse = false;
-
-  for (const raw of messages) {
-    const msg = raw as ConversationMessage;
-    const role = msg.role ?? 'unknown';
-    const blocks = extractBlocks(msg);
-
-    if (role === 'user') {
-      if (lastAssistantHadToolUse) {
-        // Tool result message
-        for (const block of blocks) {
-          const resultText =
-            block.type === 'tool_result'
-              ? typeof block.content === 'string'
-                ? block.content
-                : JSON.stringify(block.content, null, 2)
-              : block.type === 'text'
-                ? block.text ?? ''
-                : '';
-
-          if (resultText) {
-            lines.push('\\begin{toolresultbox}');
-            lines.push(latexListing(resultText));
-            lines.push('\\end{toolresultbox}');
-            lines.push('');
-          }
-        }
-        lastAssistantHadToolUse = false;
-      } else {
-        // Regular user message
-        const textParts: string[] = [];
-        for (const block of blocks) {
-          if (block.type === 'text' && block.text) {
-            textParts.push(escapeLatex(block.text));
-          } else if (block.type === 'image') {
-            textParts.push('\\textit{[Image attachment]}');
-          } else if (block.type === 'document') {
-            textParts.push('\\textit{[Document attachment]}');
-          }
-        }
-        if (textParts.length) {
-          lines.push('\\begin{usermessage}');
-          lines.push(textParts.join('\n\n'));
-          lines.push('\\end{usermessage}');
-          lines.push('');
-        }
-      }
-      continue;
-    }
-
-    if (role === 'assistant') {
-      lastAssistantHadToolUse = false;
-
-      for (const block of blocks) {
-        if (block.type === 'thinking') {
-          continue;
-        }
-
-        if (block.type === 'text' && block.text?.trim()) {
-          lines.push('\\begin{assistantmessage}');
-          lines.push(escapeLatex(block.text));
-          lines.push('\\end{assistantmessage}');
-          lines.push('');
-        }
-
-        if (block.type === 'tool_use') {
-          lastAssistantHadToolUse = true;
-          const safeName = escapeLatex(block.name ?? 'unknown');
-          lines.push(`\\begin{toolcallbox}{${safeName}}`);
-          lines.push(
-            latexListing(JSON.stringify(block.input ?? {}, null, 2)),
-          );
-          lines.push('\\end{toolcallbox}');
-          lines.push('');
-        }
-
-        if (
-          block.type === 'server_tool_use' &&
-          block.name === 'web_search'
-        ) {
-          const query =
-            block.input && typeof block.input === 'object'
-              ? (block.input as { query?: string }).query
-              : undefined;
-          lines.push('\\begin{websearchbox}');
-          if (query) {
-            lines.push(`\\textbf{Query:} ${escapeLatex(query)}`);
-          }
-          lines.push('\\end{websearchbox}');
-          lines.push('');
-        }
-
-        if (block.type === 'web_search_tool_result') {
-          if (block.content && Array.isArray(block.content)) {
-            lines.push('\\begin{websearchbox}');
-            lines.push('\\begin{itemize}');
-            for (const entry of block.content as ContentBlock[]) {
-              if (entry.type === 'web_search_result' && entry.url) {
-                const title = escapeLatex(entry.title ?? entry.url);
-                lines.push(
-                  `  \\item \\href{${entry.url}}{${title}}`,
-                );
-              }
-            }
-            lines.push('\\end{itemize}');
-            lines.push('\\end{websearchbox}');
-            lines.push('');
-          }
-        }
-
-        if (block.type === 'web_fetch_tool_result') {
-          lines.push('\\begin{websearchbox}');
-          if (block.url) {
-            lines.push(
-              `\\textbf{URL:} \\url{${block.url}}`,
-            );
-          }
-          if (block.title) {
-            lines.push(
-              `\\\\\\textbf{Title:} ${escapeLatex(block.title)}`,
-            );
-          }
-          if (block.page_content) {
-            lines.push('');
-            lines.push(latexListing(block.page_content));
-          }
-          lines.push('\\end{websearchbox}');
-          lines.push('');
-        }
-      }
-      continue;
-    }
-
-    // OpenAI tool role
-    if (role === 'tool') {
-      const text =
-        typeof msg.content === 'string'
-          ? msg.content
-          : JSON.stringify(msg.content, null, 2);
-      lines.push('\\begin{toolresultbox}');
-      lines.push(latexListing(text));
-      lines.push('\\end{toolresultbox}');
-      lines.push('');
-    }
-  }
-
-  lines.push('\\end{document}');
-  return lines.join('\n');
+  return renderDocument(input, latexSpec);
 }
 
 // ============================================================
@@ -580,7 +571,7 @@ export function generateExportFilename(
   extension: 'md' | 'tex',
 ): string {
   const date = new Date(input.timestamp);
-  const datePart = date.toISOString().slice(0, 10); // YYYY-MM-DD
+  const datePart = date.toISOString().slice(0, 10);
 
   const parts = ['texra-chat', datePart];
 
@@ -588,7 +579,6 @@ export function generateExportFilename(
     parts.push(sanitizeFilename(input.config.agent));
   }
   if (input.config.model) {
-    // Shorten model name: "claude-sonnet-4-6" → "claude-sonnet"
     const shortModel = input.config.model
       .replace(/[-_]\d+[-_]\d+.*$/, '')
       .replace(/[-_]\d{8}$/, '');
