@@ -6,7 +6,13 @@ import {
   AgentPromptSchema,
 } from '@agent/core/AgentDataclass';
 
-/** Remote agent list item from DB. Description is cached; YAML is source of truth. */
+/**
+ * Remote agent list item from DB. Description is cached; YAML is source of truth.
+ *
+ * Note: Uses `agentCategory` (DB column name) instead of canonical `category`
+ * from AgentMetadataBaseSchema. The transform normalizes nullish → Workflow.
+ * See also: AgentMetadataBaseSchema in @shared/schemas/agent for the canonical fields.
+ */
 export const RemoteAgentListItemSchema = z.object({
   id: z.string(),
   name: z.string(),

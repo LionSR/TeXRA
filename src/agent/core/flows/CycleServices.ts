@@ -3,9 +3,11 @@
  *
  * Cycle services extend BaseFlowContextInit (agent identity + interrupts)
  * and add per-cycle runtime fields (client, state slices, etc.).
+ *
+ * Note: buildCycleServices factory was removed — nodes now construct
+ * services inline with the client and refreshClient pattern.
  */
 
-import type { IModelHandler } from '@agent/modelHandlers/types/IModelHandler';
 import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
@@ -49,32 +51,3 @@ export interface ToolUseCycleServices<
 }
 
 export type CycleParams = Record<string, unknown>;
-
-/**
- * Build cycle services from outer (flow-level) services.
- * Creates a lazy client via getter and a refreshClient method for token refresh.
- */
-export async function buildCycleServices<
-  Base extends { modelHandler: IModelHandler<any, any, any, any, C> },
-  Overrides extends Record<string, unknown>,
-  C,
->(
-  baseServices: Base,
-  overrides: Overrides,
-): Promise<
-  Base & Overrides & { readonly client: C; refreshClient: () => Promise<void> }
-> {
-  const { modelHandler } = baseServices;
-  const clientRef = { current: await modelHandler.getClient() };
-
-  return {
-    ...baseServices,
-    ...overrides,
-    get client(): C {
-      return clientRef.current;
-    },
-    async refreshClient(): Promise<void> {
-      clientRef.current = await modelHandler.getClient();
-    },
-  };
-}

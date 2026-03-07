@@ -1,19 +1,11 @@
 /**
  * Type definitions for server-side API key access.
+ *
+ * SERVER_SIDE_PROVIDERS and ServerSideProvider are re-exported from
+ * @shared/constants/providers where they are derived from the canonical
+ * PROVIDER_REGISTRY — no manual sync needed.
  */
-
-/**
- * All providers that could potentially support server-side API keys.
- * The actual enabled providers are fetched from the relay server at runtime.
- */
-export const SERVER_SIDE_PROVIDERS = [
-  'openai',
-  'anthropic',
-  'google',
-  'xai',
-  'deepseek',
-  'moonshot',
-  'dashscope',
-] as const;
-
-export type ServerSideProvider = (typeof SERVER_SIDE_PROVIDERS)[number];
+export {
+  SERVER_SIDE_PROVIDER_IDS as SERVER_SIDE_PROVIDERS,
+  type ServerSideProvider,
+} from '@shared/constants/providers';

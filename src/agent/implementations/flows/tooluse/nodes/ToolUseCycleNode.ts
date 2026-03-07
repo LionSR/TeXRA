@@ -5,7 +5,6 @@ import {
   createToolUseCycleFlow,
   createToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
-import { buildCycleServices } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { formatProviderHttpError } from '@common/errors';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -62,15 +61,21 @@ export class ToolUseCycleNode<C> extends Node<
     );
 
     const flow = createToolUseCycleFlow<C>();
-    flow.setServices(
-      await buildCycleServices(this.services, {
-        setting: { ...setting, tools: resolvedTools },
-        run: prepRes.runState,
-        workspace: prepRes.workspaceState,
-        modelName: config.model,
-        agentName: config.agent,
-      }),
-    );
+    let client = await modelHandler.getClient();
+    flow.setServices({
+      ...this.services,
+      get client() {
+        return client;
+      },
+      async refreshClient() {
+        client = await modelHandler.getClient();
+      },
+      setting: { ...setting, tools: resolvedTools },
+      run: prepRes.runState,
+      workspace: prepRes.workspaceState,
+      modelName: config.model,
+      agentName: config.agent,
+    });
 
     const { onProgress } = this.services;
     prepRes.workspaceState.todos.setOnUpdate((todos) => {
