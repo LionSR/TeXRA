@@ -1,12 +1,12 @@
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { bus } from '@eventBus/ProgressEventBus';
 
-import { AgentLogger } from './AgentLogger';
 import type {
   ExtendedTokenUsageStats,
   StorageKey,
   StreamTabId,
 } from '@shared/schemas';
+import { AgentLogger } from './AgentLogger';
 
 export class AgentUsageReporter {
   constructor(

@@ -7,6 +7,8 @@
  */
 import * as vscode from 'vscode';
 
+import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
+import { showLoggedErrorMessage } from '@common/errors';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsViewInboundMessage,
@@ -20,8 +22,6 @@ import {
   HOMEBREW_INSTALL_COMMAND,
   SCOOP_INSTALL_COMMAND,
 } from '@shared/constants/latex';
-import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
-import { showLoggedErrorMessage } from '@common/errors';
 import {
   getConfig,
   isConfigExplicitlySet,

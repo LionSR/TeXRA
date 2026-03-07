@@ -5,8 +5,8 @@
  * enabling proper diff computation and file history tracking.
  */
 
-import { FileLineageCalculator } from './FileLineageCalculator';
 import type { FileLocation } from '@shared/schemas';
+import { FileLineageCalculator } from './FileLineageCalculator';
 
 import type { OutputState } from './outputState';
 import type { RoundFileMapping } from './types';

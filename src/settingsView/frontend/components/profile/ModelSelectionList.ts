@@ -17,15 +17,15 @@ import {
 } from '@shared/constants/providers';
 
 // Local imports - profile view styles and events
-import { profileViewStyles } from './styles';
-import { ModelSelectionEvents } from './events';
-
-// Local imports - shared schemas
 import {
   ReasoningLevelSchema,
   type ModelSelectionItem,
   type ReasoningLevel,
 } from '@shared/schemas/settingsViewMessages';
+import { profileViewStyles } from './styles';
+import { ModelSelectionEvents } from './events';
+
+// Local imports - shared schemas
 
 /** Display labels for reasoning level options. */
 const REASONING_LEVEL_LABELS: Record<ReasoningLevel, string> = {

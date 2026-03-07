@@ -8,18 +8,18 @@ import * as vscode from 'vscode';
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-
-// Local imports - utilities
+import { compileLatex2Pdf } from '@latex/texTools';
 import * as logger from '@logger/logUtils';
-import { AbsoluteFS, pathToLocation } from '@utils/files';
-import type { FileLocation } from '@utils/files';
 import {
   LATEX_VIEWER_OPEN_DELAY_MS,
   LATEX_VIEWER_REFRESH_DELAY_MS,
 } from '@shared/constants/latex';
 
+// Local imports - utilities
+import { AbsoluteFS, pathToLocation } from '@utils/files';
+import type { FileLocation } from '@utils/files';
+
 // Local imports - latex
-import { compileLatex2Pdf } from '@latex/texTools';
 
 const CHANNEL = 'OpenBuildUtils';
 
@@ -51,13 +51,13 @@ function resolveLatexWorkshopOutDir(filePath: string): string {
 
   // Order matters: longer/more-specific placeholders first to avoid partial matches.
   const replacements: [string, string][] = [
-    ['%DOC_EXT_W32%', filePath.replace(/\//g, '\\')],
+    ['%DOC_EXT_W32%', filePath.replaceAll('/', '\\')],
     ['%DOCFILE_EXT%', path.basename(filePath)],
     ['%DOC_EXT%', filePath],
     ['%DOCFILE%', docfile],
-    ['%DOC_W32%', doc.replace(/\//g, '\\')],
+    ['%DOC_W32%', doc.replaceAll('/', '\\')],
     ['%DOC%', doc],
-    ['%DIR_W32%', dir.replace(/\//g, '\\')],
+    ['%DIR_W32%', dir.replaceAll('/', '\\')],
     ['%DIR%', dir],
     ['%WORKSPACE_FOLDER%', workspaceFolder],
     ['%RELATIVE_DIR%', relativeDir],

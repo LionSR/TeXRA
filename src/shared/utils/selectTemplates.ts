@@ -5,9 +5,8 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 
-import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
-
 import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
+import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
 
 function buildAgentTooltip(opt: AgentOptionData): string {
   const { properties } = AGENT_DECORATORS;

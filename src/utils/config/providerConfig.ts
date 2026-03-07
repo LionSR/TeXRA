@@ -101,10 +101,8 @@ export function supportsCustomEndpoint(provider: string): boolean {
  */
 export function getAnthropicDynamicFiltering(): boolean {
   return (
-    globalSM?.get<boolean>(
-      GlobalStateKey.ANTHROPIC_DYNAMIC_FILTERING,
-      false,
-    ) ?? false
+    globalSM?.get<boolean>(GlobalStateKey.ANTHROPIC_DYNAMIC_FILTERING, false) ??
+    false
   );
 }
 

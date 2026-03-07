@@ -21,6 +21,7 @@ import {
 } from '@shared/styles';
 
 // Local imports - progress view styles
+import type { BashPermission } from '@shared/schemas';
 import { codeBlockStyles } from '../styles/codeBlockStyles';
 
 // Local imports - progress view formatters
@@ -30,7 +31,6 @@ import { buildCodeBlock } from '../formatters/htmlBuilders';
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
 // Local imports - shared schemas
-import type { BashPermission } from '@shared/schemas';
 
 @customElement('bash-request-panel')
 export class BashRequestPanel extends BaseFeedbackPanel {

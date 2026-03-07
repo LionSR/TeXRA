@@ -11,6 +11,7 @@ import {
   animationStyles,
   commonViewStyles,
 } from '@shared/styles';
+import type { StreamTabInfo } from '@shared/schemas';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared utilities
@@ -35,7 +36,6 @@ import { getComposedPathElement, getRadioValue } from '../utils';
 import type { StreamFilter, StreamSort } from '../store';
 
 // Local imports - shared schemas
-import type { StreamTabInfo } from '@shared/schemas';
 
 function buildTooltip(
   info: StreamTabInfo,

@@ -10,6 +10,7 @@
 
 import { z } from 'zod';
 
+import { TaskStateSchema } from '@logger/TaskState';
 import {
   InstructionUpdateSchema,
   OutputFileInfoSchema,
@@ -18,7 +19,6 @@ import {
   type OutputFileInfo,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { TaskStateSchema } from '@logger/TaskState';
 
 // ============================================================================
 // Shared: round key coercion

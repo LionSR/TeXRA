@@ -2,9 +2,9 @@
 import { strict as assert } from 'assert';
 
 // Local imports
-import { MESSAGE_TYPES } from '@shared/schemas';
 import { AgentLogger } from '@logger/AgentLogger';
 import { StreamLogStore } from '@logger/StreamLogStore';
+import { MESSAGE_TYPES } from '@shared/schemas';
 
 describe('AgentLogger.logFileCategory', () => {
   let logger: AgentLogger;

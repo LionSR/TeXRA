@@ -4,8 +4,8 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { toErrorMessage } from '@common/errors';
-import * as logger from '@logger/logUtils';
 import { arxivProcessor } from '@latex/arxivProcessor';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'arXivCommands';
 

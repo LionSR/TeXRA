@@ -13,15 +13,6 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 
 // Local imports - agent
-import {
-  AGENT_CATEGORY,
-  WorkflowAgentProposalSchema,
-  ToolUseAgentProposalSchema,
-  type WorkflowAgentProposal,
-  type ToolUseAgentProposal,
-  type StreamTabId,
-  type SubagentProgressUpdate,
-} from '@shared/schemas';
 import { getExecutionStore, registerExecution } from '@agent/storage';
 import { getAgent, getVisibleAgents } from '@agent/index/agentRegistry';
 import {
@@ -50,6 +41,15 @@ import {
   getVisibleModels,
   resolveVisibleModel,
 } from '@model/computeModelOptions';
+import {
+  AGENT_CATEGORY,
+  WorkflowAgentProposalSchema,
+  ToolUseAgentProposalSchema,
+  type WorkflowAgentProposal,
+  type ToolUseAgentProposal,
+  type StreamTabId,
+  type SubagentProgressUpdate,
+} from '@shared/schemas';
 
 // Local imports - tools
 import { ToolResult } from '@tools/result';

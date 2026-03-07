@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
 
-import {
-  DEFAULT_TOOL_CONFIG,
-  ToolConfigSchema,
-} from '@shared/schemas/toolConfig';
 import type { AgentConfigInput } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { validateExecutionRequest } from '@agent/core/executionRequests';
 import * as logger from '@logger/logUtils';
+import {
+  DEFAULT_TOOL_CONFIG,
+  ToolConfigSchema,
+} from '@shared/schemas/toolConfig';
 import {
   getPastedImageFullPath,
   isPastedImage,

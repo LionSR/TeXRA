@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 // Local imports - latex
 import { toErrorMessage } from '@common/errors';
+import { arxivProcessor } from '@latex/arxivProcessor';
 import { ToolError } from '@tools/result';
 import {
   type ArxivPaperMetadata,
@@ -13,7 +14,6 @@ import {
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { defineTool } from '@tools/core/define';
-import { arxivProcessor } from '@latex/arxivProcessor';
 
 const ArxivMetadataInputSchema = z.strictObject({
   id: z.string(),

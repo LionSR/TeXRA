@@ -2,9 +2,9 @@
 import * as assert from 'assert';
 
 // Local imports - tools
+import * as bibliographyModule from '@latex/extractBibliography';
 import { ExtractBibliographyTool } from '@tools/latex';
 import { WorkspaceFS } from '@utils/files';
-import * as bibliographyModule from '@latex/extractBibliography';
 
 describe('ExtractBibliographyTool', () => {
   const originalExists = WorkspaceFS.exists;
