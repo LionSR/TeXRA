@@ -127,14 +127,18 @@ export interface ProgressEventPayloads {
   requestShowError: {
     message: string;
   };
-  /** Request the frontend to ensure the progress view is visible. */
-  requestEnsureProgressView: undefined;
-  /** Request the frontend to show an agent-started notification with an option to open the progress board. */
-  requestShowAgentStarted: {
-    agentName: string;
-    modelName: string;
-    inputName: string;
-    outputInfo: string;
+  /**
+   * Request the frontend to ensure the progress view is visible.
+   * If the view cannot be opened and a fallback notification is provided,
+   * show a toast notification as a last resort.
+   */
+  requestEnsureProgressView: {
+    fallbackNotification?: {
+      agentName: string;
+      modelName: string;
+      inputName: string;
+      outputInfo: string;
+    };
   };
 }
 

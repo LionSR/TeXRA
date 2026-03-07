@@ -430,7 +430,7 @@ async function runFlowWithLifecycle(
   }
 }
 
-function showAgentNotification(config: AgentConfig): void {
+function buildFallbackNotification(config: AgentConfig) {
   const inputName = config.inputFile
     ? path.basename(config.inputFile)
     : 'selected input';
@@ -441,13 +441,7 @@ function showAgentNotification(config: AgentConfig): void {
   } else {
     outputInfo = outputFiles[0] ? `to ${path.basename(outputFiles[0])}` : '';
   }
-
-  bus.emit('requestShowAgentStarted', {
-    agentName: config.agent,
-    modelName: config.model,
-    inputName,
-    outputInfo,
-  });
+  return { agentName: config.agent, modelName: config.model, inputName, outputInfo };
 }
 
 function showApiKeyErrorNotification(): void {
@@ -550,13 +544,10 @@ async function prepareAgentUI(
 
   // Subagents don't need to force-open the progress board or show notifications —
   // the orchestrator's stream is already visible.
-  if (!options?.isSubagent) {
-    if (!runStorage.isViewVisible()) {
-      bus.emit('requestEnsureProgressView', undefined);
-    }
-    if (!runStorage.isViewVisible()) {
-      showAgentNotification(config);
-    }
+  if (!options?.isSubagent && !runStorage.isViewVisible()) {
+    bus.emit('requestEnsureProgressView', {
+      fallbackNotification: buildFallbackNotification(config),
+    });
   }
   bus.emit('setTaskState', {
     streamId,
