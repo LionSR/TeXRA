@@ -93,6 +93,16 @@ export const ClearHistoryMessageSchema = commandOnly(
   HISTORY_VIEW_COMMANDS.CLEAR_HISTORY,
 );
 
+export const ExportChatMdMessageSchema = z.object({
+  command: z.literal(HISTORY_VIEW_COMMANDS.EXPORT_CHAT_MD),
+  historyId: z.string().min(1),
+});
+
+export const ExportChatTexMessageSchema = z.object({
+  command: z.literal(HISTORY_VIEW_COMMANDS.EXPORT_CHAT_TEX),
+  historyId: z.string().min(1),
+});
+
 // ============================================================
 // Discriminated union of all inbound messages
 // ============================================================
@@ -103,6 +113,8 @@ export const HistoryViewInboundMessageSchema = z.discriminatedUnion('command', [
   RestoreAgentMessageSchema,
   DeleteAgentMessageSchema,
   ClearHistoryMessageSchema,
+  ExportChatMdMessageSchema,
+  ExportChatTexMessageSchema,
 ]);
 
 export type HistoryViewInboundMessage = z.infer<

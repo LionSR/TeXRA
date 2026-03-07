@@ -84,6 +84,13 @@ import {
 } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
+import {
+  formatChatAsMarkdown,
+  formatChatAsLatex,
+  generateExportFilename,
+  type ChatExportInput,
+} from '@commands/history/chatExportFormatter';
+import { compileLatex2Pdf } from '@latex/texTools';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
 import { AgentHandlers } from './handlers/agentHandlers';
@@ -312,6 +319,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.DELETE_AGENT]: (data) =>
         this.handleDeleteAgent(data),
       [SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY]: () => this.handleClearHistory(),
+      [SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD]: (data) =>
+        this.handleExportChat(data, 'md'),
+      [SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX]: (data) =>
+        this.handleExportChat(data, 'tex'),
 
       // Profile handlers
       [SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA]: () =>
@@ -820,6 +831,102 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       await showLoggedErrorMessage(
         this.channel,
         'Failed to clear history',
+        error,
+      );
+    }
+  }
+
+  private async handleExportChat(
+    data: { historyId: string },
+    format: 'md' | 'tex',
+  ): Promise<void> {
+    try {
+      const store = getExecutionStore(data.historyId as ExecutionId);
+      const [rawConfig, conversation, meta] = await Promise.all([
+        store.readConfig(),
+        store.readConversation(),
+        store.readMeta(),
+      ]);
+
+      if (!rawConfig) {
+        await vscode.window.showErrorMessage('History item not found');
+        return;
+      }
+
+      if (!conversation) {
+        await vscode.window.showErrorMessage(
+          'No conversation data available for this execution',
+        );
+        return;
+      }
+
+      const config = AgentConfigSchema.parse(rawConfig);
+
+      const exportInput: ChatExportInput = {
+        timestamp: meta?.timestamp ?? new Date().toISOString(),
+        description: meta?.description,
+        config: {
+          agent: config.agent,
+          model: config.model,
+          instruction: config.instruction,
+          inputFile: config.inputFile,
+          inputFiles: config.inputFiles,
+          mediaFile: config.mediaFile,
+          mediaFiles: config.mediaFiles,
+          referenceFile: config.referenceFile,
+          referenceFiles: config.referenceFiles,
+          auxiliaryFile: config.auxiliaryFile,
+          auxiliaryFiles: config.auxiliaryFiles,
+          outputFiles: config.outputFiles,
+        },
+        messages: conversation,
+      };
+
+      const filename = generateExportFilename(exportInput, format);
+      const storagePath = `executions/${data.historyId}/${filename}`;
+
+      const content =
+        format === 'md'
+          ? formatChatAsMarkdown(exportInput)
+          : formatChatAsLatex(exportInput);
+
+      await StorageFS.write(storagePath, content);
+      const absolutePath = StorageFS.fullPath(storagePath);
+
+      if (format === 'tex') {
+        // Compile LaTeX to PDF
+        const { pathToLocation } = await import('@utils/files');
+        const location = pathToLocation(absolutePath);
+        const compiled = await compileLatex2Pdf(location);
+
+        if (compiled) {
+          // Open the generated PDF
+          const pdfPath = absolutePath.replace(/\.tex$/, '.pdf');
+          const pdfUri = vscode.Uri.file(pdfPath);
+          await vscode.commands.executeCommand('vscode.open', pdfUri);
+          void vscode.window.showInformationMessage(
+            `Chat exported and compiled: ${filename.replace('.tex', '.pdf')}`,
+          );
+        } else {
+          // Compilation failed — open the .tex source instead
+          const doc = await vscode.workspace.openTextDocument(absolutePath);
+          await vscode.window.showTextDocument(doc, { preview: false });
+          void vscode.window.showWarningMessage(
+            'LaTeX compilation failed. The .tex source file has been opened instead.',
+          );
+        }
+      } else {
+        // Open Markdown file
+        const doc = await vscode.workspace.openTextDocument(absolutePath);
+        await vscode.window.showTextDocument(doc, { preview: false });
+        void vscode.window.showInformationMessage(
+          `Chat exported: ${filename}`,
+        );
+      }
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to export chat',
         error,
       );
     }
