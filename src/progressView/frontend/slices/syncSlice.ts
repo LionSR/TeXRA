@@ -63,6 +63,15 @@ export const syncHandlers: HandlerRegistry = {
             if (data.todos) d.todos = data.todos;
             if (data.queuedFollowUps) d.queuedFollowUps = data.queuedFollowUps;
           }
+
+          // Hydrate toggle bypass state on tab switch
+          if (isToolUseState(prev)) {
+            const d = draft as ToolUseStreamState;
+            if (data.toolEditBypass !== undefined)
+              d.toolEditBypass = data.toolEditBypass;
+            if (data.superYoloBypass !== undefined)
+              d.superYoloBypass = data.superYoloBypass;
+          }
           if (isWorkflowState(prev) && hasInstruction) {
             const d = draft as WorkflowStreamState;
             if (data.instruction && data.runId) {
