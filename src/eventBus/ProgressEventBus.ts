@@ -140,6 +140,8 @@ export interface ProgressEventPayloads {
       outputInfo: string;
     };
   };
+  /** Request the frontend to execute a VS Code command (fire-and-forget). */
+  requestExecuteCommand: { command: string; args?: unknown[] };
 }
 
 export type ProgressEvent = keyof ProgressEventPayloads;

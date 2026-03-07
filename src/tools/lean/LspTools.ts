@@ -1,14 +1,15 @@
 import { z } from 'zod';
 
 import { toErrorMessage } from '@common/errors';
+import { ToolResult } from '@tools/result';
+import { defineTool } from '@tools/core/define';
+import { getLeanVscodeServices } from './leanVscodeServices';
 import {
+  extractHoverText,
   countBySeverity,
   formatCounts,
   formatGroupedSections,
-} from '@frontend/vscode/vscodeDiagnostics';
-import { ToolResult } from '@tools/result';
-import { defineTool } from '@tools/core/define';
-import * as vscodeIntegration from './VscodeIntegration';
+} from './leanTypes';
 
 const LeanDiagnosticsInputSchema = z.strictObject({
   /** Command: list for full messages, count for summary */
@@ -178,7 +179,7 @@ Tips:
     const { command, file } = input;
 
     try {
-      const diagnostics = await vscodeIntegration.fetchDiagnosticsForFile(file);
+      const diagnostics = await getLeanVscodeServices().fetchDiagnosticsForFile(file);
       if (!diagnostics) {
         return {
           summary: 'Failed to open file',
@@ -187,7 +188,7 @@ Tips:
         };
       }
 
-      await vscodeIntegration.navigateToFirstError(file, diagnostics);
+      await getLeanVscodeServices().navigateToFirstError(file, diagnostics);
 
       const counts = countBySeverity(diagnostics);
       const countsStr = formatCounts(counts);
@@ -237,7 +238,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
     const config = FILE_COMMAND_CONFIG[command];
 
     try {
-      const success = await vscodeIntegration.executeFileCommand(
+      const success = await getLeanVscodeServices().executeFileCommand(
         config.vscode,
         file,
       );
@@ -292,7 +293,7 @@ Requires: Lean 4 VS Code extension installed.`,
     const config = PROJECT_COMMAND_CONFIG[command];
 
     try {
-      await vscodeIntegration.executeGlobalCommand(config.vscode);
+      await getLeanVscodeServices().executeGlobalCommand(config.vscode);
 
       if (command === 'build') {
         return {
@@ -365,7 +366,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
     column: number,
     location: string,
   ): Promise<ToolResult> {
-    const { data, error } = await vscodeIntegration.getGoalState(
+    const { data, error } = await getLeanVscodeServices().getGoalState(
       file,
       line,
       column,
@@ -405,7 +406,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
     column: number,
     location: string,
   ): Promise<ToolResult> {
-    const { data, error } = await vscodeIntegration.getTermGoal(
+    const { data, error } = await getLeanVscodeServices().getTermGoal(
       file,
       line,
       column,
@@ -428,7 +429,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
     column: number,
     location: string,
   ): Promise<ToolResult> {
-    const { data, error } = await vscodeIntegration.getHoverInfo(
+    const { data, error } = await getLeanVscodeServices().getHoverInfo(
       file,
       line,
       column,
@@ -442,7 +443,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
       };
     }
 
-    const text = vscodeIntegration.extractHoverText(data.contents);
+    const text = extractHoverText(data.contents);
     if (!text) {
       return {
         summary: 'No hover info',

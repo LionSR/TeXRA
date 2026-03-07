@@ -1,6 +1,5 @@
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { bus } from '@eventBus/ProgressEventBus';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { StreamTabId } from '@shared/schemas';
 import type { ToolResult } from '@tools/result';
 import { getConfig } from '@utils/config';
@@ -101,7 +100,7 @@ async function showApprovalPrompt(
         isSettled: () => settled,
       });
 
-      void safeExecuteCommand('texra.showProgressView');
+      bus.emit('requestExecuteCommand', { command: 'texra.showProgressView' });
 
       // Activate the stream that needs approval so user sees the prompt immediately
       if (streamId) {

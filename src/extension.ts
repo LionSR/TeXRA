@@ -33,13 +33,15 @@ import { FileLister } from '@frontend/files';
 import { agentDirectories } from '@frontend/agents';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { initializeNativeToolEditApproval } from '@frontend/approval/nativeToolEditApproval';
 import { registerAgentEventListeners } from '@frontend/events/agentEventListeners';
+import * as leanVscodeIntegration from '@frontend/lean/VscodeIntegration';
 import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { setExtensionChecker } from '@tools/externalToolDefs';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
-import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
+import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
@@ -225,7 +227,10 @@ export async function activate(context: vscode.ExtensionContext) {
   // Register commands first - this will create and store the MainViewProvider
   registerCommands(context);
 
-  initializeToolEditApproval(context);
+  initializeNativeToolEditApproval(context);
+
+  // Register Lean VS Code integration services
+  setLeanVscodeServices(leanVscodeIntegration);
 
   // Register VS Code extension checker for external tool availability
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
