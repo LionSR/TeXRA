@@ -60,7 +60,7 @@ const ExportConfigSchema = z.object({
 });
 type ExportConfig = z.infer<typeof ExportConfigSchema>;
 
-export const ChatExportInputSchema = z.object({
+const ChatExportInputSchema = z.object({
   timestamp: z.string(),
   description: z.string().optional(),
   config: ExportConfigSchema,
@@ -527,7 +527,9 @@ const TEX_NODES: NodeRenderers = {
     [
       '\\begin{websearchbox}',
       url ? `\\textbf{URL:} \\url{${escapeLatexUrl(url)}}` : undefined,
-      title ? `\\\\\\textbf{Title:} ${escapeLatex(title)}` : undefined,
+      title
+        ? `${url ? '\\\\' : ''}\\textbf{Title:} ${escapeLatex(title)}`
+        : undefined,
       content ? `\n${latexListing(content)}` : undefined,
       '\\end{websearchbox}',
       '',
