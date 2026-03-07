@@ -12,13 +12,13 @@ import { repeat } from 'lit/directives/repeat.js';
 import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas
+import { createEvent } from '@shared/utils/events';
 import type {
   ToolDashboardItem,
   ToolCategory,
 } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - shared utilities
-import { createEvent } from '@shared/utils/events';
 
 // Local imports - tool card component (side-effect: register)
 import '../components/tools/ToolCard';

@@ -19,6 +19,7 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { fileLister } from '@frontend/files';
 import { selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
+import type { MainViewInboundMessage } from '@shared/schemas';
 import {
   WorkspaceFS,
   parseLatexDiffMetadata,
@@ -26,7 +27,6 @@ import {
 } from '@utils/files';
 
 import { BaseWebviewManager } from './BaseWebviewManager';
-import type { MainViewInboundMessage } from '@shared/schemas';
 
 type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
   MainViewInboundMessage,

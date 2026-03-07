@@ -7,10 +7,10 @@ import * as vscode from 'vscode';
 // Local imports - errors
 import { showLoggedErrorMessage, showLoggedInfoMessage } from '@common/errors';
 import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
-import * as logger from '@logger/logUtils';
-import { pathToLocation } from '@utils/files';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import { tikzPictureManager } from '@latex/TikzPictureManager';
+import * as logger from '@logger/logUtils';
+import { pathToLocation } from '@utils/files';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);

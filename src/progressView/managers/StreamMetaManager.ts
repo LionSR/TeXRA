@@ -1,4 +1,3 @@
-import type { ExecutionId, StorageKey, StreamTabId } from '@shared/schemas';
 import { normalizeRunId } from '@common/constants/runIds';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
@@ -8,6 +7,7 @@ import {
 } from '@logger/TaskState';
 import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 import type { StreamTabMeta } from '@progressView/persistence/streamTabSchemas';
+import type { ExecutionId, StorageKey, StreamTabId } from '@shared/schemas';
 
 /**
  * Manages per-stream metadata with disk-backed persistence via meta.json.

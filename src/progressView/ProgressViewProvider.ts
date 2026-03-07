@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import type { IRunStorageService } from '@agent/runtime/RunStorageService';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
 import {
@@ -9,6 +8,7 @@ import {
   SIDEBAR_VIEWS,
   setActiveSidebarView,
 } from '@common/webview';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   buildBasicModelOptionsData,
@@ -17,12 +17,6 @@ import {
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
 import { WebviewBridge } from '@progressView/managers/WebviewBridge';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-
-import { ProgressEventHandler } from './events/ProgressEventHandler';
-import { ProgressViewContentProvider } from './ProgressViewContentProvider';
-import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
-import { ProgressViewState } from './state/ProgressViewState';
 import type {
   AgentProposalPermission,
   BashPermission,
@@ -32,6 +26,12 @@ import type {
   StreamTabId,
   ToolEditPermission,
 } from '@shared/schemas';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+
+import { ProgressEventHandler } from './events/ProgressEventHandler';
+import { ProgressViewContentProvider } from './ProgressViewContentProvider';
+import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
+import { ProgressViewState } from './state/ProgressViewState';
 
 import type { MainViewProvider } from '../MainViewProvider';
 
@@ -366,7 +366,6 @@ export class ProgressViewProvider
   private canSendToWebview(): boolean {
     return this.isActivePlacementReady() && this.webviewUpdater.isAvailable();
   }
-
 
   public async cleanupTasksAfterRestart(
     waitingStreams?: Set<StreamTabId>,

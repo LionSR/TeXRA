@@ -1,3 +1,6 @@
+import { KVStore } from '@common/storage';
+import { WorkspaceStateKey } from '@common/state';
+import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 import {
   PersistedStreamLogEntrySchema,
   StorageRecordSchema,
@@ -5,9 +8,6 @@ import {
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
-import { KVStore } from '@common/storage';
-import { WorkspaceStateKey } from '@common/state';
-import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 
 import {
   StreamLog,

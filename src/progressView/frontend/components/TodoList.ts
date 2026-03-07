@@ -10,10 +10,10 @@ import {
   animationStyles,
   commonViewStyles,
 } from '@shared/styles';
+import { TODO_STATUS, type TodoItem } from '@shared/schemas';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared schemas
-import { TODO_STATUS, type TodoItem } from '@shared/schemas';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';

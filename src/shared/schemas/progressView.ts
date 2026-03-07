@@ -6,11 +6,11 @@
  */
 import { z } from 'zod';
 
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 import { AgentCategorySchema } from './agent';
 import { StreamTabIdSchema } from './identifiers';

@@ -2,10 +2,10 @@
 import * as assert from 'assert';
 
 // Local imports - tools
+import * as arxivModule from '@latex/arxivProcessor';
 import { LsTool } from '@tools/ls';
 import type { ToolResult } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
-import * as arxivModule from '@latex/arxivProcessor';
 import { ArxivDownloadTool } from '@/tools/arxiv/ArxivDownloadTool';
 
 declare module '@latex/arxivProcessor' {

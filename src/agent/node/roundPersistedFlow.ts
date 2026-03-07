@@ -16,13 +16,13 @@
  * ```
  */
 
+import type { ExecutionKVStore } from '@agent/storage';
+import type { AgentLogStage } from '@logger/AgentLogger';
 import {
   EXECUTION_STATUS,
   type ExecutionStatus,
   type RetryErrorInfo,
 } from '@shared/schemas';
-import type { ExecutionKVStore } from '@agent/storage';
-import type { AgentLogStage } from '@logger/AgentLogger';
 
 import { BaseNode } from './index';
 import { PersistedFlow } from './persistedFlow';

@@ -6,6 +6,7 @@
  */
 
 // Local imports - shared schemas (Zod-derived types)
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import {
   MainViewPersistedStateSchema,
   type MainViewPersistedState,
@@ -18,7 +19,6 @@ import {
 } from '@shared/schemas';
 
 // Local imports - webview commands
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import {
   SESSION_TYPES,
   type SessionType,

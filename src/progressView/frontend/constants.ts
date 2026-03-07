@@ -1,8 +1,8 @@
 // Local imports - shared schemas
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { STREAM_STATUS } from '@shared/schemas';
 
 // Local imports - webview commands
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 export { STREAM_STATUS };
 

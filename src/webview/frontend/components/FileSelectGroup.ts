@@ -16,6 +16,7 @@ import { when } from 'lit/directives/when.js';
 // Local imports - main view
 import { SortableController } from '@shared/controllers';
 import { designTokens, codiconStyles } from '@shared/styles';
+import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
 import { ensureContextMenuUsesSlot } from '@shared/utils/dom';
 import { MainViewEvents } from '../events';
 import { SESSION_TYPES } from '../constants';
@@ -28,7 +29,6 @@ import { fileSelectStyles } from '../styles/fileSelectStyles';
 
 // Local imports - shared schemas
 import { DEFAULT_CHECKBOX_VALUES } from '../store';
-import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
 
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {

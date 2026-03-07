@@ -1,12 +1,12 @@
 import * as path from 'path';
 
+import type { OutputFileInfo } from '@shared/schemas';
 import {
   createFileMapping,
   getComparablePath,
   type FileLocation,
 } from '@utils/files';
 
-import type { OutputFileInfo } from '@shared/schemas';
 import type { RoundFileMapping } from './types';
 
 /** Invert a Map<sourceKey, targetLocation> into Map<targetPath, sourceLocation>. */

@@ -10,22 +10,26 @@ import { fileURLToPath } from 'node:url';
 
 const INTERNAL_ALIAS_NAMES = [
   'agent',
+  'auth',
+  'commands',
   'common',
+  'eventBus',
+  'explorer',
   'frontend',
   'historyView',
+  'housekeeping',
+  'latex',
   'logger',
   'memoryView',
   'model',
   'progressView',
   'replacement',
+  'settingsView',
+  'shared',
   'tools',
-  'utils',
-  'eventBus',
-  'webview',
-  'latex',
-  'commands',
-  'housekeeping',
   'types',
+  'utils',
+  'webview',
 ];
 
 const INTERNAL_ALIAS_PATH_GROUPS = INTERNAL_ALIAS_NAMES.flatMap((alias) => [
@@ -96,7 +100,7 @@ export default tseslint.config(
       '@stylistic/semi': 'warn',
       semi: 'off',
       curly: 'off',
-      eqeqeq: 'warn',
+      eqeqeq: ['warn', 'always', { null: 'ignore' }],
       'no-throw-literal': 'warn',
       'import/order': [
         'warn',

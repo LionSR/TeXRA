@@ -1,5 +1,6 @@
 import { create } from 'mutative';
 
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -8,7 +9,6 @@ import {
   type LogMessageData,
   type StreamLogEntry,
 } from '@shared/schemas';
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 import type { StreamLogs, StreamState } from '../store';
 import type { HandlerRegistry } from '../messageDispatcher';

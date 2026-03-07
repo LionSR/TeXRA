@@ -8,13 +8,13 @@ import fsExtra from 'fs-extra';
 import * as vscode from 'vscode';
 
 // Local imports
-import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { DEFAULT_MODELS } from '@model/computeModelOptions';
+import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
 import { isConfigExplicitlySet, updateConfig } from '@utils/config';
 import { extendEnvPath } from '@utils/system/platformPaths';

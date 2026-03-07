@@ -11,8 +11,23 @@ import {
   showLoggedMessageWithDocs,
 } from '@common/errors';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+import {
+  runPackLatexdiffvc,
+  runPackLatexdiffvcMultiple,
+  runCleanLatexdiffvc,
+  runCleanLatexdiffvcMultiple,
+} from '@housekeeping';
+import { getAgentFirstNameChunk } from '@housekeeping/utils';
+import { LaTeXdiffService, type LaTeXdiffResult } from '@latex/latexdiff';
+import {
+  DEFAULT_MATH_MARKUP,
+  MATH_MARKUP_OPTIONS,
+  describeMathMarkupOption,
+  type MathMarkupOption,
+} from '@latex/latexdiff/mathMarkup';
 import * as logger from '@logger/logUtils';
 import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
+import type { OutputFileInfo } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 import {
   WorkspaceFS,
@@ -23,21 +38,6 @@ import {
 } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
 import { hasExtension } from '@utils/core/pathCore';
-import { LaTeXdiffService, type LaTeXdiffResult } from '@latex/latexdiff';
-import {
-  DEFAULT_MATH_MARKUP,
-  MATH_MARKUP_OPTIONS,
-  describeMathMarkupOption,
-  type MathMarkupOption,
-} from '@latex/latexdiff/mathMarkup';
-import {
-  runPackLatexdiffvc,
-  runPackLatexdiffvcMultiple,
-  runCleanLatexdiffvc,
-  runCleanLatexdiffvcMultiple,
-} from '@housekeeping';
-import { getAgentFirstNameChunk } from '@housekeeping/utils';
-import type { OutputFileInfo } from '@shared/schemas';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);

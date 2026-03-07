@@ -2,12 +2,8 @@
 import { FinishReason } from '@google/genai';
 
 // Shared schemas
-import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Local imports - auth
-import { SupabaseClient } from '@auth/SupabaseClient';
-import { MAX_TIER } from '@auth/config';
-import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - agent
 import {
@@ -25,12 +21,16 @@ import type {
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import { getServerSideKeyService } from '@auth/serverKeys';
+import { MAX_TIER } from '@auth/config';
+import { SupabaseClient } from '@auth/SupabaseClient';
 
 // Local imports - frontend
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
 // Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Local imports - tools
 import type { ToolFileAttachment } from '@tools/result';

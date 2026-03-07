@@ -6,11 +6,11 @@
  */
 import { z } from 'zod';
 
+import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
 import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
-import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
 import { commandOnly } from './messageFactories';
 
 import { AgentCategorySchema } from './agent';

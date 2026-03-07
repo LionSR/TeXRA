@@ -2,12 +2,12 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { PROVIDER_URLS } from '@shared/constants/providers';
 import { showLoggedErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
+import { PROVIDER_URLS } from '@shared/constants/providers';
 
 const CHANNEL = 'ApiKeyCommands';
 logger.initialize(CHANNEL);
