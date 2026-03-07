@@ -11,6 +11,8 @@ import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
+import { ProviderVscodeSettingDefSchema } from '@shared/constants/providers';
+import { AgentMetadataBaseSchema } from './agent';
 import { commandOnly } from './messageFactories';
 
 // ============================================================
@@ -23,11 +25,14 @@ export const ProfileUserSchema = z.object({
 });
 export type ProfileUser = z.infer<typeof ProfileUserSchema>;
 
-export const RemoteAgentSchema = z.object({
-  name: z.string(),
-  description: z.string(),
+/**
+ * Remote agent data for the profile view.
+ * Extends AgentMetadataBaseSchema (name, category, description) with
+ * profile-specific fields. Description is required (non-optional) here.
+ */
+export const RemoteAgentSchema = AgentMetadataBaseSchema.extend({
+  description: z.string(), // override optional → required for display
   visibility: z.array(z.string()),
-  category: z.string(),
   supportsMultipleOutput: z.boolean(),
 });
 export type RemoteAgent = z.infer<typeof RemoteAgentSchema>;
@@ -41,16 +46,14 @@ export const TierConstantsSchema = z.object({
 });
 export type TierConstants = z.infer<typeof TierConstantsSchema>;
 
-/** A VS Code configuration toggle surfaced in a provider's expanded settings. */
-export const ProviderVscodeSettingSchema = z.object({
-  key: z.string(),
-  label: z.string(),
-  description: z.string(),
-  value: z.boolean(),
-  warning: z.string().optional(),
-  warningUrl: z.string().optional(),
-  warningUrlLabel: z.string().optional(),
-});
+/**
+ * A VS Code configuration toggle surfaced in a provider's expanded settings.
+ * Extends ProviderVscodeSettingDefSchema (single source of truth) with runtime `value`.
+ */
+export const ProviderVscodeSettingSchema =
+  ProviderVscodeSettingDefSchema.extend({
+    value: z.boolean(),
+  });
 export type ProviderVscodeSetting = z.infer<typeof ProviderVscodeSettingSchema>;
 
 /** A VS Code numeric configuration surfaced in a settings section. */
