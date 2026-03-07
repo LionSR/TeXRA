@@ -8,8 +8,6 @@ import { WorkspaceStateKey, workspaceSM } from '@common/state';
 import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas';
 
-const proposalsBypassedByStream = new Map<StreamTabId, boolean>();
-
 /** Check if the workspace-level Super YOLO feature is enabled. */
 export function isSuperYoloFeatureEnabled(): boolean {
   return (
@@ -18,38 +16,37 @@ export function isSuperYoloFeatureEnabled(): boolean {
   );
 }
 
-function notifyProposalBypassState(streamId: StreamTabId): void {
-  const bypassActive = proposalsBypassedByStream.get(streamId) ?? false;
-  const featureEnabled = isSuperYoloFeatureEnabled();
+const bypassedByStream = new Map<StreamTabId, boolean>();
+
+function notifyBypassState(streamId: StreamTabId): void {
   bus.emit('updateSuperYoloBypassState', {
     streamId,
-    bypassActive,
-    featureEnabled,
+    bypassActive: bypassedByStream.get(streamId) ?? false,
+    featureEnabled: isSuperYoloFeatureEnabled(),
   });
 }
 
 /** Toggle per-stream proposal bypass. Returns new state. */
 export function toggleProposalBypass(streamId: StreamTabId): boolean {
-  const currentState = proposalsBypassedByStream.get(streamId) ?? false;
-  const newState = !currentState;
-  proposalsBypassedByStream.set(streamId, newState);
-  notifyProposalBypassState(streamId);
+  const newState = !(bypassedByStream.get(streamId) ?? false);
+  bypassedByStream.set(streamId, newState);
+  notifyBypassState(streamId);
   return newState;
 }
 
 /** Check if proposals are bypassed for a specific stream. */
 export function isProposalBypassedForStream(streamId: StreamTabId): boolean {
-  return proposalsBypassedByStream.get(streamId) ?? false;
+  return bypassedByStream.get(streamId) ?? false;
 }
 
 /** @internal Called by unified cleanup in index.ts */
 export function _clearProposalBypassForStream(streamId: StreamTabId): void {
-  proposalsBypassedByStream.delete(streamId);
+  bypassedByStream.delete(streamId);
 }
 
 /** @internal Called by unified cleanup in index.ts */
 export function _clearAllProposalBypass(): void {
-  proposalsBypassedByStream.clear();
+  bypassedByStream.clear();
 }
 
 /**
@@ -59,12 +56,12 @@ export function _clearAllProposalBypass(): void {
  */
 export function _disableAllProposalBypasses(): StreamTabId[] {
   const affected: StreamTabId[] = [];
-  for (const [id, active] of proposalsBypassedByStream) {
+  for (const [id, active] of bypassedByStream) {
     if (active) affected.push(id);
   }
-  proposalsBypassedByStream.clear();
+  bypassedByStream.clear();
   for (const streamId of affected) {
-    notifyProposalBypassState(streamId);
+    notifyBypassState(streamId);
   }
   return affected;
 }
