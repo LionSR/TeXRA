@@ -4,15 +4,15 @@ import { provide } from '@lit/context';
 import { state } from 'lit/decorators.js';
 
 // Local imports - shared handlers
+import { COMMON_COMMANDS } from '@common/webview/commands';
+import { postMessage } from '@shared/vscode';
+import { installToolbarTooltips } from '@shared/controllers';
 import { handleCommonMessage } from '@shared/handlers/commonMessageHandlers';
 
 // Local imports - shared contexts
 import { themeContext } from '@shared/contexts/themeContext';
 
 // Local imports - webview commands
-import { postMessage } from '@shared/vscode';
-import { installToolbarTooltips } from '@shared/controllers';
-import { COMMON_COMMANDS } from '@common/webview/commands';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 
 /**
@@ -23,7 +23,7 @@ import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
  * backend — subclasses declare the contract so handlers receive typed data
  * instead of `unknown`.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 export abstract class BaseWebviewApp<TMessage = any> extends LitElement {
   @provide({ context: themeContext })
   @state()

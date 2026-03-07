@@ -1,11 +1,11 @@
+import { AgentLogger } from '@logger/AgentLogger';
+import { mapToRecord } from '@progressView/persistence/serializationUtils';
+import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 import type {
   InstructionUpdate,
   StorageKey,
   StreamTabId,
 } from '@shared/schemas';
-import { AgentLogger } from '@logger/AgentLogger';
-import { mapToRecord } from '@progressView/persistence/serializationUtils';
-import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 
 /**
  * Manages per-stream run instructions with disk-backed persistence.

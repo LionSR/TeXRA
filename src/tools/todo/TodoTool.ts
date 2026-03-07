@@ -12,18 +12,16 @@ import { z } from 'zod';
 // Local imports - tools
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { AgentLogger } from '@logger/AgentLogger';
-import { type ToolResult } from '@tools/result';
-import { defineTool } from '@tools/core/define';
-
-const logger = new AgentLogger('TodoWriteTool');
-
-// Import todo schemas from single source of truth
 import {
   TODO_STATUS,
   TodoItemSchema,
   type TodoItem,
   type TodoStatus,
 } from '@shared/schemas';
+import { type ToolResult } from '@tools/result';
+import { defineTool } from '@tools/core/define';
+
+const logger = new AgentLogger('TodoWriteTool');
 
 /** Configuration for displaying todo status - icon and label for each status */
 const STATUS_DISPLAY: Record<TodoStatus, { icon: string; label: string }> = {

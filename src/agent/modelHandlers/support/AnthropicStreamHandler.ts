@@ -3,7 +3,6 @@
  * Encapsulates the streaming event handling logic for improved testability and readability.
  */
 // Third-party imports
-import { MESSAGE_TYPES, type StreamDiagnostics } from '@shared/schemas';
 import {
   extractDomain,
   type WebFetchResult,
@@ -11,6 +10,7 @@ import {
   type WebSearchResultEntry,
 } from '@agent/modelHandlers/types/ServerToolTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES, type StreamDiagnostics } from '@shared/schemas';
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
 import type {
   ServerToolUseBlock,

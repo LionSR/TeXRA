@@ -5,10 +5,10 @@ import * as path from 'path';
 // Local imports - agent
 // Internal imports
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
+import type { ExecutionId } from '@shared/schemas';
 import * as configModule from '@utils/config';
 import { WorkspaceFS, StorageFS } from '@utils/files';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
-import type { ExecutionId } from '@shared/schemas';
 
 describe('maybeSaveDebugObject', () => {
   type StorageFsMutable = {

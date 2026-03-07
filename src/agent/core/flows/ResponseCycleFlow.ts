@@ -2,7 +2,6 @@ import { dirname } from 'path';
 
 import { z } from 'zod';
 
-import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
 import { isRemoteAgent } from '@agent/index';
 import { BaseNode, Flow } from '@agent/node';
 import { recordRound } from '@agent/core/AgentState';
@@ -22,12 +21,13 @@ import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
+import { bestConnectionMethod } from '@latex';
 import replacementEngine from '@replacement/engine';
+import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { getSystemPromptWithRules } from '@utils/prompt';
 import { extractScratchpad } from '@utils/text/xmlUtils';
-import { bestConnectionMethod } from '@latex';
 
 import { FlowTransition } from './FlowTransitions';
 import { ModelInvocationNode } from './ModelInvocationNode';

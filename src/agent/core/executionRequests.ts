@@ -1,4 +1,5 @@
 // Local imports - agent config (sibling module)
+import type { ExecutionId } from '@shared/schemas';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -6,7 +7,6 @@ import {
 } from './AgentConfig';
 
 // Local imports - shared schemas
-import type { ExecutionId } from '@shared/schemas';
 
 // Type imports
 import type { z } from 'zod';

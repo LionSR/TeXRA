@@ -47,7 +47,7 @@ const highlightCode = (code: string, lang: string): string => {
       }).value;
       // Sanitize lang for safe HTML attribute insertion (defense-in-depth;
       // hljs.getLanguage() above already restricts to registered names)
-      const safeLang = lang.replace(/[^a-zA-Z0-9_-]/g, '');
+      const safeLang = lang.replaceAll(/[^a-zA-Z0-9_-]/g, '');
       // Return full <pre> so markdown-it uses it as-is (detects leading <pre)
       return `<pre class="hljs"><code class="language-${safeLang}">${highlighted}</code></pre>`;
     } catch {

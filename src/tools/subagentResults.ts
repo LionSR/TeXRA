@@ -13,8 +13,8 @@ import type {
   OutputFileSummary,
 } from '@agent/runtime/AgentFlowResult';
 import type { ExecResult } from '@agent/types/ResultTypes';
-import { formatDuration } from '@utils/core';
 import type { SubagentProgressUpdate } from '@shared/schemas';
+import { formatDuration } from '@utils/core';
 
 // ============================================================================
 // Formatting helpers

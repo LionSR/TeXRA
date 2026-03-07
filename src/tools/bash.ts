@@ -22,6 +22,7 @@ import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
 // Local imports - tools
+import type { StreamTabId, ExecutionId } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
 import { formatBashDelivery, formatBashError } from '@tools/subagentResults';
 import {
@@ -36,7 +37,6 @@ import { ensureRunDir } from '@utils/files/taskRunStorage';
 
 // Local file imports
 import { defineTool } from './core/define';
-import type { StreamTabId, ExecutionId } from '@shared/schemas';
 
 const BASH_TIMEOUT_MS = 120_000; // 120 s
 

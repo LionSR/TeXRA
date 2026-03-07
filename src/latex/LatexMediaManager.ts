@@ -6,12 +6,11 @@ import pMap from 'p-map';
 
 // Local imports - log
 
-import { ToolConfig } from '@shared/schemas/toolConfig';
-
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 import { toErrorMessage } from '@common/errors';
 import { AgentLogger } from '@logger/AgentLogger';
+import { ToolConfig } from '@shared/schemas/toolConfig';
 import {
   TaskRunFileService,
   flexibleFS,

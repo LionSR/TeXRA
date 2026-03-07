@@ -7,12 +7,12 @@ import { repeat } from 'lit/directives/repeat.js';
 import { designTokens, commonViewStyles } from '@shared/styles';
 
 // Local imports - progress view constants
+import type { OutputFileInfo } from '@shared/schemas';
 import { COMMANDS, ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
 
 // Local imports - shared schemas
-import type { OutputFileInfo } from '@shared/schemas';
 
 /** Parsed path components for display */
 interface ParsedPath {

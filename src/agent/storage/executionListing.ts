@@ -14,6 +14,7 @@ import { isFileNotFoundError } from '@common/errors';
 import { isDirectory } from '@common/files/fsEntryType';
 import { workspaceSM } from '@common/state/stateManager';
 import * as logger from '@logger/logUtils';
+import type { ExecutionId } from '@shared/schemas';
 import { StorageFS, WorkspaceFS } from '@utils/files';
 
 import {
@@ -21,7 +22,6 @@ import {
   EXECUTIONS_DIR,
   getExecutionStore,
 } from './ExecutionKVStore';
-import type { ExecutionId } from '@shared/schemas';
 
 const CHANNEL = 'ExecutionListing';
 const INDEX_PATH = 'executions/index.json';

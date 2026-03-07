@@ -11,11 +11,6 @@
 
 import { z } from 'zod';
 
-import {
-  ExecutionIdSchema,
-  type StreamTabId,
-  type ExecutionId,
-} from '@shared/schemas';
 import { getExecutionStore } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
@@ -31,6 +26,11 @@ import {
 import type { TaskState } from '@logger/TaskState';
 import { isToolUseTaskState, isWorkflowTaskState } from '@logger/TaskState';
 import { AgentLogger } from '@logger/AgentLogger';
+import {
+  ExecutionIdSchema,
+  type StreamTabId,
+  type ExecutionId,
+} from '@shared/schemas';
 
 const logger = new AgentLogger('SessionResumeRetrieval');
 

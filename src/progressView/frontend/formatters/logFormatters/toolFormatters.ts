@@ -8,10 +8,14 @@
  */
 
 // Local imports - shared utilities
+import type {
+  WebSearchPayload,
+  WebFetchPayload,
+  LogMessageData,
+} from '@shared/schemas';
 import { isPlainObject } from '@shared/utils/string';
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
-import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
 import type { EditInput } from '@tools/EditTool';
 import type { TextEditorInput } from '@tools/TextEditorTool';
@@ -23,6 +27,7 @@ import type {
   WorkflowAgentInput,
 } from '@tools/DelegationTools';
 import type { AcceptRunFilesInput } from '@tools/AcceptRunFilesTool';
+import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 
 // Local imports - Lit template utilities
 import {
@@ -58,11 +63,6 @@ import {
   TRIVIAL_WRITE_OUTPUT,
   getLanguageFromPath,
 } from '../constants';
-import type {
-  WebSearchPayload,
-  WebFetchPayload,
-  LogMessageData,
-} from '@shared/schemas';
 
 // Side-effect import to register <tool-timer> custom element
 import '../../components/ToolTimer';

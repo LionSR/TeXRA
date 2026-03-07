@@ -2,10 +2,10 @@
 import { z } from 'zod';
 
 // Local imports - tools
+import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import { formatToolOutput, resolveAndFormat } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { pathToLocation } from '@utils/files';
-import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import {
   buildLimitedAttachments,
   resolveLatexFileOrThrow,
