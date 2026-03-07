@@ -35,7 +35,13 @@ export const DEFAULT_MODELS = [
  * Uses a simple hash so we don't need manual version bumps.
  */
 export const MODEL_LIST_VERSION: number = DEFAULT_MODELS.reduce(
-  (hash, model, i) => ((hash << 5) - hash + model.charCodeAt(0) + i) | 0,
+  (hash, model, i) => {
+    let h = hash;
+    for (let c = 0; c < model.length; c++) {
+      h = ((h << 5) - h + model.charCodeAt(c)) | 0;
+    }
+    return (h + i) | 0;
+  },
   DEFAULT_MODELS.length,
 );
 

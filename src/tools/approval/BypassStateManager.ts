@@ -1,8 +1,8 @@
 /**
  * Generic per-stream bypass state manager.
  *
- * Extracted from the identical pattern in bashApproval, toolEditApproval,
- * and proposalApproval to eliminate state management duplication.
+ * Extracted from the identical pattern in toolEditApproval and
+ * proposalApproval to eliminate state management duplication.
  */
 import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas';

@@ -54,9 +54,8 @@ export const MODEL_PROVIDERS_ORDER: ModelProvider[] = PROVIDER_REGISTRY.map(
  * All providers that support server-side API keys.
  * Derived from PROVIDER_REGISTRY — no manual sync needed.
  */
-export const SERVER_SIDE_PROVIDER_IDS = PROVIDER_REGISTRY.filter(
-  (p) => p.hasServerKey,
-).map((p) => p.id) as readonly string[];
+export const SERVER_SIDE_PROVIDER_IDS: readonly ModelProvider[] =
+  PROVIDER_REGISTRY.filter((p) => p.hasServerKey).map((p) => p.id);
 
 /** Type for providers that support server-side keys. */
 export type ServerSideProvider = (typeof SERVER_SIDE_PROVIDER_IDS)[number];

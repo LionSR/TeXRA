@@ -373,7 +373,7 @@ interface DiffOperation {
   round?: number;
   fromRound?: number;
   toRound?: number;
-  info: OutputFileInfo;
+  info?: OutputFileInfo;
   prevInfo?: OutputFileInfo;
 }
 
@@ -795,9 +795,6 @@ async function runLatexdiffViaWorkspaceScan(params: {
         description: `${path.basename(baseFile)} (r${round})`,
         cwd: path.dirname(resolvedOutput),
         round,
-        info: {
-          location: pathToLocation(resolvedOutput),
-        } as OutputFileInfo,
       });
     }
 
@@ -823,9 +820,6 @@ async function runLatexdiffViaWorkspaceScan(params: {
           cwd: path.dirname(resolvedCurrent),
           fromRound: currentRound,
           toRound: nextRound,
-          info: {
-            location: pathToLocation(resolvedNext),
-          } as OutputFileInfo,
         });
       }
     }
