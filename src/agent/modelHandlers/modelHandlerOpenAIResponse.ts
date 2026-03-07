@@ -113,6 +113,14 @@ interface UploadedOpenAIResponseAttachment {
   isImage: boolean;
 }
 
+/** Shared state for streaming event processing (WebSocket and HTTP paths). */
+interface StreamingEventState {
+  thinkingStream: { append(delta: string): void; finalize(finalText?: string): void };
+  outputStream: { append(delta: string): void; finalize(finalText?: string): void } | null;
+  emittedWebSearchIds: Set<string>;
+  hasThinkingContent: boolean;
+}
+
 /**
  * MIME types that the OpenAI Responses API accepts as `input_file` content.
  * Composed from the shared OFFICE_MIME_TYPES plus PDF.
@@ -301,16 +309,52 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
-   * Execute a response request via WebSocket transport.
-   * Sends a response.create event and collects streaming events until
-   * a terminal event (completed, failed, incomplete) is received.
+   * Process a single streaming event, updating the shared streaming state.
+   * Used by both WebSocket and HTTP streaming paths for consistent behavior.
    */
-  private async executeViaWebSocket(
-    ws: ResponsesWS,
-    params: ResponseCreateParamsBase,
-    signal?: AbortSignal,
-  ): Promise<Response> {
-    const state = {
+  private processStreamingEvent(
+    event: ResponseStreamEvent,
+    state: StreamingEventState,
+  ): void {
+    /** Finalize and reset the thinking stream if it has content. */
+    const rotateThinkingStream = (): void => {
+      if (!state.hasThinkingContent) return;
+      state.thinkingStream.finalize();
+      state.hasThinkingContent = false;
+      state.thinkingStream = this.createThinkingStream();
+    };
+
+    if (this.isReasoningDeltaEvent(event)) {
+      state.thinkingStream.append(event.delta);
+      state.hasThinkingContent = true;
+    } else if (this.isTextDeltaEvent(event)) {
+      state.outputStream?.append(event.delta);
+    } else if (this.isWebSearchInProgressEvent(event)) {
+      rotateThinkingStream();
+    } else if (this.isFunctionCallArgumentsDoneEvent(event)) {
+      // Function call arguments complete - finalize streams since no more
+      // text/thinking deltas will arrive after tool calls begin.
+      rotateThinkingStream();
+      this.logger.debug(
+        `Tool call ready during streaming: ${event.name}`,
+      );
+    } else if (this.isOutputItemDoneEvent(event)) {
+      const item = event.item;
+      if (
+        this.isWebSearchItem(item) &&
+        !state.emittedWebSearchIds.has(item.id) &&
+        hasOpenAIWebSearchData(item)
+      ) {
+        rotateThinkingStream();
+        this.emitOpenAIWebSearch(item);
+        state.emittedWebSearchIds.add(item.id);
+      }
+    }
+  }
+
+  /** Create a fresh streaming event state for a new request. */
+  private createStreamingEventState(): StreamingEventState {
+    return {
       thinkingStream: this.createThinkingStream(),
       outputStream: this.isOutputStreamingEnabled()
         ? this.createOutputStream()
@@ -318,9 +362,37 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       emittedWebSearchIds: new Set<string>(),
       hasThinkingContent: false,
     };
+  }
+
+  /**
+   * Execute a response request via WebSocket transport.
+   * Sends a response.create event and collects streaming events until
+   * a terminal event (completed, failed, incomplete) is received.
+   *
+   * Failed/incomplete responses are thrown as errors so the caller's catch
+   * block can apply recovery logic (e.g., context-window compaction).
+   */
+  private async executeViaWebSocket(
+    ws: ResponsesWS,
+    params: ResponseCreateParamsBase,
+    signal?: AbortSignal,
+  ): Promise<Response> {
+    // Short-circuit if already aborted before sending the request
+    if (signal?.aborted) {
+      throw new DOMException('The operation was aborted', 'AbortError');
+    }
+
+    const state = this.createStreamingEventState();
 
     return new Promise<Response>((resolve, reject) => {
       let settled = false;
+      // Track the response ID for this request so we only process events
+      // belonging to it (important when abort-and-retry reuses the connection)
+      let currentResponseId: string | null = null;
+
+      /** Check whether a terminal event belongs to the current request. */
+      const isCurrentResponse = (response: Response): boolean =>
+        currentResponseId === null || response.id === currentResponseId;
 
       const onAbort = (): void => {
         if (settled) return;
@@ -330,41 +402,31 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       };
       signal?.addEventListener('abort', onAbort, { once: true });
 
-      // Process streaming events — same logic as the HTTP streaming path.
-      // ResponsesServerEvent and ResponseStreamEvent are the same union type.
+      // Process streaming events, filtering by response ID.
       const onEvent = (event: ResponsesServerEvent): void => {
         const e = event as ResponseStreamEvent;
-        if (this.isReasoningDeltaEvent(e)) {
-          state.thinkingStream.append(e.delta);
-          state.hasThinkingContent = true;
-        } else if (this.isTextDeltaEvent(e)) {
-          state.outputStream?.append(e.delta);
-        } else if (this.isWebSearchInProgressEvent(e)) {
-          if (state.hasThinkingContent) {
-            state.thinkingStream.finalize();
-            state.hasThinkingContent = false;
-            state.thinkingStream = this.createThinkingStream();
-          }
-        } else if (this.isOutputItemDoneEvent(e)) {
-          const item = e.item;
-          if (
-            this.isWebSearchItem(item) &&
-            !state.emittedWebSearchIds.has(item.id) &&
-            hasOpenAIWebSearchData(item)
-          ) {
-            if (state.hasThinkingContent) {
-              state.thinkingStream.finalize();
-              state.hasThinkingContent = false;
-              state.thinkingStream = this.createThinkingStream();
-            }
-            this.emitOpenAIWebSearch(item);
-            state.emittedWebSearchIds.add(item.id);
-          }
+
+        // Capture the response ID from the first response.created event
+        if (e.type === 'response.created') {
+          currentResponseId = e.response.id;
+          return;
         }
+
+        // Filter events by response ID: skip events from stale responses
+        if (
+          currentResponseId &&
+          'response_id' in e &&
+          typeof (e as Record<string, unknown>).response_id === 'string' &&
+          (e as Record<string, unknown>).response_id !== currentResponseId
+        ) {
+          return;
+        }
+
+        this.processStreamingEvent(e, state);
       };
 
-      const finalize = (response: Response): void => {
-        if (settled) return;
+      const finalizeSuccess = (response: Response): void => {
+        if (settled || !isCurrentResponse(response)) return;
         settled = true;
         cleanup();
         if (state.hasThinkingContent) {
@@ -377,13 +439,30 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       };
 
       const onCompleted = (event: ResponseCompletedEvent): void =>
-        finalize(event.response);
+        finalizeSuccess(event.response);
 
-      const onFailed = (event: ResponseFailedEvent): void =>
-        finalize(event.response);
+      // Failed/incomplete responses must be rejected (not resolved) so the
+      // caller's catch block can run error recovery (e.g., context-window
+      // compaction or clearing previousResponseId).
+      const onFailed = (event: ResponseFailedEvent): void => {
+        if (settled || !isCurrentResponse(event.response)) return;
+        settled = true;
+        cleanup();
+        const errorMsg =
+          event.response.error?.message ?? 'Response failed without details';
+        reject(new Error(`OpenAI WebSocket response failed: ${errorMsg}`));
+      };
 
-      const onIncomplete = (event: ResponseIncompleteEvent): void =>
-        finalize(event.response);
+      const onIncomplete = (event: ResponseIncompleteEvent): void => {
+        if (settled || !isCurrentResponse(event.response)) return;
+        settled = true;
+        cleanup();
+        const reason =
+          event.response.incomplete_details?.reason ?? 'unknown reason';
+        reject(
+          new Error(`OpenAI WebSocket response incomplete: ${reason}`),
+        );
+      };
 
       const onWsError = (error: WebSocketError): void => {
         if (settled) return;
@@ -1638,54 +1717,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
         // State for handling interleaved thinking and web search
         // GPT can: think → web_search → think more → web_search → text
-        const state = {
-          thinkingStream: this.createThinkingStream(),
-          outputStream: this.isOutputStreamingEnabled()
-            ? this.createOutputStream()
-            : null,
-          emittedWebSearchIds: new Set<string>(),
-          hasThinkingContent: false,
-        };
-
-        /** Finalize and reset the thinking stream if it has content. */
-        const rotateThinkingStream = (): void => {
-          if (!state.hasThinkingContent) return;
-          state.thinkingStream.finalize();
-          state.hasThinkingContent = false;
-          state.thinkingStream = this.createThinkingStream();
-        };
+        const state = this.createStreamingEventState();
 
         for await (const event of stream) {
-          if (this.isReasoningDeltaEvent(event)) {
-            state.thinkingStream.append(event.delta);
-            state.hasThinkingContent = true;
-          } else if (this.isTextDeltaEvent(event)) {
-            state.outputStream?.append(event.delta);
-          } else if (this.isWebSearchInProgressEvent(event)) {
-            // Web search starting - finalize current thinking stream
-            // Don't emit placeholder here - wait for output_item.done with full data
-            rotateThinkingStream();
-          } else if (this.isFunctionCallArgumentsDoneEvent(event)) {
-            // Function call arguments complete - finalize streams since no more
-            // text/thinking deltas will arrive after tool calls begin.
-            rotateThinkingStream();
-            this.logger.debug(
-              `Tool call ready during streaming: ${event.name}`,
-            );
-          } else if (this.isOutputItemDoneEvent(event)) {
-            // When output item is done, we can get the full web search data
-            const item = event.item;
-            if (
-              this.isWebSearchItem(item) &&
-              !state.emittedWebSearchIds.has(item.id) &&
-              hasOpenAIWebSearchData(item)
-            ) {
-              // Finalize thinking if we have content (in case in_progress didn't fire)
-              rotateThinkingStream();
-              this.emitOpenAIWebSearch(item);
-              state.emittedWebSearchIds.add(item.id);
-            }
-          }
+          this.processStreamingEvent(event, state);
         }
 
         let response = await stream.finalResponse();
