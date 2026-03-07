@@ -6,9 +6,9 @@ import {
   formatCounts,
   formatGroupedSections,
 } from '@frontend/vscode/vscodeDiagnostics';
+import * as vscodeIntegration from '@frontend/lean/VscodeIntegration';
 import { ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
-import * as vscodeIntegration from './VscodeIntegration';
 
 const LeanDiagnosticsInputSchema = z.strictObject({
   /** Command: list for full messages, count for summary */

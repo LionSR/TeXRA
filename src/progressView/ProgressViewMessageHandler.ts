@@ -42,13 +42,13 @@ import {
   cleanupAllApprovals,
   cleanupApprovalsForStream,
   handleProgressViewBashApprovalAction,
-  handleProgressViewToolEditApprovalAction,
   toggleToolEditApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
   isApprovalBypassedForStream,
   toggleProposalBypass,
   isSuperYoloFeatureEnabled,
 } from '@tools/approval';
+import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/toolEditApprovalUI';
 import {
   createExternalLocation,
   createFileMapping,

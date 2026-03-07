@@ -39,7 +39,7 @@ import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { setExtensionChecker } from '@tools/externalToolDefs';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
-import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
+import { initializeToolEditApproval } from '@frontend/approval/toolEditApprovalUI';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
