@@ -17,7 +17,11 @@ import {
 
 // SETTINGS_VIEW_CMD is defined in commands.ts to avoid circular dependency.
 // Re-exported here for consumers that expect it from the schema module.
-import { AgentCategorySchema, AgentSourceSchema } from './agent';
+import {
+  AgentCategorySchema,
+  AgentMetadataBaseSchema,
+  AgentSourceSchema,
+} from './agent';
 import { AgentModePresetSchema } from './agentPresets';
 import {
   DeleteMemoryMessageSchema,
@@ -119,11 +123,13 @@ export {
 // Agent selection data schema
 // ============================================================
 
-export const AgentSelectionItemSchema = z.object({
-  name: z.string(),
+/**
+ * Agent selection data for the settings view.
+ * Extends AgentMetadataBaseSchema (name, category, description) with
+ * settings-specific fields for UI state.
+ */
+export const AgentSelectionItemSchema = AgentMetadataBaseSchema.extend({
   source: AgentSourceSchema,
-  category: AgentCategorySchema,
-  description: z.string().optional(),
   hasPath: z.boolean(),
   filePath: z.string().optional(),
   tools: z.array(z.string()).optional(),

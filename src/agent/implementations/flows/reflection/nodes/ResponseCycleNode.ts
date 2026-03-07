@@ -10,7 +10,6 @@ import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
 } from '@agent/core/AgentState';
-import { buildCycleServices } from '@agent/core/flows/CycleServices';
 import { formatProviderHttpError } from '@common/errors';
 import type { AgentFileLocation } from '@utils/files';
 
@@ -90,13 +89,20 @@ export class ResponseCycleNode<C = unknown> extends Node<
       };
 
       const flow = createResponseCycleFlow<C>();
-      flow.setServices(
-        await buildCycleServices(this.services, {
-          round: prepRes.round,
-          run: prepRes.run,
-          workspace: prepRes.workspace,
-        }),
-      );
+      const { modelHandler } = this.services;
+      let client = await modelHandler.getClient();
+      flow.setServices({
+        ...this.services,
+        get client() {
+          return client;
+        },
+        async refreshClient() {
+          client = await modelHandler.getClient();
+        },
+        round: prepRes.round,
+        run: prepRes.run,
+        workspace: prepRes.workspace,
+      });
       await flow.run(cycleShared);
 
       if (cycleShared.lastError) {
