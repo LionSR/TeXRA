@@ -250,13 +250,21 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /**
    * Whether WebSocket transport is enabled for this handler.
-   * Incompatible with OpenRouter routing (custom base URL not supported by WS)
-   * and background mode (polling-based, doesn't benefit from persistent connection).
+   *
+   * WebSocket transport connects directly to the OpenAI Responses API via the
+   * official SDK and is incompatible with any non-default base URL, including:
+   * - Server-side keys relay (Supabase Edge Function)
+   * - Improved connection proxy (proxy.texra.ai)
+   * - OpenRouter routing
+   * - Custom per-provider or per-model endpoints
+   *
+   * Also incompatible with background mode (polling-based, doesn't benefit
+   * from persistent connection).
    */
   private isWebSocketModeEnabled(): boolean {
     return (
       getConfig<boolean>('texra.model.useWebSocket', false) &&
-      !this.isOpenRouterRoutingEnabled()
+      this.getBaseUrl() === null
     );
   }
 
