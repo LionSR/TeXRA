@@ -2,11 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports - shared schemas
-import { MainViewPersistedStateSchema } from '@shared/schemas';
 
 // Local imports - agent
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { refresh, computeAgentOptionsData } from '@agent/index';
+import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - common
 import {
@@ -21,6 +20,7 @@ import { consumePendingState } from '@common/state';
 // Local imports - frontend
 import { agentDirectories } from '@frontend/agents';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import { MainViewPersistedStateSchema } from '@shared/schemas';
 import { watchConfig, DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { debounce } from '@utils/core';
 

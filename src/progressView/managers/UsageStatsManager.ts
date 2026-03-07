@@ -1,10 +1,3 @@
-import {
-  emptyUsageStats,
-  sumUsageStats,
-  type StorageKey,
-  type StreamTabId,
-  type TokenUsageStats,
-} from '@shared/schemas';
 import { AgentLogger } from '@logger/AgentLogger';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import {
@@ -12,6 +5,13 @@ import {
   isEmptyUsage,
 } from '@progressView/persistence/streamTabSchemas';
 import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
+import {
+  emptyUsageStats,
+  sumUsageStats,
+  type StorageKey,
+  type StreamTabId,
+  type TokenUsageStats,
+} from '@shared/schemas';
 
 /**
  * Manages usage statistics collection with disk-backed persistence per stream tab.

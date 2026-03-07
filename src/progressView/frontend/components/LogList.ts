@@ -25,12 +25,13 @@ import './TaskGroupList';
 import { postMessage, vscode } from '@shared/vscode';
 
 // Local imports - shared utilities
+import { PersistedState, createWebviewStorage } from '@shared/state';
+import { codiconStyles, designTokens } from '@shared/styles';
+import type { LogMessageData, TaskGroup } from '@shared/schemas';
 import { copyWithFeedback } from '@shared/utils/clipboard';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
-import { PersistedState, createWebviewStorage } from '@shared/state';
 
 // Local imports - shared styles
-import { codiconStyles, designTokens } from '@shared/styles';
 
 // Local imports - progress view constants
 import { COMMANDS } from '../constants';
@@ -53,7 +54,6 @@ import { getProposalInput } from '../formatters/proposalInputStore';
 import type { TaskGroupList } from './TaskGroupList';
 
 // Local imports - shared schemas
-import type { LogMessageData, TaskGroup } from '@shared/schemas';
 
 const LogListStateSchema = z
   .object({

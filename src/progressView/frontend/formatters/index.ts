@@ -4,6 +4,7 @@
  */
 
 // Local imports - formatter helpers
+import type { LogMessageData, MessageType } from '@shared/schemas';
 import { safeFormat, type FormatOptions } from './baseLogFormatter';
 import {
   formatBannerContentTemplate,
@@ -26,7 +27,6 @@ import {
 import { html, type TemplateResult, type FormatResult } from './litTemplates';
 
 // Local imports - shared schemas
-import type { LogMessageData, MessageType } from '@shared/schemas';
 
 type TemplateFormatterFn = (
   message: LogMessageData,

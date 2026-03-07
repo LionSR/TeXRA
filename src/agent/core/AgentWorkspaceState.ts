@@ -1,12 +1,12 @@
 import { z } from 'zod';
 
+import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import {
   TodoItemSchema,
   FileLocationSchema,
   type TodoItem,
   type FileLocation,
 } from '@shared/schemas';
-import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import { FlattenedEditRecordSchema } from '@tools/result';
 import { pathToLocation } from '@utils/files';
 

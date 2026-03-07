@@ -11,14 +11,14 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { badgeStyles, codiconStyles, designTokens } from '@shared/styles';
 
 // Local imports - profile view styles and events
-import { profileViewStyles } from './styles';
-import { ProviderKeyEvents } from './events';
-
-// Local imports - shared schemas
 import type {
   ProviderKeyStatus,
   ProviderVscodeSetting,
 } from '@shared/schemas/settingsViewMessages';
+import { profileViewStyles } from './styles';
+import { ProviderKeyEvents } from './events';
+
+// Local imports - shared schemas
 
 const STATUS_LABELS: Record<ProviderKeyStatus['status'], string> = {
   set: 'Set',

@@ -3,7 +3,6 @@ import stableStringify from 'fast-json-stable-stringify';
 import { z } from 'zod';
 
 // Local imports - core flow primitives
-import { MESSAGE_TYPES } from '@shared/schemas';
 import { isRemoteAgent } from '@agent/index';
 import { BaseNode, BatchNode, Flow } from '@agent/node';
 import { recordCycleMetrics } from '@agent/core/AgentState';
@@ -36,6 +35,7 @@ import { toErrorMessage } from '@common/errors';
 
 // Local imports - logging
 import type { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@shared/schemas';
 // Type imports
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,

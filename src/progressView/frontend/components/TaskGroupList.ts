@@ -18,13 +18,14 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { STREAM_STATUS } from '@shared/schemas';
 
 // Local imports - shared utilities
+import { designTokens, codiconStyles } from '@shared/styles';
+import type { LogMessageData, TaskGroup } from '@shared/schemas';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';
 import { getGettingStartedHtml } from '@shared/utils/uiConstants';
 import { formatDuration } from '@utils/core';
 
 // Local imports - shared styles
-import { designTokens, codiconStyles } from '@shared/styles';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';
@@ -38,8 +39,6 @@ import { playCompletionSound } from '../utils/audioNotification';
 // Local imports - formatters
 import { formatLogEntry } from '../formatters';
 import { getTimeFormatter } from '../formatters/timestampUtils';
-
-import type { LogMessageData, TaskGroup } from '@shared/schemas';
 
 interface GroupTree {
   group: TaskGroup;
@@ -247,9 +246,7 @@ export class TaskGroupList extends LitElement {
   ): void {
     const msgTime = message.timestamp ?? 0;
     const lastTs =
-      target.length > 0
-        ? (target[target.length - 1].timestamp ?? 0)
-        : -Infinity;
+      target.length > 0 ? (target.at(-1).timestamp ?? 0) : -Infinity;
     if (msgTime >= lastTs) {
       target.push(message);
     } else {
@@ -429,7 +426,7 @@ export class TaskGroupList extends LitElement {
       const entry = { key: m.id, time: m.timestamp ?? 0, msg: m };
       const lastTime =
         this.cachedTimeline.length > 0
-          ? this.cachedTimeline[this.cachedTimeline.length - 1].time
+          ? this.cachedTimeline.at(-1).time
           : -Infinity;
       if (entry.time >= lastTime) {
         this.cachedTimeline.push(entry);

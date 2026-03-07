@@ -6,15 +6,15 @@
  * cascade in getExecutionStatusInfo and handleKill.
  */
 
+import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { bus } from '@eventBus/ProgressEventBus';
 import {
   STREAM_STATUS,
   type ActiveChildInfo,
   type StreamTabId,
 } from '@shared/schemas';
-import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { formatDuration } from '@utils/core';
-import { bus } from '@eventBus/ProgressEventBus';
 
 // ============================================================================
 // Status types

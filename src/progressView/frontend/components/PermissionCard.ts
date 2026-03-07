@@ -5,24 +5,9 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - shared
-import { AGENT_CATEGORY } from '@shared/schemas';
-import { getProposalFileGroups } from '@shared/schemas/proposalFields';
-import { getBasename } from '@shared/utils/path';
-import { getTextareaValue } from '@shared/utils/textarea';
-import {
-  FEEDBACK_ELIGIBLE_KINDS,
-  PERMISSION_KIND,
-} from '@shared/utils/uiConstants';
-import { postMessage } from '@shared/vscode';
-import { designTokens } from '@shared/styles/litStyles';
-import { codiconIconClasses } from '@shared/styles/codiconStyles';
-import { permissionCardStyles } from '@shared/styles/permissionCardStyles';
-
-// Local imports - webview commands
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
-
-// Local imports - progress view
-import { ProgressEvents } from '../events';
+import { AGENT_CATEGORY } from '@shared/schemas';
+import { postMessage } from '@shared/vscode';
 import type {
   AgentProposalPermission,
   BashPermission,
@@ -31,6 +16,21 @@ import type {
   ToolEditPermission,
   WorkflowAgentProposalPermission,
 } from '@shared/schemas';
+import { getProposalFileGroups } from '@shared/schemas/proposalFields';
+import { getBasename } from '@shared/utils/path';
+import { getTextareaValue } from '@shared/utils/textarea';
+import {
+  FEEDBACK_ELIGIBLE_KINDS,
+  PERMISSION_KIND,
+} from '@shared/utils/uiConstants';
+import { designTokens } from '@shared/styles/litStyles';
+import { codiconIconClasses } from '@shared/styles/codiconStyles';
+import { permissionCardStyles } from '@shared/styles/permissionCardStyles';
+
+// Local imports - webview commands
+
+// Local imports - progress view
+import { ProgressEvents } from '../events';
 
 // =============================================================================
 // Types

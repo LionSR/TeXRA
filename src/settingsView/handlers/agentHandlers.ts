@@ -10,16 +10,6 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 import {
-  SETTINGS_VIEW_CMD,
-  type SettingsViewInboundMessage,
-  type AgentSelectionItem,
-} from '@shared/schemas/settingsViewMessages';
-import {
-  AGENT_MODE_PRESETS,
-  AgentModePresetSchema,
-  type AgentModePreset,
-} from '@shared/schemas/agentPresets';
-import {
   type AgentEntry,
   createKey,
   deduplicateByName,
@@ -38,6 +28,16 @@ import {
   globalSM,
 } from '@common/state';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import {
+  AGENT_MODE_PRESETS,
+  AgentModePresetSchema,
+  type AgentModePreset,
+} from '@shared/schemas/agentPresets';
+import {
+  SETTINGS_VIEW_CMD,
+  type SettingsViewInboundMessage,
+  type AgentSelectionItem,
+} from '@shared/schemas/settingsViewMessages';
 import { AbsoluteFS } from '@utils/files';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';

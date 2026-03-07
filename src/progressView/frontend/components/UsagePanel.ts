@@ -5,12 +5,12 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
+import type { TokenUsageStats } from '@shared/schemas';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view
 import { formatTokens } from '../formatters/timestampUtils';
 import { ELEMENT_IDS } from '../constants';
-import type { TokenUsageStats } from '@shared/schemas';
 import type { ContextState } from '../store';
 
 /**

@@ -8,6 +8,7 @@
  */
 
 // Local imports - Lit utilities
+import type { LogMessageData } from '@shared/schemas';
 import {
   html,
   unsafeHTML,
@@ -22,7 +23,6 @@ import { processMarkdownContent } from '../markdownRenderer';
 import { buildDetailsSummary } from '../htmlBuilders';
 
 // Local imports - shared schemas
-import type { LogMessageData } from '@shared/schemas';
 
 // Banner configuration by messageType
 const BANNER_CONFIG: Record<

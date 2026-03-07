@@ -10,6 +10,10 @@
  */
 
 // Slice imports
+import type {
+  ProgressViewOutboundMessage,
+  ProgressViewPlacement,
+} from '@shared/schemas';
 import { streamLifecycleHandlers } from './slices/streamLifecycleSlice';
 import { logHandlers } from './slices/logSlice';
 import { streamMetaHandlers } from './slices/streamMetaSlice';
@@ -20,10 +24,6 @@ import { followUpHandlers } from './slices/followUpSlice';
 import { syncHandlers } from './slices/syncSlice';
 import { uiHandlers } from './slices/uiSlice';
 
-import type {
-  ProgressViewOutboundMessage,
-  ProgressViewPlacement,
-} from '@shared/schemas';
 import type { FrontendEventHandlerContext } from './eventHandlers';
 import type { PermissionState } from './components/PermissionCard';
 

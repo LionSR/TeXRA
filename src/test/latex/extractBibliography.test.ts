@@ -3,12 +3,12 @@ import * as assert from 'assert';
 import * as path from 'path';
 
 // Local imports - latex helpers
-import { WorkspaceFS } from '@utils/files';
 import {
   extractBibliographyContext,
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
+import { WorkspaceFS } from '@utils/files';
 
 // Local imports - utils
 

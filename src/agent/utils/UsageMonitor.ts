@@ -1,23 +1,23 @@
 // Local imports
-import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Internal imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentRunStateSnapshot } from '@agent/core/AgentState';
 import type { RunUsageTotals } from '@agent/core/RunUsageAccumulator';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   UsageLogService,
   type AgentLogger,
   type AgentUsageReporter,
 } from '@logger/index';
-import type { ModelCapabilities, ModelConfig } from 'llm-zoo';
 import type {
   ExtendedTokenUsageStats,
   StorageKey,
   StreamTabId,
   TokenUsageStats,
 } from '@shared/schemas';
+import type { ModelCapabilities, ModelConfig } from 'llm-zoo';
 
 /**
  * Optional metadata for usage logging.
