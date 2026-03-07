@@ -17,8 +17,6 @@ import {
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
 import { WebviewBridge } from '@progressView/managers/WebviewBridge';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
-import { isApprovalBypassedForStream } from '@tools/approval/toolEditApproval';
-import { isProposalBypassedForStream } from '@tools/approval/proposalApproval';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 import { ProgressEventHandler } from './events/ProgressEventHandler';
@@ -312,10 +310,6 @@ export class ProgressViewProvider
     }
 
     this._pendingUpdateOptions = null;
-
-    if (this.canSendToWebview()) {
-      this.sendBypassStates(activeStream);
-    }
   }
 
   public markWebviewReady(
@@ -373,18 +367,6 @@ export class ProgressViewProvider
     return this.isActivePlacementReady() && this.webviewUpdater.isAvailable();
   }
 
-  private sendBypassStates(streamId: StreamTabId): void {
-    this.webviewUpdater.updateBypassState(
-      streamId,
-      'toolEdit',
-      isApprovalBypassedForStream(streamId),
-    );
-    this.webviewUpdater.updateBypassState(
-      streamId,
-      'superYolo',
-      isProposalBypassedForStream(streamId),
-    );
-  }
 
   public async cleanupTasksAfterRestart(
     waitingStreams?: Set<StreamTabId>,
@@ -433,8 +415,7 @@ export class ProgressViewProvider
     if (!this.canSendToWebview()) return;
 
     this.webviewUpdater.setActiveStream(streamId);
-    this.sendBypassStates(streamId);
-    // Hydrate content (logs, todos, follow-ups, instruction) + active-state metadata
+    // Hydrate content (logs, todos, follow-ups, instruction, bypass state) + active-state metadata
     this.eventHandler.syncStreamContent(streamId, { includeActiveState: true });
   }
 
