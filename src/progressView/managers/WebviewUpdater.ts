@@ -74,6 +74,9 @@ export interface SyncStreamContentPayload {
     finishedProcessCount: StreamExecutionState['finishedProcessCount'];
   };
   parentStreamId?: StreamTabId;
+  /** Toggle bypass state (hydrated on tab switch so toggles display correctly). */
+  toolEditBypass?: boolean;
+  superYoloBypass?: boolean;
 }
 
 /**
