@@ -12,6 +12,48 @@ import * as vscode from 'vscode';
 import { MODELS, MODEL_CONFIGS, type ReasoningEffort } from 'llm-zoo';
 
 // Shared schemas and dispatchers
+import { getAgentsBySource, loadAgents } from '@agent/index';
+import {
+  getExecutionStore,
+  listExecutions,
+  deleteExecution,
+  deleteAllExecutions,
+} from '@agent/storage';
+import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
+import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
+import { getHelperModelName } from '@agent/runtime/helperModel';
+import { LEVEL_TO_EFFORT } from '@agent/runtime/ModelFactory';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { ULTRA_TIER, MAX_TIER } from '@auth/config';
+import { AUTH_COMMANDS } from '@auth/constants';
+import { getServerSideKeyService } from '@auth/serverKeys';
+import { runExecuteCommand } from '@commands/agent/executeCommand';
+import {
+  formatChatAsMarkdown,
+  formatChatAsLatex,
+  generateExportFilename,
+  type ChatExportInput,
+} from '@commands/history/chatExportFormatter';
+import {
+  BaseViewMessageHandler,
+  SETTINGS_VIEW_COMMANDS,
+} from '@common/webview';
+import { showLoggedErrorMessage } from '@common/errors';
+import {
+  GlobalStateKey,
+  WorkspaceStateKey,
+  globalSM,
+  workspaceSM,
+} from '@common/state';
+import { SecretManager, type ApiProvider } from '@frontend/secretManager';
+import { selectAgentInMainView } from '@frontend/agents/remoteAgentUtils';
+import { compileLatex2Pdf } from '@latex/texTools';
+import {
+  DEFAULT_MODELS,
+  formatContext,
+  formatCost,
+} from '@model/computeModelOptions';
+import type { ExecutionId } from '@shared/schemas';
 import {
   dispatchSettingsViewInbound,
   type SettingsViewInboundHandlerRegistry,
@@ -28,39 +70,12 @@ import {
   PROVIDER_URLS,
   PROVIDER_VSCODE_SETTINGS,
 } from '@shared/constants/providers';
-import { SupabaseClient } from '@auth/SupabaseClient';
-import { ULTRA_TIER, MAX_TIER } from '@auth/config';
-import { AUTH_COMMANDS } from '@auth/constants';
-import { getServerSideKeyService } from '@auth/serverKeys';
-import { getAgentsBySource, loadAgents } from '@agent/index';
-import {
-  getExecutionStore,
-  listExecutions,
-  deleteExecution,
-  deleteAllExecutions,
-} from '@agent/storage';
-import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
-import { getHelperModelName } from '@agent/runtime/helperModel';
-import { LEVEL_TO_EFFORT } from '@agent/runtime/ModelFactory';
-import {
-  BaseViewMessageHandler,
-  SETTINGS_VIEW_COMMANDS,
-} from '@common/webview';
-import { showLoggedErrorMessage } from '@common/errors';
-import {
-  GlobalStateKey,
-  WorkspaceStateKey,
-  globalSM,
-  workspaceSM,
-} from '@common/state';
-import { SecretManager, type ApiProvider } from '@frontend/secretManager';
-import { selectAgentInMainView } from '@frontend/agents/remoteAgentUtils';
-import {
-  DEFAULT_MODELS,
-  formatContext,
-  formatCost,
-} from '@model/computeModelOptions';
+import type {
+  RemoteAgent,
+  ProviderKeyStatus,
+  ProviderVscodeSetting,
+  NumberVscodeSetting,
+} from '@shared/schemas/profileViewMessages';
 import {
   _disableAllProposalBypasses,
   setToolEditApprovalSessionBypass,
@@ -83,25 +98,10 @@ import {
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
-import { runExecuteCommand } from '@commands/agent/executeCommand';
-import {
-  formatChatAsMarkdown,
-  formatChatAsLatex,
-  generateExportFilename,
-  type ChatExportInput,
-} from '@commands/history/chatExportFormatter';
-import { compileLatex2Pdf } from '@latex/texTools';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
-import type {
-  RemoteAgent,
-  ProviderKeyStatus,
-  ProviderVscodeSetting,
-  NumberVscodeSetting,
-} from '@shared/schemas/profileViewMessages';
-import type { ExecutionId } from '@shared/schemas';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 
 // Type helper for extracting specific message types
@@ -919,9 +919,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         // Open Markdown file
         const doc = await vscode.workspace.openTextDocument(absolutePath);
         await vscode.window.showTextDocument(doc, { preview: false });
-        void vscode.window.showInformationMessage(
-          `Chat exported: ${filename}`,
-        );
+        void vscode.window.showInformationMessage(`Chat exported: ${filename}`);
       }
     } catch (error) {
       await showLoggedErrorMessage(

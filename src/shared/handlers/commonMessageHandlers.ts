@@ -1,8 +1,8 @@
+import { COMMON_COMMANDS } from '@common/webview/commands';
 import {
   CommonViewMessageSchema,
   type StateRestoreMessage,
 } from '@shared/schemas/commonViewMessages';
-import { COMMON_COMMANDS } from '@common/webview/commands';
 import type { ZodError } from 'zod';
 
 export interface CommonMessageContext {

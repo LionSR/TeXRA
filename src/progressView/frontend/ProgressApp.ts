@@ -10,6 +10,10 @@ import { classMap } from 'lit/directives/class-map.js';
 import { z } from 'zod';
 
 // Local imports - shared webview
+import {
+  COMMON_COMMANDS,
+  PROGRESS_VIEW_COMMANDS,
+} from '@common/webview/commands';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage, vscode } from '@shared/vscode';
 import { PersistedState, createWebviewStorage } from '@shared/state';
@@ -23,8 +27,6 @@ import {
   type StreamTabId,
   type TaskGroup,
 } from '@shared/schemas';
-import { getEffectiveRunId } from '@shared/streams/runSelection';
-import { sortStreams, StreamSortSchema } from '@shared/streams/streamSort';
 import {
   SignalWatcher,
   signal,
@@ -32,13 +34,11 @@ import {
   select,
   combine,
 } from '@shared/signals';
+import { getEffectiveRunId } from '@shared/streams/runSelection';
+import { sortStreams, StreamSortSchema } from '@shared/streams/streamSort';
 import { codiconStyles } from '@shared/styles/codiconStyles';
 
 // Local imports - webview commands
-import {
-  COMMON_COMMANDS,
-  PROGRESS_VIEW_COMMANDS,
-} from '@common/webview/commands';
 
 // Local imports - progress view frontend
 import { STREAM_STATUS } from './constants';

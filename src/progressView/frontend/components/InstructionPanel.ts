@@ -5,16 +5,16 @@ import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { CopyButtonController } from '@shared/controllers';
+import type { InstructionUpdate } from '@shared/schemas';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared controllers
-import { CopyButtonController } from '@shared/controllers';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
 
 // Local imports - shared schemas
-import type { InstructionUpdate } from '@shared/schemas';
 
 @customElement('instruction-panel')
 export class InstructionPanel extends LitElement {

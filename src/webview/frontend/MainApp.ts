@@ -4,6 +4,7 @@ import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
+import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { SignalWatcher, signal, Signal } from '@shared/signals';
 
 // Local imports - shared webview
@@ -12,12 +13,7 @@ import { postMessage, vscode } from '@shared/vscode';
 import { PersistedState, createWebviewStorage } from '@shared/state';
 
 // Local imports - shared utilities
-import { capitalize } from '@shared/utils/string';
-
-// Local imports - shared styles
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
-
-// Local imports - shared schemas (Zod-derived types)
 import {
   mainViewMessages,
   MainViewPersistedStateSchema,
@@ -33,12 +29,36 @@ import {
   type MultiFiles,
   type MultiFilesVisible,
   type CheckboxValues,
+  type ActionDetail,
+  type AgentChangeDetail,
+  type BannerActionDetail,
+  type BaseFileChangeDetail,
+  type CheckboxChangeDetail,
+  type CommitChangeDetail,
+  type EditedFileChangeDetail,
+  type FileActionDetail,
+  type FileSelectChangeDetail,
+  type FocusInstructionDetail,
+  type InstallGuideDetail,
+  type InstructionChangeDetail,
+  type LatexDiffsActionDetail,
+  type LatexDiffsToggleDetail,
+  type ModelChangeDetail,
+  type MultipleFilesActionDetail,
+  type MultipleFilesTypeActionDetail,
+  type ReorderFilesDetail,
+  type RemoveFileDetail,
+  type SessionTypeChangeDetail,
 } from '@shared/schemas';
-
-// Local imports - webview commands
-import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
+import { capitalize } from '@shared/utils/string';
 
 // Local imports - main view
+import './components/FileSelectGroup';
+import './components/BannerGroup';
+import './components/LatexDiffsSection';
+import './components/InstructionPanel';
+import './components/OutputFilesSection';
 import {
   ELEMENT_IDS,
   FILE_TYPES,
@@ -49,29 +69,17 @@ import {
   type SessionType,
   parseSessionType,
 } from './constants';
-import { SESSION_DEFAULTS } from './sessionDefaults';
-import { mainViewStyles } from './styles';
-import {
-  dispatchMainViewMessage,
-  type MainViewHandlerRegistry,
-} from './mainViewDispatcher';
-
-// Local imports - main view components (side-effect imports to register custom elements)
-import './components/FileSelectGroup';
-import './components/BannerGroup';
-import './components/LatexDiffsSection';
-import './components/InstructionPanel';
-import './components/OutputFilesSection';
-
-// Local imports - main view contexts
 import {
   fileStateContext,
   sessionContext,
   type FileStateContextValue,
   type SessionContextValue,
 } from './contexts/mainViewContexts';
-
-// Local imports - main view store (typed defaults)
+import {
+  dispatchMainViewMessage,
+  type MainViewHandlerRegistry,
+} from './mainViewDispatcher';
+import { SESSION_DEFAULTS } from './sessionDefaults';
 import {
   DEFAULT_STATE,
   DEFAULT_SINGLE_FILES,
@@ -89,32 +97,8 @@ import {
   ONBOARDING_PLACEHOLDERS,
   FILE_SELECT_CONFIGS,
 } from './store';
+import { mainViewStyles } from './styles';
 import type { VscTabsSelectEvent } from '@vscode-elements/elements/dist/vscode-tabs/vscode-tabs.js';
-
-// Type imports
-import type {
-  ActionDetail,
-  AgentChangeDetail,
-  BannerActionDetail,
-  BaseFileChangeDetail,
-  CheckboxChangeDetail,
-  CommitChangeDetail,
-  EditedFileChangeDetail,
-  FileActionDetail,
-  FileSelectChangeDetail,
-  FocusInstructionDetail,
-  InstallGuideDetail,
-  InstructionChangeDetail,
-  LatexDiffsActionDetail,
-  LatexDiffsToggleDetail,
-  ModelChangeDetail,
-  MultipleFilesActionDetail,
-  MultipleFilesTypeActionDetail,
-  ReorderFilesDetail,
-  RemoveFileDetail,
-  SessionTypeChangeDetail,
-} from '@shared/schemas';
-import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 
 // Helper type for extracting specific message type from union
 type MainViewMessageFor<C extends MainViewMessage['command']> = Extract<

@@ -20,14 +20,14 @@
 
 import * as path from 'path';
 
+import { KVStore } from '@common/storage';
+
 import type {
   InstructionUpdate,
   OutputFileInfo,
   StreamTabId,
   TokenUsageStats,
 } from '@shared/schemas';
-import { KVStore } from '@common/storage';
-
 import {
   StreamTabMetaSchema,
   OutputFilesDataSchema,

@@ -11,9 +11,6 @@
 import { z } from 'zod';
 
 // Local imports - shared utilities
-import { getBasename } from '@shared/utils/path';
-
-// Local imports - shared schemas
 import {
   ExtendedTokenUsageStatsSchema,
   FileListEntrySchema,
@@ -22,6 +19,9 @@ import {
   type ExtendedTokenUsageStats,
   type LogMessageData,
 } from '@shared/schemas';
+import { getBasename } from '@shared/utils/path';
+
+// Local imports - shared schemas
 import { html, ifDefined, type FormatResult } from '../litTemplates';
 
 // Local imports - formatter helpers

@@ -1,21 +1,5 @@
 import { z } from 'zod';
 
-import {
-  AgentCategoryFilterSchema,
-  ContextStateDataSchema,
-  TodoItemSchema,
-  type ActiveChildInfo,
-  type AgentCategoryFilter,
-  type ConversationProgress,
-  type ContextStateData,
-  type StreamTabId,
-  type TodoItem,
-} from '@shared/schemas';
-import { StreamSortSchema, type StreamSort } from '@shared/streams/streamSort';
-import {
-  PersistedState,
-  createBackendStorage,
-} from '@shared/state/PersistedState';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
@@ -34,6 +18,22 @@ import {
   needsMigrationFromMemento,
   migrateFromMemento,
 } from '@progressView/persistence/mementoMigration';
+import {
+  AgentCategoryFilterSchema,
+  ContextStateDataSchema,
+  TodoItemSchema,
+  type ActiveChildInfo,
+  type AgentCategoryFilter,
+  type ConversationProgress,
+  type ContextStateData,
+  type StreamTabId,
+  type TodoItem,
+} from '@shared/schemas';
+import {
+  PersistedState,
+  createBackendStorage,
+} from '@shared/state/PersistedState';
+import { StreamSortSchema, type StreamSort } from '@shared/streams/streamSort';
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
 export const StreamHintsSchema = z.object({

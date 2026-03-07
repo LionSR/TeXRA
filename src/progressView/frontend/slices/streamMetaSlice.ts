@@ -5,8 +5,8 @@
 
 import { create } from 'mutative';
 
-import { STREAM_STATUS } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { STREAM_STATUS } from '@shared/schemas';
 
 import { getStreamState, isToolUseState } from '../store';
 import type { HandlerRegistry } from '../messageDispatcher';

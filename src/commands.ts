@@ -2,7 +2,6 @@
 import * as vscode from 'vscode';
 
 // Local imports - commands
-import * as logger from '@logger/logUtils';
 import {
   registerFileSelectionCommands,
   registerOpenFileCommands,
@@ -45,6 +44,7 @@ import { registerAuthCommands } from '@commands/auth';
 import { registerApiKeyCommands } from '@commands/api/apiKeyCommands';
 import { registerGitCommands } from '@commands/git/gitCommands';
 import { registerProgressViewCommands } from '@commands/progress/progressViewCommands';
+import * as logger from '@logger/logUtils';
 
 // Local file imports
 import { MainViewProvider } from './MainViewProvider';

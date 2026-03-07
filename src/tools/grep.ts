@@ -94,7 +94,7 @@ export function buildArguments(
     if (input['-n']) args.push('-n');
     for (const flag of ['-A', '-B', '-C'] as const) {
       const value = input[flag];
-      // eslint-disable-next-line eqeqeq -- nullish check for .nullish() schema fields
+
       if (value != null) args.push(flag, String(value));
     }
   }

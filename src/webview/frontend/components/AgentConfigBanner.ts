@@ -15,11 +15,11 @@ import { customElement, property } from 'lit/decorators.js';
 import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
 
 // Local imports - shared banner styles
+import type { AgentConfigBannerState } from '@shared/schemas';
 import { warningBannerStyles } from '../styles/warningBannerStyles';
 
 // Local imports - main view events and schemas
 import { MainViewEvents } from '../events';
-import type { AgentConfigBannerState } from '@shared/schemas';
 
 @customElement('agent-config-banner')
 export class AgentConfigBanner extends LitElement {

@@ -3,10 +3,10 @@ import { strict as assert } from 'assert';
 
 // Local imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentLogger } from '@logger/AgentLogger';
 import { bus } from '@eventBus/ProgressEventBus';
-import { AgentUsageReporter } from '@/logger/AgentUsageReporter';
+import type { AgentLogger } from '@logger/AgentLogger';
 import type { ExtendedTokenUsageStats, StorageKey } from '@shared/schemas';
+import { AgentUsageReporter } from '@/logger/AgentUsageReporter';
 
 describe('AgentUsageReporter', () => {
   /**

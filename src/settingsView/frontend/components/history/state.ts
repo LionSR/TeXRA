@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 // Local imports - shared state
 import { vscode } from '@shared/vscode';
-import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { PersistedState, createWebviewStorage } from '@shared/state';
+import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 
 const HistoryViewStateSchema = z.object({
   searchIndex: z.number().catch(0),

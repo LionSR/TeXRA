@@ -12,6 +12,7 @@ import replacementEngine, {
   getReplacementsByCategory,
 } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
+import type { OutputFileInfo } from '@shared/schemas';
 import {
   AbsoluteFS,
   getFileDirectory,
@@ -27,7 +28,6 @@ import {
   extractDocument,
   extractDocuments,
 } from '@utils/text/xmlUtils';
-import type { OutputFileInfo } from '@shared/schemas';
 
 /** Global version of DOCUMENT_NAME_REGEX for counting matches */
 const DOCUMENT_NAME_REGEX_GLOBAL = new RegExp(DOCUMENT_NAME_REGEX.source, 'g');

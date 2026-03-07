@@ -15,6 +15,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import {
   codiconIconClasses,
   commonViewStyles,
@@ -24,23 +25,22 @@ import {
 } from '@shared/styles';
 
 // Local imports - shared utils
-import { renderModelOptions } from '@shared/utils/selectTemplates';
-
-// Local imports - shared schemas
 import {
   AGENT_CATEGORY,
   type AgentProposalPermission,
   type WorkflowAgentProposalPermission,
 } from '@shared/schemas';
+import { postMessage } from '@shared/vscode';
+import { renderModelOptions } from '@shared/utils/selectTemplates';
+
+// Local imports - shared schemas
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 
 // Local imports - shared utilities
 import { getBasename } from '@shared/utils/path';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import { postMessage } from '@shared/vscode';
 
 // Local imports - webview commands
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';

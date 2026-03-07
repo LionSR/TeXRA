@@ -13,21 +13,15 @@ import {
 import { customElement, property, queryAll, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-// Local imports - shared styles
-import { designTokens, commonViewStyles } from '@shared/styles';
-import { historyViewStyles } from './styles';
-
-// Local imports - history view components (side-effect: register)
-import './HistoryItem';
-
-// Local imports - history view events
-import { HistoryViewEvents } from './events';
-
-// Local imports - history view state
-import type { HistoryViewState } from './state';
-
-// Local imports - shared schemas
+// Local imports - shared
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
+import { designTokens, commonViewStyles } from '@shared/styles';
+
+// Local imports - history view
+import { HistoryViewEvents } from './events';
+import './HistoryItem';
+import { historyViewStyles } from './styles';
+import type { HistoryViewState } from './state';
 
 /** Search navigation action (reactive trigger from parent) */
 export type SearchAction = 'next' | 'prev' | null;

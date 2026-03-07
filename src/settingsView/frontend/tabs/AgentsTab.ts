@@ -18,11 +18,11 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - events
-import { AgentSelectionEvents } from '../components/profile/events';
 
 // Local imports - shared schemas
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
+import { AgentSelectionEvents } from '../components/profile/events';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/AgentSelectionPanel';

@@ -10,12 +10,12 @@
  * showing appropriate UI notifications based on the returned result.
  */
 
-import { STREAM_STATUS } from '@shared/schemas';
 import { getToolUseFlowContext } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { AgentLogger } from '@logger/AgentLogger';
-import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
+import { STREAM_STATUS } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
+import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
 
 /**
  * Result of sending a follow-up message to a tool-use session.

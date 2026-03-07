@@ -10,6 +10,7 @@
 // Local imports - agent types
 
 // Local file imports - individual approval modules
+import type { StreamTabId } from '@shared/schemas';
 import {
   _rejectAllPendingBashApprovals,
   _rejectPendingBashApprovalsForStream,
@@ -25,7 +26,6 @@ import {
   _clearProposalBypassForStream,
   _disableAllProposalBypasses,
 } from './proposalApproval';
-import type { StreamTabId } from '@shared/schemas';
 
 /**
  * Clean up all approval state for a deleted stream.

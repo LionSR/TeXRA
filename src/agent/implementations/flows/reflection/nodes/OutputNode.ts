@@ -12,10 +12,10 @@ import {
 } from '@agent/output/roundSummary';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { toErrorMessage } from '@common/errors';
-import type { AgentFileLocation, FileLocation } from '@utils/files';
-import { flexibleFS } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
 import type { RoundOutput } from '@shared/schemas';
+import type { AgentFileLocation, FileLocation } from '@utils/files';
+import { flexibleFS } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type {

@@ -2,13 +2,13 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { STREAM_STATUS } from '@shared/schemas';
 import {
   getInterruptible,
   getToolUseFlowContext,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { interruptActiveChildren } from '@agent/runtime/executionRegistry';
+import { STREAM_STATUS } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
 
 export function registerAgentCommands(context: vscode.ExtensionContext): void {

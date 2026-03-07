@@ -1,8 +1,4 @@
 // Local imports - shared schemas
-import {
-  MainViewPersistedStateSchema,
-  type MainViewPersistedState,
-} from '@shared/schemas';
 
 // Local imports - agent registry
 import { resolveAgentKey } from '@agent/index';
@@ -13,6 +9,10 @@ import {
   isWorkflowTaskState,
   type TaskState,
 } from '@logger/TaskState';
+import {
+  MainViewPersistedStateSchema,
+  type MainViewPersistedState,
+} from '@shared/schemas';
 
 /** Convert a TaskState payload into a full main view state snapshot. */
 export function buildMainViewState(
