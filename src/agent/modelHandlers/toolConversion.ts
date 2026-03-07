@@ -130,10 +130,11 @@ interface AnthropicToolOptions {
   /** Whether the model supports native web fetch. Defaults to false. */
   supportsNativeWebFetch?: boolean;
   /**
-   * Whether to use dynamic filtering tool versions (20260209) for web_search
-   * and web_fetch. These versions let Claude write code to filter results
-   * before they enter context, but require code execution container support.
-   * Defaults to false (uses stable 20250305/20250910 versions).
+   * Whether to enable dynamic filtering for web_search and web_fetch.
+   * When true, Claude can write code to filter results before they enter
+   * context (requires a code execution container).
+   * When false (default), tools use allowed_callers: ['direct'] to bypass
+   * code execution, avoiding the container_id requirement.
    */
   useDynamicFiltering?: boolean;
 }

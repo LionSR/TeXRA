@@ -93,9 +93,11 @@ export function supportsCustomEndpoint(provider: string): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Whether Anthropic web_search/web_fetch should use dynamic filtering
- * (20260209 tool versions). Requires code execution container support.
- * Defaults to false — uses stable 20250305/20250910 versions instead.
+ * Whether Anthropic web_search/web_fetch should use dynamic filtering.
+ * When true, Claude can write code to filter fetched content before it
+ * enters context (requires code execution container support).
+ * Defaults to false — tools use allowed_callers: ['direct'] to bypass
+ * code execution and avoid the container_id requirement.
  */
 export function getAnthropicDynamicFiltering(): boolean {
   return (
