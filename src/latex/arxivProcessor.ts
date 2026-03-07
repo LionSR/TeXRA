@@ -11,10 +11,10 @@ import * as tar from 'tar';
 
 // Local imports - log
 import { toErrorMessage } from '@common/errors';
+import { indentLatexFilesInDirectory } from '@housekeeping/indent';
 import * as logger from '@logger/logUtils';
 import { normaliseArxivIdentifier } from '@tools/latex/arxivShared';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
-import { indentLatexFilesInDirectory } from '@housekeeping/indent';
 
 export interface ExtractResult {
   success: boolean;

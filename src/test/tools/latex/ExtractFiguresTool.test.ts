@@ -2,9 +2,9 @@
 import * as assert from 'assert';
 
 // Local imports - tools
+import * as figureModule from '@latex/extractFigure';
 import { ExtractLatexFiguresTool } from '@tools/latex';
 import { WorkspaceFS } from '@utils/files';
-import * as figureModule from '@latex/extractFigure';
 
 describe('ExtractLatexFiguresTool', () => {
   const originalExtract = figureModule.extractFigurePathsFromLatex;

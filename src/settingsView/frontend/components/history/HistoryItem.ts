@@ -16,6 +16,7 @@ import {
   commonViewStyles,
   designTokens,
 } from '@shared/styles';
+import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
 
 // Local imports - history view styles
@@ -25,7 +26,6 @@ import { historyViewStyles } from './styles';
 import { HistoryViewEvents } from './events';
 
 // Local imports - shared schemas
-import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 
 type ConfigValue = string | number | boolean | string[] | null | undefined;
 

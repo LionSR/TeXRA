@@ -8,6 +8,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
+import type { MemoryViewItem } from '@shared/schemas';
 import {
   formatBytes,
   formatLineCount,
@@ -18,7 +19,6 @@ import {
 import { MemoryViewEvents } from './events';
 
 // Local imports - shared schemas
-import type { MemoryViewItem } from '@shared/schemas';
 
 @customElement('memory-item')
 export class MemoryItem extends LitElement {

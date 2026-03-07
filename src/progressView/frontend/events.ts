@@ -3,9 +3,9 @@
  * Both dispatch and handler sides use these types.
  */
 
+import type { StringValueDetail } from '@shared/schemas';
 import { createEvent } from '@shared/utils/events';
 
-import type { StringValueDetail } from '@shared/schemas';
 import type { FollowupFormData } from './components/FollowupSection';
 import type { PermissionState } from './components/PermissionCard';
 import type { FollowupMode, StreamFilter, StreamSort } from './store';

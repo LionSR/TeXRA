@@ -3,8 +3,8 @@
  */
 
 // Local imports - shared schemas
-import { getBasename } from '@shared/utils/path';
 import type { LogLevel } from '@shared/schemas';
+import { getBasename } from '@shared/utils/path';
 
 // Local imports - shared utilities
 

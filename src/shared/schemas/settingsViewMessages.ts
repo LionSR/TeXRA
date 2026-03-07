@@ -7,16 +7,16 @@
 import { z } from 'zod';
 
 import {
+  SETTINGS_VIEW_CMD,
+  SETTINGS_VIEW_COMMANDS,
+} from '@common/webview/commands';
+import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 
 // SETTINGS_VIEW_CMD is defined in commands.ts to avoid circular dependency.
 // Re-exported here for consumers that expect it from the schema module.
-import {
-  SETTINGS_VIEW_CMD,
-  SETTINGS_VIEW_COMMANDS,
-} from '@common/webview/commands';
 import { AgentCategorySchema, AgentSourceSchema } from './agent';
 import { AgentModePresetSchema } from './agentPresets';
 import {

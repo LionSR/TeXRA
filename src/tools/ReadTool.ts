@@ -34,7 +34,7 @@ const RangeSchema = z.preprocess(
       start: z.int().min(1),
       end: z.int().min(1).nullish(),
     })
-    // eslint-disable-next-line eqeqeq -- nullish check (null or undefined)
+
     .refine((value) => value.end == null || value.end >= value.start, {
       path: ['end'],
       error: 'range.end must be greater than or equal to range.start',
@@ -182,11 +182,10 @@ export class ReadFileTool extends defineTool({
     requestedStartLine: number,
     totalLines: number,
   ): number {
-    // eslint-disable-next-line eqeqeq -- nullish check (null or undefined)
     if (range?.end != null) {
       return range.end;
     }
-    // eslint-disable-next-line eqeqeq -- nullish check (null or undefined)
+
     if (range?.start != null) {
       return Math.min(requestedStartLine + READ_FILE_MAX_LINES - 1, totalLines);
     }

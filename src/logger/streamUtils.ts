@@ -1,7 +1,7 @@
 import { getCleanAgentName, getMultipleName } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { generateExecutionId } from '@utils/core/executionId';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { generateExecutionId } from '@utils/core/executionId';
 
 export function getStreamTabId(
   agent: string,

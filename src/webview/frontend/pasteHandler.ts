@@ -2,12 +2,12 @@
 import { nanoid } from 'nanoid';
 
 // Local imports - shared utilities
-import { insertTextAtCursor } from '@shared/utils/textarea';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { postMessage } from '@shared/vscode';
+import { insertTextAtCursor } from '@shared/utils/textarea';
 import { PASTED_PREFIX } from '@shared/files/pastedImageConstants';
 
 // Local imports - webview commands
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 const IMAGE_MIME_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',

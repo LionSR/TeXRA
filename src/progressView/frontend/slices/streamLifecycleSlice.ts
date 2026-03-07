@@ -7,12 +7,12 @@
 
 import { create } from 'mutative';
 
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import {
   createStreamState,
   type StreamMetadata,
   type StreamTabInfo,
 } from '@shared/schemas';
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 import { firstStreamId, type ProgressState, type StreamState } from '../store';
 import { clearResolvedProposalIds } from './permissionSlice';

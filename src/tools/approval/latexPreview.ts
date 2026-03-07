@@ -8,10 +8,10 @@ import fs from 'fs/promises';
 import path from 'path';
 
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+import { TEMP_EXTENSIONS } from '@housekeeping/constants';
+import { LaTeXdiffService } from '@latex/latexdiff';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS, pathToLocation } from '@utils/files';
-import { LaTeXdiffService } from '@latex/latexdiff';
-import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 
 /** Interface for entries that support LaTeX preview operations */
 export interface LatexPreviewEntry {

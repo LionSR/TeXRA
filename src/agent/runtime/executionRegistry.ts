@@ -6,6 +6,7 @@
  */
 
 import { bus } from '@eventBus/ProgressEventBus';
+import type { StreamTabId } from '@shared/schemas';
 import {
   type ExecutionHandle,
   AgentExecutionHandle,
@@ -14,7 +15,6 @@ import {
   emitActiveProcessesUpdate,
   interruptActiveChildren as interruptActiveChildrenImpl,
 } from './ExecutionHandle';
-import type { StreamTabId } from '@shared/schemas';
 
 export type { ExecutionHandle } from './ExecutionHandle';
 export {

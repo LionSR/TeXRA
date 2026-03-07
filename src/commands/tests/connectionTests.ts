@@ -3,11 +3,11 @@ import * as vscode from 'vscode';
 
 // Local imports - utilities
 import { showLoggedErrorMessage } from '@common/errors';
-import * as logger from '@logger/logUtils';
 import {
   bestConnectionMethod,
   bestConnectionMethodAnthropic,
 } from '@latex/textConnection';
+import * as logger from '@logger/logUtils';
 
 // Local imports - log
 

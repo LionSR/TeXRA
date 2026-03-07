@@ -1,7 +1,7 @@
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import type { FileLocation } from '@utils/files';
 import { getTeXCountStats } from '@latex';
+import type { FileLocation } from '@utils/files';
 
 import { getFilesForRound } from '../helpers';
 import type { ReflectionFlowShared } from '../ReflectionFlowState';

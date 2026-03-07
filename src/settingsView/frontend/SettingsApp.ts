@@ -8,6 +8,7 @@ import { html, css, type TemplateResult } from 'lit';
 import { customElement, query } from 'lit/decorators.js';
 
 // Local imports - shared webview
+import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/vscode';
 
@@ -51,15 +52,14 @@ import {
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 // Local imports - settings view commands
-import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - settings view styles
+import type { AgentCategory } from '@shared/schemas/agent';
+import type { AgentModePreset } from '@shared/schemas/agentPresets';
 import { settingsViewStyles } from './styles';
 import type { VscTabsSelectEvent } from '@vscode-elements/elements/dist/vscode-tabs/vscode-tabs.js';
 
 // Local imports - shared schema types
-import type { AgentCategory } from '@shared/schemas/agent';
-import type { AgentModePreset } from '@shared/schemas/agentPresets';
 
 // Local imports - settings view tabs (side-effect: register)
 import './tabs/MemoryTab';

@@ -22,10 +22,10 @@ import {
 } from '@shared/styles';
 
 // Local imports - base class
+import type { ToolEditPermission } from '@shared/schemas';
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
 // Local imports - shared schemas
-import type { ToolEditPermission } from '@shared/schemas';
 
 @customElement('tool-edit-request-panel')
 export class ToolEditRequestPanel extends BaseFeedbackPanel {

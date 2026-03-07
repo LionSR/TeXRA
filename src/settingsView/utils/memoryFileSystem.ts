@@ -8,6 +8,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 
+import type { MemoryViewItem } from '@shared/schemas/settingsViewMessages';
 import {
   MEMORY_STORAGE_ROOT,
   MAX_PREVIEW_LINES,
@@ -18,7 +19,6 @@ import { relativeToDisplayPath } from '@tools/memory/memoryUtils';
 import { parseFrontmatter, formatAttribution } from '@tools/memory/memoryMeta';
 import { StorageFS } from '@utils/files';
 import { splitContentLines } from '@utils/text/stringUtils';
-import type { MemoryViewItem } from '@shared/schemas/settingsViewMessages';
 
 /**
  * Builds a preview of content with truncation info.

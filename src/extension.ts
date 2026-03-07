@@ -6,14 +6,14 @@ import * as vscode from 'vscode';
 import dotenv from 'dotenv';
 
 // Local imports - core
-import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
+import { loadAgents } from '@agent/index';
+import { clearStoreCache } from '@agent/storage';
+import { initializePolishModel } from '@agent/runtime/polishModel';
 import { initializeServerSideKeyAccess } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SupabaseAuthProvider } from '@auth/SupabaseAuthProvider';
 import { SupabaseUriHandler } from '@auth/UriHandler';
 import { isSupabaseConfigured, setRuntimeExtensionId } from '@auth/config';
-import { loadAgents } from '@agent/index';
-import { initializePolishModel } from '@agent/runtime/polishModel';
 import { toErrorMessage } from '@common/errors';
 import {
   getActiveSidebarView,
@@ -22,6 +22,7 @@ import {
 } from '@common/webview';
 import { initializeStateManagers } from '@common/state';
 import { isTerminalStatus } from '@common/constants/streamStatus';
+import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager } from '@frontend/secretManager';
 import {
   copyDefaultAgents,
@@ -35,14 +36,13 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { registerAgentEventListeners } from '@frontend/events/agentEventListeners';
 import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
+import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { setExtensionChecker } from '@tools/externalToolDefs';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
-import { bus } from '@eventBus/ProgressEventBus';
-import { clearStoreCache } from '@agent/storage';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';

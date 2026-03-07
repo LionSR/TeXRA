@@ -2,9 +2,9 @@
 import * as assert from 'assert';
 
 // Local imports - tools
+import { tikzPictureManager } from '@latex/TikzPictureManager';
 import { ExtractTikzFiguresTool } from '@tools/latex';
 import { WorkspaceFS, pathToLocation } from '@utils/files';
-import { tikzPictureManager } from '@latex/TikzPictureManager';
 
 describe('ExtractTikzFiguresTool', () => {
   const originalExtract = tikzPictureManager.extract;

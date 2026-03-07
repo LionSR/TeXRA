@@ -14,34 +14,46 @@
 
 import { z } from 'zod';
 
-import LATEX_PREAMBLE from '../../../resources/templates/chatExport.tex';
+import latexPreamble from '../../../resources/templates/chatExport.tex';
 
 // ============================================================
 // Input schemas (single source of truth)
 // ============================================================
 
 /** Loose schema for API content blocks — accepts many optional fields. */
-const ContentBlockSchema = z.object({
-  type: z.string(),
-  text: z.string().optional(),
-  thinking: z.string().optional(),
-  name: z.string().optional(),
-  id: z.string().optional(),
-  input: z.unknown().optional(),
-  content: z.unknown().optional(),
-  source: z.object({ type: z.string(), media_type: z.string().optional() }).optional(),
-  query: z.string().optional(),
-  search_results: z.array(z.object({ title: z.string().optional(), url: z.string().optional() })).optional(),
-  url: z.string().optional(),
-  title: z.string().optional(),
-  page_content: z.string().optional(),
-}).passthrough();
+const ContentBlockSchema = z
+  .object({
+    type: z.string(),
+    text: z.string().optional(),
+    thinking: z.string().optional(),
+    name: z.string().optional(),
+    id: z.string().optional(),
+    input: z.unknown().optional(),
+    content: z.unknown().optional(),
+    source: z
+      .object({ type: z.string(), media_type: z.string().optional() })
+      .optional(),
+    query: z.string().optional(),
+    search_results: z
+      .array(
+        z.object({ title: z.string().optional(), url: z.string().optional() }),
+      )
+      .optional(),
+    url: z.string().optional(),
+    title: z.string().optional(),
+    page_content: z.string().optional(),
+  })
+  .passthrough();
 type ContentBlock = z.infer<typeof ContentBlockSchema>;
 
-const ConversationMessageSchema = z.object({
-  role: z.string().optional(),
-  content: z.union([z.string(), z.array(ContentBlockSchema), z.unknown()]).optional(),
-}).passthrough();
+const ConversationMessageSchema = z
+  .object({
+    role: z.string().optional(),
+    content: z
+      .union([z.string(), z.array(ContentBlockSchema), z.unknown()])
+      .optional(),
+  })
+  .passthrough();
 type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 
 const ExportConfigSchema = z.object({
@@ -79,18 +91,33 @@ const WebSearchResultSchema = z.object({
 
 const UserPartSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), text: z.string() }),
-  z.object({ type: z.literal('attachment'), attachmentType: z.enum(['image', 'document']) }),
+  z.object({
+    type: z.literal('attachment'),
+    attachmentType: z.enum(['image', 'document']),
+  }),
 ]);
 type UserPart = z.infer<typeof UserPartSchema>;
 
 const ExportNodeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('user-message'), parts: z.array(UserPartSchema) }),
   z.object({ kind: z.literal('assistant-text'), text: z.string() }),
-  z.object({ kind: z.literal('tool-call'), name: z.string(), input: z.string() }),
+  z.object({
+    kind: z.literal('tool-call'),
+    name: z.string(),
+    input: z.string(),
+  }),
   z.object({ kind: z.literal('tool-result'), text: z.string() }),
   z.object({ kind: z.literal('web-search'), query: z.string() }),
-  z.object({ kind: z.literal('web-search-results'), results: z.array(WebSearchResultSchema) }),
-  z.object({ kind: z.literal('web-fetch'), url: z.string().optional(), title: z.string().optional(), content: z.string().optional() }),
+  z.object({
+    kind: z.literal('web-search-results'),
+    results: z.array(WebSearchResultSchema),
+  }),
+  z.object({
+    kind: z.literal('web-fetch'),
+    url: z.string().optional(),
+    title: z.string().optional(),
+    content: z.string().optional(),
+  }),
 ]);
 type ExportNode = z.infer<typeof ExportNodeSchema>;
 
@@ -144,7 +171,7 @@ const LATEX_ESCAPE_MAP: Record<string, string> = {
 const LATEX_ESCAPE_RE = /[\\#$%&_{}\~\^]/g;
 
 function escapeLatex(text: string): string {
-  return text.replace(LATEX_ESCAPE_RE, (ch) => LATEX_ESCAPE_MAP[ch]);
+  return text.replaceAll(LATEX_ESCAPE_RE, (ch) => LATEX_ESCAPE_MAP[ch]);
 }
 
 /** Escape special characters in URLs for \\href and \\url commands. */
@@ -152,12 +179,12 @@ const LATEX_URL_ESCAPE_RE = /[%#]/g;
 const LATEX_URL_ESCAPE_MAP: Record<string, string> = { '%': '\\%', '#': '\\#' };
 
 function escapeLatexUrl(url: string): string {
-  return url.replace(LATEX_URL_ESCAPE_RE, (ch) => LATEX_URL_ESCAPE_MAP[ch]);
+  return url.replaceAll(LATEX_URL_ESCAPE_RE, (ch) => LATEX_URL_ESCAPE_MAP[ch]);
 }
 
 /** Wrap text in lstlisting, handling nested end markers. */
 function latexListing(text: string): string {
-  const safeText = text.replace(/\\end\{lstlisting\}/g, '\\end {lstlisting}');
+  const safeText = text.replaceAll('\\end{lstlisting}', '\\end {lstlisting}');
   return `\\begin{lstlisting}\n${safeText}\n\\end{lstlisting}`;
 }
 
@@ -236,9 +263,7 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
       const results = (block.content as ContentBlock[])
         .filter((e) => e.type === 'web_search_result' && e.url)
         .map((e) => ({ title: e.title ?? e.url!, url: e.url! }));
-      return results.length
-        ? { kind: 'web-search-results', results }
-        : null;
+      return results.length ? { kind: 'web-search-results', results } : null;
     }
 
     case 'web_fetch_tool_result':
@@ -352,7 +377,7 @@ function extractMeta(input: ChatExportInput): DocumentMeta {
 function renderNode(node: ExportNode, renderers: NodeRenderers): string {
   // TypeScript can't narrow discriminated unions through record access,
   // so we cast here. NodeRenderers ensures every kind has a handler.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   return (renderers as Record<string, (n: any) => string>)[node.kind](node);
 }
 
@@ -382,9 +407,11 @@ function markdownHeader(meta: DocumentMeta): string {
     : '';
 
   const fileList = meta.files.length
-    ? ['**Files:**', ...meta.files.map(([l, v]) => `- ${l}: \`${v}\``), ''].join(
-        '\n',
-      )
+    ? [
+        '**Files:**',
+        ...meta.files.map(([l, v]) => `- ${l}: \`${v}\``),
+        '',
+      ].join('\n')
     : '';
 
   return [fields, '', instruction, fileList, '---', '', '## Conversation', '']
@@ -447,9 +474,7 @@ const markdownSpec: FormatSpec = {
 function latexHeader(meta: DocumentMeta): string {
   const esc = escapeLatex;
 
-  const rows = HEADER_FIELDS.filter(
-    (f) => f.key === 'date' || meta[f.key],
-  ).map(
+  const rows = HEADER_FIELDS.filter((f) => f.key === 'date' || meta[f.key]).map(
     (f) =>
       `\\textbf{${f.label}:} & ${esc(String(meta[f.key] ?? 'Unknown'))} \\\\`,
   );
@@ -470,7 +495,7 @@ function latexHeader(meta: DocumentMeta): string {
     : '';
 
   return [
-    LATEX_PREAMBLE,
+    latexPreamble,
     '',
     '\\begin{document}',
     '',
@@ -518,7 +543,10 @@ const TEX_NODES: NodeRenderers = {
 
   'web-search-results': ({ results }) => {
     const items = results
-      .map((r) => `  \\item \\href{${escapeLatexUrl(r.url)}}{${escapeLatex(r.title)}}`)
+      .map(
+        (r) =>
+          `  \\item \\href{${escapeLatexUrl(r.url)}}{${escapeLatex(r.title)}}`,
+      )
       .join('\n');
     return `\\begin{websearchbox}\n\\begin{itemize}\n${items}\n\\end{itemize}\n\\end{websearchbox}\n`;
   },
@@ -589,7 +617,7 @@ export function generateExportFilename(
 function sanitizeFilename(name: string): string {
   return name
     .toLowerCase()
-    .replace(/[^a-z0-9-]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
+    .replaceAll(/[^a-z0-9-]/g, '-')
+    .replaceAll(/-+/g, '-')
+    .replaceAll(/^-|-$/g, '');
 }
