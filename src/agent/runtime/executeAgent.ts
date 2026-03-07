@@ -86,29 +86,6 @@ interface ResolvedAgentBase extends AgentCore {
   parentStage: AgentLogStage;
 }
 
-function computePreliminaryStreamId(
-  configPayload: AgentConfigPayload,
-  executionId?: ExecutionId,
-): StreamTabId {
-  if (!configPayload.agent || !configPayload.model) {
-    throw new Error('Missing required fields: model and/or agent');
-  }
-
-  const agentEntry = getAgent(configPayload.agent);
-  const agentCategory = agentEntry?.category ?? AgentCategory.Workflow;
-
-  return getStreamTabId(
-    configPayload.agent,
-    configPayload.model,
-    configPayload.inputFile ?? '',
-    {
-      agentCategory,
-      executionId,
-      useMultipleOutputs: configPayload.useMultipleOutputs,
-    },
-  );
-}
-
 export async function getAgentPath(
   agentIdentifier: string,
   options?: AgentLoadOptions,
@@ -420,7 +397,20 @@ async function runFlowWithLifecycle(
         msg.includes('Missing API key') ||
         msg.includes('API key not found')
       ) {
-        showApiKeyErrorNotification();
+        bus.emit('requestShowInstruction', {
+          key: 'missingApiKey',
+          message:
+            'API key not found. Set your API key in the extension settings and run again.',
+          actions: [
+            { title: 'Set API Key', command: 'texra.setApiKey' },
+            {
+              title: 'Open Settings Guide',
+              command: 'texra.openDoc',
+              args: ['configuration'],
+            },
+          ],
+          showSuppress: false,
+        });
       } else {
         bus.emit('requestShowError', { message: errorMsg });
       }
@@ -442,23 +432,6 @@ function buildFallbackNotification(config: AgentConfig) {
     outputInfo = outputFiles[0] ? `to ${path.basename(outputFiles[0])}` : '';
   }
   return { agentName: config.agent, modelName: config.model, inputName, outputInfo };
-}
-
-function showApiKeyErrorNotification(): void {
-  bus.emit('requestShowInstruction', {
-    key: 'missingApiKey',
-    message:
-      'API key not found. Set your API key in the extension settings and run again.',
-    actions: [
-      { title: 'Set API Key', command: 'texra.setApiKey' },
-      {
-        title: 'Open Settings Guide',
-        command: 'texra.openDoc',
-        args: ['configuration'],
-      },
-    ],
-    showSuppress: false,
-  });
 }
 
 // ============================================================================
@@ -486,9 +459,19 @@ async function resolveAndAcquireStream(
     });
   }
 
-  const preliminaryStreamId = computePreliminaryStreamId(
-    configPayload,
-    executionId,
+  if (!configPayload.agent || !configPayload.model) {
+    throw new Error('Missing required fields: model and/or agent');
+  }
+  const agentEntry = getAgent(configPayload.agent);
+  const preliminaryStreamId = getStreamTabId(
+    configPayload.agent,
+    configPayload.model,
+    configPayload.inputFile ?? '',
+    {
+      agentCategory: agentEntry?.category ?? AgentCategory.Workflow,
+      executionId,
+      useMultipleOutputs: configPayload.useMultipleOutputs,
+    },
   );
   acquireStreamOrThrow(preliminaryStreamId, options?.taskType);
 
@@ -519,48 +502,6 @@ async function resolveAndAcquireStream(
   }
 
   return ctx;
-}
-
-/** Pre-execution UI setup: progress board visibility, notifications, task state emission. */
-async function prepareAgentUI(
-  ctx: ResolvedAgentBase,
-  executionId: ExecutionId | undefined,
-  options?: { isSubagent?: boolean },
-): Promise<void> {
-  if (executionId) await ensureRunDir(executionId);
-  const { streamId, config, storageKey } = ctx;
-
-  const runStorage = getRunStorageService();
-  StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
-
-  logger.info(`Starting task execution for ${streamId}`);
-  logger.info(`Input file: ${config.inputFile}`);
-  logger.debug(
-    `Stream ID: ${streamId}, Agent: ${config.agent}, Model: ${config.model}`,
-  );
-  logger.debug(
-    `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
-  );
-
-  // Subagents don't need to force-open the progress board or show notifications —
-  // the orchestrator's stream is already visible.
-  if (!options?.isSubagent && !runStorage.isViewVisible()) {
-    bus.emit('requestEnsureProgressView', {
-      fallbackNotification: buildFallbackNotification(config),
-    });
-  }
-  bus.emit('setTaskState', {
-    streamId,
-    executionId,
-    taskState: agentConfigToTaskState(config),
-    storageKey,
-  });
-
-  if (config.outputFiles.length > 1 && !config.useMultipleOutputs) {
-    logger.warn(
-      `Multiple output files provided (${config.outputFiles.length}) but useMultipleOutputs flag is disabled.`,
-    );
-  }
 }
 
 // ============================================================================
@@ -604,7 +545,38 @@ export async function executeAgent(
     streamId,
     agentName,
     async () => {
-      await prepareAgentUI(ctx, executionId, { isSubagent });
+      // Pre-execution UI setup (inlined from prepareAgentUI)
+      if (executionId) await ensureRunDir(executionId);
+      {
+        const runStorage = getRunStorageService();
+        StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
+        logger.info(`Starting task execution for ${streamId}`);
+        logger.info(`Input file: ${config.inputFile}`);
+        logger.debug(
+          `Stream ID: ${streamId}, Agent: ${config.agent}, Model: ${config.model}`,
+        );
+        logger.debug(
+          `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
+        );
+        // Subagents don't need to force-open the progress board or show notifications —
+        // the orchestrator's stream is already visible.
+        if (!isSubagent && !runStorage.isViewVisible()) {
+          bus.emit('requestEnsureProgressView', {
+            fallbackNotification: buildFallbackNotification(config),
+          });
+        }
+        bus.emit('setTaskState', {
+          streamId,
+          executionId,
+          taskState: agentConfigToTaskState(config),
+          storageKey: ctx.storageKey,
+        });
+        if (config.outputFiles.length > 1 && !config.useMultipleOutputs) {
+          logger.warn(
+            `Multiple output files provided (${config.outputFiles.length}) but useMultipleOutputs flag is disabled.`,
+          );
+        }
+      }
 
       const taskStage = await logger.stage(
         `Task: ${agentName}@${config.model}`,

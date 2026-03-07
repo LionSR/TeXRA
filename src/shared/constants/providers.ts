@@ -1,43 +1,101 @@
+import { z } from 'zod';
+
 import { ModelProvider } from 'llm-zoo';
 
-/** Consolidated provider display names used across settings UI and model selection. */
-export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
-  [ModelProvider.OPENAI]: 'OpenAI',
-  [ModelProvider.ANTHROPIC]: 'Anthropic',
+// ============================================================================
+// Provider Registry — single source of truth for all provider metadata
+// ============================================================================
+
+/** Definition for a provider entry in the registry. */
+interface ProviderDef {
+  readonly id: ModelProvider;
+  readonly displayName: string;
+  /** Whether this provider supports server-side (relay) API keys. */
+  readonly hasServerKey: boolean;
+  /** URL for obtaining API keys. undefined = no standalone key page. */
+  readonly keyUrl?: string;
+}
+
+/**
+ * Canonical provider registry. All provider lists are derived from this.
+ * Order here determines display order in MODEL_PROVIDERS_ORDER.
+ *
+ * To add a new provider: add a single entry here.
+ * hasServerKey: true → automatically included in SERVER_SIDE_PROVIDERS.
+ */
+const PROVIDER_REGISTRY: readonly ProviderDef[] = [
+  { id: ModelProvider.OPENAI, displayName: 'OpenAI', hasServerKey: true, keyUrl: 'https://platform.openai.com/api-keys' },
+  { id: ModelProvider.ANTHROPIC, displayName: 'Anthropic', hasServerKey: true, keyUrl: 'https://console.anthropic.com/' },
+  { id: ModelProvider.GOOGLE, displayName: 'Google', hasServerKey: true, keyUrl: 'https://aistudio.google.com/app/apikey' },
+  { id: ModelProvider.XAI, displayName: 'xAI', hasServerKey: true, keyUrl: 'https://console.x.ai/' },
+  { id: ModelProvider.DEEPSEEK, displayName: 'DeepSeek', hasServerKey: true, keyUrl: 'https://platform.deepseek.com/api_keys' },
+  { id: ModelProvider.MOONSHOT, displayName: 'Moonshot', hasServerKey: true, keyUrl: 'https://platform.moonshot.cn/console' },
+  { id: ModelProvider.DASHSCOPE, displayName: 'DashScope', hasServerKey: true, keyUrl: 'https://dashscope.aliyun.com/api-console/' },
+] as const;
+
+/** Providers not in the main registry (no server-side keys, no model selection). */
+const EXTRA_DISPLAY_NAMES: Record<string, string> = {
   openRouter: 'OpenRouter',
-  [ModelProvider.GOOGLE]: 'Google',
-  [ModelProvider.XAI]: 'xAI',
-  [ModelProvider.DEEPSEEK]: 'DeepSeek',
-  [ModelProvider.MOONSHOT]: 'Moonshot',
-  [ModelProvider.DASHSCOPE]: 'DashScope',
   wolframllmapp: 'Wolfram',
   [ModelProvider.COPILOT]: 'Copilot',
   [ModelProvider.OTHERS]: 'Others',
 };
 
+// ============================================================================
+// Derived lists — keep in sync automatically
+// ============================================================================
+
 /** Providers shown in the model selection list (display order). */
-export const MODEL_PROVIDERS_ORDER: ModelProvider[] = [
-  ModelProvider.OPENAI,
-  ModelProvider.ANTHROPIC,
-  ModelProvider.GOOGLE,
-  ModelProvider.XAI,
-  ModelProvider.DEEPSEEK,
-  ModelProvider.MOONSHOT,
-  ModelProvider.DASHSCOPE,
-];
+export const MODEL_PROVIDERS_ORDER: ModelProvider[] = PROVIDER_REGISTRY.map(
+  (p) => p.id,
+);
+
+/**
+ * All providers that support server-side API keys.
+ * Derived from PROVIDER_REGISTRY — no manual sync needed.
+ */
+export const SERVER_SIDE_PROVIDER_IDS = PROVIDER_REGISTRY.filter(
+  (p) => p.hasServerKey,
+).map((p) => p.id) as readonly string[];
+
+/** Type for providers that support server-side keys. */
+export type ServerSideProvider = (typeof SERVER_SIDE_PROVIDER_IDS)[number];
+
+/** Consolidated provider display names used across settings UI and model selection. */
+export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
+  ...Object.fromEntries(PROVIDER_REGISTRY.map((p) => [p.id, p.displayName])),
+  ...EXTRA_DISPLAY_NAMES,
+};
+
+/** URLs for obtaining API keys from each provider. */
+export const PROVIDER_URLS: Record<string, string> = {
+  ...Object.fromEntries(
+    PROVIDER_REGISTRY.filter((p) => p.keyUrl).map((p) => [p.id, p.keyUrl!]),
+  ),
+  openRouter: 'https://openrouter.ai/keys',
+  wolframllmapp: 'https://llm-api.wolframalpha.com/',
+};
 
 /** Default model used for auxiliary/helper tasks (polishing, agent creation, merge, session descriptions). */
 export const DEFAULT_HELPER_MODEL = 'sonnet45';
 
-/** Shape for a VS Code boolean setting surfaced per provider (without runtime value). */
-export interface ProviderVscodeSettingDef {
-  readonly key: string;
-  readonly label: string;
-  readonly description: string;
-  readonly warning?: string;
-  readonly warningUrl?: string;
-  readonly warningUrlLabel?: string;
-}
+/**
+ * Zod schema for a VS Code boolean setting surfaced per provider (without runtime value).
+ * This is the single source of truth — ProviderVscodeSettingSchema in
+ * profileViewMessages.ts extends this with a `value` field for runtime state.
+ */
+export const ProviderVscodeSettingDefSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  description: z.string(),
+  warning: z.string().optional(),
+  warningUrl: z.string().optional(),
+  warningUrlLabel: z.string().optional(),
+});
+
+export type ProviderVscodeSettingDef = z.infer<
+  typeof ProviderVscodeSettingDefSchema
+>;
 
 /** VS Code config settings to surface per provider in the Models tab. */
 export const PROVIDER_VSCODE_SETTINGS: Record<
@@ -85,15 +143,3 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
   ],
 };
 
-/** URLs for obtaining API keys from each provider. */
-export const PROVIDER_URLS: Record<string, string> = {
-  openai: 'https://platform.openai.com/api-keys',
-  anthropic: 'https://console.anthropic.com/',
-  openRouter: 'https://openrouter.ai/keys',
-  google: 'https://aistudio.google.com/app/apikey',
-  xai: 'https://console.x.ai/',
-  deepseek: 'https://platform.deepseek.com/api_keys',
-  moonshot: 'https://platform.moonshot.cn/console',
-  dashscope: 'https://dashscope.aliyun.com/api-console/',
-  wolframllmapp: 'https://llm-api.wolframalpha.com/',
-};

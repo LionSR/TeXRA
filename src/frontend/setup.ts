@@ -13,17 +13,14 @@ import { GlobalStateKey, globalSM } from '@common/state';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
-import { DEFAULT_MODELS } from '@model/computeModelOptions';
+import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/computeModelOptions';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
 import { isConfigExplicitlySet, updateConfig } from '@utils/config';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
-/**
- * Version number for the default model list.
- * Increment this when adding new models to force existing users to get the updated defaults.
- */
-const MODEL_LIST_VERSION = 7;
+// MODEL_LIST_VERSION is now auto-computed from DEFAULT_MODELS in computeModelOptions.ts.
+// No manual version bump needed — changes to DEFAULT_MODELS automatically change the hash.
 
 /**
  * Version number for LaTeX-related VS Code config setup.

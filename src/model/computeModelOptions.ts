@@ -13,7 +13,7 @@ import type { ModelOptionData } from '@shared/schemas';
 
 /**
  * Default models that should be present in every user's model list.
- * Update this list and increment MODEL_LIST_VERSION in setup.ts when adding new models.
+ * MODEL_LIST_VERSION is auto-computed from this array — no manual sync needed.
  */
 export const DEFAULT_MODELS = [
   'gemini31p',
@@ -28,6 +28,16 @@ export const DEFAULT_MODELS = [
   'kimi25T',
   'grok4',
 ];
+
+/**
+ * Auto-computed version derived from DEFAULT_MODELS content.
+ * Changes whenever models are added, removed, or reordered.
+ * Uses a simple hash so we don't need manual version bumps.
+ */
+export const MODEL_LIST_VERSION: number = DEFAULT_MODELS.reduce(
+  (hash, model, i) => ((hash << 5) - hash + model.charCodeAt(0) + i) | 0,
+  DEFAULT_MODELS.length,
+);
 
 /**
  * Get the list of visible models from extension global state.

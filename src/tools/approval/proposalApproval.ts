@@ -5,10 +5,8 @@
  * toggle are active, agent proposals are auto-approved without user interaction.
  */
 import { WorkspaceStateKey, workspaceSM } from '@common/state';
-import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas';
-
-const proposalsBypassedByStream = new Map<StreamTabId, boolean>();
+import { BypassStateManager } from './BypassStateManager';
 
 /** Check if the workspace-level Super YOLO feature is enabled. */
 export function isSuperYoloFeatureEnabled(): boolean {
@@ -18,38 +16,33 @@ export function isSuperYoloFeatureEnabled(): boolean {
   );
 }
 
-function notifyProposalBypassState(streamId: StreamTabId): void {
-  const bypassActive = proposalsBypassedByStream.get(streamId) ?? false;
-  const featureEnabled = isSuperYoloFeatureEnabled();
-  bus.emit('updateSuperYoloBypassState', {
+const proposalBypass = new BypassStateManager(
+  'updateSuperYoloBypassState',
+  (streamId, bypassActive) => ({
     streamId,
     bypassActive,
-    featureEnabled,
-  });
-}
+    featureEnabled: isSuperYoloFeatureEnabled(),
+  }),
+);
 
 /** Toggle per-stream proposal bypass. Returns new state. */
 export function toggleProposalBypass(streamId: StreamTabId): boolean {
-  const currentState = proposalsBypassedByStream.get(streamId) ?? false;
-  const newState = !currentState;
-  proposalsBypassedByStream.set(streamId, newState);
-  notifyProposalBypassState(streamId);
-  return newState;
+  return proposalBypass.toggle(streamId);
 }
 
 /** Check if proposals are bypassed for a specific stream. */
 export function isProposalBypassedForStream(streamId: StreamTabId): boolean {
-  return proposalsBypassedByStream.get(streamId) ?? false;
+  return proposalBypass.isActive(streamId);
 }
 
 /** @internal Called by unified cleanup in index.ts */
 export function _clearProposalBypassForStream(streamId: StreamTabId): void {
-  proposalsBypassedByStream.delete(streamId);
+  proposalBypass.clearForStream(streamId);
 }
 
 /** @internal Called by unified cleanup in index.ts */
 export function _clearAllProposalBypass(): void {
-  proposalsBypassedByStream.clear();
+  proposalBypass.clearAll();
 }
 
 /**
@@ -58,13 +51,5 @@ export function _clearAllProposalBypass(): void {
  * @internal Called when the workspace feature is disabled.
  */
 export function _disableAllProposalBypasses(): StreamTabId[] {
-  const affected: StreamTabId[] = [];
-  for (const [id, active] of proposalsBypassedByStream) {
-    if (active) affected.push(id);
-  }
-  proposalsBypassedByStream.clear();
-  for (const streamId of affected) {
-    notifyProposalBypassState(streamId);
-  }
-  return affected;
+  return proposalBypass.disableAllAndNotify();
 }
