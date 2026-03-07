@@ -123,12 +123,36 @@ interface FormatSpec {
 // Escape utilities
 // ============================================================
 
+/**
+ * Single-pass LaTeX text escaping (pandoc/pylatex pattern).
+ * A character-level replacement map avoids ordering bugs —
+ * every special character is handled exactly once.
+ */
+const LATEX_ESCAPE_MAP: Record<string, string> = {
+  '\\': '\\textbackslash{}',
+  '#': '\\#',
+  $: '\\$',
+  '%': '\\%',
+  '&': '\\&',
+  _: '\\_',
+  '{': '\\{',
+  '}': '\\}',
+  '~': '\\textasciitilde{}',
+  '^': '\\textasciicircum{}',
+};
+
+const LATEX_ESCAPE_RE = /[\\#$%&_{}\~\^]/g;
+
 function escapeLatex(text: string): string {
-  return text
-    .replace(/\\/g, '\\textbackslash{}')
-    .replace(/([#$%&_{}])/g, '\\$1')
-    .replace(/~/g, '\\textasciitilde{}')
-    .replace(/\^/g, '\\textasciicircum{}');
+  return text.replace(LATEX_ESCAPE_RE, (ch) => LATEX_ESCAPE_MAP[ch]);
+}
+
+/** Escape special characters in URLs for \\href and \\url commands. */
+const LATEX_URL_ESCAPE_RE = /[%#]/g;
+const LATEX_URL_ESCAPE_MAP: Record<string, string> = { '%': '\\%', '#': '\\#' };
+
+function escapeLatexUrl(url: string): string {
+  return url.replace(LATEX_URL_ESCAPE_RE, (ch) => LATEX_URL_ESCAPE_MAP[ch]);
 }
 
 /** Wrap text in lstlisting, handling nested end markers. */
@@ -494,7 +518,7 @@ const TEX_NODES: NodeRenderers = {
 
   'web-search-results': ({ results }) => {
     const items = results
-      .map((r) => `  \\item \\href{${r.url}}{${escapeLatex(r.title)}}`)
+      .map((r) => `  \\item \\href{${escapeLatexUrl(r.url)}}{${escapeLatex(r.title)}}`)
       .join('\n');
     return `\\begin{websearchbox}\n\\begin{itemize}\n${items}\n\\end{itemize}\n\\end{websearchbox}\n`;
   },
@@ -502,7 +526,7 @@ const TEX_NODES: NodeRenderers = {
   'web-fetch': ({ url, title, content }) =>
     [
       '\\begin{websearchbox}',
-      url ? `\\textbf{URL:} \\url{${url}}` : undefined,
+      url ? `\\textbf{URL:} \\url{${escapeLatexUrl(url)}}` : undefined,
       title ? `\\\\\\textbf{Title:} ${escapeLatex(title)}` : undefined,
       content ? `\n${latexListing(content)}` : undefined,
       '\\end{websearchbox}',
