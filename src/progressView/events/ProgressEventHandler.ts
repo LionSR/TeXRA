@@ -27,6 +27,11 @@ import {
 import { bus } from '@eventBus/ProgressEventBus';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
+import {
+  isApprovalBypassedForStream,
+  isProposalBypassedForStream,
+} from '@tools/approval';
+
 import { registerHandlers } from './registerHandlers';
 import { registerUIEvents, type UICallbacks } from './UIEvents';
 import type { EventHandlerContext } from './EventHandlerContext';
@@ -521,6 +526,10 @@ export class ProgressEventHandler {
       parentStreamId = this.state.meta.getParentStreamId(stream);
     }
 
+    // Always include toggle bypass state so buttons render correctly on tab switch.
+    const toolEditBypass = isApprovalBypassedForStream(stream);
+    const superYoloBypass = isProposalBypassedForStream(stream);
+
     this.webviewUpdater.sendSyncStreamContent({
       stream,
       action: 'render',
@@ -533,6 +542,8 @@ export class ProgressEventHandler {
       conversationProgress,
       badges,
       parentStreamId,
+      toolEditBypass,
+      superYoloBypass,
     });
 
     return activeRunId;
