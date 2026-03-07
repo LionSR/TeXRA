@@ -23,9 +23,9 @@ import {
 
 // Local imports - shared schemas
 import type { ProviderErrorPartial, RetryPermission } from '@shared/schemas';
+import { BaseRequestPanel } from './BaseRequestPanel';
 
 // Local imports - base class
-import { BaseRequestPanel } from './BaseRequestPanel';
 
 @customElement('retry-request-panel')
 export class RetryRequestPanel extends BaseRequestPanel {

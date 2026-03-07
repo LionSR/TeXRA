@@ -9,13 +9,13 @@
 import * as vscode from 'vscode';
 
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { bus } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import * as logger from '@logger/logUtils';
 import { getRunStorageService } from '@agent/runtime/RunStorageService';
-import { bus } from '@eventBus/ProgressEventBus';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'agentEventListeners';
 

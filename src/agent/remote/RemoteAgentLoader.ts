@@ -1,8 +1,6 @@
 import { StatusCodes } from 'http-status-codes';
 import yaml from 'yaml';
 
-import { SupabaseClient } from '@auth/SupabaseClient';
-import { SUPABASE_CONFIG } from '@auth/config';
 import {
   AgentSetting,
   AgentPromptSchema,
@@ -19,6 +17,8 @@ import {
   updateAgentDefaultOutputFiles,
 } from '@agent/index/agentRegistry';
 import type { AgentLoadOptions } from '@agent/runtime/agentLoad';
+import { SUPABASE_CONFIG } from '@auth/config';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { resolveToolDefinitions } from '@tools/registry';

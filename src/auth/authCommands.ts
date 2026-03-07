@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
+import { showSettingsView } from '@commands/settings';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getConfig } from '@utils/config';
-import { showSettingsView } from '@commands/settings';
 import { SupabaseClient } from './SupabaseClient';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';
 import { type OAuthProvider, getExternalAuthCallbackUri } from './config';

@@ -13,6 +13,11 @@ import { consume } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 
 // Local imports - progress view
+import type {
+  InstructionUpdate,
+  OutputFileInfo,
+  TokenUsageStats,
+} from '@shared/schemas';
 import {
   filterPermissionsForStream,
   getRunGroups,
@@ -28,11 +33,6 @@ import {
 import type { FollowupOptionsState, WorkflowStreamState } from '../store';
 
 // Local imports - types
-import type {
-  InstructionUpdate,
-  OutputFileInfo,
-  TokenUsageStats,
-} from '@shared/schemas';
 import type { PermissionState } from './PermissionCard';
 
 // Side-effect imports - sibling components

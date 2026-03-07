@@ -8,13 +8,12 @@
  */
 
 import { getAgent } from '@agent/index';
+import { writeSessionDescription } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { createHelperModelKit } from '@agent/runtime/helperModel';
-import { writeSessionDescription } from '@agent/storage';
 import * as logger from '@logger/logUtils';
-import { isNonEmptyString } from '@utils/core';
-
 import type { ExecutionId } from '@shared/schemas';
+import { isNonEmptyString } from '@utils/core';
 
 const CHANNEL = 'SessionDescription';
 

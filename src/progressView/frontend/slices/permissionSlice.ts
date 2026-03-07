@@ -7,8 +7,8 @@
 
 import { create } from 'mutative';
 
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 import { updateToolUseState } from '../stateUtils';
 import type { PermissionState } from '../components/PermissionCard';

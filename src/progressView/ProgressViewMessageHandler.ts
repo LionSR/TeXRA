@@ -1,27 +1,22 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 
-import {
-  dispatchProgressViewInbound,
-  type ProgressViewInboundHandlerRegistry,
-  type ProgressViewInboundMessage,
-} from '@shared/schemas/progressView';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getAgent } from '@agent/index/agentRegistry';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import {
+  validateExecutionRequest,
+  type ExecutionRequest,
+} from '@agent/core/executionRequests';
 import { toErrorMessage } from '@common/errors';
 import {
   BaseViewMessageHandler,
   COMMON_COMMANDS,
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview';
-import {
-  validateExecutionRequest,
-  type ExecutionRequest,
-} from '@agent/core/executionRequests';
 import { RecordingManager } from '@common/managers/RecordingManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -30,12 +25,19 @@ import {
   type TaskState,
   type WorkflowTaskState,
 } from '@logger/TaskState';
+import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import {
   CHAT_INSTRUCTION_TEMPLATE,
   WORKFLOW_CONTEXT_TEMPLATE,
   type FollowupInstructionVars,
 } from '@progressView/templates/followupInstructionTemplates';
-import { buildStreamInfos } from '@progressView/streamInfoUtils';
+import type { OutputFileInfo, StorageKey, StreamTabId } from '@shared/schemas';
+import type { AgentProposal } from '@shared/schemas/prompts';
+import {
+  dispatchProgressViewInbound,
+  type ProgressViewInboundHandlerRegistry,
+  type ProgressViewInboundMessage,
+} from '@shared/schemas/progressView';
 import {
   cleanupAllApprovals,
   cleanupApprovalsForStream,
@@ -64,8 +66,6 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
-import type { AgentProposal } from '@shared/schemas/prompts';
-import type { OutputFileInfo, StorageKey, StreamTabId } from '@shared/schemas';
 
 import type { ProgressViewProvider } from './ProgressViewProvider';
 

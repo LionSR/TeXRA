@@ -19,11 +19,11 @@ import { when } from 'lit/directives/when.js';
 import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
 
 // Local imports - shared banner styles
+import type { DependencyBannerState } from '@shared/schemas';
 import { warningBannerStyles } from '../styles/warningBannerStyles';
 
 // Local imports - main view events and schemas
 import { MainViewEvents } from '../events';
-import type { DependencyBannerState } from '@shared/schemas';
 
 @customElement('dependency-banner')
 export class DependencyBanner extends LitElement {

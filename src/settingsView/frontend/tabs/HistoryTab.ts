@@ -16,8 +16,8 @@ import {
 } from '@shared/styles';
 
 // Local imports - shared schemas
-import { HistoryViewState } from '../components/history/state';
 import type { HistoryItem } from '@shared/schemas';
+import { HistoryViewState } from '../components/history/state';
 
 // Local imports - settings view components
 import '../components/history/SearchBar';

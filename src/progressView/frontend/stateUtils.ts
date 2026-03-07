@@ -1,12 +1,12 @@
 // Shared imports
 import { create } from 'mutative';
+import type { OutputFileInfo, StreamTabId, TaskGroup } from '@shared/schemas';
 import {
   isToolUseState,
   isWorkflowState,
   type ToolUseStreamState,
   type WorkflowStreamState,
 } from './store';
-import type { OutputFileInfo, StreamTabId, TaskGroup } from '@shared/schemas';
 
 // Local imports
 import type { FrontendEventHandlerContext } from './eventHandlers';

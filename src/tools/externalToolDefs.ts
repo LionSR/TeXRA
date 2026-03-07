@@ -15,10 +15,10 @@
 import axios from 'axios';
 
 // Local imports
+import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 import type { RegisteredToolName } from '@tools/registry';
 import { getZoteroPort } from '@tools/zotero/bbtClient';
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 
 const LEAN4_EXT_ID = 'leanprover.lean4';
 

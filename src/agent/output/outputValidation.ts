@@ -5,12 +5,12 @@
  * reporting missing files for user notification.
  */
 
+import type { AgentLogStage } from '@logger/AgentLogger';
 import {
   MESSAGE_TYPES,
   type FileLocation,
   type StorageKey,
 } from '@shared/schemas';
-import type { AgentLogStage } from '@logger/AgentLogger';
 import { flexibleFS } from '@utils/files';
 
 import {

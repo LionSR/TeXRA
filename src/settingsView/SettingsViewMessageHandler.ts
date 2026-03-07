@@ -12,26 +12,6 @@ import * as vscode from 'vscode';
 import { MODELS, MODEL_CONFIGS, type ReasoningEffort } from 'llm-zoo';
 
 // Shared schemas and dispatchers
-import {
-  dispatchSettingsViewInbound,
-  type SettingsViewInboundHandlerRegistry,
-  type SettingsViewInboundMessage,
-  SETTINGS_VIEW_CMD,
-  ReasoningLevelSchema,
-  type ModelSelectionItem,
-  type ReasoningLevel,
-} from '@shared/schemas/settingsViewMessages';
-import {
-  PROVIDER_DISPLAY_NAMES,
-  MODEL_PROVIDERS_ORDER,
-  DEFAULT_HELPER_MODEL,
-  PROVIDER_URLS,
-  PROVIDER_VSCODE_SETTINGS,
-} from '@shared/constants/providers';
-import { SupabaseClient } from '@auth/SupabaseClient';
-import { ULTRA_TIER, MAX_TIER } from '@auth/config';
-import { AUTH_COMMANDS } from '@auth/constants';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { getAgentsBySource, loadAgents } from '@agent/index';
 import {
   getExecutionStore,
@@ -43,6 +23,11 @@ import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
 import { getHelperModelName } from '@agent/runtime/helperModel';
 import { LEVEL_TO_EFFORT } from '@agent/runtime/ModelFactory';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { ULTRA_TIER, MAX_TIER } from '@auth/config';
+import { AUTH_COMMANDS } from '@auth/constants';
+import { getServerSideKeyService } from '@auth/serverKeys';
+import { runExecuteCommand } from '@commands/agent/executeCommand';
 import {
   BaseViewMessageHandler,
   SETTINGS_VIEW_COMMANDS,
@@ -61,6 +46,29 @@ import {
   formatContext,
   formatCost,
 } from '@model/computeModelOptions';
+import type { ExecutionId } from '@shared/schemas';
+import {
+  dispatchSettingsViewInbound,
+  type SettingsViewInboundHandlerRegistry,
+  type SettingsViewInboundMessage,
+  SETTINGS_VIEW_CMD,
+  ReasoningLevelSchema,
+  type ModelSelectionItem,
+  type ReasoningLevel,
+} from '@shared/schemas/settingsViewMessages';
+import {
+  PROVIDER_DISPLAY_NAMES,
+  MODEL_PROVIDERS_ORDER,
+  DEFAULT_HELPER_MODEL,
+  PROVIDER_URLS,
+  PROVIDER_VSCODE_SETTINGS,
+} from '@shared/constants/providers';
+import type {
+  RemoteAgent,
+  ProviderKeyStatus,
+  ProviderVscodeSetting,
+  NumberVscodeSetting,
+} from '@shared/schemas/profileViewMessages';
 import {
   _disableAllProposalBypasses,
   setToolEditApprovalSessionBypass,
@@ -82,8 +90,6 @@ import {
   setProviderEndpoint,
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
-import { getConfig } from '@utils/config/configUtils';
-import { runExecuteCommand } from '@commands/agent/executeCommand';
 import {
   formatChatAsMarkdown,
   formatChatAsLatex,
@@ -91,17 +97,11 @@ import {
   type ChatExportInput,
 } from '@commands/history/chatExportFormatter';
 import { compileLatex2Pdf } from '@latex/texTools';
+import { getConfig } from '@utils/config/configUtils';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
-import type {
-  RemoteAgent,
-  ProviderKeyStatus,
-  ProviderVscodeSetting,
-  NumberVscodeSetting,
-} from '@shared/schemas/profileViewMessages';
-import type { ExecutionId } from '@shared/schemas';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 
 // Type helper for extracting specific message types

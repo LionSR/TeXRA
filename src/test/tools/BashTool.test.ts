@@ -27,9 +27,9 @@ import type { ExecResult } from '@agent/types/ResultTypes';
 // Internal imports
 import { MapToolRegistry } from '@agent/core/ToolTypes';
 import { AgentLogger } from '@logger/AgentLogger';
+import type { StreamTabId } from '@shared/schemas';
 import { BashTool } from '@tools/bash';
 import * as execUtils from '@utils/system/execUtils';
-import type { StreamTabId } from '@shared/schemas';
 
 // Type imports
 import type OpenAI from 'openai';

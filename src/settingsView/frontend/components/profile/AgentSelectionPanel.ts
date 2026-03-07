@@ -25,8 +25,8 @@ import {
   type AgentCategory,
   type AgentSourceType,
 } from '@shared/schemas/agent';
-import { AgentSelectionEvents } from './events';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
+import { AgentSelectionEvents } from './events';
 
 /** Shorthand: derive the canonical key from an AgentSelectionItem. */
 function agentKey(agent: AgentSelectionItem): string {

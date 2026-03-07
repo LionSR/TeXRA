@@ -2,8 +2,8 @@
 import * as assert from 'assert';
 
 // Local imports - tools
-import { TexcountTool } from '@tools/texcount';
 import * as texcountModule from '@latex/texcount';
+import { TexcountTool } from '@tools/texcount';
 
 describe('TexcountTool', () => {
   const originalGetTeXCount = texcountModule.getTeXCount;

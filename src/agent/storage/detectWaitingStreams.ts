@@ -6,8 +6,8 @@
  */
 
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
-import { getExecutionStore } from './ExecutionKVStore';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { getExecutionStore } from './ExecutionKVStore';
 
 /**
  * Check if a single stream has a valid, resumable flow record.

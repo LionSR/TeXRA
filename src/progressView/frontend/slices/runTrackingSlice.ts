@@ -5,8 +5,8 @@
 
 import { create } from 'mutative';
 
-import { sumUsageStats } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { sumUsageStats } from '@shared/schemas';
 
 import { isToolUseState, isWorkflowState } from '../store';
 import { updateWorkflowState, updateNestedRounds } from '../stateUtils';

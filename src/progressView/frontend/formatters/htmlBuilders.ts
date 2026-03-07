@@ -8,6 +8,7 @@
  */
 
 // Third-party imports - use optimized hljs with only TeXRA-relevant languages
+import type { FileListEntry } from '@shared/schemas';
 import { hljs } from '@shared/highlighting/hljs';
 
 // Local imports - shared utilities
@@ -34,7 +35,6 @@ import { generateInlineDiff } from './wordDiff';
 import { registerCopyContent } from './copyContentStore';
 
 // Local imports - shared schemas (types)
-import type { FileListEntry } from '@shared/schemas';
 
 /** Build a tool-use section template. Empty label omits the label element. */
 export function buildToolUseSection(

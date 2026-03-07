@@ -12,12 +12,13 @@ import * as vscode from 'vscode';
 
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { isLatexFile } from '@common/files/fileTypeUtils';
+import { bus } from '@eventBus/ProgressEventBus';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import type { StreamTabId } from '@shared/schemas';
 import { type LineChanges, type ToolResult } from '@tools/result';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 import { countLines, normalizeLineEndings } from '@utils/text/stringUtils';
-import { bus } from '@eventBus/ProgressEventBus';
 
 import { rejectPendingEntries } from './bashApproval';
 import {
@@ -25,7 +26,6 @@ import {
   previewProposedLatex,
   runLatexdiff,
 } from './latexPreview';
-import type { StreamTabId } from '@shared/schemas';
 
 export interface ToolEditApprovalRequest {
   path: string;

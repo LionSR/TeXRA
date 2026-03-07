@@ -11,6 +11,7 @@ import {
   animationStyles,
   commonViewStyles,
 } from '@shared/styles';
+import type { StreamTabInfo } from '@shared/schemas';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 
@@ -22,7 +23,6 @@ import type { StreamState } from '../store';
 import './RunSelector';
 
 // Local imports - shared schemas
-import type { StreamTabInfo } from '@shared/schemas';
 
 interface ToolbarButton {
   id: string;

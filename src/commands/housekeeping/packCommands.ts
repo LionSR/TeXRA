@@ -5,9 +5,9 @@ import { z } from 'zod';
 // Local imports
 import type { FileOpResult } from '@agent/types';
 import { parseWithErrorDisplay } from '@common/errors';
+import { runPack, runPackSingle, runPackMultiple } from '@housekeeping';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
-import { runPack, runPackSingle, runPackMultiple } from '@housekeeping';
 import { emitClearMissingOutputs } from './streamEventUtils';
 
 const CHANNEL = 'packCommands';

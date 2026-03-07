@@ -1,11 +1,12 @@
 import { create } from 'mutative';
 
 // Local imports - shared webview
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { postMessage } from '@shared/vscode';
+import type { StreamTabId } from '@shared/schemas';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 // Local imports - webview commands
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view
 import {
@@ -35,7 +36,6 @@ import type {
 import type { MessageHandlerContext } from './messageDispatcher';
 
 // Local imports - shared schemas (types)
-import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - component types
 import type { FollowUpInput } from './components/FollowUpInput';

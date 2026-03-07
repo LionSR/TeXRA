@@ -4,6 +4,7 @@ import * as assert from 'assert';
 // Local imports - agent types
 
 // Local imports - tools
+import type { StreamTabId } from '@shared/schemas';
 import { WriteFileTool } from '@tools/WriteTool';
 import {
   cleanupAllApprovals,
@@ -14,7 +15,6 @@ import {
 } from '@tools/approval';
 import * as configModule from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
-import type { StreamTabId } from '@shared/schemas';
 
 // Test stream ID for per-stream YOLO mode tests
 const TEST_STREAM_ID = 'TestAgent@model: test.tex' as StreamTabId;

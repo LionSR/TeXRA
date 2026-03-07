@@ -12,6 +12,12 @@ import { live } from 'lit/directives/live.js';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
+import { STREAM_STATUS } from '@shared/schemas';
+import type {
+  SetFollowupOptionsMessage,
+  AgentOptionData,
+  ModelOptionData,
+} from '@shared/schemas';
 import { commonViewStyles } from '@shared/styles/commonViewStyles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
@@ -22,18 +28,12 @@ import {
 } from '@shared/utils/selectTemplates';
 
 // Local imports - shared schemas
-import { STREAM_STATUS } from '@shared/schemas';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getRadioValue } from '../utils';
 import type { FollowupMode } from '../store';
-import type {
-  SetFollowupOptionsMessage,
-  AgentOptionData,
-  ModelOptionData,
-} from '@shared/schemas';
 
 /** Agent name used for merge mode (fixed, not user-selectable) */
 const MERGE_AGENT_NAME = 'merge';
