@@ -545,37 +545,34 @@ export async function executeAgent(
     streamId,
     agentName,
     async () => {
-      // Pre-execution UI setup (inlined from prepareAgentUI)
+      // Pre-execution UI setup
       if (executionId) await ensureRunDir(executionId);
-      {
-        const runStorage = getRunStorageService();
-        StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
-        logger.info(`Starting task execution for ${streamId}`);
-        logger.info(`Input file: ${config.inputFile}`);
-        logger.debug(
-          `Stream ID: ${streamId}, Agent: ${config.agent}, Model: ${config.model}`,
-        );
-        logger.debug(
-          `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
-        );
-        // Subagents don't need to force-open the progress board or show notifications —
-        // the orchestrator's stream is already visible.
-        if (!isSubagent && !runStorage.isViewVisible()) {
-          bus.emit('requestEnsureProgressView', {
-            fallbackNotification: buildFallbackNotification(config),
-          });
-        }
-        bus.emit('setTaskState', {
-          streamId,
-          executionId,
-          taskState: agentConfigToTaskState(config),
-          storageKey: ctx.storageKey,
+      StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
+      logger.info(`Starting task execution for ${streamId}`);
+      logger.info(`Input file: ${config.inputFile}`);
+      logger.debug(
+        `Stream ID: ${streamId}, Agent: ${config.agent}, Model: ${config.model}`,
+      );
+      logger.debug(
+        `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
+      );
+      // Subagents don't need to force-open the progress board or show notifications —
+      // the orchestrator's stream is already visible.
+      if (!isSubagent && !getRunStorageService().isViewVisible()) {
+        bus.emit('requestEnsureProgressView', {
+          fallbackNotification: buildFallbackNotification(config),
         });
-        if (config.outputFiles.length > 1 && !config.useMultipleOutputs) {
-          logger.warn(
-            `Multiple output files provided (${config.outputFiles.length}) but useMultipleOutputs flag is disabled.`,
-          );
-        }
+      }
+      bus.emit('setTaskState', {
+        streamId,
+        executionId,
+        taskState: agentConfigToTaskState(config),
+        storageKey: ctx.storageKey,
+      });
+      if (config.outputFiles.length > 1 && !config.useMultipleOutputs) {
+        logger.warn(
+          `Multiple output files provided (${config.outputFiles.length}) but useMultipleOutputs flag is disabled.`,
+        );
       }
 
       const taskStage = await logger.stage(
