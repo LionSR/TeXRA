@@ -75,6 +75,8 @@ const HISTORY_ACTION_COMMANDS: Record<string, string> = {
   delete: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
   restore: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
   rerun: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
+  'export-md': SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
+  'export-tex': SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX,
 };
 
 /** Create an event handler that forwards event.detail to a postMessage command. */
