@@ -88,6 +88,39 @@ const approvalsBypassedByStream = new Map<StreamTabId, boolean>();
 let storageDirectory: string | undefined;
 const activePreviewFiles = new Set<string>();
 
+// -- Pending approvals accessors --
+
+export function getPendingApproval(
+  id: string,
+): PendingApprovalEntry | undefined {
+  return pendingApprovals.get(id);
+}
+
+export function setPendingApproval(
+  id: string,
+  entry: PendingApprovalEntry,
+): void {
+  pendingApprovals.set(id, entry);
+}
+
+export function deletePendingApproval(
+  id: string,
+): PendingApprovalEntry | undefined {
+  const entry = pendingApprovals.get(id);
+  pendingApprovals.delete(id);
+  return entry;
+}
+
+// -- Active preview files accessors --
+
+export function trackPreviewFile(filePath: string): void {
+  activePreviewFiles.add(filePath);
+}
+
+export function untrackPreviewFile(filePath: string): void {
+  activePreviewFiles.delete(filePath);
+}
+
 function notifyApprovalBypassState(streamId: StreamTabId): void {
   if (!initialized) {
     return;

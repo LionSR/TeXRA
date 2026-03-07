@@ -23,9 +23,12 @@ import {
   type ToolEditApprovalResult,
   type PendingApprovalEntry,
   type ToolEditApprovalAction,
-  pendingApprovals,
+  getPendingApproval,
+  setPendingApproval,
+  deletePendingApproval,
+  trackPreviewFile,
+  untrackPreviewFile,
   nextApprovalId,
-  activePreviewFiles,
   ensureStorageDir,
   getStorageDir,
   computeLineChangeSummary,
@@ -58,12 +61,12 @@ async function createTempFile(
   const fileName = `${randomUUID()}-${side}${ext}`;
   const filePath = path.join(dir, fileName);
   await fs.writeFile(filePath, content, 'utf8');
-  activePreviewFiles.add(filePath);
+  trackPreviewFile(filePath);
   return vscode.Uri.file(filePath);
 }
 
 async function cleanupTempFile(uri: vscode.Uri): Promise<void> {
-  activePreviewFiles.delete(uri.fsPath);
+  untrackPreviewFile(uri.fsPath);
   await fs.unlink(uri.fsPath).catch(() => {});
 }
 
@@ -284,7 +287,7 @@ async function nativeRequestApproval(
         onError: (msg) => vscode.window.showErrorMessage(msg),
       };
 
-      pendingApprovals.set(requestId, entry);
+      setPendingApproval(requestId, entry);
       void showProgressViewApprovalPrompt(
         requestId,
         request,
@@ -317,17 +320,13 @@ async function nativeRequestApproval(
       lineChanges: result.lineChanges ?? lineChanges,
     };
   } finally {
-    const entry = pendingApprovals.get(requestId);
-    pendingApprovals.delete(requestId);
+    const entry = deletePendingApproval(requestId);
     await closeApprovalEditors(originalUri, proposedUri);
-    await cleanupTempFile(originalUri);
-    await cleanupTempFile(proposedUri);
-
-    if (entry?.workspaceTempCleanup.length) {
-      await Promise.all(
-        entry.workspaceTempCleanup.map((fn) => fn().catch(() => {})),
-      );
-    }
+    await Promise.all([
+      cleanupTempFile(originalUri),
+      cleanupTempFile(proposedUri),
+      ...(entry?.workspaceTempCleanup.map((fn) => fn().catch(() => {})) ?? []),
+    ]);
 
     resolveProgressViewApprovalPrompt(requestId);
   }
@@ -346,7 +345,7 @@ interface ToolEditApprovalActionPayload {
 export async function handleProgressViewToolEditApprovalAction(
   payload: ToolEditApprovalActionPayload,
 ): Promise<void> {
-  const entry = pendingApprovals.get(payload.requestId);
+  const entry = getPendingApproval(payload.requestId);
   if (!entry || entry.isSettled()) {
     return;
   }
