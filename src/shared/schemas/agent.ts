@@ -37,6 +37,19 @@ export type AgentSourceType = z.infer<typeof AgentSourceSchema>;
 export const AgentSource = AgentSourceSchema;
 export type AgentSource = AgentSourceType;
 
+/**
+ * Base schema for agent identity metadata shared across all agent representations.
+ * View-specific schemas (RemoteAgentSchema, AgentSelectionItemSchema, etc.)
+ * should extend this via `.extend()` rather than redefining these fields.
+ */
+export const AgentMetadataBaseSchema = z.object({
+  name: z.string(),
+  category: AgentCategorySchema,
+  description: z.string().optional(),
+});
+
+export type AgentMetadataBase = z.infer<typeof AgentMetadataBaseSchema>;
+
 /** Canonical key format: disambiguates agents with same name across sources. */
 export function agentKey(source: string, name: string): string {
   return `${source}:${name}`;

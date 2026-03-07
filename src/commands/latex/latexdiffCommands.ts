@@ -373,8 +373,6 @@ interface DiffOperation {
   round?: number;
   fromRound?: number;
   toRound?: number;
-  info: OutputFileInfo;
-  prevInfo?: OutputFileInfo;
 }
 
 async function handleRunLatexdiff(
@@ -529,6 +527,70 @@ async function handleRunLatexdiff(
   }
 }
 
+/**
+ * Shared executor for diff operations. Both metadata-driven and workspace-scan
+ * paths build a list of DiffOperation[], then delegate to this function.
+ */
+async function executeDiffOperations(
+  operations: DiffOperation[],
+  mathMarkup: MathMarkupOption | undefined,
+  progress: vscode.Progress<{ message?: string; increment?: number }>,
+  immediateResults: DiffRunResult[] = [],
+): Promise<DiffRunOutcome> {
+  const results: DiffRunResult[] = [...immediateResults];
+  const incrementPct = operations.length > 0 ? 100 / operations.length : 0;
+
+  for (const operation of operations) {
+    progress.report({
+      increment: incrementPct,
+      message: `Running ${operation.type} diff for ${operation.description}`,
+    });
+
+    const baseExists = await flexibleFS.exists(operation.base);
+    const revisedExists = await flexibleFS.exists(operation.revised);
+
+    if (!baseExists || !revisedExists) {
+      results.push({
+        success: false,
+        message: 'Required files are missing on disk',
+        description: operation.description,
+      });
+      continue;
+    }
+
+    logger.debug(
+      CHANNEL,
+      `Running ${operation.type} diff: ${operation.description}`,
+    );
+
+    const diffResult =
+      operation.type === 'round'
+        ? await service.runDiffForRound(
+            operation.base,
+            operation.revised,
+            operation.round ?? 0,
+            mathMarkup,
+            { cwd: operation.cwd },
+          )
+        : await service.runDiffBetweenRounds(
+            operation.base,
+            operation.revised,
+            mathMarkup,
+            { cwd: operation.cwd },
+          );
+
+    results.push({
+      success: diffResult.success,
+      message: diffResult.message,
+      basePath: operation.base.absolutePath,
+      diffFileName: diffResult.diffFileName,
+      description: operation.description,
+    });
+  }
+
+  return { results, totalOperations: results.length };
+}
+
 async function runLatexdiffFromMetadata(params: {
   rounds: Map<number, OutputFileInfo[]>;
   mathMarkup?: MathMarkupOption;
@@ -538,7 +600,6 @@ async function runLatexdiffFromMetadata(params: {
 }): Promise<DiffRunOutcome> {
   const { rounds, mathMarkup, generateBetweenRoundDiffs, progress } = params;
 
-  // Get file description for display - trust source field, fall back to basename
   const getFileLabel = (info: OutputFileInfo): string =>
     info.source ??
     path.basename(
@@ -556,7 +617,6 @@ async function runLatexdiffFromMetadata(params: {
 
   for (const [round, infos] of rounds.entries()) {
     for (const info of infos) {
-      // lineage.original is already a FileLocation | null - use directly
       const base = info.lineage?.original ?? null;
       const description = `${getFileLabel(info)} (r${round})`;
 
@@ -576,7 +636,6 @@ async function runLatexdiffFromMetadata(params: {
         description,
         cwd: WorkspaceFS.getPath() ?? path.dirname(base.absolutePath),
         round,
-        info,
       });
 
       const key =
@@ -608,72 +667,17 @@ async function runLatexdiffFromMetadata(params: {
           cwd: WorkspaceFS.getPath() ?? path.dirname(base.absolutePath),
           fromRound: previous.round,
           toRound: current.round,
-          info: current.info,
-          prevInfo: previous.info,
         });
       }
     }
   }
 
-  const results: DiffRunResult[] = [...immediateResults];
-  const operationCount = operations.length;
-  const incrementPct = operationCount > 0 ? 100 / operationCount : 0;
-
-  for (const operation of operations) {
-    progress.report({
-      increment: incrementPct,
-      message: `Running ${operation.type} diff for ${operation.description}`,
-    });
-
-    const baseExists = await flexibleFS.exists(operation.base);
-    const revisedExists = await flexibleFS.exists(operation.revised);
-
-    if (!baseExists || !revisedExists) {
-      results.push({
-        success: false,
-        message: 'Required files are missing on disk',
-        description: operation.description,
-      });
-      continue;
-    }
-
-    logger.debug(
-      CHANNEL,
-      `Running ${operation.type} diff: ${operation.description}`,
-    );
-
-    let diffResult: LaTeXdiffResult;
-
-    if (operation.type === 'round') {
-      diffResult = await service.runDiffForRound(
-        operation.base,
-        operation.revised,
-        operation.round ?? 0,
-        mathMarkup,
-        { cwd: operation.cwd },
-      );
-    } else {
-      diffResult = await service.runDiffBetweenRounds(
-        operation.base,
-        operation.revised,
-        mathMarkup,
-        { cwd: operation.cwd },
-      );
-    }
-
-    results.push({
-      success: diffResult.success,
-      message: diffResult.message,
-      basePath: operation.base.absolutePath,
-      diffFileName: diffResult.diffFileName,
-      description: operation.description,
-    });
-  }
-
-  return {
-    results,
-    totalOperations: operationCount + immediateResults.length,
-  };
+  return executeDiffOperations(
+    operations,
+    mathMarkup,
+    progress,
+    immediateResults,
+  );
 }
 
 async function runLatexdiffViaWorkspaceScan(params: {
@@ -765,66 +769,28 @@ async function runLatexdiffViaWorkspaceScan(params: {
     return { results: [], totalOperations: 0 };
   }
 
-  let totalOperations = 0;
-  for (const roundOutputs of inputToOutputsMap.values()) {
-    totalOperations += roundOutputs.size;
-    if (generateBetweenRoundDiffs && roundOutputs.size > 1) {
-      totalOperations += roundOutputs.size - 1;
-    }
-  }
-
-  if (totalOperations === 0) {
-    return { results: [], totalOperations: 0 };
-  }
-
-  logger.debug(CHANNEL, `Total diff operations to perform: ${totalOperations}`);
-
-  const results: DiffRunResult[] = [];
-  let completedOperations = 0;
+  // Build operations list from scanned workspace files
+  const operations: DiffOperation[] = [];
 
   for (const [baseFile, roundOutputs] of inputToOutputsMap.entries()) {
-    progress.report({
-      increment: 0,
-      message: `Running diffs for ${path.basename(baseFile)}...`,
-    });
-
     const rounds = [...roundOutputs.keys()].sort((a, b) => a - b);
 
     for (const round of rounds) {
       const outputFile = roundOutputs.get(round)!;
-      logger.debug(
-        CHANNEL,
-        `Running round diff for ${path.basename(baseFile)} -> ${path.basename(outputFile)} (r${round})`,
-      );
-
       const resolvedBase = path.isAbsolute(baseFile)
         ? baseFile
         : path.join(workspacePath, baseFile);
       const resolvedOutput = path.isAbsolute(outputFile)
         ? outputFile
         : path.join(workspacePath, outputFile);
-      const cwd = path.dirname(resolvedOutput);
 
-      const result = await service.runDiffForRound(
-        pathToLocation(resolvedBase),
-        pathToLocation(resolvedOutput),
-        round,
-        mathMarkup,
-        { cwd },
-      );
-
-      results.push({
-        success: result.success,
-        message: result.message,
-        basePath: resolvedBase,
-        diffFileName: result.diffFileName,
+      operations.push({
+        type: 'round',
+        base: pathToLocation(resolvedBase),
+        revised: pathToLocation(resolvedOutput),
         description: `${path.basename(baseFile)} (r${round})`,
-      });
-
-      completedOperations += 1;
-      progress.report({
-        increment: 100 / totalOperations,
-        message: `Completed ${completedOperations} of ${totalOperations} operations`,
+        cwd: path.dirname(resolvedOutput),
+        round,
       });
     }
 
@@ -835,42 +801,25 @@ async function runLatexdiffViaWorkspaceScan(params: {
         const currentFile = roundOutputs.get(currentRound)!;
         const nextFile = roundOutputs.get(nextRound)!;
 
-        logger.debug(
-          CHANNEL,
-          `Running between-rounds diff: ${path.basename(currentFile)} -> ${path.basename(nextFile)}`,
-        );
-
         const resolvedCurrent = path.isAbsolute(currentFile)
           ? currentFile
           : path.join(workspacePath, currentFile);
         const resolvedNext = path.isAbsolute(nextFile)
           ? nextFile
           : path.join(workspacePath, nextFile);
-        const cwd = path.dirname(resolvedCurrent);
 
-        const result = await service.runDiffBetweenRounds(
-          pathToLocation(resolvedCurrent),
-          pathToLocation(resolvedNext),
-          mathMarkup,
-          { cwd },
-        );
-
-        results.push({
-          success: result.success,
-          message: result.message,
-          basePath: resolvedCurrent,
-          diffFileName: result.diffFileName,
+        operations.push({
+          type: 'between-rounds',
+          base: pathToLocation(resolvedCurrent),
+          revised: pathToLocation(resolvedNext),
           description: `${path.basename(currentFile)} (r${currentRound}→r${nextRound})`,
-        });
-
-        completedOperations += 1;
-        progress.report({
-          increment: 100 / totalOperations,
-          message: `Completed ${completedOperations} of ${totalOperations} operations`,
+          cwd: path.dirname(resolvedCurrent),
+          fromRound: currentRound,
+          toRound: nextRound,
         });
       }
     }
   }
 
-  return { results, totalOperations };
+  return executeDiffOperations(operations, mathMarkup, progress);
 }

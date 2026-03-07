@@ -92,37 +92,23 @@ export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
  */
 
 /**
- * Tier values for server-side API key access.
+ * Single source of truth for tier values used in server-side API key access.
+ *
+ * CROSS-REFERENCE: These exact string values are duplicated in:
+ *   supabase/functions/relay/models.ts (lines 143-145)
+ * Deno Edge Functions cannot import TypeScript source, so the values must
+ * be kept in sync manually. If you change any value here, you MUST also
+ * update the corresponding constants in that file.
+ *
+ * The schema enum order is: 'free', 'Max', 'Ultra' (ascending privilege).
  */
 export const UserTierSchema = z.enum(['free', 'Max', 'Ultra']);
 export type UserTier = z.infer<typeof UserTierSchema>;
 
-/**
- * Ultra tier constant for server-side API key access checks.
- *
- * CROSS-REFERENCE: Duplicated in supabase/functions/relay/index.ts
- * because Deno Edge Functions cannot import TypeScript source.
- * Update both locations when changing tier values.
- */
-export const ULTRA_TIER: UserTier = 'Ultra';
-
-/**
- * Max tier constant for server-side API key access (cheaper models).
- *
- * CROSS-REFERENCE: Duplicated in supabase/functions/relay/index.ts
- * because Deno Edge Functions cannot import TypeScript source.
- * Update both locations when changing tier values.
- */
-export const MAX_TIER: UserTier = 'Max';
-
-/**
- * Free tier constant for server-side API key access (budget models).
- *
- * CROSS-REFERENCE: Duplicated in supabase/functions/relay/index.ts
- * because Deno Edge Functions cannot import TypeScript source.
- * Update both locations when changing tier values.
- */
+/** Tier constants derived from the schema — use these instead of string literals. */
 export const FREE_TIER: UserTier = 'free';
+export const MAX_TIER: UserTier = 'Max';
+export const ULTRA_TIER: UserTier = 'Ultra';
 
 /**
  * User's authorization context.
