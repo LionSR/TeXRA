@@ -87,3 +87,28 @@ export async function setProviderEndpoint(
 export function supportsCustomEndpoint(provider: string): boolean {
   return provider.toLowerCase() in ENDPOINT_KEY;
 }
+
+// ---------------------------------------------------------------------------
+// Anthropic API settings (globalSM-backed)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether Anthropic web_search/web_fetch should use dynamic filtering
+ * (20260209 tool versions). Requires code execution container support.
+ * Defaults to false — uses stable 20250305/20250910 versions instead.
+ */
+export function getAnthropicDynamicFiltering(): boolean {
+  return (
+    globalSM?.get<boolean>(
+      GlobalStateKey.ANTHROPIC_DYNAMIC_FILTERING,
+      false,
+    ) ?? false
+  );
+}
+
+/** Set Anthropic dynamic filtering preference. */
+export async function setAnthropicDynamicFiltering(
+  enabled: boolean,
+): Promise<void> {
+  await globalSM?.update(GlobalStateKey.ANTHROPIC_DYNAMIC_FILTERING, enabled);
+}

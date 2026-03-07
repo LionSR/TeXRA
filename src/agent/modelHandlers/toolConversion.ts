@@ -39,9 +39,6 @@ function convertToolSchema(
 }
 
 // Map local tool names to Anthropic remote tool types.
-// The 20260209 versions of web_search and web_fetch add dynamic filtering support
-// (Claude can write code to filter results before they enter context). These are
-// backward-compatible: models without dynamic filtering simply ignore the capability.
 const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
   bash: 'bash_20250124',
   str_replace_editor: 'text_editor_20250429',
@@ -50,6 +47,9 @@ const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
   web_fetch: 'web_fetch_20260209',
   memory: 'memory_20250818',
 };
+
+/** Tools that support dynamic filtering via code execution. */
+const DYNAMIC_FILTERING_TOOLS = new Set(['web_search', 'web_fetch']);
 
 /**
  * Convert generic ToolDefinition objects to OpenAI ChatCompletionTool format.
@@ -129,6 +129,13 @@ interface AnthropicToolOptions {
   supportsNativeWebSearch?: boolean;
   /** Whether the model supports native web fetch. Defaults to false. */
   supportsNativeWebFetch?: boolean;
+  /**
+   * Whether to use dynamic filtering tool versions (20260209) for web_search
+   * and web_fetch. These versions let Claude write code to filter results
+   * before they enter context, but require code execution container support.
+   * Defaults to false (uses stable 20250305/20250910 versions).
+   */
+  useDynamicFiltering?: boolean;
 }
 
 /**
@@ -138,8 +145,11 @@ export function toAnthropicTools(
   defs: ToolDefinition[],
   options: AnthropicToolOptions = {},
 ): ToolUnion[] {
-  const { supportsNativeWebSearch = false, supportsNativeWebFetch = false } =
-    options;
+  const {
+    supportsNativeWebSearch = false,
+    supportsNativeWebFetch = false,
+    useDynamicFiltering = false,
+  } = options;
 
   /** Tools that require an explicit capability flag to use as native. */
   const CONDITIONAL_NATIVE_TOOLS: Record<string, boolean> = {
@@ -154,7 +164,15 @@ export function toAnthropicTools(
       const gated = CONDITIONAL_NATIVE_TOOLS[d.name];
       // If not gated (undefined) or explicitly enabled, use native tool
       if (gated !== false) {
-        return { name: d.name, type: remoteType } as ToolUnion;
+        // For web tools with dynamic filtering disabled, restrict to direct
+        // invocation to avoid requiring a code execution container.
+        const needsDirectOnly =
+          !useDynamicFiltering && DYNAMIC_FILTERING_TOOLS.has(d.name);
+        return {
+          name: d.name,
+          type: remoteType,
+          ...(needsDirectOnly ? { allowed_callers: ['direct'] } : {}),
+        } as ToolUnion;
       }
     }
 
