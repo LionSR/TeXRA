@@ -12,69 +12,85 @@
  * This module is VS Code-free — all platform wiring lives in the caller.
  */
 
+import { z } from 'zod';
+
 // ============================================================
-// Input types
+// Input schemas (single source of truth)
 // ============================================================
 
-interface ContentBlock {
-  type: string;
-  text?: string;
-  thinking?: string;
-  name?: string;
-  id?: string;
-  input?: unknown;
-  content?: unknown;
-  source?: { type: string; media_type?: string };
-  query?: string;
-  search_results?: Array<{ title?: string; url?: string }>;
-  url?: string;
-  title?: string;
-  page_content?: string;
-}
+/** Loose schema for API content blocks — accepts many optional fields. */
+const ContentBlockSchema = z.object({
+  type: z.string(),
+  text: z.string().optional(),
+  thinking: z.string().optional(),
+  name: z.string().optional(),
+  id: z.string().optional(),
+  input: z.unknown().optional(),
+  content: z.unknown().optional(),
+  source: z.object({ type: z.string(), media_type: z.string().optional() }).optional(),
+  query: z.string().optional(),
+  search_results: z.array(z.object({ title: z.string().optional(), url: z.string().optional() })).optional(),
+  url: z.string().optional(),
+  title: z.string().optional(),
+  page_content: z.string().optional(),
+}).passthrough();
+type ContentBlock = z.infer<typeof ContentBlockSchema>;
 
-interface ConversationMessage {
-  role?: string;
-  content?: string | ContentBlock[] | unknown;
-}
+const ConversationMessageSchema = z.object({
+  role: z.string().optional(),
+  content: z.union([z.string(), z.array(ContentBlockSchema), z.unknown()]).optional(),
+}).passthrough();
+type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 
-interface ExportConfig {
-  agent?: string;
-  model?: string;
-  instruction?: string;
-  inputFile?: string;
-  inputFiles?: string[];
-  mediaFile?: string | null;
-  mediaFiles?: string[];
-  referenceFile?: string | null;
-  referenceFiles?: string[];
-  auxiliaryFile?: string | null;
-  auxiliaryFiles?: string[];
-  outputFiles?: string[];
-}
+const ExportConfigSchema = z.object({
+  agent: z.string().optional(),
+  model: z.string().optional(),
+  instruction: z.string().optional(),
+  inputFile: z.string().optional(),
+  inputFiles: z.array(z.string()).optional(),
+  mediaFile: z.string().nullish(),
+  mediaFiles: z.array(z.string()).optional(),
+  referenceFile: z.string().nullish(),
+  referenceFiles: z.array(z.string()).optional(),
+  auxiliaryFile: z.string().nullish(),
+  auxiliaryFiles: z.array(z.string()).optional(),
+  outputFiles: z.array(z.string()).optional(),
+});
+type ExportConfig = z.infer<typeof ExportConfigSchema>;
 
-export interface ChatExportInput {
-  timestamp: string;
-  description?: string;
-  config: ExportConfig;
-  messages: unknown[];
-}
+export const ChatExportInputSchema = z.object({
+  timestamp: z.string(),
+  description: z.string().optional(),
+  config: ExportConfigSchema,
+  messages: z.array(z.unknown()),
+});
+export type ChatExportInput = z.infer<typeof ChatExportInputSchema>;
 
 // ============================================================
 // Intermediate representation — format-agnostic
 // ============================================================
 
-type UserPart =
-  | { type: 'text'; text: string }
-  | { type: 'attachment'; attachmentType: 'image' | 'document' };
+const WebSearchResultSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+});
 
-type ExportNode =
-  | { kind: 'user-message'; parts: UserPart[] }
-  | { kind: 'assistant-text'; text: string }
-  | { kind: 'tool-call'; name: string; input: string }
-  | { kind: 'tool-result'; text: string }
-  | { kind: 'web-search'; query: string }
-  | { kind: 'web-search-results'; results: Array<{ title: string; url: string }> }
-  | { kind: 'web-fetch'; url: string; title?: string; content?: string };
+const UserPartSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('text'), text: z.string() }),
+  z.object({ type: z.literal('attachment'), attachmentType: z.enum(['image', 'document']) }),
+]);
+type UserPart = z.infer<typeof UserPartSchema>;
+
+const ExportNodeSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('user-message'), parts: z.array(UserPartSchema) }),
+  z.object({ kind: z.literal('assistant-text'), text: z.string() }),
+  z.object({ kind: z.literal('tool-call'), name: z.string(), input: z.string() }),
+  z.object({ kind: z.literal('tool-result'), text: z.string() }),
+  z.object({ kind: z.literal('web-search'), query: z.string() }),
+  z.object({ kind: z.literal('web-search-results'), results: z.array(WebSearchResultSchema) }),
+  z.object({ kind: z.literal('web-fetch'), url: z.string(), title: z.string().optional(), content: z.string().optional() }),
+]);
+type ExportNode = z.infer<typeof ExportNodeSchema>;
 
 // ============================================================
 // Format specification
@@ -85,14 +101,15 @@ type NodeRenderers = {
   [K in ExportNode['kind']]: (node: Extract<ExportNode, { kind: K }>) => string;
 };
 
-interface DocumentMeta {
-  date: string;
-  agent?: string;
-  model?: string;
-  description?: string;
-  instruction?: string;
-  files: Array<[string, string]>;
-}
+const DocumentMetaSchema = z.object({
+  date: z.string(),
+  agent: z.string().optional(),
+  model: z.string().optional(),
+  description: z.string().optional(),
+  instruction: z.string().optional(),
+  files: z.array(z.tuple([z.string(), z.string()])),
+});
+type DocumentMeta = z.infer<typeof DocumentMetaSchema>;
 
 interface FormatSpec {
   header: (meta: DocumentMeta) => string;
