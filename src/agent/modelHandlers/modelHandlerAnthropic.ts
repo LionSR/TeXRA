@@ -45,6 +45,7 @@ import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
 import { getConfig } from '@utils/config';
+import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
 import { isNonEmptyString } from '@utils/core';
 import { flexibleFS, type FileLocation } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
@@ -631,6 +632,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
         // Web fetch is available on the same Anthropic models that support native web search
         supportsNativeWebFetch: this.capabilities.supportsNativeWebSearch,
+        useDynamicFiltering: getAnthropicDynamicFiltering(),
       });
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
 
