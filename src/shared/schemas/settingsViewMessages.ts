@@ -30,6 +30,8 @@ import {
 import {
   ClearHistoryMessageSchema,
   DeleteAgentMessageSchema,
+  ExportChatMdMessageSchema,
+  ExportChatTexMessageSchema,
   GetHistoryDataMessageSchema,
   RerunAgentMessageSchema,
   RestoreAgentMessageSchema,
@@ -565,6 +567,8 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     RestoreAgentMessageSchema,
     DeleteAgentMessageSchema,
     ClearHistoryMessageSchema,
+    ExportChatMdMessageSchema,
+    ExportChatTexMessageSchema,
     // Profile messages
     GetProfileDataMessageSchema,
     SelectAgentInboundMessageSchema,

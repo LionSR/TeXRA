@@ -13,4 +13,6 @@ export const HISTORY_VIEW_COMMANDS = {
   RERUN_AGENT: 'rerunAgent',
   RESTORE_AGENT: 'restoreAgent',
   DELETE_AGENT: 'deleteAgent',
+  EXPORT_CHAT_MD: 'exportChatMd',
+  EXPORT_CHAT_TEX: 'exportChatTex',
 } as const;
