@@ -84,20 +84,16 @@ let customHandler:
   | undefined;
 let approvalCounter = 0;
 const pendingApprovals = new Map<string, PendingApprovalEntry>();
-const approvalsBypassedByStream = new Map<StreamTabId, boolean>();
-let storageDirectory: string | undefined;
-const activePreviewFiles = new Set<string>();
+const bypassedByStream = new Map<StreamTabId, boolean>();
 
-function notifyApprovalBypassState(streamId: StreamTabId): void {
-  if (!initialized) {
-    return;
-  }
-  const bypassActive = approvalsBypassedByStream.get(streamId) ?? false;
+function notifyBypassState(streamId: StreamTabId): void {
   bus.emit('updateToolEditApprovalBypassState', {
     streamId,
-    bypassActive,
+    bypassActive: bypassedByStream.get(streamId) ?? false,
   });
 }
+let storageDirectory: string | undefined;
+const activePreviewFiles = new Set<string>();
 
 function getStorageDir(): string {
   if (!storageDirectory) {
@@ -135,21 +131,21 @@ export function setToolEditApprovalSessionBypass(
   streamId: StreamTabId,
   enabled: boolean,
 ): void {
-  approvalsBypassedByStream.set(streamId, enabled);
-  notifyApprovalBypassState(streamId);
+  bypassedByStream.set(streamId, enabled);
+  notifyBypassState(streamId);
 }
 
 export function toggleToolEditApprovalSessionBypass(
   streamId: StreamTabId,
 ): boolean {
-  const currentState = approvalsBypassedByStream.get(streamId) ?? false;
-  const newState = !currentState;
-  setToolEditApprovalSessionBypass(streamId, newState);
+  const newState = !(bypassedByStream.get(streamId) ?? false);
+  bypassedByStream.set(streamId, newState);
+  notifyBypassState(streamId);
   return newState;
 }
 
 export function isApprovalBypassedForStream(streamId: StreamTabId): boolean {
-  return approvalsBypassedByStream.get(streamId) ?? false;
+  return bypassedByStream.get(streamId) ?? false;
 }
 
 /** @internal Called by unified cleanup in index.ts */
@@ -166,12 +162,12 @@ export function _rejectAllPendingToolEditApprovals(): void {
 
 /** @internal Called by unified cleanup in index.ts */
 export function _clearApprovalBypassForStream(streamId: StreamTabId): void {
-  approvalsBypassedByStream.delete(streamId);
+  bypassedByStream.delete(streamId);
 }
 
 /** @internal Called by unified cleanup in index.ts */
 export function _clearAllApprovalBypass(): void {
-  approvalsBypassedByStream.clear();
+  bypassedByStream.clear();
 }
 
 export function initializeToolEditApproval(
