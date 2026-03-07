@@ -90,7 +90,7 @@ const ExportNodeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('tool-result'), text: z.string() }),
   z.object({ kind: z.literal('web-search'), query: z.string() }),
   z.object({ kind: z.literal('web-search-results'), results: z.array(WebSearchResultSchema) }),
-  z.object({ kind: z.literal('web-fetch'), url: z.string(), title: z.string().optional(), content: z.string().optional() }),
+  z.object({ kind: z.literal('web-fetch'), url: z.string().optional(), title: z.string().optional(), content: z.string().optional() }),
 ]);
 type ExportNode = z.infer<typeof ExportNodeSchema>;
 
@@ -244,7 +244,7 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
     case 'web_fetch_tool_result':
       return {
         kind: 'web-fetch',
-        url: block.url ?? '',
+        url: block.url,
         title: block.title,
         content: block.page_content,
       };
