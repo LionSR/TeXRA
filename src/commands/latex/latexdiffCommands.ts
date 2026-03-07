@@ -538,8 +538,7 @@ async function executeDiffOperations(
   immediateResults: DiffRunResult[] = [],
 ): Promise<DiffRunOutcome> {
   const results: DiffRunResult[] = [...immediateResults];
-  const totalOperations = operations.length + immediateResults.length;
-  const incrementPct = operations.length > 0 ? 100 / totalOperations : 0;
+  const incrementPct = operations.length > 0 ? 100 / operations.length : 0;
 
   for (const operation of operations) {
     progress.report({
@@ -589,7 +588,7 @@ async function executeDiffOperations(
     });
   }
 
-  return { results, totalOperations };
+  return { results, totalOperations: results.length };
 }
 
 async function runLatexdiffFromMetadata(params: {

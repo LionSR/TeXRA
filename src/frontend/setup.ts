@@ -19,9 +19,6 @@ import { GlobalStorageFS, StorageFS } from '@utils/files';
 import { isConfigExplicitlySet, updateConfig } from '@utils/config';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
-// MODEL_LIST_VERSION is now auto-computed from DEFAULT_MODELS in computeModelOptions.ts.
-// No manual version bump needed — changes to DEFAULT_MODELS automatically change the hash.
-
 /**
  * Version number for LaTeX-related VS Code config setup.
  * Increment this when changing which settings are auto-configured.

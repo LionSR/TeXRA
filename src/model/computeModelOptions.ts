@@ -13,7 +13,7 @@ import type { ModelOptionData } from '@shared/schemas';
 
 /**
  * Default models that should be present in every user's model list.
- * MODEL_LIST_VERSION is auto-computed from this array — no manual sync needed.
+ * Update this list and increment MODEL_LIST_VERSION below when adding new models.
  */
 export const DEFAULT_MODELS = [
   'gemini31p',
@@ -30,20 +30,12 @@ export const DEFAULT_MODELS = [
 ];
 
 /**
- * Auto-computed version derived from DEFAULT_MODELS content.
- * Changes whenever models are added, removed, or reordered.
- * Uses a simple hash so we don't need manual version bumps.
+ * Version number for the default model list.
+ * Increment this when adding or removing models to force existing users
+ * to get the updated defaults. A simple integer avoids hash-collision risks
+ * and doesn't trigger on harmless reordering.
  */
-export const MODEL_LIST_VERSION: number = DEFAULT_MODELS.reduce(
-  (hash, model, i) => {
-    let h = hash;
-    for (let c = 0; c < model.length; c++) {
-      h = ((h << 5) - h + model.charCodeAt(c)) | 0;
-    }
-    return (h + i) | 0;
-  },
-  DEFAULT_MODELS.length,
-);
+export const MODEL_LIST_VERSION = 7;
 
 /**
  * Get the list of visible models from extension global state.
