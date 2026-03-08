@@ -200,7 +200,10 @@ async function showProgressViewApprovalPrompt(
   relativePath: string,
   lineChanges: LineChanges,
 ): Promise<void> {
-  await vscode.commands.executeCommand('texra.showProgressView');
+  // Best-effort: don't let a command failure prevent the approval prompt
+  await Promise.resolve(
+    vscode.commands.executeCommand('texra.showProgressView'),
+  ).catch(() => {});
   const streamId = request.streamId;
 
   // Activate the stream that needs approval so user sees the prompt immediately
