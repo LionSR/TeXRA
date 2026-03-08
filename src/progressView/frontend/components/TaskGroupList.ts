@@ -246,7 +246,7 @@ export class TaskGroupList extends LitElement {
   ): void {
     const msgTime = message.timestamp ?? 0;
     const lastTs =
-      target.length > 0 ? (target.at(-1).timestamp ?? 0) : -Infinity;
+      target.length > 0 ? (target.at(-1)!.timestamp ?? 0) : -Infinity;
     if (msgTime >= lastTs) {
       target.push(message);
     } else {
@@ -426,7 +426,7 @@ export class TaskGroupList extends LitElement {
       const entry = { key: m.id, time: m.timestamp ?? 0, msg: m };
       const lastTime =
         this.cachedTimeline.length > 0
-          ? this.cachedTimeline.at(-1).time
+          ? this.cachedTimeline.at(-1)!.time
           : -Infinity;
       if (entry.time >= lastTime) {
         this.cachedTimeline.push(entry);
