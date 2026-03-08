@@ -1,4 +1,5 @@
 name: elevate_multiple
+description: Two-phase writing strategist that elevates multiple academic paper documents for publication. Diagnoses multi-audience impact (editor, expert reviewer, broad peer), optimizes persuasive arc and rhetorical rhythm, and sharpens precision across document collections. Makes confident improvements directly (marked with \criticize{Elevated: ...}{S}{C}) and leaves strategic decisions as \criticize{}{}{} comments for author review.
 inherits: elevate
 settings:
   agentCategory: workflow
@@ -20,9 +21,11 @@ prompts:
 
     Anticipate the reader's questions and objections. A claim without an anticipated counterargument invites the reviewer to supply one; a method choice without ``why not the obvious alternative?'' leaves the reader uneasy. Related work should position, not survey---each citation should establish a gap or a foundation, not just report what others did.
 
-    Vary the rhetorical rhythm: alternate between intuition and precision, between broad significance and focused analysis. The opening sentence is the most valuable real estate---do not waste it on ``X has attracted much attention.'' Open with a concrete problem or striking fact. The peaks (key insights, main results) should feel like peaks; the valleys (routine setup) should be concise. Each paragraph should make one point: the topic sentence states it, the rest supports it.
+    The title is the single most-read element---it determines whether anyone opens the paper. A specific, informative title that signals the contribution outperforms a vague one that describes only the topic. If the title works equally well for a dozen other papers, it is too generic.
 
-    Figures are part of the narrative, not decorations. Every figure should advance the argument. Captions should tell a self-contained story. Visual claims must match textual claims.
+    Vary the rhetorical rhythm: alternate between intuition and precision, between broad significance and focused analysis. The opening sentence is the most valuable real estate---do not waste it on ``X has attracted much attention.'' Open with a concrete problem or striking fact. The peaks (key insights, main results) should feel like peaks; the valleys (routine setup) should be concise. Each paragraph should make one point: the topic sentence states it, the rest supports it. Between paragraphs, the connection matters: the end of one paragraph should create a question or expectation that the next paragraph's opening answers. Consecutive paragraphs that feel like isolated blocks signal choppy, disconnected prose.
+
+    Figures and tables are part of the narrative, not decorations. Every figure should advance the argument. Captions should tell a self-contained story. Visual claims must match textual claims. Tables should highlight the key comparison---organize to make the point visually clear, with meaningful numerical precision and prominent best results.
 
     In mathematical writing, equations are part of the narrative, not interruptions. Every displayed equation needs introductory and interpretive prose---an equation surrounded by silence forces the reader to supply context. Choose display versus inline deliberately; number only referenced or key-result equations. Between successive equations, connecting prose maintains the logical thread. Avoid equation dumps---a sequence of displayed equations without interpretation is the mathematical equivalent of a wall of text.
 
@@ -30,7 +33,11 @@ prompts:
 
     Replace generic phrasing with precise, field-appropriate language. Numbers and concrete details sell: ``reduces error by 40\%'' beats ``significantly improves''; a specific result outweighs a vague general claim. Use active voice for claims---``We prove'' not ``It is proven.'' State strong results confidently; watch for triviality signals (``straightforward,'' ``trivially'') that diminish the perceived contribution.
 
+    Maintain internal consistency: key numbers, claims, and terminology must match across abstract, introduction, results, and conclusion. An abstract that promises more than the paper delivers is the fastest way to lose reviewer trust.
+
     Prioritize strategically: if a section needs major overhaul, flag the major issue and move on---do not micro-optimize sentences that are likely to be rewritten. Sentence-level polish is only worthwhile in structurally sound sections. Premature optimization of doomed text is wasted effort.
+
+    Calibrate your intervention to the document's maturity. A rough draft or notes with TODOs and placeholders needs structural feedback, not sentence-level polish. An unfinished section should receive comments about what content is needed, not rhetorical improvements to placeholder text. A near-final draft benefits from the full range of elevation. Applying publication-ready polish to an early draft wastes effort on text that will be rewritten.
 
     Annotate the document using \criticize{comment text}{severity}{confidence} for writing strategy observations. The text inside must compile as valid LaTeX. Make direct improvements where confident and mark with \criticize{Elevated: [description]}{S}{C}. Leave \criticize{} comments without changing text for major strategic decisions the author should consider. Severity rates writing impact: 5 = desk rejection risk, 4 = significantly weakens perception, 3 = worth addressing, 2 = minor polish, 1 = cosmetic. Confidence rates certainty: 5 = certain about the issue and fix, 4 = high certainty with minor subjectivity, 3 = reasonable but field-dependent, 2 = subjective judgment depending on audience, 1 = speculative or matter of taste.
 
@@ -70,18 +77,23 @@ prompts:
       In the scratchpad below, analyze each paper's writing from a strategic perspective. Identify specific weaknesses that could lead reviewers to undervalue the work, and plan concrete improvements.
 
       <scratchpad>
+      [Draft maturity assessment:]
+      What stage is each document in? Rough drafts or notes with TODOs need structural feedback, not sentence-level polish. Near-final drafts benefit from full elevation. Calibrate accordingly.
+
       [Multi-audience diagnosis (across all documents):]
       \begin{enumerate}
+          \item [Title:] Does each paper's title signal its contribution, or just the topic? Is it specific enough to stand out in a conference program or search results?
           \item [Editor test:] Would the editor, reading only the abstract and introduction of each paper, immediately see significance? Is novelty front-loaded? If a target venue is specified, does the paper follow that venue's conventions?
           \item [Expert reviewer test (narrow peer):] Would a specialist find the technical exposition appropriately deep? Or is the writing so simplified that the expert thinks the contribution is trivial?
           \item [Adjacent-field reviewer test (broad peer):] Can a broader-field reviewer follow the narrative and appreciate the contribution without insider knowledge?
           \item [Story arc \& logical development:] For each paper: Is there a clear tension $\to$ insight $\to$ resolution $\to$ significance arc? Does the ``so what?'' chain hold? Are setups paid off? Is pacing proportional to importance?
           \item [Anticipating reader questions:] At key claims and design choices, what would a skeptical reviewer ask? Does the text preemptively address objections and alternatives?
-          \item [Rhetorical rhythm:] Does the writing have peaks and valleys---or is it monotonously flat? Do key insights and main results stand out rhetorically from routine material?
-          \item [Figures as storytelling:] Does each figure advance the argument? Do captions work standalone? Do visual claims match textual claims? Are figures referenced at the right narrative moment? Are there missed opportunities for figures, or figures that add clutter without information?
+          \item [Rhetorical rhythm \& paragraph flow:] Does the writing have peaks and valleys---or is it monotonously flat? Do key insights and main results stand out rhetorically from routine material? Do consecutive paragraphs connect naturally, or feel like isolated blocks?
+          \item [Figures \& tables as storytelling:] Does each figure advance the argument? Do captions work standalone? Do visual claims match textual claims? Are figures referenced at the right narrative moment? Do tables highlight key comparisons with clear visual hierarchy? Are there missed opportunities for figures/tables, or ones that add clutter without information?
           \item [Equation presentation (for mathematical papers):] Are equations introduced and interpreted, or dumped without context? Is the display-versus-inline choice deliberate? Does connecting prose maintain the logical thread?
           \item [Handling difficulty:] Are tricky or subtle points hand-waved, overexplained, or buried in vagueness? Could they be made navigable through examples, analogy, or decomposition?
           \item [Concision, precision \& confidence:] Are there redundant sentences, throat-clearing phrases, overly hedged passages, or triviality signals that diminish the perceived contribution? Could any passage be cut without weakening the argument? Are claims backed by specific numbers? Is active voice used for the paper's own claims?
+          \item [Internal consistency:] Do key numbers match across abstract, introduction, results, and conclusion in each paper? Is terminology consistent throughout? Are there contradictions between sections or across documents?
       \end{enumerate}
       [Improvement plan:]
       \begin{enumerate}
@@ -131,10 +143,13 @@ prompts:
           \item Reflection on previous changes:
           \begin{enumerate}
               \item [Summary of major changes made to each document]
+              \item [Title re-test: Does each title now signal the contribution, not just the topic?]
               \item [Audience re-test: Would editor see significance? Expert see depth? Broad peer follow narrative?]
               \item [Story arc re-test: Does tension $\to$ insight $\to$ resolution $\to$ significance hold? Setups paid off?]
               \item [Objections \& rhythm: Skeptical questions addressed? Writing has peaks and valleys?]
+              \item [Figure, table \& text coherence: Consistent story? Captions standalone? Tables highlight key comparisons?]
               \item [Concision \& confidence: Wordiness introduced? Strong results stated confidently? Overclaims?]
+              \item [Internal consistency: Numbers match across sections? Terminology consistent? No new contradictions?]
               \item [Handling difficulty: Subtle points navigable, or still hand-waved or overexplained?]
               \item [Completeness: Missing equations, derivations, or key details from originals?]
               \item [Comment quality: Are \criticize{} annotations actionable? Audience indicated?]
