@@ -21,39 +21,38 @@ import latexPreamble from '../../../resources/templates/chatExport.tex';
 // ============================================================
 
 /** Loose schema for API content blocks — accepts many optional fields. */
-const ContentBlockSchema = z
-  .object({
-    type: z.string(),
-    text: z.string().optional(),
-    thinking: z.string().optional(),
-    name: z.string().optional(),
-    id: z.string().optional(),
-    input: z.unknown().optional(),
-    content: z.unknown().optional(),
-    source: z
-      .object({ type: z.string(), media_type: z.string().optional() })
-      .optional(),
-    query: z.string().optional(),
-    search_results: z
-      .array(
-        z.object({ title: z.string().optional(), url: z.string().optional() }),
-      )
-      .optional(),
-    url: z.string().optional(),
-    title: z.string().optional(),
-    page_content: z.string().optional(),
-  })
-  .passthrough();
+const ContentBlockSchema = z.looseObject({
+  type: z.string(),
+  text: z.string().optional(),
+  thinking: z.string().optional(),
+  name: z.string().optional(),
+  id: z.string().optional(),
+  input: z.unknown().optional(),
+  content: z.unknown().optional(),
+  source: z
+    .looseObject({ type: z.string(), media_type: z.string().optional() })
+    .optional(),
+  query: z.string().optional(),
+  search_results: z
+    .array(
+      z.looseObject({
+        title: z.string().optional(),
+        url: z.string().optional(),
+      }),
+    )
+    .optional(),
+  url: z.string().optional(),
+  title: z.string().optional(),
+  page_content: z.string().optional(),
+});
 type ContentBlock = z.infer<typeof ContentBlockSchema>;
 
-const ConversationMessageSchema = z
-  .object({
-    role: z.string().optional(),
-    content: z
-      .union([z.string(), z.array(ContentBlockSchema), z.unknown()])
-      .optional(),
-  })
-  .passthrough();
+const ConversationMessageSchema = z.looseObject({
+  role: z.string().optional(),
+  content: z
+    .union([z.string(), z.array(ContentBlockSchema), z.unknown()])
+    .optional(),
+});
 type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 
 const ExportConfigSchema = z.object({
