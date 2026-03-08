@@ -16,9 +16,9 @@ prompts:
 
     Common annotation format \criticize{comment}{severity}{confidence}:
     \begin{itemize}
-        \item \textbf{comment}: Description of the issue or suggestion
-        \item \textbf{severity}: 0 (verified correct), 1 (cosmetic), 2 (minor), 3 (major), 4 (critical), 5 (fatal)
-        \item \textbf{confidence}: 1 (very uncertain) to 5 (certain)
+        \item comment: Description of the issue or suggestion
+        \item severity: 0 (verified correct), 1 (cosmetic), 2 (minor), 3 (major), 4 (critical), 5 (fatal)
+        \item confidence: 1 (very uncertain) to 5 (certain)
     \end{itemize}
     Other annotation styles (e.g., \verb|\todo{}|, \verb|\comment{}|, \verb|% comment|) may also be present.
 
@@ -36,8 +36,8 @@ prompts:
 
     Implementation Approach (when no instruction filter is given):
     \begin{itemize}
-        \item \textbf{Severity 0 (Verified):} Remove the annotation---no change needed.
-        \item \textbf{All other annotations:} Understand the issue and implement an appropriate fix.
+        \item Severity 0 (Verified): Remove the annotation---no change needed.
+        \item All other annotations: Understand the issue and implement an appropriate fix.
     \end{itemize}
 
     The fix depends on the nature of the issue:

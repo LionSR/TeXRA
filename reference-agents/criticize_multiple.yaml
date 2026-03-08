@@ -28,7 +28,7 @@ prompts:
 
     When providing critical feedback across multiple documents, you must:
     \begin{itemize}
-        \item \textbf{ALWAYS CHECK ALL DOCUMENTS FIRST:} Before claiming steps are missing, check if they are explained in other documents, appendices, or supplementary materials.
+        \item ALWAYS CHECK ALL DOCUMENTS FIRST: Before claiming steps are missing, check if they are explained in other documents, appendices, or supplementary materials.
         \item If derivations are in appendices/supplements, comment should acknowledge this: \criticize{Full derivation in Supplementary Material Section~\ref{supp:X}. Main text correctly summarizes the result.}{0}{5}
         \item Map the connections between main text and appendices/supplements - don't criticize brevity if details are properly deferred.
         \item Focus on technical issues requiring action, prioritized by severity across all documents.
@@ -37,7 +37,7 @@ prompts:
         \item Focus on the crucial points that affect the validity of the paper.
         \item Note when issues in appendices affect the main text.
         \item Check for inconsistencies between documents - these are often severity 4-5.
-        \item \textbf{CRITICAL:} The text inside \criticize{...}{...} is part of the LaTeX document and must compile.
+        \item CRITICAL: The text inside \criticize{...}{...} is part of the LaTeX document and must compile.
     \end{itemize}
 
     SEVERITY RATING GUIDE (for multiple documents):
@@ -48,41 +48,41 @@ prompts:
     - Mathematical errors maintain their severity regardless of document state
     - If documents are at different stages, assess each appropriately
     \begin{itemize}
-        \item \textbf{Level 5 (Fatal):} Issues that invalidate main claims or create contradictions
+        \item Level 5 (Fatal): Issues that invalidate main claims or create contradictions
             \begin{itemize}
                 \item Logical gaps that break main proofs
                 \item Mathematical errors in core theorems
                 \item Contradictory results between documents
                 \item Cascading errors that affect multiple documents
             \end{itemize}
-        \item \textbf{Level 4 (Critical):} Serious flaws that significantly weaken the collection
+        \item Level 4 (Critical): Serious flaws that significantly weaken the collection
             \begin{itemize}
                 \item Inconsistent definitions across documents
                 \item Unjustified key assumptions used throughout
                 \item Missing essential derivations referenced elsewhere
                 \item Major notation conflicts between documents
             \end{itemize}
-        \item \textbf{Level 3 (Major):} Important issues that need addressing
+        \item Level 3 (Major): Important issues that need addressing
             \begin{itemize}
                 \item Incomplete proofs of results used in other documents
                 \item Unclear approximations affecting multiple results
                 \item Missing cross-references between documents
                 \item Significant pedagogical failures
             \end{itemize}
-        \item \textbf{Level 2 (Minor):} Issues that should be fixed but don't affect validity
+        \item Level 2 (Minor): Issues that should be fixed but don't affect validity
             \begin{itemize}
                 \item Local notation inconsistencies within papers
                 \item Missing intermediate steps
                 \item Unclear explanations
                 \item Missing standard references
             \end{itemize}
-        \item \textbf{Level 1 (Cosmetic):} Small issues that are nice to fix
+        \item Level 1 (Cosmetic): Small issues that are nice to fix
             \begin{itemize}
                 \item Typos that don't affect understanding
                 \item Minor formatting inconsistencies
                 \item Slightly imprecise language
             \end{itemize}
-        \item \textbf{Level 0 (Verified Correct):} Areas checked and found rigorous
+        \item Level 0 (Verified Correct): Areas checked and found rigorous
             \begin{itemize}
                 \item Derivations independently verified and correct
                 \item Consistency checks passed across documents
@@ -261,9 +261,9 @@ prompts:
       \usepackage{xcolor}\newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\text{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
 
 
-      \textbf{COMMENTING STRATEGY FOR MULTIPLE PAPERS:} Limit yourself to 10-15 comments per paper, focusing on severity 3-5 issues while including 1-2 severity 0 verifications. Prioritize cross-paper issues (often severity 4-5). When the same issue appears in multiple documents, comment in the first occurrence and reference it in others. For systemic problems across documents, add one comment in the first paper. Include verification confirmations where derivations are particularly well-done. Balance comments across documents---don't overwhelm one paper.
+      COMMENTING STRATEGY FOR MULTIPLE PAPERS: Limit yourself to 10-15 comments per paper, focusing on severity 3-5 issues while including 1-2 severity 0 verifications. Prioritize cross-paper issues (often severity 4-5). When the same issue appears in multiple documents, comment in the first occurrence and reference it in others. For systemic problems across documents, add one comment in the first paper. Include verification confirmations where derivations are particularly well-done. Balance comments across documents---don't overwhelm one paper.
 
-      \textbf{CONFIDENCE LEVELS:}
+      CONFIDENCE LEVELS:
       \begin{itemize}
           \item 5: Very confident (certain about the issue/verification)
           \item 4: Confident (high certainty but minor doubts possible)
@@ -272,9 +272,9 @@ prompts:
           \item 1: Very uncertain (speculative)
       \end{itemize}
 
-      \textbf{CONFIDENCE SCORING GUIDANCE:} Assess each issue individually based on its actual complexity, not just the type. Simple multi-step calculations that follow standard procedures can have high confidence (4-5), while complex or novel derivations should have lower confidence (1-3). When you successfully verify something step-by-step, confidence depends on the clarity of the steps. Cross-document inconsistencies you can directly observe warrant high confidence (4-5). Subtle mathematical errors or questionable approximations warrant lower confidence (2-3). Be honest about your uncertainty---if you're not sure, use lower confidence.
+      CONFIDENCE SCORING GUIDANCE: Assess each issue individually based on its actual complexity, not just the type. Simple multi-step calculations that follow standard procedures can have high confidence (4-5), while complex or novel derivations should have lower confidence (1-3). When you successfully verify something step-by-step, confidence depends on the clarity of the steps. Cross-document inconsistencies you can directly observe warrant high confidence (4-5). Subtle mathematical errors or questionable approximations warrant lower confidence (2-3). Be honest about your uncertainty---if you're not sure, use lower confidence.
 
-      \textbf{EXAMPLES of proper cross-document comments:}
+      EXAMPLES of proper cross-document comments:
       \begin{itemize}
           \item SEVERITY 5: \criticize{This contradicts the result in Appendix~\ref{sec:dissipative}, \cref{thm:main}. Either this derivation or that theorem is wrong.}{5}{4}
           \item SEVERITY 4: \criticize{The definition of $\mathcal{H}$ differs from Appendix~\ref{sec:dissipative}. This inconsistency affects all subsequent results.}{4}{5}
@@ -283,7 +283,7 @@ prompts:
           \item SEVERITY 0: \criticize{Verified: The fluctuation theorem $\eE[\exp(-\sigma_{tot})] = 1$ holds across all documents - checked by path integral.}{0}{3}
       \end{itemize}
 
-      \textbf{Remember:} Focus on the crucial points across the entire paper. Identify issues that cascade between documents. If one paper's errors invalidate others, that's severity 5. Be strategic about comment placement to maximize clarity.
+      Remember: Focus on the crucial points across the entire paper. Identify issues that cascade between documents. If one paper's errors invalidate others, that's severity 5. Be strategic about comment placement to maximize clarity.
 
       Ensure that the output documents are in the following order: OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}
 
