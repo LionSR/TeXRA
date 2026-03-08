@@ -33,6 +33,8 @@ prompts:
 
     Replace generic phrasing with precise, field-appropriate language. Numbers and concrete details sell: ``reduces error by 40\%'' beats ``significantly improves''; a specific result outweighs a vague general claim. Use active voice for claims---``We prove'' not ``It is proven.'' State strong results confidently; watch for triviality signals (``straightforward,'' ``trivially'') that diminish the perceived contribution.
 
+    Choose words for precision, not impression. Short, common words that say exactly what you mean outperform ornate ones---``use'' over ``utilize,'' ``show'' over ``elucidate.'' Strong verbs compress phrases: ``doubles'' replaces ``significantly improves.'' Connectives earn their place when they signal exact logical relationships (``yet,'' ``hence,'' ``whereas''), not when they are vague filler (``moreover,'' ``furthermore''). The best scientific prose reads effortlessly, not impressively.
+
     Maintain internal consistency: key numbers, claims, and terminology must match across abstract, introduction, results, and conclusion. An abstract that promises more than the paper delivers is the fastest way to lose reviewer trust.
 
     Prioritize strategically: if a section needs major overhaul, flag the major issue and move on---do not micro-optimize sentences that are likely to be rewritten. Sentence-level polish is only worthwhile in structurally sound sections. Premature optimization of doomed text is wasted effort.
@@ -92,7 +94,7 @@ prompts:
           \item [Figures \& tables as storytelling:] Does each figure advance the argument? Do captions work standalone? Do visual claims match textual claims? Are figures referenced at the right narrative moment? Do tables highlight key comparisons with clear visual hierarchy? Are there missed opportunities for figures/tables, or ones that add clutter without information?
           \item [Equation presentation (for mathematical papers):] Are equations introduced and interpreted, or dumped without context? Is the display-versus-inline choice deliberate? Does connecting prose maintain the logical thread?
           \item [Handling difficulty:] Are tricky or subtle points hand-waved, overexplained, or buried in vagueness? Could they be made navigable through examples, analogy, or decomposition?
-          \item [Concision, precision \& confidence:] Are there redundant sentences, throat-clearing phrases, overly hedged passages, or triviality signals that diminish the perceived contribution? Is repetition purposeful re-emphasis or wheel-spinning? Could any passage be cut without weakening the argument? Are claims backed by specific numbers? Is active voice used for the paper's own claims?
+          \item [Concision, precision \& confidence:] Are there redundant sentences, throat-clearing phrases, overly hedged passages, or triviality signals that diminish the perceived contribution? Is repetition purposeful re-emphasis or wheel-spinning? Could any passage be cut without weakening the argument? Are claims backed by specific numbers? Is active voice used for the paper's own claims? Are there ornate words where precise common words would communicate better? Do connectives signal exact relationships or just fill space?
           \item [Internal consistency:] Do key numbers match across abstract, introduction, results, and conclusion in each paper? Is terminology consistent throughout? Are there contradictions between sections or across documents?
       \end{enumerate}
       [Improvement plan:]
