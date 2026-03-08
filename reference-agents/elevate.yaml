@@ -20,7 +20,7 @@ prompts:
 
     Anticipate the reader's questions and objections---build fences before they wander. At each key claim, ask: ``What would a skeptical reviewer ask here?'' A claim without an anticipated counterargument invites the reviewer to supply one. A method choice without ``why not the obvious alternative?'' leaves the reader uneasy. The strongest papers make every reasonable objection feel already considered---not through defensiveness, but through the natural flow of the argument. Related work should position, not survey: each citation should either establish a gap your work fills or a foundation your work builds on. A flat list of ``X did Y, Z did W'' tells the reader nothing about why the current approach is needed.
 
-    Good writing should never be flat. Vary the rhetorical rhythm: alternate between high-level intuition and precise technical detail, between confident assertion and careful qualification. The opening sentence of a paper is its most valuable real estate---do not waste it on generic platitudes like ``X has attracted much attention in recent years.'' Open with a concrete problem, a striking fact, or a revealing contradiction; then build tension through the introduction and deliver the insight with clarity. The peaks (key insights, main results) should feel like peaks; the valleys (routine setup) should be concise. Monotony in sentence structure, paragraph length, or rhetorical mode signals mechanical writing. Each paragraph should make one point: the topic sentence states it, the rest supports it. When a paragraph tries to do two things, it does neither well.
+    Vary the rhetorical rhythm: alternate between high-level intuition and precise technical detail, between confident assertion and careful qualification. The opening sentence of a paper is its most valuable real estate---do not waste it on generic platitudes like ``X has attracted much attention in recent years.'' Open with a concrete problem, a striking fact, or a revealing contradiction; then build tension through the introduction and deliver the insight with clarity. The peaks (key insights, main results) should feel like peaks; the valleys (routine setup) should be concise. Monotony in sentence structure, paragraph length, or rhetorical mode signals mechanical writing. Each paragraph should make one point: the topic sentence states it, the rest supports it. When a paragraph tries to do two things, it does neither well.
 
     Figures are part of the narrative, not decorations. Every figure should advance the argument. Evaluate holistically: do captions tell a self-contained story for a skimming reader? Do visual claims match textual claims---if the text says ``dramatic improvement,'' does the figure show it clearly? Are figures referenced at the right narrative moment? For multi-panel figures, does the arrangement tell a progressive story?
 
@@ -95,9 +95,9 @@ prompts:
                   \item For multi-panel figures, does the arrangement tell a progressive story?
                   \item Are there missed opportunities where a figure would communicate better than prose, or vice versa?
               \end{itemize}
-          \item [Handling difficulty:] Are there subtle or tricky points that the paper hand-waves, overexplains, or buries in vagueness? Could they be made navigable through a concrete example, analogy, or decomposition?
-          \item [Concision \& confidence:] Are there redundant sentences, throat-clearing phrases, or paragraphs that restate what has already been said? Are there passages that are overly hedged or generic? Triviality signals (``straightforward,'' ``trivially,'' ``it is easy to see'') that diminish the perceived contribution? Could any passage be cut without weakening the argument?
           \item [Equation presentation (for mathematical papers):] Are equations introduced and interpreted, or dumped without context? Is the display-versus-inline choice deliberate? Are only key results and referenced equations numbered? Does connecting prose maintain the logical thread between successive equations?
+          \item [Handling difficulty:] Are there subtle or tricky points that the paper hand-waves, overexplains, or buries in vagueness? Could they be made navigable through a concrete example, analogy, or decomposition?
+          \item [Concision, precision \& confidence:] Are there redundant sentences, throat-clearing phrases, or paragraphs that restate what has already been said? Are there passages that are overly hedged or generic? Triviality signals (``straightforward,'' ``trivially,'' ``it is easy to see'') that diminish the perceived contribution? Could any passage be cut without weakening the argument? Are claims backed by specific numbers or left vague (``significant improvement'' vs ``40\% improvement'')? Is active voice used for the paper's own claims and contributions?
       \end{enumerate}
       [Improvement plan:]
       \begin{enumerate}
@@ -235,3 +235,7 @@ prompts:
       Every direct change must be annotated with \criticize{Elevated: [description of what was changed and why]}{S}{C} so the author can review each modification. No silent changes---the author should be able to scan the \criticize{Elevated: ...} markers to understand exactly what was improved. Keep unresolved \criticize{} comments from round 1. Add new comment-only annotations for major strategic decisions. Remove any comments that have been fully addressed.
 
       The goal is writing that makes a reviewer think: ``This is a well-written, important paper.''
+
+      <latex_document>
+      % 2ND_UPDATED_LATEX_DOCUMENT WITH ELEVATE COMMENTS HERE
+      </latex_document>

@@ -79,9 +79,9 @@ prompts:
           \item [Anticipating reader questions:] At key claims and design choices, what would a skeptical reviewer ask? Does the text preemptively address objections and alternatives?
           \item [Rhetorical rhythm:] Does the writing have peaks and valleys---or is it monotonously flat? Do key insights and main results stand out rhetorically from routine material?
           \item [Figures as storytelling:] Does each figure advance the argument? Do captions work standalone? Do visual claims match textual claims? Are figures referenced at the right narrative moment? Are there missed opportunities for figures, or figures that add clutter without information?
-          \item [Handling difficulty:] Are tricky or subtle points hand-waved, overexplained, or buried in vagueness? Could they be made navigable through examples, analogy, or decomposition?
-          \item [Concision \& confidence:] Are there redundant sentences, throat-clearing phrases, overly hedged passages, or triviality signals that diminish the perceived contribution? Could any passage be cut without weakening the argument?
           \item [Equation presentation (for mathematical papers):] Are equations introduced and interpreted, or dumped without context? Is the display-versus-inline choice deliberate? Does connecting prose maintain the logical thread?
+          \item [Handling difficulty:] Are tricky or subtle points hand-waved, overexplained, or buried in vagueness? Could they be made navigable through examples, analogy, or decomposition?
+          \item [Concision, precision \& confidence:] Are there redundant sentences, throat-clearing phrases, overly hedged passages, or triviality signals that diminish the perceived contribution? Could any passage be cut without weakening the argument? Are claims backed by specific numbers? Is active voice used for the paper's own claims?
       \end{enumerate}
       [Improvement plan:]
       \begin{enumerate}
@@ -178,3 +178,13 @@ prompts:
       The goal is writing that makes a reviewer think: ``This is a well-written, important paper.''
 
       Ensure that the output documents are in the following order: OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}
+
+      <latex_documents>
+      <document name="{OUTPUT_FILES_ORDER[0]}">
+      % 2ND_UPDATED_LATEX_DOCUMENT_1 WITH ELEVATE COMMENTS HERE
+      </document>
+      <document name="{OUTPUT_FILES_ORDER[1]}">
+      % 2ND_UPDATED_LATEX_DOCUMENT_2 WITH ELEVATE COMMENTS HERE
+      </document>
+      ... (repeat for all output files)
+      </latex_documents>
