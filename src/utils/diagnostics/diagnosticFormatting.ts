@@ -126,10 +126,7 @@ export function formatGroupedSections(
     (d) => d.severity === SEVERITY_INFO || d.severity === SEVERITY_HINT,
   );
 
-  const formatSection = (
-    title: string,
-    items: GenericDiagnostic[],
-  ): string => {
+  const formatSection = (title: string, items: GenericDiagnostic[]): string => {
     if (items.length === 0) return '';
     const lines = items
       .map((d) => `**Line ${d.range.start.line + 1}:** ${d.message}`)
