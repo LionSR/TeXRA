@@ -275,6 +275,16 @@ export class SettingsApp extends SettingsAppBase {
         return;
       }
 
+      case SETTINGS_VIEW_COMMANDS.REMOVE_HISTORY_ITEM: {
+        const id = (raw as { historyId?: string }).historyId;
+        if (id) {
+          this.historyItems.set(
+            this.historyItems.get().filter((item) => item.id !== id),
+          );
+        }
+        return;
+      }
+
       case SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED: {
         const data = this.parseMessage(raw, HistoryClearedMessageSchema);
         if (!data) return;

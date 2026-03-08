@@ -46,11 +46,18 @@ export async function setGlobalStreaming(enabled: boolean): Promise<void> {
   await globalSM?.update(GlobalStateKey.STREAMING_GLOBAL, enabled);
 }
 
-/** Read per-provider streaming setting, falling back to global default. */
-export function getProviderStreaming(provider: string): boolean {
+/**
+ * Read per-provider streaming setting, falling back to global default.
+ * Accepts an optional pre-read `globalDefault` to avoid redundant globalSM
+ * reads when called in a loop for multiple providers.
+ */
+export function getProviderStreaming(
+  provider: string,
+  globalDefault?: boolean,
+): boolean {
+  const global = globalDefault ?? getGlobalStreaming();
   const key = STREAMING_KEY[provider.toLowerCase()];
-  if (!key) return getGlobalStreaming();
-  const global = getGlobalStreaming();
+  if (!key) return global;
   return globalSM?.get<boolean>(key, global) ?? global;
 }
 

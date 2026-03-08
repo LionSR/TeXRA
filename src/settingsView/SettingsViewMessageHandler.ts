@@ -52,6 +52,7 @@ import {
   DEFAULT_MODELS,
   formatContext,
   formatCost,
+  invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
 import type { ExecutionId } from '@shared/schemas';
 import {
@@ -168,6 +169,10 @@ function getReliabilitySettings(): NumberVscodeSetting[] {
 }
 
 async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
+  // Read global streaming default once — avoids N redundant globalSM reads
+  // when getProviderStreaming() falls back to the global default per provider.
+  const globalStreaming = getGlobalStreaming();
+
   return Promise.all(
     SecretManager.API_PROVIDERS.map(async (provider) => {
       const secretValue = await SecretManager.get(
@@ -189,7 +194,7 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
         displayName: PROVIDER_DISPLAY_NAMES[provider],
         status,
         keyUrl: PROVIDER_URLS[provider],
-        streaming: getProviderStreaming(provider),
+        streaming: getProviderStreaming(provider, globalStreaming),
         customEndpoint: getProviderEndpoint(provider),
         supportsCustomEndpoint: supportsCustomEndpoint(provider),
         vscodeSettings: getProviderVscodeSettings(provider),
@@ -271,6 +276,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // Domain-specific handler delegates
   private readonly agentHandlers: AgentHandlers;
   private readonly latexHandlers: LatexSettingsHandlers;
+
+  /**
+   * Debounce timer for sendProfileData() — batches rapid settings toggles
+   * (streaming, endpoint, VS Code settings) into a single profile refresh.
+   */
+  private _profileDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly PROFILE_DEBOUNCE_MS = 150;
 
   constructor(_context: vscode.ExtensionContext) {
     super('SettingsView', { trackActiveView: true });
@@ -613,6 +625,20 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
+  /**
+   * Schedule a debounced sendProfileData refresh. Batches rapid settings
+   * toggles (streaming, endpoint, VS Code settings) into a single send.
+   */
+  private scheduleSendProfileData(): void {
+    if (this._profileDebounceTimer) {
+      clearTimeout(this._profileDebounceTimer);
+    }
+    this._profileDebounceTimer = setTimeout(() => {
+      this._profileDebounceTimer = null;
+      void this.withActiveWebview((w) => this.sendProfileData(w));
+    }, SettingsViewMessageHandler.PROFILE_DEBOUNCE_MS);
+  }
+
   public async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
     const models = buildModelSelectionItems();
     await webview.postMessage({
@@ -803,7 +829,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       }
       const deleted = await deleteExecution(data.historyId as ExecutionId);
       if (deleted) {
-        await this.withActiveWebview((w) => this.sendHistoryData(w));
+        // Send incremental removal instead of re-fetching the entire history list.
+        await this.withActiveWebview((w) =>
+          w.postMessage({
+            command: SETTINGS_VIEW_COMMANDS.REMOVE_HISTORY_ITEM,
+            historyId: data.historyId,
+          }),
+        );
       } else {
         await vscode.window.showWarningMessage(
           `History item not found: ${data.historyId}`,
@@ -1003,6 +1035,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       void vscode.window.showInformationMessage(
         `${displayName} API key has been set`,
       );
+      // refreshAfterKeyChange now includes sendProfileData, no separate finally needed.
       await this.refreshAfterKeyChange();
     } catch (error) {
       await showLoggedErrorMessage(
@@ -1010,7 +1043,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         `Failed to set ${displayName} API key`,
         error,
       );
-    } finally {
+      // On error, still refresh settings view to reflect current key state.
       await this.withActiveWebview((w) => this.sendProfileData(w));
     }
   }
@@ -1026,6 +1059,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       void vscode.window.showInformationMessage(
         `${displayName} API key has been removed`,
       );
+      // refreshAfterKeyChange now includes sendProfileData, no separate finally needed.
       await this.refreshAfterKeyChange();
     } catch (error) {
       await showLoggedErrorMessage(
@@ -1033,15 +1067,22 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         `Failed to remove ${displayName} API key`,
         error,
       );
-    } finally {
+      // On error, still refresh settings view to reflect current key state.
       await this.withActiveWebview((w) => this.sendProfileData(w));
     }
   }
 
-  /** Refresh main view API key status and model options after key changes. */
+  /**
+   * Refresh main view API key status, model options, AND settings-view profile
+   * after key changes. Combines all refreshes into a single call to avoid
+   * redundant async work when callers would otherwise call sendProfileData separately.
+   */
   private async refreshAfterKeyChange(): Promise<void> {
+    // Invalidate model options cache so downstream refreshes see fresh key state.
+    invalidateModelOptionsCache();
     await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
     void vscode.commands.executeCommand('texra.refreshAllOptions');
+    await this.withActiveWebview((w) => this.sendProfileData(w));
   }
 
   /** Refresh settings-view agent list and main-view dropdown after agent mutations. */
@@ -1066,21 +1107,21 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_STREAMING>,
   ): Promise<void> {
     await setProviderStreaming(data.provider, data.enabled);
-    await this.withActiveWebview((w) => this.sendProfileData(w));
+    this.scheduleSendProfileData();
   }
 
   private async handleSetProviderEndpoint(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_ENDPOINT>,
   ): Promise<void> {
     await setProviderEndpoint(data.provider, data.endpoint);
-    await this.withActiveWebview((w) => this.sendProfileData(w));
+    this.scheduleSendProfileData();
   }
 
   private async handleSetGlobalStreaming(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GLOBAL_STREAMING>,
   ): Promise<void> {
     await setGlobalStreaming(data.enabled);
-    await this.withActiveWebview((w) => this.sendProfileData(w));
+    this.scheduleSendProfileData();
   }
 
   private async handleOpenExternalUrl(
@@ -1107,12 +1148,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       vscode.ConfigurationTarget.Global,
     );
 
-    await this.withActiveWebview(async (w) => {
-      await Promise.all([
-        this.sendProfileData(w),
-        this.sendSuperYoloEnabled(w),
-      ]);
-    });
+    this.scheduleSendProfileData();
+    await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
   }
 
   // ============================================================

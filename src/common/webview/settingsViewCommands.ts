@@ -89,6 +89,7 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_MEMORY: 'updateMemory',
   UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
   UPDATE_HISTORY: 'updateHistory',
+  REMOVE_HISTORY_ITEM: 'removeHistoryItem',
   HISTORY_CLEARED: 'historyCleared',
   UPDATE_PROFILE: 'updateProfile',
   UPDATE_MODEL_SELECTION: 'updateModelSelection',

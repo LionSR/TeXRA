@@ -175,8 +175,57 @@ export function buildBasicModelOptionsData(): ModelOptionData[] {
   });
 }
 
+/**
+ * TTL-based cache for computeModelOptionsData.
+ * Avoids redundant async work (SecretManager + server-side key checks)
+ * when multiple callers request model options in quick succession.
+ */
+const MODEL_OPTIONS_CACHE_TTL_MS = 5_000;
+let _modelOptionsCache: {
+  data: ModelOptionData[];
+  expiry: number;
+  /** Dedup in-flight requests so concurrent callers share one computation. */
+  pending?: Promise<ModelOptionData[]>;
+} | null = null;
+
+/** Invalidate the shared model options cache (e.g. after key changes). */
+export function invalidateModelOptionsCache(): void {
+  _modelOptionsCache = null;
+}
+
 /** Compute typed model options data for Lit-native rendering. */
 export async function computeModelOptionsData(): Promise<ModelOptionData[]> {
+  const now = Date.now();
+
+  // Return cached result if still valid.
+  if (_modelOptionsCache && now < _modelOptionsCache.expiry) {
+    return _modelOptionsCache.data;
+  }
+
+  // Dedup concurrent callers — share the same in-flight promise.
+  if (_modelOptionsCache?.pending) {
+    return _modelOptionsCache.pending;
+  }
+
+  const pending = computeModelOptionsDataUncached();
+
+  // Store the pending promise so concurrent calls share it.
+  _modelOptionsCache = { data: [], expiry: 0, pending };
+
+  try {
+    const data = await pending;
+    _modelOptionsCache = {
+      data,
+      expiry: Date.now() + MODEL_OPTIONS_CACHE_TTL_MS,
+    };
+    return data;
+  } catch (error) {
+    _modelOptionsCache = null;
+    throw error;
+  }
+}
+
+async function computeModelOptionsDataUncached(): Promise<ModelOptionData[]> {
   const models = getVisibleModels();
 
   const serverSideKeyService = getServerSideKeyService();

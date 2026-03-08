@@ -80,11 +80,27 @@ class ReplacementEngineImpl implements ReplacementEngine {
    * Apply every replacement rule in the recommended order.
    * Non-regex replacements run before and after regex replacements to fix
    * artifacts they may introduce.
+   *
+   * Config values are read once and reused across both non-regex passes
+   * to avoid redundant getConfig() calls (~7 → 3 per invocation).
    */
   applyAll(text: string): string {
-    const afterNonRegex = this.applyNonRegex(text);
-    const afterRegex = this.applyRegex(afterNonRegex);
-    return this.applyNonRegex(afterRegex);
+    // Snapshot config-derived data once for both non-regex passes.
+    const nonRegexReplacements = getAllReplacements();
+    const regexReplacements = getAllReplacementsRegex();
+    const wrapCritique = shouldWrapCritiqueInAlign();
+
+    const applyNonRegexWith = (t: string): string => {
+      const processed = applyReplacements(t, nonRegexReplacements).trim();
+      return wrapCritique ? wrapCritiqueInAlign(processed) : processed;
+    };
+
+    const afterNonRegex = applyNonRegexWith(text);
+    const afterRegex = applyReplacements(
+      afterNonRegex,
+      regexReplacements,
+    ).trim();
+    return applyNonRegexWith(afterRegex);
   }
 }
 
