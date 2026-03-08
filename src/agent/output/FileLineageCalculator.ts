@@ -31,7 +31,23 @@ function invertMapping(
 
 /** Calculates file lineage and mappings between base files and round outputs. */
 export class FileLineageCalculator {
-  constructor(private readonly baseFiles: FileLocation[]) {}
+  /** Pre-computed base file names to avoid repeated path parsing. */
+  private readonly baseEntries: ReadonlyArray<{
+    loc: FileLocation;
+    baseName: string;
+    baseNameNoExt: string;
+  }>;
+
+  constructor(private readonly baseFiles: FileLocation[]) {
+    this.baseEntries = baseFiles.map((baseLoc) => {
+      const baseName = path.basename(
+        baseLoc.kind !== 'external'
+          ? baseLoc.relativePath
+          : baseLoc.absolutePath,
+      );
+      return { loc: baseLoc, baseName, baseNameNoExt: path.parse(baseName).name };
+    });
+  }
 
   calculateMapping(
     currentOutputs: OutputFileInfo[],
@@ -100,15 +116,9 @@ export class FileLineageCalculator {
     ];
 
     for (const match of matchers) {
-      for (const baseLoc of this.baseFiles) {
-        const baseName = path.basename(
-          baseLoc.kind !== 'external'
-            ? baseLoc.relativePath
-            : baseLoc.absolutePath,
-        );
-        const baseNameNoExt = path.parse(baseName).name;
+      for (const { loc, baseName, baseNameNoExt } of this.baseEntries) {
         if (match(baseName, baseNameNoExt)) {
-          return baseLoc;
+          return loc;
         }
       }
     }

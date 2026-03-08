@@ -7,10 +7,7 @@ import { AgentSetting } from '@agent/core/AgentDataclass';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
-import replacementEngine, {
-  applyReplacements,
-  getReplacementsByCategory,
-} from '@replacement/engine';
+import replacementEngine, { applyReplacements } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import type { OutputFileInfo } from '@shared/schemas';
 import {
@@ -59,19 +56,10 @@ export class XmlOutputManager {
   ) {}
 
   async processXmlContent(content: string): Promise<string> {
+    // applyNonRegex already applies all enabled non-regex categories
+    // (including latex_xml and scratchpad_xml), so no need to re-apply them.
     content = replacementEngine.applyNonRegex(content);
     content = applyReplacements(content, FENCED_LATEX_BLOCK_REPLACEMENTS);
-
-    const latexXmlReplacements = getReplacementsByCategory('latex_xml');
-    if (latexXmlReplacements) {
-      content = applyReplacements(content, latexXmlReplacements);
-    }
-
-    const scratchpadXmlReplacements =
-      getReplacementsByCategory('scratchpad_xml');
-    if (scratchpadXmlReplacements) {
-      content = applyReplacements(content, scratchpadXmlReplacements);
-    }
 
     return content;
   }
@@ -99,7 +87,7 @@ export class XmlOutputManager {
     outputLocation: FileLocation,
     documentTag: string,
     thinkingTag: string = 'scratchpad',
-  ): Promise<FileLocation> {
+  ): Promise<{ location: FileLocation; sourceName: string }> {
     const { name } = path.parse(outputLocation.absolutePath);
     const outputDir = getFileDirectory(outputLocation);
     const texRelativePath = outputDir
@@ -109,6 +97,8 @@ export class XmlOutputManager {
     const texLocation = this.fileService.createLocation(texRelativePath);
 
     let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
+    const sourceName =
+      outputContent.match(DOCUMENT_NAME_REGEX)?.[1]?.trim() ?? '';
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = addCdataToTags(outputContent, tagsToWrap);
 
@@ -120,7 +110,7 @@ export class XmlOutputManager {
         this.logger.logInternal(`Recovered ${documentTag} ${suffix}`);
       }
       await AbsoluteFS.write(texLocation.absolutePath, regexResult.content);
-      return texLocation;
+      return { location: texLocation, sourceName };
     }
     this.logger.debugInternal(
       `No ${documentTag} found in output file using fallback method`,
@@ -132,7 +122,7 @@ export class XmlOutputManager {
     const latexDocument = extractContentFromXMLbyTag(root, documentTag);
     if (latexDocument) {
       await AbsoluteFS.write(texLocation.absolutePath, latexDocument);
-      return texLocation;
+      return { location: texLocation, sourceName };
     }
     throw new Error(
       `Failed to extract <${documentTag}> from ${path.basename(outputLocation.absolutePath)}`,
@@ -270,18 +260,15 @@ export class XmlOutputManager {
       `Splitting scratchpad output XML: ${outputLocation.absolutePath}`,
     );
 
-    const processedTexLocation = await this.splitScratchpadOutputXml(
+    const { location, sourceName } = await this.splitScratchpadOutputXml(
       outputLocation,
       this.agentSetting.documentTag,
     );
 
-    const xmlContent = await AbsoluteFS.read(outputLocation.absolutePath);
-    const original = xmlContent.match(DOCUMENT_NAME_REGEX)?.[1]?.trim() ?? '';
-
     return {
-      source: original || this.agentConfig.inputFile,
+      source: sourceName || this.agentConfig.inputFile,
       round,
-      location: processedTexLocation,
+      location,
       lineage: null,
       diff: null,
     };
