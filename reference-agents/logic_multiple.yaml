@@ -20,12 +20,12 @@ prompts:
         \item Identify gaps in argumentation or logical leaps
         \item Spot redundant or misplaced sections across all documents
         \item Assess whether each section serves its intended purpose in the overall narrative
-        \item \textbf{Identify completely unused content and definition order issues across documents}
+        \item Identify completely unused content and definition order issues across documents
             \begin{itemize}
                 \item Find sections or paragraphs that don't connect to the main narrative
                 \item Identify orphaned content that serves no purpose
                 \item Mark for deletion: disconnected paragraphs, unreferenced content
-                \item \textbf{Check definition/concept ordering across documents:}
+                \item Check definition/concept ordering across documents:
                     \begin{itemize}
                         \item Concepts used before they are explained (must be fixed)
                         \item Concepts defined in one document but used earlier in another
