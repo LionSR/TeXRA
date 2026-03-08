@@ -31,7 +31,23 @@ function invertMapping(
 
 /** Calculates file lineage and mappings between base files and round outputs. */
 export class FileLineageCalculator {
-  constructor(private readonly baseFiles: FileLocation[]) {}
+  /** Pre-computed base file names to avoid repeated path parsing. */
+  private readonly baseEntries: ReadonlyArray<{
+    loc: FileLocation;
+    baseName: string;
+    baseNameNoExt: string;
+  }>;
+
+  constructor(private readonly baseFiles: FileLocation[]) {
+    this.baseEntries = baseFiles.map((baseLoc) => {
+      const baseName = path.basename(
+        baseLoc.kind !== 'external'
+          ? baseLoc.relativePath
+          : baseLoc.absolutePath,
+      );
+      return { loc: baseLoc, baseName, baseNameNoExt: path.parse(baseName).name };
+    });
+  }
 
   calculateMapping(
     currentOutputs: OutputFileInfo[],
@@ -92,16 +108,6 @@ export class FileLineageCalculator {
   findMatchingBaseFile(source: string): FileLocation | undefined {
     const sourceNoExt = path.parse(source).name;
 
-    // Pre-compute path parsing once per base file instead of per matcher
-    const indexed = this.baseFiles.map((baseLoc) => {
-      const baseName = path.basename(
-        baseLoc.kind !== 'external'
-          ? baseLoc.relativePath
-          : baseLoc.absolutePath,
-      );
-      return { baseLoc, baseName, baseNameNoExt: path.parse(baseName).name };
-    });
-
     const matchers = [
       (b: string, bNoExt: string) => b === source,
       (b: string, bNoExt: string) => bNoExt === sourceNoExt,
@@ -110,9 +116,9 @@ export class FileLineageCalculator {
     ];
 
     for (const match of matchers) {
-      for (const { baseLoc, baseName, baseNameNoExt } of indexed) {
+      for (const { loc, baseName, baseNameNoExt } of this.baseEntries) {
         if (match(baseName, baseNameNoExt)) {
-          return baseLoc;
+          return loc;
         }
       }
     }
