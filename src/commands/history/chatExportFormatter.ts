@@ -56,6 +56,10 @@ const ConversationMessageSchema = z.looseObject({
   content: z
     .union([z.string(), z.array(ContentBlockSchema), z.unknown()])
     .optional(),
+  // Google GenAI uses `parts` instead of `content`
+  parts: z.array(z.unknown()).optional(),
+  // OpenAI Chat Completions: tool_calls on assistant messages
+  tool_calls: z.array(z.unknown()).optional(),
 });
 type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 
@@ -196,6 +200,13 @@ function latexListing(text: string): string {
 // ============================================================
 
 function extractBlocks(msg: ConversationMessage): ContentBlock[] {
+  // Google GenAI: field-based Parts → type-based ContentBlocks
+  if (Array.isArray(msg.parts)) {
+    return (msg.parts as Record<string, unknown>[]).flatMap(
+      googlePartToBlocks,
+    );
+  }
+
   if (typeof msg.content === 'string') {
     return [{ type: 'text', text: msg.content }];
   }
@@ -208,13 +219,61 @@ function extractBlocks(msg: ConversationMessage): ContentBlock[] {
   return [];
 }
 
+/** Convert a Google GenAI Part (field-based discrimination) to type-based ContentBlock(s). */
+function googlePartToBlocks(
+  part: Record<string, unknown>,
+): ContentBlock[] {
+  if (typeof part.text === 'string') {
+    return [{ type: 'text', text: part.text }];
+  }
+  if (typeof part.thought === 'string') {
+    return [{ type: 'thinking', thinking: part.thought }];
+  }
+  if (part.functionCall && typeof part.functionCall === 'object') {
+    const fc = part.functionCall as { name?: string; args?: unknown };
+    return [
+      {
+        type: 'tool_use',
+        name: fc.name ?? 'unknown',
+        input: fc.args ?? {},
+      },
+    ];
+  }
+  if (part.functionResponse && typeof part.functionResponse === 'object') {
+    const fr = part.functionResponse as {
+      name?: string;
+      response?: unknown;
+    };
+    return [
+      {
+        type: 'tool_result',
+        content:
+          typeof fr.response === 'string'
+            ? fr.response
+            : JSON.stringify(fr.response ?? '', null, 2),
+      },
+    ];
+  }
+  if (part.inlineData && typeof part.inlineData === 'object') {
+    const data = part.inlineData as { mimeType?: string };
+    return [
+      { type: data.mimeType?.startsWith('image/') ? 'image' : 'document' },
+    ];
+  }
+  return [];
+}
+
 function blocksToUserParts(blocks: ContentBlock[]): UserPart[] {
   const parts: UserPart[] = [];
   for (const b of blocks) {
     // Anthropic: 'text', OpenAI Response API: 'input_text'
     if ((b.type === 'text' || b.type === 'input_text') && b.text) {
       parts.push({ type: 'text', text: b.text });
-    } else if (b.type === 'image' || b.type === 'input_image') {
+    } else if (
+      b.type === 'image' ||
+      b.type === 'input_image' ||
+      b.type === 'image_url'
+    ) {
       parts.push({ type: 'attachment', attachmentType: 'image' });
     } else if (b.type === 'document' || b.type === 'input_file') {
       parts.push({ type: 'attachment', attachmentType: 'document' });
@@ -239,6 +298,7 @@ function extractToolResultText(block: ContentBlock): string | undefined {
 function assistantBlockToNode(block: ContentBlock): ExportNode | null {
   switch (block.type) {
     case 'thinking':
+    case 'redacted_thinking':
       return null;
 
     // Anthropic: 'text', OpenAI Response API: 'output_text'
@@ -253,6 +313,16 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
         kind: 'tool-call',
         name: block.name ?? 'unknown',
         input: JSON.stringify(block.input ?? {}, null, 2),
+      };
+
+    // Anthropic: tool_result blocks (from Google conversion or nested)
+    case 'tool_result':
+      return {
+        kind: 'tool-result',
+        text:
+          typeof block.content === 'string'
+            ? block.content
+            : JSON.stringify(block.content ?? '', null, 2),
       };
 
     case 'server_tool_use':
@@ -279,6 +349,18 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
         url: block.url,
         title: block.title,
         content: block.page_content,
+      };
+
+    // Anthropic: server-side code execution results
+    case 'code_execution_tool_result':
+    case 'bash_code_execution_tool_result':
+    case 'text_editor_code_execution_tool_result':
+      return {
+        kind: 'tool-result',
+        text:
+          typeof block.content === 'string'
+            ? block.content
+            : JSON.stringify(block.content ?? '', null, 2),
       };
 
     default:
@@ -334,13 +416,31 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
       continue;
     }
 
-    if (role === 'assistant') {
+    // Google GenAI uses 'model' role instead of 'assistant'
+    if (role === 'assistant' || role === 'model') {
       lastAssistantHadToolUse = false;
       for (const block of blocks) {
         const node = assistantBlockToNode(block);
         if (node) {
           if (node.kind === 'tool-call') lastAssistantHadToolUse = true;
           nodes.push(node);
+        }
+      }
+
+      // OpenAI Chat Completions: tool_calls array on assistant messages
+      if (Array.isArray(msg.tool_calls)) {
+        for (const tc of msg.tool_calls as Record<string, unknown>[]) {
+          const fn = tc.function as
+            | { name?: string; arguments?: string }
+            | undefined;
+          if (fn) {
+            nodes.push({
+              kind: 'tool-call',
+              name: fn.name ?? 'unknown',
+              input: fn.arguments ?? '{}',
+            });
+            lastAssistantHadToolUse = true;
+          }
         }
       }
       continue;
