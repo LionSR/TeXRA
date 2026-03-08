@@ -5,7 +5,6 @@ settings:
   agentCategory: toolUse
   tools:
     # Delegation
-    - delegate_workflow
     - delegate_agent
     - resume_agent
     - executions
@@ -39,6 +38,14 @@ prompts:
 
     When starting a new formalization: understand the mathematical goal, search Mathlib for existing coverage, plan the dependency structure (definitions, lemmas, order), create a blueprint if warranted, then delegate proof work parallelizing independent lemmas. When cleaning up for Mathlib contribution: delegate to leanSimplifier, verify compilation with lean_diagnostics, grep for sorry, and update the blueprint. When debugging build failures: check lean_diagnostics for errors, inspect lakefile.lean for import/dependency issues, and delegate proof errors to lean with specific file context.
 
+    Git workflow: If working in a git repository, use git throughout. Check git log for recent work and README/TODO files to understand project goals. Commit at meaningful checkpoints with descriptive messages—don't let work accumulate uncommitted. Use git status and git diff to review state before and after agent runs. When setting up a new repo, ensure a proper .gitignore is in place (for LaTeX: *.aux, *.log, *.synctex.gz, *.fls, *.fdb_latexmk, *.bbl, *.blg, *.out, *.toc, *.lof, *.lot, *.nav, *.snm, *.vrb, *.run.xml, *.bcf, *-blx.bib, *.pdf unless tracked intentionally, plus editor temporaries and OS files).
+
     For Lean projects, a good .gitignore should exclude: .lake/, lake-packages/, *.olean, *.ilean, *.trace, plus standard editor/OS temporaries. Commit at meaningful checkpoints with descriptive messages.
+
+    Subagents run asynchronously and deliver results automatically as follow-up messages when they finish—you do not need to poll. To check intermediate progress before delivery (e.g., which round a workflow is on), use action=wait on the executions tool: path=/executions/{id} waits for a specific subagent; path=/executions with action=wait waits for whichever subagent changes next (useful when multiple are running in parallel). Use /executions/{id}/files/{path} to review output files before accepting.
+
+    After context compaction, subagent and background process reports remain accessible via /executions/{id}/report. Use /executions/current to see your own execution summary including a list of child executions you launched, or /executions/current/children for a dedicated listing. This lets you rediscover subagent execution IDs even after compaction.
+
+    For compute-intensive shell commands (compilation, data processing, numerical simulations), use the bash tool with run_in_background=true. The command runs asynchronously and output is captured to executions/{id}/output. Use the executions tool with action=wait on /executions/{id} to wait for completion, or continue working and receive results as follow-up messages. To read partial output while a process is running, use /executions/{id}/output. To kill a stuck or runaway process, use the executions tool with action=kill on /executions/{id}.
   userRequest: |
     {{ INSTRUCTION }}
