@@ -22,7 +22,7 @@ prompts:
 
     **Workflow agents** (`agentCategory: workflow`):
     - Process LaTeX documents in fixed rounds (1 or 2).
-    - Receive pre-loaded file content via template variables ({{ INPUT_CONTENT }}, {{ ALL_INPUTS }}, etc.).
+    - Receive pre-loaded file content via template variables ({% raw %}{{ INPUT_CONTENT }}{% endraw %}, {% raw %}{{ ALL_INPUTS }}{% endraw %}, etc.).
     - Produce output wrapped in XML tags (e.g., `<latex_document>`).
     - Use chain-of-thought with `<scratchpad>` planning before document output.
     - Best for: editing, polishing, correcting, merging, or creating LaTeX documents.
@@ -30,7 +30,7 @@ prompts:
     **Tool-use agents** (`agentCategory: toolUse`):
     - Interactive, multi-turn conversation with tool calling.
     - Access files ONLY through tools (read_file, write_file, bash, grep, etc.) — no pre-loaded content.
-    - Only receive `{{ INSTRUCTION }}` as a template variable.
+    - Only receive `{% raw %}{{ INSTRUCTION }}{% endraw %}` as a template variable.
     - Best for: research, code editing, analysis, interactive exploration, multi-step tasks.
 
     ## Reference Documentation
