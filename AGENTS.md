@@ -252,6 +252,20 @@ For good separation of concerns and platform independence, core business logic s
 
 5. **Prefer `WorkspaceFS.getPath()` over `vscode.workspace.workspaceFolders`.** The former is already available and returns the same value.
 
+6. **Do not consolidate bridges into a unified Platform abstraction.** The current set of injectable bridges is intentionally small and distributed. Each bridge lives next to the code that uses it. A centralized `Platform` interface would add indirection without reducing complexity. If a new platform target arises, the existing `set*()` calls are already the seams to swap implementations.
+
+**Existing bridge inventory** (all registered once from `extension.ts` during activation):
+
+| Bridge | Location | Purpose |
+|--------|----------|---------|
+| `setConfigProvider` | `@utils/configBridge` | Read `vscode.workspace.getConfiguration` from VS Code-free code |
+| `setStateBridge` | `@common/state/stateBridge` | Access global/workspace Memento state via proxy objects |
+| `setKeyServices` | `@agent/modelHandlers/types/IKeyService` | Inject auth client, secret manager, server-side key service |
+| `setExtensionChecker` | `@tools/externalToolDefs` | Check if a VS Code extension is installed |
+| `setOpenBuildDisplay` | `@tools/approval/latexPreview` | Open LaTeX build display panel |
+| `setLinterMessagesProvider` | `@tools/DiagnosticsTool` | Read VS Code diagnostics for a file |
+| `pureConstants` | `@utils/config/pureConstants` | No injection — pure values safe everywhere |
+
 ### Patterns across the codebase
 
 **Configuration, storage, and workspace files**
