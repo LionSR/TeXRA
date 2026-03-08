@@ -3,13 +3,13 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { showLoggedErrorMessage } from '@common/errors';
+import { getLinterMessages } from '@frontend/latex/linter';
+import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
+import * as logger from '@logger/logUtils';
 import {
   countBySeverity,
   getSeverityLabel,
 } from '@utils/diagnostics/diagnosticFormatting';
-import { getLinterMessages } from '@frontend/latex/linter';
-import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
-import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'LinterCommands';
 logger.initialize(CHANNEL);

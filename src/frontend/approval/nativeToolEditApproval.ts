@@ -15,6 +15,8 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 import { isLatexFile } from '@common/files/fileTypeUtils';
+import { bus } from '@eventBus/ProgressEventBus';
+import type { StreamTabId } from '@shared/schemas';
 import type { LineChanges } from '@tools/result';
 import {
   type LatexPreviewEntry,
@@ -25,20 +27,18 @@ import {
   computeLineChangeSummary,
   computeUserPatch,
   firstChangedLine,
+  isApprovalBypassedForStream,
   markToolEditApprovalInitialized,
   registerPendingApproval,
   REVEAL_TIMEOUT_MS,
   setToolEditApprovalHandler,
   unregisterPendingApproval,
-  isApprovalBypassedForStream,
   type ToolEditApprovalAction,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
-import { bus } from '@eventBus/ProgressEventBus';
-import type { StreamTabId } from '@shared/schemas';
 
 interface PendingApprovalEntry extends LatexPreviewEntry {
   request: ToolEditApprovalRequest;
