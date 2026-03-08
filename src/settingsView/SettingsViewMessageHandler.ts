@@ -169,10 +169,6 @@ function getReliabilitySettings(): NumberVscodeSetting[] {
 }
 
 async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
-  // Read global streaming default once — avoids N redundant globalSM reads
-  // when getProviderStreaming() falls back to the global default per provider.
-  const globalStreaming = getGlobalStreaming();
-
   return Promise.all(
     SecretManager.API_PROVIDERS.map(async (provider) => {
       const secretValue = await SecretManager.get(
@@ -194,7 +190,7 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
         displayName: PROVIDER_DISPLAY_NAMES[provider],
         status,
         keyUrl: PROVIDER_URLS[provider],
-        streaming: getProviderStreaming(provider, globalStreaming),
+        streaming: getProviderStreaming(provider),
         customEndpoint: getProviderEndpoint(provider),
         supportsCustomEndpoint: supportsCustomEndpoint(provider),
         vscodeSettings: getProviderVscodeSettings(provider),
@@ -276,13 +272,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // Domain-specific handler delegates
   private readonly agentHandlers: AgentHandlers;
   private readonly latexHandlers: LatexSettingsHandlers;
-
-  /**
-   * Debounce timer for sendProfileData() — batches rapid settings toggles
-   * (streaming, endpoint, VS Code settings) into a single profile refresh.
-   */
-  private _profileDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-  private static readonly PROFILE_DEBOUNCE_MS = 150;
 
   constructor(_context: vscode.ExtensionContext) {
     super('SettingsView', { trackActiveView: true });
@@ -625,20 +614,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  /**
-   * Schedule a debounced sendProfileData refresh. Batches rapid settings
-   * toggles (streaming, endpoint, VS Code settings) into a single send.
-   */
-  private scheduleSendProfileData(): void {
-    if (this._profileDebounceTimer) {
-      clearTimeout(this._profileDebounceTimer);
-    }
-    this._profileDebounceTimer = setTimeout(() => {
-      this._profileDebounceTimer = null;
-      void this.withActiveWebview((w) => this.sendProfileData(w));
-    }, SettingsViewMessageHandler.PROFILE_DEBOUNCE_MS);
-  }
-
   public async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
     const models = buildModelSelectionItems();
     await webview.postMessage({
@@ -829,13 +804,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       }
       const deleted = await deleteExecution(data.historyId as ExecutionId);
       if (deleted) {
-        // Send incremental removal instead of re-fetching the entire history list.
-        await this.withActiveWebview((w) =>
-          w.postMessage({
-            command: SETTINGS_VIEW_COMMANDS.REMOVE_HISTORY_ITEM,
-            historyId: data.historyId,
-          }),
-        );
+        await this.withActiveWebview((w) => this.sendHistoryData(w));
       } else {
         await vscode.window.showWarningMessage(
           `History item not found: ${data.historyId}`,
@@ -1107,21 +1076,21 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_STREAMING>,
   ): Promise<void> {
     await setProviderStreaming(data.provider, data.enabled);
-    this.scheduleSendProfileData();
+    await this.withActiveWebview((w) => this.sendProfileData(w));
   }
 
   private async handleSetProviderEndpoint(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_ENDPOINT>,
   ): Promise<void> {
     await setProviderEndpoint(data.provider, data.endpoint);
-    this.scheduleSendProfileData();
+    await this.withActiveWebview((w) => this.sendProfileData(w));
   }
 
   private async handleSetGlobalStreaming(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GLOBAL_STREAMING>,
   ): Promise<void> {
     await setGlobalStreaming(data.enabled);
-    this.scheduleSendProfileData();
+    await this.withActiveWebview((w) => this.sendProfileData(w));
   }
 
   private async handleOpenExternalUrl(
@@ -1148,8 +1117,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       vscode.ConfigurationTarget.Global,
     );
 
-    this.scheduleSendProfileData();
-    await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
+    await this.withActiveWebview(async (w) => {
+      await Promise.all([
+        this.sendProfileData(w),
+        this.sendSuperYoloEnabled(w),
+      ]);
+    });
   }
 
   // ============================================================
