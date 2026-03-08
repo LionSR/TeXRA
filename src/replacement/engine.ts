@@ -152,8 +152,9 @@ export function getAllReplacements(): ReplacementCategory {
   const customReplacements = getConfig('texra.latex.customReplacements', {});
 
   // Filter predefined categories based on user configuration
+  const enabledSet = new Set(enabledCategoryNames);
   const enabledCategories = NON_REGEX_CATEGORIES.filter((category) =>
-    enabledCategoryNames.includes(category.name),
+    enabledSet.has(category.name),
   );
 
   // Combine patterns from all enabled categories with custom replacements taking precedence
@@ -194,8 +195,9 @@ export function getAllReplacementsRegex(): ReplacementCategory[] {
     {},
   );
 
+  const enabledSet = new Set(enabledCategoryNames);
   const enabledCategories = REGEX_CATEGORIES.filter((category) =>
-    enabledCategoryNames.includes(category.name),
+    enabledSet.has(category.name),
   );
 
   if (Object.keys(customReplacements).length === 0) {
@@ -212,18 +214,6 @@ export function getAllReplacementsRegex(): ReplacementCategory[] {
       patterns: customReplacements,
     },
   ];
-}
-
-/**
- * Get replacement patterns for a specific category.
- */
-export function getReplacementsByCategory(
-  categoryName: string,
-): ReplacementCategory | undefined {
-  return (
-    NON_REGEX_CATEGORIES.find((c) => c.name === categoryName) ??
-    REGEX_CATEGORIES.find((c) => c.name === categoryName)
-  );
 }
 
 /**

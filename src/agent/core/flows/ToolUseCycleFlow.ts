@@ -24,7 +24,10 @@ import {
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 
 // Internal imports - use core ToolTypes as single source of truth
-import { extractToolAttachments } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import {
+  extractToolAttachments,
+  type ExtractedToolAttachments,
+} from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type {
   FileInteractionState,
@@ -499,7 +502,8 @@ interface ToolExecutionResult {
   call: SdkToolCall;
   result: ToolResult;
   parsedInput: unknown;
-  sanitizedOutput: Record<string, unknown>;
+  /** Pre-extracted attachments and sanitized result (avoids re-extraction in post). */
+  extracted: ExtractedToolAttachments;
   editedFiles: Array<{
     path: string;
     ok: boolean;
@@ -581,14 +585,11 @@ class ToolUseDispatchNode<C> extends BatchNode<
     if (this._duplicateCallIds.has(call.callId)) {
       return {
         call,
-        result: {
-          error: DUPLICATE_CALL_ERROR,
-          isError: true,
-        },
+        result: { error: DUPLICATE_CALL_ERROR, isError: true as const },
         parsedInput: call.input,
-        sanitizedOutput: {
-          error: DUPLICATE_CALL_ERROR,
-          isError: true,
+        extracted: {
+          sanitizedResult: { error: DUPLICATE_CALL_ERROR },
+          attachments: [],
         },
         editedFiles: [],
         logRef: {
@@ -723,22 +724,19 @@ class ToolUseDispatchNode<C> extends BatchNode<
       result.lineChanges = trackedEdits.lineChanges;
     }
 
-    const sanitizedOutput = extractToolAttachments(result).sanitizedResult;
+    const extracted = extractToolAttachments(result);
     const editedFiles = trackedEdits.edits.map((entry) => ({
       path: entry.path,
       ok: true,
       source: 'tool',
       sourceDisplay: 'Tool use',
     }));
-    if (editedFiles.length > 0) {
-      sanitizedOutput.editedFiles = editedFiles;
-    }
 
     return {
       call,
       result,
       parsedInput,
-      sanitizedOutput,
+      extracted,
       editedFiles,
       logRef,
     };
@@ -749,13 +747,20 @@ class ToolUseDispatchNode<C> extends BatchNode<
     options: ToolUseCycleServices<C>,
     workspace: ToolUseCycleServices<C>['workspace'],
   ): Promise<void> {
-    const { call, result, parsedInput, sanitizedOutput, editedFiles, logRef } =
+    const { call, result, parsedInput, extracted, editedFiles, logRef } =
       execResult;
+
+    // Spread sanitizedResult so editedFiles in the log don't leak into
+    // extracted.sanitizedResult (which is reused for model messages in post).
+    const logOutput =
+      editedFiles.length > 0
+        ? { ...extracted.sanitizedResult, editedFiles }
+        : extracted.sanitizedResult;
 
     const toolUseLog = {
       toolName: call.name,
       input: parsedInput ?? call.raw,
-      output: sanitizedOutput,
+      output: logOutput,
       ...(editedFiles.length > 0 && { files: editedFiles }),
       isError: Boolean(result.isError),
     };
@@ -824,9 +829,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
       await this.logAndProcessMediaFiles(execResult, services, workspace);
     }
 
-    const extracted = completedResults.map((er) =>
-      extractToolAttachments(er.result),
-    );
+    const extracted = completedResults.map((er) => er.extracted);
     const calls = completedResults.map((er) => er.call);
 
     // For Google/DeepSeek/Kimi handlers with multiple parallel calls, batch all tool calls
