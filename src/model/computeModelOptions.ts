@@ -181,6 +181,8 @@ export function buildBasicModelOptionsData(): ModelOptionData[] {
  * when multiple callers request model options in quick succession.
  */
 const MODEL_OPTIONS_CACHE_TTL_MS = 5_000;
+/** Generation counter — incremented on invalidation to discard stale in-flight results. */
+let _cacheGeneration = 0;
 let _modelOptionsCache: {
   data: ModelOptionData[];
   expiry: number;
@@ -188,8 +190,9 @@ let _modelOptionsCache: {
   pending?: Promise<ModelOptionData[]>;
 } | null = null;
 
-/** Invalidate the shared model options cache (e.g. after key changes). */
+/** Invalidate the shared model options cache (e.g. after key or model-list changes). */
 export function invalidateModelOptionsCache(): void {
+  _cacheGeneration++;
   _modelOptionsCache = null;
 }
 
@@ -207,6 +210,7 @@ export async function computeModelOptionsData(): Promise<ModelOptionData[]> {
     return _modelOptionsCache.pending;
   }
 
+  const generation = _cacheGeneration;
   const pending = computeModelOptionsDataUncached();
 
   // Store the pending promise so concurrent calls share it.
@@ -214,13 +218,18 @@ export async function computeModelOptionsData(): Promise<ModelOptionData[]> {
 
   try {
     const data = await pending;
-    _modelOptionsCache = {
-      data,
-      expiry: Date.now() + MODEL_OPTIONS_CACHE_TTL_MS,
-    };
+    // Only populate cache if no invalidation occurred while we were awaiting.
+    if (_cacheGeneration === generation) {
+      _modelOptionsCache = {
+        data,
+        expiry: Date.now() + MODEL_OPTIONS_CACHE_TTL_MS,
+      };
+    }
     return data;
   } catch (error) {
-    _modelOptionsCache = null;
+    if (_cacheGeneration === generation) {
+      _modelOptionsCache = null;
+    }
     throw error;
   }
 }

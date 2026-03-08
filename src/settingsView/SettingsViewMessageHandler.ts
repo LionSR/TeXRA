@@ -971,6 +971,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       data.mode === 'included',
     );
 
+    // Access mode affects model availability — invalidate cached options.
+    invalidateModelOptionsCache();
     await this.withActiveWebview((w) => this.sendProfileData(w));
 
     const modeLabel =
@@ -1154,6 +1156,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       await globalSM.update(GlobalStateKey.HELPER_MODEL, newHelper);
     }
 
+    // Enabled model list changed — invalidate cached options.
+    invalidateModelOptionsCache();
     void vscode.commands.executeCommand('texra.refreshAllOptions');
     await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
