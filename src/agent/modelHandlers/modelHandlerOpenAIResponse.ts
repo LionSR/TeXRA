@@ -478,6 +478,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         if (settled) return;
         settled = true;
         cleanup();
+        // Invalidate the connection on error events (e.g., websocket_connection_limit_reached).
+        // The server may close the socket after sending the error, but the close event
+        // fires after this handler and would be a no-op (settled=true).
+        this.closeWebSocket();
         reject(error);
       };
 
