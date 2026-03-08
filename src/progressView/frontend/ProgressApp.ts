@@ -292,30 +292,18 @@ export class ProgressApp extends ProgressAppBase {
     () => new Map(this.filteredStreams$.get().map((s) => [s.name, s])),
   );
 
-  /** Status string per stream tab. */
-  private statusById$ = combine(
+  /** Status and timestamp per stream tab (single pass over filtered streams). */
+  private statusAndTimestampById$ = combine(
     [this.streamStates$, this.filteredStreams$] as const,
     (states, streams) => {
-      const map = new Map<StreamTabId, string>();
+      const statusMap = new Map<StreamTabId, string>();
+      const timestampMap = new Map<StreamTabId, number | undefined>();
       for (const stream of streams) {
-        map.set(
-          stream.name,
-          states.get(stream.name)?.status ?? STREAM_STATUS.READY,
-        );
+        const state = states.get(stream.name);
+        statusMap.set(stream.name, state?.status ?? STREAM_STATUS.READY);
+        timestampMap.set(stream.name, state?.lastTimestamp);
       }
-      return map;
-    },
-  );
-
-  /** Last timestamp per stream tab. */
-  private timestampById$ = combine(
-    [this.streamStates$, this.filteredStreams$] as const,
-    (states, streams) => {
-      const map = new Map<StreamTabId, number | undefined>();
-      for (const stream of streams) {
-        map.set(stream.name, states.get(stream.name)?.lastTimestamp);
-      }
-      return map;
+      return { statusMap, timestampMap };
     },
   );
 
@@ -521,8 +509,8 @@ export class ProgressApp extends ProgressAppBase {
               .activeStreamId=${this.activeStreamId$.get()}
               .filter=${this.streamFilter$.get()}
               .sort=${this.streamSort$.get()}
-              .streamStatusById=${this.statusById$.get()}
-              .streamLastTimestampById=${this.timestampById$.get()}
+              .streamStatusById=${this.statusAndTimestampById$.get().statusMap}
+              .streamLastTimestampById=${this.statusAndTimestampById$.get().timestampMap}
               .pendingApprovalStreamIds=${this.pendingApprovalIds$.get()}
               @stream-switch=${this.onStreamSwitch}
               @stream-delete=${this.onStreamDelete}
