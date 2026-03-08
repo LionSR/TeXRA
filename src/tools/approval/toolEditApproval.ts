@@ -13,7 +13,10 @@ import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 import { countLines } from '@utils/text/stringUtils';
 
-import { type RejectablePendingEntry, rejectPendingEntries } from './bashApproval';
+import {
+  type RejectablePendingEntry,
+  rejectPendingEntries,
+} from './bashApproval';
 
 export interface ToolEditApprovalRequest {
   path: string;
