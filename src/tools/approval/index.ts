@@ -74,8 +74,6 @@ export {
   // Tool edit approval
   requestToolEditApproval,
   buildApprovalRejectedResult,
-  handleProgressViewToolEditApprovalAction,
-  initializeToolEditApproval,
   setToolEditApprovalHandler,
   setToolEditApprovalSessionBypass,
   toggleToolEditApprovalSessionBypass,

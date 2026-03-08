@@ -19,6 +19,7 @@ import {
 } from '@common/webview';
 import { RecordingManager } from '@common/managers/RecordingManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
+import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/nativeToolEditApproval';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isWorkflowTaskState,
@@ -42,7 +43,6 @@ import {
   cleanupAllApprovals,
   cleanupApprovalsForStream,
   handleProgressViewBashApprovalAction,
-  handleProgressViewToolEditApprovalAction,
   toggleToolEditApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
   isApprovalBypassedForStream,
