@@ -233,7 +233,9 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     // Generate patterns for bold Greek letters with \b prefix
     // prettier-ignore
     const commonGreekSet = new Set(['alpha', 'beta', 'gamma', 'epsilon', 'eta', 'theta', 'mu', 'nu', 'omega', 'phi', 'sigma', 'xi', 'zeta']);
-    const commonGreekLetters = GREEK_LETTERS.filter((letter) => commonGreekSet.has(letter));
+    const commonGreekLetters = GREEK_LETTERS.filter((letter) =>
+      commonGreekSet.has(letter),
+    );
 
     // prettier-ignore
     const greekBoldLetters = [...commonGreekLetters, 'chi', 'pi', 'varphi', 'Sigma', 'lambda', 'Gamma', 'Lambda'];
