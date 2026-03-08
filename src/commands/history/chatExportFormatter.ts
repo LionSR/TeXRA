@@ -20,7 +20,8 @@ import latexPreamble from '../../../resources/templates/chatExport.tex';
 // Input schemas (single source of truth)
 // ============================================================
 
-/** Loose schema for API content blocks — accepts many optional fields. */
+/** Loose schema for API content blocks — accepts many optional fields.
+ *  Covers Anthropic, OpenAI Chat Completions, and OpenAI Response API formats. */
 const ContentBlockSchema = z.looseObject({
   type: z.string(),
   text: z.string().optional(),
@@ -44,6 +45,9 @@ const ContentBlockSchema = z.looseObject({
   url: z.string().optional(),
   title: z.string().optional(),
   page_content: z.string().optional(),
+  // OpenAI Response API fields
+  arguments: z.string().optional(),
+  output: z.string().optional(),
 });
 type ContentBlock = z.infer<typeof ContentBlockSchema>;
 
@@ -207,11 +211,12 @@ function extractBlocks(msg: ConversationMessage): ContentBlock[] {
 function blocksToUserParts(blocks: ContentBlock[]): UserPart[] {
   const parts: UserPart[] = [];
   for (const b of blocks) {
-    if (b.type === 'text' && b.text) {
+    // Anthropic: 'text', OpenAI Response API: 'input_text'
+    if ((b.type === 'text' || b.type === 'input_text') && b.text) {
       parts.push({ type: 'text', text: b.text });
-    } else if (b.type === 'image') {
+    } else if (b.type === 'image' || b.type === 'input_image') {
       parts.push({ type: 'attachment', attachmentType: 'image' });
-    } else if (b.type === 'document') {
+    } else if (b.type === 'document' || b.type === 'input_file') {
       parts.push({ type: 'attachment', attachmentType: 'document' });
     }
   }
@@ -224,7 +229,8 @@ function extractToolResultText(block: ContentBlock): string | undefined {
       ? block.content
       : JSON.stringify(block.content, null, 2);
   }
-  if (block.type === 'text' && block.text) {
+  // Anthropic: 'text', OpenAI Response API: 'input_text'
+  if ((block.type === 'text' || block.type === 'input_text') && block.text) {
     return block.text;
   }
   return undefined;
@@ -235,7 +241,9 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
     case 'thinking':
       return null;
 
+    // Anthropic: 'text', OpenAI Response API: 'output_text'
     case 'text':
+    case 'output_text':
       return block.text?.trim()
         ? { kind: 'assistant-text', text: block.text }
         : null;
@@ -283,7 +291,32 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
   let lastAssistantHadToolUse = false;
 
   for (const raw of messages) {
-    const msg = raw as ConversationMessage;
+    const item = raw as Record<string, unknown>;
+
+    // OpenAI Response API: top-level function_call items (not wrapped in a message)
+    if (item.type === 'function_call') {
+      const name = typeof item.name === 'string' ? item.name : 'unknown';
+      const args =
+        typeof item.arguments === 'string'
+          ? item.arguments
+          : JSON.stringify(item.arguments ?? {}, null, 2);
+      nodes.push({ kind: 'tool-call', name, input: args });
+      lastAssistantHadToolUse = true;
+      continue;
+    }
+
+    // OpenAI Response API: top-level function_call_output items
+    if (item.type === 'function_call_output') {
+      const output =
+        typeof item.output === 'string'
+          ? item.output
+          : JSON.stringify(item.output ?? '', null, 2);
+      nodes.push({ kind: 'tool-result', text: output });
+      lastAssistantHadToolUse = false;
+      continue;
+    }
+
+    const msg = item as ConversationMessage;
     const role = msg.role ?? 'unknown';
     const blocks = extractBlocks(msg);
 
@@ -313,7 +346,7 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
       continue;
     }
 
-    // OpenAI tool role
+    // OpenAI Chat Completions tool role
     if (role === 'tool') {
       const text =
         typeof msg.content === 'string'
