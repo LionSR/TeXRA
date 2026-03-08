@@ -217,18 +217,6 @@ export function getAllReplacementsRegex(): ReplacementCategory[] {
 }
 
 /**
- * Get replacement patterns for a specific category.
- */
-export function getReplacementsByCategory(
-  categoryName: string,
-): ReplacementCategory | undefined {
-  return (
-    NON_REGEX_CATEGORIES.find((c) => c.name === categoryName) ??
-    REGEX_CATEGORIES.find((c) => c.name === categoryName)
-  );
-}
-
-/**
  * Apply replacements to text, handling both regex and non-regex patterns.
  */
 export function applyReplacements(
