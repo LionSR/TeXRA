@@ -213,11 +213,13 @@ export class AgentHandlers {
         data.category === 'workflow' ? getWorkflowAgents() : getToolUseAgents();
 
       const sourceAgents = allAgents.filter((e) => e.source === data.source);
-      const targetKeys = new Set(
-        sourceAgents.map((e) => createKey(e.source, e.name)),
-      );
+      const targetKeys = new Set<string>();
       // Legacy entries may use plain agent names without source prefix
-      const targetLegacyNames = new Set(sourceAgents.map((e) => e.name));
+      const targetLegacyNames = new Set<string>();
+      for (const e of sourceAgents) {
+        targetKeys.add(createKey(e.source, e.name));
+        targetLegacyNames.add(e.name);
+      }
 
       // Resolve current state: undefined means "all enabled" (never configured)
       const raw = workspaceSM.get<string[]>(stateKey);
