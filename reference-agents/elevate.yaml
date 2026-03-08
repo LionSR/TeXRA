@@ -184,7 +184,7 @@ prompts:
 
       Consider: Would this version make a reviewer want to champion the paper? Or are there still passages that feel flat, unmotivated, or that undersell the contribution?
 
-      Brainstorm further improvements in the scratchpad below.
+      In the scratchpad below, critically re-evaluate the revised version, then categorize remaining issues into changes you will implement directly and major decisions to leave as comments.
       <scratchpad>
       <reflection>
       \begin{enumerate}
@@ -200,25 +200,34 @@ prompts:
       </reflection>
       <improvements>
       \begin{enumerate}
-          \item [Additional improvement 1]
+          \item [Changes to implement directly] (mark each with \criticize{Elevated: [description]}{S}{C}):
+              \begin{itemize}
+                  \item Sharpening phrasing, tightening hedging, replacing generic with specific
+                  \item Improving transitions, topic sentences, paragraph focus
+                  \item Cutting redundancy, throat-clearing, and verbosity introduced in round 1
+                  \item Strengthening equation prose (introductions, interpretations, connections)
+                  \item Fixing overclaims or under-claims discovered in reflection
+              \end{itemize}
+          \item [Major decisions to leave as comments] (mark with \criticize{[diagnosis and suggestion]}{S}{C}):
+              \begin{itemize}
+                  \item Major reframing of motivation or contribution
+                  \item Restructuring sections or reordering the narrative
+                  \item Adding substantial new content the author must write
+                  \item Repositioning the contribution relative to related work
+              \end{itemize}
+          \item [Specific additional improvements]
               \begin{itemize}
                   \item Location: [Where in the paper]
                   \item Issue: [What still weakens the writing]
                   \item Fix: [How to strengthen it]
+                  \item Action: [Implement directly / Leave as comment]
               \end{itemize}
-          \item [Additional improvement 2]
-              \begin{itemize}
-                  \item Location: [Where in the paper]
-                  \item Issue: [What still weakens the writing]
-                  \item Fix: [How to strengthen it]
-              \end{itemize}
-          \item[\ldots]
       \end{enumerate}
       </improvements>
       </scratchpad>
 
-      Then, output a further enhanced version of the \LaTeX document incorporating the reflections and additional improvements. Include all the changes from the previous step. Stay focused on the instruction and planned improvements---do not add or remove sections beyond what is necessary.
+      Then, output a further enhanced version of the \LaTeX document. Implement all improvements you categorized as direct changes---this round should produce a noticeably better document, not just add more comments. Include all changes from the previous step. Stay focused on the instruction and planned improvements---do not add or remove sections beyond what is necessary.
 
-      Keep all \criticize{} comments from the previous step that are still relevant. Add new ones where needed. Remove any that have been fully addressed by your revisions.
+      Every direct change must be annotated with \criticize{Elevated: [description of what was changed and why]}{S}{C} so the author can review each modification. No silent changes---the author should be able to scan the \criticize{Elevated: ...} markers to understand exactly what was improved. Keep unresolved \criticize{} comments from round 1. Add new comment-only annotations for major strategic decisions. Remove any comments that have been fully addressed.
 
       The goal is writing that makes a reviewer think: ``This is a well-written, important paper.''

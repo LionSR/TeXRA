@@ -123,6 +123,7 @@ prompts:
     - |
       Now let's critically evaluate the revised versions through the eyes of a demanding reviewer.
 
+      In the scratchpad below, critically re-evaluate the revised versions, then categorize remaining issues into changes to implement directly and major decisions to leave as comments.
       <scratchpad>
       \begin{itemize}
           \item Reflection on previous changes:
@@ -136,31 +137,41 @@ prompts:
               \item [Completeness: Missing equations, derivations, or key details from originals?]
               \item [Comment quality: Are \criticize{} annotations actionable? Audience indicated?]
           \end{enumerate}
-          \item Additional improvements:
+          \item Changes to implement directly (mark each with \criticize{Elevated: [description]}{S}{C}):
+          \begin{itemize}
+              \item Sharpening phrasing, tightening hedging, replacing generic with specific
+              \item Improving transitions, topic sentences, paragraph focus
+              \item Cutting redundancy, throat-clearing, and verbosity introduced in round 1
+              \item Strengthening equation prose (introductions, interpretations, connections)
+              \item Fixing overclaims or under-claims discovered in reflection
+          \end{itemize}
+          \item Major decisions to leave as comments (mark with \criticize{[diagnosis and suggestion]}{S}{C}):
+          \begin{itemize}
+              \item Major reframing of motivation or contribution
+              \item Restructuring sections or reordering the narrative
+              \item Adding substantial new content the author must write
+          \end{itemize}
+          \item Specific additional improvements:
           \begin{enumerate}
-              \item [Additional improvement 1]
+              \item [Improvement 1]
               \begin{itemize}
                   \item Affected documents: [List of documents]
                   \item Issue: [What still weakens the writing]
                   \item Fix: [How to strengthen it]
+                  \item Action: [Implement directly / Leave as comment]
               \end{itemize}
-              \item [Additional improvement 2]
+              \item [Improvement 2]
               \begin{itemize}
                   \item Affected documents: [List of documents]
                   \item Issue: [What still weakens the writing]
                   \item Fix: [How to strengthen it]
-              \end{itemize}
-              \item [Additional improvement 3]
-              \begin{itemize}
-                  \item Affected documents: [List of documents]
-                  \item Issue: [What still weakens the writing]
-                  \item Fix: [How to strengthen it]
+                  \item Action: [Implement directly / Leave as comment]
               \end{itemize}
           \end{enumerate}
       \end{itemize}
       </scratchpad>
 
-      Then, output further enhanced and complete versions of all \LaTeX documents incorporating the reflections and additional improvements. Include all changes from the previous step. Keep relevant \criticize{} comments, add new ones, remove fully addressed ones.
+      Then, output further enhanced versions of all \LaTeX documents. Implement all improvements categorized as direct changes---this round should produce noticeably better documents, not just add more comments. Include all changes from the previous step. Every direct change must be annotated with \criticize{Elevated: [description of what was changed and why]}{S}{C} so the author can review each modification. No silent changes. Keep unresolved \criticize{} comments from round 1. Remove fully addressed ones.
 
       The goal is writing that makes a reviewer think: ``This is a well-written, important paper.''
 
