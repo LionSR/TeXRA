@@ -1,7 +1,7 @@
 import { ModelProvider } from 'llm-zoo';
 import { getKeyService } from '../types/IKeyService';
 import { readConfig } from '@utils/configBridge';
-import { getProviderEndpoint } from '@utils/config/providerConfigBridge';
+import { getProviderEndpoint } from '@utils/config/providerConfig';
 
 // NOTE: getProviderEndpoint reads from globalSM (VS Code global state), which is
 // where the Settings dashboard writes custom endpoints. The legacy settings.json

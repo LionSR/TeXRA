@@ -6,44 +6,51 @@
  * in @shared/constants/providers.
  */
 
-// Local imports - common (direct import to avoid circular dependency via barrel)
-import { globalSM, GlobalStateKey } from '@common/state/stateManager';
+import { globalState } from '@common/state/stateBridge';
 
 // ---------------------------------------------------------------------------
-// Streaming / Endpoint settings (globalSM-backed)
+// State key constants (string values matching GlobalStateKey enum)
 // ---------------------------------------------------------------------------
 
-/** Map from provider string to GlobalStateKey for per-provider streaming. */
-const STREAMING_KEY: Record<string, GlobalStateKey> = {
-  openai: GlobalStateKey.STREAMING_OPENAI,
-  anthropic: GlobalStateKey.STREAMING_ANTHROPIC,
-  openrouter: GlobalStateKey.STREAMING_OPENROUTER,
-  google: GlobalStateKey.STREAMING_GOOGLE,
-  xai: GlobalStateKey.STREAMING_XAI,
-  deepseek: GlobalStateKey.STREAMING_DEEPSEEK,
-  moonshot: GlobalStateKey.STREAMING_MOONSHOT,
-  dashscope: GlobalStateKey.STREAMING_DASHSCOPE,
+/** Map from provider string to state key for per-provider streaming. */
+const STREAMING_KEY: Record<string, string> = {
+  openai: 'texra.streaming.openai',
+  anthropic: 'texra.streaming.anthropic',
+  openrouter: 'texra.streaming.openrouter',
+  google: 'texra.streaming.google',
+  xai: 'texra.streaming.xai',
+  deepseek: 'texra.streaming.deepseek',
+  moonshot: 'texra.streaming.moonshot',
+  dashscope: 'texra.streaming.dashscope',
 };
 
-/** Map from provider string to GlobalStateKey for per-provider endpoint. */
-const ENDPOINT_KEY: Record<string, GlobalStateKey> = {
-  openai: GlobalStateKey.ENDPOINT_OPENAI,
-  anthropic: GlobalStateKey.ENDPOINT_ANTHROPIC,
-  google: GlobalStateKey.ENDPOINT_GOOGLE,
-  deepseek: GlobalStateKey.ENDPOINT_DEEPSEEK,
-  xai: GlobalStateKey.ENDPOINT_XAI,
-  moonshot: GlobalStateKey.ENDPOINT_MOONSHOT,
-  dashscope: GlobalStateKey.ENDPOINT_DASHSCOPE,
+/** Map from provider string to state key for per-provider endpoint. */
+const ENDPOINT_KEY: Record<string, string> = {
+  openai: 'texra.endpoint.openai',
+  anthropic: 'texra.endpoint.anthropic',
+  google: 'texra.endpoint.google',
+  deepseek: 'texra.endpoint.deepseek',
+  xai: 'texra.endpoint.xai',
+  moonshot: 'texra.endpoint.moonshot',
+  dashscope: 'texra.endpoint.dashscope',
 };
+
+const STREAMING_GLOBAL_KEY = 'texra.streaming.global';
+const MEMORY_ENABLED_KEY = 'texra.memory.enabled';
+const ANTHROPIC_DYNAMIC_FILTERING_KEY = 'texra.anthropic.dynamicFiltering';
+
+// ---------------------------------------------------------------------------
+// Streaming / Endpoint settings
+// ---------------------------------------------------------------------------
 
 /** Read the global streaming default. */
 export function getGlobalStreaming(): boolean {
-  return globalSM?.get<boolean>(GlobalStateKey.STREAMING_GLOBAL, true) ?? true;
+  return globalState.get<boolean>(STREAMING_GLOBAL_KEY, true) ?? true;
 }
 
 /** Set the global streaming default. */
 export async function setGlobalStreaming(enabled: boolean): Promise<void> {
-  await globalSM?.update(GlobalStateKey.STREAMING_GLOBAL, enabled);
+  await globalState.update(STREAMING_GLOBAL_KEY, enabled);
 }
 
 /** Read per-provider streaming setting, falling back to global default. */
@@ -51,7 +58,7 @@ export function getProviderStreaming(provider: string): boolean {
   const key = STREAMING_KEY[provider.toLowerCase()];
   if (!key) return getGlobalStreaming();
   const global = getGlobalStreaming();
-  return globalSM?.get<boolean>(key, global) ?? global;
+  return globalState.get<boolean>(key, global) ?? global;
 }
 
 /** Set per-provider streaming setting. */
@@ -61,7 +68,7 @@ export async function setProviderStreaming(
 ): Promise<void> {
   const key = STREAMING_KEY[provider.toLowerCase()];
   if (key) {
-    await globalSM?.update(key, enabled);
+    await globalState.update(key, enabled);
   }
 }
 
@@ -69,7 +76,7 @@ export async function setProviderStreaming(
 export function getProviderEndpoint(provider: string): string {
   const key = ENDPOINT_KEY[provider.toLowerCase()];
   if (!key) return '';
-  return globalSM?.get<string>(key, '') ?? '';
+  return globalState.get<string>(key, '') ?? '';
 }
 
 /** Set per-provider custom endpoint. */
@@ -79,7 +86,7 @@ export async function setProviderEndpoint(
 ): Promise<void> {
   const key = ENDPOINT_KEY[provider.toLowerCase()];
   if (key) {
-    await globalSM?.update(key, endpoint);
+    await globalState.update(key, endpoint);
   }
 }
 
@@ -89,20 +96,27 @@ export function supportsCustomEndpoint(provider: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Anthropic API settings (globalSM-backed)
+// Memory / Anthropic API settings
 // ---------------------------------------------------------------------------
+
+/** Determine whether the memory tool is enabled for tool-use sessions. */
+export function getToolUseMemoryEnabled(): boolean {
+  return globalState.get<boolean>(MEMORY_ENABLED_KEY, true) ?? true;
+}
+
+/** Set whether the memory tool is enabled for tool-use sessions. */
+export async function setToolUseMemoryEnabled(enabled: boolean): Promise<void> {
+  await globalState.update(MEMORY_ENABLED_KEY, enabled);
+}
 
 /**
  * Whether Anthropic web_search/web_fetch should use dynamic filtering.
- * When true, Claude can write code to filter fetched content before it
- * enters context (requires code execution container support).
  * Defaults to false — tools use allowed_callers: ['direct'] to bypass
  * code execution and avoid the container_id requirement.
  */
 export function getAnthropicDynamicFiltering(): boolean {
   return (
-    globalSM?.get<boolean>(GlobalStateKey.ANTHROPIC_DYNAMIC_FILTERING, false) ??
-    false
+    globalState.get<boolean>(ANTHROPIC_DYNAMIC_FILTERING_KEY, false) ?? false
   );
 }
 
@@ -110,5 +124,5 @@ export function getAnthropicDynamicFiltering(): boolean {
 export async function setAnthropicDynamicFiltering(
   enabled: boolean,
 ): Promise<void> {
-  await globalSM?.update(GlobalStateKey.ANTHROPIC_DYNAMIC_FILTERING, enabled);
+  await globalState.update(ANTHROPIC_DYNAMIC_FILTERING_KEY, enabled);
 }

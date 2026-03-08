@@ -14,10 +14,7 @@ import {
   STREAM_STATUS,
   type RetryErrorInfo,
 } from '@shared/schemas';
-import {
-  getModelRetryBackoffMs,
-  getModelRetryMaxAttempts,
-} from '@utils/configBridge';
+import { readConfig } from '@utils/configBridge';
 
 const BACKGROUND_MODE_MIN_RETRIES = 3;
 
@@ -27,8 +24,8 @@ export interface RetryState {
 
 /** Returns maxRetries (1 initial + N auto-retries) and wait (seconds between retries). */
 function getNodeRetryConfig(): { maxRetries: number; wait: number } {
-  const maxAutoAttempts = getModelRetryMaxAttempts();
-  const backoffMs = getModelRetryBackoffMs();
+  const maxAutoAttempts = readConfig<number>('texra.model.retry.maxAttempts', 1);
+  const backoffMs = readConfig<number>('texra.model.retry.backoffMs', 1000);
 
   return {
     maxRetries: 1 + Math.max(0, maxAutoAttempts),

@@ -40,7 +40,7 @@ import type { FileLocation } from '@utils/files';
 import {
   getProviderStreaming,
   getGlobalStreaming,
-} from '@utils/config/providerConfigBridge';
+} from '@utils/config/providerConfig';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {
   resolveBaseUrl,

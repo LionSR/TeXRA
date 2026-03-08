@@ -47,7 +47,7 @@ import type { ToolFileAttachment } from '@tools/result';
 import { readConfig } from '@utils/configBridge';
 import { isNonEmptyString } from '@utils/core';
 import { flexibleFS, type FileLocation } from '@utils/files';
-import { getAnthropicDynamicFiltering } from '@utils/config/providerConfigBridge';
+import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
 import { objectToLogString } from '@utils/text/stringUtils';
 
 // Local file imports

@@ -1,6 +1,3 @@
-// Local imports - common (direct import to avoid circular dependency via barrel)
-import { globalSM, GlobalStateKey } from '@common/state/stateManager';
-
 // Local imports - config utils
 import * as logger from '@logger/logUtils';
 import { getConfig } from './configUtils';
@@ -33,7 +30,6 @@ export const SETTINGS_QUERY = {
 
 // Tool-use persistence defaults (internal)
 const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 336; // 2 weeks
-const DEFAULT_TOOL_USE_MEMORY_ENABLED = true;
 
 /** Determine whether tool-use session persistence is enabled. */
 export function getToolUsePersistenceEnabled(): boolean {
@@ -57,20 +53,8 @@ export function getToolUsePersistenceTtlHours(): number {
   return hours;
 }
 
-/** Determine whether the memory tool is enabled for tool-use sessions. */
-export function getToolUseMemoryEnabled(): boolean {
-  return (
-    globalSM?.get<boolean>(
-      GlobalStateKey.MEMORY_ENABLED,
-      DEFAULT_TOOL_USE_MEMORY_ENABLED,
-    ) ?? DEFAULT_TOOL_USE_MEMORY_ENABLED
-  );
-}
-
-/** Set whether the memory tool is enabled for tool-use sessions. */
-export async function setToolUseMemoryEnabled(enabled: boolean): Promise<void> {
-  await globalSM?.update(GlobalStateKey.MEMORY_ENABLED, enabled);
-}
+// Re-export memory functions from providerConfig (single source of truth via stateBridge)
+export { getToolUseMemoryEnabled, setToolUseMemoryEnabled } from './providerConfig';
 
 /** Get the maximum number of automatic retry attempts for model calls. */
 export function getModelRetryMaxAttempts(): number {

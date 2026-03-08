@@ -26,7 +26,7 @@ import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { getUnavailableToolNamesCached } from '@tools/toolAvailability';
 import { notifyUnavailableTools } from '@tools/toolUnavailableNotification';
-import { getToolUseMemoryEnabled } from '@utils/config/providerConfigBridge';
+import { getToolUseMemoryEnabled } from '@utils/config/providerConfig';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
