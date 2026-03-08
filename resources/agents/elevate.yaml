@@ -1,5 +1,5 @@
 name: elevate
-description: Elevates academic writing to be more compelling, engaging, and publication-ready while preserving technical rigor.
+description: Elevates academic writing to be more compelling and publication-ready. Leaves \criticize{}{}{} comments for writing strategy issues.
 
 settings:
   agentCategory: workflow
@@ -27,6 +27,68 @@ prompts:
         \item \textbf{Concrete over abstract:} Replace vague claims with specific statements. Instead of ``our method performs well,'' say ``our method reduces error by 40\% on benchmark X.''
         \item \textbf{Avoid triviality signals:} Phrases like ``it is straightforward to show'' or ``the result follows trivially'' make reviewers question whether the contribution is significant. Reframe to highlight the insight or difficulty overcome.
     \end{itemize}
+
+    When providing feedback and making changes, you must:
+    \begin{itemize}
+        \item Use the command \criticize{comment text}{severity}{confidence} to annotate the document with writing strategy observations.
+        \item \textbf{CRITICAL:} The text inside \criticize{...}{...}{...} is part of the LaTeX document and must compile:
+            \begin{itemize}
+                \item Use proper LaTeX syntax for math symbols (e.g., $F_t$ not `F_t')
+                \item Use \ref{...} or \cref{...} or \eqref{...} for equation references
+                \item Escape special characters properly (e.g., \%, \&, \_)
+                \item Use `...' or ``...'' for quotes, not straight quotes
+            \end{itemize}
+        \item Make direct improvements where you are confident (transitions, phrasing, emphasis), and mark them with brief \criticize{Elevated: [description]}{severity}{confidence}
+        \item Leave \criticize{} comments (without changing the text) for major strategic decisions that the author should consider
+    \end{itemize}
+
+    SEVERITY RATING GUIDE (writing impact on reviewer perception):
+    \begin{itemize}
+        \item \textbf{Level 5 (Critical):} Issues that could cause desk rejection or strongly negative reviewer impression
+            \begin{itemize}
+                \item Missing or incoherent motivation---reviewer cannot see why this work matters
+                \item Contribution completely buried or unclear---reviewer misses the novelty
+                \item Writing so vague that claims appear unsupported
+                \item Tone that undermines credibility (excessive triviality signals, extreme overclaiming)
+            \end{itemize}
+        \item \textbf{Level 4 (Major):} Issues that significantly weaken reviewer perception
+            \begin{itemize}
+                \item Weak framing that makes the work feel incremental when it is not
+                \item Key results buried or underemphasized
+                \item Narrative drops or sections that feel disconnected
+                \item Systematic overhedging or underconfidence on strong results
+            \end{itemize}
+        \item \textbf{Level 3 (Moderate):} Issues worth addressing for a stronger paper
+            \begin{itemize}
+                \item Missed opportunities to highlight novelty or impact
+                \item Generic phrasing where precision would be more persuasive
+                \item Passages where reader attention might drift
+                \item Transitions that could better build momentum
+            \end{itemize}
+        \item \textbf{Level 2 (Minor):} Small improvements for polish
+            \begin{itemize}
+                \item Individual hedging phrases that could be more direct
+                \item Slightly generic sentences that could be sharpened
+                \item Minor missed connections between ideas
+            \end{itemize}
+        \item \textbf{Level 1 (Cosmetic):} Very minor writing style preferences
+            \begin{itemize}
+                \item Stylistic alternatives that are roughly equivalent
+                \item Slightly awkward but functional phrasing
+            \end{itemize}
+    \end{itemize}
+
+    CONFIDENCE LEVELS:
+    \begin{itemize}
+        \item 5: Very confident (certain about the issue and suggested fix)
+        \item 4: Confident (high certainty with minor subjectivity)
+        \item 3: Moderate confidence (reasonable but field-dependent)
+        \item 2: Uncertain (subjective judgment, depends on audience)
+        \item 1: Very uncertain (speculative, may be a matter of taste)
+    \end{itemize}
+
+    Add this command to the preamble if it is not already there:
+    \usepackage{xcolor}\newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\text{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
 
     When writing a professional *.tex \LaTeX document, you must:
     \begin{itemize}
@@ -80,25 +142,60 @@ prompts:
                   \item Location: [Where in the paper]
                   \item Current issue: [What weakens the writing]
                   \item Planned fix: [How to make it more compelling]
+                  \item Severity/Confidence: [S/C rating]
               \end{itemize}
           \item [Specific improvement 2]
               \begin{itemize}
                   \item Location: [Where in the paper]
                   \item Current issue: [What weakens the writing]
                   \item Planned fix: [How to make it more compelling]
+                  \item Severity/Confidence: [S/C rating]
               \end{itemize}
           \item [Specific improvement 3]
               \begin{itemize}
                   \item Location: [Where in the paper]
                   \item Current issue: [What weakens the writing]
                   \item Planned fix: [How to make it more compelling]
+                  \item Severity/Confidence: [S/C rating]
               \end{itemize}
       \end{enumerate}
       </scratchpad>
 
-      Then, following your plan in the scratchpad, please output an updated version of the \LaTeX document with writing that is more compelling, engaging, and persuasive while maintaining full technical accuracy. Use the following format:
+      Then, following your plan in the scratchpad, please output an updated version of the \LaTeX document with writing improvements and \criticize{}{}{} annotations. Your approach should be:
+
+      \textbf{Changes to implement directly} (with brief annotation):
+      \begin{itemize}
+          \item Strengthening weak transitions and connections between ideas
+          \item Replacing triviality signals with language that highlights insight
+          \item Tightening hedging language on well-supported results
+          \item Sharpening vague or generic phrasing with concrete specifics
+          \item Improving topic sentences to better signal the paragraph's purpose
+          \item Mark each implemented change with: \criticize{Elevated: [brief description of what was improved]}{severity}{confidence}
+      \end{itemize}
+
+      \textbf{Leave as comments for the author} (annotation only, no text change):
+      \begin{itemize}
+          \item Major reframing of the introduction or motivation
+          \item Restructuring sections or reordering the narrative
+          \item Adding substantial new content (examples, intuitive explanations, discussion)
+          \item Repositioning the contribution relative to related work
+          \item Mark with: \criticize{[Diagnosis and concrete suggestion]}{severity}{confidence}
+      \end{itemize}
+
+      EXAMPLES of comment syntax:
+      \begin{itemize}
+          \item \criticize{Elevated: Replaced ``it is easy to see'' with language that highlights the key insight enabling this step.}{3}{5}
+          \item \criticize{Elevated: Strengthened hedging---``may potentially improve'' to ``improves'' given the $3\times$ speedup in \cref{tab:results}.}{2}{4}
+          \item \criticize{Elevated: Added transition connecting the limitation in \cref{sec:related} to the motivation for the proposed approach.}{3}{4}
+          \item \criticize{Weak motivation: The introduction states what you do but not why it matters. Consider opening with the concrete failure mode that motivates this work---e.g., ``Existing methods fail when $n > 10^6$ because [specific reason].''}{5}{4}
+          \item \criticize{Buried result: The $40\%$ improvement over SOTA is mentioned only in passing in \cref{sec:experiments}. This is your strongest result---consider highlighting it in the abstract and introduction.}{4}{5}
+          \item \criticize{Triviality signal: ``The proof is straightforward'' undermines the contribution. If the proof reveals an insight, highlight it. If it is genuinely routine, omit the editorial comment entirely.}{3}{5}
+          \item \criticize{Passive related work: \cref{sec:related} surveys prior work but does not set up your contribution. Consider ending each paragraph with how the cited limitation motivates your approach.}{4}{3}
+          \item \criticize{Overclaim risk: ``Our method solves the problem'' without qualification may trigger skepticism. Consider ``Our method resolves [specific aspect] under [stated conditions].''}{3}{4}
+      \end{itemize}
+
       <latex_document>
-      % 1ST_UPDATED_LATEX_DOCUMENT HERE
+      % 1ST_UPDATED_LATEX_DOCUMENT WITH ELEVATE COMMENTS HERE
       </latex_document>
     - |
       Now let's critically evaluate the revised version through the eyes of a demanding reviewer.
@@ -116,6 +213,7 @@ prompts:
           \item \textbf{Precision audit:} Have any vague or generic phrases crept in (``significant improvement,'' ``promising results,'' ``interesting behavior'') where specific quantitative or qualitative statements would be stronger?
           \item \textbf{Contribution framing:} Is the novelty positioned correctly relative to prior work? Does the related work section set up the contribution effectively, or just survey the field passively?
           \item \textbf{Missing elements:} Are there any mathematical derivations, equations, or key details from the original that were inadvertently lost?
+          \item \textbf{Comment quality review:} Are the \criticize{} annotations actionable? Are they focused on writing strategy, not grammar or notation?
       \end{enumerate}
       </reflection>
       <improvements>
@@ -137,4 +235,8 @@ prompts:
       </improvements>
       </scratchpad>
 
-      Then, output a further enhanced version of the \LaTeX document incorporating the reflections and additional improvements. Include all the changes from the previous step. Stay focused on the instruction and planned improvements---do not add or remove sections beyond what is necessary. The goal is writing that makes a reviewer think: ``This is a well-written, important paper.''
+      Then, output a further enhanced version of the \LaTeX document incorporating the reflections and additional improvements. Include all the changes from the previous step. Stay focused on the instruction and planned improvements---do not add or remove sections beyond what is necessary.
+
+      Keep all \criticize{} comments from the previous step that are still relevant. Add new ones where needed. Remove any that have been fully addressed by your revisions.
+
+      The goal is writing that makes a reviewer think: ``This is a well-written, important paper.''
