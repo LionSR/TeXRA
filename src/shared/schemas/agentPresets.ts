@@ -61,7 +61,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'Symbolic derivations, mathematical verification, literature discussion, and rigorous manuscript review.',
     icon: 'codicon-symbol-operator',
     workflowAgents: ['correct', 'polish', 'draw'],
-    toolUseAgents: ['research', 'review', 'chat', 'discuss', 'orchestrator'],
+    toolUseAgents: ['research', 'review', 'chat', 'ask', 'orchestrator'],
   },
   {
     id: 'mathematician',
