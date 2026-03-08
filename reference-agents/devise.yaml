@@ -39,7 +39,7 @@ prompts:
         \item Add punctuation in displayed math environments based on sentence continuity.
         \item Use the math commands defined in commands.tex or preamble.tex if provided.
         \item When referring to equations, always use \cref{...} instead of numbers.
-        \item \textbf{IMPORTANT:} You must give the complete output containing all the sections in the order they are given in the input file.
+        \item IMPORTANT: You must give the complete output containing all the sections in the order they are given in the input file.
     \end{itemize}
 
   userPrefix: |

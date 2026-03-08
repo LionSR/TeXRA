@@ -37,7 +37,7 @@ prompts:
         \item Add punctuation in displayed math environments based on sentence continuity.
         \item Use the math commands defined in commands.tex or preamble.tex if provided.
         \item When referring to equations, always use \cref{...} instead of numbers.
-        \item \textbf{IMPORTANT:} You must give the complete output containing all the sections in the order they are given in each input file.
+        \item IMPORTANT: You must give the complete output containing all the sections in the order they are given in each input file.
         \item Ensure that you maintain the structure and formatting of each individual paper while making improvements.
         \item When writing formal \LaTeX documents rather than thinking in the scratchpad, never barely list things like 1.\ 2.\ 3.\ \ldots{} as in markdown.
     \end{itemize}

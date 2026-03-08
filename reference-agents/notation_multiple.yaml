@@ -20,7 +20,7 @@ prompts:
         \item Check for undefined symbols and definition order issues
         \item Find unused notation that can be removed
         \item Propose graceful solutions that minimize changes
-        \item \textbf{CRITICAL: Track notation consistency across ALL documents}
+        \item CRITICAL: Track notation consistency across ALL documents
             \begin{itemize}
                 \item Flag when different documents use different notation for the same concept
                 \item Identify index convention inconsistencies across documents
@@ -30,12 +30,12 @@ prompts:
                 \item Cross-document notation conflicts are high-priority issues
                 \item For notation conflicts, propose graceful solutions that minimize changes (e.g., introduce new symbol once rather than changing all occurrences)
             \end{itemize}
-        \item \textbf{Identify completely unused notation across documents}
+        \item Identify completely unused notation across documents
             \begin{itemize}
                 \item Find symbols defined but never used in any document
                 \item Identify orphaned definitions that serve no purpose
                 \item Mark for deletion: unused definitions across all documents
-                \item \textbf{Check definition ordering across documents:}
+                \item Check definition ordering across documents:
                     \begin{itemize}
                         \item Symbols used before they are defined (must be fixed)
                         \item Symbols defined in one document but used earlier in another
