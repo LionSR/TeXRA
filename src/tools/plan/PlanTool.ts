@@ -14,11 +14,11 @@ import { z } from 'zod';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
-  PLAN_STEP_STATUS,
+  TODO_STATUS,
   PlanSchema,
   type Plan,
   type PlanStep,
-  type PlanStepStatus,
+  type TodoStatus,
 } from '@shared/schemas';
 import { type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
@@ -26,12 +26,11 @@ import { defineTool } from '@tools/core/define';
 const logger = new AgentLogger('PlanTool');
 
 /** Configuration for displaying plan step status — icon and label for each status */
-const STATUS_DISPLAY: Record<PlanStepStatus, { icon: string; label: string }> =
-  {
-    [PLAN_STEP_STATUS.PENDING]: { icon: '○', label: 'PENDING' },
-    [PLAN_STEP_STATUS.IN_PROGRESS]: { icon: '◐', label: 'IN PROGRESS' },
-    [PLAN_STEP_STATUS.COMPLETED]: { icon: '●', label: 'COMPLETED' },
-  };
+const STATUS_DISPLAY: Record<TodoStatus, { icon: string; label: string }> = {
+  [TODO_STATUS.PENDING]: { icon: '○', label: 'PENDING' },
+  [TODO_STATUS.IN_PROGRESS]: { icon: '◐', label: 'IN PROGRESS' },
+  [TODO_STATUS.COMPLETED]: { icon: '●', label: 'COMPLETED' },
+};
 
 /**
  * Schema for the plan tool input.
@@ -104,15 +103,14 @@ Best practices:
     // This triggers the onUpdate callback which emits events to the UI
     context.planState.updatePlan(input.plan);
 
-    const completedCount = input.plan.steps.filter(
-      (s) => s.status === PLAN_STEP_STATUS.COMPLETED,
-    ).length;
-    const inProgressCount = input.plan.steps.filter(
-      (s) => s.status === PLAN_STEP_STATUS.IN_PROGRESS,
-    ).length;
-    const pendingCount = input.plan.steps.filter(
-      (s) => s.status === PLAN_STEP_STATUS.PENDING,
-    ).length;
+    let completedCount = 0;
+    let inProgressCount = 0;
+    let pendingCount = 0;
+    for (const s of input.plan.steps) {
+      if (s.status === TODO_STATUS.COMPLETED) completedCount++;
+      else if (s.status === TODO_STATUS.IN_PROGRESS) inProgressCount++;
+      else pendingCount++;
+    }
 
     const summary = `Plan updated: ${completedCount} completed, ${inProgressCount} in progress, ${pendingCount} pending`;
 

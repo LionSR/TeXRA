@@ -1,19 +1,7 @@
 import { z } from 'zod';
 
 import { StreamTabIdSchema } from './identifiers';
-
-const planStepStatusValues = ['pending', 'in_progress', 'completed'] as const;
-
-export const PLAN_STEP_STATUS = {
-  PENDING: 'pending',
-  IN_PROGRESS: 'in_progress',
-  COMPLETED: 'completed',
-} as const satisfies Record<string, (typeof planStepStatusValues)[number]>;
-
-export const PlanStepStatusSchema = z
-  .enum(planStepStatusValues)
-  .describe('Current status of the plan step');
-export type PlanStepStatus = z.infer<typeof PlanStepStatusSchema>;
+import { TodoStatusSchema } from './todo';
 
 export const PlanStepSchema = z.strictObject({
   title: z.string().min(1).describe('Short title for this step'),
@@ -21,7 +9,7 @@ export const PlanStepSchema = z.strictObject({
     .string()
     .min(1)
     .describe('Detailed description of what this step involves'),
-  status: PlanStepStatusSchema,
+  status: TodoStatusSchema,
   files: z
     .array(z.string())
     .prefault([])

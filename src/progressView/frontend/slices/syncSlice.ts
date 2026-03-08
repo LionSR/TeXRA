@@ -23,7 +23,7 @@ export const syncHandlers: HandlerRegistry = {
       data.runFiles !== undefined ||
       data.runMissingOutputs !== undefined ||
       data.contextState !== undefined;
-    const hasTodos =
+    const hasTaskData =
       data.todos !== undefined ||
       data.plan !== undefined ||
       data.queuedFollowUps !== undefined;
@@ -31,7 +31,7 @@ export const syncHandlers: HandlerRegistry = {
     const hasMeta =
       data.conversationProgress !== undefined || data.badges !== undefined;
 
-    if (hasRunData || hasTodos || hasInstruction || hasMeta) {
+    if (hasRunData || hasTaskData || hasInstruction || hasMeta) {
       ctx.setStreamState(data.stream, (prev) =>
         create(prev, (draft) => {
           if (hasRunData) {
@@ -60,7 +60,7 @@ export const syncHandlers: HandlerRegistry = {
             }
           }
 
-          if (isToolUseState(prev) && hasTodos) {
+          if (isToolUseState(prev) && hasTaskData) {
             const d = draft as ToolUseStreamState;
             if (data.todos) d.todos = data.todos;
             if (data.plan !== undefined) d.plan = data.plan;

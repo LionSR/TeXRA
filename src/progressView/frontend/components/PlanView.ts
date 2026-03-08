@@ -15,16 +15,16 @@ import {
   animationStyles,
   commonViewStyles,
 } from '@shared/styles';
-import { PLAN_STEP_STATUS, type Plan, type PlanStep } from '@shared/schemas';
+import { TODO_STATUS, type Plan, type PlanStep } from '@shared/schemas';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
 
 const STATUS_ICONS: Record<string, string> = {
-  [PLAN_STEP_STATUS.PENDING]: 'circle-outline',
-  [PLAN_STEP_STATUS.IN_PROGRESS]: 'loading',
-  [PLAN_STEP_STATUS.COMPLETED]: 'pass-filled',
+  [TODO_STATUS.PENDING]: 'circle-outline',
+  [TODO_STATUS.IN_PROGRESS]: 'loading',
+  [TODO_STATUS.COMPLETED]: 'pass-filled',
 };
 
 @customElement('plan-view')
@@ -130,10 +130,6 @@ export class PlanView extends LitElement {
         color: var(--color-text-secondary);
       }
 
-      .plan-step--in-progress {
-        /* No opacity change - active step */
-      }
-
       .plan-step--in-progress .plan-step__icon {
         color: var(--vscode-progressBar-background);
       }
@@ -164,7 +160,7 @@ export class PlanView extends LitElement {
     }
 
     const completed = this.plan.steps.filter(
-      (s) => s.status === PLAN_STEP_STATUS.COMPLETED,
+      (s) => s.status === TODO_STATUS.COMPLETED,
     ).length;
     const total = this.plan.steps.length;
 
@@ -178,7 +174,7 @@ export class PlanView extends LitElement {
         <div id=${ELEMENT_IDS.PLAN_VIEW} class="plan-steps">
           ${repeat(
             this.plan.steps,
-            (step, index) => `${index}-${step.title}-${step.status}`,
+            (_step, index) => index,
             (step, index) => this.renderStep(step, index),
           )}
         </div>
@@ -187,17 +183,17 @@ export class PlanView extends LitElement {
   }
 
   private renderStep(step: PlanStep, index: number): TemplateResult {
-    const status = step.status ?? PLAN_STEP_STATUS.PENDING;
-    const isInProgress = status === PLAN_STEP_STATUS.IN_PROGRESS;
-    const icon = STATUS_ICONS[status] ?? STATUS_ICONS[PLAN_STEP_STATUS.PENDING];
+    const status = step.status ?? TODO_STATUS.PENDING;
+    const isInProgress = status === TODO_STATUS.IN_PROGRESS;
+    const icon = STATUS_ICONS[status] ?? STATUS_ICONS[TODO_STATUS.PENDING];
 
     return html`
       <div
         class=${classMap({
           'plan-step': true,
-          'plan-step--pending': status === PLAN_STEP_STATUS.PENDING,
-          'plan-step--in-progress': status === PLAN_STEP_STATUS.IN_PROGRESS,
-          'plan-step--completed': status === PLAN_STEP_STATUS.COMPLETED,
+          'plan-step--pending': status === TODO_STATUS.PENDING,
+          'plan-step--in-progress': status === TODO_STATUS.IN_PROGRESS,
+          'plan-step--completed': status === TODO_STATUS.COMPLETED,
         })}
       >
         <span class="plan-step__number">${index + 1}.</span>
