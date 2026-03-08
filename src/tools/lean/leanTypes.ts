@@ -31,14 +31,6 @@ export interface LeanDiagnostic extends GenericDiagnostic {
   source?: string;
 }
 
-// Re-export formatting utilities for convenience.
-export {
-  countBySeverity,
-  formatCounts,
-  formatGroupedSections,
-  type SeverityCounts,
-} from '@utils/diagnostics/diagnosticFormatting';
-
 /** Extract text value from hover contents (handles all LSP content formats) */
 export function extractHoverText(contents: Hover['contents']): string | null {
   if (typeof contents === 'string') {

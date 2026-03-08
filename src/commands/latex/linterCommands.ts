@@ -6,7 +6,7 @@ import { showLoggedErrorMessage } from '@common/errors';
 import {
   countBySeverity,
   getSeverityLabel,
-} from '@frontend/vscode/vscodeDiagnostics';
+} from '@utils/diagnostics/diagnosticFormatting';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
 import * as logger from '@logger/logUtils';

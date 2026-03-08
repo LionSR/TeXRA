@@ -1,8 +1,8 @@
 /**
  * VS Code diagnostics utilities.
  *
- * Provides VS Code-specific helpers (waiting on diagnostic events) and
- * re-exports platform-agnostic formatting from `@utils/diagnostics`.
+ * Provides VS Code-specific helpers (waiting on diagnostic events).
+ * For formatting, import directly from `@utils/diagnostics/diagnosticFormatting`.
  */
 
 import * as vscode from 'vscode';
@@ -12,16 +12,6 @@ import * as logger from '@logger/logUtils';
 const CHANNEL = 'VscodeDiagnostics';
 
 export { DiagnosticSeverity } from 'vscode';
-
-// Re-export all pure formatting utilities so existing callers don't break.
-export {
-  countBySeverity,
-  formatCounts,
-  formatGroupedSections,
-  formatMessageList,
-  getSeverityLabel,
-  type SeverityCounts,
-} from '@utils/diagnostics/diagnosticFormatting';
 
 /**
  * Wait for diagnostics to change for a specific file.

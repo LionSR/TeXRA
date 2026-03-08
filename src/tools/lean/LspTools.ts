@@ -3,13 +3,13 @@ import { z } from 'zod';
 import { toErrorMessage } from '@common/errors';
 import { ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
-import { getLeanVscodeServices } from './leanVscodeServices';
 import {
-  extractHoverText,
   countBySeverity,
   formatCounts,
   formatGroupedSections,
-} from './leanTypes';
+} from '@utils/diagnostics/diagnosticFormatting';
+import { getLeanVscodeServices } from './leanVscodeServices';
+import { extractHoverText } from './leanTypes';
 
 const LeanDiagnosticsInputSchema = z.strictObject({
   /** Command: list for full messages, count for summary */
