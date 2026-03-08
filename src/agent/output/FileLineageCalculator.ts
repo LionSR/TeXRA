@@ -92,6 +92,16 @@ export class FileLineageCalculator {
   findMatchingBaseFile(source: string): FileLocation | undefined {
     const sourceNoExt = path.parse(source).name;
 
+    // Pre-compute path parsing once per base file instead of per matcher
+    const indexed = this.baseFiles.map((baseLoc) => {
+      const baseName = path.basename(
+        baseLoc.kind !== 'external'
+          ? baseLoc.relativePath
+          : baseLoc.absolutePath,
+      );
+      return { baseLoc, baseName, baseNameNoExt: path.parse(baseName).name };
+    });
+
     const matchers = [
       (b: string, bNoExt: string) => b === source,
       (b: string, bNoExt: string) => bNoExt === sourceNoExt,
@@ -100,13 +110,7 @@ export class FileLineageCalculator {
     ];
 
     for (const match of matchers) {
-      for (const baseLoc of this.baseFiles) {
-        const baseName = path.basename(
-          baseLoc.kind !== 'external'
-            ? baseLoc.relativePath
-            : baseLoc.absolutePath,
-        );
-        const baseNameNoExt = path.parse(baseName).name;
+      for (const { baseLoc, baseName, baseNameNoExt } of indexed) {
         if (match(baseName, baseNameNoExt)) {
           return baseLoc;
         }
