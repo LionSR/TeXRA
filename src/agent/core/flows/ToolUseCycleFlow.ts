@@ -504,7 +504,6 @@ interface ToolExecutionResult {
   parsedInput: unknown;
   /** Pre-extracted attachments and sanitized result (avoids re-extraction in post). */
   extracted: ExtractedToolAttachments;
-  sanitizedOutput: Record<string, unknown>;
   editedFiles: Array<{
     path: string;
     ok: boolean;
@@ -584,21 +583,13 @@ class ToolUseDispatchNode<C> extends BatchNode<
     // Skip duplicate parallel calls — return a synthetic error result so
     // the model is informed and can retry sequentially if needed.
     if (this._duplicateCallIds.has(call.callId)) {
-      const errorResult = {
-        error: DUPLICATE_CALL_ERROR,
-        isError: true as const,
-      };
       return {
         call,
-        result: errorResult,
+        result: { error: DUPLICATE_CALL_ERROR, isError: true as const },
         parsedInput: call.input,
         extracted: {
           sanitizedResult: { error: DUPLICATE_CALL_ERROR, isError: true },
           attachments: [],
-        },
-        sanitizedOutput: {
-          error: DUPLICATE_CALL_ERROR,
-          isError: true,
         },
         editedFiles: [],
         logRef: {
@@ -734,7 +725,6 @@ class ToolUseDispatchNode<C> extends BatchNode<
     }
 
     const extracted = extractToolAttachments(result);
-    const sanitizedOutput = extracted.sanitizedResult;
     const editedFiles = trackedEdits.edits.map((entry) => ({
       path: entry.path,
       ok: true,
@@ -742,7 +732,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
       sourceDisplay: 'Tool use',
     }));
     if (editedFiles.length > 0) {
-      sanitizedOutput.editedFiles = editedFiles;
+      extracted.sanitizedResult.editedFiles = editedFiles;
     }
 
     return {
@@ -750,7 +740,6 @@ class ToolUseDispatchNode<C> extends BatchNode<
       result,
       parsedInput,
       extracted,
-      sanitizedOutput,
       editedFiles,
       logRef,
     };
@@ -761,13 +750,13 @@ class ToolUseDispatchNode<C> extends BatchNode<
     options: ToolUseCycleServices<C>,
     workspace: ToolUseCycleServices<C>['workspace'],
   ): Promise<void> {
-    const { call, result, parsedInput, sanitizedOutput, editedFiles, logRef } =
+    const { call, result, parsedInput, extracted, editedFiles, logRef } =
       execResult;
 
     const toolUseLog = {
       toolName: call.name,
       input: parsedInput ?? call.raw,
-      output: sanitizedOutput,
+      output: extracted.sanitizedResult,
       ...(editedFiles.length > 0 && { files: editedFiles }),
       isError: Boolean(result.isError),
     };
