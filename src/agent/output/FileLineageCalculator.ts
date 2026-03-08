@@ -45,7 +45,11 @@ export class FileLineageCalculator {
           ? baseLoc.relativePath
           : baseLoc.absolutePath,
       );
-      return { loc: baseLoc, baseName, baseNameNoExt: path.parse(baseName).name };
+      return {
+        loc: baseLoc,
+        baseName,
+        baseNameNoExt: path.parse(baseName).name,
+      };
     });
   }
 
