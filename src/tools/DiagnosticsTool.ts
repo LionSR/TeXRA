@@ -3,13 +3,13 @@ import { z } from 'zod';
 
 // Internal imports
 import { toErrorMessage } from '@common/errors';
+import { getLinterMessages } from '@frontend/latex/linter';
+import * as logger from '@logger/logUtils';
 import {
   countBySeverity,
   formatCounts,
   formatMessageList,
-} from '@frontend/vscode/vscodeDiagnostics';
-import { getLinterMessages } from '@frontend/latex/linter';
-import * as logger from '@logger/logUtils';
+} from '@utils/diagnostics/diagnosticFormatting';
 
 // Local file imports
 import { defineTool } from './core/define';
