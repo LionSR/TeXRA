@@ -14,6 +14,7 @@ export const PROGRESS_VIEW_COMMANDS = {
 
   UPDATE_INSTRUCTION: 'updateInstruction',
   UPDATE_TODOS: 'updateTodos',
+  UPDATE_PLAN: 'updatePlan',
   UPDATE_QUEUED_FOLLOW_UPS: 'updateQueuedFollowUps',
   SYNC_STREAM_CONTENT: 'syncStreamContent',
 
@@ -53,6 +54,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   TOGGLE_TOOL_EDIT_APPROVAL_BYPASS: 'toggleToolEditApprovalBypass',
   AGENT_PROPOSAL_ACTION: 'agentProposalAction',
   BASH_APPROVAL_ACTION: 'bashApprovalAction',
+  PLAN_APPROVAL_ACTION: 'planApprovalAction',
   RESTORE_PROPOSAL_CONFIG: 'restoreProposalConfig',
   TOGGLE_SUPER_YOLO_BYPASS: 'toggleSuperYoloBypass',
 

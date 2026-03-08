@@ -24,7 +24,9 @@ export const syncHandlers: HandlerRegistry = {
       data.runMissingOutputs !== undefined ||
       data.contextState !== undefined;
     const hasTodos =
-      data.todos !== undefined || data.queuedFollowUps !== undefined;
+      data.todos !== undefined ||
+      data.plan !== undefined ||
+      data.queuedFollowUps !== undefined;
     const hasInstruction = data.instruction !== undefined && !!data.runId;
     const hasMeta =
       data.conversationProgress !== undefined || data.badges !== undefined;
@@ -61,6 +63,7 @@ export const syncHandlers: HandlerRegistry = {
           if (isToolUseState(prev) && hasTodos) {
             const d = draft as ToolUseStreamState;
             if (data.todos) d.todos = data.todos;
+            if (data.plan !== undefined) d.plan = data.plan;
             if (data.queuedFollowUps) d.queuedFollowUps = data.queuedFollowUps;
           }
 
