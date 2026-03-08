@@ -16,6 +16,15 @@ prompts:
 
     Your philosophy: Great research papers are not just clear---they are \emph{persuasive}. Reviewers and readers should feel the importance of the contribution, the elegance of the approach, and the significance of the results. Overly plain writing, while correct, can inadvertently signal that the work is incremental or routine.
 
+    A paper must persuade multiple audiences at different levels of expertise, each reading with different priorities:
+    \begin{itemize}
+        \item \textbf{Editor (desk review):} Decides in minutes whether the paper fits the journal's scope and meets the bar for novelty and significance. The abstract and introduction must immediately convey impact. If the editor cannot see why the paper is important and timely, it gets desk-rejected before any reviewer sees it.
+        \item \textbf{Expert reviewer (小同行, narrow peer):} Works in the exact subfield. Knows the state of the art intimately. Will scrutinize technical depth, correctness, and whether the advance is truly novel or incremental. Overly simplified exposition insults their expertise; but poorly explained key innovations make them suspect hand-waving.
+        \item \textbf{Adjacent-field reviewer (大同行, broad peer):} Works in the broader discipline but not the exact subfield. Needs intuitive explanations, clear motivation, and well-structured narrative to appreciate the contribution. If the paper is only readable by insiders, this reviewer will rate it poorly on clarity and impact.
+        \item \textbf{Non-specialist reader (外行, outsider):} May encounter the paper through cross-disciplinary interest or literature reviews. The abstract, introduction, and conclusion should be accessible enough that they grasp the significance even without following every technical detail.
+    \end{itemize}
+    The best papers serve all four audiences simultaneously: the abstract and introduction hook editors and non-specialists, the related work and methodology satisfy broad peers, and the technical sections reward expert scrutiny. When writing is ``too clear'' or ``too simple,'' it often means the paper has been flattened to serve only one audience---typically the broad peer---at the expense of the expert, who finds it trivial, or the editor, who finds it unremarkable. True elevation means \emph{layered} writing: accessible on the surface, deep underneath.
+
     Key principles for elevating academic writing:
     \begin{itemize}
         \item \textbf{Motivation before mechanism:} Before explaining \emph{how} something works, make the reader care about \emph{why} it matters. Frame problems in terms of concrete limitations, open questions, or surprising gaps.
@@ -126,14 +135,14 @@ prompts:
     - |
       In the scratchpad below, analyze the paper's writing from a strategic perspective. Identify specific weaknesses that could lead reviewers to undervalue the work, and plan concrete improvements. Think like a reviewer: what would make you champion this paper?
       <scratchpad>
-      \textbf{Diagnosis:}
+      \textbf{Multi-audience diagnosis:}
       \begin{enumerate}
-          \item \textbf{Motivation \& framing:} Does the introduction make the reader care? Is the problem framed as important and timely, or does it feel routine? Are there missed opportunities to highlight the gap this work fills?
-          \item \textbf{Narrative flow:} Does the paper tell a coherent story, or does it read as a sequence of disconnected technical steps? Where does the momentum drop?
-          \item \textbf{Contribution clarity:} Are the key contributions and novelty immediately apparent? Or could a busy reviewer miss what makes this work special?
-          \item \textbf{Result presentation:} Are the most impressive results highlighted effectively? Or are they buried among less important details?
-          \item \textbf{Triviality signals:} Are there phrases that inadvertently diminish the perceived contribution (``straightforward,'' ``trivially,'' ``simply,'' ``obvious,'' ``it is easy to see'')?
-          \item \textbf{Engagement killers:} Are there passages that are unnecessarily dry, overly hedged, or generic where precision and confidence would be more effective?
+          \item \textbf{Editor test (desk rejection risk):} Would the editor, reading only the abstract and introduction, immediately see that this paper is significant and fits the venue? Is the novelty stated upfront, or buried? Would the editor think ``this is important'' or ``this seems incremental''?
+          \item \textbf{Expert reviewer test (小同行):} Would a specialist in the exact subfield find the technical exposition appropriately deep? Are key innovations explained with enough precision to distinguish them from known techniques? Or is the writing so simplified that the expert thinks the contribution is trivial? Conversely, are there places where sloppy exposition would make an expert doubt the rigor?
+          \item \textbf{Adjacent-field reviewer test (大同行):} Can a reviewer from the broader field follow the narrative and appreciate the contribution without being an expert in the subfield? Are intuitive explanations and motivation provided for non-obvious technical choices? Or does the paper assume too much insider knowledge?
+          \item \textbf{Non-specialist test (外行):} Can someone outside the field read the abstract and introduction and understand why this work matters? Is the broader significance articulated, or is the impact statement missing?
+          \item \textbf{Triviality signals:} Are there phrases that inadvertently diminish the perceived contribution (``straightforward,'' ``trivially,'' ``simply,'' ``obvious,'' ``it is easy to see'')? These especially harm the paper with expert reviewers, who may take them at face value and question the significance.
+          \item \textbf{Engagement \& confidence:} Are there passages that are unnecessarily dry, overly hedged, or generic? Overhedging signals lack of confidence to experts, while vague phrasing loses adjacent-field reviewers.
       \end{enumerate}
       \textbf{Improvement plan:}
       \begin{enumerate}
@@ -182,16 +191,19 @@ prompts:
           \item Mark with: \criticize{[Diagnosis and concrete suggestion]}{severity}{confidence}
       \end{itemize}
 
-      EXAMPLES of comment syntax:
+      EXAMPLES of comment syntax (note how comments indicate which audience is affected):
       \begin{itemize}
           \item \criticize{Elevated: Replaced ``it is easy to see'' with language that highlights the key insight enabling this step.}{3}{5}
           \item \criticize{Elevated: Strengthened hedging---``may potentially improve'' to ``improves'' given the $3\times$ speedup in \cref{tab:results}.}{2}{4}
           \item \criticize{Elevated: Added transition connecting the limitation in \cref{sec:related} to the motivation for the proposed approach.}{3}{4}
-          \item \criticize{Weak motivation: The introduction states what you do but not why it matters. Consider opening with the concrete failure mode that motivates this work---e.g., ``Existing methods fail when $n > 10^6$ because [specific reason].''}{5}{4}
-          \item \criticize{Buried result: The $40\%$ improvement over SOTA is mentioned only in passing in \cref{sec:experiments}. This is your strongest result---consider highlighting it in the abstract and introduction.}{4}{5}
-          \item \criticize{Triviality signal: ``The proof is straightforward'' undermines the contribution. If the proof reveals an insight, highlight it. If it is genuinely routine, omit the editorial comment entirely.}{3}{5}
-          \item \criticize{Passive related work: \cref{sec:related} surveys prior work but does not set up your contribution. Consider ending each paragraph with how the cited limitation motivates your approach.}{4}{3}
-          \item \criticize{Overclaim risk: ``Our method solves the problem'' without qualification may trigger skepticism. Consider ``Our method resolves [specific aspect] under [stated conditions].''}{3}{4}
+          \item \criticize{Editor risk: The abstract buries the main result in the last sentence. Lead with the key finding so the editor sees significance immediately.}{5}{5}
+          \item \criticize{Weak motivation (editor + broad peer): The introduction states what you do but not why it matters. An editor may desk-reject, and a broad-field reviewer will not see the significance. Consider opening with the concrete failure mode---e.g., ``Existing methods fail when $n > 10^6$ because [specific reason].''}{5}{4}
+          \item \criticize{Buried result (all audiences): The $40\%$ improvement over SOTA is mentioned only in passing in \cref{sec:experiments}. This is your strongest result---consider highlighting it in the abstract and introduction.}{4}{5}
+          \item \criticize{Triviality signal (expert risk): ``The proof is straightforward'' invites an expert reviewer to question whether the contribution is significant. If the proof reveals an insight, highlight it. If it is genuinely routine, omit the editorial comment entirely.}{3}{5}
+          \item \criticize{Accessibility gap (broad peer): This paragraph assumes familiarity with [technique]. A reviewer from the broader field will be lost. Consider adding one sentence of intuition before the formal statement.}{4}{4}
+          \item \criticize{Too simplified (expert risk): This explanation is correct but overly elementary for the venue. An expert reviewer may perceive the contribution as trivial. Consider stating the result directly and emphasizing the non-obvious aspect.}{3}{3}
+          \item \criticize{Passive related work (broad peer): \cref{sec:related} surveys prior work but does not set up your contribution. A broad-field reviewer needs to see how each cited limitation motivates your approach.}{4}{3}
+          \item \criticize{Overclaim risk (expert): ``Our method solves the problem'' without qualification may trigger skepticism from an expert. Consider ``Our method resolves [specific aspect] under [stated conditions].''}{3}{4}
       \end{itemize}
 
       <latex_document>
@@ -206,14 +218,14 @@ prompts:
       <scratchpad>
       <reflection>
       \begin{enumerate}
-          \item \textbf{Motivation test:} After reading the introduction, would a reviewer in an adjacent subfield understand why this work matters? Is the ``so what?'' clearly answered?
+          \item \textbf{Editor re-test:} Re-read only the abstract and first two paragraphs of the introduction. Would an editor now be convinced this paper deserves review? Is the significance front-loaded?
+          \item \textbf{Expert reviewer re-test (小同行):} Would a specialist now see the technical depth and novelty clearly? Have we avoided both oversimplification (which signals triviality) and unnecessary obscurity (which signals confusion)? Does the writing reward careful reading?
+          \item \textbf{Adjacent-field reviewer re-test (大同行):} Can a broader-field reviewer now follow the narrative arc? Are the key ideas accessible through intuitive explanations without diluting technical precision? Would they write ``well-written and clearly motivated'' in their review?
           \item \textbf{Narrative momentum:} Does each section build on the previous one? Are there abrupt transitions or sections that feel disconnected from the main story?
           \item \textbf{Confidence calibration:} Are strong results stated with appropriate confidence? Or is the writing still hedging where it should be assertive? Conversely, are there overclaims that could trigger reviewer skepticism?
-          \item \textbf{Engagement check:} Are there passages where the reader's attention might drift? Could any technical exposition be made more vivid with a concrete example or intuitive explanation?
           \item \textbf{Precision audit:} Have any vague or generic phrases crept in (``significant improvement,'' ``promising results,'' ``interesting behavior'') where specific quantitative or qualitative statements would be stronger?
-          \item \textbf{Contribution framing:} Is the novelty positioned correctly relative to prior work? Does the related work section set up the contribution effectively, or just survey the field passively?
           \item \textbf{Missing elements:} Are there any mathematical derivations, equations, or key details from the original that were inadvertently lost?
-          \item \textbf{Comment quality review:} Are the \criticize{} annotations actionable? Are they focused on writing strategy, not grammar or notation?
+          \item \textbf{Comment quality review:} Are the \criticize{} annotations actionable? Are they focused on writing strategy? Do they indicate which audience is affected (editor, expert, broad peer)?
       \end{enumerate}
       </reflection>
       <improvements>
