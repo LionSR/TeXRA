@@ -2,12 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.36.6] - 2026-03-06
+## [0.36.5] - 2026-03-08
 
 ### Features
 
 - **GPT-5.4** — added OpenAI's GPT-5.4 (`gpt54`) and GPT-5.4 Pro (`gpt54pro`) to the default model list. GPT-5.4 is OpenAI's most capable model, with 1M token context, native computer-use, and improved professional-task performance. GPT-5.4 Pro offers maximum performance for complex workloads.
 - GPT-5.2 and GPT-5.2 Pro have been removed from the default list (still usable if manually added). GPT-5.3 Codex remains as the recommended coding model.
+- **Chat export** — export agent conversations to Markdown or LaTeX/PDF formats.
+- **Approval indicators** — stream tabs now show a pulsing orange border when an approval is pending, and auto-focus to the requesting tab.
+
+### Bug Fixes
+
+- Bug fixes in diff view focus, custom endpoint resolution, approval toggle state, and Anthropic web tool handling.
+
+### Improvements
+
+- Updated dependencies.
 
 ## [0.36.4] - 2026-03-02
 
