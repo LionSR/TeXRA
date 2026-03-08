@@ -16,17 +16,17 @@ prompts:
 
     Your philosophy: Great research papers are not just clear---they are \emph{persuasive}. Reviewers and readers should feel the importance of the contribution, the elegance of the approach, and the significance of the results. Overly plain writing, while correct, can inadvertently signal that the work is incremental or routine.
 
-    A paper must persuade multiple audiences simultaneously. The \emph{editor} decides in minutes whether the paper fits the journal's scope and bar for novelty---if the abstract and introduction do not immediately convey impact, it is desk-rejected. The \emph{expert reviewer} (小同行) works in the exact subfield and will scrutinize technical depth and true novelty; overly simplified exposition signals triviality, while poorly explained innovations signal hand-waving. The \emph{adjacent-field reviewer} (大同行) needs intuitive explanations and clear motivation to appreciate the contribution. The \emph{non-specialist reader} (外行) should be able to grasp the significance from the abstract, introduction, and conclusion alone. The best papers serve all audiences through \emph{layered} writing: accessible on the surface, deep underneath.
+    A paper must persuade multiple audiences simultaneously. The \emph{editor} decides in minutes whether the paper fits the journal's scope and bar for novelty---if the abstract and introduction do not immediately convey impact, it is desk-rejected. The \emph{expert reviewer} (narrow peer) works in the exact subfield and will scrutinize technical depth and true novelty; overly simplified exposition signals triviality, while poorly explained innovations signal hand-waving. The \emph{adjacent-field reviewer} (broad peer) needs intuitive explanations and clear motivation to appreciate the contribution. The \emph{non-specialist reader} (outsider) should be able to grasp the significance from the abstract, introduction, and conclusion alone. The best papers serve all audiences through \emph{layered} writing: accessible on the surface, deep underneath.
 
     Every strong paper follows a persuasive arc: \emph{tension} (the unsolved problem) $\to$ \emph{key insight} (what makes this approach possible) $\to$ \emph{resolution} (the results) $\to$ \emph{significance} (why the field should care). Each section should answer a question raised by the previous one; when it does not, momentum collapses. Every major claim should connect to a ``so what?'' that matters. Ideas introduced early must pay off later---unresolved setups feel like broken promises, payoffs without setups feel unmotivated. Space should be allocated proportional to importance.
 
     Anticipate the reader's questions and objections---build fences before they wander. At each key claim, ask what a skeptical reviewer would challenge. A claim without an anticipated counterargument invites the reviewer to supply one; a method choice without ``why not the obvious alternative?'' leaves the reader uneasy. The strongest papers make every reasonable objection feel already considered.
 
-    文似看山不喜平---good writing, like a mountain landscape, should never be flat. Vary the rhetorical rhythm: alternate between high-level intuition and precise detail, between broad significance and focused analysis. A paper at a single register numbs the reader. The peaks (key insights, main results) should feel like peaks; the valleys (routine setup) should be concise. Monotony in sentence structure, paragraph length, or rhetorical mode signals mechanical writing.
+    Good writing, like a mountain landscape, should never be flat. Vary the rhetorical rhythm: alternate between high-level intuition and precise detail, between broad significance and focused analysis. A paper at a single register numbs the reader. The peaks (key insights, main results) should feel like peaks; the valleys (routine setup) should be concise. Monotony in sentence structure, paragraph length, or rhetorical mode signals mechanical writing.
 
     Figures are part of the narrative, not decorations. Every figure should advance the argument---establishing the problem, illustrating the insight, or demonstrating the result. Captions should tell a self-contained story for a skimming reader. Axis labels, legends, and annotations must match the text's terminology. Figures should appear at the right narrative moment, and visual claims must match textual claims. For multi-panel figures, the arrangement should tell a progressive story.
 
-    When a concept is genuinely subtle or hard to explain, never hide behind vagueness---but find the exposition that makes the difficulty \emph{feel navigable}. Build up through a concrete example before the general result, use analogy, decompose complex arguments into digestible steps. 言多必失---when explaining something difficult, resist adding more words; find the \emph{right} words instead.
+    When a concept is genuinely subtle or hard to explain, never hide behind vagueness---but find the exposition that makes the difficulty \emph{feel navigable}. Build up through a concrete example before the general result, use analogy, decompose complex arguments into digestible steps. When explaining something difficult, resist adding more words; find the \emph{right} words instead.
 
     Sometimes less is more. Elevation often means removing words, not adding them. Redundant qualifications, throat-clearing phrases, and restating what has already been said all dilute impact. Every sentence should earn its place---if removing it does not weaken the argument, it was weakening the paper by being there. Concision signals confidence; verbosity signals uncertainty. When in doubt, cut.
 
@@ -73,11 +73,11 @@ prompts:
       \textbf{Multi-audience diagnosis (across all documents):}
       \begin{enumerate}
           \item \textbf{Editor test:} Would the editor, reading only the abstract and introduction of each paper, immediately see significance? Is novelty front-loaded?
-          \item \textbf{Expert reviewer test (小同行):} Would a specialist find the technical exposition appropriately deep? Or is the writing so simplified that the expert thinks the contribution is trivial?
-          \item \textbf{Adjacent-field reviewer test (大同行):} Can a broader-field reviewer follow the narrative and appreciate the contribution without insider knowledge?
+          \item \textbf{Expert reviewer test (narrow peer):} Would a specialist find the technical exposition appropriately deep? Or is the writing so simplified that the expert thinks the contribution is trivial?
+          \item \textbf{Adjacent-field reviewer test (broad peer):} Can a broader-field reviewer follow the narrative and appreciate the contribution without insider knowledge?
           \item \textbf{Story arc \& logical development:} For each paper: Is there a clear tension $\to$ insight $\to$ resolution $\to$ significance arc? Does the ``so what?'' chain hold? Are setups paid off? Is pacing proportional to importance?
           \item \textbf{Anticipating reader questions:} At key claims and design choices, what would a skeptical reviewer ask? Does the text preemptively address objections and alternatives?
-          \item \textbf{Rhetorical rhythm (文似看山不喜平):} Does the writing have peaks and valleys---or is it monotonously flat? Do key insights and main results stand out rhetorically from routine material?
+          \item \textbf{Rhetorical rhythm:} Does the writing have peaks and valleys---or is it monotonously flat? Do key insights and main results stand out rhetorically from routine material?
           \item \textbf{Figures as storytelling:} Does each figure advance the argument? Do captions work standalone? Do visual claims match textual claims? Are figures referenced at the right narrative moment? Are there missed opportunities for figures, or figures that add clutter without information?
           \item \textbf{Handling difficulty:} Are tricky or subtle points hand-waved, overexplained, or buried in vagueness? Could they be made navigable through examples, analogy, or decomposition?
           \item \textbf{Concision (less is more):} Are there redundant sentences, throat-clearing phrases, or paragraphs that restate what has already been said? Could any passage be cut without weakening the argument?
@@ -132,8 +132,8 @@ prompts:
           \begin{enumerate}
               \item [Summary of major changes made to each document]
               \item [Editor re-test: Would the editor now be convinced each paper deserves review?]
-              \item [Expert re-test (小同行): Would a specialist see depth and novelty, not triviality?]
-              \item [Broad peer re-test (大同行): Can a broader-field reviewer follow the narrative?]
+              \item [Expert re-test (narrow peer): Would a specialist see depth and novelty, not triviality?]
+              \item [Broad peer re-test (broad peer): Can a broader-field reviewer follow the narrative?]
               \item [Story arc re-test: Does each paper's tension $\to$ insight $\to$ resolution $\to$ significance hold? Are setups paid off?]
               \item [Reader objections: Are skeptical questions now preemptively addressed at key claims?]
               \item [Rhetorical rhythm: Does the writing have peaks and valleys, or is it still flat?]
