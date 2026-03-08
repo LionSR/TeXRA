@@ -5,12 +5,20 @@
  * outline an implementation strategy with numbered steps, descriptions, and file
  * references — giving the user visibility into the agent's approach before and
  * during execution.
+ *
+ * When a new plan is created (all steps pending), the tool pauses execution and
+ * waits for user approval before returning. Progress updates (steps already
+ * in_progress or completed) are applied immediately without approval.
  */
 
 // Third-party imports
 import { z } from 'zod';
 
 // Local imports - tools
+import {
+  planApprovalCoordinator,
+  type PlanApprovalResult,
+} from '@agent/runtime/PlanApprovalCoordinator';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
@@ -24,6 +32,9 @@ import { type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
 const logger = new AgentLogger('PlanTool');
+
+/** Counter for generating unique approval IDs */
+let approvalCounter = 0;
 
 /** Configuration for displaying plan step status — icon and label for each status */
 const STATUS_DISPLAY: Record<TodoStatus, { icon: string; label: string }> = {
@@ -56,6 +67,11 @@ export type PlanToolInput = z.infer<typeof PlanToolInputSchema>;
  * - description: What the step involves
  * - status: pending | in_progress | completed
  * - files: Optional list of files involved
+ *
+ * When you create a NEW plan (all steps pending), execution pauses until the
+ * user approves. If the user rejects, you will receive their feedback and
+ * should revise your approach accordingly. Progress updates (updating step
+ * statuses on an existing plan) are applied immediately.
  */
 export class PlanTool extends defineTool({
   name: 'plan',
@@ -66,6 +82,11 @@ Use this tool to:
 - Break down complex tasks into numbered steps with descriptions
 - Show which files will be involved in each step
 - Track progress through the plan as you work
+
+IMPORTANT: When you create a new plan (all steps are "pending"), the plan is
+presented to the user for approval. Execution pauses until they approve or reject.
+If rejected, you receive their feedback and should revise the plan. Progress
+updates (marking steps in_progress or completed) are applied immediately.
 
 Plan structure:
 - summary: Brief overview of the approach (1-3 sentences)
@@ -99,14 +120,73 @@ Best practices:
       };
     }
 
-    // Update the plan in workspace state
-    // This triggers the onUpdate callback which emits events to the UI
+    // Update the plan in workspace state — shows it in the UI immediately
     context.planState.updatePlan(input.plan);
 
+    // Determine if this is a new plan (all steps pending) vs. a progress update
+    const isNewPlan = input.plan.steps.every(
+      (s) => s.status === TODO_STATUS.PENDING,
+    );
+
+    if (isNewPlan && context.streamId) {
+      return this.requestApproval(input.plan, context.streamId);
+    }
+
+    return this.buildProgressResult(input.plan);
+  }
+
+  /**
+   * Request user approval for a new plan. Pauses execution until approved/rejected.
+   */
+  private async requestApproval(
+    plan: Plan,
+    streamId: string,
+  ): Promise<ToolResult> {
+    const approvalId = `plan-${Date.now().toString(36)}-${++approvalCounter}`;
+
+    logger.info(`Requesting approval for plan: ${plan.summary}`);
+
+    const result: PlanApprovalResult =
+      await planApprovalCoordinator.waitForApproval(streamId, {
+        approvalId,
+        plan,
+      });
+
+    if (result.action === 'approve') {
+      logger.info('Plan approved by user');
+      return {
+        summary: 'Plan approved — proceed with implementation',
+        output:
+          'Plan approved by the user. You may now begin implementing the plan steps. Update step statuses as you work through them.',
+      };
+    }
+
+    // Rejected or timed out
+    const feedback = 'feedback' in result ? result.feedback : undefined;
+    const feedbackNote = feedback
+      ? `\nUser feedback: ${feedback}`
+      : '\nNo specific feedback was provided.';
+
+    logger.info(
+      `Plan rejected by user${feedback ? `: ${feedback}` : ''}`,
+    );
+
+    return {
+      summary: 'Plan rejected — revise approach',
+      output: `The user rejected this plan.${feedbackNote}\nPlease revise your approach based on the feedback and create an updated plan.`,
+      isError: true,
+      ...(feedback ? { userInstruction: feedback } : {}),
+    };
+  }
+
+  /**
+   * Build result for a progress update (no approval needed).
+   */
+  private buildProgressResult(plan: Plan): ToolResult {
     let completedCount = 0;
     let inProgressCount = 0;
     let pendingCount = 0;
-    for (const s of input.plan.steps) {
+    for (const s of plan.steps) {
       if (s.status === TODO_STATUS.COMPLETED) completedCount++;
       else if (s.status === TODO_STATUS.IN_PROGRESS) inProgressCount++;
       else pendingCount++;
@@ -114,7 +194,6 @@ Best practices:
 
     const summary = `Plan updated: ${completedCount} completed, ${inProgressCount} in progress, ${pendingCount} pending`;
 
-    // Return minimal output — the UI already shows the plan
     return {
       summary,
       output: 'OK',

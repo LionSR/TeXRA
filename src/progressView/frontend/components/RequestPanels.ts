@@ -242,6 +242,9 @@ export class RequestPanels extends LitElement {
       case PERMISSION_KIND.PROPOSAL:
         id = permission.data.proposalId;
         break;
+      case PERMISSION_KIND.PLAN_APPROVAL:
+        id = permission.data.approvalId;
+        break;
       default:
         id = permission.data.requestId;
         break;
