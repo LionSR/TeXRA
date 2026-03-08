@@ -510,7 +510,8 @@ export class ProgressApp extends ProgressAppBase {
               .filter=${this.streamFilter$.get()}
               .sort=${this.streamSort$.get()}
               .streamStatusById=${this.statusAndTimestampById$.get().statusMap}
-              .streamLastTimestampById=${this.statusAndTimestampById$.get().timestampMap}
+              .streamLastTimestampById=${this.statusAndTimestampById$.get()
+                .timestampMap}
               .pendingApprovalStreamIds=${this.pendingApprovalIds$.get()}
               @stream-switch=${this.onStreamSwitch}
               @stream-delete=${this.onStreamDelete}
