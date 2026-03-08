@@ -42,7 +42,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'leanBlueprint',
       'chat',
       'review',
-      'orchestrator',
+      'leanOrchestrator',
     ],
   },
   {
