@@ -130,6 +130,32 @@ ON CONFLICT (name) DO UPDATE SET
 
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
+  'elevate',
+  'Elevates academic writing to be more compelling and publication-ready. Leaves \criticize{}{}{} comments for writing strategy issues.',
+  'workflow/elevate.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'elevate_multiple',
+  'Multi-document writing elevation agent. Elevates academic writing across paper collections to be more compelling and publication-ready.',
+  'workflow/elevate_multiple.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description  = EXCLUDED.description,
+  agent_category = EXCLUDED.agent_category;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
   'generic',
   'General-purpose LaTeX document editor. Flexibly processes research papers following academic standards and user instructions. Detects and uses existing comment styles (\todo, \comment, %).',
   'workflow/generic.yaml',
