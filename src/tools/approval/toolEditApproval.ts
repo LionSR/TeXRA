@@ -1,31 +1,19 @@
-import { randomUUID } from 'crypto';
-import { promises as fs } from 'fs';
-import * as path from 'path';
-
 import {
   diff_match_patch,
   DIFF_DELETE,
   DIFF_EQUAL,
   DIFF_INSERT,
 } from 'diff-match-patch';
-import * as vscode from 'vscode';
 
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
-import { isLatexFile } from '@common/files/fileTypeUtils';
 import { bus } from '@eventBus/ProgressEventBus';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { StreamTabId } from '@shared/schemas';
 import { type LineChanges, type ToolResult } from '@tools/result';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
-import { countLines, normalizeLineEndings } from '@utils/text/stringUtils';
+import { countLines } from '@utils/text/stringUtils';
 
-import { rejectPendingEntries } from './bashApproval';
-import {
-  type LatexPreviewEntry,
-  previewProposedLatex,
-  runLatexdiff,
-} from './latexPreview';
+import { type RejectablePendingEntry, rejectPendingEntries } from './bashApproval';
 
 export interface ToolEditApprovalRequest {
   path: string;
@@ -48,17 +36,7 @@ export interface ToolEditApprovalResult {
 export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
   'texra.toolUse.requireEditApproval';
 
-const REVEAL_TIMEOUT_MS = 1500;
-
-interface PendingApprovalEntry extends LatexPreviewEntry {
-  request: ToolEditApprovalRequest;
-  originalUri: vscode.Uri;
-  proposedUri: vscode.Uri;
-  title: string;
-  streamId?: StreamTabId;
-  lineChanges: LineChanges;
-  settle: (result: ToolEditApprovalResult) => void;
-}
+export const REVEAL_TIMEOUT_MS = 1500;
 
 export const TOOL_EDIT_APPROVAL_ACTIONS = [
   'approve',
@@ -71,60 +49,38 @@ export const TOOL_EDIT_APPROVAL_ACTIONS = [
 export type ToolEditApprovalAction =
   (typeof TOOL_EDIT_APPROVAL_ACTIONS)[number];
 
-interface ToolEditApprovalActionPayload {
-  requestId: string;
-  action: ToolEditApprovalAction;
-  feedback?: string;
-}
-
 let queue: Promise<void> = Promise.resolve();
 let initialized = false;
 let customHandler:
   | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
   | undefined;
-let approvalCounter = 0;
-const pendingApprovals = new Map<string, PendingApprovalEntry>();
 const bypassedByStream = new Map<StreamTabId, boolean>();
+
+/**
+ * Abstract pending approval registry for rejection tracking.
+ * The native handler (in @frontend/approval) registers entries here
+ * so that stream cleanup can reject them without vscode dependencies.
+ */
+const pendingApprovals = new Map<string, RejectablePendingEntry>();
+
+/** Register a pending approval entry for rejection tracking. */
+export function registerPendingApproval(
+  id: string,
+  entry: RejectablePendingEntry,
+): void {
+  pendingApprovals.set(id, entry);
+}
+
+/** Unregister a pending approval entry after it has been resolved. */
+export function unregisterPendingApproval(id: string): void {
+  pendingApprovals.delete(id);
+}
 
 function notifyBypassState(streamId: StreamTabId): void {
   bus.emit('updateToolEditApprovalBypassState', {
     streamId,
     bypassActive: bypassedByStream.get(streamId) ?? false,
   });
-}
-let storageDirectory: string | undefined;
-const activePreviewFiles = new Set<string>();
-
-function getStorageDir(): string {
-  if (!storageDirectory) {
-    throw new Error('Tool edit approval has not been initialized.');
-  }
-  return storageDirectory;
-}
-
-async function ensureStorageDir(): Promise<string> {
-  const dir = getStorageDir();
-  await fs.mkdir(dir, { recursive: true });
-  return dir;
-}
-
-async function createTempFile(
-  side: 'original' | 'proposed',
-  targetPath: string,
-  content: string,
-): Promise<vscode.Uri> {
-  const dir = await ensureStorageDir();
-  const ext = path.extname(targetPath) || '.txt';
-  const fileName = `${randomUUID()}-${side}${ext}`;
-  const filePath = path.join(dir, fileName);
-  await fs.writeFile(filePath, content, 'utf8');
-  activePreviewFiles.add(filePath);
-  return vscode.Uri.file(filePath);
-}
-
-async function cleanupTempFile(uri: vscode.Uri): Promise<void> {
-  activePreviewFiles.delete(uri.fsPath);
-  await fs.unlink(uri.fsPath).catch(() => {});
 }
 
 export function setToolEditApprovalSessionBypass(
@@ -170,14 +126,8 @@ export function _clearAllApprovalBypass(): void {
   bypassedByStream.clear();
 }
 
-export function initializeToolEditApproval(
-  context: vscode.ExtensionContext,
-): void {
-  if (initialized) {
-    return;
-  }
-  const baseDir = context.storageUri ?? context.globalStorageUri;
-  storageDirectory = path.join(baseDir.fsPath, 'tool-edit-previews');
+/** Mark the approval system as initialized. Called by the native handler. */
+export function markToolEditApprovalInitialized(): void {
   initialized = true;
 }
 
@@ -189,37 +139,9 @@ export function setToolEditApprovalHandler(
   customHandler = handler;
 }
 
-async function showProgressViewApprovalPrompt(
-  requestId: string,
-  request: ToolEditApprovalRequest,
-  relativePath: string,
-  lineChanges: LineChanges,
-): Promise<void> {
-  await safeExecuteCommand('texra.showProgressView');
-  const streamId = request.streamId;
-
-  // Activate the stream that needs approval so user sees the prompt immediately
-  if (streamId) {
-    bus.emit('setActiveStream', { streamId });
-  }
-
-  const isBypassed = streamId ? isApprovalBypassedForStream(streamId) : false;
-  bus.emit('showToolEditPermission', {
-    requestId,
-    path: request.path,
-    relativePath,
-    sourceTool: request.sourceTool,
-    allowBypass: !isBypassed,
-    streamId: streamId ?? '',
-    addedLines: lineChanges.added,
-    removedLines: lineChanges.removed,
-    isLatex: isLatexFile(request.path),
-  });
-}
-
-function resolveProgressViewApprovalPrompt(requestId: string): void {
-  bus.emit('resolveToolEditPermission', { requestId });
-}
+// ============================================================================
+// Pure diff helpers (exported for use by native handler in @frontend/)
+// ============================================================================
 
 function createSemanticDiffs(
   original: string,
@@ -231,7 +153,7 @@ function createSemanticDiffs(
   return diffs;
 }
 
-function computeLineChangeSummary(
+export function computeLineChangeSummary(
   original: string,
   proposed: string,
 ): LineChanges {
@@ -259,7 +181,10 @@ function computeLineChangeSummary(
  * Compute the 0-based line number where the first change occurs.
  * Returns null if the content is identical.
  */
-function firstChangedLine(original: string, proposed: string): number | null {
+export function firstChangedLine(
+  original: string,
+  proposed: string,
+): number | null {
   if (original === proposed) {
     return null;
   }
@@ -282,7 +207,7 @@ function firstChangedLine(original: string, proposed: string): number | null {
   return 0;
 }
 
-function computeUserPatch(
+export function computeUserPatch(
   suggestedContent: string,
   appliedContent: string,
 ): string | undefined {
@@ -300,240 +225,22 @@ function computeUserPatch(
   return dmp.patch_toText(patches);
 }
 
-async function revealFirstChange(
-  proposedUri: vscode.Uri,
-  originalContent: string,
-  proposedContent: string,
-): Promise<void> {
-  const line = firstChangedLine(originalContent, proposedContent);
-  if (line === null) {
-    return;
-  }
-
-  const targetUri = proposedUri.toString();
-  const position = new vscode.Position(line, 0);
-
-  const tryReveal = () => {
-    const editor = vscode.window.visibleTextEditors.find(
-      (candidate) => candidate.document.uri.toString() === targetUri,
-    );
-
-    if (!editor) {
-      return false;
-    }
-
-    editor.selections = [new vscode.Selection(position, position)];
-    editor.revealRange(
-      new vscode.Range(position, position),
-      vscode.TextEditorRevealType.InCenter,
-    );
-    return true;
-  };
-
-  if (tryReveal()) {
-    return;
-  }
-
-  await new Promise<void>((resolve) => {
-    let resolved = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    const disposable = vscode.window.onDidChangeVisibleTextEditors(() => {
-      if (!resolved && tryReveal()) {
-        resolved = true;
-        disposeAll();
-        resolve();
-      }
-    });
-
-    function disposeAll() {
-      if (timer) {
-        clearTimeout(timer);
-        timer = undefined;
-      }
-      disposable.dispose();
-    }
-
-    timer = setTimeout(() => {
-      if (resolved) {
-        return;
-      }
-      resolved = true;
-      disposeAll();
-      tryReveal();
-      resolve();
-    }, REVEAL_TIMEOUT_MS);
-  });
-}
-
-async function closeApprovalEditors(
-  originalUri: vscode.Uri,
-  proposedUri: vscode.Uri,
-): Promise<void> {
-  const targetUris = new Set([originalUri.toString(), proposedUri.toString()]);
-
-  const tabsToClose: vscode.Tab[] = [];
-  for (const group of vscode.window.tabGroups.all) {
-    for (const tab of group.tabs) {
-      const input = tab.input;
-      if (
-        typeof vscode.TabInputTextDiff !== 'undefined' &&
-        input instanceof vscode.TabInputTextDiff
-      ) {
-        const original = input.original.toString();
-        const modified = input.modified.toString();
-        if (targetUris.has(original) && targetUris.has(modified)) {
-          tabsToClose.push(tab);
-        }
-        continue;
-      }
-
-      if (
-        typeof vscode.TabInputText !== 'undefined' &&
-        input instanceof vscode.TabInputText
-      ) {
-        if (targetUris.has(input.uri.toString())) {
-          tabsToClose.push(tab);
-        }
-      }
-    }
-  }
-
-  if (tabsToClose.length > 0) {
-    await vscode.window.tabGroups.close(tabsToClose);
-  }
-}
-
-async function nativeRequestApproval(
-  request: ToolEditApprovalRequest,
-): Promise<ToolEditApprovalResult> {
-  getStorageDir(); // Validates initialization
-
-  const { path, originalContent, proposedContent, sourceTool, streamId } =
-    request;
-
-  approvalCounter += 1;
-  const requestId = `approval-${Date.now().toString(36)}-${approvalCounter}`;
-  const originalUri = await createTempFile('original', path, originalContent);
-  const proposedUri = await createTempFile('proposed', path, proposedContent);
-
-  const description = vscode.workspace.asRelativePath(
-    WorkspaceFS.fullPath(path),
-  );
-  const lineChanges = computeLineChangeSummary(
-    originalContent,
-    proposedContent,
-  );
-  const { added, removed } = lineChanges;
-  const totalChanged = added + removed;
-  const changeParts = [
-    added > 0 && `+${added}`,
-    removed > 0 && `-${removed}`,
-  ].filter(Boolean);
-  const lineWord = totalChanged === 1 ? 'line' : 'lines';
-  const changeSuffix = changeParts.length
-    ? ` · ${changeParts.join(' / ')} ${lineWord}`
-    : '';
-  const title = `Tool edit (${sourceTool}): ${description}${changeSuffix}`;
-  let result: ToolEditApprovalResult = { accepted: false };
-  try {
-    await vscode.commands.executeCommand(
-      'vscode.diff',
-      originalUri,
-      proposedUri,
-      title,
-      { preserveFocus: true } satisfies vscode.TextDocumentShowOptions,
-    );
-
-    await revealFirstChange(proposedUri, originalContent, proposedContent);
-
-    result = await new Promise<ToolEditApprovalResult>((resolve) => {
-      let settled = false;
-
-      const settle = (value: ToolEditApprovalResult) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        // Note: Don't delete from pendingApprovals here - finally block handles cleanup
-        resolve(value);
-      };
-
-      const entry: PendingApprovalEntry = {
-        request,
-        originalUri,
-        proposedUri,
-        originalContent,
-        proposedContent,
-        title,
-        streamId,
-        lineChanges,
-        isSettled: () => settled,
-        settle,
-        workspaceTempCleanup: [],
-        latexOperationInProgress: false,
-        onError: (msg) => vscode.window.showErrorMessage(msg),
-      };
-
-      pendingApprovals.set(requestId, entry);
-      void showProgressViewApprovalPrompt(
-        requestId,
-        request,
-        description,
-        lineChanges,
-      );
-    });
-
-    if (result.accepted) {
-      // Read current content from open document or file, falling back to proposedContent
-      const openDocument = vscode.workspace.textDocuments.find(
-        (doc) => doc.uri.toString() === proposedUri.toString(),
-      );
-      // Normalize here: these reads bypass BaseFS so may contain CRLF.
-      const appliedContent = normalizeLineEndings(
-        openDocument
-          ? openDocument.getText()
-          : await fs
-              .readFile(proposedUri.fsPath, 'utf8')
-              .catch(() => proposedContent),
-      );
-      const userPatch = computeUserPatch(proposedContent, appliedContent);
-      result = {
-        ...result,
-        appliedContent,
-        userPatch,
-      };
-    }
-
-    return {
-      ...result,
-      lineChanges: result.lineChanges ?? lineChanges,
-    };
-  } finally {
-    // Get entry before deleting to access workspace temp cleanup functions
-    const entry = pendingApprovals.get(requestId);
-    pendingApprovals.delete(requestId);
-    await closeApprovalEditors(originalUri, proposedUri);
-    await cleanupTempFile(originalUri);
-    await cleanupTempFile(proposedUri);
-
-    // Clean up any workspace temp files created by preview/latexdiff (parallel for performance)
-    if (entry?.workspaceTempCleanup.length) {
-      await Promise.all(
-        entry.workspaceTempCleanup.map((fn) => fn().catch(() => {})),
-      );
-    }
-
-    resolveProgressViewApprovalPrompt(requestId);
-  }
-}
+// ============================================================================
+// Approval queue and request handling
+// ============================================================================
 
 async function enqueueApproval(
   request: ToolEditApprovalRequest,
 ): Promise<ToolEditApprovalResult> {
   // Note: YOLO bypass is checked in requestToolEditApproval before enqueueing
-  const run = async () =>
-    customHandler ? customHandler(request) : nativeRequestApproval(request);
+  const run = async () => {
+    if (!customHandler) {
+      throw new Error(
+        'No approval handler registered. Call initializeNativeToolEditApproval first.',
+      );
+    }
+    return customHandler(request);
+  };
 
   const operation = queue.then(run);
   queue = operation.then(
@@ -661,60 +368,6 @@ export async function writeApprovedContent(
 
   await WorkspaceFS.write(path, finalContent);
   return { appliedContent: finalContent, baseContent: currentContent };
-}
-
-export async function handleProgressViewToolEditApprovalAction(
-  payload: ToolEditApprovalActionPayload,
-): Promise<void> {
-  const entry = pendingApprovals.get(payload.requestId);
-  if (!entry || entry.isSettled()) {
-    return;
-  }
-
-  switch (payload.action) {
-    case 'openDiff':
-      await vscode.commands.executeCommand(
-        'vscode.diff',
-        entry.originalUri,
-        entry.proposedUri,
-        entry.title,
-        { preserveFocus: true } satisfies vscode.TextDocumentShowOptions,
-      );
-      await revealFirstChange(
-        entry.proposedUri,
-        entry.originalContent,
-        entry.proposedContent,
-      );
-      break;
-
-    case 'showLatexdiff':
-      // Use ONLYCHANGEDPAGE for tool edit approvals to focus on changes
-      await runLatexdiff(entry, { subtype: 'ONLYCHANGEDPAGE' });
-      break;
-
-    case 'previewProposed':
-      await previewProposedLatex(entry);
-      break;
-
-    case 'approve': {
-      // Normalize: this read bypasses BaseFS so may contain CRLF.
-      const appliedContent = normalizeLineEndings(
-        await fs
-          .readFile(entry.proposedUri.fsPath, 'utf-8')
-          .catch(() => entry.proposedContent),
-      );
-      entry.settle({ accepted: true, appliedContent });
-      break;
-    }
-
-    case 'reject': {
-      entry.settle({
-        accepted: false,
-        userMessage: payload.feedback?.trim() || undefined,
-      });
-      break;
-    }
-  }
 }
 
 export function buildApprovalRejectedResult(
