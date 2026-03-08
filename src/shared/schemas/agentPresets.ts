@@ -78,7 +78,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'research',
       'review',
       'chat',
-      'leanOrchestrator',
+      'orchestrator',
     ],
   },
 ];
