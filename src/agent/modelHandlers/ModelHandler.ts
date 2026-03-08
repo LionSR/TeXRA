@@ -935,4 +935,12 @@ export abstract class ModelHandler<
   get supportsTokenCounting(): boolean {
     return false;
   }
+
+  /**
+   * Release any resources held by the handler.
+   * Override in subclasses that hold long-lived resources (e.g., WebSocket connections).
+   */
+  dispose(): void {
+    // No-op by default
+  }
 }

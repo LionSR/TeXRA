@@ -532,6 +532,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     });
   }
 
+  /** Release all resources held by this handler (WebSocket, keepalive). */
+  override dispose(): void {
+    this.closeWebSocket();
+  }
+
   /** Close the WebSocket connection and clean up resources. */
   closeWebSocket(): void {
     this.stopWsKeepalive();
