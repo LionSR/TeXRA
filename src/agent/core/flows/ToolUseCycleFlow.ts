@@ -731,9 +731,6 @@ class ToolUseDispatchNode<C> extends BatchNode<
       source: 'tool',
       sourceDisplay: 'Tool use',
     }));
-    if (editedFiles.length > 0) {
-      extracted.sanitizedResult.editedFiles = editedFiles;
-    }
 
     return {
       call,
@@ -753,10 +750,17 @@ class ToolUseDispatchNode<C> extends BatchNode<
     const { call, result, parsedInput, extracted, editedFiles, logRef } =
       execResult;
 
+    // Spread sanitizedResult so editedFiles in the log don't leak into
+    // extracted.sanitizedResult (which is reused for model messages in post).
+    const logOutput =
+      editedFiles.length > 0
+        ? { ...extracted.sanitizedResult, editedFiles }
+        : extracted.sanitizedResult;
+
     const toolUseLog = {
       toolName: call.name,
       input: parsedInput ?? call.raw,
-      output: extracted.sanitizedResult,
+      output: logOutput,
       ...(editedFiles.length > 0 && { files: editedFiles }),
       isError: Boolean(result.isError),
     };
