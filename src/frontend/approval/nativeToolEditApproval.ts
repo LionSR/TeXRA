@@ -59,7 +59,6 @@ interface ToolEditApprovalActionPayload {
 let approvalCounter = 0;
 const pendingApprovals = new Map<string, PendingApprovalEntry>();
 let storageDirectory: string | undefined;
-const activePreviewFiles = new Set<string>();
 
 function getStorageDir(): string {
   if (!storageDirectory) {
@@ -84,12 +83,10 @@ async function createTempFile(
   const fileName = `${randomUUID()}-${side}${ext}`;
   const filePath = path.join(dir, fileName);
   await fs.writeFile(filePath, content, 'utf8');
-  activePreviewFiles.add(filePath);
   return vscode.Uri.file(filePath);
 }
 
 async function cleanupTempFile(uri: vscode.Uri): Promise<void> {
-  activePreviewFiles.delete(uri.fsPath);
   await fs.unlink(uri.fsPath).catch(() => {});
 }
 
@@ -310,7 +307,7 @@ async function nativeRequestApproval(
       registerPendingApproval(requestId, {
         streamId,
         isSettled: () => settled,
-        settle: (r) => settle(r),
+        settle,
       });
       void showProgressViewApprovalPrompt(
         requestId,

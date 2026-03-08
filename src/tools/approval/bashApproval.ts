@@ -100,7 +100,7 @@ async function showApprovalPrompt(
         isSettled: () => settled,
       });
 
-      bus.emit('requestExecuteCommand', { command: 'texra.showProgressView' });
+      bus.emit('requestEnsureProgressView', {});
 
       // Activate the stream that needs approval so user sees the prompt immediately
       if (streamId) {

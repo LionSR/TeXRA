@@ -93,16 +93,6 @@ async function handleRequestEnsureProgressView(
   }
 }
 
-function handleRequestExecuteCommand(
-  payload: ProgressEventPayloads['requestExecuteCommand'],
-): void {
-  void vscode.commands.executeCommand(
-    payload.command,
-    ...(payload.args ?? []),
-  );
-}
-
-
 /**
  * Register all agent→frontend event listeners.
  * Returns a Disposable that cleans up all subscriptions.
@@ -124,7 +114,6 @@ export function registerAgentEventListeners(): vscode.Disposable {
     (payload) => void handleRequestEnsureProgressView(payload),
     { signal },
   );
-  bus.on('requestExecuteCommand', handleRequestExecuteCommand, { signal });
 
   return new vscode.Disposable(() => controller.abort());
 }
