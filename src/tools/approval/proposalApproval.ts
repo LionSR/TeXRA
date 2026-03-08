@@ -4,14 +4,14 @@
  * When both the workspace setting (SUPER_YOLO_ENABLED) and the per-stream
  * toggle are active, agent proposals are auto-approved without user interaction.
  */
-import { WorkspaceStateKey, workspaceSM } from '@common/state';
+import { workspaceState } from '@common/state/stateBridge';
 import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas';
 
 /** Check if the workspace-level Super YOLO feature is enabled. */
 export function isSuperYoloFeatureEnabled(): boolean {
   return (
-    workspaceSM.get<boolean>(WorkspaceStateKey.SUPER_YOLO_ENABLED, false) ??
+    workspaceState.get<boolean>('texra.superYoloEnabled', false) ??
     false
   );
 }

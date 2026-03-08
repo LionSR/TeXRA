@@ -14,9 +14,9 @@ import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import { GlobalStateKey, globalSM } from '@common/state';
+import { globalState } from '@common/state/stateBridge';
 import * as logger from '@logger/logUtils';
-import { getConfig } from '@utils/config';
+import { readConfig } from '@utils/configBridge';
 
 const CHANNEL = 'ModelFactory';
 logger.initialize(CHANNEL);
@@ -54,8 +54,8 @@ export const LEVEL_TO_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
 function withReasoningOverride<T extends ModelHandler>(handler: T): T {
   if (!handler.capabilities.supportsReasoningEffort) return handler;
 
-  const overrides = globalSM.get<Record<string, string>>(
-    GlobalStateKey.REASONING_LEVELS,
+  const overrides = globalState.get<Record<string, string>>(
+    'texra.reasoningLevels',
     {},
   );
   const level = overrides[handler.config.name];
@@ -87,7 +87,7 @@ function shouldUseResponsesAPI(
     return false;
   }
   return (
-    getConfig<boolean>('texra.model.useOpenAIResponsesAPI', false) ||
+    readConfig<boolean>('texra.model.useOpenAIResponsesAPI', false) ||
     config.fullName.startsWith('gpt-oss')
   );
 }
@@ -97,7 +97,7 @@ function shouldUseResponsesAPI(
  * Applies user reasoning level overrides when the model supports configurable effort.
  */
 export function createModelHandler(config: ModelConfig): ModelHandler {
-  const useOpenRouter = getConfig<boolean>('texra.model.useOpenRouter', false);
+  const useOpenRouter = readConfig<boolean>('texra.model.useOpenRouter', false);
 
   // OpenAI Responses API (required or optional)
   if (shouldUseResponsesAPI(config, useOpenRouter)) {

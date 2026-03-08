@@ -42,8 +42,16 @@ import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { setExtensionChecker } from '@tools/externalToolDefs';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
+import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
+import { setLinterMessagesProvider } from '@tools/DiagnosticsTool';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import { setConfigProvider } from '@utils/configBridge';
+import { setStateBridge } from '@common/state/stateBridge';
+import { setKeyServices } from '@agent/modelHandlers/types/IKeyService';
+import { getServerSideKeyService } from '@auth/serverKeys';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+import { getLinterMessages } from '@frontend/latex/linter';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 
 // Local imports - components
@@ -114,12 +122,24 @@ export async function activate(context: vscode.ExtensionContext) {
   initializePolishModel(context.extensionPath);
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   initializeStateManagers(context);
+
+  // Wire platform-agnostic bridges for VS Code-free zones
+  setConfigProvider(getConfig);
+  setStateBridge(context.globalState, context.workspaceState);
+
   FileLister.initialize(context);
   // Initialize server-side key access with SupabaseClient as auth provider
   initializeServerSideKeyAccess(context, {
     isAuthenticated: () => SupabaseClient.isAuthenticated(),
     getUserTier: () => SupabaseClient.getUserTier(),
     getAccessToken: () => SupabaseClient.getAccessToken(),
+  });
+
+  // Wire platform-agnostic key service bridges for VS Code-free zones
+  setKeyServices({
+    serverSideKeyService: getServerSideKeyService(),
+    secretManager: SecretManager,
+    authClient: SupabaseClient,
   });
 
   // Copy default agents BEFORE initializing the agent index
@@ -234,6 +254,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register VS Code extension checker for external tool availability
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
+
+  // Wire platform-specific tool bridges for VS Code-free zones
+  setOpenBuildDisplay(openBuildDisplayIfTex);
+  setLinterMessagesProvider(getLinterMessages);
 
   // Register VS Code notification handler for unavailable tool groups
   setToolNotificationHandler((message, actionCommand) => {

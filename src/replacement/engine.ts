@@ -7,7 +7,7 @@ import { toErrorMessage } from '@common/errors';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-import { getConfig } from '@utils/config';
+import { readConfig } from '@utils/configBridge';
 
 const CHANNEL = 'ReplacementEngine';
 logger.initialize(CHANNEL);
@@ -126,7 +126,7 @@ const REGEX_CATEGORIES: ReplacementCategory[] = [
 ];
 
 function shouldWrapCritiqueInAlign(): boolean {
-  return getConfig('texra.latex.wrapCritiqueInAlign', true);
+  return readConfig('texra.latex.wrapCritiqueInAlign', true);
 }
 
 /**
@@ -134,7 +134,7 @@ function shouldWrapCritiqueInAlign(): boolean {
  * These replacements are subject to user configuration via enabledReplacements.
  */
 export function getAllReplacements(): ReplacementCategory {
-  const enabledCategoryNames = getConfig('texra.latex.enabledReplacements', [
+  const enabledCategoryNames = readConfig('texra.latex.enabledReplacements', [
     'latex_spacing',
     'equations',
     'sections',
@@ -149,7 +149,7 @@ export function getAllReplacements(): ReplacementCategory {
     'gptness',
     'latexdiff',
   ]);
-  const customReplacements = getConfig('texra.latex.customReplacements', {});
+  const customReplacements = readConfig('texra.latex.customReplacements', {});
 
   // Filter predefined categories based on user configuration
   const enabledCategories = NON_REGEX_CATEGORIES.filter((category) =>
@@ -177,7 +177,7 @@ export function getAllReplacements(): ReplacementCategory {
  * custom regex replacements from settings.
  */
 export function getAllReplacementsRegex(): ReplacementCategory[] {
-  const enabledCategoryNames = getConfig(
+  const enabledCategoryNames = readConfig(
     'texra.latex.enabledReplacementsRegex',
     [
       'fenced_latex_blocks',
@@ -189,7 +189,7 @@ export function getAllReplacementsRegex(): ReplacementCategory[] {
       'personal_style_contextual',
     ],
   );
-  const customReplacements = getConfig(
+  const customReplacements = readConfig(
     'texra.latex.customReplacementsRegex',
     {},
   );

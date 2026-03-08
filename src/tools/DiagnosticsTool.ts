@@ -3,13 +3,17 @@ import { z } from 'zod';
 
 // Internal imports
 import { toErrorMessage } from '@common/errors';
-import { getLinterMessages } from '@frontend/latex/linter';
 import * as logger from '@logger/logUtils';
 import {
+  type GenericDiagnostic,
   countBySeverity,
   formatCounts,
   formatMessageList,
 } from '@utils/diagnostics/diagnosticFormatting';
+
+type LinterMessagesFn = (path: string) => Promise<GenericDiagnostic[]>;
+let _getLinterMessages: LinterMessagesFn = async () => [];
+export function setLinterMessagesProvider(fn: LinterMessagesFn): void { _getLinterMessages = fn; }
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -35,7 +39,7 @@ export class DiagnosticsTool extends defineTool({
     const { command, path } = input;
 
     try {
-      const messages = await getLinterMessages(path);
+      const messages = await _getLinterMessages(path);
       const counts = countBySeverity(messages);
       const header = `${path}: ${formatCounts(counts)}`;
       const summary = `Diagnostics ${command} for ${path}`;

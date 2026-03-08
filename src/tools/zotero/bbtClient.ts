@@ -14,7 +14,7 @@ import axios from 'axios';
 import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
 import { isTimeoutErrorCode } from '@tools/timeouts';
-import { getConfig } from '@utils/config';
+import { readConfig } from '@utils/configBridge';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
 
@@ -23,7 +23,7 @@ const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
  * Used by both Connector API and Better BibTeX JSON-RPC (same port, different paths).
  */
 export function getZoteroPort(): number {
-  return getConfig<number>('texra.bib.zoteroPort', 23119);
+  return readConfig<number>('texra.bib.zoteroPort', 23119);
 }
 
 /**

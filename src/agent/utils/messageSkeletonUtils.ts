@@ -1,7 +1,7 @@
 /**
  * Utility functions for working with message objects in agent conversations.
  */
-import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
+import { MESSAGE_PREVIEW_LENGTH } from '@utils/config/pureConstants';
 
 /**
  * Truncate a string if it exceeds maxLength, appending char count.

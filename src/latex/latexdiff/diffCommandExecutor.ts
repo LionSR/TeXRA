@@ -4,7 +4,7 @@ import type { ExecResult } from '@agent/types/ResultTypes';
 // Internal imports
 import * as logger from '@logger/logUtils';
 import { executeCommand } from '@utils/system';
-import { getConfig } from '@utils/config';
+import { readConfig } from '@utils/configBridge';
 
 // Local file imports
 import { DEFAULT_MATH_MARKUP, type MathMarkupOption } from './mathMarkup';
@@ -210,11 +210,11 @@ export class DiffCommandExecutor {
     return {
       mathMarkup:
         options?.mathMarkup ??
-        getConfig<MathMarkupOption>(
+        readConfig<MathMarkupOption>(
           'texra.latexdiff.mathMarkup',
           DEFAULT_MATH_MARKUP,
         ),
-      pictureEnvs: getConfig<string>(
+      pictureEnvs: readConfig<string>(
         'texra.latexdiff.pictureEnvironments',
         DEFAULT_PICTURE_ENVS,
       ),

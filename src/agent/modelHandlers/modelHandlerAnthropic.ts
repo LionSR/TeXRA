@@ -44,10 +44,10 @@ import replacementEngine from '@replacement/engine';
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import { getConfig } from '@utils/config';
+import { readConfig } from '@utils/configBridge';
 import { isNonEmptyString } from '@utils/core';
 import { flexibleFS, type FileLocation } from '@utils/files';
-import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
+import { getAnthropicDynamicFiltering } from '@utils/config/providerConfigBridge';
 import { objectToLogString } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -319,7 +319,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   public override getEffectiveContextWindow(): number {
-    const useAnthropic1MBeta = getConfig<boolean>(
+    const useAnthropic1MBeta = readConfig<boolean>(
       'texra.model.useAnthropic1MBeta',
       false,
     );
@@ -712,7 +712,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Set up context management before token counting so estimates use matching options.
-    const compactionThresholdPercent = getConfig<number>(
+    const compactionThresholdPercent = readConfig<number>(
       'texra.model.compactionThresholdPercent',
       DEFAULT_COMPACTION_THRESHOLD_PERCENT,
     );

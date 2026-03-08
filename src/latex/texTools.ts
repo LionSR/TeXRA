@@ -12,7 +12,7 @@ import {
 import * as logger from '@logger/logUtils';
 
 // Local imports - utils
-import { getConfig } from '@utils/config';
+import { readConfig } from '@utils/configBridge';
 import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';
@@ -42,13 +42,13 @@ export async function compileLatex2Pdf(
     await flexibleFS.ensureDir(pathToLocation(outDir));
 
     // Get TikZ input directory from configuration
-    const tikzInputDirectory = getConfig<string>(
+    const tikzInputDirectory = readConfig<string>(
       'texra.latex.tikzInputDirectory',
       '',
     );
 
     // Check if workspace path should be included
-    const includeWorkspace = getConfig<boolean>(
+    const includeWorkspace = readConfig<boolean>(
       'texra.latex.includeWorkspaceInTexinputs',
       true,
     );

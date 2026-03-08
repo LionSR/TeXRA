@@ -21,12 +21,11 @@ import type {
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { getServerSideKeyService } from '@auth/serverKeys';
-import { MAX_TIER } from '@auth/config';
-import { SupabaseClient } from '@auth/SupabaseClient';
-
-// Local imports - frontend
-import { SecretManager, ApiProvider } from '@frontend/secretManager';
+import {
+  getKeyService,
+  getSecretService,
+  getAuthClient,
+} from './types/IKeyService';
 
 // Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
@@ -36,12 +35,12 @@ import { MESSAGE_TYPES } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import { K_SLICE } from '@utils/config';
+import { K_SLICE } from '@utils/config/pureConstants';
 import type { FileLocation } from '@utils/files';
 import {
   getProviderStreaming,
   getGlobalStreaming,
-} from '@utils/config/providerConfig';
+} from '@utils/config/providerConfigBridge';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {
   resolveBaseUrl,
@@ -298,7 +297,7 @@ export abstract class ModelHandler<
     }
     // Pass short name (this.config.name) for client-side tier validation.
     // The server will separately validate the actual API model name from the request.
-    return getServerSideKeyService().shouldUseServerSideKeysSync(
+    return getKeyService().shouldUseServerSideKeysSync(
       this.config.provider,
       this.config.name,
     );
@@ -315,7 +314,7 @@ export abstract class ModelHandler<
    * @throws Error if required API key is missing from environment
    */
   public async getApiKey(): Promise<string> {
-    const serverSideKeyService = getServerSideKeyService();
+    const serverSideKeyService = getKeyService();
     const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
 
     // Prime caches before using sync methods. This ensures that after reload/continue,
@@ -327,7 +326,7 @@ export abstract class ModelHandler<
 
     // Use centralized check to ensure consistency with getBaseUrl()
     if (this.shouldUseServerSideKeys()) {
-      const accessToken = await SupabaseClient.getAccessToken();
+      const accessToken = await getAuthClient().getAccessToken();
       if (accessToken) {
         this.logger.debug(
           `Using server-side API keys via relay for ${this.config.provider}`,
@@ -345,7 +344,7 @@ export abstract class ModelHandler<
     // Allow these even in "Use Included Access" mode since included access is never possible.
     if (this.config.openRouterOnly) {
       try {
-        return await SecretManager.getApiKey('openRouter');
+        return await getSecretService().getApiKey('openRouter');
       } catch (err) {
         throw new Error(
           `Model "${this.config.name}" requires an OpenRouter API key. Please set it using the "Set API Key" command.`,
@@ -369,7 +368,7 @@ export abstract class ModelHandler<
 
     if (shouldUseOpenRouter(this.config)) {
       try {
-        return await SecretManager.getApiKey('openRouter');
+        return await getSecretService().getApiKey('openRouter');
       } catch (err) {
         throw new Error(
           'Missing API key for OpenRouter. Please set it using the "Set API Key" command.',
@@ -377,9 +376,9 @@ export abstract class ModelHandler<
       }
     }
 
-    const provider = this.config.provider.toLowerCase() as ApiProvider;
+    const provider = this.config.provider.toLowerCase();
     try {
-      return await SecretManager.getApiKey(provider);
+      return await getSecretService().getApiKey(provider);
     } catch (err) {
       throw new Error(
         `Missing API key for ${this.config.provider}. Please set it using the "Set API Key" command.`,
@@ -506,8 +505,8 @@ export abstract class ModelHandler<
       reasoningEffort === ReasoningEffort.XHIGH &&
       this.shouldUseServerSideKeys()
     ) {
-      const userTier = getServerSideKeyService().getUserTier();
-      if (userTier === MAX_TIER) {
+      const userTier = getKeyService().getUserTier();
+      if (userTier === 'Max') {
         return ReasoningEffort.HIGH;
       }
     }

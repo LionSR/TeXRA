@@ -7,11 +7,17 @@ import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
-import { getConfig } from '@utils/config';
+import { readConfig } from '@utils/configBridge';
 import { WorkspaceFS, pathToLocation } from '@utils/files';
+
+import type { FileLocation } from '@utils/files';
+
+type BuildDisplayFn = (location: FileLocation, options?: { preserveFocus?: boolean }) => Promise<void>;
+let _openBuildDisplay: BuildDisplayFn = async () => {};
+/** Register the platform-specific build display handler. Called from extension.ts. */
+export function setOpenBuildDisplay(fn: BuildDisplayFn): void { _openBuildDisplay = fn; }
 
 /** Interface for entries that support LaTeX preview operations */
 export interface LatexPreviewEntry {
@@ -105,7 +111,7 @@ async function createTempFileWithCleanup(
     throw new Error('No workspace folder open');
   }
 
-  const location = getConfig<TempFileLocation>(
+  const location = readConfig<TempFileLocation>(
     'texra.latexdiff.tempFileLocation',
     'sameDirectory',
   );
@@ -157,7 +163,7 @@ export async function previewProposedLatex(
 
     if (entry.isSettled()) return;
 
-    await openBuildDisplayIfTex(pathToLocation(tempPath), {
+    await _openBuildDisplay(pathToLocation(tempPath), {
       preserveFocus: true,
     });
   });
@@ -226,7 +232,7 @@ export async function runLatexdiff(
 
     if (entry.isSettled()) return;
 
-    await openBuildDisplayIfTex(pathToLocation(diffFilePath), {
+    await _openBuildDisplay(pathToLocation(diffFilePath), {
       preserveFocus: true,
     });
   });

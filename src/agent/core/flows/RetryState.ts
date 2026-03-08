@@ -6,7 +6,7 @@ import {
   type RetryResult,
 } from '@agent/runtime/RetryRequestCoordinator';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { getAuthClient } from '@agent/modelHandlers/types/IKeyService';
 import { formatProviderHttpError, toErrorMessage } from '@common/errors';
 import type { AgentLogger } from '@logger/AgentLogger';
 import {
@@ -17,7 +17,7 @@ import {
 import {
   getModelRetryBackoffMs,
   getModelRetryMaxAttempts,
-} from '@utils/config';
+} from '@utils/configBridge';
 
 const BACKGROUND_MODE_MIN_RETRIES = 3;
 
@@ -116,7 +116,7 @@ export abstract class RetryableInvocationNode<
     this._hasAttemptedTokenRefresh = true;
     services.logger.debug('Relay 401, refreshing token before retry loop');
 
-    const refreshed = await SupabaseClient.getAccessToken(true);
+    const refreshed = await getAuthClient().getAccessToken(true);
     if (!refreshed) {
       services.logger.debug('Token refresh failed, skipping auto-retries');
       this._persistent401Error =
@@ -170,7 +170,7 @@ export abstract class RetryableInvocationNode<
     services.setAbortController(controller);
 
     // Proactive relay token refresh before the request
-    if (SupabaseClient.isTokenExpiringSoon()) {
+    if (getAuthClient().isTokenExpiringSoon()) {
       services.logger.debug(
         'Token nearing expiry, refreshing client proactively',
       );

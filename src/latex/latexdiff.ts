@@ -10,7 +10,7 @@ import { formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { flexibleFS, pathToLocation, type FileLocation } from '@utils/files';
-import { getConfig } from '@utils/config';
+import { readConfig } from '@utils/configBridge';
 
 // Local imports - latex utils
 import { runLatexFormatter } from './texFormatter';
@@ -62,7 +62,7 @@ export class LaTeXdiffService {
   }
 
   private getLatexdiffTimeout(): number {
-    return getConfig<number>(
+    return readConfig<number>(
       'texra.latexdiff.timeoutMs',
       DEFAULT_LATEXDIFF_TIMEOUT_MS,
     );

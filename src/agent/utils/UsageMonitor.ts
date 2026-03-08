@@ -5,7 +5,7 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentRunStateSnapshot } from '@agent/core/AgentState';
 import type { RunUsageTotals } from '@agent/core/RunUsageAccumulator';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
-import { getServerSideKeyService } from '@auth/serverKeys';
+import { getKeyService } from '@agent/modelHandlers/types/IKeyService';
 import {
   UsageLogService,
   type AgentLogger,
@@ -226,7 +226,7 @@ export class UsageMonitor {
         cachedInputTokens,
         cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
         reasoningTokens: usage.reasoningTokens ?? 0,
-        usedRelay: getServerSideKeyService().shouldUseServerSideKeysSync(
+        usedRelay: getKeyService().shouldUseServerSideKeysSync(
           config.provider,
           config.name,
         ),

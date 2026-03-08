@@ -8,7 +8,7 @@ import { sync as globSync } from 'glob';
 import { isFileNotFoundError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
-import { getConfig } from '@utils/config';
+import { readConfig } from '@utils/configBridge';
 import { delay } from '@utils/core';
 import { runToolWithCheck } from '@utils/system';
 
@@ -33,7 +33,7 @@ async function cleanupIndentLog(
 
 export async function runLatexIndent(filePath: string): Promise<boolean> {
   try {
-    const showWarning = getConfig<boolean>(
+    const showWarning = readConfig<boolean>(
       'texra.latex.showLatexindentWarning',
       true,
     );
@@ -44,7 +44,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       (filePath === workspacePath ||
         filePath.startsWith(workspacePath + path.sep));
 
-    const latexindentConfig = getConfig<string>(
+    const latexindentConfig = readConfig<string>(
       'texra.latex.latexindentConfig',
     );
 

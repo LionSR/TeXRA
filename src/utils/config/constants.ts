@@ -5,6 +5,24 @@ import { globalSM, GlobalStateKey } from '@common/state/stateManager';
 import * as logger from '@logger/logUtils';
 import { getConfig } from './configUtils';
 
+// Re-export pure (platform-agnostic) constants so existing barrel consumers
+// keep working without changes. VS Code-free zones should import directly
+// from '@utils/config/pureConstants' instead.
+export {
+  K_SLICE,
+  MESSAGE_PREVIEW_LENGTH,
+  REPETITION_PREVIEW_LENGTH,
+  REPETITION_DETECTION_THRESHOLD,
+  SHORT_SLEEP_MS,
+  REFRESH_THRESHOLD_MS,
+  THREE_DAYS_MS,
+  DEBOUNCE_WATCHER_MS,
+  DEBOUNCE_OPTIONS_MS,
+  DEBOUNCE_STATE_SAVE_MS,
+  FILE_TYPES,
+  type FileType,
+} from './pureConstants';
+
 const CHANNEL = 'config';
 
 // Settings query constants for VS Code settings UI
@@ -12,35 +30,6 @@ export const SETTINGS_QUERY = {
   EXTENSION: '@ext:texra-ai.texra',
   MODELS: '@ext:texra-ai.texra models',
 } as const;
-
-// Common file type constants
-export const FILE_TYPES = [
-  'input',
-  'reference',
-  'auxiliary',
-  'media',
-  'output',
-] as const;
-
-export type FileType = (typeof FILE_TYPES)[number];
-
-// Length for preview slices of tool output and responses
-export const K_SLICE = 200;
-
-// Generic preview lengths for logging and repetition checks
-export const MESSAGE_PREVIEW_LENGTH = 50;
-export const REPETITION_PREVIEW_LENGTH = 400;
-export const REPETITION_DETECTION_THRESHOLD = 1000;
-
-// Time constants
-export const SHORT_SLEEP_MS = 50;
-export const REFRESH_THRESHOLD_MS = 200;
-export const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
-
-// Debounce delay constants for UI responsiveness
-export const DEBOUNCE_WATCHER_MS = 200; // File system watchers (fast response)
-export const DEBOUNCE_OPTIONS_MS = 300; // Dropdown options refresh
-export const DEBOUNCE_STATE_SAVE_MS = 500; // State persistence (slower, batched)
 
 // Tool-use persistence defaults (internal)
 const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 336; // 2 weeks

@@ -10,7 +10,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import type { ModelHandler } from '@agent/modelHandlers';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
-import { GlobalStateKey, globalSM } from '@common/state';
+import { globalState } from '@common/state/stateBridge';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { isNonEmptyString } from '@utils/core';
 
@@ -29,8 +29,8 @@ export interface HelperModelKit {
  * only the model name (not a full handler) is needed.
  */
 export function getHelperModelName(): string {
-  const configuredModel = globalSM.get<string>(
-    GlobalStateKey.HELPER_MODEL,
+  const configuredModel = globalState.get<string>(
+    'polishModel',
     DEFAULT_HELPER_MODEL,
   );
   return isNonEmptyString(configuredModel)

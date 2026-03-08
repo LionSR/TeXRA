@@ -11,7 +11,7 @@ import { ToolError } from '@tools/result';
 import { formatToolOutput, resolveAndFormat } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';
-import { getConfig } from '@utils/config';
+import { readConfig } from '@utils/configBridge';
 
 const ExtractBibliographyInputSchema = z.strictObject({
   texPath: z
@@ -53,7 +53,7 @@ export class ExtractBibliographyTool extends defineTool({
 
     // Use provided bibPath, or fall back to configured default
     const effectiveBibPath =
-      bibPath || getConfig<string>('texra.bib.defaultPath', '');
+      bibPath || readConfig<string>('texra.bib.defaultPath', '');
 
     if (effectiveBibPath) {
       const { path: resolved } = resolveAndFormat(effectiveBibPath);

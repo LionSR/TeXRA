@@ -1,7 +1,7 @@
 // Local imports - log
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { getConfig } from '@utils/config';
+import { readConfig } from '@utils/configBridge';
 import { runToolWithCheck } from '@utils/system';
 
 const CHANNEL = 'LaTeXCommands';
@@ -9,7 +9,7 @@ logger.initialize(CHANNEL);
 
 export async function runTexFmt(filePath: string): Promise<boolean> {
   try {
-    const texfmtConfig = getConfig<string>('texra.latex.texfmtConfig');
+    const texfmtConfig = readConfig<string>('texra.latex.texfmtConfig');
 
     const args: string[] = [];
     if (texfmtConfig) {

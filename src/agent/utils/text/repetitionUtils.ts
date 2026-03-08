@@ -6,7 +6,7 @@ import * as logger from '@logger/logUtils';
 import {
   REPETITION_DETECTION_THRESHOLD,
   REPETITION_PREVIEW_LENGTH,
-} from '@utils/config';
+} from '@utils/config/pureConstants';
 
 const CHANNEL = 'repetitionUtils';
 logger.initialize(CHANNEL);

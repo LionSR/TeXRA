@@ -36,7 +36,7 @@ import {
 import { ProcessExecutionHandle } from '@agent/runtime/ExecutionHandle';
 
 // Local imports - utils
-import { WorkspaceStateKey, workspaceSM } from '@common/state';
+import { workspaceState } from '@common/state/stateBridge';
 import { isDirectory } from '@common/files/fsEntryType';
 import { STREAM_STATUS } from '@shared/schemas';
 import {
@@ -586,7 +586,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     // Only block subagent kills when the toggle is disabled; process kills are always allowed.
     if (
       target instanceof AgentExecutionHandle &&
-      !workspaceSM.get<boolean>(WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL, true)
+      !workspaceState.get<boolean>('texra.allowOrchestratorKill', true)
     ) {
       return {
         output:

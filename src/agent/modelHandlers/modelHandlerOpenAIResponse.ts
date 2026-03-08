@@ -25,7 +25,8 @@ import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 
 // Local imports - utils
-import { K_SLICE, getConfig } from '@utils/config';
+import { K_SLICE } from '@utils/config/pureConstants';
+import { readConfig } from '@utils/configBridge';
 import { delay } from '@utils/core';
 import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
@@ -131,7 +132,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private isOpenRouterRoutingEnabled(): boolean {
     return (
       this.config.openRouterOnly ||
-      getConfig<boolean>('texra.model.useOpenRouter', false)
+      readConfig<boolean>('texra.model.useOpenRouter', false)
     );
   }
 
@@ -156,7 +157,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * this model/agent is eligible for background execution.
    */
   public override isBackgroundModeActive(): boolean {
-    const useBackgroundResponses = getConfig<boolean>(
+    const useBackgroundResponses = readConfig<boolean>(
       'texra.model.useBackgroundResponses',
       false,
     );
@@ -449,7 +450,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Returns 0 if compaction is disabled.
    */
   private getCompactionThresholdPercent(): number {
-    return getConfig<number>(
+    return readConfig<number>(
       'texra.model.compactionThresholdPercent',
       DEFAULT_COMPACTION_THRESHOLD_PERCENT,
     );
@@ -1053,7 +1054,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const { client, messages, temperature, systemPrompt, signal, tools } =
       options;
     const streamingToggleEnabled = this.getStreamingConfig();
-    const backgroundToggleEnabled = getConfig<boolean>(
+    const backgroundToggleEnabled = readConfig<boolean>(
       'texra.model.useBackgroundResponses',
       false,
     );
@@ -1252,7 +1253,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     // Phase 4: EXECUTE - Build final params and make the API call
-    const parallelToolCalls = getConfig<boolean>(
+    const parallelToolCalls = readConfig<boolean>(
       'texra.model.openaiParallelToolCalls',
       false,
     );
@@ -1295,7 +1296,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const isGpt5 = this.config.name.startsWith('gpt5');
       const includeSummary =
         !isGpt5 ||
-        getConfig<boolean>('texra.model.gpt5ReasoningSummary', false);
+        readConfig<boolean>('texra.model.gpt5ReasoningSummary', false);
       if (includeSummary) {
         params.reasoning = {
           ...(params.reasoning as Reasoning),

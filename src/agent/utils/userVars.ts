@@ -13,7 +13,7 @@ import {
 import { AgentLogger } from '@logger/AgentLogger';
 import type { FileListEntry } from '@shared/schemas';
 import { getXmlFormatFromFiles, getListOfFiles } from '@utils/prompt';
-import { getConfig } from '@utils/config';
+import { readConfig } from '@utils/configBridge';
 import { WorkspaceFS } from '@utils/files';
 import { setVarFromFile } from '@utils/files/varsUtils';
 
@@ -124,7 +124,7 @@ function getBasicVars(
   );
 
   // Get default bib path from settings (empty string if not configured)
-  const defaultBibPath = getConfig<string>('texra.bib.defaultPath', '');
+  const defaultBibPath = readConfig<string>('texra.bib.defaultPath', '');
 
   return {
     MODEL: agentConfig.model,
@@ -406,7 +406,7 @@ export function getToolFlags(
     AUTO_EXTRACT_FIGURE: agentConfig.toolConfig.autoExtractFigure,
     AUTO_EXTRACT_TIKZ_FIGURE: agentConfig.toolConfig.autoExtractTikzFigure,
     INCLUDE_TEX_COUNT: agentConfig.toolConfig.attachTeXCount,
-    PRINT_INPUT_PROMPT: getConfig<boolean>(
+    PRINT_INPUT_PROMPT: readConfig<boolean>(
       'texra.debug.saveInputPrompt',
       false,
     ),

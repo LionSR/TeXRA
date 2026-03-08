@@ -11,7 +11,7 @@ import {
   MESSAGE_TYPES,
   type OutputFileInfo,
 } from '@shared/schemas';
-import { getConfig } from '@utils/config';
+import { readConfig } from '@utils/configBridge';
 import {
   flexibleFS,
   TaskRunFileService,
@@ -165,7 +165,7 @@ export class LatexDiffManager {
       }
     }
 
-    const generateBetweenRoundDiffs = getConfig<boolean>(
+    const generateBetweenRoundDiffs = readConfig<boolean>(
       'texra.latexdiff.generateBetweenRoundDiffs',
       false,
     );

@@ -4,7 +4,7 @@ import * as path from 'path';
 // Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
 import type { ExecutionId } from '@shared/schemas';
-import { getConfig } from '@utils/config';
+import { readConfig } from '@utils/configBridge';
 import { WorkspaceFS, StorageFS } from '@utils/files';
 import { ensureRunDir, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 
@@ -67,7 +67,7 @@ export async function maybeSaveDebugObject({
   context,
   fileOptions = {},
 }: SaveDebugParams): Promise<void> {
-  const shouldSave = getConfig<boolean>('texra.debug.saveDebugObjects', false);
+  const shouldSave = readConfig<boolean>('texra.debug.saveDebugObjects', false);
   if (!shouldSave) {
     return;
   }

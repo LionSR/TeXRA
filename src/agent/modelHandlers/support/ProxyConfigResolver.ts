@@ -1,7 +1,7 @@
 import { ModelProvider } from 'llm-zoo';
-import { getServerSideKeyService } from '@auth/serverKeys';
-import { getConfig } from '@utils/config';
-import { getProviderEndpoint } from '@utils/config/providerConfig';
+import { getKeyService } from '../types/IKeyService';
+import { readConfig } from '@utils/configBridge';
+import { getProviderEndpoint } from '@utils/config/providerConfigBridge';
 
 // NOTE: getProviderEndpoint reads from globalSM (VS Code global state), which is
 // where the Settings dashboard writes custom endpoints. The legacy settings.json
@@ -69,7 +69,7 @@ export function shouldUseOpenRouter(config: {
 
   return (
     config.openRouterOnly ||
-    getConfig<boolean>('texra.model.useOpenRouter', false)
+    readConfig<boolean>('texra.model.useOpenRouter', false)
   );
 }
 
@@ -105,7 +105,7 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
   // The caller (ModelHandler.shouldUseServerSideKeys) pre-computes this decision
   // to ensure consistency between URL routing and API key retrieval.
   if (config.useServerSideKeys) {
-    const relayUrl = getServerSideKeyService().getRelayBaseUrl(config.provider);
+    const relayUrl = getKeyService().getRelayBaseUrl(config.provider);
     config.logger?.debug(
       `Using server-side keys relay for ${config.provider}: ${relayUrl}`,
     );
@@ -116,13 +116,13 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
   // These paths are only used when server-side keys are NOT enabled.
 
   const useOpenRouter = shouldUseOpenRouter(config);
-  const useImprovedConnection = getConfig<boolean>(
+  const useImprovedConnection = readConfig<boolean>(
     'texra.model.useImprovedConnection',
     false,
   );
 
   if (useImprovedConnection) {
-    const customDomain = getConfig<string>(
+    const customDomain = readConfig<string>(
       'texra.model.improvedConnectionDomain',
       '',
     ).trim();

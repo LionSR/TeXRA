@@ -2,7 +2,7 @@ import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInt
 import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas';
 import type { ToolResult } from '@tools/result';
-import { getConfig } from '@utils/config';
+import { readConfig } from '@utils/configBridge';
 
 import { isApprovalBypassedForStream } from './toolEditApproval';
 
@@ -54,7 +54,7 @@ const pendingApprovals = new Map<
 export async function requestBashApproval(
   request: BashApprovalRequest,
 ): Promise<BashApprovalResult> {
-  const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY, true);
+  const approvalsEnabled = readConfig<boolean>(BASH_APPROVAL_CONFIG_KEY, true);
 
   // Resolve streamId from context if not provided
   const context = getCurrentToolFileInteractionContext();

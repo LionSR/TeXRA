@@ -10,7 +10,7 @@ import {
   pathToLocation,
   type FileLocation,
 } from '@utils/files';
-import { getConfig } from '@utils/config';
+import { readConfig } from '@utils/configBridge';
 
 // Local imports - latex utils
 import { compileLatex2Pdf } from './texTools';
@@ -52,7 +52,7 @@ export class TikzPictureManager {
    * @returns The TikZ template string
    */
   private getTikzTemplate(): string {
-    return getConfig<string>(
+    return readConfig<string>(
       'texra.latex.tikzTemplate',
       `
   \\documentclass[tikz,border=10pt]{standalone}

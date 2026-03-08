@@ -1,12 +1,13 @@
 // Third-party imports
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
-// Local imports - auth
-import { getServerSideKeyService } from '@auth/serverKeys';
-
-// Local imports - frontend
-import { GlobalStateKey, globalSM } from '@common/state';
-import { ApiProvider, SecretManager } from '@frontend/secretManager';
+// Local imports - bridges (platform-agnostic)
+import { globalState } from '@common/state/stateBridge';
+import {
+  getKeyService,
+  getSecretService,
+  type IServerSideKeyService,
+} from '@agent/modelHandlers/types/IKeyService';
 
 // Local imports - shared schemas
 import type { ModelOptionData } from '@shared/schemas';
@@ -42,7 +43,7 @@ export const MODEL_LIST_VERSION = 7;
  * This should be used to validate model selections in proposals.
  */
 export function getVisibleModels(): string[] {
-  return globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS, DEFAULT_MODELS);
+  return globalState.get<string[]>('enabledModels', DEFAULT_MODELS);
 }
 
 /**
@@ -84,13 +85,14 @@ async function hasPersonalKeyForModel(
   hasOpenRouter: boolean,
 ): Promise<boolean> {
   if (config.openRouterOnly) return hasOpenRouter;
-  if (!SecretManager.API_PROVIDERS.includes(config.provider as ApiProvider)) {
+  const secretService = getSecretService();
+  if (!secretService.API_PROVIDERS.includes(config.provider)) {
     return true;
   }
 
   try {
     return (
-      (await SecretManager.apiKeyExists(config.provider as ApiProvider)) ||
+      (await secretService.apiKeyExists(config.provider)) ||
       Boolean(config.openrouterFullName && hasOpenRouter)
     );
   } catch {
@@ -102,7 +104,7 @@ interface ModelAvailabilityContext {
   hasOpenRouter: boolean;
   hasServerAccess: boolean;
   useIncludedAccess: boolean;
-  serverSideKeyService: ReturnType<typeof getServerSideKeyService>;
+  serverSideKeyService: IServerSideKeyService;
 }
 
 /** Determine if a model is available based on access mode and keys. */
@@ -179,9 +181,10 @@ export function buildBasicModelOptionsData(): ModelOptionData[] {
 export async function computeModelOptionsData(): Promise<ModelOptionData[]> {
   const models = getVisibleModels();
 
-  const serverSideKeyService = getServerSideKeyService();
+  const serverSideKeyService = getKeyService();
+  const secretService = getSecretService();
   const [hasOpenRouter, hasServerAccess] = await Promise.all([
-    SecretManager.apiKeyExists('openRouter'),
+    secretService.apiKeyExists('openRouter'),
     serverSideKeyService.canUseServerSideKeys(),
   ]);
 
