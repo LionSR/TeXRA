@@ -29,7 +29,7 @@ prompts:
         \item When writing formal \LaTeX documents, never list things like 1.\ 2.\ 3.\ \ldots{} as in markdown. Use proper \LaTeX environments such as enumerate or itemize.
         \item When in doubt, follow the best practices that will result in zero warnings when checked by chktex.
         \item Use the math commands defined in the auxiliary file commands.tex or preamble.tex if provided.
-        \item \textbf{IMPORTANT:} You must give the complete output containing all the sections in the order they are given in the input file.
+        \item IMPORTANT: You must give the complete output containing all the sections in the order they are given in the input file.
     \end{itemize}
 
     When adding comments or annotations to the document:
