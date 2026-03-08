@@ -61,10 +61,7 @@ When creating a tool-use agent, select the tools it needs from these groups.
 
 ## Agent Management
 
-- `agent_list` — List files in agent directories (/agents/builtin, /agents/tooluse, /agents/custom, /agents/docs).
-- `agent_read` — Read agent YAML files or reference docs from agent directories.
-- `agent_write` — Write agent YAML files to the custom agents directory (/agents/custom/).
-- `agent_search` — Search agent files for text patterns across agent directories.
+- `agents` — Browse and manage agent definitions under /agents. Commands: list, read, write, search. Directories: /agents/builtin (workflow), /agents/tooluse (tool-use), /agents/custom (writable), /agents/docs (reference docs).
 
 ## Utility
 

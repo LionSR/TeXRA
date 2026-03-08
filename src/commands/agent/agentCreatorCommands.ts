@@ -222,7 +222,7 @@ const TOOL_GROUPS: Record<string, ToolGroup> = {
   },
   'Agent Management': {
     description: 'Browse, read, write, and search agent definitions',
-    tools: ['agent_list', 'agent_read', 'agent_write', 'agent_search'],
+    tools: ['agents'],
     keywords: ['agent', 'creator', 'browse', 'yaml'],
   },
   Utility: {
