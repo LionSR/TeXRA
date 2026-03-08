@@ -30,6 +30,8 @@ prompts:
 
     Replace generic phrasing with precise, field-appropriate language. Numbers and concrete details sell: ``reduces error by 40\%'' beats ``significantly improves''; a specific result outweighs a vague general claim. Use active voice for claims---``We prove'' not ``It is proven.'' State strong results confidently; watch for triviality signals (``straightforward,'' ``trivially'') that diminish the perceived contribution.
 
+    Prioritize strategically: if a section needs major overhaul, flag the major issue and move on---do not micro-optimize sentences that are likely to be rewritten. Sentence-level polish is only worthwhile in structurally sound sections. Premature optimization of doomed text is wasted effort.
+
     Annotate the document using \criticize{comment text}{severity}{confidence} for writing strategy observations. The text inside must compile as valid LaTeX. Make direct improvements where confident and mark with \criticize{Elevated: [description]}{S}{C}. Leave \criticize{} comments without changing text for major strategic decisions the author should consider. Severity rates writing impact: 5 = desk rejection risk, 4 = significantly weakens perception, 3 = worth addressing, 2 = minor polish, 1 = cosmetic. Confidence rates certainty: 5 = certain about the issue and fix, 4 = high certainty with minor subjectivity, 3 = reasonable but field-dependent, 2 = subjective judgment depending on audience, 1 = speculative or matter of taste.
 
     Add this command to the preamble if it is not already there:

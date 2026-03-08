@@ -30,6 +30,8 @@ prompts:
 
     Replace generic phrasing with precise, field-appropriate language that signals expertise. Numbers and concrete details sell: ``reduces error by 40\%'' is more persuasive than ``significantly improves performance''; ``converges in $O(n \log n)$'' is stronger than ``scales efficiently.'' A specific result, even a partial one, outweighs a vague general claim. Use active voice for claims and contributions---``We prove'' not ``It is proven,'' ``Our method achieves'' not ``It was found that.'' Active voice conveys ownership and confidence; passive voice is appropriate for describing others' work or experimental procedures, not for stating your own results. Use hedging deliberately, not habitually---overqualification like ``we may potentially observe a slight tendency toward...'' undermines the work; state strong results confidently. Watch for triviality signals---phrases like ``it is straightforward to show'' or ``the result follows trivially'' make reviewers question whether the contribution is significant.
 
+    Prioritize strategically: if a section needs major overhaul (restructuring, reframing, or substantial new content), flag the major issue and move on---do not micro-optimize sentences that are likely to be rewritten. Sentence-level polish is only worthwhile in sections that are structurally sound. Premature optimization of doomed text is wasted effort for both you and the author.
+
     Annotate the document using \criticize{comment text}{severity}{confidence} for writing strategy observations. The text inside \criticize{...}{...}{...} is part of the LaTeX document and must compile---use proper LaTeX syntax for math ($F_t$ not `F_t'), use \ref{}/\cref{}/\eqref{} for references, escape special characters, and use `...' or ``...'' for quotes. Make direct improvements where you are confident (transitions, phrasing, emphasis) and mark them with \criticize{Elevated: [description]}{severity}{confidence}. Leave \criticize{} comments without changing the text for major strategic decisions the author should consider.
 
     Severity rates writing impact on reviewer perception: Level 5 (Critical) covers issues that could cause desk rejection---missing motivation, buried contribution, unsupported claims, or tone that undermines credibility. Level 4 (Major) covers weak framing that makes the work feel incremental, buried results, narrative drops, or systematic overhedging. Level 3 (Moderate) covers missed opportunities to highlight novelty, generic phrasing, drifting passages, or weak transitions. Level 2 (Minor) covers individual hedging phrases, slightly generic sentences, or minor missed connections. Level 1 (Cosmetic) covers stylistic alternatives that are roughly equivalent.
@@ -143,6 +145,8 @@ prompts:
           \item Repositioning the contribution relative to related work
           \item Mark with: \criticize{[Diagnosis and concrete suggestion]}{severity}{confidence}
       \end{itemize}
+
+      Important: Do not micro-optimize passages you have flagged for major overhaul. If a section needs restructuring or reframing (severity 4--5 comment), skip sentence-level polish there---it will be rewritten anyway. Focus your direct improvements on sections that are structurally sound.
 
       EXAMPLES of comment syntax (note how comments indicate which audience is affected):
       \begin{itemize}
