@@ -244,8 +244,16 @@ async function nativeRequestApproval(
 
   approvalCounter += 1;
   const requestId = `approval-${Date.now().toString(36)}-${approvalCounter}`;
-  const originalUri = await createTempFile('original', filePath, originalContent);
-  const proposedUri = await createTempFile('proposed', filePath, proposedContent);
+  const originalUri = await createTempFile(
+    'original',
+    filePath,
+    originalContent,
+  );
+  const proposedUri = await createTempFile(
+    'proposed',
+    filePath,
+    proposedContent,
+  );
 
   const description = vscode.workspace.asRelativePath(
     WorkspaceFS.fullPath(filePath),
