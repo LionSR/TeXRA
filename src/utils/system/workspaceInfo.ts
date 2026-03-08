@@ -205,7 +205,7 @@ export async function buildWorkspaceInfoBlock(
   const virtualPaths = getVirtualPathDescriptions();
   if (virtualPaths.length > 0) {
     lines.push('');
-    lines.push('Virtual paths (accessible via file tools like read_file, glob, ls, grep, write_file):');
+    lines.push('Virtual paths (accessible via the `agents` tool):');
     for (const vp of virtualPaths) {
       const rw = vp.writable ? 'read-write' : 'read-only';
       lines.push(`  ${vp.prefix}/ — ${vp.description} (${rw})`);

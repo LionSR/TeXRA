@@ -11,15 +11,15 @@ import * as vscode from 'vscode';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
-import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { agentDirectories } from '@frontend/agents';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
 import { DEFAULT_MODELS } from '@model/computeModelOptions';
-import { GlobalStorageFS, StorageFS } from '@utils/files';
-import { isConfigExplicitlySet, updateConfig } from '@utils/config';
-import { extendEnvPath } from '@utils/system/platformPaths';
 import { registerVirtualPath } from '@tools/virtualPaths';
+import { isConfigExplicitlySet, updateConfig } from '@utils/config';
+import { GlobalStorageFS, StorageFS } from '@utils/files';
+import { extendEnvPath } from '@utils/system/platformPaths';
 
 /**
  * Version number for the default model list.
