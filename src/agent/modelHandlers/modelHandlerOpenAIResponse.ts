@@ -317,6 +317,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
+   * Finalize and reset the thinking stream if it has content.
+   * Extracted as a method to avoid recreating a closure on every streaming event.
+   */
+  private rotateThinkingStream(state: StreamingEventState): void {
+    if (!state.hasThinkingContent) return;
+    state.thinkingStream.finalize();
+    state.hasThinkingContent = false;
+    state.thinkingStream = this.createThinkingStream();
+  }
+
+  /**
    * Process a single streaming event, updating the shared streaming state.
    * Used by both WebSocket and HTTP streaming paths for consistent behavior.
    */
@@ -324,25 +335,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     event: ResponseStreamEvent,
     state: StreamingEventState,
   ): void {
-    /** Finalize and reset the thinking stream if it has content. */
-    const rotateThinkingStream = (): void => {
-      if (!state.hasThinkingContent) return;
-      state.thinkingStream.finalize();
-      state.hasThinkingContent = false;
-      state.thinkingStream = this.createThinkingStream();
-    };
-
     if (this.isReasoningDeltaEvent(event)) {
       state.thinkingStream.append(event.delta);
       state.hasThinkingContent = true;
     } else if (this.isTextDeltaEvent(event)) {
       state.outputStream?.append(event.delta);
     } else if (this.isWebSearchInProgressEvent(event)) {
-      rotateThinkingStream();
+      this.rotateThinkingStream(state);
     } else if (this.isFunctionCallArgumentsDoneEvent(event)) {
       // Function call arguments complete - finalize streams since no more
       // text/thinking deltas will arrive after tool calls begin.
-      rotateThinkingStream();
+      this.rotateThinkingStream(state);
       this.logger.debug(
         `Tool call ready during streaming: ${event.name}`,
       );
@@ -353,7 +356,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         !state.emittedWebSearchIds.has(item.id) &&
         hasOpenAIWebSearchData(item)
       ) {
-        rotateThinkingStream();
+        this.rotateThinkingStream(state);
         this.emitOpenAIWebSearch(item);
         state.emittedWebSearchIds.add(item.id);
       }
@@ -377,8 +380,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Sends a response.create event and collects streaming events until
    * a terminal event (completed, failed, incomplete) is received.
    *
-   * Failed/incomplete responses are thrown as errors so the caller's catch
-   * block can apply recovery logic (e.g., context-window compaction).
+   * Completed and incomplete responses are resolved so the caller's
+   * `finalizeResponse()` can handle non-completed statuses consistently
+   * with the HTTP streaming path. Failed responses are rejected so the
+   * caller's catch block can apply recovery logic.
    */
   private async executeViaWebSocket(
     ws: ResponsesWS,
@@ -395,12 +400,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return new Promise<Response>((resolve, reject) => {
       let settled = false;
       // Track the response ID for this request so we only process events
-      // belonging to it (important when abort-and-retry reuses the connection)
+      // belonging to it (important when abort-and-retry reuses the connection).
+      // Starts as null — terminal events are ignored until response.created sets it,
+      // preventing stale events from a previous request from being accepted.
       let currentResponseId: string | null = null;
 
       /** Check whether a terminal event belongs to the current request. */
       const isCurrentResponse = (response: Response): boolean =>
-        currentResponseId === null || response.id === currentResponseId;
+        currentResponseId !== null && response.id === currentResponseId;
 
       const onAbort = (): void => {
         if (settled) return;
@@ -449,9 +456,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const onCompleted = (event: ResponseCompletedEvent): void =>
         finalizeSuccess(event.response);
 
-      // Failed/incomplete responses must be rejected (not resolved) so the
-      // caller's catch block can run error recovery (e.g., context-window
-      // compaction or clearing previousResponseId).
+      // Failed responses must be rejected so the caller's catch block can
+      // run error recovery (e.g., context-window compaction).
       const onFailed = (event: ResponseFailedEvent): void => {
         if (settled || !isCurrentResponse(event.response)) return;
         settled = true;
@@ -461,16 +467,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         reject(new Error(`OpenAI WebSocket response failed: ${errorMsg}`));
       };
 
-      const onIncomplete = (event: ResponseIncompleteEvent): void => {
-        if (settled || !isCurrentResponse(event.response)) return;
-        settled = true;
-        cleanup();
-        const reason =
-          event.response.incomplete_details?.reason ?? 'unknown reason';
-        reject(
-          new Error(`OpenAI WebSocket response incomplete: ${reason}`),
-        );
-      };
+      // Incomplete responses are resolved (not rejected) to match the HTTP
+      // streaming path behavior. The caller's finalizeResponse() handles
+      // non-completed statuses (e.g., max_output_tokens truncation) by
+      // clearing previousResponseId and logging a warning.
+      const onIncomplete = (event: ResponseIncompleteEvent): void =>
+        finalizeSuccess(event.response);
 
       const onWsError = (error: WebSocketError): void => {
         if (settled) return;
