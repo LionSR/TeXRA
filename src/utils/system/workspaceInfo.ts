@@ -7,6 +7,7 @@ import * as path from 'path';
 import { execa } from 'execa';
 
 // Local imports
+import { getVirtualPathDescriptions } from '@tools/virtualPaths';
 import { WorkspaceFS } from '@utils/files';
 
 /** Timeout for git commands in milliseconds. */
@@ -198,6 +199,17 @@ export async function buildWorkspaceInfoBlock(
       parts.push('uncommitted changes');
     }
     lines.push(parts.join(', '));
+  }
+
+  // Append virtual path descriptions so the model knows about /agents/ etc.
+  const virtualPaths = getVirtualPathDescriptions();
+  if (virtualPaths.length > 0) {
+    lines.push('');
+    lines.push('Virtual paths (accessible via file tools like read_file, glob, ls, grep, write_file):');
+    for (const vp of virtualPaths) {
+      const rw = vp.writable ? 'read-write' : 'read-only';
+      lines.push(`  ${vp.prefix}/ — ${vp.description} (${rw})`);
+    }
   }
 
   return `\n<workspace_info>\n${lines.join('\n')}\n</workspace_info>`;

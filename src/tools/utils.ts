@@ -9,6 +9,7 @@ import { toErrorMessage } from '@common/errors';
 
 // Local imports - tools
 import { ToolError, type ToolFileAttachment } from '@tools/result';
+import { resolveVirtualPath } from '@tools/virtualPaths';
 
 // Local imports - core utilities
 import { isNonEmptyString } from '@utils/core';
@@ -30,11 +31,20 @@ export interface WorkspacePathResolution {
 export function resolveWorkspaceRelativePath(
   targetPath?: string,
 ): WorkspacePathResolution {
+  const trimmed = targetPath?.trim();
+
+  // Check virtual paths first (e.g., /agents/builtin/, /agents/custom/)
+  if (trimmed) {
+    const virtual = resolveVirtualPath(trimmed);
+    if (virtual) {
+      return { relative: trimmed, absolute: virtual.absolutePath };
+    }
+  }
+
   if (!WorkspaceFS.getPath()) {
     throw new ToolError('Workspace path is not available.');
   }
 
-  const trimmed = targetPath?.trim();
   const resolved = WorkspaceFS.locatePath(
     !trimmed || trimmed === '.' ? '' : trimmed,
   );

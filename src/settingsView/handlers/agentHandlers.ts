@@ -747,6 +747,9 @@ prompts:
   /** Refresh agent dir + selection after a directory change. */
   private async refreshAgentDirUI(): Promise<void> {
     await agentDirectories.refreshAfterDirChange();
+    // Keep the /agents/custom virtual path in sync
+    const { refreshCustomAgentVirtualPath } = await import('@frontend/setup');
+    await refreshCustomAgentVirtualPath();
     await this.ctx.withActiveWebview(async (w) => {
       await Promise.all([
         this.sendCustomAgentDir(w),

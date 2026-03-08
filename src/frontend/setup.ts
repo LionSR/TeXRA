@@ -12,12 +12,14 @@ import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { agentDirectories } from '@frontend/agents';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { DEFAULT_MODELS } from '@model/computeModelOptions';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
 import { isConfigExplicitlySet, updateConfig } from '@utils/config';
 import { extendEnvPath } from '@utils/system/platformPaths';
+import { registerVirtualPath } from '@tools/virtualPaths';
 
 /**
  * Version number for the default model list.
@@ -331,6 +333,73 @@ async function resetLegacyLatexSettings(): Promise<void> {
       await cfg.update(langKey, newValue, GLOBAL);
       logger.info('extension', `Cleaned legacy keys from ${langKey}`);
     }
+  }
+}
+
+/**
+ * Register virtual paths so that tool-use agents can access agent directories
+ * and reference docs via paths like `/agents/builtin/`, `/agents/custom/`, etc.
+ */
+export async function registerAgentVirtualPaths(
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  try {
+    const [builtIn, toolUse, custom] = await Promise.all([
+      agentDirectories.builtIn(),
+      agentDirectories.builtInToolUse(),
+      agentDirectories.custom(),
+    ]);
+
+    registerVirtualPath('/agents/builtin', {
+      absolutePath: builtIn,
+      writable: false,
+      description: 'Built-in workflow agents',
+    });
+    registerVirtualPath('/agents/tooluse', {
+      absolutePath: toolUse,
+      writable: false,
+      description: 'Built-in tool-use agents',
+    });
+    registerVirtualPath('/agents/custom', {
+      absolutePath: custom,
+      writable: true,
+      description: 'Custom agents directory (new agents go here)',
+    });
+    registerVirtualPath('/agents/docs', {
+      absolutePath: path.join(
+        context.extensionPath,
+        'resources',
+        'docs',
+        'agent-creation',
+      ),
+      writable: false,
+      description: 'Agent creation reference documentation',
+    });
+  } catch (err) {
+    logger.error(
+      'extension',
+      `Failed to register agent virtual paths: ${toErrorMessage(err)}`,
+    );
+  }
+}
+
+/**
+ * Re-register the `/agents/custom` virtual path after the custom agent
+ * directory changes. Call this alongside `agentDirectories.refreshAfterDirChange()`.
+ */
+export async function refreshCustomAgentVirtualPath(): Promise<void> {
+  try {
+    const custom = await agentDirectories.custom();
+    registerVirtualPath('/agents/custom', {
+      absolutePath: custom,
+      writable: true,
+      description: 'Custom agents directory (new agents go here)',
+    });
+  } catch (err) {
+    logger.error(
+      'extension',
+      `Failed to refresh custom agent virtual path: ${toErrorMessage(err)}`,
+    );
   }
 }
 

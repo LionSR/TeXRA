@@ -27,6 +27,7 @@ import {
   copyDefaultAgents,
   configureLatexSettings,
   refreshModelListIfNeeded,
+  registerAgentVirtualPaths,
 } from '@frontend/setup';
 import { FileLister } from '@frontend/files';
 import { agentDirectories } from '@frontend/agents';
@@ -123,6 +124,10 @@ export async function activate(context: vscode.ExtensionContext) {
   // Copy default agents BEFORE initializing the agent index
   // This ensures built-in agents are available when the index scans directories
   await copyDefaultAgents(context);
+
+  // Register virtual paths for agent directories so tool-use agents can
+  // browse and read agents via /agents/builtin/, /agents/custom/, etc.
+  await registerAgentVirtualPaths(context);
 
   // Refresh model list to defaults if version changed (adds new models for existing users)
   await refreshModelListIfNeeded();
