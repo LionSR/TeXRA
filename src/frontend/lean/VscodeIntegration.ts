@@ -18,7 +18,12 @@ import {
   waitForDiagnosticsChange,
   DiagnosticSeverity,
 } from '@frontend/vscode/vscodeDiagnostics';
-import type { LeanDiagnostic, LspResult, PlainGoal, PlainTermGoal } from '@tools/lean/leanTypes';
+import type {
+  LeanDiagnostic,
+  LspResult,
+  PlainGoal,
+  PlainTermGoal,
+} from '@tools/lean/leanTypes';
 import { WorkspaceFS } from '@utils/files';
 
 // ============================================================================

@@ -179,7 +179,8 @@ Tips:
     const { command, file } = input;
 
     try {
-      const diagnostics = await getLeanVscodeServices().fetchDiagnosticsForFile(file);
+      const diagnostics =
+        await getLeanVscodeServices().fetchDiagnosticsForFile(file);
       if (!diagnostics) {
         return {
           summary: 'Failed to open file',
