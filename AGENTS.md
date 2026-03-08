@@ -264,7 +264,6 @@ For good separation of concerns and platform independence, core business logic s
 | `setExtensionChecker` | `@tools/externalToolDefs` | Check if a VS Code extension is installed |
 | `setOpenBuildDisplay` | `@tools/approval/latexPreview` | Open LaTeX build display panel |
 | `setLinterMessagesProvider` | `@tools/DiagnosticsTool` | Read VS Code diagnostics for a file |
-| `pureConstants` | `@utils/config/pureConstants` | No injection — pure values safe everywhere |
 
 ### Patterns across the codebase
 
