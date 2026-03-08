@@ -4,8 +4,7 @@ import { z } from 'zod';
 // Internal imports
 import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine from '@replacement/engine';
-import { ToolError, ToolResult } from '@tools/result';
-import { resolveVirtualPath } from '@tools/virtualPaths';
+import { ToolResult } from '@tools/result';
 import {
   recordToolFileRead,
   requireFileReadForEdit,
@@ -17,7 +16,7 @@ import {
   requestToolEditApproval,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-import { AbsoluteFS, WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -36,12 +35,6 @@ export class WriteFileTool extends defineTool({
   schema: WriteInputSchema,
 }) {
   protected async execute(input: WriteInput): Promise<ToolResult> {
-    // Handle virtual paths (e.g., /agents/custom/my_agent.yaml)
-    const virtual = resolveVirtualPath(input.path);
-    if (virtual) {
-      return this.executeVirtualWrite(input, virtual);
-    }
-
     const exists = await WorkspaceFS.exists(input.path);
     const readGate = requireFileReadForEdit(input.path, exists);
     if (readGate) {
@@ -106,25 +99,6 @@ export class WriteFileTool extends defineTool({
         },
       ],
       ...(userInstruction && { userInstruction }),
-    };
-  }
-
-  /** Write to a virtual path (e.g., /agents/custom/). Read-only dirs are rejected. */
-  private async executeVirtualWrite(
-    input: WriteInput,
-    virtual: { absolutePath: string; writable: boolean },
-  ): Promise<ToolResult> {
-    if (!virtual.writable) {
-      throw new ToolError(
-        `Cannot write to ${input.path} — this virtual directory is read-only.`,
-      );
-    }
-
-    await AbsoluteFS.write(virtual.absolutePath, input.content);
-    const newLineCount = input.content.split('\n').length;
-    return {
-      summary: `Created ${input.path} (${newLineCount} lines)`,
-      output: 'written',
     };
   }
 }

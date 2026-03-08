@@ -220,6 +220,11 @@ const TOOL_GROUPS: Record<string, ToolGroup> = {
     ],
     keywords: ['lean', 'proof', 'theorem', 'formal', 'verification'],
   },
+  'Agent Management': {
+    description: 'Browse, read, write, and search agent definitions',
+    tools: ['agent_list', 'agent_read', 'agent_write', 'agent_search'],
+    keywords: ['agent', 'creator', 'browse', 'yaml'],
+  },
   Utility: {
     description: 'Memory, todo tracking, and diagnostics',
     tools: ['memory', 'todo_write', 'diagnostics'],

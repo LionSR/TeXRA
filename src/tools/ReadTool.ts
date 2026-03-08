@@ -7,9 +7,8 @@ import { z } from 'zod';
 // Local imports - tools
 import { ToolResult } from '@tools/result';
 import { buildFileAttachment, formatLinesWithNumbers } from '@tools/utils';
-import { resolveVirtualPath } from '@tools/virtualPaths';
 import { recordToolFileRead } from '@tools/fileInteractions';
-import { AbsoluteFS, WorkspaceFS, getMimeType } from '@utils/files';
+import { WorkspaceFS, getMimeType } from '@utils/files';
 import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -68,8 +67,6 @@ export class ReadFileTool extends defineTool({
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
-    const virtual = resolveVirtualPath(input.path);
-
     const attachmentConfig = this.getAttachmentConfig(input.path);
     if (attachmentConfig) {
       const result = await this.returnBinaryAttachment(input, attachmentConfig);
@@ -77,10 +74,7 @@ export class ReadFileTool extends defineTool({
       return result;
     }
 
-    const content = virtual
-      ? await AbsoluteFS.read(virtual.absolutePath)
-      : await WorkspaceFS.read(input.path);
-    const lines = splitContentLines(content);
+    const lines = splitContentLines(await WorkspaceFS.read(input.path));
     recordToolFileRead(input.path);
 
     const totalLines = lines.length;

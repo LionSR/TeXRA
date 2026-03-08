@@ -47,6 +47,12 @@ import {
 } from './DelegationTools';
 import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
+import {
+  AgentListTool,
+  AgentReadTool,
+  AgentSearchTool,
+  AgentWriteTool,
+} from './agents';
 
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
@@ -101,6 +107,10 @@ function createDefaultTools() {
     resume_agent: new ResumeAgentTool(),
     executions: new ExecutionsTool(),
     accept_run_files: new AcceptRunFilesTool(),
+    agent_list: new AgentListTool(),
+    agent_read: new AgentReadTool(),
+    agent_write: new AgentWriteTool(),
+    agent_search: new AgentSearchTool(),
     // Legacy aliases — old agent configs may reference these names
     propose_workflow: new WorkflowAgentTool(),
     propose_agent: new DelegateAgentTool(),

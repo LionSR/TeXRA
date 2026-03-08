@@ -59,6 +59,13 @@ When creating a tool-use agent, select the tools it needs from these groups.
 - `lean_inspect` — Inspect Lean 4 terms and types.
 - `lean_loogle` — Search Mathlib by type signature or name.
 
+## Agent Management
+
+- `agent_list` — List files in agent directories (/agents/builtin, /agents/tooluse, /agents/custom, /agents/docs).
+- `agent_read` — Read agent YAML files or reference docs from agent directories.
+- `agent_write` — Write agent YAML files to the custom agents directory (/agents/custom/).
+- `agent_search` — Search agent files for text patterns across agent directories.
+
 ## Utility
 
 - `memory` — Manage persistent memory files for cross-session knowledge.
