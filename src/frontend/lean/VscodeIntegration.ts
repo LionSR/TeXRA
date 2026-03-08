@@ -3,11 +3,13 @@
  *
  * Provides access to Lean 4 diagnostics and goal state via VS Code's built-in
  * language APIs and the Lean 4 extension's exported API.
+ *
+ * This module lives in `@frontend/` because it depends on `vscode` APIs.
+ * Tool implementations access it via the injectable `LeanVscodeServices`.
  */
 
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { Hover } from 'vscode-languageserver-protocol';
 
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -16,17 +18,12 @@ import {
   waitForDiagnosticsChange,
   DiagnosticSeverity,
 } from '@frontend/vscode/vscodeDiagnostics';
+import type { LeanDiagnostic, LspResult, PlainGoal, PlainTermGoal } from '@tools/lean/leanTypes';
 import { WorkspaceFS } from '@utils/files';
 
 // ============================================================================
 // Types
 // ============================================================================
-
-/** Response from $/lean/plainGoal LSP request */
-export interface PlainGoal {
-  goals: string[];
-  rendered: string;
-}
 
 /**
  * Duck-typed FileUri compatible with the Lean 4 extension's ExtUri.
@@ -88,19 +85,46 @@ interface Lean4ExtensionApi {
   lean4EnabledFeatures: Promise<Lean4EnabledFeatures>;
 }
 
+// ============================================================================
+// Helpers to convert vscode.Diagnostic → LeanDiagnostic
+// ============================================================================
+
+function toLeanDiagnostic(d: vscode.Diagnostic): LeanDiagnostic {
+  return {
+    severity: d.severity,
+    message: d.message,
+    range: {
+      start: {
+        line: d.range.start.line,
+        character: d.range.start.character,
+      },
+      end: { line: d.range.end.line, character: d.range.end.character },
+    },
+    source: d.source,
+  };
+}
+
+function toLeanDiagnostics(diagnostics: vscode.Diagnostic[]): LeanDiagnostic[] {
+  return diagnostics.map(toLeanDiagnostic);
+}
+
+// ============================================================================
+// Diagnostics
+// ============================================================================
+
 /**
  * Get diagnostics for a Lean file using VS Code's diagnostics API.
  * This returns diagnostics from the Lean 4 extension's LSP.
  */
-export function getDiagnostics(filePath: string): vscode.Diagnostic[] {
+export function getDiagnostics(filePath: string): LeanDiagnostic[] {
   const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
   const directLookup = vscode.languages.getDiagnostics(uri);
   if (directLookup.length > 0) {
-    return directLookup;
+    return toLeanDiagnostics(directLookup);
   }
 
   // Fallback: search by path in case URI format differs
-  return findDiagnosticsByPath(uri.fsPath);
+  return toLeanDiagnostics(findDiagnosticsByPath(uri.fsPath));
 }
 
 /** Find diagnostics by matching file path (case-insensitive). */
@@ -185,11 +209,6 @@ async function getClientProvider(): Promise<LeanClientProvider | null> {
  * Send an LSP request at a specific position in a Lean file.
  * Opens the file first to ensure the LSP server has processed it.
  */
-export interface LspResult<T> {
-  data: T | null;
-  error?: string;
-}
-
 async function sendPositionRequest<T>(
   filePath: string,
   line: number,
@@ -268,11 +287,6 @@ export async function getGoalState(
   );
 }
 
-/** Response from $/lean/plainTermGoal LSP request */
-export interface PlainTermGoal {
-  goal: string;
-}
-
 /**
  * Get the expected type (term goal) at a specific position in a Lean file.
  * @param line - 0-indexed line number
@@ -291,28 +305,6 @@ export async function getTermGoal(
   );
 }
 
-/** Extract text value from hover contents (handles all LSP content formats) */
-export function extractHoverText(contents: Hover['contents']): string | null {
-  if (typeof contents === 'string') {
-    return contents;
-  }
-
-  if (Array.isArray(contents)) {
-    const texts = contents.flatMap((item) => {
-      if (typeof item === 'string') return item;
-      if ('value' in item) return item.value;
-      return [];
-    });
-    return texts.join('\n\n');
-  }
-
-  if ('value' in contents) {
-    return contents.value;
-  }
-
-  return null;
-}
-
 /**
  * Get hover information (type + docs) at a specific position in a Lean file.
  * @param line - 0-indexed line number
@@ -322,8 +314,8 @@ export async function getHoverInfo(
   filePath: string,
   line: number,
   column: number,
-): Promise<LspResult<Hover>> {
-  return sendPositionRequest<Hover>(
+): Promise<LspResult<import('vscode-languageserver-protocol').Hover>> {
+  return sendPositionRequest<import('vscode-languageserver-protocol').Hover>(
     filePath,
     line,
     column,
@@ -332,7 +324,7 @@ export async function getHoverInfo(
 }
 
 // ============================================================================
-// VS Code Wrappers (keep vscode imports out of LspTools.ts)
+// VS Code Wrappers
 // ============================================================================
 
 /**
@@ -341,7 +333,7 @@ export async function getHoverInfo(
  */
 export async function fetchDiagnosticsForFile(
   file: string,
-): Promise<vscode.Diagnostic[] | null> {
+): Promise<LeanDiagnostic[] | null> {
   const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(file));
   const diagnosticsWait = waitForDiagnosticsChange(uri, 10000);
 
@@ -355,7 +347,7 @@ export async function fetchDiagnosticsForFile(
 /** Navigate editor to first error location if present. */
 export async function navigateToFirstError(
   filePath: string,
-  diagnostics: vscode.Diagnostic[],
+  diagnostics: LeanDiagnostic[],
 ): Promise<void> {
   const firstError = diagnostics.find(
     (d) => d.severity === DiagnosticSeverity.Error,
