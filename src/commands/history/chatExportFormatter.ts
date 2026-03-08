@@ -275,7 +275,11 @@ function blocksToUserParts(blocks: ContentBlock[]): UserPart[] {
       b.type === 'image_url'
     ) {
       parts.push({ type: 'attachment', attachmentType: 'image' });
-    } else if (b.type === 'document' || b.type === 'input_file') {
+    } else if (
+      b.type === 'document' ||
+      b.type === 'input_file' ||
+      b.type === 'file'
+    ) {
       parts.push({ type: 'attachment', attachmentType: 'document' });
     }
   }
