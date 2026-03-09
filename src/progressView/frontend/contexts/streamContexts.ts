@@ -76,9 +76,14 @@ export const permissionsContext = createContext<PermissionState[]>(
 /**
  * Separate context for background process outputs — changes on every output chunk.
  * Only consumed by BackgroundTasksPanel, avoiding re-renders of other components.
- * Keyed by executionId → accumulated output text.
+ * Keyed by executionId → accumulated stdout/stderr.
  */
-export type ProcessOutputMap = Map<string, string>;
+export interface ProcessOutputEntry {
+  stdout: string;
+  stderr: string;
+}
+
+export type ProcessOutputMap = Map<string, ProcessOutputEntry>;
 
 export const EMPTY_PROCESS_OUTPUTS: ProcessOutputMap = new Map();
 

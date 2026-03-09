@@ -288,7 +288,10 @@ async function pollProcessOutputs(): Promise<void> {
   await Promise.all(reads);
 }
 
-/** Read only the new bytes from a file starting at byteOffset. */
+/** Max bytes to read per file per poll — prevents huge allocations from chatty processes. */
+const MAX_READ_PER_POLL = 128 * 1024;
+
+/** Read only the new bytes from a file starting at byteOffset (capped per poll). */
 async function readTail(
   path: string,
   byteOffset: number,
@@ -297,8 +300,9 @@ async function readTail(
   try {
     const { size } = await fh.stat();
     if (size <= byteOffset) return { text: '', newOffset: byteOffset };
-    const buf = Buffer.alloc(size - byteOffset);
-    const { bytesRead } = await fh.read(buf, 0, buf.length, byteOffset);
+    const toRead = Math.min(size - byteOffset, MAX_READ_PER_POLL);
+    const buf = Buffer.alloc(toRead);
+    const { bytesRead } = await fh.read(buf, 0, toRead, byteOffset);
     return { text: buf.toString('utf-8', 0, bytesRead), newOffset: byteOffset + bytesRead };
   } finally {
     await fh.close();
@@ -327,7 +331,8 @@ async function readIncremental(
     bus.emit('updateProcessOutput', {
       parentStreamId,
       executionId,
-      output: out.text + err.text,
+      stdout: out.text,
+      stderr: err.text,
     });
   } catch {
     // File may have been deleted between check and read — ignore

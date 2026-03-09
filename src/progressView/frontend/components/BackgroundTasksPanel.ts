@@ -292,8 +292,9 @@ export class BackgroundTasksPanel extends LitElement {
   ): TemplateResult {
     const icon =
       kind === 'process' ? 'codicon-terminal' : 'codicon-server-process';
-    const output = this.processOutputs.get(child.executionId) ?? '';
-    const hasOutput = output.length > 0;
+    const entry = this.processOutputs.get(child.executionId);
+    const hasStdout = Boolean(entry?.stdout);
+    const hasStderr = Boolean(entry?.stderr);
 
     return html`
       <div class="task-item">
@@ -312,20 +313,30 @@ export class BackgroundTasksPanel extends LitElement {
           >
           <span class="task-status task-status--running">running</span>
         </div>
-        ${hasOutput
-          ? html`
-              <details class="task-output" open>
-                <summary>
-                  <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
-                  Output
-                </summary>
-                <div class="output-container">
-                  <terminal-output .text=${output}></terminal-output>
-                </div>
-              </details>
-            `
+        ${hasStdout
+          ? this.renderOutputStream('stdout', entry!.stdout)
+          : nothing}
+        ${hasStderr
+          ? this.renderOutputStream('stderr', entry!.stderr)
           : nothing}
       </div>
+    `;
+  }
+
+  private renderOutputStream(
+    label: string,
+    text: string,
+  ): TemplateResult {
+    return html`
+      <details class="task-output" open>
+        <summary>
+          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
+          ${label}
+        </summary>
+        <div class="output-container">
+          <terminal-output .text=${text}></terminal-output>
+        </div>
+      </details>
     `;
   }
 

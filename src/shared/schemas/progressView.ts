@@ -151,7 +151,8 @@ export const UpdateProcessOutputMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT),
   stream: StreamTabIdSchema,
   executionId: z.string(),
-  output: z.string(),
+  stdout: z.string(),
+  stderr: z.string(),
 });
 
 export const UpdateParentStreamMessageSchema = z.object({

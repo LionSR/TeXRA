@@ -57,28 +57,52 @@ export const streamMetaHandlers: HandlerRegistry = {
         draft.finishedProcessCount = data.finishedProcessCount;
       }),
     );
+    // Prune output entries for processes no longer active to free memory.
+    const activeIds = new Set(data.activeProcesses.map((p: { executionId: string }) => p.executionId));
+    ctx.setState((prev) => {
+      const streamOutputs = prev.processOutputs.get(data.stream);
+      if (!streamOutputs) return prev;
+      let pruned = false;
+      for (const id of streamOutputs.keys()) {
+        if (!activeIds.has(id)) { pruned = true; break; }
+      }
+      if (!pruned) return prev;
+      return create(prev, (draft) => {
+        const outputs = draft.processOutputs.get(data.stream);
+        if (!outputs) return;
+        for (const id of [...outputs.keys()]) {
+          if (!activeIds.has(id)) outputs.delete(id);
+        }
+      });
+    });
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT]: (data, ctx) => {
-    const { stream, executionId, output } = data;
+    const { stream, executionId, stdout, stderr } = data;
+    // Cap each stream at 100KB to prevent unbounded memory growth.
+    const MAX_OUTPUT = 100_000;
+    const cap = (prev: string, delta: string): string => {
+      if (!delta) return prev;
+      const combined = prev + delta;
+      return combined.length > MAX_OUTPUT
+        ? combined.slice(combined.length - MAX_OUTPUT)
+        : combined;
+    };
     ctx.setState((prev) =>
       create(prev, (draft) => {
         let streamOutputs = draft.processOutputs.get(stream);
         if (!streamOutputs) {
-          streamOutputs = new Map<string, string>();
+          streamOutputs = new Map();
           draft.processOutputs.set(stream, streamOutputs);
         }
-        const existing = streamOutputs.get(executionId) ?? '';
-        const combined = existing + output;
-        // Cap at 100KB to prevent unbounded memory growth from chatty processes.
-        // Keep the tail so the user sees the most recent output.
-        const MAX_OUTPUT = 100_000;
-        streamOutputs.set(
-          executionId,
-          combined.length > MAX_OUTPUT
-            ? combined.slice(combined.length - MAX_OUTPUT)
-            : combined,
-        );
+        const existing = streamOutputs.get(executionId) ?? {
+          stdout: '',
+          stderr: '',
+        };
+        streamOutputs.set(executionId, {
+          stdout: cap(existing.stdout, stdout),
+          stderr: cap(existing.stderr, stderr),
+        });
       }),
     );
   },

@@ -114,7 +114,8 @@ export class ProgressEventHandler {
             this.webviewUpdater.updateProcessOutput(
               data.parentStreamId,
               data.executionId,
-              data.output,
+              data.stdout,
+              data.stderr,
             );
           }
         },
