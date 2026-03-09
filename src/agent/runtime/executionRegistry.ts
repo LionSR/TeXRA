@@ -231,14 +231,19 @@ const outputOffsets = new Map<
 let outputPollTimer: ReturnType<typeof setTimeout> | null = null;
 let pollInFlight = false;
 
+/** Check whether any tracked execution is a process handle. */
+function hasActiveProcesses(): boolean {
+  for (const h of registry.values()) {
+    if (h instanceof ProcessExecutionHandle) return true;
+  }
+  return false;
+}
+
 /** Start polling if there are active process handles; stop if none remain. */
 function reconcileOutputPoller(): void {
-  const hasProcesses = [...registry.values()].some(
-    (h) => h instanceof ProcessExecutionHandle,
-  );
-  if (hasProcesses && !outputPollTimer) {
+  if (hasActiveProcesses() && !outputPollTimer) {
     schedulePoll();
-  } else if (!hasProcesses && outputPollTimer) {
+  } else if (!hasActiveProcesses() && outputPollTimer) {
     clearTimeout(outputPollTimer);
     outputPollTimer = null;
   }
@@ -256,12 +261,7 @@ function schedulePoll(): void {
       await pollProcessOutputs();
     } finally {
       pollInFlight = false;
-      // Continue polling if processes remain
-      if ([...registry.values()].some((h) => h instanceof ProcessExecutionHandle)) {
-        schedulePoll();
-      } else {
-        outputPollTimer = null;
-      }
+      reconcileOutputPoller();
     }
   }, OUTPUT_POLL_INTERVAL_MS);
 }
