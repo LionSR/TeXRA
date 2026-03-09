@@ -52,6 +52,7 @@ import {
   DEFAULT_MODELS,
   formatContext,
   formatCost,
+  invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
 import type { ExecutionId } from '@shared/schemas';
 import {
@@ -970,6 +971,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       data.mode === 'included',
     );
 
+    // Access mode affects model availability — invalidate cached options.
+    invalidateModelOptionsCache();
     await this.withActiveWebview((w) => this.sendProfileData(w));
 
     const modeLabel =
@@ -1003,6 +1006,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       void vscode.window.showInformationMessage(
         `${displayName} API key has been set`,
       );
+      // refreshAfterKeyChange now includes sendProfileData, no separate finally needed.
       await this.refreshAfterKeyChange();
     } catch (error) {
       await showLoggedErrorMessage(
@@ -1010,7 +1014,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         `Failed to set ${displayName} API key`,
         error,
       );
-    } finally {
+      // On error, still refresh settings view to reflect current key state.
       await this.withActiveWebview((w) => this.sendProfileData(w));
     }
   }
@@ -1026,6 +1030,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       void vscode.window.showInformationMessage(
         `${displayName} API key has been removed`,
       );
+      // refreshAfterKeyChange now includes sendProfileData, no separate finally needed.
       await this.refreshAfterKeyChange();
     } catch (error) {
       await showLoggedErrorMessage(
@@ -1033,15 +1038,22 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         `Failed to remove ${displayName} API key`,
         error,
       );
-    } finally {
+      // On error, still refresh settings view to reflect current key state.
       await this.withActiveWebview((w) => this.sendProfileData(w));
     }
   }
 
-  /** Refresh main view API key status and model options after key changes. */
+  /**
+   * Refresh main view API key status, model options, AND settings-view profile
+   * after key changes. Combines all refreshes into a single call to avoid
+   * redundant async work when callers would otherwise call sendProfileData separately.
+   */
   private async refreshAfterKeyChange(): Promise<void> {
+    // Invalidate model options cache so downstream refreshes see fresh key state.
+    invalidateModelOptionsCache();
     await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
     void vscode.commands.executeCommand('texra.refreshAllOptions');
+    await this.withActiveWebview((w) => this.sendProfileData(w));
   }
 
   /** Refresh settings-view agent list and main-view dropdown after agent mutations. */
@@ -1144,6 +1156,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       await globalSM.update(GlobalStateKey.HELPER_MODEL, newHelper);
     }
 
+    // Enabled model list changed — invalidate cached options.
+    invalidateModelOptionsCache();
     void vscode.commands.executeCommand('texra.refreshAllOptions');
     await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }

@@ -7,6 +7,7 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { PROVIDER_URLS } from '@shared/constants/providers';
 
 const CHANNEL = 'ApiKeyCommands';
@@ -18,6 +19,7 @@ export const apiKeyCommands = {
 };
 
 async function refreshApiKeyUI(): Promise<void> {
+  invalidateModelOptionsCache();
   await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
   void vscode.commands.executeCommand('texra.refreshAllOptions');
 }
