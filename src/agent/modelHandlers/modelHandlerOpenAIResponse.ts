@@ -529,10 +529,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Build and send the WebSocket client event.
       // ResponsesClientEvent mirrors ResponseCreateParamsBase fields with type: 'response.create'.
       // Transport-specific fields (stream, background) are included but ignored by the server.
-      ws.send({
-        type: 'response.create',
-        ...params,
-      } as ResponsesClientEvent);
+      try {
+        ws.send({
+          type: 'response.create',
+          ...params,
+        } as ResponsesClientEvent);
+      } catch (sendError) {
+        // If send() throws synchronously, clean up listeners to prevent leaks
+        // on the reused WebSocket connection.
+        cleanup();
+        reject(sendError);
+      }
     });
   }
 
