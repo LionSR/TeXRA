@@ -542,7 +542,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /** Close the WebSocket connection and clean up resources. */
-  closeWebSocket(): void {
+  private closeWebSocket(): void {
     this.stopWsKeepalive();
     if (this.wsConnection) {
       try {
