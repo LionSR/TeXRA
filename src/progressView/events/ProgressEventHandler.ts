@@ -108,13 +108,15 @@ export class ProgressEventHandler {
             next: data.processes,
           }),
         updateProcessOutput: (_, data) => {
-          this.sendIfActive(data.parentStreamId, () =>
+          // Always send — output accumulates in frontend state per-stream,
+          // so it must not be dropped when the stream is inactive.
+          if (this.webviewUpdater.isAvailable()) {
             this.webviewUpdater.updateProcessOutput(
               data.parentStreamId,
               data.executionId,
               data.output,
-            ),
-          );
+            );
+          }
         },
         setParentStream: (_, { childStreamId, parentStreamId }) => {
           this.state.meta.setParentStream(childStreamId, parentStreamId);

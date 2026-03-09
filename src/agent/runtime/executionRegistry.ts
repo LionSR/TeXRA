@@ -252,6 +252,8 @@ function reconcileOutputPoller(): void {
 /** Schedule the next poll cycle (serialized — next poll waits for current to finish). */
 function schedulePoll(): void {
   outputPollTimer = setTimeout(async () => {
+    // Clear stale timer ID so reconcileOutputPoller sees !outputPollTimer
+    outputPollTimer = null;
     if (pollInFlight) {
       schedulePoll();
       return;
