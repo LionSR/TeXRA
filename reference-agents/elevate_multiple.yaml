@@ -1,5 +1,6 @@
 name: elevate_multiple
-description: Two-phase writing strategist that elevates multiple academic paper documents for publication. Diagnoses multi-audience impact (editor, expert reviewer, broad peer), optimizes persuasive arc and rhetorical rhythm, and sharpens precision across document collections. Makes confident improvements directly (marked with \criticize{Elevated: ...}{S}{C}) and leaves strategic decisions as \criticize{}{}{} comments for author review.
+description: Two-phase writing strategist that elevates multiple academic paper documents for publication. Diagnoses multi-audience impact (editor, expert reviewer, broad peer), optimizes persuasive arc and rhetorical rhythm, and sharpens precision across document collections. Makes confident improvements directly (marked with \criticize{Comment text}{S}{C}) and leaves strategic decisions as \criticize{}{}{} comments for author review.
+
 inherits: elevate
 settings:
   agentCategory: workflow
