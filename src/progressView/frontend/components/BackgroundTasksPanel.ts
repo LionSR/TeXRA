@@ -7,7 +7,14 @@
  */
 
 // Third-party imports
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  css,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { consume } from '@lit/context';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -148,11 +155,6 @@ export class BackgroundTasksPanel extends LitElement {
         );
       }
 
-      .task-status--done {
-        color: var(--color-success);
-        background: color-mix(in srgb, var(--color-success) 12%, transparent);
-      }
-
       .section-label {
         display: flex;
         align-items: center;
@@ -207,11 +209,26 @@ export class BackgroundTasksPanel extends LitElement {
   @property({ attribute: false }) finishedProcessCount = 0;
   @property({ attribute: false }) activeSubagents: ActiveChildInfo[] = [];
   @property({ attribute: false }) finishedSubagentCount = 0;
-  @property({ type: Boolean }) open = false;
+
+  /** Open state — managed internally. Toggled by user or auto-opened on first active task. */
+  @state() open = false;
 
   @consume({ context: processOutputContext, subscribe: true })
   @state()
   private processOutputs: ProcessOutputMap = EMPTY_PROCESS_OUTPUTS;
+
+  /** Track previous active count to detect 0→N transitions for auto-open. */
+  private prevActiveCount = 0;
+
+  protected override willUpdate(changed: PropertyValues): void {
+    super.willUpdate(changed);
+    const active = this.activeProcesses.length + this.activeSubagents.length;
+    // Auto-open when tasks first appear (0 → N), but never force-close
+    if (this.prevActiveCount === 0 && active > 0) {
+      this.open = true;
+    }
+    this.prevActiveCount = active;
+  }
 
   /** Total number of background tasks (active + finished). */
   private get totalTasks(): number {
@@ -243,7 +260,8 @@ export class BackgroundTasksPanel extends LitElement {
           ${this.renderSummaryBadges()}
         </summary>
         <div class="task-list">
-          ${this.renderProcessSection()} ${this.renderSubagentSection()}
+          ${this.renderSection(this.activeProcesses, this.finishedProcessCount, 'process')}
+          ${this.renderSection(this.activeSubagents, this.finishedSubagentCount, 'subagent')}
         </div>
       </details>
     `;
@@ -268,63 +286,40 @@ export class BackgroundTasksPanel extends LitElement {
     return parts.length > 0 ? html`${parts}` : nothing;
   }
 
-  private renderProcessSection(): TemplateResult | typeof nothing {
-    const hasActive = this.activeProcesses.length > 0;
-    const hasFinished = this.finishedProcessCount > 0;
+  private renderSection(
+    active: ActiveChildInfo[],
+    finishedCount: number,
+    kind: 'process' | 'subagent',
+  ): TemplateResult | typeof nothing {
+    const hasActive = active.length > 0;
+    const hasFinished = finishedCount > 0;
     if (!hasActive && !hasFinished) return nothing;
+
+    const icon =
+      kind === 'process' ? 'codicon-terminal' : 'codicon-server-process';
+    const label = kind === 'process' ? 'Processes' : 'Subagents';
 
     return html`
       <div class="section-label">
-        <i class="codicon codicon-terminal"></i>
+        <i class="codicon ${icon}"></i>
         <span
-          >Processes${hasActive
-            ? html` &middot; ${this.activeProcesses.length} active`
+          >${label}${hasActive
+            ? html` &middot; ${active.length} active`
             : nothing}${hasFinished
-            ? html` &middot; ${this.finishedProcessCount} done`
+            ? html` &middot; ${finishedCount} done`
             : nothing}</span
         >
       </div>
       ${hasActive
         ? repeat(
-            this.activeProcesses,
-            (p) => p.executionId,
-            (p) => this.renderTaskItem(p, 'process', true),
+            active,
+            (c) => c.executionId,
+            (c) => this.renderTaskItem(c, kind),
           )
         : nothing}
       ${!hasActive && hasFinished
         ? html`<div class="empty-message">
-            All ${this.finishedProcessCount} processes completed
-          </div>`
-        : nothing}
-    `;
-  }
-
-  private renderSubagentSection(): TemplateResult | typeof nothing {
-    const hasActive = this.activeSubagents.length > 0;
-    const hasFinished = this.finishedSubagentCount > 0;
-    if (!hasActive && !hasFinished) return nothing;
-
-    return html`
-      <div class="section-label">
-        <i class="codicon codicon-server-process"></i>
-        <span
-          >Subagents${hasActive
-            ? html` &middot; ${this.activeSubagents.length} active`
-            : nothing}${hasFinished
-            ? html` &middot; ${this.finishedSubagentCount} done`
-            : nothing}</span
-        >
-      </div>
-      ${hasActive
-        ? repeat(
-            this.activeSubagents,
-            (s) => s.executionId,
-            (s) => this.renderTaskItem(s, 'subagent', true),
-          )
-        : nothing}
-      ${!hasActive && hasFinished
-        ? html`<div class="empty-message">
-            All ${this.finishedSubagentCount} subagents completed
+            All ${finishedCount} ${label.toLowerCase()} completed
           </div>`
         : nothing}
     `;
@@ -333,7 +328,6 @@ export class BackgroundTasksPanel extends LitElement {
   private renderTaskItem(
     child: ActiveChildInfo,
     kind: 'process' | 'subagent',
-    isRunning: boolean,
   ): TemplateResult {
     const icon =
       kind === 'process' ? 'codicon-terminal' : 'codicon-server-process';
@@ -355,14 +349,7 @@ export class BackgroundTasksPanel extends LitElement {
           <span class="task-name" title=${child.agentName}
             >${child.agentName}</span
           >
-          <span
-            class=${classMap({
-              'task-status': true,
-              'task-status--running': isRunning,
-              'task-status--done': !isRunning,
-            })}
-            >${isRunning ? 'running' : 'done'}</span
-          >
+          <span class="task-status task-status--running">running</span>
         </div>
         ${hasOutput
           ? html`
@@ -384,6 +371,16 @@ export class BackgroundTasksPanel extends LitElement {
   private handleToggle(e: ToggleEvent): void {
     this.open = (e.target as HTMLDetailsElement).open;
   }
+}
+
+/** Toggle open state and scroll into view. Shared by ToolUseStreamContent and WorkflowStreamContent. */
+export function toggleBackgroundTasksPanel(
+  panelRef: { value: BackgroundTasksPanel | undefined },
+): void {
+  const panel = panelRef.value;
+  if (!panel) return;
+  panel.open = !panel.open;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 declare global {

@@ -34,7 +34,10 @@ import {
 import type { FollowupOptionsState, WorkflowStreamState } from '../store';
 
 // Local imports - types
-import type { BackgroundTasksPanel } from './BackgroundTasksPanel';
+import {
+  type BackgroundTasksPanel,
+  toggleBackgroundTasksPanel,
+} from './BackgroundTasksPanel';
 import type { PermissionState } from './PermissionCard';
 
 // Side-effect imports - sibling components
@@ -157,8 +160,6 @@ export class WorkflowStreamContent extends LitElement {
         .finishedProcessCount=${state.finishedProcessCount}
         .activeSubagents=${state.activeSubagents}
         .finishedSubagentCount=${state.finishedSubagentCount}
-        .open=${state.activeProcesses.length > 0 ||
-        state.activeSubagents.length > 0}
       ></background-tasks-panel>
 
       <log-list></log-list>
@@ -182,9 +183,6 @@ export class WorkflowStreamContent extends LitElement {
   }
 
   private handleBackgroundTasksToggle(): void {
-    const panel = this.backgroundTasksRef.value;
-    if (!panel) return;
-    panel.open = !panel.open;
-    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    toggleBackgroundTasksPanel(this.backgroundTasksRef);
   }
 }

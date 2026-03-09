@@ -86,16 +86,17 @@ export function untrackExecution(executionId: string): void {
 
   // Emit process badge update on removal and flush final output
   if (handle instanceof ProcessExecutionHandle) {
-    // Final poll to capture any remaining output before cleanup
+    // Final poll to capture any remaining output, then clean up offset
     if (handle.outputPaths) {
       void readIncremental(
         executionId,
         handle.parentStreamId,
         handle.outputPaths.stdout,
         handle.outputPaths.stderr,
-      );
+      ).finally(() => outputOffsets.delete(executionId));
+    } else {
+      outputOffsets.delete(executionId);
     }
-    outputOffsets.delete(executionId);
     emitActiveProcessesUpdate(handle.parentStreamId, registry.values());
     reconcileOutputPoller();
   }
@@ -221,10 +222,14 @@ export function interruptActiveChildren(parentStreamId: StreamTabId): void {
 /** Interval at which temp files are read and pushed to the progress UI. */
 const OUTPUT_POLL_INTERVAL_MS = 500;
 
-/** Tracks how many bytes have already been sent per executionId. */
-const outputOffsets = new Map<string, number>();
+/** Tracks how many characters have already been sent per executionId per stream. */
+const outputOffsets = new Map<
+  string,
+  { stdout: number; stderr: number }
+>();
 
-let outputPollTimer: ReturnType<typeof setInterval> | null = null;
+let outputPollTimer: ReturnType<typeof setTimeout> | null = null;
+let pollInFlight = false;
 
 /** Start polling if there are active process handles; stop if none remain. */
 function reconcileOutputPoller(): void {
@@ -232,29 +237,52 @@ function reconcileOutputPoller(): void {
     (h) => h instanceof ProcessExecutionHandle,
   );
   if (hasProcesses && !outputPollTimer) {
-    outputPollTimer = setInterval(pollProcessOutputs, OUTPUT_POLL_INTERVAL_MS);
+    schedulePoll();
   } else if (!hasProcesses && outputPollTimer) {
-    clearInterval(outputPollTimer);
+    clearTimeout(outputPollTimer);
     outputPollTimer = null;
   }
 }
 
+/** Schedule the next poll cycle (serialized — next poll waits for current to finish). */
+function schedulePoll(): void {
+  outputPollTimer = setTimeout(async () => {
+    if (pollInFlight) {
+      schedulePoll();
+      return;
+    }
+    pollInFlight = true;
+    try {
+      await pollProcessOutputs();
+    } finally {
+      pollInFlight = false;
+      // Continue polling if processes remain
+      if ([...registry.values()].some((h) => h instanceof ProcessExecutionHandle)) {
+        schedulePoll();
+      } else {
+        outputPollTimer = null;
+      }
+    }
+  }, OUTPUT_POLL_INTERVAL_MS);
+}
+
 /** Read incremental output from temp files and emit to progress UI. */
-function pollProcessOutputs(): void {
+async function pollProcessOutputs(): Promise<void> {
+  const reads: Promise<void>[] = [];
   for (const handle of registry.values()) {
     if (!(handle instanceof ProcessExecutionHandle)) continue;
     if (!handle.outputPaths) continue;
 
-    const { executionId, parentStreamId } = handle;
-
-    // Read both stdout and stderr, concatenated (stderr after stdout)
-    void readIncremental(
-      executionId,
-      parentStreamId,
-      handle.outputPaths.stdout,
-      handle.outputPaths.stderr,
+    reads.push(
+      readIncremental(
+        handle.executionId,
+        handle.parentStreamId,
+        handle.outputPaths.stdout,
+        handle.outputPaths.stderr,
+      ),
     );
   }
+  await Promise.all(reads);
 }
 
 async function readIncremental(
@@ -268,17 +296,20 @@ async function readIncremental(
       fs.promises.readFile(stdoutPath, 'utf-8').catch(() => ''),
       fs.promises.readFile(stderrPath, 'utf-8').catch(() => ''),
     ]);
-    const full = stdout + stderr;
-    const offset = outputOffsets.get(executionId) ?? 0;
-    if (full.length <= offset) return;
+    const prev = outputOffsets.get(executionId) ?? { stdout: 0, stderr: 0 };
+    const stdoutDelta = stdout.slice(prev.stdout);
+    const stderrDelta = stderr.slice(prev.stderr);
+    if (!stdoutDelta && !stderrDelta) return;
 
-    const delta = full.slice(offset);
-    outputOffsets.set(executionId, full.length);
+    outputOffsets.set(executionId, {
+      stdout: stdout.length,
+      stderr: stderr.length,
+    });
 
     bus.emit('updateProcessOutput', {
       parentStreamId,
       executionId,
-      output: delta,
+      output: stdoutDelta + stderrDelta,
     });
   } catch {
     // File may have been deleted between check and read — ignore

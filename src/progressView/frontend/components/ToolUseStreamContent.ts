@@ -30,7 +30,10 @@ import type { ToolUseStreamState } from '../store';
 
 // Local imports - types
 import type { PermissionState } from './PermissionCard';
-import type { BackgroundTasksPanel } from './BackgroundTasksPanel';
+import {
+  type BackgroundTasksPanel,
+  toggleBackgroundTasksPanel,
+} from './BackgroundTasksPanel';
 import type { FollowUpInput } from './FollowUpInput';
 
 // Side-effect imports - sibling components
@@ -119,8 +122,6 @@ export class ToolUseStreamContent extends LitElement {
         .finishedProcessCount=${currentState.finishedProcessCount}
         .activeSubagents=${currentState.activeSubagents}
         .finishedSubagentCount=${currentState.finishedSubagentCount}
-        .open=${currentState.activeProcesses.length > 0 ||
-        currentState.activeSubagents.length > 0}
       ></background-tasks-panel>
 
       <log-list></log-list>
@@ -155,9 +156,6 @@ export class ToolUseStreamContent extends LitElement {
   }
 
   private handleBackgroundTasksToggle(): void {
-    const panel = this.backgroundTasksRef.value;
-    if (!panel) return;
-    panel.open = !panel.open;
-    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    toggleBackgroundTasksPanel(this.backgroundTasksRef);
   }
 }
