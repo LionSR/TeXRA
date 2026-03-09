@@ -180,6 +180,10 @@ const extensionConfig = {
         test: /\.node$/,
         use: 'node-loader',
       },
+      {
+        test: /\.tex$/,
+        type: 'asset/source',
+      },
     ],
   },
   devtool: 'nosources-source-map',
