@@ -178,6 +178,7 @@ export const streamLifecycleHandlers: HandlerRegistry = {
         draft.streamById = new Map();
         draft.streamStates = new Map();
         draft.streamLogs = new Map();
+        draft.processOutputs = new Map();
         draft.activeStreamId = null;
         draft.followupOptionsByStream = new Map();
       }),
