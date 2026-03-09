@@ -61,12 +61,17 @@ export interface ReplacementEngine {
 class ReplacementEngineImpl implements ReplacementEngine {
   /**
    * Apply all configured non-regex replacement rules.
+   * Accepts optional pre-fetched config to avoid redundant getConfig() calls
+   * when called multiple times (e.g. from applyAll).
    */
-  applyNonRegex(text: string): string {
-    const processed = applyReplacements(text, getAllReplacements()).trim();
-    return shouldWrapCritiqueInAlign()
-      ? wrapCritiqueInAlign(processed)
-      : processed;
+  applyNonRegex(
+    text: string,
+    preloaded?: { replacements: ReplacementCategory; wrapCritique: boolean },
+  ): string {
+    const replacements = preloaded?.replacements ?? getAllReplacements();
+    const wrapCritique = preloaded?.wrapCritique ?? shouldWrapCritiqueInAlign();
+    const processed = applyReplacements(text, replacements).trim();
+    return wrapCritique ? wrapCritiqueInAlign(processed) : processed;
   }
 
   /**
@@ -86,21 +91,14 @@ class ReplacementEngineImpl implements ReplacementEngine {
    */
   applyAll(text: string): string {
     // Snapshot config-derived data once for both non-regex passes.
-    const nonRegexReplacements = getAllReplacements();
-    const regexReplacements = getAllReplacementsRegex();
-    const wrapCritique = shouldWrapCritiqueInAlign();
-
-    const applyNonRegexWith = (t: string): string => {
-      const processed = applyReplacements(t, nonRegexReplacements).trim();
-      return wrapCritique ? wrapCritiqueInAlign(processed) : processed;
+    const preloaded = {
+      replacements: getAllReplacements(),
+      wrapCritique: shouldWrapCritiqueInAlign(),
     };
 
-    const afterNonRegex = applyNonRegexWith(text);
-    const afterRegex = applyReplacements(
-      afterNonRegex,
-      regexReplacements,
-    ).trim();
-    return applyNonRegexWith(afterRegex);
+    const afterNonRegex = this.applyNonRegex(text, preloaded);
+    const afterRegex = this.applyRegex(afterNonRegex);
+    return this.applyNonRegex(afterRegex, preloaded);
   }
 }
 

@@ -179,58 +179,45 @@ export function buildBasicModelOptionsData(): ModelOptionData[] {
  * TTL-based cache for computeModelOptionsData.
  * Avoids redundant async work (SecretManager + server-side key checks)
  * when multiple callers request model options in quick succession.
+ *
+ * State is split into resolved data vs in-flight promise to avoid
+ * sentinel values (like `data: []`) that could leak to callers.
  */
 const MODEL_OPTIONS_CACHE_TTL_MS = 5_000;
-/** Generation counter — incremented on invalidation to discard stale in-flight results. */
-let _cacheGeneration = 0;
-let _modelOptionsCache: {
-  data: ModelOptionData[];
-  expiry: number;
-  /** Dedup in-flight requests so concurrent callers share one computation. */
-  pending?: Promise<ModelOptionData[]>;
-} | null = null;
+let _resolved: { data: ModelOptionData[]; expiry: number } | null = null;
+let _pending: Promise<ModelOptionData[]> | null = null;
 
 /** Invalidate the shared model options cache (e.g. after key or model-list changes). */
 export function invalidateModelOptionsCache(): void {
-  _cacheGeneration++;
-  _modelOptionsCache = null;
+  _resolved = null;
+  _pending = null;
 }
 
 /** Compute typed model options data for Lit-native rendering. */
 export async function computeModelOptionsData(): Promise<ModelOptionData[]> {
-  const now = Date.now();
-
   // Return cached result if still valid.
-  if (_modelOptionsCache && now < _modelOptionsCache.expiry) {
-    return _modelOptionsCache.data;
+  if (_resolved && Date.now() < _resolved.expiry) {
+    return _resolved.data;
   }
 
   // Dedup concurrent callers — share the same in-flight promise.
-  if (_modelOptionsCache?.pending) {
-    return _modelOptionsCache.pending;
+  if (_pending) {
+    return _pending;
   }
 
-  const generation = _cacheGeneration;
-  const pending = computeModelOptionsDataUncached();
-
-  // Store the pending promise so concurrent calls share it.
-  _modelOptionsCache = { data: [], expiry: 0, pending };
+  _pending = computeModelOptionsDataUncached();
 
   try {
-    const data = await pending;
+    const data = await _pending;
     // Only populate cache if no invalidation occurred while we were awaiting.
-    if (_cacheGeneration === generation) {
-      _modelOptionsCache = {
-        data,
-        expiry: Date.now() + MODEL_OPTIONS_CACHE_TTL_MS,
-      };
+    // invalidateModelOptionsCache() sets _pending = null, so a truthy check
+    // prevents stale results from populating the cache.
+    if (_pending) {
+      _resolved = { data, expiry: Date.now() + MODEL_OPTIONS_CACHE_TTL_MS };
     }
     return data;
-  } catch (error) {
-    if (_cacheGeneration === generation) {
-      _modelOptionsCache = null;
-    }
-    throw error;
+  } finally {
+    _pending = null;
   }
 }
 

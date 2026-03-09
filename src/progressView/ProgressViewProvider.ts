@@ -232,7 +232,7 @@ export class ProgressViewProvider
   ): Promise<void> {
     let modelOptions: ModelOptionData[];
     try {
-      modelOptions = await this.getCachedModelOptions();
+      modelOptions = await computeModelOptionsData();
     } catch {
       // Availability check failed (e.g. ServerSideKeyService not yet initialized) —
       // fall back to static model metadata so the dropdown still appears.
@@ -244,12 +244,6 @@ export class ProgressViewProvider
       data: proposal,
       modelOptionsData: modelOptions,
     });
-  }
-
-  private async getCachedModelOptions(): Promise<ModelOptionData[]> {
-    // computeModelOptionsData() now has a built-in shared TTL cache,
-    // so no local caching is needed here.
-    return computeModelOptionsData();
   }
 
   public static getInstance(): ProgressViewProvider | undefined {
