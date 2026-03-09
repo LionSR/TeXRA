@@ -70,13 +70,6 @@ export class ProgressViewProvider
   private _sidebarWebviewGetter?: () => vscode.Webview | undefined;
   private _mainViewProvider?: MainViewProvider;
 
-  /** TTL-cached model options to avoid redundant async work for rapid proposals. */
-  private static readonly MODEL_OPTIONS_TTL_MS = 30_000;
-  private _cachedModelOptions?: {
-    data: ModelOptionData[];
-    expiry: number;
-  };
-
   private readonly toolEditHandler: ApprovalRequestHandler<
     ToolEditPermission,
     'requestId'
@@ -239,7 +232,7 @@ export class ProgressViewProvider
   ): Promise<void> {
     let modelOptions: ModelOptionData[];
     try {
-      modelOptions = await this.getCachedModelOptions();
+      modelOptions = await computeModelOptionsData();
     } catch {
       // Availability check failed (e.g. ServerSideKeyService not yet initialized) —
       // fall back to static model metadata so the dropdown still appears.
@@ -251,19 +244,6 @@ export class ProgressViewProvider
       data: proposal,
       modelOptionsData: modelOptions,
     });
-  }
-
-  private async getCachedModelOptions(): Promise<ModelOptionData[]> {
-    const now = Date.now();
-    if (this._cachedModelOptions && now < this._cachedModelOptions.expiry) {
-      return this._cachedModelOptions.data;
-    }
-    const data = await computeModelOptionsData();
-    this._cachedModelOptions = {
-      data,
-      expiry: now + ProgressViewProvider.MODEL_OPTIONS_TTL_MS,
-    };
-    return data;
   }
 
   public static getInstance(): ProgressViewProvider | undefined {
