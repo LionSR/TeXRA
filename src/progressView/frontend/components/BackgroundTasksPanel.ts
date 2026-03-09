@@ -79,24 +79,16 @@ export class BackgroundTasksPanel extends LitElement {
         font-weight: var(--font-weight-semibold);
         border-radius: var(--border-radius-small);
         white-space: nowrap;
+        color: var(--_tint);
+        background: color-mix(in srgb, var(--_tint) 12%, transparent);
       }
 
       .badge-count--active {
-        color: var(--color-warning, var(--vscode-charts-orange));
-        background: color-mix(
-          in srgb,
-          var(--color-warning, var(--vscode-charts-orange)) 12%,
-          transparent
-        );
+        --_tint: var(--color-warning, var(--vscode-charts-orange));
       }
 
       .badge-count--done {
-        color: var(--color-text-secondary);
-        background: color-mix(
-          in srgb,
-          var(--color-text-secondary) 12%,
-          transparent
-        );
+        --_tint: var(--color-text-secondary);
       }
 
       .task-list {
@@ -140,19 +132,13 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .task-status {
+        --_tint: var(--color-warning, var(--vscode-charts-orange));
         flex-shrink: 0;
         font-size: var(--font-size-xs, 10px);
         padding: 1px var(--spacing-small);
         border-radius: var(--border-radius-small);
-      }
-
-      .task-status--running {
-        color: var(--color-warning, var(--vscode-charts-orange));
-        background: color-mix(
-          in srgb,
-          var(--color-warning, var(--vscode-charts-orange)) 12%,
-          transparent
-        );
+        color: var(--_tint);
+        background: color-mix(in srgb, var(--_tint) 12%, transparent);
       }
 
       .section-label {
@@ -230,26 +216,11 @@ export class BackgroundTasksPanel extends LitElement {
     this.prevActiveCount = active;
   }
 
-  /** Total number of background tasks (active + finished). */
-  private get totalTasks(): number {
-    return (
-      this.activeProcesses.length +
-      this.finishedProcessCount +
-      this.activeSubagents.length +
-      this.finishedSubagentCount
-    );
-  }
-
-  private get totalActive(): number {
-    return this.activeProcesses.length + this.activeSubagents.length;
-  }
-
-  private get totalFinished(): number {
-    return this.finishedProcessCount + this.finishedSubagentCount;
-  }
-
   override render(): TemplateResult | typeof nothing {
-    if (this.totalTasks === 0) return nothing;
+    const active =
+      this.activeProcesses.length + this.activeSubagents.length;
+    const finished = this.finishedProcessCount + this.finishedSubagentCount;
+    if (active + finished === 0) return nothing;
 
     return html`
       <details class="panel-root" ?open=${this.open} @toggle=${this.handleToggle}>
@@ -257,7 +228,16 @@ export class BackgroundTasksPanel extends LitElement {
           <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
           <i class="codicon codicon-terminal panel-icon"></i>
           <span class="panel-title">Background Tasks</span>
-          ${this.renderSummaryBadges()}
+          ${active > 0
+            ? html`<span class="badge-count badge-count--active"
+                >${active} running</span
+              >`
+            : nothing}
+          ${finished > 0
+            ? html`<span class="badge-count badge-count--done"
+                >${finished} done</span
+              >`
+            : nothing}
         </summary>
         <div class="task-list">
           ${this.renderSection(this.activeProcesses, this.finishedProcessCount, 'process')}
@@ -265,25 +245,6 @@ export class BackgroundTasksPanel extends LitElement {
         </div>
       </details>
     `;
-  }
-
-  private renderSummaryBadges(): TemplateResult | typeof nothing {
-    const parts: TemplateResult[] = [];
-    if (this.totalActive > 0) {
-      parts.push(
-        html`<span class="badge-count badge-count--active"
-          >${this.totalActive} running</span
-        >`,
-      );
-    }
-    if (this.totalFinished > 0) {
-      parts.push(
-        html`<span class="badge-count badge-count--done"
-          >${this.totalFinished} done</span
-        >`,
-      );
-    }
-    return parts.length > 0 ? html`${parts}` : nothing;
   }
 
   private renderSection(

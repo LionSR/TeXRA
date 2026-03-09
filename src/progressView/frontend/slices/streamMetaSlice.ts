@@ -69,7 +69,16 @@ export const streamMetaHandlers: HandlerRegistry = {
           draft.processOutputs.set(stream, streamOutputs);
         }
         const existing = streamOutputs.get(executionId) ?? '';
-        streamOutputs.set(executionId, existing + output);
+        const combined = existing + output;
+        // Cap at 100KB to prevent unbounded memory growth from chatty processes.
+        // Keep the tail so the user sees the most recent output.
+        const MAX_OUTPUT = 100_000;
+        streamOutputs.set(
+          executionId,
+          combined.length > MAX_OUTPUT
+            ? combined.slice(combined.length - MAX_OUTPUT)
+            : combined,
+        );
       }),
     );
   },

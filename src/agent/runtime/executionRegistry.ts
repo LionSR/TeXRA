@@ -241,9 +241,10 @@ function hasActiveProcesses(): boolean {
 
 /** Start polling if there are active process handles; stop if none remain. */
 function reconcileOutputPoller(): void {
-  if (hasActiveProcesses() && !outputPollTimer) {
+  const active = hasActiveProcesses();
+  if (active && !outputPollTimer) {
     schedulePoll();
-  } else if (!hasActiveProcesses() && outputPollTimer) {
+  } else if (!active && outputPollTimer) {
     clearTimeout(outputPollTimer);
     outputPollTimer = null;
   }
