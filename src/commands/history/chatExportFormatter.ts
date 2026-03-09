@@ -202,9 +202,7 @@ function latexListing(text: string): string {
 function extractBlocks(msg: ConversationMessage): ContentBlock[] {
   // Google GenAI: field-based Parts → type-based ContentBlocks
   if (Array.isArray(msg.parts)) {
-    return (msg.parts as Record<string, unknown>[]).flatMap(
-      googlePartToBlocks,
-    );
+    return (msg.parts as Record<string, unknown>[]).flatMap(googlePartToBlocks);
   }
 
   if (typeof msg.content === 'string') {
@@ -220,9 +218,7 @@ function extractBlocks(msg: ConversationMessage): ContentBlock[] {
 }
 
 /** Convert a Google GenAI Part (field-based discrimination) to type-based ContentBlock(s). */
-function googlePartToBlocks(
-  part: Record<string, unknown>,
-): ContentBlock[] {
+function googlePartToBlocks(part: Record<string, unknown>): ContentBlock[] {
   // Google GenAI: thought is a boolean flag; the actual text is in part.text.
   // Must check before the plain text branch to avoid exposing thinking as assistant text.
   if (part.thought === true && typeof part.text === 'string') {
