@@ -1,6 +1,6 @@
 /**
  * Stream metadata handlers: UPDATE_STREAM_STATUS, UPDATE_CONVERSATION_PROGRESS,
- * UPDATE_STREAM_BADGES.
+ * UPDATE_STREAM_BADGES, UPDATE_PROCESS_OUTPUT.
  */
 
 import { create } from 'mutative';
@@ -55,6 +55,21 @@ export const streamMetaHandlers: HandlerRegistry = {
         draft.finishedSubagentCount = data.finishedSubagentCount;
         draft.activeProcesses = data.activeProcesses;
         draft.finishedProcessCount = data.finishedProcessCount;
+      }),
+    );
+  },
+
+  [PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT]: (data, ctx) => {
+    const { stream, executionId, output } = data;
+    ctx.setState((prev) =>
+      create(prev, (draft) => {
+        let streamOutputs = draft.processOutputs.get(stream);
+        if (!streamOutputs) {
+          streamOutputs = new Map<string, string>();
+          draft.processOutputs.set(stream, streamOutputs);
+        }
+        const existing = streamOutputs.get(executionId) ?? '';
+        streamOutputs.set(executionId, existing + output);
       }),
     );
   },

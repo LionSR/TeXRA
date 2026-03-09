@@ -21,6 +21,9 @@ import {
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
+// Local imports - event bus
+import { bus } from '@eventBus/ProgressEventBus';
+
 // Local imports - tools
 import type { StreamTabId, ExecutionId } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
@@ -170,14 +173,43 @@ export class BashTool extends defineTool({
 
     let pid: number | undefined;
     const startedAt = Date.now();
+
+    // Throttled output emitter: buffer chunks and flush to event bus periodically
+    const OUTPUT_FLUSH_INTERVAL_MS = 300;
+    let outputBuffer = '';
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    const flushOutput = (): void => {
+      flushTimer = null;
+      if (outputBuffer.length > 0) {
+        bus.emit('updateProcessOutput', {
+          parentStreamId,
+          executionId,
+          output: outputBuffer,
+        });
+        outputBuffer = '';
+      }
+    };
+    const appendOutput = (chunk: string): void => {
+      outputBuffer += chunk;
+      if (!flushTimer) {
+        flushTimer = setTimeout(flushOutput, OUTPUT_FLUSH_INTERVAL_MS);
+      }
+    };
+
     const promise = executeCommand(command, {
       timeout: timeoutMs,
       buffer: false, // Output is streamed to disk; don't buffer in memory
       onPid: (p) => {
         pid = p;
       },
-      onStdout: (chunk) => stdoutStream.write(chunk),
-      onStderr: (chunk) => stderrStream.write(chunk),
+      onStdout: (chunk) => {
+        stdoutStream.write(chunk);
+        appendOutput(chunk);
+      },
+      onStderr: (chunk) => {
+        stderrStream.write(chunk);
+        appendOutput(chunk);
+      },
     });
 
     const kill = (): boolean => {
@@ -220,6 +252,9 @@ export class BashTool extends defineTool({
     trackExecution(handle);
 
     const cleanupTempFiles = (): void => {
+      // Flush any remaining buffered output before cleanup
+      if (flushTimer) clearTimeout(flushTimer);
+      flushOutput();
       stdoutStream.end();
       stderrStream.end();
       handle.outputPaths = undefined;

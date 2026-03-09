@@ -72,3 +72,16 @@ export const streamLogContext = createContext<StreamLogContextValue>(
 export const permissionsContext = createContext<PermissionState[]>(
   'progress-permissions',
 );
+
+/**
+ * Separate context for background process outputs — changes on every output chunk.
+ * Only consumed by BackgroundTasksPanel, avoiding re-renders of other components.
+ * Keyed by executionId → accumulated output text.
+ */
+export type ProcessOutputMap = Map<string, string>;
+
+export const EMPTY_PROCESS_OUTPUTS: ProcessOutputMap = new Map();
+
+export const processOutputContext = createContext<ProcessOutputMap>(
+  'progress-process-outputs',
+);

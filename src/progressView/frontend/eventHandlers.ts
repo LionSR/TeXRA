@@ -90,6 +90,7 @@ export function handleStreamDelete(
     create(prev, (draft) => {
       draft.streamStates.delete(streamId);
       draft.streamLogs.delete(streamId);
+      draft.processOutputs.delete(streamId);
       draft.streamById.delete(streamId);
       if (draft.activeStreamId === streamId) {
         draft.activeStreamId = firstStreamId(draft.streamById);

@@ -107,6 +107,15 @@ export class ProgressEventHandler {
             countField: 'finishedProcessCount',
             next: data.processes,
           }),
+        updateProcessOutput: (_, data) => {
+          this.sendIfActive(data.parentStreamId, () =>
+            this.webviewUpdater.updateProcessOutput(
+              data.parentStreamId,
+              data.executionId,
+              data.output,
+            ),
+          );
+        },
         setParentStream: (_, { childStreamId, parentStreamId }) => {
           this.state.meta.setParentStream(childStreamId, parentStreamId);
           if (this.webviewUpdater.isAvailable()) {

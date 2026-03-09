@@ -2,12 +2,14 @@
  * Collapsible panel for displaying background tasks (processes and subagents).
  *
  * Shows a summary badge in the collapsed header and a list of active/finished
- * tasks when expanded, similar to the ContextManagement pattern.
+ * tasks when expanded. Each active task has a collapsible real-time terminal
+ * output section powered by the existing TerminalOutput (xterm.js) component.
  */
 
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { consume } from '@lit/context';
+import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
 
@@ -20,6 +22,16 @@ import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 
 // Local imports - types
 import type { ActiveChildInfo } from '@shared/schemas';
+
+// Local imports - contexts
+import {
+  EMPTY_PROCESS_OUTPUTS,
+  processOutputContext,
+  type ProcessOutputMap,
+} from '../contexts/streamContexts';
+
+// Side-effect imports - sibling components
+import './TerminalOutput';
 
 @customElement('background-tasks-panel')
 export class BackgroundTasksPanel extends LitElement {
@@ -36,7 +48,7 @@ export class BackgroundTasksPanel extends LitElement {
         display: none;
       }
 
-      details {
+      details.panel-root {
         border-top: var(--border-thin) solid var(--color-border);
       }
 
@@ -87,6 +99,10 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .task-item {
+        margin-bottom: var(--spacing-tiny);
+      }
+
+      .task-header {
         display: flex;
         align-items: center;
         gap: var(--spacing-small);
@@ -159,6 +175,31 @@ export class BackgroundTasksPanel extends LitElement {
         color: var(--color-text-secondary);
         font-style: italic;
       }
+
+      /* Collapsible output per task */
+      details.task-output {
+        margin-left: calc(var(--spacing-small) + var(--font-size-sm));
+      }
+
+      details.task-output > summary {
+        padding: 2px 0;
+        font-size: var(--font-size-xs, 10px);
+        color: var(--color-text-secondary);
+        cursor: pointer;
+        list-style: none;
+        user-select: none;
+      }
+
+      details.task-output > summary:hover {
+        color: var(--vscode-foreground);
+      }
+
+      .output-container {
+        margin-top: var(--spacing-tiny);
+        border: var(--border-thin) solid var(--color-border);
+        border-radius: var(--border-radius-small);
+        overflow: hidden;
+      }
     `,
   ];
 
@@ -167,6 +208,10 @@ export class BackgroundTasksPanel extends LitElement {
   @property({ attribute: false }) activeSubagents: ActiveChildInfo[] = [];
   @property({ attribute: false }) finishedSubagentCount = 0;
   @property({ type: Boolean }) open = false;
+
+  @consume({ context: processOutputContext, subscribe: true })
+  @state()
+  private processOutputs: ProcessOutputMap = EMPTY_PROCESS_OUTPUTS;
 
   /** Total number of background tasks (active + finished). */
   private get totalTasks(): number {
@@ -190,7 +235,7 @@ export class BackgroundTasksPanel extends LitElement {
     if (this.totalTasks === 0) return nothing;
 
     return html`
-      <details ?open=${this.open} @toggle=${this.handleToggle}>
+      <details class="panel-root" ?open=${this.open} @toggle=${this.handleToggle}>
         <summary class="details-summary">
           <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
           <i class="codicon codicon-terminal panel-icon"></i>
@@ -292,28 +337,46 @@ export class BackgroundTasksPanel extends LitElement {
   ): TemplateResult {
     const icon =
       kind === 'process' ? 'codicon-terminal' : 'codicon-server-process';
+    const output = this.processOutputs.get(child.executionId) ?? '';
+    const hasOutput = output.length > 0;
+
     return html`
       <div class="task-item">
-        <i
-          class=${classMap({
-            codicon: true,
-            [icon]: true,
-            'task-icon': true,
-            'task-icon--process': kind === 'process',
-            'task-icon--subagent': kind === 'subagent',
-          })}
-        ></i>
-        <span class="task-name" title=${child.agentName}
-          >${child.agentName}</span
-        >
-        <span
-          class=${classMap({
-            'task-status': true,
-            'task-status--running': isRunning,
-            'task-status--done': !isRunning,
-          })}
-          >${isRunning ? 'running' : 'done'}</span
-        >
+        <div class="task-header">
+          <i
+            class=${classMap({
+              codicon: true,
+              [icon]: true,
+              'task-icon': true,
+              'task-icon--process': kind === 'process',
+              'task-icon--subagent': kind === 'subagent',
+            })}
+          ></i>
+          <span class="task-name" title=${child.agentName}
+            >${child.agentName}</span
+          >
+          <span
+            class=${classMap({
+              'task-status': true,
+              'task-status--running': isRunning,
+              'task-status--done': !isRunning,
+            })}
+            >${isRunning ? 'running' : 'done'}</span
+          >
+        </div>
+        ${hasOutput
+          ? html`
+              <details class="task-output" open>
+                <summary>
+                  <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
+                  Output
+                </summary>
+                <div class="output-container">
+                  <terminal-output .text=${output}></terminal-output>
+                </div>
+              </details>
+            `
+          : nothing}
       </div>
     `;
   }
