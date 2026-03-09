@@ -413,6 +413,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         if (settled) return;
         settled = true;
         cleanup();
+        // Close the WebSocket on abort to prevent cross-talk on retry.
+        // The server runs responses sequentially, so after client-side abort
+        // it continues finishing the current response. If we reuse the socket,
+        // the new executeViaWebSocket call's listeners would receive stale
+        // events (including response.created) from the prior response, causing
+        // the new request to resolve with the wrong response.
+        this.closeWebSocket();
         reject(new DOMException('The operation was aborted', 'AbortError'));
       };
       signal?.addEventListener('abort', onAbort, { once: true });
