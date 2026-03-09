@@ -247,6 +247,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private static readonly WS_MAX_AGE_MS = 55 * 60 * 1000;
   /** Keepalive ping interval to prevent idle timeouts (30 seconds). */
   private static readonly WS_KEEPALIVE_INTERVAL_MS = 30_000;
+  /** WebSocket readyState value for an open connection. */
+  private static readonly WS_OPEN = 1;
 
   /**
    * Whether WebSocket transport is enabled for this handler.
@@ -276,7 +278,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Check if existing connection is still valid
     if (this.wsConnection) {
       const age = Date.now() - this.wsConnectionCreatedAt;
-      const socketReady = this.wsConnection.socket.readyState === 1; // WebSocket.OPEN
+      const socketReady = this.wsConnection.socket.readyState === ModelHandlerOpenAIResponse.WS_OPEN;
       if (age < ModelHandlerOpenAIResponse.WS_MAX_AGE_MS && socketReady) {
         return this.wsConnection;
       }
@@ -292,7 +294,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     // Wait for the socket to open before returning
     await new Promise<void>((resolve, reject) => {
-      if (ws.socket.readyState === 1) {
+      if (ws.socket.readyState === ModelHandlerOpenAIResponse.WS_OPEN) {
         resolve();
         return;
       }
@@ -497,9 +499,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         if (settled) return;
         settled = true;
         cleanup();
-        // Invalidate the connection so the next call reconnects
-        this.wsConnection = null;
-        this.stopWsKeepalive();
+        this.closeWebSocket();
         reject(
           new Error(
             `WebSocket closed unexpectedly (code: ${code}, reason: ${reason.toString()})`,
@@ -575,7 +575,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.stopWsKeepalive();
     this.wsKeepaliveInterval = setInterval(() => {
       try {
-        if (ws.socket.readyState === 1) {
+        if (ws.socket.readyState === ModelHandlerOpenAIResponse.WS_OPEN) {
           ws.socket.ping();
         }
       } catch {
