@@ -483,6 +483,7 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
           ? msg.content
           : JSON.stringify(msg.content, null, 2);
       nodes.push({ kind: 'tool-result', text });
+      lastAssistantHadToolUse = false;
     }
   }
 
