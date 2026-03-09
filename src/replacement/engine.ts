@@ -61,12 +61,17 @@ export interface ReplacementEngine {
 class ReplacementEngineImpl implements ReplacementEngine {
   /**
    * Apply all configured non-regex replacement rules.
+   * Accepts optional pre-fetched config to avoid redundant getConfig() calls
+   * when called multiple times (e.g. from applyAll).
    */
-  applyNonRegex(text: string): string {
-    const processed = applyReplacements(text, getAllReplacements()).trim();
-    return shouldWrapCritiqueInAlign()
-      ? wrapCritiqueInAlign(processed)
-      : processed;
+  applyNonRegex(
+    text: string,
+    preloaded?: { replacements: ReplacementCategory; wrapCritique: boolean },
+  ): string {
+    const replacements = preloaded?.replacements ?? getAllReplacements();
+    const wrapCritique = preloaded?.wrapCritique ?? shouldWrapCritiqueInAlign();
+    const processed = applyReplacements(text, replacements).trim();
+    return wrapCritique ? wrapCritiqueInAlign(processed) : processed;
   }
 
   /**
@@ -80,11 +85,20 @@ class ReplacementEngineImpl implements ReplacementEngine {
    * Apply every replacement rule in the recommended order.
    * Non-regex replacements run before and after regex replacements to fix
    * artifacts they may introduce.
+   *
+   * Config values are read once and reused across both non-regex passes
+   * to avoid redundant getConfig() calls (~7 → 3 per invocation).
    */
   applyAll(text: string): string {
-    const afterNonRegex = this.applyNonRegex(text);
+    // Snapshot config-derived data once for both non-regex passes.
+    const preloaded = {
+      replacements: getAllReplacements(),
+      wrapCritique: shouldWrapCritiqueInAlign(),
+    };
+
+    const afterNonRegex = this.applyNonRegex(text, preloaded);
     const afterRegex = this.applyRegex(afterNonRegex);
-    return this.applyNonRegex(afterRegex);
+    return this.applyNonRegex(afterRegex, preloaded);
   }
 }
 
