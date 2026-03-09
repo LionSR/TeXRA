@@ -341,7 +341,9 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   private handleToggle(e: ToggleEvent): void {
-    this.open = (e.target as HTMLDetailsElement).open;
+    // Only react to the outer panel-root toggle, not bubbled inner <details>
+    if (e.target !== e.currentTarget) return;
+    this.open = (e.currentTarget as HTMLDetailsElement).open;
   }
 }
 

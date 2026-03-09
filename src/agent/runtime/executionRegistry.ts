@@ -84,21 +84,25 @@ export function untrackExecution(executionId: string): void {
     emitActiveSubagentsUpdate(handle.parentStreamId, registry.values());
   }
 
-  // Emit process badge update on removal and flush final output
+  // Emit process badge update on removal and flush final output.
+  // The final read must complete before the badge update, because the
+  // badge handler prunes output entries for processes no longer active.
   if (handle instanceof ProcessExecutionHandle) {
-    // Final poll to capture any remaining output, then clean up offset
+    const finalize = (): void => {
+      outputOffsets.delete(executionId);
+      emitActiveProcessesUpdate(handle.parentStreamId, registry.values());
+      reconcileOutputPoller();
+    };
     if (handle.outputPaths) {
       void readIncremental(
         executionId,
         handle.parentStreamId,
         handle.outputPaths.stdout,
         handle.outputPaths.stderr,
-      ).finally(() => outputOffsets.delete(executionId));
+      ).finally(finalize);
     } else {
-      outputOffsets.delete(executionId);
+      finalize();
     }
-    emitActiveProcessesUpdate(handle.parentStreamId, registry.values());
-    reconcileOutputPoller();
   }
 }
 
@@ -291,6 +295,34 @@ async function pollProcessOutputs(): Promise<void> {
 /** Max bytes to read per file per poll — prevents huge allocations from chatty processes. */
 const MAX_READ_PER_POLL = 128 * 1024;
 
+/**
+ * Find the last byte index that ends a complete UTF-8 character.
+ * If the buffer ends mid-character, those trailing bytes are excluded
+ * so the next read starts at the right boundary.
+ */
+function lastCompleteUtf8(buf: Buffer, bytesRead: number): number {
+  if (bytesRead === 0) return 0;
+  // Walk backward (max 3 bytes — longest UTF-8 lead) looking for
+  // a continuation byte (10xxxxxx). If we find a lead byte, check
+  // whether the sequence is complete.
+  for (let i = bytesRead - 1; i >= Math.max(0, bytesRead - 3); i--) {
+    const b = buf[i];
+    // ASCII or single-byte — always complete
+    if (b < 0x80) return bytesRead;
+    // Continuation byte (10xxxxxx) — keep scanning for the lead
+    if ((b & 0xc0) === 0x80) continue;
+    // Lead byte — determine expected sequence length
+    let seqLen: number;
+    if ((b & 0xe0) === 0xc0) seqLen = 2;
+    else if ((b & 0xf0) === 0xe0) seqLen = 3;
+    else if ((b & 0xf8) === 0xf0) seqLen = 4;
+    else return bytesRead; // Invalid lead — let toString handle it
+    // Complete if all bytes of the sequence were read
+    return i + seqLen <= bytesRead ? bytesRead : i;
+  }
+  return bytesRead;
+}
+
 /** Read only the new bytes from a file starting at byteOffset (capped per poll). */
 async function readTail(
   path: string,
@@ -303,7 +335,9 @@ async function readTail(
     const toRead = Math.min(size - byteOffset, MAX_READ_PER_POLL);
     const buf = Buffer.alloc(toRead);
     const { bytesRead } = await fh.read(buf, 0, toRead, byteOffset);
-    return { text: buf.toString('utf-8', 0, bytesRead), newOffset: byteOffset + bytesRead };
+    // Avoid splitting multi-byte UTF-8 characters at the read boundary
+    const safeEnd = lastCompleteUtf8(buf, bytesRead);
+    return { text: buf.toString('utf-8', 0, safeEnd), newOffset: byteOffset + safeEnd };
   } finally {
     await fh.close();
   }
