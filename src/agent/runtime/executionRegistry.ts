@@ -222,7 +222,7 @@ export function interruptActiveChildren(parentStreamId: StreamTabId): void {
 /** Interval at which temp files are read and pushed to the progress UI. */
 const OUTPUT_POLL_INTERVAL_MS = 500;
 
-/** Tracks how many characters have already been sent per executionId per stream. */
+/** Tracks byte offsets already sent per executionId per stream. */
 const outputOffsets = new Map<
   string,
   { stdout: number; stderr: number }
@@ -288,6 +288,23 @@ async function pollProcessOutputs(): Promise<void> {
   await Promise.all(reads);
 }
 
+/** Read only the new bytes from a file starting at byteOffset. */
+async function readTail(
+  path: string,
+  byteOffset: number,
+): Promise<{ text: string; newOffset: number }> {
+  const fh = await fs.promises.open(path, 'r');
+  try {
+    const { size } = await fh.stat();
+    if (size <= byteOffset) return { text: '', newOffset: byteOffset };
+    const buf = Buffer.alloc(size - byteOffset);
+    const { bytesRead } = await fh.read(buf, 0, buf.length, byteOffset);
+    return { text: buf.toString('utf-8', 0, bytesRead), newOffset: byteOffset + bytesRead };
+  } finally {
+    await fh.close();
+  }
+}
+
 async function readIncremental(
   executionId: string,
   parentStreamId: StreamTabId,
@@ -295,24 +312,22 @@ async function readIncremental(
   stderrPath: string,
 ): Promise<void> {
   try {
-    const [stdout, stderr] = await Promise.all([
-      fs.promises.readFile(stdoutPath, 'utf-8').catch(() => ''),
-      fs.promises.readFile(stderrPath, 'utf-8').catch(() => ''),
-    ]);
     const prev = outputOffsets.get(executionId) ?? { stdout: 0, stderr: 0 };
-    const stdoutDelta = stdout.slice(prev.stdout);
-    const stderrDelta = stderr.slice(prev.stderr);
-    if (!stdoutDelta && !stderrDelta) return;
+    const [out, err] = await Promise.all([
+      readTail(stdoutPath, prev.stdout).catch(() => ({ text: '', newOffset: prev.stdout })),
+      readTail(stderrPath, prev.stderr).catch(() => ({ text: '', newOffset: prev.stderr })),
+    ]);
+    if (!out.text && !err.text) return;
 
     outputOffsets.set(executionId, {
-      stdout: stdout.length,
-      stderr: stderr.length,
+      stdout: out.newOffset,
+      stderr: err.newOffset,
     });
 
     bus.emit('updateProcessOutput', {
       parentStreamId,
       executionId,
-      output: stdoutDelta + stderrDelta,
+      output: out.text + err.text,
     });
   } catch {
     // File may have been deleted between check and read — ignore
