@@ -223,11 +223,13 @@ function extractBlocks(msg: ConversationMessage): ContentBlock[] {
 function googlePartToBlocks(
   part: Record<string, unknown>,
 ): ContentBlock[] {
+  // Google GenAI: thought is a boolean flag; the actual text is in part.text.
+  // Must check before the plain text branch to avoid exposing thinking as assistant text.
+  if (part.thought === true && typeof part.text === 'string') {
+    return [{ type: 'thinking', thinking: part.text }];
+  }
   if (typeof part.text === 'string') {
     return [{ type: 'text', text: part.text }];
-  }
-  if (typeof part.thought === 'string') {
-    return [{ type: 'thinking', thinking: part.thought }];
   }
   if (part.functionCall && typeof part.functionCall === 'object') {
     const fc = part.functionCall as { name?: string; args?: unknown };
@@ -256,6 +258,13 @@ function googlePartToBlocks(
   }
   if (part.inlineData && typeof part.inlineData === 'object') {
     const data = part.inlineData as { mimeType?: string };
+    return [
+      { type: data.mimeType?.startsWith('image/') ? 'image' : 'document' },
+    ];
+  }
+  // Google GenAI: URI-based file data (uploaded files over the inline threshold)
+  if (part.fileData && typeof part.fileData === 'object') {
+    const data = part.fileData as { mimeType?: string };
     return [
       { type: data.mimeType?.startsWith('image/') ? 'image' : 'document' },
     ];
@@ -391,13 +400,30 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
       continue;
     }
 
-    // OpenAI Response API: top-level function_call_output items
+    // OpenAI Response API: top-level function_call_output items.
+    // output can be a string OR an array of input_text/input_file/input_image parts.
     if (item.type === 'function_call_output') {
-      const output =
-        typeof item.output === 'string'
-          ? item.output
-          : JSON.stringify(item.output ?? '', null, 2);
-      nodes.push({ kind: 'tool-result', text: output });
+      if (Array.isArray(item.output)) {
+        const textParts: string[] = [];
+        for (const part of item.output as Record<string, unknown>[]) {
+          if (part.type === 'input_text' && typeof part.text === 'string') {
+            textParts.push(part.text);
+          } else if (part.type === 'input_image') {
+            textParts.push('[image attachment]');
+          } else if (part.type === 'input_file') {
+            textParts.push('[file attachment]');
+          }
+        }
+        if (textParts.length) {
+          nodes.push({ kind: 'tool-result', text: textParts.join('\n') });
+        }
+      } else {
+        const output =
+          typeof item.output === 'string'
+            ? item.output
+            : JSON.stringify(item.output ?? '', null, 2);
+        nodes.push({ kind: 'tool-result', text: output });
+      }
       lastAssistantHadToolUse = false;
       continue;
     }
