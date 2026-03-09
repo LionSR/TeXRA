@@ -1407,7 +1407,7 @@
     "highlightjs-lean": "^1.2.0",
     "http-status-codes": "^2.3.0",
     "identifiers-arxiv": "^0.1.1",
-    "katex": "^0.16.37",
+    "katex": "^0.16.38",
     "lit": "^3.3.2",
     "llm-zoo": "^1.1.0",
     "mark.js": "^8.11.1",
