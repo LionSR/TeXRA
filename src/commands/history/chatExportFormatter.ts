@@ -328,8 +328,11 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
         input: JSON.stringify(block.input ?? {}, null, 2),
       };
 
-    // Anthropic: tool_result blocks (from Google conversion or nested)
+    // Tool result blocks: Anthropic tool_result + server-side code execution results
     case 'tool_result':
+    case 'code_execution_tool_result':
+    case 'bash_code_execution_tool_result':
+    case 'text_editor_code_execution_tool_result':
       return {
         kind: 'tool-result',
         text:
@@ -362,18 +365,6 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
         url: block.url,
         title: block.title,
         content: block.page_content,
-      };
-
-    // Anthropic: server-side code execution results
-    case 'code_execution_tool_result':
-    case 'bash_code_execution_tool_result':
-    case 'text_editor_code_execution_tool_result':
-      return {
-        kind: 'tool-result',
-        text:
-          typeof block.content === 'string'
-            ? block.content
-            : JSON.stringify(block.content ?? '', null, 2),
       };
 
     default:
