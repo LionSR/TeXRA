@@ -5,6 +5,8 @@
  * change notification, and subagent lineage tracking in a single module.
  */
 
+import * as fs from 'fs';
+
 import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas';
 import {
@@ -64,6 +66,7 @@ export function trackExecution(handle: ExecutionHandle): void {
   // Emit process badge update for background bash processes
   if (handle instanceof ProcessExecutionHandle) {
     emitActiveProcessesUpdate(handle.parentStreamId, registry.values());
+    reconcileOutputPoller();
   }
 }
 
@@ -81,9 +84,20 @@ export function untrackExecution(executionId: string): void {
     emitActiveSubagentsUpdate(handle.parentStreamId, registry.values());
   }
 
-  // Emit process badge update on removal
+  // Emit process badge update on removal and flush final output
   if (handle instanceof ProcessExecutionHandle) {
+    // Final poll to capture any remaining output before cleanup
+    if (handle.outputPaths) {
+      void readIncremental(
+        executionId,
+        handle.parentStreamId,
+        handle.outputPaths.stdout,
+        handle.outputPaths.stderr,
+      );
+    }
+    outputOffsets.delete(executionId);
     emitActiveProcessesUpdate(handle.parentStreamId, registry.values());
+    reconcileOutputPoller();
   }
 }
 
@@ -198,6 +212,77 @@ export function waitForAnyExecutionChange(
  */
 export function interruptActiveChildren(parentStreamId: StreamTabId): void {
   interruptActiveChildrenImpl(parentStreamId, registry.values());
+}
+
+// ============================================================================
+// Process output polling
+// ============================================================================
+
+/** Interval at which temp files are read and pushed to the progress UI. */
+const OUTPUT_POLL_INTERVAL_MS = 500;
+
+/** Tracks how many bytes have already been sent per executionId. */
+const outputOffsets = new Map<string, number>();
+
+let outputPollTimer: ReturnType<typeof setInterval> | null = null;
+
+/** Start polling if there are active process handles; stop if none remain. */
+function reconcileOutputPoller(): void {
+  const hasProcesses = [...registry.values()].some(
+    (h) => h instanceof ProcessExecutionHandle,
+  );
+  if (hasProcesses && !outputPollTimer) {
+    outputPollTimer = setInterval(pollProcessOutputs, OUTPUT_POLL_INTERVAL_MS);
+  } else if (!hasProcesses && outputPollTimer) {
+    clearInterval(outputPollTimer);
+    outputPollTimer = null;
+  }
+}
+
+/** Read incremental output from temp files and emit to progress UI. */
+function pollProcessOutputs(): void {
+  for (const handle of registry.values()) {
+    if (!(handle instanceof ProcessExecutionHandle)) continue;
+    if (!handle.outputPaths) continue;
+
+    const { executionId, parentStreamId } = handle;
+
+    // Read both stdout and stderr, concatenated (stderr after stdout)
+    void readIncremental(
+      executionId,
+      parentStreamId,
+      handle.outputPaths.stdout,
+      handle.outputPaths.stderr,
+    );
+  }
+}
+
+async function readIncremental(
+  executionId: string,
+  parentStreamId: StreamTabId,
+  stdoutPath: string,
+  stderrPath: string,
+): Promise<void> {
+  try {
+    const [stdout, stderr] = await Promise.all([
+      fs.promises.readFile(stdoutPath, 'utf-8').catch(() => ''),
+      fs.promises.readFile(stderrPath, 'utf-8').catch(() => ''),
+    ]);
+    const full = stdout + stderr;
+    const offset = outputOffsets.get(executionId) ?? 0;
+    if (full.length <= offset) return;
+
+    const delta = full.slice(offset);
+    outputOffsets.set(executionId, full.length);
+
+    bus.emit('updateProcessOutput', {
+      parentStreamId,
+      executionId,
+      output: delta,
+    });
+  } catch {
+    // File may have been deleted between check and read — ignore
+  }
 }
 
 // ============================================================================
