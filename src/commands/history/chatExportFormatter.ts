@@ -20,7 +20,8 @@ import latexPreamble from '../../../resources/templates/chatExport.tex';
 // Input schemas (single source of truth)
 // ============================================================
 
-/** Loose schema for API content blocks — accepts many optional fields. */
+/** Loose schema for API content blocks — accepts many optional fields.
+ *  Covers Anthropic, OpenAI Chat Completions, and OpenAI Response API formats. */
 const ContentBlockSchema = z.looseObject({
   type: z.string(),
   text: z.string().optional(),
@@ -44,6 +45,9 @@ const ContentBlockSchema = z.looseObject({
   url: z.string().optional(),
   title: z.string().optional(),
   page_content: z.string().optional(),
+  // OpenAI Response API fields
+  arguments: z.string().optional(),
+  output: z.string().optional(),
 });
 type ContentBlock = z.infer<typeof ContentBlockSchema>;
 
@@ -52,6 +56,10 @@ const ConversationMessageSchema = z.looseObject({
   content: z
     .union([z.string(), z.array(ContentBlockSchema), z.unknown()])
     .optional(),
+  // Google GenAI uses `parts` instead of `content`
+  parts: z.array(z.unknown()).optional(),
+  // OpenAI Chat Completions: tool_calls on assistant messages
+  tool_calls: z.array(z.unknown()).optional(),
 });
 type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 
@@ -192,6 +200,13 @@ function latexListing(text: string): string {
 // ============================================================
 
 function extractBlocks(msg: ConversationMessage): ContentBlock[] {
+  // Google GenAI: field-based Parts → type-based ContentBlocks
+  if (Array.isArray(msg.parts)) {
+    return (msg.parts as Record<string, unknown>[]).flatMap(
+      googlePartToBlocks,
+    );
+  }
+
   if (typeof msg.content === 'string') {
     return [{ type: 'text', text: msg.content }];
   }
@@ -204,14 +219,76 @@ function extractBlocks(msg: ConversationMessage): ContentBlock[] {
   return [];
 }
 
+/** Convert a Google GenAI Part (field-based discrimination) to type-based ContentBlock(s). */
+function googlePartToBlocks(
+  part: Record<string, unknown>,
+): ContentBlock[] {
+  // Google GenAI: thought is a boolean flag; the actual text is in part.text.
+  // Must check before the plain text branch to avoid exposing thinking as assistant text.
+  if (part.thought === true && typeof part.text === 'string') {
+    return [{ type: 'thinking', thinking: part.text }];
+  }
+  if (typeof part.text === 'string') {
+    return [{ type: 'text', text: part.text }];
+  }
+  if (part.functionCall && typeof part.functionCall === 'object') {
+    const fc = part.functionCall as { name?: string; args?: unknown };
+    return [
+      {
+        type: 'tool_use',
+        name: fc.name ?? 'unknown',
+        input: fc.args ?? {},
+      },
+    ];
+  }
+  if (part.functionResponse && typeof part.functionResponse === 'object') {
+    const fr = part.functionResponse as {
+      name?: string;
+      response?: unknown;
+    };
+    return [
+      {
+        type: 'tool_result',
+        content:
+          typeof fr.response === 'string'
+            ? fr.response
+            : JSON.stringify(fr.response ?? '', null, 2),
+      },
+    ];
+  }
+  if (part.inlineData && typeof part.inlineData === 'object') {
+    const data = part.inlineData as { mimeType?: string };
+    return [
+      { type: data.mimeType?.startsWith('image/') ? 'image' : 'document' },
+    ];
+  }
+  // Google GenAI: URI-based file data (uploaded files over the inline threshold)
+  if (part.fileData && typeof part.fileData === 'object') {
+    const data = part.fileData as { mimeType?: string };
+    return [
+      { type: data.mimeType?.startsWith('image/') ? 'image' : 'document' },
+    ];
+  }
+  return [];
+}
+
 function blocksToUserParts(blocks: ContentBlock[]): UserPart[] {
   const parts: UserPart[] = [];
   for (const b of blocks) {
-    if (b.type === 'text' && b.text) {
+    // Anthropic: 'text', OpenAI Response API: 'input_text'
+    if ((b.type === 'text' || b.type === 'input_text') && b.text) {
       parts.push({ type: 'text', text: b.text });
-    } else if (b.type === 'image') {
+    } else if (
+      b.type === 'image' ||
+      b.type === 'input_image' ||
+      b.type === 'image_url'
+    ) {
       parts.push({ type: 'attachment', attachmentType: 'image' });
-    } else if (b.type === 'document') {
+    } else if (
+      b.type === 'document' ||
+      b.type === 'input_file' ||
+      b.type === 'file'
+    ) {
       parts.push({ type: 'attachment', attachmentType: 'document' });
     }
   }
@@ -224,7 +301,8 @@ function extractToolResultText(block: ContentBlock): string | undefined {
       ? block.content
       : JSON.stringify(block.content, null, 2);
   }
-  if (block.type === 'text' && block.text) {
+  // Anthropic: 'text', OpenAI Response API: 'input_text'
+  if ((block.type === 'text' || block.type === 'input_text') && block.text) {
     return block.text;
   }
   return undefined;
@@ -233,9 +311,12 @@ function extractToolResultText(block: ContentBlock): string | undefined {
 function assistantBlockToNode(block: ContentBlock): ExportNode | null {
   switch (block.type) {
     case 'thinking':
+    case 'redacted_thinking':
       return null;
 
+    // Anthropic: 'text', OpenAI Response API: 'output_text'
     case 'text':
+    case 'output_text':
       return block.text?.trim()
         ? { kind: 'assistant-text', text: block.text }
         : null;
@@ -245,6 +326,19 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
         kind: 'tool-call',
         name: block.name ?? 'unknown',
         input: JSON.stringify(block.input ?? {}, null, 2),
+      };
+
+    // Tool result blocks: Anthropic tool_result + server-side code execution results
+    case 'tool_result':
+    case 'code_execution_tool_result':
+    case 'bash_code_execution_tool_result':
+    case 'text_editor_code_execution_tool_result':
+      return {
+        kind: 'tool-result',
+        text:
+          typeof block.content === 'string'
+            ? block.content
+            : JSON.stringify(block.content ?? '', null, 2),
       };
 
     case 'server_tool_use':
@@ -283,7 +377,49 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
   let lastAssistantHadToolUse = false;
 
   for (const raw of messages) {
-    const msg = raw as ConversationMessage;
+    const item = raw as Record<string, unknown>;
+
+    // OpenAI Response API: top-level function_call items (not wrapped in a message)
+    if (item.type === 'function_call') {
+      const name = typeof item.name === 'string' ? item.name : 'unknown';
+      const args =
+        typeof item.arguments === 'string'
+          ? item.arguments
+          : JSON.stringify(item.arguments ?? {}, null, 2);
+      nodes.push({ kind: 'tool-call', name, input: args });
+      lastAssistantHadToolUse = true;
+      continue;
+    }
+
+    // OpenAI Response API: top-level function_call_output items.
+    // output can be a string OR an array of input_text/input_file/input_image parts.
+    if (item.type === 'function_call_output') {
+      if (Array.isArray(item.output)) {
+        const textParts: string[] = [];
+        for (const part of item.output as Record<string, unknown>[]) {
+          if (part.type === 'input_text' && typeof part.text === 'string') {
+            textParts.push(part.text);
+          } else if (part.type === 'input_image') {
+            textParts.push('[image attachment]');
+          } else if (part.type === 'input_file') {
+            textParts.push('[file attachment]');
+          }
+        }
+        if (textParts.length) {
+          nodes.push({ kind: 'tool-result', text: textParts.join('\n') });
+        }
+      } else {
+        const output =
+          typeof item.output === 'string'
+            ? item.output
+            : JSON.stringify(item.output ?? '', null, 2);
+        nodes.push({ kind: 'tool-result', text: output });
+      }
+      lastAssistantHadToolUse = false;
+      continue;
+    }
+
+    const msg = item as ConversationMessage;
     const role = msg.role ?? 'unknown';
     const blocks = extractBlocks(msg);
 
@@ -301,7 +437,8 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
       continue;
     }
 
-    if (role === 'assistant') {
+    // Google GenAI uses 'model' role instead of 'assistant'
+    if (role === 'assistant' || role === 'model') {
       lastAssistantHadToolUse = false;
       for (const block of blocks) {
         const node = assistantBlockToNode(block);
@@ -310,16 +447,34 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
           nodes.push(node);
         }
       }
+
+      // OpenAI Chat Completions: tool_calls array on assistant messages
+      if (Array.isArray(msg.tool_calls)) {
+        for (const tc of msg.tool_calls as Record<string, unknown>[]) {
+          const fn = tc.function as
+            | { name?: string; arguments?: string }
+            | undefined;
+          if (fn) {
+            nodes.push({
+              kind: 'tool-call',
+              name: fn.name ?? 'unknown',
+              input: fn.arguments ?? '{}',
+            });
+            lastAssistantHadToolUse = true;
+          }
+        }
+      }
       continue;
     }
 
-    // OpenAI tool role
+    // OpenAI Chat Completions tool role
     if (role === 'tool') {
       const text =
         typeof msg.content === 'string'
           ? msg.content
           : JSON.stringify(msg.content, null, 2);
       nodes.push({ kind: 'tool-result', text });
+      lastAssistantHadToolUse = false;
     }
   }
 
