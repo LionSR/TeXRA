@@ -207,12 +207,10 @@ export class BackgroundTasksPanel extends LitElement {
     const finished = this.finishedProcessCount + this.finishedSubagentCount;
     if (active + finished === 0) return nothing;
 
-    const title = this.buildTitle(finished);
-
     return html`
       <vscode-collapsible
         class="panel-collapsible"
-        title=${title}
+        title="Background Tasks"
         ?open=${this.open}
         @vsc-collapsible-toggle=${this.handleCollapsibleToggle}
       >
@@ -222,20 +220,6 @@ export class BackgroundTasksPanel extends LitElement {
         </div>
       </vscode-collapsible>
     `;
-  }
-
-  private buildTitle(finished: number): string {
-    const all = [...this.activeProcesses, ...this.activeSubagents];
-    const running = all.filter((c) => !isWaiting(c)).length;
-    const waiting = all.filter((c) => isWaiting(c)).length;
-
-    const segments: string[] = [];
-    if (running > 0) segments.push(`${running} running`);
-    if (waiting > 0) segments.push(`${waiting} waiting`);
-    if (finished > 0) segments.push(`${finished} done`);
-    return segments.length > 0
-      ? `Background Tasks (${segments.join(', ')})`
-      : 'Background Tasks';
   }
 
   private renderSection(
