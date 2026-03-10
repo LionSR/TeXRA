@@ -84,10 +84,13 @@ import { dispatchMessage } from './messageDispatcher';
 // Local imports - progress view contexts
 import {
   EMPTY_LOG_CONTEXT,
+  EMPTY_PROCESS_OUTPUTS,
   EMPTY_STREAM_CONTEXT,
   permissionsContext,
+  processOutputContext,
   streamLogContext,
   streamStateContext,
+  type ProcessOutputMap,
   type StreamContextValue,
   type StreamLogContextValue,
 } from './contexts/streamContexts';
@@ -249,6 +252,10 @@ export class ProgressApp extends ProgressAppBase {
   @state()
   private permissionsContextValue: PermissionState[] = [];
 
+  @provide({ context: processOutputContext })
+  @state()
+  private processOutputContextValue: ProcessOutputMap = EMPTY_PROCESS_OUTPUTS;
+
   // Container ref for accessing child component methods (FollowUpInput)
   private toolUseContentRef = createRef<ToolUseStreamContent>();
 
@@ -262,6 +269,10 @@ export class ProgressApp extends ProgressAppBase {
   private followupOptions$ = select(
     this.appState,
     (s) => s.followupOptionsByStream,
+  );
+  private processOutputs$ = select(
+    this.appState,
+    (s) => s.processOutputs,
   );
 
   // --- Derived computeds: only re-evaluate when selector inputs propagate ---
@@ -337,6 +348,13 @@ export class ProgressApp extends ProgressAppBase {
     const info = this.activeStreamInfo$.get();
     if (!info) return EMPTY_STREAM_LOGS;
     return this.streamLogs$.get().get(info.name) ?? EMPTY_STREAM_LOGS;
+  });
+
+  /** Only changes when the ACTIVE stream's process outputs change. */
+  private activeProcessOutputs$ = new Signal.Computed((): ProcessOutputMap => {
+    const info = this.activeStreamInfo$.get();
+    if (!info) return EMPTY_PROCESS_OUTPUTS;
+    return this.processOutputs$.get().get(info.name) ?? EMPTY_PROCESS_OUTPUTS;
   });
 
   // --- Leaf selectors for logContext$ ---
@@ -445,6 +463,7 @@ export class ProgressApp extends ProgressAppBase {
     this.streamContextValue = this.streamContext$.get();
     this.streamLogContextValue = this.logContext$.get();
     this.permissionsContextValue = this.permissions$.get();
+    this.processOutputContextValue = this.activeProcessOutputs$.get();
   }
 
   render(): TemplateResult {

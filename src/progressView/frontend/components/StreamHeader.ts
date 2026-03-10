@@ -349,6 +349,24 @@ export class StreamHeader extends LitElement {
         white-space: nowrap;
       }
 
+      .child-badge--clickable {
+        cursor: pointer;
+        transition:
+          background-color var(--transition-fast),
+          box-shadow var(--transition-fast);
+      }
+
+      .child-badge--clickable:hover {
+        background: color-mix(in srgb, var(--_badge-color) 22%, transparent);
+        box-shadow: 0 0 4px
+          color-mix(in srgb, var(--_badge-color) 30%, transparent);
+      }
+
+      .child-badge--clickable:focus-visible {
+        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline-offset: 1px;
+      }
+
       .child-badge .codicon {
         font-size: var(--font-size-xs, 10px);
       }
@@ -565,8 +583,12 @@ export class StreamHeader extends LitElement {
     const total = active.length + finishedCount;
     if (total === 0) return nothing;
     return html`<span
-      class="child-badge ${cssClass}"
-      title=${active.map((s) => s.agentName).join(', ')}
+      class="child-badge child-badge--clickable ${cssClass}"
+      role="button"
+      tabindex="0"
+      title="Click to show background tasks — ${active.map((s) => s.agentName).join(', ')}"
+      @click=${this.handleBadgeClick}
+      @keydown=${this.handleBadgeKeydown}
     >
       <i class="codicon codicon-${icon}"></i>
       ${active.length > 0
@@ -619,5 +641,17 @@ export class StreamHeader extends LitElement {
 
   private handleRunSelected(event: CustomEvent) {
     this.dispatchEvent(ProgressEvents.runSelected(event.detail));
+  }
+
+  private handleBadgeClick(e: MouseEvent): void {
+    e.stopPropagation();
+    this.dispatchEvent(ProgressEvents.backgroundTasksToggle());
+  }
+
+  private handleBadgeKeydown(e: KeyboardEvent): void {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      this.dispatchEvent(ProgressEvents.backgroundTasksToggle());
+    }
   }
 }
