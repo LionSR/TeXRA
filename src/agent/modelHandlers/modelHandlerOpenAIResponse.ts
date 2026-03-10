@@ -274,7 +274,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Get or create a WebSocket connection, reusing an existing one if still valid.
    * Reconnects if the connection is approaching the 60-minute server limit.
    */
-  private async getOrCreateWebSocket(client: OpenAI): Promise<ResponsesWS> {
+  private async getOrCreateWebSocket(
+    client: OpenAI,
+    signal?: AbortSignal,
+  ): Promise<ResponsesWS> {
     // Check if existing connection is still valid
     if (this.wsConnection) {
       const age = Date.now() - this.wsConnectionCreatedAt;
@@ -289,25 +292,45 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.closeWebSocket();
     }
 
+    if (signal?.aborted) {
+      throw new DOMException('The operation was aborted', 'AbortError');
+    }
+
     this.logger.debug('Opening WebSocket connection to Responses API');
     const ws = new ResponsesWS(client);
 
-    // Wait for the socket to open before returning
+    // Wait for the socket to open, fail on error, or abort on signal.
+    // If the handshake fails or is aborted, close the orphaned socket
+    // to prevent resource leaks (it hasn't been assigned to wsConnection yet).
     await new Promise<void>((resolve, reject) => {
       if (ws.socket.readyState === ModelHandlerOpenAIResponse.WS_OPEN) {
         resolve();
         return;
       }
-      const onOpen = (): void => {
+
+      const cleanup = (): void => {
+        ws.socket.removeListener('open', onOpen);
         ws.socket.removeListener('error', onError);
+        signal?.removeEventListener('abort', onAbort);
+      };
+      const onOpen = (): void => {
+        cleanup();
         resolve();
       };
       const onError = (err: Error): void => {
-        ws.socket.removeListener('open', onOpen);
+        cleanup();
+        try { ws.close(); } catch { /* ignore */ }
         reject(err);
       };
+      const onAbort = (): void => {
+        cleanup();
+        try { ws.close(); } catch { /* ignore */ }
+        reject(new DOMException('The operation was aborted', 'AbortError'));
+      };
+
       ws.socket.once('open', onOpen);
       ws.socket.once('error', onError);
+      signal?.addEventListener('abort', onAbort, { once: true });
     });
 
     this.wsConnection = ws;
@@ -544,6 +567,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       } catch (sendError) {
         // If send() throws synchronously, clean up listeners to prevent leaks
         // on the reused WebSocket connection.
+        settled = true;
         cleanup();
         reject(sendError);
       }
@@ -1717,7 +1741,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       // WebSocket transport: persistent connection for lower-latency tool-use loops
       if (useWebSocket) {
-        const ws = await this.getOrCreateWebSocket(client);
+        const ws = await this.getOrCreateWebSocket(client, signal);
         let response = await this.executeViaWebSocket(ws, params, signal);
 
         // Safety net: handle unexpected pending status (shouldn't happen without background mode)
