@@ -116,9 +116,13 @@ export const streamMetaHandlers: HandlerRegistry = {
           streamOutputs = new Map();
           draft.processOutputs.set(stream, streamOutputs);
         }
-        // Prune entries for finished processes
+        // Prune entries for finished processes — but never prune the
+        // incoming executionId, which we're about to update. The activeIds
+        // set can be stale for non-active streams (badge updates only fire
+        // for the active stream), so pruning the current ID would discard
+        // accumulated output and keep only the latest delta.
         for (const id of [...streamOutputs.keys()]) {
-          if (!activeIds.has(id)) streamOutputs.delete(id);
+          if (id !== executionId && !activeIds.has(id)) streamOutputs.delete(id);
         }
         const existing = streamOutputs.get(executionId) ?? {
           stdout: '',

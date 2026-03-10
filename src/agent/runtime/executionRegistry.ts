@@ -343,8 +343,11 @@ async function readTail(
   }
 }
 
-/** Guards against concurrent readIncremental calls for the same executionId. */
-const readingInProgress = new Set<string>();
+/**
+ * Tracks in-flight reads per executionId so concurrent calls can await
+ * rather than silently skipping (which would lose tail output on final flush).
+ */
+const readingInProgress = new Map<string, Promise<void>>();
 
 async function readIncremental(
   executionId: string,
@@ -352,32 +355,46 @@ async function readIncremental(
   stdoutPath: string,
   stderrPath: string,
 ): Promise<void> {
-  // Skip if another read (poll or final flush) is already in flight.
-  if (readingInProgress.has(executionId)) return;
-  readingInProgress.add(executionId);
+  // If another read is in flight, wait for it then read again —
+  // the final flush must not be skipped or it loses tail output.
+  const inflight = readingInProgress.get(executionId);
+  if (inflight) {
+    await inflight;
+  }
+
+  const work = (async () => {
+    try {
+      const prev = outputOffsets.get(executionId) ?? { stdout: 0, stderr: 0 };
+      const [out, err] = await Promise.all([
+        readTail(stdoutPath, prev.stdout).catch(() => ({ text: '', newOffset: prev.stdout })),
+        readTail(stderrPath, prev.stderr).catch(() => ({ text: '', newOffset: prev.stderr })),
+      ]);
+      if (!out.text && !err.text) return;
+
+      outputOffsets.set(executionId, {
+        stdout: out.newOffset,
+        stderr: err.newOffset,
+      });
+
+      bus.emit('updateProcessOutput', {
+        parentStreamId,
+        executionId,
+        stdout: out.text,
+        stderr: err.text,
+      });
+    } catch {
+      // File may have been deleted between check and read — ignore
+    }
+  })();
+
+  readingInProgress.set(executionId, work);
   try {
-    const prev = outputOffsets.get(executionId) ?? { stdout: 0, stderr: 0 };
-    const [out, err] = await Promise.all([
-      readTail(stdoutPath, prev.stdout).catch(() => ({ text: '', newOffset: prev.stdout })),
-      readTail(stderrPath, prev.stderr).catch(() => ({ text: '', newOffset: prev.stderr })),
-    ]);
-    if (!out.text && !err.text) return;
-
-    outputOffsets.set(executionId, {
-      stdout: out.newOffset,
-      stderr: err.newOffset,
-    });
-
-    bus.emit('updateProcessOutput', {
-      parentStreamId,
-      executionId,
-      stdout: out.text,
-      stderr: err.text,
-    });
-  } catch {
-    // File may have been deleted between check and read — ignore
+    await work;
   } finally {
-    readingInProgress.delete(executionId);
+    // Only clear if we're still the latest — another call may have replaced us
+    if (readingInProgress.get(executionId) === work) {
+      readingInProgress.delete(executionId);
+    }
   }
 }
 
