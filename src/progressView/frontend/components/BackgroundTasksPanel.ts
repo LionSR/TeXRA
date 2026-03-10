@@ -136,6 +136,17 @@ export class BackgroundTasksPanel extends LitElement {
         color: var(--color-text-secondary);
         text-transform: uppercase;
         letter-spacing: 0.05em;
+        cursor: pointer;
+        list-style: none;
+        user-select: none;
+      }
+
+      .section-label::-webkit-details-marker {
+        display: none;
+      }
+
+      .section-label:hover {
+        color: var(--vscode-foreground);
       }
 
       .section-label .codicon {
@@ -236,28 +247,31 @@ export class BackgroundTasksPanel extends LitElement {
     const label = kind === 'process' ? 'Processes' : 'Subagents';
 
     return html`
-      <div class="section-label">
-        <i class="codicon ${icon}"></i>
-        <span
-          >${label}${hasActive
-            ? html` &middot; ${active.length} active`
-            : nothing}${hasFinished
-            ? html` &middot; ${finishedCount} done`
-            : nothing}</span
-        >
-      </div>
-      ${hasActive
-        ? repeat(
-            active,
-            (c) => c.executionId,
-            (c) => this.renderTaskItem(c, kind),
-          )
-        : nothing}
-      ${!hasActive && hasFinished
-        ? html`<div class="empty-message">
-            All ${finishedCount} ${label.toLowerCase()} completed
-          </div>`
-        : nothing}
+      <details open>
+        <summary class="section-label">
+          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
+          <i class="codicon ${icon}"></i>
+          <span
+            >${label}${hasActive
+              ? html` &middot; ${active.length} active`
+              : nothing}${hasFinished
+              ? html` &middot; ${finishedCount} done`
+              : nothing}</span
+          >
+        </summary>
+        ${hasActive
+          ? repeat(
+              active,
+              (c) => c.executionId,
+              (c) => this.renderTaskItem(c, kind),
+            )
+          : nothing}
+        ${!hasActive && hasFinished
+          ? html`<div class="empty-message">
+              All ${finishedCount} ${label.toLowerCase()} completed
+            </div>`
+          : nothing}
+      </details>
     `;
   }
 
