@@ -459,9 +459,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           return;
         }
 
+        // Discard any events that arrive before response.created identifies
+        // the current request. This guards against out-of-order delivery and
+        // prevents processing stale events on a reused connection.
+        if (!currentResponseId) return;
+
         // Filter events by response ID: skip events from stale responses
         if (
-          currentResponseId &&
           'response_id' in e &&
           typeof (e as Record<string, unknown>).response_id === 'string' &&
           (e as Record<string, unknown>).response_id !== currentResponseId
