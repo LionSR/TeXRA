@@ -210,6 +210,9 @@ function collectChildSummary(
     result.push({
       executionId: handle.executionId,
       agentName: handle.agentName,
+      ...(handle instanceof AgentExecutionHandle
+        ? { childStreamId: handle.childStreamId }
+        : {}),
     });
   }
   return result;

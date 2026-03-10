@@ -1,9 +1,9 @@
 /**
  * Collapsible panel for displaying background tasks (processes and subagents).
  *
- * Shows a summary badge in the collapsed header and a list of active/finished
- * tasks when expanded. Each active task has a collapsible real-time terminal
- * output section powered by the existing TerminalOutput (xterm.js) component.
+ * Uses `<vscode-collapsible>` for consistent styling with other panels (Todos,
+ * Files, etc.). Each active subagent is clickable to navigate to its stream tab.
+ * Processes don't have their own tab so they are not clickable.
  */
 
 // Third-party imports
@@ -30,6 +30,9 @@ import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 // Local imports - types
 import type { ActiveChildInfo } from '@shared/schemas';
 
+// Local imports - events
+import { ProgressEvents } from '../events';
+
 // Local imports - contexts
 import {
   EMPTY_PROCESS_OUTPUTS,
@@ -55,46 +58,10 @@ export class BackgroundTasksPanel extends LitElement {
         display: none;
       }
 
-      details.panel-root {
-        border-top: var(--border-thin) solid var(--color-border);
-      }
-
-      summary {
-        padding: var(--spacing-small) var(--spacing-medium);
-      }
-
-      .panel-title {
-        font-weight: var(--font-weight-medium);
-        font-size: var(--font-size-sm);
-        color: var(--color-text-secondary);
-      }
-
-      .badge-count {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--spacing-tiny);
-        margin-left: var(--spacing-small);
-        padding: 1px var(--spacing-small);
-        font-size: var(--font-size-xs, 10px);
-        font-weight: var(--font-weight-semibold);
-        border-radius: var(--border-radius-small);
-        white-space: nowrap;
-        color: var(--_tint);
-        background: color-mix(in srgb, var(--_tint) 12%, transparent);
-      }
-
-      .badge-count--active {
-        --_tint: var(--color-warning, var(--vscode-charts-orange));
-      }
-
-      .badge-count--done {
-        --_tint: var(--color-text-secondary);
-      }
-
       .task-list {
-        list-style: none;
-        margin: 0;
-        padding: 0 var(--spacing-medium) var(--spacing-small);
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-tiny);
       }
 
       .task-item {
@@ -129,6 +96,17 @@ export class BackgroundTasksPanel extends LitElement {
         text-overflow: ellipsis;
         white-space: nowrap;
         color: var(--vscode-foreground);
+      }
+
+      .task-name--clickable {
+        cursor: pointer;
+        text-decoration: underline;
+        text-decoration-color: transparent;
+        transition: text-decoration-color 0.15s ease;
+      }
+
+      .task-name--clickable:hover {
+        text-decoration-color: var(--vscode-foreground);
       }
 
       .task-status {
@@ -222,29 +200,30 @@ export class BackgroundTasksPanel extends LitElement {
     const finished = this.finishedProcessCount + this.finishedSubagentCount;
     if (active + finished === 0) return nothing;
 
+    const title = this.buildTitle(active, finished);
+
     return html`
-      <details class="panel-root" ?open=${this.open} @toggle=${this.handleToggle}>
-        <summary class="details-summary">
-          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
-          <i class="codicon codicon-terminal panel-icon"></i>
-          <span class="panel-title">Background Tasks</span>
-          ${active > 0
-            ? html`<span class="badge-count badge-count--active"
-                >${active} running</span
-              >`
-            : nothing}
-          ${finished > 0
-            ? html`<span class="badge-count badge-count--done"
-                >${finished} done</span
-              >`
-            : nothing}
-        </summary>
+      <vscode-collapsible
+        class="panel-collapsible"
+        title=${title}
+        ?open=${this.open}
+        @vsc-collapsible-toggle=${this.handleCollapsibleToggle}
+      >
         <div class="task-list">
           ${this.renderSection(this.activeProcesses, this.finishedProcessCount, 'process')}
           ${this.renderSection(this.activeSubagents, this.finishedSubagentCount, 'subagent')}
         </div>
-      </details>
+      </vscode-collapsible>
     `;
+  }
+
+  private buildTitle(active: number, finished: number): string {
+    const parts = ['Background Tasks'];
+    if (active > 0) parts.push(`${active} running`);
+    if (finished > 0) parts.push(`${finished} done`);
+    return parts.length > 1
+      ? `${parts[0]} (${parts.slice(1).join(', ')})`
+      : parts[0];
   }
 
   private renderSection(
@@ -295,6 +274,7 @@ export class BackgroundTasksPanel extends LitElement {
     const entry = this.processOutputs.get(child.executionId);
     const hasStdout = Boolean(entry?.stdout);
     const hasStderr = Boolean(entry?.stderr);
+    const isClickable = kind === 'subagent' && Boolean(child.childStreamId);
 
     return html`
       <div class="task-item">
@@ -308,7 +288,27 @@ export class BackgroundTasksPanel extends LitElement {
               'task-icon--subagent': kind === 'subagent',
             })}
           ></i>
-          <span class="task-name" title=${child.agentName}
+          <span
+            class=${classMap({
+              'task-name': true,
+              'task-name--clickable': isClickable,
+            })}
+            title=${isClickable
+              ? `Go to ${child.agentName}`
+              : child.agentName}
+            role=${isClickable ? 'link' : 'text'}
+            tabindex=${isClickable ? '0' : '-1'}
+            @click=${isClickable
+              ? () => this.navigateToStream(child.childStreamId!)
+              : nothing}
+            @keydown=${isClickable
+              ? (e: KeyboardEvent) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    this.navigateToStream(child.childStreamId!);
+                  }
+                }
+              : nothing}
             >${child.agentName}</span
           >
           <span class="task-status task-status--running">running</span>
@@ -340,10 +340,12 @@ export class BackgroundTasksPanel extends LitElement {
     `;
   }
 
-  private handleToggle(e: ToggleEvent): void {
-    // Only react to the outer panel-root toggle, not bubbled inner <details>
-    if (e.target !== e.currentTarget) return;
-    this.open = (e.currentTarget as HTMLDetailsElement).open;
+  private handleCollapsibleToggle(e: CustomEvent<{ open?: boolean }>): void {
+    this.open = e.detail?.open ?? this.open;
+  }
+
+  private navigateToStream(streamId: string): void {
+    this.dispatchEvent(ProgressEvents.streamSwitch({ streamId }));
   }
 }
 
