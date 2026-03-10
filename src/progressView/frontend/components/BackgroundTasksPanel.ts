@@ -28,7 +28,7 @@ import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 
 // Local imports - types
-import type { ActiveChildInfo } from '@shared/schemas';
+import { STREAM_STATUS, type ActiveChildInfo } from '@shared/schemas';
 
 // Local imports - events
 import { ProgressEvents } from '../events';
@@ -110,13 +110,20 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .task-status {
-        --_tint: var(--color-warning, var(--vscode-charts-orange));
         flex-shrink: 0;
         font-size: var(--font-size-xs, 10px);
         padding: 1px var(--spacing-small);
         border-radius: var(--border-radius-small);
         color: var(--_tint);
         background: color-mix(in srgb, var(--_tint) 12%, transparent);
+      }
+
+      .task-status--running {
+        --_tint: var(--color-warning, var(--vscode-charts-orange));
+      }
+
+      .task-status--waiting {
+        --_tint: var(--color-text-secondary);
       }
 
       .section-label {
@@ -200,7 +207,7 @@ export class BackgroundTasksPanel extends LitElement {
     const finished = this.finishedProcessCount + this.finishedSubagentCount;
     if (active + finished === 0) return nothing;
 
-    const title = this.buildTitle(active, finished);
+    const title = this.buildTitle(finished);
 
     return html`
       <vscode-collapsible
@@ -217,13 +224,18 @@ export class BackgroundTasksPanel extends LitElement {
     `;
   }
 
-  private buildTitle(active: number, finished: number): string {
-    const parts = ['Background Tasks'];
-    if (active > 0) parts.push(`${active} running`);
-    if (finished > 0) parts.push(`${finished} done`);
-    return parts.length > 1
-      ? `${parts[0]} (${parts.slice(1).join(', ')})`
-      : parts[0];
+  private buildTitle(finished: number): string {
+    const all = [...this.activeProcesses, ...this.activeSubagents];
+    const running = all.filter((c) => !isWaiting(c)).length;
+    const waiting = all.filter((c) => isWaiting(c)).length;
+
+    const segments: string[] = [];
+    if (running > 0) segments.push(`${running} running`);
+    if (waiting > 0) segments.push(`${waiting} waiting`);
+    if (finished > 0) segments.push(`${finished} done`);
+    return segments.length > 0
+      ? `Background Tasks (${segments.join(', ')})`
+      : 'Background Tasks';
   }
 
   private renderSection(
@@ -311,7 +323,14 @@ export class BackgroundTasksPanel extends LitElement {
               : nothing}
             >${child.agentName}</span
           >
-          <span class="task-status task-status--running">running</span>
+          <span
+            class=${classMap({
+              'task-status': true,
+              'task-status--running': !isWaiting(child),
+              'task-status--waiting': isWaiting(child),
+            })}
+            >${isWaiting(child) ? 'waiting' : 'running'}</span
+          >
         </div>
         ${hasStdout
           ? this.renderOutputStream('stdout', entry!.stdout)
@@ -357,6 +376,11 @@ export function toggleBackgroundTasksPanel(
   if (!panel) return;
   panel.open = !panel.open;
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/** Check if a child is in a waiting/idle state rather than actively processing. */
+function isWaiting(child: ActiveChildInfo): boolean {
+  return child.status === STREAM_STATUS.WAITING || child.status === STREAM_STATUS.READY;
 }
 
 declare global {

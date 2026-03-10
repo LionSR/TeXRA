@@ -34,6 +34,8 @@ export const ActiveChildInfoSchema = z.object({
   agentName: z.string(),
   /** Stream tab ID for subagents (they have their own tab). Absent for processes. */
   childStreamId: z.string().optional(),
+  /** Current execution status (e.g. "running", "waiting"). Defaults to "running". */
+  status: z.string().optional(),
 });
 
 export type ActiveChildInfo = z.infer<typeof ActiveChildInfoSchema>;

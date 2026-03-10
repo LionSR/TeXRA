@@ -210,6 +210,7 @@ function collectChildSummary(
     result.push({
       executionId: handle.executionId,
       agentName: handle.agentName,
+      status: handle.getStatus().status,
       ...(handle instanceof AgentExecutionHandle
         ? { childStreamId: handle.childStreamId }
         : {}),
