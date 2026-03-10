@@ -96,6 +96,12 @@ export interface ProgressEventPayloads {
     parentStreamId: StreamTabId;
     processes: ActiveChildInfo[];
   };
+  updateProcessOutput: {
+    parentStreamId: StreamTabId;
+    executionId: ExecutionId;
+    stdout: string;
+    stderr: string;
+  };
   setParentStream: {
     childStreamId: StreamTabId;
     parentStreamId: StreamTabId;

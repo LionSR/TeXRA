@@ -11,6 +11,7 @@ import {
 } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
+import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 // Local imports - progress view
 import type {
@@ -33,6 +34,10 @@ import {
 import type { FollowupOptionsState, WorkflowStreamState } from '../store';
 
 // Local imports - types
+import {
+  type BackgroundTasksPanel,
+  toggleBackgroundTasksPanel,
+} from './BackgroundTasksPanel';
 import type { PermissionState } from './PermissionCard';
 
 // Side-effect imports - sibling components
@@ -43,6 +48,7 @@ import './LogList';
 import './UsagePanel';
 import './FileList';
 import './FollowupSection';
+import './BackgroundTasksPanel';
 import './RequestPanels';
 
 /** Derived values for the currently selected run. */
@@ -80,6 +86,7 @@ export class WorkflowStreamContent extends LitElement {
   // Not @state(): always derived from streamContext/permissionContext (avoids double-render).
   private runGroups: RunGroup[] = [];
   private runValues: RunDerivedValues = EMPTY_RUN_VALUES;
+  private backgroundTasksRef: Ref<BackgroundTasksPanel> = createRef();
   private filteredPermissions: PermissionState[] = [];
 
   protected override willUpdate(changedProperties: PropertyValues): void {
@@ -140,11 +147,20 @@ export class WorkflowStreamContent extends LitElement {
         .runId=${runId}
         .runs=${this.runGroups}
         .yoloActive=${false}
+        @background-tasks-toggle=${this.handleBackgroundTasksToggle}
       ></stream-header>
 
       <instruction-panel .instruction=${instruction}></instruction-panel>
 
       <request-panels .permissions=${this.filteredPermissions}></request-panels>
+
+      <background-tasks-panel
+        ${ref(this.backgroundTasksRef)}
+        .activeProcesses=${state.activeProcesses}
+        .finishedProcessCount=${state.finishedProcessCount}
+        .activeSubagents=${state.activeSubagents}
+        .finishedSubagentCount=${state.finishedSubagentCount}
+      ></background-tasks-panel>
 
       <log-list></log-list>
 
@@ -164,5 +180,9 @@ export class WorkflowStreamContent extends LitElement {
         .streamModel=${streamInfo.model ?? null}
       ></followup-section>
     `;
+  }
+
+  private handleBackgroundTasksToggle(): void {
+    toggleBackgroundTasksPanel(this.backgroundTasksRef);
   }
 }
