@@ -343,12 +343,18 @@ async function readTail(
   }
 }
 
+/** Guards against concurrent readIncremental calls for the same executionId. */
+const readingInProgress = new Set<string>();
+
 async function readIncremental(
   executionId: string,
   parentStreamId: StreamTabId,
   stdoutPath: string,
   stderrPath: string,
 ): Promise<void> {
+  // Skip if another read (poll or final flush) is already in flight.
+  if (readingInProgress.has(executionId)) return;
+  readingInProgress.add(executionId);
   try {
     const prev = outputOffsets.get(executionId) ?? { stdout: 0, stderr: 0 };
     const [out, err] = await Promise.all([
@@ -370,6 +376,8 @@ async function readIncremental(
     });
   } catch {
     // File may have been deleted between check and read — ignore
+  } finally {
+    readingInProgress.delete(executionId);
   }
 }
 
