@@ -1,6 +1,6 @@
 /**
  * Stream metadata handlers: UPDATE_STREAM_STATUS, UPDATE_CONVERSATION_PROGRESS,
- * UPDATE_STREAM_BADGES.
+ * UPDATE_STREAM_BADGES, UPDATE_PROCESS_OUTPUT.
  */
 
 import { create } from 'mutative';
@@ -9,7 +9,34 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { STREAM_STATUS } from '@shared/schemas';
 
 import { getStreamState, isToolUseState } from '../store';
-import type { HandlerRegistry } from '../messageDispatcher';
+import type {
+  HandlerRegistry,
+  MessageHandlerContext,
+} from '../messageDispatcher';
+
+/** Remove output entries for processes no longer in the active list. */
+function pruneStaleOutputs(
+  ctx: MessageHandlerContext,
+  stream: string,
+  activeIds: Set<string>,
+): void {
+  ctx.setState((prev) => {
+    const streamOutputs = prev.processOutputs.get(stream);
+    if (!streamOutputs) return prev;
+    let hasStale = false;
+    for (const id of streamOutputs.keys()) {
+      if (!activeIds.has(id)) { hasStale = true; break; }
+    }
+    if (!hasStale) return prev;
+    return create(prev, (draft) => {
+      const outputs = draft.processOutputs.get(stream);
+      if (!outputs) return;
+      for (const id of [...outputs.keys()]) {
+        if (!activeIds.has(id)) outputs.delete(id);
+      }
+    });
+  });
+}
 
 export const streamMetaHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS]: (data, ctx) => {
@@ -57,5 +84,55 @@ export const streamMetaHandlers: HandlerRegistry = {
         draft.finishedProcessCount = data.finishedProcessCount;
       }),
     );
+    pruneStaleOutputs(
+      ctx,
+      data.stream,
+      new Set(data.activeProcesses.map((p: { executionId: string }) => p.executionId)),
+    );
+  },
+
+  [PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT]: (data, ctx) => {
+    const { stream, executionId, stdout, stderr } = data;
+    const MAX_OUTPUT = 100_000;
+    const cap = (prev: string, delta: string): string => {
+      if (!delta) return prev;
+      const combined = prev + delta;
+      return combined.length > MAX_OUTPUT
+        ? combined.slice(combined.length - MAX_OUTPUT)
+        : combined;
+    };
+    ctx.setState((prev) => {
+      // Prune stale entries opportunistically — this is the only handler
+      // that fires for non-active streams, so it's the only chance to clean up.
+      const streamState = prev.streamStates.get(stream);
+      const activeIds = new Set(
+        (streamState?.activeProcesses ?? []).map(
+          (p: { executionId: string }) => p.executionId,
+        ),
+      );
+      return create(prev, (draft) => {
+        let streamOutputs = draft.processOutputs.get(stream);
+        if (!streamOutputs) {
+          streamOutputs = new Map();
+          draft.processOutputs.set(stream, streamOutputs);
+        }
+        // Prune entries for finished processes — but never prune the
+        // incoming executionId, which we're about to update. The activeIds
+        // set can be stale for non-active streams (badge updates only fire
+        // for the active stream), so pruning the current ID would discard
+        // accumulated output and keep only the latest delta.
+        for (const id of [...streamOutputs.keys()]) {
+          if (id !== executionId && !activeIds.has(id)) streamOutputs.delete(id);
+        }
+        const existing = streamOutputs.get(executionId) ?? {
+          stdout: '',
+          stderr: '',
+        };
+        streamOutputs.set(executionId, {
+          stdout: cap(existing.stdout, stdout),
+          stderr: cap(existing.stderr, stderr),
+        });
+      });
+    });
   },
 };

@@ -147,6 +147,14 @@ export const UpdateStreamBadgesMessageSchema = z.object({
   finishedProcessCount: z.number(),
 });
 
+export const UpdateProcessOutputMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT),
+  stream: StreamTabIdSchema,
+  executionId: z.string(),
+  stdout: z.string(),
+  stderr: z.string(),
+});
+
 export const UpdateParentStreamMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM),
   stream: StreamTabIdSchema,
@@ -352,6 +360,7 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     SetActiveStreamMessageSchema,
     UpdateConversationProgressMessageSchema,
     UpdateStreamBadgesMessageSchema,
+    UpdateProcessOutputMessageSchema,
     UpdateParentStreamMessageSchema,
     UpdateStreamStatusMessageSchema,
     LogDeltaMessageSchema,

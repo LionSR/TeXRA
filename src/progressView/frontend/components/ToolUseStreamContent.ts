@@ -30,6 +30,10 @@ import type { ToolUseStreamState } from '../store';
 
 // Local imports - types
 import type { PermissionState } from './PermissionCard';
+import {
+  type BackgroundTasksPanel,
+  toggleBackgroundTasksPanel,
+} from './BackgroundTasksPanel';
 import type { FollowUpInput } from './FollowUpInput';
 
 // Side-effect imports - sibling components
@@ -39,6 +43,7 @@ import './TodoList';
 import './TaskGroupList';
 import './LogList';
 import './UsagePanel';
+import './BackgroundTasksPanel';
 import './FollowUpInput';
 
 @customElement('tool-use-stream-content')
@@ -62,6 +67,7 @@ export class ToolUseStreamContent extends LitElement {
   private filteredPermissions: PermissionState[] = [];
   private runGroups: RunGroup[] = [];
 
+  private backgroundTasksRef: Ref<BackgroundTasksPanel> = createRef();
   private followUpRef: Ref<FollowUpInput> = createRef();
 
   protected override willUpdate(changedProperties: PropertyValues): void {
@@ -103,11 +109,20 @@ export class ToolUseStreamContent extends LitElement {
         .runs=${this.runGroups}
         .yoloActive=${Boolean(currentState.toolEditBypass)}
         .superYoloActive=${Boolean(currentState.superYoloBypass)}
+        @background-tasks-toggle=${this.handleBackgroundTasksToggle}
       ></stream-header>
 
       <request-panels .permissions=${this.filteredPermissions}></request-panels>
 
       <todo-list .todos=${currentState.todos}></todo-list>
+
+      <background-tasks-panel
+        ${ref(this.backgroundTasksRef)}
+        .activeProcesses=${currentState.activeProcesses}
+        .finishedProcessCount=${currentState.finishedProcessCount}
+        .activeSubagents=${currentState.activeSubagents}
+        .finishedSubagentCount=${currentState.finishedSubagentCount}
+      ></background-tasks-panel>
 
       <log-list></log-list>
 
@@ -138,5 +153,9 @@ export class ToolUseStreamContent extends LitElement {
 
   private handleFocusComplete(): void {
     this.dispatchEvent(ProgressEvents.followupFocusComplete());
+  }
+
+  private handleBackgroundTasksToggle(): void {
+    toggleBackgroundTasksPanel(this.backgroundTasksRef);
   }
 }

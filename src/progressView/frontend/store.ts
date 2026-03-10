@@ -12,6 +12,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { StreamSort } from '@shared/streams/streamSort';
+import type { ProcessOutputMap } from './contexts/streamContexts';
 
 // Re-export schema types for components (single source of truth)
 export {
@@ -65,6 +66,9 @@ export interface ProgressState {
   /** Log messages per stream — separated so log appends don't trigger meta context updates */
   streamLogs: Map<StreamTabId, StreamLogs>;
   followupOptionsByStream: Map<StreamTabId, FollowupOptionsState>;
+  /** Background process outputs per stream — separated so output appends don't trigger meta context updates.
+   *  Outer key: streamId, inner key: executionId → { stdout, stderr }. */
+  processOutputs: Map<StreamTabId, ProcessOutputMap>;
 }
 
 /** Return the first stream ID from a streamById Map, or null if empty. */
@@ -83,6 +87,7 @@ export function createInitialState(): ProgressState {
     streamStates: new Map(),
     streamLogs: new Map(),
     followupOptionsByStream: new Map(),
+    processOutputs: new Map(),
   };
 }
 
