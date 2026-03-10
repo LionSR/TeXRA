@@ -122,4 +122,7 @@ export const ProgressEvents = {
 
   followupFocusComplete: () =>
     createEvent('followup-focus-complete', undefined),
+
+  backgroundTasksToggle: () =>
+    createEvent('background-tasks-toggle', undefined),
 } as const;
