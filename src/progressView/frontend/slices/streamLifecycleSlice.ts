@@ -81,6 +81,7 @@ function updateStreamInfo(
       if (!newStreamById.has(key)) {
         draft.streamStates.delete(key);
         draft.streamLogs.delete(key);
+        draft.processOutputs.delete(key);
       }
     }
 
@@ -154,6 +155,7 @@ export const streamLifecycleHandlers: HandlerRegistry = {
       create(prev, (draft) => {
         draft.streamStates.delete(streamId);
         draft.streamLogs.delete(streamId);
+        draft.processOutputs.delete(streamId);
         draft.streamById.delete(streamId);
         if (draft.activeStreamId === streamId) {
           draft.activeStreamId = null;
@@ -176,6 +178,7 @@ export const streamLifecycleHandlers: HandlerRegistry = {
         draft.streamById = new Map();
         draft.streamStates = new Map();
         draft.streamLogs = new Map();
+        draft.processOutputs = new Map();
         draft.activeStreamId = null;
         draft.followupOptionsByStream = new Map();
       }),

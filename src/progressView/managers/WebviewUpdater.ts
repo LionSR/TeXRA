@@ -314,6 +314,21 @@ export class WebviewUpdater {
     });
   }
 
+  updateProcessOutput(
+    stream: StreamTabId,
+    executionId: string,
+    stdout: string,
+    stderr: string,
+  ): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT,
+      stream,
+      executionId,
+      stdout,
+      stderr,
+    });
+  }
+
   updateParentStream(
     stream: StreamTabId,
     parentStreamId: StreamTabId | undefined,

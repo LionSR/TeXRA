@@ -34,6 +34,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   SET_ACTIVE_STREAM: 'setActiveStream',
   UPDATE_CONVERSATION_PROGRESS: 'updateConversationProgress',
   UPDATE_STREAM_BADGES: 'updateStreamBadges',
+  UPDATE_PROCESS_OUTPUT: 'updateProcessOutput',
   UPDATE_PARENT_STREAM: 'updateParentStream',
   UPDATE_FILES: 'updateFiles',
   UPDATE_MISSING_OUTPUTS: 'updateMissingOutputs',
