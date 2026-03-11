@@ -8,7 +8,7 @@
 
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';
-import { state } from 'lit/decorators.js';
+import { query, state } from 'lit/decorators.js';
 
 // Local imports - shared utilities
 import { FEEDBACK_ELIGIBLE_KINDS } from '@shared/utils/uiConstants';
@@ -17,6 +17,7 @@ import { FEEDBACK_ELIGIBLE_KINDS } from '@shared/utils/uiConstants';
 import { BaseRequestPanel } from './BaseRequestPanel';
 
 export abstract class BaseFeedbackPanel extends BaseRequestPanel {
+  @query('[data-feedback-input]') private feedbackInput?: HTMLElement;
   @state() protected showFeedback = false;
 
   // ===========================================================================
@@ -60,10 +61,7 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
     if (!this.showFeedback) {
       this.showFeedback = true;
       this.updateComplete.then(() => {
-        const input = this.renderRoot.querySelector<HTMLElement>(
-          '[data-feedback-input]',
-        );
-        input?.focus();
+        this.feedbackInput?.focus();
       });
       return;
     }
@@ -114,10 +112,9 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
   // ===========================================================================
 
   private getFeedbackValue(): string | undefined {
-    const input = this.renderRoot.querySelector<HTMLElement>(
-      '[data-feedback-input]',
-    ) as HTMLElement & { value?: string };
-    const trimmed = (input?.value ?? '').trim();
+    const trimmed =
+      ((this.feedbackInput as HTMLElement & { value?: string })?.value ?? '')
+        .trim();
     return trimmed || undefined;
   }
 }
