@@ -67,6 +67,7 @@ export class StreamTab extends LitElement {
     css`
       :host {
         display: block;
+        container-type: inline-size;
       }
 
       .tab-container {
@@ -156,6 +157,14 @@ export class StreamTab extends LitElement {
         overflow: hidden;
         text-overflow: ellipsis;
         width: 100%;
+        display: none;
+      }
+
+      /* Only show description when the tab has enough horizontal space */
+      @container (min-width: 200px) {
+        .tab-description {
+          display: block;
+        }
       }
 
       .tab-meta {
