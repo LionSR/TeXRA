@@ -188,8 +188,6 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     patterns['\\int d\\'] = '\\int \\dd\\';
     patterns['\\int \\dd \\bx \\'] = '\\int \\dd \\bx~ \\';
 
-    // Keep the generateTextCommandNormalization utility for other cases where needed
-
     // Arrows and Relations
     // Examples: \rightarrow -> \ra, \Leftrightarrow -> \LRa
     const arrowRelationMap = {
@@ -428,19 +426,6 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
       generateBoldBackslashFixes('b', mathbfUpperLetters),
     );
 
-    // Fix for double backslashes in custom commands
-    // Examples: \\bet -> \bet, \\bbf -> \bbf
-    const customShortcutFixes = ['bet', 'bze', 'cP', 'Om', 'bbf'];
-    Object.assign(
-      patterns,
-      Object.fromEntries(
-        customShortcutFixes.map((shortcut) => [
-          `\\\\${shortcut}`,
-          `\\${shortcut}`,
-        ]),
-      ),
-    );
-
     // Convert functions to simpler forms (e.g., F_/G_)
     // Examples: \F_ -> F_, \G( -> G(
     const functionNames = ['F', 'G'];
@@ -533,7 +518,6 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
     '    &\\quad ': '    &~~~ ',
     '\\Ra\,': '\\Ra~',
 
-    //
     '{\\ddt}': '{\\dd t}',
     '\\int_0^\\tauf dt': '\\int_0^{\\tauf} \\ddt',
 
@@ -609,9 +593,8 @@ function createWordRegexPart(words: string[]): string {
   return words.join('|');
 }
 
-// Define the comprehensive list of all trigger words (from our previous discussion)
 // prettier-ignore
-// Define the comprehensive list of all trigger words (from our previous discussion)
+// Define the comprehensive list of all trigger words
 const _fullWordsArrayInternal = [
   'apply', 'Apply', 'applies', 'Applies', 'applying', 'Applying', 'base', 'Base', 'based', 'Based', 'bases', 'Bases', 'basing', 'Basing', 'but', 'But', 'by', 'By', 
   'between', 'Between', 'betweening', 'Betweening', 'betweened', 'Betweened', 'betweenes', 'Betweenes',

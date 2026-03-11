@@ -395,9 +395,10 @@ export class ProgressEventHandler {
       return;
     }
 
-    // Push a targeted update only for the active stream.
-    const activeStream = this.state.activeStream;
-    const progress = this.pendingProgressUpdates.get(activeStream);
+    const { activeStream } = this.state;
+    const progress = activeStream
+      ? this.pendingProgressUpdates.get(activeStream)
+      : undefined;
     if (activeStream && progress) {
       this.webviewUpdater.updateConversationProgress(activeStream, progress);
     }
@@ -633,8 +634,7 @@ export class ProgressEventHandler {
     status: StreamStatus,
     previousStatus?: StreamStatus,
   ): void {
-    const isDirectCall = previousStatus === undefined;
-    if (isDirectCall) {
+    if (previousStatus === undefined) {
       StreamStatusService.set(streamId, status, { emit: false });
     }
 

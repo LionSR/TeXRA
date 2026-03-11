@@ -1,7 +1,7 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
+// Local imports
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
@@ -51,10 +51,7 @@ async function handleApplyReplacements(): Promise<void> {
         const document = editor.document;
         const text = document.getText();
 
-        // Apply replacements
         const processedText = replacementEngine.applyAll(text);
-
-        // Update document content
         const fullRange = new vscode.Range(
           document.positionAt(0),
           document.positionAt(text.length),
@@ -90,13 +87,10 @@ async function handleIndentCurrentTeX(): Promise<void> {
       async ({ relativePath }) => {
         logger.debug(CHANNEL, `Indenting LaTeX file: ${relativePath}`);
 
-        // Run the indent operation with relative path
         const success = await runLatexFormatter(relativePath);
 
         if (success) {
-          // Instead of trying to modify the document directly,
-          // let VS Code handle the file change notification
-          await delay(100); // Small delay to ensure file is written
+          await delay(100);
           await showLoggedInfoMessage(
             CHANNEL,
             'LaTeX file indented successfully',
@@ -118,7 +112,6 @@ async function handleGetTeXCount(): Promise<void> {
       async ({ relativePath }) => {
         logger.debug(CHANNEL, `Getting tex count for: ${relativePath}`);
 
-        // Ask if user wants to merge included files
         const countingMode = await vscode.window.showQuickPick<
           vscode.QuickPickItem & { value: TexcountMode }
         >(
@@ -139,7 +132,6 @@ async function handleGetTeXCount(): Promise<void> {
           return;
         }
 
-        // Show progress indicator
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
@@ -162,7 +154,6 @@ async function handleGetTeXCount(): Promise<void> {
               return;
             }
 
-            // Extract key statistics using regex patterns
             const patterns: [RegExp, string][] = [
               [/Words in text:\s*(\d+)/, 'Text: $1 words'],
               [/Words in headers:\s*(\d+)/, 'Headers: $1'],

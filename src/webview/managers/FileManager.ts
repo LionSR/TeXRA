@@ -221,7 +221,6 @@ export class FileManager extends BaseWebviewManager {
     message: SelectMultipleFilesMessage,
   ): Promise<void> {
     const { fileType, currentFile } = message;
-    // Cast needed: ExtendedFileType includes 'edited' but multi-select doesn't
     const commands = MULTIPLE_FILE_COMMANDS.get(fileType as MultiFileCategory);
     if (!commands) {
       logger.warn(CHANNEL, `Unsupported multiple file selection: ${fileType}`);
@@ -290,7 +289,6 @@ export class FileManager extends BaseWebviewManager {
       return;
     }
 
-    // Inline file path resolution (was resolveFilePathForType)
     let filePathToSelect = currentOpenFile;
     if (fileType === 'base') {
       const derivedBaseFile = deriveBaseFileFromLatexDiff(currentOpenFile);

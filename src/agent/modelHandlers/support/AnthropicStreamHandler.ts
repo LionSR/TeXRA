@@ -490,24 +490,17 @@ export class AnthropicStreamHandler {
   private extractSearchResults(
     block: WebSearchToolResultBlock,
   ): WebSearchResultEntry[] {
-    const entries: WebSearchResultEntry[] = [];
+    if (!Array.isArray(block.content)) return [];
 
-    if (Array.isArray(block.content)) {
-      for (const item of block.content) {
-        const r = item as WebSearchResultBlock;
-        if (r.type === 'web_search_result' && r.url) {
-          entries.push({
-            url: r.url,
-            title: r.title,
-            snippet: r.encrypted_content,
-            pageAge: r.page_age ?? undefined,
-            domain: extractDomain(r.url),
-          });
-        }
-      }
-    }
-
-    return entries;
+    return (block.content as WebSearchResultBlock[])
+      .filter((r) => r.type === 'web_search_result' && r.url)
+      .map((r) => ({
+        url: r.url,
+        title: r.title,
+        snippet: r.encrypted_content,
+        pageAge: r.page_age ?? undefined,
+        domain: extractDomain(r.url),
+      }));
   }
 
   /**

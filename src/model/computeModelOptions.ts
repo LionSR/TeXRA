@@ -205,19 +205,22 @@ export async function computeModelOptionsData(): Promise<ModelOptionData[]> {
     return _pending;
   }
 
-  _pending = computeModelOptionsDataUncached();
+  const thisRequest = computeModelOptionsDataUncached();
+  _pending = thisRequest;
 
   try {
-    const data = await _pending;
+    const data = await thisRequest;
     // Only populate cache if no invalidation occurred while we were awaiting.
-    // invalidateModelOptionsCache() sets _pending = null, so a truthy check
-    // prevents stale results from populating the cache.
-    if (_pending) {
+    // invalidateModelOptionsCache() sets _pending = null, so comparing against
+    // thisRequest detects concurrent invalidation.
+    if (_pending === thisRequest) {
       _resolved = { data, expiry: Date.now() + MODEL_OPTIONS_CACHE_TTL_MS };
     }
     return data;
   } finally {
-    _pending = null;
+    if (_pending === thisRequest) {
+      _pending = null;
+    }
   }
 }
 

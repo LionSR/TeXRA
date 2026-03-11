@@ -25,9 +25,6 @@ function showNoIssuesMessage(): void {
   );
 }
 
-/**
- * Show linter messages for the current file
- */
 export async function handleShowLinterMessages(): Promise<void> {
   try {
     await withLaTeXGuard(
@@ -64,9 +61,6 @@ export async function handleShowLinterMessages(): Promise<void> {
   }
 }
 
-/**
- * Count and display linter messages by severity for the current file
- */
 export async function handleCountLinterMessages(): Promise<void> {
   try {
     await withLaTeXGuard(

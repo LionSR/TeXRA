@@ -1,10 +1,6 @@
-// Standard library imports
 import * as path from 'path';
 
-// Third-party imports
 import pMap from 'p-map';
-
-// Local imports - log
 
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
@@ -162,7 +158,6 @@ export class LatexMediaManager {
 
     const mirrorTasks: Promise<void>[] = [];
 
-    // Process results with non-empty values
     for (const { file, figures } of figureResults) {
       if (figures.length === 0) {
         continue;
@@ -219,7 +214,6 @@ export class LatexMediaManager {
       { concurrency: LATEX_CONCURRENCY, stopOnError: false },
     );
 
-    // Add successful TikZ compilation results
     for (const r of tikzResults) {
       if (r.length > 0) {
         workspaceState.media.addMediaFiles(r);

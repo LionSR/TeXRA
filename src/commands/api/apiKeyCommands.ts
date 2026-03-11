@@ -24,7 +24,6 @@ async function refreshApiKeyUI(): Promise<void> {
   void vscode.commands.executeCommand('texra.refreshAllOptions');
 }
 
-// Helper function to set API key for a specific provider
 async function setApiKeyForProvider(
   provider: ApiProvider,
   skipDialog = false,
@@ -84,26 +83,20 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       apiKeyCommands.setApiKey,
       async (provider?: ApiProvider) => {
-        let selectedProvider = provider;
-        const skipDialog = !!provider;
-
-        if (!selectedProvider) {
-          const providerItems =
-            await SecretManager.getApiProviderQuickPickItems();
-          const providerPick = await vscode.window.showQuickPick(
-            providerItems,
-            {
-              placeHolder: 'Select API provider',
-            },
-          );
-          selectedProvider = providerPick?.provider;
-        }
-
-        if (!selectedProvider) {
+        if (provider) {
+          await setApiKeyForProvider(provider, true);
           return;
         }
 
-        await setApiKeyForProvider(selectedProvider, skipDialog);
+        const providerItems =
+          await SecretManager.getApiProviderQuickPickItems();
+        const providerPick = await vscode.window.showQuickPick(providerItems, {
+          placeHolder: 'Select API provider',
+        });
+
+        if (providerPick?.provider) {
+          await setApiKeyForProvider(providerPick.provider);
+        }
       },
     ),
 

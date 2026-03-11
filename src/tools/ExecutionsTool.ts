@@ -27,19 +27,19 @@ import {
   type ExecutionStatusInfo,
   ACTIVE_STATUSES,
   AgentExecutionHandle,
+  ProcessExecutionHandle,
   getHandle,
   getActiveExecutionIds,
   waitForExecutionChange,
   waitForAnyExecutionChange,
   killExecution,
 } from '@agent/runtime/executionRegistry';
-import { ProcessExecutionHandle } from '@agent/runtime/ExecutionHandle';
 
 // Local imports - utils
 import { WorkspaceStateKey, workspaceSM } from '@common/state';
 import { isDirectory } from '@common/files/fsEntryType';
-import { STREAM_STATUS } from '@shared/schemas';
 import {
+  STREAM_STATUS,
   EXECUTION_STATUS,
   ExecutionIdSchema,
   type ExecutionId,

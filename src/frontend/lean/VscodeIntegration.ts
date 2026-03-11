@@ -200,7 +200,6 @@ async function getClientProvider(): Promise<LeanClientProvider | null> {
   const lean4Ext =
     vscode.extensions.getExtension<Lean4ExtensionApi>(LEAN4_EXTENSION_ID);
   if (!lean4Ext) {
-    // Prompt user to install the extension
     await promptLean4ExtensionInstall();
     return null;
   }
@@ -224,13 +223,11 @@ async function sendPositionRequest<T>(
   const uri = vscode.Uri.file(absolutePath);
   const leanUri = createLeanFileUri(absolutePath);
 
-  // Get client provider
   const clientProvider = await getClientProvider().catch(() => null);
   if (!clientProvider) {
     return { data: null, error: 'Lean 4 extension not found or not activated' };
   }
 
-  // Open file in editor so LSP server has processed it
   try {
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preserveFocus: true });
@@ -238,7 +235,6 @@ async function sendPositionRequest<T>(
     return { data: null, error: `Failed to open file ${absolutePath}: ${e}` };
   }
 
-  // Find and validate Lean client (uses duck-typed FileUri for Lean 4 extension compatibility)
   let client: LeanClient | undefined;
   try {
     client = clientProvider.findClient(leanUri);
@@ -261,7 +257,6 @@ async function sendPositionRequest<T>(
     };
   }
 
-  // Send LSP request
   try {
     const params = {
       textDocument: { uri: leanUri.toString() },

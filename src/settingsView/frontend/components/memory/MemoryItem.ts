@@ -18,8 +18,6 @@ import {
 // Local imports - memory view events
 import { MemoryViewEvents } from './events';
 
-// Local imports - shared schemas
-
 @customElement('memory-item')
 export class MemoryItem extends LitElement {
   static override styles = [

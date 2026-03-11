@@ -9,17 +9,12 @@
  * 5. On resolution → emits 'resolveRetryRequest' to dismiss UI
  */
 
-// Local imports
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { ProviderErrorPartial } from '@shared/schemas';
 import {
   BasePromiseCoordinator,
   type CoordinatorConfig,
 } from './BasePromiseCoordinator';
-
-// ============================================================================
-// Types
-// ============================================================================
 
 /**
  * Result of a retry request. Discriminated union for type-safe handling.
@@ -56,10 +51,6 @@ interface RetryShowPayload extends Record<string, unknown> {
   errorMessage?: string;
   errorDetails?: ProviderErrorPartial;
 }
-
-// ============================================================================
-// Coordinator Implementation
-// ============================================================================
 
 /**
  * Manages pending retry requests.
@@ -151,11 +142,4 @@ class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
   }
 }
 
-// ============================================================================
-// Singleton Export
-// ============================================================================
-
-/**
- * Singleton coordinator instance.
- */
 export const retryCoordinator = new RetryRequestCoordinatorImpl();

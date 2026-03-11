@@ -25,8 +25,6 @@ import { historyViewStyles } from './styles';
 // Local imports - history view events
 import { HistoryViewEvents } from './events';
 
-// Local imports - shared schemas
-
 type ConfigValue = string | number | boolean | string[] | null | undefined;
 
 @customElement('history-item')
@@ -85,11 +83,9 @@ export class HistoryItem extends LitElement {
   }
 
   private handleActionClick(event: MouseEvent): void {
-    const button = (event.target as HTMLElement).closest<HTMLElement>(
+    const action = (event.target as HTMLElement).closest<HTMLElement>(
       '[data-action]',
-    );
-    if (!button) return;
-    const action = button.dataset.action;
+    )?.dataset.action;
     if (action) {
       this.handleAction(action);
     }
@@ -101,7 +97,7 @@ export class HistoryItem extends LitElement {
     this.dispatchEvent(
       HistoryViewEvents.toggleItem({
         historyId: this.item.id,
-        open: Boolean(open),
+        open,
       }),
     );
   }

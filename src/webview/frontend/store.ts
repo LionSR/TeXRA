@@ -5,7 +5,6 @@
  * Uses Zod-derived types from shared schemas for type safety.
  */
 
-// Local imports - shared schemas (Zod-derived types)
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import {
   MainViewPersistedStateSchema,
@@ -18,7 +17,6 @@ import {
   type MultiFilesVisible,
 } from '@shared/schemas';
 
-// Local imports - webview commands
 import {
   SESSION_TYPES,
   type SessionType,

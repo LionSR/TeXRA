@@ -7,8 +7,6 @@
  * Import cleanup functions from here, not from individual modules.
  */
 
-// Local imports - agent types
-
 // Local file imports - individual approval modules
 import type { StreamTabId } from '@shared/schemas';
 import {

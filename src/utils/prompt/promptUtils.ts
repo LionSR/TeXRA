@@ -1,10 +1,7 @@
-// Standard library imports
 import * as path from 'path';
 
-// Third-party imports
 import * as nunjucks from 'nunjucks';
 
-// Local imports
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';

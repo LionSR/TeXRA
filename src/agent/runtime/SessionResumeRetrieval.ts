@@ -21,7 +21,6 @@ import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessag
 import {
   TOOL_USE_SNAPSHOT_VERSION,
   ToolUseSessionSnapshotSchema,
-  type ToolUseSessionSnapshot,
 } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import type { TaskState } from '@logger/TaskState';
 import { isToolUseTaskState, isWorkflowTaskState } from '@logger/TaskState';
