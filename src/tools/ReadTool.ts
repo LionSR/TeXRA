@@ -63,7 +63,7 @@ interface BuildSummaryParams {
 export class ReadFileTool extends defineTool({
   name: 'read_file',
   description:
-    'Read and return workspace files. For text files you can supply an optional line range. PDFs (.pdf) and common image formats are returned as attachments so vision-capable models can inspect their pages or visual content.',
+    'Read and return workspace files. For text files you can supply an optional line range. PDFs (.pdf), common image formats, and office documents (.docx, .xlsx, .pptx, .doc, .xls, .ppt, .odt, .rtf) are returned as file attachments so capable models can process their content.',
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
@@ -194,7 +194,7 @@ export class ReadFileTool extends defineTool({
 
   private getAttachmentConfig(
     filePath: string,
-  ): { kind: 'pdf' | 'image'; label: string } | null {
+  ): { kind: 'pdf' | 'image' | 'document'; label: string } | null {
     const mimeType = getMimeType(filePath)?.toLowerCase();
     // Keep extension detection case-insensitive so users can reference files regardless of casing.
     const extension = path.extname(filePath.toLowerCase());
@@ -212,17 +212,31 @@ export class ReadFileTool extends defineTool({
       return { kind: 'image', label: 'image' };
     }
 
+    // Office documents are binary formats that cannot be read as text.
+    // Return them as attachments so models with file input support can process them.
+    const isDocument =
+      OFFICE_EXTENSIONS.has(extension) || OFFICE_MIME_TYPES.has(mimeType ?? '');
+    if (isDocument) {
+      return { kind: 'document', label: 'document' };
+    }
+
     return null;
   }
 
   private async returnBinaryAttachment(
     input: ReadInput,
-    config: { kind: 'pdf' | 'image'; label: string },
+    config: { kind: 'pdf' | 'image' | 'document'; label: string },
   ): Promise<ToolResult> {
     const copy = ATTACHMENT_COPY[config.kind];
+    const descriptionLabel =
+      config.kind === 'pdf'
+        ? 'PDF'
+        : config.kind === 'image'
+          ? 'Image'
+          : 'Document';
     const attachment = await buildFileAttachment({
       filePath: input.path,
-      description: `${config.label === 'PDF' ? 'PDF' : 'Image'} returned by read_file tool.`,
+      description: `${descriptionLabel} returned by read_file tool.`,
     });
 
     const baseSummary = `Attached ${config.label} ${attachment.path}.`;
@@ -249,8 +263,61 @@ const IMAGE_EXTENSIONS = new Set([
   '.svg',
 ]);
 
+const OFFICE_EXTENSIONS = new Set([
+  // Word processing
+  '.doc',
+  '.docx',
+  '.dot',
+  '.odt',
+  '.rtf',
+  // Spreadsheets
+  '.xls',
+  '.xlsx',
+  '.xla',
+  '.xlb',
+  '.xlc',
+  '.xlm',
+  '.xlt',
+  '.xlw',
+  '.ods',
+  '.csv',
+  '.tsv',
+  // Presentations
+  '.ppt',
+  '.pptx',
+  '.pot',
+  '.ppa',
+  '.pps',
+  '.odp',
+  // Apple iWork
+  '.pages',
+  '.numbers',
+  '.key',
+]);
+
+const OFFICE_MIME_TYPES = new Set([
+  // Word processing
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.oasis.opendocument.text',
+  'application/rtf',
+  'text/rtf',
+  // Spreadsheets
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  // Presentations
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.oasis.opendocument.presentation',
+  // Apple iWork
+  'application/vnd.apple.pages',
+  'application/vnd.apple.numbers',
+  'application/vnd.apple.keynote',
+]);
+
 const ATTACHMENT_COPY: Record<
-  'pdf' | 'image',
+  'pdf' | 'image' | 'document',
   {
     rangeSummary: string;
     rangeOutput: string;
@@ -268,5 +335,12 @@ const ATTACHMENT_COPY: Record<
     rangeOutput: 'Line ranges are not supported when reading images.',
     coreOutput:
       'Returned the image as a file attachment. Vision-capable models can analyze the visual content directly.',
+  },
+  document: {
+    rangeSummary:
+      'Ignored requested line range because office documents are binary.',
+    rangeOutput: 'Line ranges are not supported when reading office documents.',
+    coreOutput:
+      'Returned the document as a file attachment. Models with file input support can extract and analyze the document content.',
   },
 };

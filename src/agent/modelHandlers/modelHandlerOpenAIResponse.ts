@@ -107,6 +107,40 @@ interface UploadedOpenAIResponseAttachment {
 }
 
 /**
+ * MIME types that the OpenAI Responses API accepts as `input_file` content.
+ * Includes PDFs, office documents (Word, Excel, PowerPoint), and open formats.
+ * Images are handled separately via `input_image`.
+ */
+const INLINEABLE_FILE_MIME_TYPES = new Set([
+  'application/pdf',
+  // Word processing
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.oasis.opendocument.text',
+  'application/rtf',
+  'text/rtf',
+  // Spreadsheets
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  'text/csv',
+  'text/tsv',
+  // Presentations
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.oasis.opendocument.presentation',
+  // Apple iWork
+  'application/vnd.apple.pages',
+  'application/vnd.apple.numbers',
+  'application/vnd.apple.keynote',
+]);
+
+/** Check whether a MIME type can be inlined as an `input_file` part. */
+function isInlineableFileType(mimeType: string): boolean {
+  return INLINEABLE_FILE_MIME_TYPES.has(mimeType);
+}
+
+/**
  * Handler for OpenAI's Responses API. This implementation works directly with
  * the native response message types instead of reusing the chat completion
  * abstractions. Conversation state is maintained through `previous_response_id`
@@ -2400,7 +2434,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /**
    * Build inline base64 content parts for tool attachments when file uploads
    * are unavailable (e.g., OpenRouter routing). Images use data URI in
-   * `image_url`; PDFs use `file_data`. Non-visual attachments are skipped.
+   * `image_url`; PDFs and office documents use `file_data` in `input_file`.
+   * Unsupported MIME types are skipped.
    */
   private async buildInlineAttachmentParts(
     attachments: ToolFileAttachment[],
@@ -2417,9 +2452,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     for (const attachment of attachments) {
       const mimeType = attachment.mimeType ?? 'application/octet-stream';
       const isImage = mimeType.startsWith('image/');
-      const isPdf = mimeType === 'application/pdf';
+      const isFileInput = isInlineableFileType(mimeType);
 
-      if (!isImage && !isPdf) {
+      if (!isImage && !isFileInput) {
         skipped.push(attachment);
         continue;
       }
@@ -2444,14 +2479,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             image_url: `data:${mimeType};base64,${base64}`,
           });
         } else {
-          // PDF
+          // PDF, office documents, and other file types accepted by input_file
           const filename =
             typeof attachment.path === 'string' && attachment.path.length > 0
               ? path.basename(attachment.path)
-              : 'attachment.pdf';
+              : 'attachment';
           parts.push({
             type: 'input_file',
-            file_data: `data:application/pdf;base64,${base64}`,
+            file_data: `data:${mimeType};base64,${base64}`,
             filename,
           });
         }
