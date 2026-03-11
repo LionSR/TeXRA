@@ -36,7 +36,6 @@ export const StreamTabMetaSchema = z.object({
   parentStreamId: z.string().optional(),
   executionId: z.string().optional(),
   taskState: TaskStateSchema.optional(),
-  description: z.string().optional(),
 });
 
 export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;

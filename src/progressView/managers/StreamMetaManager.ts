@@ -1,3 +1,4 @@
+import { getExecutionStore } from '@agent/storage';
 import { normalizeRunId } from '@common/constants/runIds';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
@@ -81,9 +82,10 @@ export class StreamMetaManager {
     return this.descriptions.get(stream);
   }
 
+  /** Cache description in memory (for live sessions). Not persisted to
+   *  StreamTabMeta — ExecutionMeta is the single source of truth on disk. */
   setDescription(stream: StreamTabId, description: string): void {
     this.descriptions.set(stream, description);
-    this.save(stream);
   }
 
   // -- Queries ----------------------------------------------------------------
@@ -161,17 +163,39 @@ export class StreamMetaManager {
       if (meta.parentStreamId) {
         this.parentStreamIds.set(streamId, meta.parentStreamId as StreamTabId);
       }
-
-      if (meta.description) {
-        this.descriptions.set(streamId, meta.description);
-      }
     }
+
+    // Hydrate descriptions from ExecutionMeta (the single source of truth).
+    // Runs in parallel for all streams that have an associated executionId.
+    await this.hydrateDescriptions();
 
     this.loaded = true;
 
     this.logger.info(
       `Loaded: ${loadedTasks} task states, ${skippedTasks} skipped, ${this.executionIds.size} execution IDs`,
     );
+  }
+
+  /**
+   * Populate in-memory descriptions from ExecutionMeta for all known streams.
+   * ExecutionMeta.description is the single source of truth on disk.
+   */
+  private async hydrateDescriptions(): Promise<void> {
+    const entries = [...this.executionIds.entries()];
+    if (entries.length === 0) return;
+    const results = await Promise.all(
+      entries.map(async ([streamId, executionId]) => {
+        try {
+          const meta = await getExecutionStore(executionId).readMeta();
+          return { streamId, description: meta?.description };
+        } catch {
+          return { streamId, description: undefined };
+        }
+      }),
+    );
+    for (const { streamId, description } of results) {
+      if (description) this.descriptions.set(streamId, description);
+    }
   }
 
   /** Await all pending disk writes. */
@@ -214,9 +238,6 @@ export class StreamMetaManager {
 
     const parentStreamId = this.parentStreamIds.get(stream);
     if (parentStreamId) meta.parentStreamId = parentStreamId;
-
-    const description = this.descriptions.get(stream);
-    if (description) meta.description = description;
 
     return meta;
   }
