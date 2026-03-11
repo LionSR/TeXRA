@@ -267,27 +267,15 @@ const OFFICE_EXTENSIONS = new Set([
   // Word processing
   '.doc',
   '.docx',
-  '.dot',
   '.odt',
   '.rtf',
   // Spreadsheets
   '.xls',
   '.xlsx',
-  '.xla',
-  '.xlb',
-  '.xlc',
-  '.xlm',
-  '.xlt',
-  '.xlw',
   '.ods',
-  // NOTE: .csv and .tsv are intentionally excluded — they are plain text
-  // and should be read with line-range support, not treated as binary.
   // Presentations
   '.ppt',
   '.pptx',
-  '.pot',
-  '.ppa',
-  '.pps',
   '.odp',
   // Apple iWork
   '.pages',
