@@ -10,24 +10,20 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 
-// Local imports - shared styles
+// Local imports - shared
 import { designTokens } from '@shared/styles';
-import { STREAM_STATUS } from '@shared/schemas';
-import type {
-  SetFollowupOptionsMessage,
-  AgentOptionData,
-  ModelOptionData,
+import {
+  STREAM_STATUS,
+  type SetFollowupOptionsMessage,
+  type AgentOptionData,
+  type ModelOptionData,
 } from '@shared/schemas';
 import { commonViewStyles } from '@shared/styles/commonViewStyles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
-
-// Local imports - shared utils
 import {
   renderAgentOptions,
   renderModelOptions,
 } from '@shared/utils/selectTemplates';
-
-// Local imports - shared schemas
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';

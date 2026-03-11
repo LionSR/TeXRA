@@ -11,18 +11,15 @@ import {
   animationStyles,
   commonViewStyles,
 } from '@shared/styles';
-import type { StreamTabInfo } from '@shared/schemas';
+import { STREAM_STATUS, type StreamTabInfo } from '@shared/schemas';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 
 // Local imports - progress view constants
-import { ELEMENT_IDS, STREAM_STATUS, TOOLBAR_BUTTONS } from '../constants';
+import { ELEMENT_IDS, TOOLBAR_BUTTONS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
-import type { StreamState } from '../store';
 import './RunSelector';
-
-// Local imports - shared schemas
 
 interface ToolbarButton {
   id: string;
@@ -336,53 +333,6 @@ export class StreamHeader extends LitElement {
         font-size: var(--font-size-xs, 10px);
       }
 
-      .child-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--spacing-tiny);
-        padding: 1px var(--spacing-small);
-        font-size: var(--font-size-xs, 10px);
-        font-weight: var(--font-weight-semibold);
-        color: var(--_badge-color);
-        background: color-mix(in srgb, var(--_badge-color) 12%, transparent);
-        border-radius: var(--border-radius-small);
-        white-space: nowrap;
-      }
-
-      .child-badge--clickable {
-        cursor: pointer;
-        transition:
-          background-color var(--transition-fast),
-          box-shadow var(--transition-fast);
-      }
-
-      .child-badge--clickable:hover {
-        background: color-mix(in srgb, var(--_badge-color) 22%, transparent);
-        box-shadow: 0 0 4px
-          color-mix(in srgb, var(--_badge-color) 30%, transparent);
-      }
-
-      .child-badge--clickable:focus-visible {
-        outline: var(--border-thin) solid var(--vscode-focusBorder);
-        outline-offset: 1px;
-      }
-
-      .child-badge .codicon {
-        font-size: var(--font-size-xs, 10px);
-      }
-
-      .subagent-badge {
-        --_badge-color: var(--color-info, var(--vscode-charts-blue));
-      }
-
-      .process-badge {
-        --_badge-color: var(--color-warning, var(--vscode-charts-orange));
-      }
-
-      .progress-badge {
-        --_badge-color: var(--color-text-secondary);
-      }
-
       @media (max-width: 500px) {
         .log-header {
           flex-wrap: wrap;
@@ -401,7 +351,7 @@ export class StreamHeader extends LitElement {
   ];
 
   @property({ attribute: false }) stream: StreamTabInfo | null = null;
-  @property({ attribute: false }) streamState: StreamState | null = null;
+  @property({ attribute: false }) status: string = STREAM_STATUS.READY;
   @property({ attribute: false }) runId: string | null = null;
   @property({ attribute: false }) runs: Array<{
     id: string;
@@ -416,22 +366,12 @@ export class StreamHeader extends LitElement {
       return nothing;
     }
 
-    const status = this.getCurrentStatus();
-    const statusLabel = this.getStatusLabel(status);
+    const status = this.status || STREAM_STATUS.READY;
+    const statusLabel = STATUS_LABELS[status] ?? status;
     const hasExecutionId = Boolean(this.stream.executionId);
     const agentCategory = this.stream.agentCategory;
     const toolbarButtons =
       TOOLBAR_BUTTONS[agentCategory] ?? TOOLBAR_BUTTONS.workflow;
-    const streamState = this.streamState;
-    const activeSubagents = streamState ? streamState.activeSubagents : [];
-    const finishedSubagentCount = streamState
-      ? streamState.finishedSubagentCount
-      : 0;
-    const activeProcesses = streamState ? streamState.activeProcesses : [];
-    const finishedProcessCount = streamState
-      ? streamState.finishedProcessCount
-      : 0;
-    const progress = this.streamState?.conversationProgress;
 
     return html`
       <div class="log-header">
@@ -455,30 +395,6 @@ export class StreamHeader extends LitElement {
               })}
               data-status=${statusLabel}
             ></span>
-            ${this.renderChildBadge(
-              activeSubagents,
-              finishedSubagentCount,
-              'server-process',
-              'subagent-badge',
-            )}
-            ${this.renderChildBadge(
-              activeProcesses,
-              finishedProcessCount,
-              'terminal',
-              'process-badge',
-            )}
-            ${progress && progress.conversationTurns > 0
-              ? html`<span
-                  class="child-badge progress-badge"
-                  title="Conversation turns: ${progress.conversationTurns}, Tool calls: ${progress.toolCallCount}"
-                >
-                  <i class="codicon codicon-pulse"></i>
-                  ${progress.conversationTurns}
-                  turns${progress.toolCallCount > 0
-                    ? html`, ${progress.toolCallCount} tool calls`
-                    : nothing}
-                </span>`
-              : nothing}
           </div>
           <div class="header-actions">
             <vscode-toolbar-container
@@ -554,14 +470,6 @@ export class StreamHeader extends LitElement {
     `;
   }
 
-  private getCurrentStatus(): string {
-    return this.streamState?.status || STREAM_STATUS.READY;
-  }
-
-  private getStatusLabel(status: string): string {
-    return STATUS_LABELS[status] ?? status;
-  }
-
   private getButtonState(
     buttonId: string,
     status: string,
@@ -571,36 +479,6 @@ export class StreamHeader extends LitElement {
     const hidden = EXECUTION_DEPENDENT_BUTTONS.has(buttonId) && !hasExecutionId;
     const disabled = hidden || !enabledButtons?.has(buttonId);
     return { disabled, hidden };
-  }
-
-  /** Render a child-count badge (subagents or processes). */
-  private renderChildBadge(
-    active: { agentName: string; status?: string }[],
-    finishedCount: number,
-    icon: string,
-    cssClass: string,
-  ): TemplateResult | typeof nothing {
-    const total = active.length + finishedCount;
-    if (total === 0) return nothing;
-    const running = active.filter(
-      (c) => c.status !== STREAM_STATUS.WAITING && c.status !== STREAM_STATUS.READY,
-    ).length;
-    const waiting = active.length - running;
-    const segments: string[] = [];
-    if (running > 0) segments.push(`${running} running`);
-    if (waiting > 0) segments.push(`${waiting} waiting`);
-    if (finishedCount > 0) segments.push(`${finishedCount} done`);
-    return html`<span
-      class="child-badge child-badge--clickable ${cssClass}"
-      role="button"
-      tabindex="0"
-      title="Click to show background tasks — ${active.map((s) => s.agentName).join(', ')}"
-      @click=${this.handleBadgeClick}
-      @keydown=${this.handleBadgeKeydown}
-    >
-      <i class="codicon codicon-${icon}"></i>
-      ${segments.join(', ')}
-    </span>`;
   }
 
   private renderParentLink(): TemplateResult | typeof nothing {
@@ -647,15 +525,4 @@ export class StreamHeader extends LitElement {
     this.dispatchEvent(ProgressEvents.runSelected(event.detail));
   }
 
-  private handleBadgeClick(e: MouseEvent): void {
-    e.stopPropagation();
-    this.dispatchEvent(ProgressEvents.backgroundTasksToggle());
-  }
-
-  private handleBadgeKeydown(e: KeyboardEvent): void {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      this.dispatchEvent(ProgressEvents.backgroundTasksToggle());
-    }
-  }
 }

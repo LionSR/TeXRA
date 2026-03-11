@@ -5,37 +5,24 @@ import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
-// Local imports - shared styles
+// Local imports
+import { STREAM_STATUS, type StreamTabInfo } from '@shared/schemas';
 import {
   designTokens,
   animationStyles,
   commonViewStyles,
 } from '@shared/styles';
-import type { StreamTabInfo } from '@shared/schemas';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
-
-// Local imports - shared utilities
-import { formatRelativeTime } from '@shared/utils/string';
 import {
   AGENT_DECORATORS,
   getAgentCategoryDecorator,
 } from '@shared/utils/icons';
-
-// Local imports - progress view styles
+import { formatRelativeTime } from '@shared/utils/string';
 import { layoutStyles } from '../styles/logStyles';
-
-// Local imports - progress view constants
-import {
-  ELEMENT_IDS,
-  FILTER_BUTTONS,
-  SORT_BUTTONS,
-  STREAM_STATUS,
-} from '../constants';
+import { ELEMENT_IDS, FILTER_BUTTONS, SORT_BUTTONS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement, getRadioValue } from '../utils';
 import type { StreamFilter, StreamSort } from '../store';
-
-// Local imports - shared schemas
 
 function buildTooltip(
   info: StreamTabInfo,
