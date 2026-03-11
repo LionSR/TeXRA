@@ -306,18 +306,8 @@ export class ProgressViewProvider
     }
 
     this._pendingUpdateOptions = null;
-    // The webview was just (re)created — frontend state is empty.
-    // Reset delivery tracking so replay() re-sends all pending items.
-    this.resetAllDeliveryTracking();
     this.syncFullView({ forceRebuild: true });
     this.replayPendingPrompts();
-  }
-
-  private resetAllDeliveryTracking(): void {
-    this.toolEditHandler.resetDeliveryTracking();
-    this.bashApprovalHandler.resetDeliveryTracking();
-    this.retryRequestHandler.resetDeliveryTracking();
-    this.agentProposalHandler.resetDeliveryTracking();
   }
 
   private replayPendingPrompts(): void {

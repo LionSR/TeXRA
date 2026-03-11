@@ -2,16 +2,17 @@
  * Generic handler for approval/prompt requests with pending state management.
  * Eliminates duplication across tool edit, bash approval, retry, and proposal handlers.
  *
- * Tracks which items have been delivered to the current webview instance so
- * that replay() only re-sends items the frontend hasn't seen yet. Call
- * resetDeliveryTracking() when the webview is recreated (frontend state lost).
+ * The `delivered` set tracks IDs sent to the current webview target so that
+ * show() won't duplicate an item that replay() already sent.  replay() always
+ * clears the set first — every caller replays because the target changed or
+ * lost state, so prior delivery info is meaningless.
  */
 export class ApprovalRequestHandler<
   T extends { streamId: string },
   K extends keyof T,
 > {
   private readonly pending = new Map<string, T>();
-  /** IDs already sent to the current webview instance. */
+  /** IDs already sent to the current webview target. */
   private readonly delivered = new Set<string>();
 
   constructor(
@@ -36,18 +37,14 @@ export class ApprovalRequestHandler<
     if (this.canSend()) this.sendResolve(id);
   }
 
+  /** Re-send all pending items. Clears delivery tracking first — the target
+   *  is either new or lost state, so everything must be (re-)delivered. */
   replay(): void {
-    for (const [id, item] of this.pending.entries()) {
-      if (!this.delivered.has(id)) {
-        this.delivered.add(id);
-        this.sendShow(item);
-      }
-    }
-  }
-
-  /** Clear delivery tracking when the webview is recreated (state is lost). */
-  resetDeliveryTracking(): void {
     this.delivered.clear();
+    for (const [id, item] of this.pending.entries()) {
+      this.delivered.add(id);
+      this.sendShow(item);
+    }
   }
 
   get(id: string): T | undefined {
