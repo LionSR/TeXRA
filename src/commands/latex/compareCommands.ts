@@ -111,7 +111,12 @@ async function handleCompare(
       }
     }
 
-    await vscode.commands.executeCommand('vscode.diff', editedUri, baseUri, title);
+    await vscode.commands.executeCommand(
+      'vscode.diff',
+      editedUri,
+      baseUri,
+      title,
+    );
 
     setTimeout(() => {
       registerDiffRefresh(editedUri, baseUri, title);

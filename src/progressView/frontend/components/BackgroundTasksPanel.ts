@@ -22,7 +22,11 @@ import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports
 import { STREAM_STATUS, type ActiveChildInfo } from '@shared/schemas';
-import { designTokens, commonViewStyles, tintedBadgeStyles } from '@shared/styles';
+import {
+  designTokens,
+  commonViewStyles,
+  tintedBadgeStyles,
+} from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 import { ProgressEvents } from '../events';
