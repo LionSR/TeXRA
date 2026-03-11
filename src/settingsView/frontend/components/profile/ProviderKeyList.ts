@@ -18,8 +18,6 @@ import type {
 import { profileViewStyles } from './styles';
 import { ProviderKeyEvents } from './events';
 
-// Local imports - shared schemas
-
 const STATUS_LABELS: Record<ProviderKeyStatus['status'], string> = {
   set: 'Set',
   env: 'Env',

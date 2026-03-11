@@ -1,12 +1,4 @@
-/**
- * Service interfaces for cycle flows.
- *
- * Cycle services extend BaseFlowContextInit (agent identity + interrupts)
- * and add per-cycle runtime fields (client, state slices, etc.).
- *
- * Note: buildCycleServices factory was removed — nodes now construct
- * services inline with the client and refreshClient pattern.
- */
+/** Service interfaces for cycle flows. */
 
 import type {
   AgentRunStateSnapshot,

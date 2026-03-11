@@ -28,17 +28,6 @@ import type {
   SessionTypeChangeDetail,
 } from '@shared/schemas';
 import { createEvent } from '@shared/utils/events';
-
-// Local imports - shared schemas (types)
-
-// =============================================================================
-// Event Creators - use these to dispatch typed events
-// =============================================================================
-
-/**
- * MainView event creators.
- * Mirrors the ProgressEvents pattern for consistency.
- */
 export const MainViewEvents = {
   // File select events
   fileChange: (detail: FileSelectChangeDetail) =>

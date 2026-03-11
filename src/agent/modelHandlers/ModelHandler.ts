@@ -1,10 +1,6 @@
 // Third-party imports
 import { FinishReason } from '@google/genai';
 
-// Shared schemas
-
-// Local imports - auth
-
 // Local imports - agent
 import {
   type ModelConfig,

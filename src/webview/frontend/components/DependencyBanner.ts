@@ -1,28 +1,11 @@
-/**
- * Banner component for missing system dependencies.
- *
- * Displays a warning banner listing missing tools with install buttons,
- * plus recheck and dismiss actions.
- *
- * @fires dependency-dismiss - When dismiss button is clicked
- * @fires recheck-dependencies - When recheck button is clicked
- * @fires open-install-guide - When install button is clicked for a tool
- */
-
-// Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
-// Local imports - shared styles
 import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
-
-// Local imports - shared banner styles
 import type { DependencyBannerState } from '@shared/schemas';
 import { warningBannerStyles } from '../styles/warningBannerStyles';
-
-// Local imports - main view events and schemas
 import { MainViewEvents } from '../events';
 
 @customElement('dependency-banner')

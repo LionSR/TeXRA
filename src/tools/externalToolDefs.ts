@@ -159,11 +159,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     installUrl: 'https://retorque.re/zotero-better-bibtex/installation/',
     configNotes:
       'Zotero must be running with Better BibTeX installed. Port configurable via texra.bib.zoteroPort.',
-    check: async () => {
-      const port = getZoteroPort();
-      const bbtOk = await probeZoteroBbt(port);
-      return bbtOk;
-    },
+    check: async () => probeZoteroBbt(getZoteroPort()),
     detailCheck: async () => {
       const port = getZoteroPort();
       const zoteroOk = await probeZoteroConnector(port);

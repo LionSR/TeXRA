@@ -1,25 +1,10 @@
-/**
- * Banner component for missing API key notification.
- *
- * Displays a warning banner when an API key is missing for a provider,
- * with actions to set or get the key.
- *
- * @fires api-key-action - When set/guide button is clicked
- */
-
-// Third-party imports
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-// Local imports - shared styles
 import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
 import type { ApiKeyBannerState } from '@shared/schemas';
 import { capitalize } from '@shared/utils/string';
-
-// Local imports - shared banner styles
 import { warningBannerStyles } from '../styles/warningBannerStyles';
-
-// Local imports - main view events and schemas
 import { MainViewEvents } from '../events';
 
 @customElement('api-key-banner')

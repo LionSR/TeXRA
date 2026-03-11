@@ -1,7 +1,5 @@
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
 import * as logger from '@logger/logUtils';
 import { REFRESH_THRESHOLD_MS } from '@utils/config';
 

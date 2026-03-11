@@ -33,15 +33,10 @@ export class HistoryList extends LitElement {
   @property({ attribute: false }) items: HistoryItemData[] = [];
   @property({ attribute: false }) state?: HistoryViewState;
 
-  // === Reactive search properties (Lit-native Phase 9) ===
-  /** Search term from parent - triggers search when changed */
   @property({ attribute: false }) searchTerm = '';
-  /** Navigation action trigger - 'next' | 'prev' | null */
   @property({ attribute: false }) searchAction: SearchAction = null;
-  /** Trigger to clear search state (set true to clear, resets to false) */
   @property({ attribute: false }) clearSearchTrigger = false;
 
-  /** Match counts per item, keyed by item.id - used to compute highlighted index */
   @state() private matchCounts: Map<string, number> = new Map();
 
   @state() private searchVersion = 0;
@@ -54,30 +49,21 @@ export class HistoryList extends LitElement {
     }
   >;
 
-  /**
-   * React to property changes (Lit-native approach).
-   * Replaces imperative method calls from parent with reactive updates.
-   */
   protected willUpdate(changedProperties: PropertyValues<this>): void {
-    // Handle clearSearchTrigger - clear search state
     if (
       changedProperties.has('clearSearchTrigger') &&
       this.clearSearchTrigger
     ) {
       this.performClearSearch();
-      // Dispatch event to reset the trigger
       this.dispatchEvent(HistoryViewEvents.searchClearComplete());
     }
 
-    // Handle searchTerm changes - apply search
     if (changedProperties.has('searchTerm')) {
       this.performSearch(this.searchTerm);
     }
 
-    // Handle searchAction - navigate to next/prev match
     if (changedProperties.has('searchAction') && this.searchAction) {
       this.performNavigate(this.searchAction);
-      // Dispatch event to reset the action
       this.dispatchEvent(HistoryViewEvents.searchNavigateComplete());
     }
   }
@@ -90,15 +76,9 @@ export class HistoryList extends LitElement {
     }
   }
 
-  // === Internal search operations (called from willUpdate) ===
-
   private performClearSearch(): void {
-    this.searchVersion += 1;
     this.matchCounts = new Map();
-    this.state?.setSearchIndex(-1);
-    this.state?.setTotalMatches(0);
-    this.clearItemMarks();
-    this.updateMatchCount();
+    this.performSearch('');
   }
 
   private performSearch(term: string): void {
@@ -121,7 +101,6 @@ export class HistoryList extends LitElement {
       this.state.totalMatches;
     this.state.setSearchIndex(nextIndex);
     this.updateMatchCount();
-    // Trigger re-render to update highlightedMatchIndex props
     this.requestUpdate();
   }
 
@@ -132,10 +111,6 @@ export class HistoryList extends LitElement {
     this.dispatchEvent(HistoryViewEvents.matchCount({ display }));
   }
 
-  /**
-   * Compute the local highlighted match index for a specific item.
-   * Returns the local index within the item, or null if the current match is not in this item.
-   */
   private getHighlightedMatchIndex(itemId: string): number | null {
     if (!this.state || this.state.searchIndex < 0) return null;
 
@@ -173,7 +148,6 @@ export class HistoryList extends LitElement {
       return;
     }
 
-    // Store match counts per item for computing highlighted indices
     const newMatchCounts = new Map<string, number>();
     this.items.forEach((item, index) => {
       newMatchCounts.set(item.id, counts[index] ?? 0);
@@ -185,7 +159,6 @@ export class HistoryList extends LitElement {
     if (total > 0) {
       this.state?.setSearchIndex(0);
       this.updateMatchCount();
-      // Trigger re-render to update highlightedMatchIndex props
       this.requestUpdate();
     } else {
       this.state?.setSearchIndex(-1);
@@ -206,18 +179,13 @@ export class HistoryList extends LitElement {
       getMarks: () => HTMLElement[];
     }
   > {
-    // @queryAll returns NodeList, not Array - convert for .map() support
     return [...(this.historyItemElements ?? [])];
   }
 
   private handleToggle(
     event: CustomEvent<{ historyId: string; open: boolean }>,
   ): void {
-    if (!this.state) return;
-    // Ignore toggle when searching (items are auto-expanded during search)
-    if (this.searchTerm) {
-      return;
-    }
+    if (!this.state || this.searchTerm) return;
     this.state.toggleStates.set(event.detail.historyId, event.detail.open);
   }
 

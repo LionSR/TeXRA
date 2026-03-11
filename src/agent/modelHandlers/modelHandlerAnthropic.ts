@@ -45,7 +45,6 @@ import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
 import { getConfig } from '@utils/config';
-import { isNonEmptyString } from '@utils/core';
 import { flexibleFS, type FileLocation } from '@utils/files';
 import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
 import { objectToLogString } from '@utils/text/stringUtils';
@@ -1865,11 +1864,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     if (lastMessage && lastMessage.role === 'assistant') {
       if (Array.isArray(lastMessage.content)) {
-        const newMessage: ContentBlockParam = {
+        lastMessage.content.push({
           type: 'text',
           text: bestConnector + newResponse,
-        };
-        lastMessage.content.push(newMessage);
+        } as ContentBlockParam);
       } else {
         lastMessage.content = [
           {
@@ -1879,9 +1877,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
         ];
       }
 
-      if (Array.isArray(lastMessage.content)) {
-        this.assignCacheControlToLatest(lastMessage.content);
-      }
+      this.assignCacheControlToLatest(
+        lastMessage.content as (ContentBlockParam | ContentBlock)[],
+      );
     }
   }
 

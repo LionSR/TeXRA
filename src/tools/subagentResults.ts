@@ -58,12 +58,7 @@ function formatWorkflowOutputs(outputs: OutputFileSummary[]): string[] {
 
 /** Map internal end-group statuses to agent-friendly labels. */
 function agentFriendlyStatus(status: string): string {
-  switch (status) {
-    case 'stopped':
-      return 'completed';
-    default:
-      return status;
-  }
+  return status === 'stopped' ? 'completed' : status;
 }
 
 /**

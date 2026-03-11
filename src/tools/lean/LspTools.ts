@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { toErrorMessage } from '@common/errors';
-import { ToolResult } from '@tools/result';
+import type { ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 import {
   countBySeverity,
