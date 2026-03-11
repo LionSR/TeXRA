@@ -414,7 +414,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     ws: ResponsesWS,
     params: ResponseCreateParamsBase,
     signal?: AbortSignal,
-  ): Promise<Response> {
+  ): Promise<{ response: Response; state: StreamingEventState }> {
     // Short-circuit if already aborted before sending the request
     if (signal?.aborted) {
       throw new DOMException('The operation was aborted', 'AbortError');
@@ -422,7 +422,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const state = this.createStreamingEventState();
 
-    return new Promise<Response>((resolve, reject) => {
+    return new Promise<{ response: Response; state: StreamingEventState }>((resolve, reject) => {
       let settled = false;
       // Track the response ID for this request so we only process events
       // belonging to it (important when abort-and-retry reuses the connection).
@@ -480,13 +480,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         if (settled || !isCurrentResponse(response)) return;
         settled = true;
         cleanup();
-        if (state.hasThinkingContent) {
-          state.thinkingStream.finalize();
-        }
-        const { text: finalText } = this.extractResponse(response, '');
-        if (state.outputStream) state.outputStream.finalize(finalText);
-        this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
-        resolve(response);
+        // Stream finalization is deferred to the caller so that background
+        // polling (if needed) can replace the response before streams close.
+        resolve({ response, state });
       };
 
       const onCompleted = (event: ResponseCompletedEvent): void =>
@@ -1746,7 +1742,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // WebSocket transport: persistent connection for lower-latency tool-use loops
       if (useWebSocket) {
         const ws = await this.getOrCreateWebSocket(client, signal);
-        let response = await this.executeViaWebSocket(ws, params, signal);
+        const wsResult = await this.executeViaWebSocket(ws, params, signal);
+        let response = wsResult.response;
+        const state = wsResult.state;
 
         // Safety net: handle unexpected pending status (shouldn't happen without background mode)
         if (this.isBackgroundPending(response)) {
@@ -1759,6 +1757,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             signal,
           );
         }
+
+        // Finalize streams after background polling so the final text
+        // reflects the completed response, not the pre-poll snapshot.
+        if (state.hasThinkingContent) {
+          state.thinkingStream.finalize();
+        }
+        const { text: finalText } = this.extractResponse(response, '');
+        if (state.outputStream) state.outputStream.finalize(finalText);
+        this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
 
         this.finalizeResponse(
           response,
