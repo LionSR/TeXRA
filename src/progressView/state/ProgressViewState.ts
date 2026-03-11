@@ -116,6 +116,7 @@ export class ProgressViewState {
   // -- Ephemeral state (session-only, not persisted) --------------------------
   private _streamStates = new Map<StreamTabId, StreamExecutionState>();
   private _sessionState = new Map<StreamTabId, StreamSessionState>();
+  private _descriptions = new Map<StreamTabId, string>();
 
   private readonly storage: MementoStorage;
   private readonly logger: AgentLogger;
@@ -215,6 +216,14 @@ export class ProgressViewState {
     }
   }
 
+  setDescription(stream: StreamTabId, description: string): void {
+    this._descriptions.set(stream, description);
+  }
+
+  getDescription(stream: StreamTabId): string | undefined {
+    return this._descriptions.get(stream);
+  }
+
   setTodos(stream: StreamTabId, todos: TodoItem[]): void {
     this.getOrCreateSession(stream).todos = todos;
   }
@@ -299,6 +308,7 @@ export class ProgressViewState {
     this.runInstructions.evict(stream);
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
+    this._descriptions.delete(stream);
 
     // Delete from disk: stream log file + stream data directory
     const store = getStreamTabStore(stream);
@@ -327,6 +337,7 @@ export class ProgressViewState {
     this.runInstructions.evictAll();
     this._sessionState.clear();
     this._streamStates.clear();
+    this._descriptions.clear();
     this._prefs.reset();
 
     // Delete from disk

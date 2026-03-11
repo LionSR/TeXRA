@@ -37,11 +37,15 @@ function buildTooltip(
   ]
     .filter(Boolean)
     .join(' • ');
-  if (!lastTimestamp) return mainLine;
-  const lastSeen = formatRelativeTime(lastTimestamp);
-  return lastSeen && mainLine
-    ? `${mainLine}\nLast activity ${lastSeen}`
-    : mainLine;
+  const parts = [mainLine];
+  if (info.description) {
+    parts.push(info.description);
+  }
+  if (lastTimestamp) {
+    const lastSeen = formatRelativeTime(lastTimestamp);
+    if (lastSeen) parts.push(`Last activity ${lastSeen}`);
+  }
+  return parts.join('\n');
 }
 
 // =============================================================================
@@ -142,6 +146,16 @@ export class StreamTab extends LitElement {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+
+      .tab-description {
+        font-size: var(--font-size-sm);
+        color: var(--vscode-descriptionForeground, var(--vscode-foreground));
+        opacity: 0.8;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        width: 100%;
       }
 
       .tab-meta {
@@ -263,6 +277,9 @@ export class StreamTab extends LitElement {
           ${this.compact
             ? nothing
             : html`
+                ${stream.description
+                  ? html`<div class="tab-description">${stream.description}</div>`
+                  : nothing}
                 <div class="tab-meta">
                   <span class="last-active"
                     >${this.lastTimestamp

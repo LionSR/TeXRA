@@ -1,23 +1,24 @@
 /**
  * Session description generation.
  *
- * After a tool-use session completes, generates a short AI summary describing
- * what the session aimed to accomplish. The description is persisted on the
- * execution metadata so that future agents and the history view can quickly
- * understand what each session did.
+ * When a tool-use session starts, generates a short AI summary describing
+ * what the session aims to accomplish. The description is persisted on the
+ * execution metadata and pushed to the progress view so that the stream tab,
+ * history view, and future agents can quickly understand each session.
  */
 
 import { getAgent } from '@agent/index';
 import { writeSessionDescription } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { createHelperModelKit } from '@agent/runtime/helperModel';
+import { bus } from '@eventBus/ProgressEventBus';
 import * as logger from '@logger/logUtils';
-import type { ExecutionId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 
 const CHANNEL = 'SessionDescription';
 
-const SYSTEM_PROMPT = `You generate concise session descriptions for a LaTeX research assistant tool. Given an agent name, its description, and the user's instruction, write 1-2 sentences summarizing what this session aimed to accomplish. Be specific and informative. Do not include meta-commentary — just the summary. Write in past tense (e.g. "Reviewed the introduction for...").`;
+const SYSTEM_PROMPT = `You generate concise session descriptions for a LaTeX research assistant tool. Given an agent name, its description, and the user's instruction, write 1-2 sentences summarizing what this session aims to accomplish. Be specific and informative. Do not include meta-commentary — just the summary. Write in present tense (e.g. "Reviews the introduction for...").`;
 
 /**
  * Build a user prompt for session description generation.
@@ -36,13 +37,16 @@ function buildUserPrompt(
 }
 
 /**
- * Generate and persist a session description for a completed execution.
+ * Generate and persist a session description from the user's instruction.
  *
- * Runs fire-and-forget — never throws. Uses the configured helper model
- * for a one-shot, non-streaming call.
+ * Called fire-and-forget at the start of a tool-use session — never throws.
+ * Uses the configured helper model for a one-shot, non-streaming call.
+ * On success, persists the description to execution metadata and emits
+ * an `updateStreamDescription` event so the progress view can display it.
  */
 export async function generateSessionDescription(
   executionId: ExecutionId,
+  streamId: StreamTabId,
   config: AgentConfig,
 ): Promise<void> {
   try {
@@ -85,6 +89,7 @@ export async function generateSessionDescription(
       // Collapse newlines to prevent corrupting line-based tool output.
       const description = text.trim().replaceAll(/\s*\n\s*/g, ' ');
       await writeSessionDescription(executionId, description);
+      bus.emit('updateStreamDescription', { streamId, description });
       logger.info(CHANNEL, `Generated session description for ${executionId}`);
     }
   } catch (err) {

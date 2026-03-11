@@ -1,6 +1,6 @@
 /**
- * Stream metadata handlers: UPDATE_STREAM_STATUS, UPDATE_CONVERSATION_PROGRESS,
- * UPDATE_STREAM_BADGES, UPDATE_PROCESS_OUTPUT.
+ * Stream metadata handlers: UPDATE_STREAM_STATUS, UPDATE_STREAM_DESCRIPTION,
+ * UPDATE_CONVERSATION_PROGRESS, UPDATE_STREAM_BADGES, UPDATE_PROCESS_OUTPUT.
  */
 
 import { create } from 'mutative';
@@ -78,6 +78,17 @@ export const streamMetaHandlers: HandlerRegistry = {
 
       return create(prev, (draft) => {
         draft.streamStates.set(stream, updatedState);
+      });
+    });
+  },
+
+  [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION]: (data, ctx) => {
+    const { stream, description } = data;
+    ctx.setState((prev) => {
+      const info = prev.streamById.get(stream);
+      if (!info) return prev;
+      return create(prev, (draft) => {
+        draft.streamById.set(stream, { ...info, description });
       });
     });
   },

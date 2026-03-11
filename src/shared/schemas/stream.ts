@@ -58,6 +58,8 @@ export const StreamTabInfoSchema = z.object({
   creationTimestamp: z.number(),
   executionId: ExecutionIdSchema.optional(),
   parentStreamId: StreamTabIdSchema.optional(),
+  /** AI-generated summary of what this session aims to accomplish. */
+  description: z.string().optional(),
 });
 export type StreamTabInfo = z.infer<typeof StreamTabInfoSchema>;
 

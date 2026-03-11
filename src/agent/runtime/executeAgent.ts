@@ -359,12 +359,6 @@ async function runFlowWithLifecycle(
     options?.onCompleted?.(result);
     await writeTerminalStatus(ctx.executionId, result.status).catch(() => {});
 
-    // Fire-and-forget: generate AI session description for completed tool-use sessions.
-    // Note: 'stopped' means successfully completed; user-cancellation maps to 'error'.
-    if (category === 'toolUse' && result.status === END_GROUP_STATUS.STOPPED) {
-      generateSessionDescription(ctx.executionId, ctx.config).catch(() => {});
-    }
-
     untrackExecution(ctx.executionId);
     ctx.parentStage.end(result.status);
 
@@ -536,6 +530,14 @@ export async function executeAgent(
   const ctx = await resolveAndAcquireStream(configPayload, executionId);
   const { setting, streamId, config } = ctx;
   const agentName = config.agent;
+
+  // Fire-and-forget: generate AI session description from the user's instruction.
+  // Triggered at the start so cancelled/errored sessions still get descriptions.
+  if (setting.agentCategory === AgentCategory.ToolUse) {
+    generateSessionDescription(ctx.executionId, streamId, config).catch(
+      () => {},
+    );
+  }
 
   options?.onStreamResolved?.(streamId);
 
