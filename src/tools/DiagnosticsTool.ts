@@ -13,7 +13,7 @@ import {
 
 // Local file imports
 import { defineTool } from './core/define';
-import { ToolResult, ToolError } from './result';
+import { type ToolResult, ToolError } from './result';
 
 const CHANNEL = 'DiagnosticsTool';
 logger.initialize(CHANNEL);

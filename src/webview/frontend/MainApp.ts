@@ -1,4 +1,3 @@
-// Third-party imports
 import { html, type TemplateResult } from 'lit';
 import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
@@ -6,13 +5,9 @@ import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { SignalWatcher, signal, Signal } from '@shared/signals';
-
-// Local imports - shared webview
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage, vscode } from '@shared/vscode';
 import { PersistedState, createWebviewStorage } from '@shared/state';
-
-// Local imports - shared utilities
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
 import {
   mainViewMessages,
@@ -53,7 +48,6 @@ import {
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { capitalize } from '@shared/utils/string';
 
-// Local imports - main view
 import './components/FileSelectGroup';
 import './components/BannerGroup';
 import './components/LatexDiffsSection';
@@ -224,9 +218,6 @@ export class MainApp extends MainAppBase {
   @state()
   private sessionContextValue: SessionContextValue = this.sessionContext$.get();
 
-  // Note: model/agent selects are inside InstructionPanel's shadow DOM.
-  // Decoration is now handled declaratively in selectTemplates.ts via Lit templates.
-
   private readonly stateManager = new PersistedState(
     createWebviewStorage(vscode),
     'mainViewState',
@@ -235,18 +226,12 @@ export class MainApp extends MainAppBase {
   private saveBlockCount = 0;
   private placeholderTimer: number | null = null;
 
-  /**
-   * Type-safe message handler registry.
-   * Handlers receive typed data - no casts needed.
-   */
   private readonly messageHandlers: MainViewHandlerRegistry = {
-    // Model and agent options
     [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (data) =>
       this.handleSetModelOptions(data),
     [MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS]: (data) =>
       this.handleSetAgentOptions(data),
 
-    // Single file operations
     [MAIN_VIEW_COMMANDS.SET_INPUT_FILE]: (data) =>
       this.handleSetSingleFileOptions(data),
     [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILE]: (data) =>
@@ -259,7 +244,6 @@ export class MainApp extends MainAppBase {
       this.handleSetSingleFileOptions(data),
     [MAIN_VIEW_COMMANDS.SET_BASE_FILE]: (data) => this.handleSetBaseFile(data),
 
-    // Single file selected
     [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: (data) =>
       this.handleSingleFileSelected(data),
     [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: (data) =>
@@ -271,7 +255,6 @@ export class MainApp extends MainAppBase {
     [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: (data) =>
       this.handleSingleFileSelected(data),
 
-    // Multiple file operations
     [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: (data) =>
       this.handleSetMultipleFiles(data),
     [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: (data) =>
@@ -287,7 +270,6 @@ export class MainApp extends MainAppBase {
     [MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE]: (data) =>
       this.handleAddMediaFile(data),
 
-    // Commit operations
     [MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS]: (data) =>
       this.handleSetRecentCommits(data),
     [MAIN_VIEW_COMMANDS.SET_CURRENT_FILE]: (data) =>
@@ -299,7 +281,6 @@ export class MainApp extends MainAppBase {
     [MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES]: (data) =>
       this.handleSetAllSingleFiles(data),
 
-    // Instruction operations
     [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED]: (data) =>
       this.handleInstructionTextPolished(data),
     [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR]: (data) =>
@@ -307,7 +288,6 @@ export class MainApp extends MainAppBase {
     [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED]: (data) =>
       this.handleInstructionTextTranscribed(data),
 
-    // Recording state
     [MAIN_VIEW_COMMANDS.RECORDING_STARTED]: () => {
       this.isRecording.set(true);
     },
@@ -318,7 +298,6 @@ export class MainApp extends MainAppBase {
       this.isRecording.set(false);
     },
 
-    // Banner operations
     [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (data) =>
       this.handleShowApiKeyBanner(data),
     [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: () => {
@@ -350,7 +329,6 @@ export class MainApp extends MainAppBase {
       this.loginBannerVisible.set(false);
     },
 
-    // Agent selection
     [MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT]: (data) =>
       this.handleSetSelectedAgent(data),
   };
@@ -371,8 +349,6 @@ export class MainApp extends MainAppBase {
   }
 
   protected handleMessage(raw: unknown): void {
-    // Schema-driven dispatch - parses once with discriminated union,
-    // then routes to typed handler
     dispatchMainViewMessage(raw, this.messageHandlers, (error) => {
       this.logSchemaError(
         '[MainApp] Main view message validation failed.',
@@ -846,9 +822,6 @@ export class MainApp extends MainAppBase {
       return;
     }
 
-    // Append transcribed text to instruction (Lit-native: update state, not DOM)
-    // Note: Cursor position insertion is not supported with shadow DOM isolation.
-    // The InstructionPanel receives the updated instruction via property binding.
     const current = this.instruction.get();
     const updated = current ? `${current} ${message.text}` : message.text;
     this.instruction.set(updated);
@@ -884,8 +857,6 @@ export class MainApp extends MainAppBase {
     this.blockSave();
     try {
       this.sessionType.set(state.sessionType);
-      // Backend resolves agent names to source:name format via buildMainViewState,
-      // so we can set directly. handleSetAgentOptions validates when options arrive.
       this.workflowAgent.set(state.workflowAgent);
       this.toolUseAgent.set(state.toolUseAgent);
       this.model.set(state.model);
@@ -1029,7 +1000,6 @@ export class MainApp extends MainAppBase {
     if (this.defaultOutputFiles.length > 0) {
       return this.defaultOutputFiles;
     }
-    // Include both the single input file and multiple input files
     const files = [inputFile];
     for (const file of mf.inputFiles) {
       if (!files.includes(file)) {
@@ -1173,10 +1143,6 @@ export class MainApp extends MainAppBase {
     this.model.set(value);
     this.saveState();
     postMessage(MAIN_VIEW_COMMANDS.MODEL_SELECTED, { model: value });
-    // Note: API key banner updates are handled by backend messages
-    // (SHOW_API_KEY_BANNER, HIDE_API_KEY_BANNER) since the model select
-    // is inside InstructionPanel's shadow DOM and data attributes
-    // can't be read from here.
   }
 
   private handleShowApiKeyBanner(
@@ -1229,10 +1195,6 @@ export class MainApp extends MainAppBase {
     this.saveState();
   }
 
-  // Note: Instruction input events are handled via @instruction-input from InstructionPanel.
-  // Image paste is handled by @instruction-paste from InstructionPanel (Lit-native pattern).
-
-  /** Handle image paste in instruction - save state after paste completes */
   private handleComponentInstructionPaste(): void {
     this.saveState();
   }

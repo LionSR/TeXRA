@@ -112,11 +112,11 @@ export class FileLineageCalculator {
   findMatchingBaseFile(source: string): FileLocation | undefined {
     const sourceNoExt = path.parse(source).name;
 
-    const matchers = [
-      (b: string, bNoExt: string) => b === source,
-      (b: string, bNoExt: string) => bNoExt === sourceNoExt,
-      (b: string, bNoExt: string) => bNoExt === source,
-      (b: string, bNoExt: string) => b === sourceNoExt,
+    const matchers: Array<(b: string, bNoExt: string) => boolean> = [
+      (b, _bNoExt) => b === source,
+      (_b, bNoExt) => bNoExt === sourceNoExt,
+      (_b, bNoExt) => bNoExt === source,
+      (b, _bNoExt) => b === sourceNoExt,
     ];
 
     for (const match of matchers) {

@@ -1,11 +1,8 @@
-// Standard library imports
 import * as os from 'os';
 import * as path from 'path';
 
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - common
 import { toErrorMessage } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
@@ -18,8 +15,6 @@ import {
 // Local imports - utilities
 import { AbsoluteFS, pathToLocation } from '@utils/files';
 import type { FileLocation } from '@utils/files';
-
-// Local imports - latex
 
 const CHANNEL = 'OpenBuildUtils';
 

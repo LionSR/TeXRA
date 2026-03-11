@@ -42,14 +42,10 @@ export async function needsMigrationFromMemento(
     WorkspaceStateKey.MISSING_OUTPUTS,
   ] as const;
 
-  for (const key of legacyKeys) {
+  return legacyKeys.some((key) => {
     const raw = storage.get(key);
-    if (raw && typeof raw === 'object' && Object.keys(raw).length > 0) {
-      return true;
-    }
-  }
-
-  return false;
+    return raw && typeof raw === 'object' && Object.keys(raw).length > 0;
+  });
 }
 
 /**

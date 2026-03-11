@@ -12,7 +12,6 @@ import {
   getPastedImageFullPath,
   isPastedImage,
 } from '@utils/files/pastedImageUtils';
-import { capitalize } from '@utils/text/stringUtils';
 import type { z } from 'zod';
 
 const CHANNEL = 'ExecutionManager';
@@ -70,19 +69,14 @@ export class ExecutionManager {
       return;
     }
 
-    // Map media file paths (pasted images need full path resolution)
     const mapMedia = (f: string | null): string | null =>
       f && isPastedImage(f) ? getPastedImageFullPath(f) : f;
 
-    // Tool-use agents don't produce output files
     const outputFiles: string[] = isToolUse ? [] : (message.outputFiles ?? []);
-
-    // Tool config: tool-use uses defaults, workflow agents use message values (schema provides defaults)
     const toolConfig = isToolUse
       ? DEFAULT_TOOL_CONFIG
       : ToolConfigSchema.parse(message);
 
-    // Schema provides defaults via .prefault(), we only override conditional fields
     const request = {
       config: {
         ...message,
@@ -139,12 +133,10 @@ export class ExecutionManager {
 
   handleMultipleOperation(message: CommandMessage): void {
     const outputFiles = message.outputFiles ?? [];
-    const operation = message.command.startsWith('pack')
-      ? 'packing'
-      : 'cleaning';
+    const label = message.command.startsWith('pack') ? 'Packing' : 'Cleaning';
     logger.info(
       CHANNEL,
-      `${capitalize(operation)} multiple files: ${message.inputFile}, ${outputFiles.join(', ')}`,
+      `${label} multiple files: ${message.inputFile}, ${outputFiles.join(', ')}`,
     );
     void vscode.commands.executeCommand(
       `texra.${message.command}`,

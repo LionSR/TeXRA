@@ -1,11 +1,3 @@
-/**
- * FileSelectGroup component for MainView file selection.
- *
- * Renders a file selection dropdown with optional multiple files list,
- * and optional tool config / auto-extract menus.
- */
-
-// Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, property, query, state } from 'lit/decorators.js';
@@ -13,7 +5,6 @@ import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
-// Local imports - main view
 import { SortableController } from '@shared/controllers';
 import { designTokens, codiconStyles } from '@shared/styles';
 import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
@@ -26,8 +17,6 @@ import {
   type FileStateContextValue,
 } from '../contexts/mainViewContexts';
 import { fileSelectStyles } from '../styles/fileSelectStyles';
-
-// Local imports - shared schemas
 import { DEFAULT_CHECKBOX_VALUES } from '../store';
 
 @customElement('file-select-group')
@@ -105,7 +94,6 @@ export class FileSelectGroup extends LitElement {
       type === 'autoExtract'
         ? this.autoExtractMenuOpen
         : this.toolConfigMenuOpen;
-    // Close both menus first, then toggle the requested one
     this.autoExtractMenuOpen = type === 'autoExtract' && !wasOpen;
     this.toolConfigMenuOpen = type === 'toolConfig' && !wasOpen;
   }
@@ -224,14 +212,7 @@ export class FileSelectGroup extends LitElement {
         : null;
     const nextTarget = (event.relatedTarget ?? activeElement) as Node | null;
 
-    if (nextTarget === null) {
-      this.autoExtractMenuOpen = false;
-      this.toolConfigMenuOpen = false;
-      return;
-    }
-
-    const staysInComponent = this.isWithinComponent(nextTarget);
-    if (staysInComponent) return;
+    if (nextTarget !== null && this.isWithinComponent(nextTarget)) return;
     this.autoExtractMenuOpen = false;
     this.toolConfigMenuOpen = false;
   }
@@ -241,7 +222,6 @@ export class FileSelectGroup extends LitElement {
       return true;
     }
 
-    // Traverse shadow DOM hierarchy with max depth guard
     const MAX_SHADOW_DEPTH = 20;
     let root = target.getRootNode();
     let depth = 0;
