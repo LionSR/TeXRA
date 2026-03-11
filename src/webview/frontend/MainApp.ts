@@ -1029,7 +1029,6 @@ export class MainApp extends MainAppBase {
     const currentFileKey = listId.replace('Files', 'File');
     const currentFile =
       this.singleFiles.get()[currentFileKey as keyof SingleFiles];
-    // Convert listId (e.g., 'inputFiles') to fileType (e.g., 'input')
     const fileType = listId.replace('Files', '');
     postMessage(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES, {
       fileType,
@@ -1667,10 +1666,6 @@ export class MainApp extends MainAppBase {
   }
 
   private handleComponentAgentChange(e: CustomEvent<AgentChangeDetail>): void {
-    // Note: Select element is inside InstructionPanel's shadow DOM and
-    // cannot be queried from here. The disabled-option check in
-    // handleAgentChange will be skipped. This should be handled by
-    // InstructionPanel emitting additional event data when needed.
     this.handleAgentChange(e.detail.sessionType, e.detail.value);
   }
 
