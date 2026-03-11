@@ -14,6 +14,18 @@ import type {
   MessageHandlerContext,
 } from '../messageDispatcher';
 
+/** Max characters retained per output stream (stdout/stderr) per process. */
+const MAX_OUTPUT = 100_000;
+
+/** Append delta to prev, capping to MAX_OUTPUT by trimming the front. */
+function capOutput(prev: string, delta: string): string {
+  if (!delta) return prev;
+  const combined = prev + delta;
+  return combined.length > MAX_OUTPUT
+    ? combined.slice(combined.length - MAX_OUTPUT)
+    : combined;
+}
+
 /** Remove output entries for processes no longer in the active list. */
 function pruneStaleOutputs(
   ctx: MessageHandlerContext,
@@ -98,14 +110,6 @@ export const streamMetaHandlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT]: (data, ctx) => {
     const { stream, executionId, stdout, stderr } = data;
-    const MAX_OUTPUT = 100_000;
-    const cap = (prev: string, delta: string): string => {
-      if (!delta) return prev;
-      const combined = prev + delta;
-      return combined.length > MAX_OUTPUT
-        ? combined.slice(combined.length - MAX_OUTPUT)
-        : combined;
-    };
     ctx.setState((prev) => {
       // Only prune stale entries when this stream is active — badge data
       // (activeProcesses) is only refreshed for the active stream, so for
@@ -136,8 +140,8 @@ export const streamMetaHandlers: HandlerRegistry = {
           stderr: '',
         };
         streamOutputs.set(executionId, {
-          stdout: cap(existing.stdout, stdout),
-          stderr: cap(existing.stderr, stderr),
+          stdout: capOutput(existing.stdout, stdout),
+          stderr: capOutput(existing.stderr, stderr),
         });
       });
     });
