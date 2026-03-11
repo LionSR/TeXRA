@@ -44,28 +44,17 @@ import { registerAuthCommands } from '@commands/auth';
 import { registerApiKeyCommands } from '@commands/api/apiKeyCommands';
 import { registerGitCommands } from '@commands/git/gitCommands';
 import { registerProgressViewCommands } from '@commands/progress/progressViewCommands';
-import * as logger from '@logger/logUtils';
 
 // Local file imports
 import { MainViewProvider } from './MainViewProvider';
 
-const CHANNEL = 'Registration';
-logger.initialize(CHANNEL);
-
-// Store MainViewProvider instance for external access (e.g., auth state changes)
 let mainViewProviderInstance: MainViewProvider | null = null;
 
-/** Get the MainViewProvider instance (available after registerCommands is called). */
 export function getMainViewProvider(): MainViewProvider | null {
   return mainViewProviderInstance;
 }
 
-/**
- * Register all extension commands
- * Commands are organized into logical groups in separate modules
- */
 export function registerCommands(context: vscode.ExtensionContext): void {
-  // Register command groups from separate modules
   registerFileSelectionCommands(context);
   registerLatexdiffCommands(context);
   registerGitCommands(context);
@@ -99,7 +88,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerSampleProjectCommands(context);
   registerWalkthroughCommands(context);
 
-  // Register webview provider and store instance for external access
   mainViewProviderInstance = new MainViewProvider(context);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
@@ -114,7 +102,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   );
 }
 
-// Add exports for the command modules
 export { linterCommands, arXivCommands } from '@commands/latex';
 export { runExecuteCommand, agentCreatorCommands } from '@commands/agent';
 export {

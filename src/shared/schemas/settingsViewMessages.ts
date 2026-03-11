@@ -624,6 +624,11 @@ export type SettingsViewInboundMessage = z.infer<
   typeof SettingsViewInboundMessageSchema
 >;
 
+/** Type helper for extracting a specific inbound message by command. */
+export type SettingsMessageFor<
+  C extends SettingsViewInboundMessage['command'],
+> = Extract<SettingsViewInboundMessage, { command: C }>;
+
 // ============================================================
 // Type-safe handler registry and dispatcher
 // ============================================================

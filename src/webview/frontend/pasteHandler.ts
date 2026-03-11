@@ -7,8 +7,6 @@ import { postMessage } from '@shared/vscode';
 import { insertTextAtCursor } from '@shared/utils/textarea';
 import { PASTED_PREFIX } from '@shared/files/pastedImageConstants';
 
-// Local imports - webview commands
-
 const IMAGE_MIME_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/jpg': 'jpg',
@@ -117,7 +115,7 @@ export async function handleImagePaste(
     images.map(({ file, type }) => processClipboardImage(file, type)),
   );
 
-  fileNames.forEach((fileName) => {
+  for (const fileName of fileNames) {
     if (fileName) {
       if (
         insertText &&
@@ -128,10 +126,9 @@ export async function handleImagePaste(
       }
       insertText += `[${fileName}]`;
     }
-  });
+  }
 
   if (insertText) {
-    // insertTextAtCursor handles vscode-textarea resolution internally
     insertTextAtCursor(target, insertText);
   }
 

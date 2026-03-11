@@ -12,7 +12,7 @@ import {
   resetCycleState,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
-import { type ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { ProviderUsage } from '@agent/core/ResponseUsage';
 
@@ -31,9 +31,7 @@ import { extractScratchpad } from '@utils/text/xmlUtils';
 
 import { FlowTransition } from './FlowTransitions';
 import { ModelInvocationNode } from './ModelInvocationNode';
-import { type CycleParams, type ResponseCycleServices } from './CycleServices';
-
-// All debug options (context + file options) are derived at maybeSaveDebugObject call sites.
+import type { CycleParams, ResponseCycleServices } from './CycleServices';
 
 // ============================================================================
 // Cycle Fields Schema (Extends Base)
@@ -94,11 +92,6 @@ export interface CycleTransientFields {
  * outer ReflectionFlowShared.
  */
 export type ResponseCycleShared = CycleFields & CycleTransientFields;
-
-// Each node in the response cycle progressively hydrates the shared cycle
-// object. Mutations performed in `prep`, `exec`, and `post` stages are
-// intentionally visible to downstream nodes so that debug metadata and model
-// results accumulate over the course of the flow.
 
 /** Prep result for ResponsePrepNode - captures interruption status and initial state. */
 interface ResponsePrepResult {

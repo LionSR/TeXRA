@@ -35,18 +35,12 @@ import {
 } from '@shared/schemas/agentPresets';
 import {
   SETTINGS_VIEW_CMD,
-  type SettingsViewInboundMessage,
+  type SettingsMessageFor,
   type AgentSelectionItem,
 } from '@shared/schemas/settingsViewMessages';
 import { AbsoluteFS } from '@utils/files';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
-
-// Type helper for extracting specific message types
-type MessageFor<C extends SettingsViewInboundMessage['command']> = Extract<
-  SettingsViewInboundMessage,
-  { command: C }
->;
 
 function entryToSelectionItem(
   entry: AgentEntry,
@@ -117,7 +111,7 @@ export class AgentHandlers {
   // ── Agent selection handlers ──
 
   async handleOpenAgentYaml(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_YAML>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_YAML>,
   ): Promise<void> {
     try {
       const key = createKey(data.agentSource, data.agentName);
@@ -150,7 +144,7 @@ export class AgentHandlers {
   }
 
   async handleSetAgentEnabled(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_AGENT_ENABLED>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_AGENT_ENABLED>,
   ): Promise<void> {
     try {
       const stateKey =
@@ -201,7 +195,7 @@ export class AgentHandlers {
   }
 
   async handleSetAllAgentsEnabled(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_ALL_AGENTS_ENABLED>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_ALL_AGENTS_ENABLED>,
   ): Promise<void> {
     try {
       const stateKey =
@@ -253,7 +247,7 @@ export class AgentHandlers {
   }
 
   async handleOpenAgentFolder(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_FOLDER>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_FOLDER>,
   ): Promise<void> {
     try {
       const folderPath = await agentDirectories.getDirectory(data.folderType);
@@ -277,7 +271,7 @@ export class AgentHandlers {
   }
 
   async handleRevealAgentFile(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.REVEAL_AGENT_FILE>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.REVEAL_AGENT_FILE>,
   ): Promise<void> {
     try {
       const key = createKey(data.agentSource, data.agentName);
@@ -302,7 +296,7 @@ export class AgentHandlers {
   }
 
   async handleCreateAgent(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.CREATE_AGENT>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.CREATE_AGENT>,
   ): Promise<void> {
     if (data.mode === 'template') {
       await this.createAgentFromTemplate();
@@ -317,7 +311,7 @@ export class AgentHandlers {
   }
 
   async handleCustomizeAgent(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.CUSTOMIZE_AGENT>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.CUSTOMIZE_AGENT>,
   ): Promise<void> {
     try {
       const key = createKey(data.agentSource, data.agentName);
@@ -404,7 +398,7 @@ export class AgentHandlers {
   }
 
   async handleDeleteCustomAgent(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.DELETE_CUSTOM_AGENT>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_CUSTOM_AGENT>,
   ): Promise<void> {
     try {
       const key = createKey('custom', data.agentName);
@@ -513,7 +507,7 @@ export class AgentHandlers {
   }
 
   async handleApplyAgentModePreset(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.APPLY_AGENT_MODE_PRESET>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.APPLY_AGENT_MODE_PRESET>,
   ): Promise<void> {
     try {
       const preset =
@@ -558,7 +552,7 @@ export class AgentHandlers {
   }
 
   async handleSaveAgentModePreset(
-    _data: MessageFor<typeof SETTINGS_VIEW_CMD.SAVE_AGENT_MODE_PRESET>,
+    _data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SAVE_AGENT_MODE_PRESET>,
   ): Promise<void> {
     try {
       const name = await vscode.window.showInputBox({
@@ -603,7 +597,7 @@ export class AgentHandlers {
   }
 
   async handleDeleteAgentModePreset(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.DELETE_AGENT_MODE_PRESET>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_AGENT_MODE_PRESET>,
   ): Promise<void> {
     try {
       const presets = this.getCustomPresets();

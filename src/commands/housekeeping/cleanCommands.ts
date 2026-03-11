@@ -17,18 +17,14 @@ import { emitClearMissingOutputs } from './streamEventUtils';
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);
 
-// --- Schemas ---
-
 const RequiredString = z.string().min(1);
 
-/** Base params shared by all clean commands */
 const CleanParamsSchema = z.object({
   inputFile: RequiredString,
   agent: RequiredString,
   model: RequiredString,
 });
 
-/** Extended config for main clean command */
 const CleanConfigSchema = CleanParamsSchema.extend({
   outputFiles: z.array(z.string()).prefault([]),
   useMultipleOutputs: z.boolean().optional(),
@@ -38,8 +34,6 @@ const CleanConfigSchema = CleanParamsSchema.extend({
   ...c,
   useMultipleOutputs: c.useMultipleOutputs ?? c.outputFiles.length > 0,
 }));
-
-// --- Helpers ---
 
 function showCleanResult(result: FileOpResult, inputFile: string): void {
   switch (result.status) {

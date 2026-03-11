@@ -1,24 +1,9 @@
-/**
- * Banner component for missing agent configuration.
- *
- * Displays a warning banner when agent configuration is missing,
- * with actions to edit agents, set directory, or view docs.
- *
- * @fires agent-config-action - When edit/dir/docs button is clicked
- */
-
-// Third-party imports
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-// Local imports - shared styles
 import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
-
-// Local imports - shared banner styles
 import type { AgentConfigBannerState } from '@shared/schemas';
 import { warningBannerStyles } from '../styles/warningBannerStyles';
-
-// Local imports - main view events and schemas
 import { MainViewEvents } from '../events';
 
 @customElement('agent-config-banner')

@@ -1,15 +1,12 @@
-// Standard library imports
 import * as path from 'path';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 
-// Third-party imports
 import axios from 'axios';
 import { StatusCodes } from 'http-status-codes';
 import * as arxivIdentifiers from 'identifiers-arxiv';
 import * as tar from 'tar';
 
-// Local imports - log
 import { toErrorMessage } from '@common/errors';
 import { indentLatexFilesInDirectory } from '@housekeeping/indent';
 import * as logger from '@logger/logUtils';

@@ -14,8 +14,6 @@ import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
 import { createEvent } from '@shared/utils/events';
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 
-// Local imports - shared utilities
-
 @customElement('tool-card')
 export class ToolCard extends LitElement {
   static override styles = [

@@ -53,7 +53,6 @@ export type ToolEditApprovalAction =
   (typeof TOOL_EDIT_APPROVAL_ACTIONS)[number];
 
 let queue: Promise<void> = Promise.resolve();
-let initialized = false;
 let customHandler:
   | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
   | undefined;
@@ -127,11 +126,6 @@ export function _clearApprovalBypassForStream(streamId: StreamTabId): void {
 /** @internal Called by unified cleanup in index.ts */
 export function _clearAllApprovalBypass(): void {
   bypassedByStream.clear();
-}
-
-/** Mark the approval system as initialized. Called by the native handler. */
-export function markToolEditApprovalInitialized(): void {
-  initialized = true;
 }
 
 export function setToolEditApprovalHandler(

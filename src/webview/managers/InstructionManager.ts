@@ -1,14 +1,9 @@
-// Standard library imports
 import * as path from 'path';
 
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - common
 import { toErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
-
-// Local imports - logger
 import * as logger from '@logger/logUtils';
 import type { MainViewInboundMessage } from '@shared/schemas';
 import { StorageFS } from '@utils/files';

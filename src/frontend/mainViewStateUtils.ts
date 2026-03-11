@@ -1,5 +1,3 @@
-// Local imports - shared schemas
-
 // Local imports - agent registry
 import { resolveAgentKey } from '@agent/index';
 

@@ -39,10 +39,9 @@ export interface ProposalRequestOptions {
 }
 
 /** Payload for show event */
-interface ProposalShowPayload {
+interface ProposalShowPayload extends Record<string, unknown> {
   proposalId: string;
   streamId: string;
-  [key: string]: unknown; // Spread from proposal
 }
 
 // ============================================================================
@@ -75,9 +74,7 @@ class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
     void safeExecuteCommand('texra.showProgressView');
 
     // Activate the stream that needs approval so user sees the prompt immediately
-    if (streamId) {
-      bus.emit('setActiveStream', { streamId });
-    }
+    bus.emit('setActiveStream', { streamId });
 
     return this.waitForUserAction(
       proposalId,

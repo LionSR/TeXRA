@@ -59,10 +59,8 @@ export const MissingOutputsPayloadSchema = z.object({
   xmlFile: z.string().nullable().prefault(null),
   documentTag: z.string().nullable().prefault(null),
 });
-type MissingOutputsPayload = z.infer<typeof MissingOutputsPayloadSchema>;
 
 const ToolUseStatusSchema = z.enum(['in_progress', 'completed']);
-type ToolUseStatus = z.infer<typeof ToolUseStatusSchema>;
 
 export const ToolUseLogSchema = z.object({
   toolName: z.string().optional(),

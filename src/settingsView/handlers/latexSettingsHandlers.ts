@@ -11,7 +11,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
 import { showLoggedErrorMessage } from '@common/errors';
 import {
   SETTINGS_VIEW_CMD,
-  type SettingsViewInboundMessage,
+  type SettingsMessageFor,
   type LatexSettingsStatus,
   DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/schemas/settingsViewMessages';
@@ -34,12 +34,6 @@ import {
 import { findToolInCommonPaths } from '@utils/system/platformPaths';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
-
-// Type helper for extracting specific message types
-type MessageFor<C extends SettingsViewInboundMessage['command']> = Extract<
-  SettingsViewInboundMessage,
-  { command: C }
->;
 
 /** How long cached LaTeX settings remain valid (ms). */
 const LATEX_SETTINGS_CACHE_TTL = 60_000;
@@ -107,7 +101,7 @@ export class LatexSettingsHandlers {
   }
 
   async handleApplyLatexSettings(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.APPLY_LATEX_SETTINGS>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.APPLY_LATEX_SETTINGS>,
   ): Promise<void> {
     try {
       const targets = data.field
@@ -175,7 +169,7 @@ export class LatexSettingsHandlers {
   }
 
   async handleRunInstallCommand(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.RUN_INSTALL_COMMAND>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.RUN_INSTALL_COMMAND>,
   ): Promise<void> {
     if (!ALLOWED_INSTALL_COMMANDS.has(data.installCommand)) {
       this.ctx.logger.warn(
