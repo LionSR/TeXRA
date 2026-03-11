@@ -141,21 +141,6 @@ export class TaskGroupList extends LitElement {
     this.isSticky = value;
   }
 
-  override firstUpdated(): void {
-    this.scrollContainer?.addEventListener(
-      'vsc-scrollable-scroll',
-      this.handleVscScroll,
-      { passive: true },
-    );
-  }
-
-  override disconnectedCallback(): void {
-    this.scrollContainer?.removeEventListener(
-      'vsc-scrollable-scroll',
-      this.handleVscScroll,
-    );
-    super.disconnectedCallback();
-  }
 
   override willUpdate(changedProperties: Map<string, unknown>): void {
     if (changedProperties.has('groups')) {
@@ -611,7 +596,7 @@ export class TaskGroupList extends LitElement {
     // Show placeholder only when there are no streams in the current filter
     if (!this.hasStreams) {
       return html`
-        <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
+        <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container" @vsc-scrollable-scroll=${this.handleVscScroll}>
           <div class="log-placeholder">${unsafeHTML(PLACEHOLDER_HTML)}</div>
         </vscode-scrollable>
       `;
@@ -622,7 +607,7 @@ export class TaskGroupList extends LitElement {
       // with groups chronologically so the conversation reads top-to-bottom.
       // Timeline is memoized in willUpdate() — only rebuilt when inputs change.
       return html`
-        <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
+        <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container" @vsc-scrollable-scroll=${this.handleVscScroll}>
           ${repeat(
             this.cachedTimeline,
             (item) => item.key,
@@ -639,7 +624,7 @@ export class TaskGroupList extends LitElement {
     // Workflow stages are hierarchical (not conversational), so structure-first
     // ordering keeps stage execution visually separate from stray messages.
     return html`
-      <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
+      <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container" @vsc-scrollable-scroll=${this.handleVscScroll}>
         ${repeat(
           this.cachedTree,
           (t) => t.group.id,
