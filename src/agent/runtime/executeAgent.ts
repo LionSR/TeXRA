@@ -531,15 +531,18 @@ export async function executeAgent(
   const { setting, streamId, config } = ctx;
   const agentName = config.agent;
 
-  // Fire-and-forget: generate AI session description from the user's instruction.
-  // Triggered at the start so cancelled/errored sessions still get descriptions.
-  generateSessionDescription(ctx.executionId, streamId, config).catch(
-    () => {},
-  );
-
   options?.onStreamResolved?.(streamId);
 
   const isSubagent = options?.isSubagent;
+
+  // Fire-and-forget: generate AI session description from the user's instruction.
+  // Triggered at the start so cancelled/errored sessions still get descriptions.
+  // Skipped for subagents to avoid unnecessary LLM calls in multi-agent pipelines.
+  if (!isSubagent) {
+    generateSessionDescription(ctx.executionId, streamId, config).catch(
+      () => {},
+    );
+  }
   const category =
     setting.agentCategory === AgentCategory.ToolUse
       ? ('toolUse' as const)
