@@ -22,7 +22,7 @@ import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports
 import { STREAM_STATUS, type ActiveChildInfo } from '@shared/schemas';
-import { designTokens, commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles, tintedBadgeStyles } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 import { ProgressEvents } from '../events';
@@ -43,6 +43,7 @@ export class BackgroundTasksPanel extends LitElement {
     designTokens,
     commonViewStyles,
     codiconIconClasses,
+    tintedBadgeStyles,
     css`
       :host {
         display: block;
@@ -76,11 +77,11 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .task-icon--process {
-        color: var(--color-warning, var(--vscode-charts-orange));
+        color: var(--color-warning);
       }
 
       .task-icon--subagent {
-        color: var(--color-info, var(--vscode-charts-blue));
+        color: var(--color-info);
       }
 
       .task-name {
@@ -96,7 +97,7 @@ export class BackgroundTasksPanel extends LitElement {
         cursor: pointer;
         text-decoration: underline;
         text-decoration-color: transparent;
-        transition: text-decoration-color 0.15s ease;
+        transition: text-decoration-color var(--transition-fast);
       }
 
       .task-name--clickable:hover {
@@ -105,24 +106,16 @@ export class BackgroundTasksPanel extends LitElement {
 
       .task-elapsed {
         flex-shrink: 0;
-        font-size: var(--font-size-xs, 10px);
+        font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
       }
 
-      .task-status {
-        flex-shrink: 0;
-        font-size: var(--font-size-xs, 10px);
-        padding: 1px var(--spacing-small);
-        border-radius: var(--border-radius-small);
-        color: var(--_tint);
-        background: color-mix(in srgb, var(--_tint) 12%, transparent);
+      /* Variant tints for shared .tinted-badge */
+      .tinted-badge--running {
+        --_tint: var(--color-warning);
       }
 
-      .task-status--running {
-        --_tint: var(--color-warning, var(--vscode-charts-orange));
-      }
-
-      .task-status--waiting {
+      .tinted-badge--waiting {
         --_tint: var(--color-text-secondary);
       }
 
@@ -131,7 +124,7 @@ export class BackgroundTasksPanel extends LitElement {
         align-items: center;
         gap: var(--spacing-small);
         padding: var(--spacing-small) 0 var(--spacing-tiny);
-        font-size: var(--font-size-xs, 10px);
+        font-size: var(--font-size-xs);
         font-weight: var(--font-weight-semibold);
         color: var(--color-text-secondary);
         text-transform: uppercase;
@@ -150,7 +143,7 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .section-label .codicon {
-        font-size: var(--font-size-xs, 10px);
+        font-size: var(--font-size-xs);
       }
 
       .empty-message {
@@ -166,8 +159,8 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       details.task-output > summary {
-        padding: 2px 0;
-        font-size: var(--font-size-xs, 10px);
+        padding: var(--spacing-tiny) 0;
+        font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
         cursor: pointer;
         list-style: none;
@@ -331,9 +324,9 @@ export class BackgroundTasksPanel extends LitElement {
             : nothing}
           <span
             class=${classMap({
-              'task-status': true,
-              'task-status--running': !isWaiting(child),
-              'task-status--waiting': isWaiting(child),
+              'tinted-badge': true,
+              'tinted-badge--running': !isWaiting(child),
+              'tinted-badge--waiting': isWaiting(child),
             })}
             >${isWaiting(child) ? 'waiting' : 'running'}</span
           >
