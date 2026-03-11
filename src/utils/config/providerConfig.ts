@@ -110,5 +110,7 @@ export async function setAnthropicDynamicFiltering(
 
 /** Read the WebSocket transport setting for OpenAI. */
 export function getWebSocketEnabled(): boolean {
-  return globalSM?.get<boolean>(GlobalStateKey.WEBSOCKET_OPENAI, false) ?? false;
+  return (
+    globalSM?.get<boolean>(GlobalStateKey.WEBSOCKET_OPENAI, false) ?? false
+  );
 }

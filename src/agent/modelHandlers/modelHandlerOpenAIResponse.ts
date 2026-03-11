@@ -116,8 +116,14 @@ interface UploadedOpenAIResponseAttachment {
 
 /** Shared state for streaming event processing (WebSocket and HTTP paths). */
 interface StreamingEventState {
-  thinkingStream: { append(delta: string): void; finalize(finalText?: string): void };
-  outputStream: { append(delta: string): void; finalize(finalText?: string): void } | null;
+  thinkingStream: {
+    append(delta: string): void;
+    finalize(finalText?: string): void;
+  };
+  outputStream: {
+    append(delta: string): void;
+    finalize(finalText?: string): void;
+  } | null;
   emittedWebSearchIds: Set<string>;
   hasThinkingContent: boolean;
 }
@@ -285,7 +291,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Check if existing connection is still valid
     if (this.wsConnection) {
       const age = Date.now() - this.wsConnectionCreatedAt;
-      const socketReady = this.wsConnection.socket.readyState === ModelHandlerOpenAIResponse.WS_OPEN;
+      const socketReady =
+        this.wsConnection.socket.readyState ===
+        ModelHandlerOpenAIResponse.WS_OPEN;
       if (age < ModelHandlerOpenAIResponse.WS_MAX_AGE_MS && socketReady) {
         return this.wsConnection;
       }
@@ -323,12 +331,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       };
       const onError = (err: Error): void => {
         cleanup();
-        try { ws.close(); } catch { /* ignore */ }
+        try {
+          ws.close();
+        } catch {
+          /* ignore */
+        }
         reject(err);
       };
       const onAbort = (): void => {
         cleanup();
-        try { ws.close(); } catch { /* ignore */ }
+        try {
+          ws.close();
+        } catch {
+          /* ignore */
+        }
         reject(new DOMException('The operation was aborted', 'AbortError'));
       };
 
@@ -375,9 +391,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Function call arguments complete - finalize streams since no more
       // text/thinking deltas will arrive after tool calls begin.
       this.rotateThinkingStream(state);
-      this.logger.debug(
-        `Tool call ready during streaming: ${event.name}`,
-      );
+      this.logger.debug(`Tool call ready during streaming: ${event.name}`);
     } else if (this.isOutputItemDoneEvent(event)) {
       const item = event.item;
       if (
@@ -409,7 +423,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Shared by both WebSocket and HTTP streaming paths after background
    * polling completes.
    */
-  private finalizeStreams(response: Response, state: StreamingEventState): void {
+  private finalizeStreams(
+    response: Response,
+    state: StreamingEventState,
+  ): void {
     if (state.hasThinkingContent) {
       state.thinkingStream.finalize();
     }
@@ -567,10 +584,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       ws.on('event', onEvent);
       ws.on('response.completed', onCompleted);
       ws.on('response.failed', onFailed as Parameters<typeof ws.on>[1]);
-      ws.on(
-        'response.incomplete',
-        onIncomplete as Parameters<typeof ws.on>[1],
-      );
+      ws.on('response.incomplete', onIncomplete as Parameters<typeof ws.on>[1]);
       ws.on('error', onWsError);
       ws.socket.on('close', onSocketClose);
 
