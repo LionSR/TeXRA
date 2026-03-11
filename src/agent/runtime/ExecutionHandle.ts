@@ -190,7 +190,7 @@ export function interruptActiveChildren(
 }
 
 /** Collect {executionId, agentName} for handles matching a class under a parent stream. */
-function collectChildSummary(
+export function collectChildSummary(
   parentStreamId: StreamTabId,
   handles: Iterable<ExecutionHandle>,
   ctor: new (...args: any[]) => ExecutionHandle,

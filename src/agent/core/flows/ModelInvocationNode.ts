@@ -25,6 +25,12 @@ export interface ModelInvocationConfig<TShared, TServices> {
   getEndTag?: (services: TServices) => string | undefined;
   getTools?: (services: TServices) => ToolDefinition[] | undefined;
   storeResponse: (shared: TShared, response: unknown) => void;
+  /**
+   * Called after compaction to get additional context (e.g. active executions)
+   * to append to the compacted messages. Returns the context string to inject
+   * as a user follow-up message, or null if no context is needed.
+   */
+  getPostCompactionContext?: (services: TServices) => string | null;
   getDebugSaveOptions?: (
     shared: TShared,
     services: TServices,
@@ -130,6 +136,19 @@ export class ModelInvocationNode<
 
     if (successRes.updatedMessages != null) {
       replaceMessagesInPlace(shared.messages, successRes.updatedMessages);
+
+      // After compaction, inject active execution context so the agent knows
+      // about running subagents/background processes it launched pre-compaction.
+      if (this._config.getPostCompactionContext) {
+        const context = this._config.getPostCompactionContext(this.services);
+        if (context) {
+          shared.messages =
+            await this.services.modelHandler.createUserFollowUpMessages(
+              shared.messages,
+              context,
+            );
+        }
+      }
     }
 
     shared.responseTimeMs = successRes.responseTimeMs;

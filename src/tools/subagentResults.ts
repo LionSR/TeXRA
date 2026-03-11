@@ -239,6 +239,70 @@ export function formatBashError(
   ].join('\n');
 }
 
+// ============================================================================
+// Post-compaction execution context
+// ============================================================================
+
+/** Minimal execution info needed for post-compaction context formatting. */
+export interface ActiveExecutionSummary {
+  executionId: string;
+  agentName: string;
+  status?: string;
+  elapsed?: string | null;
+}
+
+/**
+ * Format active execution state as context for the agent after compaction.
+ * Returns null if there are no active children to report.
+ *
+ * This helps the agent understand what subagents and background processes
+ * are still running after context was compressed, so it can:
+ * - Avoid launching duplicate subagents
+ * - Know which execution IDs to check on
+ * - Understand that pending results may arrive as follow-up messages
+ */
+export function formatPostCompactionContext(
+  subagents: ActiveExecutionSummary[],
+  processes: ActiveExecutionSummary[],
+): string | null {
+  if (subagents.length === 0 && processes.length === 0) {
+    return null;
+  }
+
+  const lines: string[] = [
+    '<post-compaction-context>',
+    '<note>Your conversation context was compacted (summarized) to free up space. The following executions were launched before compaction and may still be active. Their results will be delivered as follow-up messages when they complete. Use the executions tool to check on their status or read their results.</note>',
+  ];
+
+  if (subagents.length > 0) {
+    lines.push(`<active-subagents count="${subagents.length}">`);
+    for (const sa of subagents) {
+      const statusAttr = sa.status ? ` status="${escapeAttr(sa.status)}"` : '';
+      const elapsedAttr =
+        sa.elapsed ? ` elapsed="${escapeAttr(sa.elapsed)}"` : '';
+      lines.push(
+        `  <subagent id="${escapeAttr(sa.executionId)}" agent="${escapeAttr(sa.agentName)}"${statusAttr}${elapsedAttr} />`,
+      );
+    }
+    lines.push('</active-subagents>');
+  }
+
+  if (processes.length > 0) {
+    lines.push(`<active-processes count="${processes.length}">`);
+    for (const proc of processes) {
+      const elapsedAttr =
+        proc.elapsed ? ` elapsed="${escapeAttr(proc.elapsed)}"` : '';
+      lines.push(
+        `  <process id="${escapeAttr(proc.executionId)}" command="${escapeAttr(proc.agentName)}"${elapsedAttr} />`,
+      );
+    }
+    lines.push('</active-processes>');
+  }
+
+  lines.push('</post-compaction-context>');
+  return lines.join('\n');
+}
+
 function lastNLines(text: string, n: number): string {
   const lines = text.split('\n');
   return lines.length <= n ? text : lines.slice(-n).join('\n');

@@ -13,6 +13,7 @@ import {
   type ExecutionHandle,
   AgentExecutionHandle,
   ProcessExecutionHandle,
+  collectChildSummary,
   emitActiveSubagentsUpdate,
   emitActiveProcessesUpdate,
   interruptActiveChildren as interruptActiveChildrenImpl,
@@ -217,6 +218,25 @@ export function waitForAnyExecutionChange(
  */
 export function interruptActiveChildren(parentStreamId: StreamTabId): void {
   interruptActiveChildrenImpl(parentStreamId, registry.values());
+}
+
+/** Get active subagent and process children for a parent stream. */
+export function getActiveChildren(parentStreamId: StreamTabId): {
+  subagents: import('@shared/schemas').ActiveChildInfo[];
+  processes: import('@shared/schemas').ActiveChildInfo[];
+} {
+  return {
+    subagents: collectChildSummary(
+      parentStreamId,
+      registry.values(),
+      AgentExecutionHandle,
+    ),
+    processes: collectChildSummary(
+      parentStreamId,
+      registry.values(),
+      ProcessExecutionHandle,
+    ),
+  };
 }
 
 // ============================================================================

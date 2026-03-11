@@ -21,6 +21,8 @@ import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
+import { getActiveChildren } from '@agent/runtime/executionRegistry';
+import { formatPostCompactionContext } from '@tools/subagentResults';
 import { bestConnectionMethod } from '@latex';
 import replacementEngine from '@replacement/engine';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
@@ -650,6 +652,10 @@ export function createResponseCycleFlow<C>(): Flow<
         : undefined,
     storeResponse: (shared, response) => {
       shared.responseObject = response;
+    },
+    getPostCompactionContext: (services) => {
+      const { subagents, processes } = getActiveChildren(services.streamId);
+      return formatPostCompactionContext(subagents, processes);
     },
     getDebugSaveOptions: (shared, services) => ({
       context: {
