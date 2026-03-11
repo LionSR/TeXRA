@@ -280,8 +280,8 @@ const OFFICE_EXTENSIONS = new Set([
   '.xlt',
   '.xlw',
   '.ods',
-  '.csv',
-  '.tsv',
+  // NOTE: .csv and .tsv are intentionally excluded — they are plain text
+  // and should be read with line-range support, not treated as binary.
   // Presentations
   '.ppt',
   '.pptx',

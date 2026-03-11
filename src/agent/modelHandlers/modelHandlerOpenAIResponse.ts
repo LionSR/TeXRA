@@ -123,8 +123,9 @@ const INLINEABLE_FILE_MIME_TYPES = new Set([
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.oasis.opendocument.spreadsheet',
-  'text/csv',
-  'text/tsv',
+  // NOTE: text/csv and text/tab-separated-values are intentionally excluded —
+  // CSV/TSV files are plain text and read_file returns them as text with
+  // line-range support, so they won't arrive here as attachments.
   // Presentations
   'application/vnd.ms-powerpoint',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
