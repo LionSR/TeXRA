@@ -280,15 +280,15 @@ export function formatPostCompactionContext(
   }
 
   if (processes.length > 0) {
-    lines.push(`<active-processes count="${processes.length}">`);
+    lines.push(`<active-background-bash count="${processes.length}">`);
     for (const proc of processes) {
       const elapsedAttr =
         proc.elapsed ? ` elapsed="${escapeAttr(proc.elapsed)}"` : '';
       lines.push(
-        `  <process id="${escapeAttr(proc.executionId)}" command="${escapeAttr(proc.agentName)}"${elapsedAttr} />`,
+        `  <background-bash id="${escapeAttr(proc.executionId)}" command="${escapeAttr(proc.agentName)}"${elapsedAttr} />`,
       );
     }
-    lines.push('</active-processes>');
+    lines.push('</active-background-bash>');
   }
 
   lines.push('</post-compaction-context>');
