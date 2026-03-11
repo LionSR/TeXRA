@@ -112,6 +112,25 @@ import './components/ContextManagement';
 // Local imports - progress view component types
 import type { PermissionState } from './components/PermissionCard';
 
+// ---------------------------------------------------------------------------
+// Collection equality helpers — avoid allocating temporary arrays in
+// Signal.Computed evaluations that run on every state change.
+// ---------------------------------------------------------------------------
+
+function mapsEqual<K, V>(a: Map<K, V>, b: Map<K, V>): boolean {
+  for (const [k, v] of a) {
+    if (b.get(k) !== v) return false;
+  }
+  return true;
+}
+
+function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
+  for (const v of a) {
+    if (!b.has(v)) return false;
+  }
+  return true;
+}
+
 // Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
 // Safe because ProgressApp implements all abstract members below.
 const ProgressAppBase = SignalWatcher(
@@ -226,7 +245,7 @@ export class ProgressApp extends ProgressAppBase {
     // so a new Set with identical contents would still propagate.
     if (
       ids.size === this._prevApprovalIds.size &&
-      [...ids].every((id) => this._prevApprovalIds.has(id))
+      setsEqual(ids, this._prevApprovalIds)
     ) {
       return this._prevApprovalIds;
     }
@@ -286,9 +305,7 @@ export class ProgressApp extends ProgressAppBase {
     // so a new Map with identical contents would still propagate.
     if (
       map.size === this._prevDescriptions.size &&
-      [...map].every(
-        ([k, v]) => this._prevDescriptions.get(k) === v,
-      )
+      mapsEqual(map, this._prevDescriptions)
     ) {
       return this._prevDescriptions;
     }

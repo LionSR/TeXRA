@@ -534,9 +534,7 @@ export async function executeAgent(
   // Fire-and-forget: generate AI session description from the user's instruction.
   // Triggered at the start so cancelled/errored sessions still get descriptions.
   if (setting.agentCategory === AgentCategory.ToolUse) {
-    generateSessionDescription(ctx.executionId, streamId, config).catch(
-      () => {},
-    );
+    generateSessionDescription(ctx.executionId, streamId, config);
   }
 
   options?.onStreamResolved?.(streamId);
