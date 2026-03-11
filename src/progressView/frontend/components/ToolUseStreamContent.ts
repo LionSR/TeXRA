@@ -96,6 +96,7 @@ export class ToolUseStreamContent extends LitElement {
       <stream-header
         .stream=${streamInfo}
         .status=${currentState.status}
+        .progress=${currentState.conversationProgress}
         .runId=${null}
         .runs=${this.runGroups}
         .yoloActive=${Boolean(currentState.toolEditBypass)}
@@ -137,5 +138,4 @@ export class ToolUseStreamContent extends LitElement {
   private handleFocusComplete(): void {
     this.dispatchEvent(ProgressEvents.followupFocusComplete());
   }
-
 }
