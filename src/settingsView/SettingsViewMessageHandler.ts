@@ -154,10 +154,11 @@ const ALLOWED_VSCODE_SETTING_KEYS = new Set([
 function getProviderVscodeSettings(provider: string): ProviderVscodeSetting[] {
   const defs = PROVIDER_VSCODE_SETTINGS[provider.toLowerCase()];
   if (!defs) return [];
-  // getConfig reads from VS Code's config API which already knows package.json defaults
   return defs.map((def) => ({
     ...def,
-    value: getConfig<boolean>(def.key, false),
+    value: def.globalStateKey
+      ? (globalSM?.get<boolean>(def.globalStateKey, false) ?? false)
+      : getConfig<boolean>(def.key, false),
   }));
 }
 
@@ -1112,12 +1113,20 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    const config = vscode.workspace.getConfiguration();
-    await config.update(
-      data.key,
-      data.value,
-      vscode.ConfigurationTarget.Global,
-    );
+    // Check if this setting is backed by globalSM instead of VS Code config
+    const def = Object.values(PROVIDER_VSCODE_SETTINGS)
+      .flat()
+      .find((s) => s.key === data.key);
+    if (def?.globalStateKey) {
+      await globalSM?.update(def.globalStateKey, data.value);
+    } else {
+      const config = vscode.workspace.getConfiguration();
+      await config.update(
+        data.key,
+        data.value,
+        vscode.ConfigurationTarget.Global,
+      );
+    }
 
     await this.withActiveWebview(async (w) => {
       await Promise.all([
