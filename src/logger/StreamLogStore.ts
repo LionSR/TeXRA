@@ -269,15 +269,10 @@ export class StreamLogStore {
 
   private parsePersistedEntries(rawEntries: unknown): StreamLogEntry[] {
     if (!Array.isArray(rawEntries)) return [];
-
-    const entries: StreamLogEntry[] = [];
-    for (const rawEntry of rawEntries) {
-      const result = PersistedStreamLogEntrySchema.safeParse(rawEntry);
-      if (result.success) {
-        entries.push(result.data);
-      }
-    }
-    return entries;
+    return rawEntries.flatMap((raw) => {
+      const result = PersistedStreamLogEntrySchema.safeParse(raw);
+      return result.success ? [result.data] : [];
+    });
   }
 
   /**
