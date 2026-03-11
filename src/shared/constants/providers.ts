@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import { ModelProvider } from 'llm-zoo';
 
+import { GlobalStateKey } from '@common/state/stateManager';
+
 // ============================================================================
 // Provider Registry — single source of truth for all provider metadata
 // ============================================================================
@@ -132,6 +134,11 @@ export const ProviderVscodeSettingDefSchema = z.object({
   warning: z.string().optional(),
   warningUrl: z.string().optional(),
   warningUrlLabel: z.string().optional(),
+  /**
+   * When set, the setting is backed by globalSM (extension global state)
+   * instead of VS Code's workspace configuration.
+   */
+  globalStateKey: z.string().optional(),
 });
 
 export type ProviderVscodeSettingDef = z.infer<
@@ -172,6 +179,13 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
       label: 'Parallel Tool Calls',
       description:
         'Allow the model to call multiple tools in parallel. Off by default to preserve sequential tool execution.',
+    },
+    {
+      key: GlobalStateKey.WEBSOCKET_OPENAI,
+      label: 'WebSocket Transport',
+      description:
+        'Use a persistent WebSocket connection for lower-latency tool-use loops. Requires direct OpenAI API (not compatible with custom endpoints).',
+      globalStateKey: GlobalStateKey.WEBSOCKET_OPENAI,
     },
   ],
   anthropic: [
