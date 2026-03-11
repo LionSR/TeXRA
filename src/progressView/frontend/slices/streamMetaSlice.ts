@@ -25,7 +25,10 @@ function pruneStaleOutputs(
     if (!streamOutputs) return prev;
     let hasStale = false;
     for (const id of streamOutputs.keys()) {
-      if (!activeIds.has(id)) { hasStale = true; break; }
+      if (!activeIds.has(id)) {
+        hasStale = true;
+        break;
+      }
     }
     if (!hasStale) return prev;
     return create(prev, (draft) => {
@@ -87,7 +90,9 @@ export const streamMetaHandlers: HandlerRegistry = {
     pruneStaleOutputs(
       ctx,
       data.stream,
-      new Set(data.activeProcesses.map((p: { executionId: string }) => p.executionId)),
+      new Set(
+        data.activeProcesses.map((p: { executionId: string }) => p.executionId),
+      ),
     );
   },
 
@@ -122,7 +127,8 @@ export const streamMetaHandlers: HandlerRegistry = {
             ),
           );
           for (const id of [...streamOutputs.keys()]) {
-            if (id !== executionId && !activeIds.has(id)) streamOutputs.delete(id);
+            if (id !== executionId && !activeIds.has(id))
+              streamOutputs.delete(id);
           }
         }
         const existing = streamOutputs.get(executionId) ?? {

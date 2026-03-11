@@ -13,9 +13,6 @@ import {
 import { TODO_STATUS, type TodoItem } from '@shared/schemas';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
-// Local imports - shared schemas
-
-// Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
 
 const STATUS_ICONS: Record<string, string> = {

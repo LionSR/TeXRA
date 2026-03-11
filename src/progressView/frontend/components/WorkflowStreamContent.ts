@@ -11,7 +11,6 @@ import {
 } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
-import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 // Local imports - progress view
 import type {
@@ -31,13 +30,9 @@ import {
   streamStateContext,
   type StreamContextValue,
 } from '../contexts/streamContexts';
-import type { FollowupOptionsState, WorkflowStreamState } from '../store';
+import type { WorkflowStreamState } from '../store';
 
 // Local imports - types
-import {
-  type BackgroundTasksPanel,
-  toggleBackgroundTasksPanel,
-} from './BackgroundTasksPanel';
 import type { PermissionState } from './PermissionCard';
 
 // Side-effect imports - sibling components
@@ -86,7 +81,6 @@ export class WorkflowStreamContent extends LitElement {
   // Not @state(): always derived from streamContext/permissionContext (avoids double-render).
   private runGroups: RunGroup[] = [];
   private runValues: RunDerivedValues = EMPTY_RUN_VALUES;
-  private backgroundTasksRef: Ref<BackgroundTasksPanel> = createRef();
   private filteredPermissions: PermissionState[] = [];
 
   protected override willUpdate(changedProperties: PropertyValues): void {
@@ -143,11 +137,10 @@ export class WorkflowStreamContent extends LitElement {
     return html`
       <stream-header
         .stream=${streamInfo}
-        .streamState=${state}
+        .status=${state.status}
         .runId=${runId}
         .runs=${this.runGroups}
         .yoloActive=${false}
-        @background-tasks-toggle=${this.handleBackgroundTasksToggle}
       ></stream-header>
 
       <instruction-panel .instruction=${instruction}></instruction-panel>
@@ -155,7 +148,6 @@ export class WorkflowStreamContent extends LitElement {
       <request-panels .permissions=${this.filteredPermissions}></request-panels>
 
       <background-tasks-panel
-        ${ref(this.backgroundTasksRef)}
         .activeProcesses=${state.activeProcesses}
         .finishedProcessCount=${state.finishedProcessCount}
         .activeSubagents=${state.activeSubagents}
@@ -182,7 +174,4 @@ export class WorkflowStreamContent extends LitElement {
     `;
   }
 
-  private handleBackgroundTasksToggle(): void {
-    toggleBackgroundTasksPanel(this.backgroundTasksRef);
-  }
 }

@@ -11,15 +11,12 @@ import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
 
-// Local imports - shared styles
-import { designTokens, commonViewStyles } from '@shared/styles';
-
-// Local imports - shared utilities
+// Local imports
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { RecordingButtonController } from '@shared/controllers';
+import { designTokens, commonViewStyles } from '@shared/styles';
 import { getTextareaValue, insertTextAtCursor } from '@shared/utils/textarea';
-
-// Local imports - progress view constants
-import { COMMANDS, ELEMENT_IDS } from '../constants';
+import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 
 // Local imports - progress view components
@@ -115,8 +112,8 @@ export class FollowUpInput extends LitElement {
   declare private textAreaEl: HTMLElement | null;
 
   private recordingController = new RecordingButtonController(this, {
-    startCommand: COMMANDS.START_RECORDING,
-    stopCommand: COMMANDS.STOP_RECORDING,
+    startCommand: PROGRESS_VIEW_COMMANDS.START_RECORDING,
+    stopCommand: PROGRESS_VIEW_COMMANDS.STOP_RECORDING,
     startTitle: 'Record follow-up with microphone',
     stopTitle: 'Stop recording',
   });

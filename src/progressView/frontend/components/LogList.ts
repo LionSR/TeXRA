@@ -21,20 +21,14 @@ import { z } from 'zod';
 // Local imports - side-effect: register component
 import './TaskGroupList';
 
-// Local imports - shared webview
-import { postMessage, vscode } from '@shared/vscode';
-
-// Local imports - shared utilities
-import { PersistedState, createWebviewStorage } from '@shared/state';
-import { codiconStyles, designTokens } from '@shared/styles';
+// Local imports
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
-import { copyWithFeedback } from '@shared/utils/clipboard';
+import { PersistedState, createWebviewStorage } from '@shared/state';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
-
-// Local imports - shared styles
-
-// Local imports - progress view constants
-import { COMMANDS } from '../constants';
+import { codiconStyles, designTokens } from '@shared/styles';
+import { copyWithFeedback } from '@shared/utils/clipboard';
+import { postMessage, vscode } from '@shared/vscode';
 
 // Local imports - progress view contexts
 import {
@@ -52,8 +46,6 @@ import { getProposalInput } from '../formatters/proposalInputStore';
 
 // Local imports - progress view components (type-only)
 import type { TaskGroupList } from './TaskGroupList';
-
-// Local imports - shared schemas
 
 const LogListStateSchema = z
   .object({
@@ -256,7 +248,7 @@ export class LogList extends LitElement {
     if (!(event instanceof MouseEvent)) return;
     const fileLink = this.findTargetInPath<HTMLElement>(event, '.file-link');
     if (fileLink?.dataset.file) {
-      postMessage(COMMANDS.OPEN_FILE, {
+      postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, {
         file: fileLink.dataset.file,
         ...(fileLink.dataset.fileLine && {
           line: Number(fileLink.dataset.fileLine),
@@ -267,7 +259,9 @@ export class LogList extends LitElement {
 
     const latexRef = this.findTargetInPath<HTMLElement>(event, '.latex-ref');
     if (latexRef?.dataset.label) {
-      postMessage(COMMANDS.OPEN_LABEL, { label: latexRef.dataset.label });
+      postMessage(PROGRESS_VIEW_COMMANDS.OPEN_LABEL, {
+        label: latexRef.dataset.label,
+      });
       return;
     }
 
@@ -280,7 +274,9 @@ export class LogList extends LitElement {
       event.preventDefault();
       const proposal = getProposalInput(proposalLink.dataset.proposalId);
       if (proposal) {
-        postMessage(COMMANDS.RESTORE_PROPOSAL_CONFIG, { proposal });
+        postMessage(PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG, {
+          proposal,
+        });
       }
       return;
     }
@@ -326,7 +322,7 @@ export class LogList extends LitElement {
       event as CustomEvent<{ file: string; line?: number }>
     ).detail;
     if (file) {
-      postMessage(COMMANDS.OPEN_FILE, {
+      postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, {
         file,
         ...(line !== undefined && { line }),
       });

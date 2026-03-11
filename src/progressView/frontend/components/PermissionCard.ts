@@ -27,8 +27,6 @@ import { designTokens } from '@shared/styles/litStyles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { permissionCardStyles } from '@shared/styles/permissionCardStyles';
 
-// Local imports - webview commands
-
 // Local imports - progress view
 import { ProgressEvents } from '../events';
 
