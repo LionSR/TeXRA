@@ -3,16 +3,13 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-// Local imports - shared styles
-import { designTokens, commonViewStyles } from '@shared/styles';
-
-// Local imports - progress view constants
+// Local imports
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { OutputFileInfo } from '@shared/schemas';
-import { COMMANDS, ELEMENT_IDS } from '../constants';
+import { designTokens, commonViewStyles } from '@shared/styles';
+import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
-
-// Local imports - shared schemas
 
 /** Parsed path components for display */
 interface ParsedPath {
@@ -251,7 +248,7 @@ export class FileList extends LitElement {
           <span
             class="file-path clickable-link"
             title=${tooltipPath}
-            data-command=${COMMANDS.OPEN_FILE}
+            data-command=${PROGRESS_VIEW_COMMANDS.OPEN_FILE}
             data-file=${filePath}
           >
             <span class="file-dir">${dir}</span>
@@ -338,7 +335,7 @@ export class FileList extends LitElement {
         icon="diff"
         label="Compare with base"
         title="Compare with base"
-        data-command=${COMMANDS.COMPARE_ORIGINAL}
+        data-command=${PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL}
         data-file=${filePath}
         data-base=${basePath}
       ></vscode-toolbar-button>
@@ -347,7 +344,7 @@ export class FileList extends LitElement {
         icon="check"
         label="Accept edits"
         title="Accept edits"
-        data-command=${COMMANDS.ACCEPT_FILE}
+        data-command=${PROGRESS_VIEW_COMMANDS.ACCEPT_FILE}
         data-file=${filePath}
         data-base=${basePath}
       ></vscode-toolbar-button>
@@ -356,7 +353,7 @@ export class FileList extends LitElement {
         icon="git-merge"
         label="Merge edits"
         title="Merge edits"
-        data-command=${COMMANDS.MERGE_FILE}
+        data-command=${PROGRESS_VIEW_COMMANDS.MERGE_FILE}
         data-file=${filePath}
         data-base=${basePath}
       ></vscode-toolbar-button>
@@ -365,7 +362,7 @@ export class FileList extends LitElement {
         icon="diff-single"
         label="LaTeXdiff"
         title="LaTeXdiff"
-        data-command=${COMMANDS.LATEXDIFF_FILE}
+        data-command=${PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE}
         data-file=${filePath}
         data-base=${basePath}
       ></vscode-toolbar-button>
@@ -385,7 +382,7 @@ export class FileList extends LitElement {
         icon="diff-added"
         label="Compare with previous round"
         title="Compare with previous round"
-        data-command=${COMMANDS.COMPARE_PREVIOUS}
+        data-command=${PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS}
         data-file=${filePath}
         data-base=${basePath}
         data-prev=${previousPath}

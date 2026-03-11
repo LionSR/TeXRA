@@ -40,8 +40,6 @@ import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import { getBasename } from '@shared/utils/path';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
-// Local imports - webview commands
-
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
