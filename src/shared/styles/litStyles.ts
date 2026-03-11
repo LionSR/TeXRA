@@ -17,6 +17,7 @@ export const designTokens: CSSResult = css`
     --color-success: var(--vscode-testing-iconPassed, #2ea043);
     --color-error: var(--vscode-editorError-foreground, #f14c4c);
     --color-warning: var(--vscode-editorWarning-foreground, #cca700);
+    --color-info: var(--vscode-charts-blue, #3794ff);
     --color-added: var(--vscode-charts-green, #4caf50);
     --color-removed: var(--vscode-charts-red, #f44336);
 
