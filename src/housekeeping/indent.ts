@@ -1,18 +1,13 @@
-// Standard library imports
 import * as path from 'path';
 
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
 import { showLoggedErrorMessage } from '@common/errors';
 import { runLatexFormatter } from '@latex/texFormatter';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { hasExtension } from '@utils/core/pathCore';
-
-// Local imports - housekeeping
 import { EXCLUDED_DIRS } from './constants';
 
 const CHANNEL = 'Housekeeping';
@@ -70,11 +65,10 @@ export async function indentLatexFilesInDirectory(
 
   let indentedCount = 0;
 
-  /** Walks directory tree, calling onFile for each file */
-  const walkDirectory = async (
+  async function walkDirectory(
     dirPath: string,
     onFile: (fullPath: string, name: string) => Promise<void>,
-  ) => {
+  ): Promise<void> {
     const entries = await WorkspaceFS.readDir(dirPath);
     for (const [name, type] of entries) {
       if (EXCLUDED_DIRS.has(name.toLowerCase()) || name.includes('Diffs')) {
@@ -89,7 +83,7 @@ export async function indentLatexFilesInDirectory(
         await onFile(fullPath, name);
       }
     }
-  };
+  }
 
   try {
     // Pass 1: Format .tex files

@@ -10,10 +10,7 @@ import type { StreamTabId } from '@shared/schemas';
 
 /** Check if the workspace-level Super YOLO feature is enabled. */
 export function isSuperYoloFeatureEnabled(): boolean {
-  return (
-    workspaceSM.get<boolean>(WorkspaceStateKey.SUPER_YOLO_ENABLED, false) ??
-    false
-  );
+  return workspaceSM.get<boolean>(WorkspaceStateKey.SUPER_YOLO_ENABLED, false);
 }
 
 const bypassedByStream = new Map<StreamTabId, boolean>();

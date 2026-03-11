@@ -208,15 +208,16 @@ function collectChildSummary(
       continue;
     }
     const statusInfo = handle.getStatus();
-    result.push({
+    const info: ActiveChildInfo = {
       executionId: handle.executionId,
       agentName: handle.agentName,
       status: statusInfo.status,
       elapsed: statusInfo.elapsed ?? null,
-      ...(handle instanceof AgentExecutionHandle
-        ? { childStreamId: handle.childStreamId }
-        : {}),
-    });
+    };
+    if (handle instanceof AgentExecutionHandle) {
+      info.childStreamId = handle.childStreamId;
+    }
+    result.push(info);
   }
   return result;
 }

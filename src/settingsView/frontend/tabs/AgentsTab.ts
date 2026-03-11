@@ -17,8 +17,6 @@ import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
 
-// Local imports - events
-
 // Local imports - shared schemas
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';

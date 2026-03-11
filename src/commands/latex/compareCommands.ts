@@ -21,7 +21,6 @@ import type { FileLocation } from '@utils/files';
 const CHANNEL = 'CompareCommands';
 logger.initialize(CHANNEL);
 
-/** Validates that required file locations are provided, returns resolved base location */
 function validateFileLocations(
   inputLocation: FileLocation,
   baseLocation: FileLocation,
@@ -36,7 +35,6 @@ function validateFileLocations(
   return fileToUseLocation;
 }
 
-/** Checks if both base and edited files exist */
 async function validateFilesExist(
   baseLocation: FileLocation,
   editedLocation: FileLocation,
@@ -58,9 +56,6 @@ async function validateFilesExist(
   return true;
 }
 
-/**
- * Register comparison related commands
- */
 export function registerCompareCommands(
   context: vscode.ExtensionContext,
 ): void {
@@ -70,9 +65,6 @@ export function registerCompareCommands(
   );
 }
 
-/**
- * Handles the compare command to show two files in VS Code's built-in diff editor
- */
 async function handleCompare(
   inputLocation: FileLocation,
   baseLocation: FileLocation,
@@ -91,18 +83,12 @@ async function handleCompare(
       return;
     }
 
-    // Create URIs for diff editor
     const baseUri = vscode.Uri.file(fileToUseLocation.absolutePath);
     const editedUri = vscode.Uri.file(editedLocation.absolutePath);
-
-    // Create title for the diff editor
     const baseFileName = path.basename(fileToUseLocation.absolutePath);
     const editedFileName = path.basename(editedLocation.absolutePath);
     const title = `Compare: ${editedFileName} ↔ ${baseFileName}`;
 
-    // If the ProgressBoard lives in the secondary sidebar, close the bottom
-    // panel to give the diff view more space. If the view is in the panel
-    // already, leave it open.
     const contextKeyCommandId = 'vscode.getContextKeyValue';
     try {
       const location: string | undefined = await vscode.commands.executeCommand(
@@ -125,15 +111,8 @@ async function handleCompare(
       }
     }
 
-    // Open files in diff editor
-    await vscode.commands.executeCommand(
-      'vscode.diff',
-      editedUri, // left-hand side (modified)
-      baseUri, // right-hand side (original)
-      title,
-    );
+    await vscode.commands.executeCommand('vscode.diff', editedUri, baseUri, title);
 
-    // Wait a short time for the diff editor to fully open, then register listeners
     setTimeout(() => {
       registerDiffRefresh(editedUri, baseUri, title);
     }, DIFF_REGISTRATION_DELAY_MS);
@@ -147,10 +126,6 @@ async function handleCompare(
   }
 }
 
-/**
- * Handles accepting the content of the edited file.
- * If extensions differ, creates a new file instead of overwriting.
- */
 async function handleAcceptEdited(
   inputLocation: FileLocation,
   baseLocation: FileLocation,
@@ -175,7 +150,6 @@ async function handleAcceptEdited(
     const baseExt = path.extname(basePath).toLowerCase();
     const editedExt = path.extname(editedPath).toLowerCase();
 
-    // Determine target: new file if extensions differ, otherwise overwrite base
     const { targetLocation, targetFileName, isNewFile } =
       baseExt !== editedExt
         ? getNewFileTarget(fileToUseLocation, editedPath)
@@ -185,10 +159,8 @@ async function handleAcceptEdited(
             isNewFile: false,
           };
 
-    // Check if new file would overwrite an existing file
     const targetExists = isNewFile && (await flexibleFS.exists(targetLocation));
 
-    // Build confirmation message based on operation type
     let action: string;
     if (targetExists) {
       action = 'overwrite existing';
@@ -226,11 +198,6 @@ async function handleAcceptEdited(
   }
 }
 
-/**
- * Determines the target file when extensions differ.
- * Creates filename: {baseName}_{agent}.{editedExt} or falls back to edited filename.
- * Preserves the location kind (workspace/runStorage/external) from the base file.
- */
 function getNewFileTarget(
   baseLocation: FileLocation,
   editedPath: string,
@@ -250,12 +217,10 @@ function getNewFileTarget(
 
   const targetAbsolutePath = path.join(path.dirname(basePath), targetFileName);
 
-  // Preserve location kind from base file
   let targetLocation: FileLocation;
   if (baseLocation.kind === 'external') {
     targetLocation = createExternalLocation(targetAbsolutePath);
   } else {
-    // workspace and runStorage share the same relative path computation
     const targetRelativePath = path.join(
       path.dirname(baseLocation.relativePath),
       targetFileName,

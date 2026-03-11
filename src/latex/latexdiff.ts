@@ -1,24 +1,17 @@
-// Standard library imports
 import * as path from 'path';
 
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports - log
 import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 import { formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { flexibleFS, pathToLocation, type FileLocation } from '@utils/files';
 import { getConfig } from '@utils/config';
-
-// Local imports - latex utils
 import { runLatexFormatter } from './texFormatter';
 import { generateDiffFileName } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
-
-// Type imports
 import type { MathMarkupOption } from './latexdiff/mathMarkup';
 
 // ============================================================================

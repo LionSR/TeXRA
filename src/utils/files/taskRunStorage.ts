@@ -2,12 +2,7 @@
 import * as path from 'path';
 import { promises as fs } from 'fs';
 
-// Local imports - shared schemas
-
-// Local imports - common
 import { toErrorMessage } from '@common/errors';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
 import {
   AgentFileLocationSchema,
@@ -23,11 +18,7 @@ import {
   type WorkspaceFileLocation,
 } from '@shared/schemas';
 import { getConfig } from '@utils/config';
-
-// Local imports - core utilities
 import { getPathSegments } from '@utils/core/pathCore';
-
-// Local file imports
 import { StorageFS } from './storageFS';
 import { WorkspaceFS } from './workspaceFS';
 

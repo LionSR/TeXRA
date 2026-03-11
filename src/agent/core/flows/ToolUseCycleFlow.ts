@@ -39,7 +39,6 @@ import { toErrorMessage } from '@common/errors';
 // Local imports - logging
 import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@shared/schemas';
-// Type imports
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
@@ -599,9 +598,8 @@ class ToolUseDispatchNode<C> extends BatchNode<
       };
     }
 
-    this.services.workspace.interactions.recordToolCall();
-
     const { workspace } = this.services;
+    workspace.interactions.recordToolCall();
 
     return this.executeToolCall(
       call,
@@ -783,15 +781,14 @@ class ToolUseDispatchNode<C> extends BatchNode<
         if (!isNonEmptyString(attachment.path)) {
           continue;
         }
-        const filePath = attachment.path;
-        const location = pathToLocation(filePath);
+        const location = pathToLocation(attachment.path);
         try {
           if (await AbsoluteFS.exists(location.absolutePath)) {
             validLocations.push(location);
           }
         } catch (err) {
           options.logger.debug(
-            `Skipping inaccessible media file: ${filePath} (${err instanceof Error ? err.message : 'unknown error'})`,
+            `Skipping inaccessible media file: ${attachment.path} (${err instanceof Error ? err.message : 'unknown error'})`,
           );
         }
       }

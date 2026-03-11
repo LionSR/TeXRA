@@ -14,11 +14,6 @@ export const arXivCommands = {
   downloadArXivSource: 'texra.downloadArXivSource',
 };
 
-/**
- * Register arXiv-related commands
- * @param context The extension context
- * @returns An object with the registered commands
- */
 export function registerArXivCommands(context: vscode.ExtensionContext) {
   logger.initialize(CHANNEL);
 

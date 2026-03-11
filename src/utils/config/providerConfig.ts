@@ -6,12 +6,7 @@
  * in @shared/constants/providers.
  */
 
-// Local imports - common (direct import to avoid circular dependency via barrel)
 import { globalSM, GlobalStateKey } from '@common/state/stateManager';
-
-// ---------------------------------------------------------------------------
-// Streaming / Endpoint settings (globalSM-backed)
-// ---------------------------------------------------------------------------
 
 /** Map from provider string to GlobalStateKey for per-provider streaming. */
 const STREAMING_KEY: Record<string, GlobalStateKey> = {
@@ -87,10 +82,6 @@ export async function setProviderEndpoint(
 export function supportsCustomEndpoint(provider: string): boolean {
   return provider.toLowerCase() in ENDPOINT_KEY;
 }
-
-// ---------------------------------------------------------------------------
-// Anthropic API settings (globalSM-backed)
-// ---------------------------------------------------------------------------
 
 /**
  * Whether Anthropic web_search/web_fetch should use dynamic filtering.

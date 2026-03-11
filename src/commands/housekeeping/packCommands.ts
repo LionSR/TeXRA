@@ -13,8 +13,6 @@ import { emitClearMissingOutputs } from './streamEventUtils';
 const CHANNEL = 'packCommands';
 logger.initialize(CHANNEL);
 
-// --- Schemas ---
-
 const RequiredString = z.string().min(1);
 
 const BasePackSchema = z.object({
@@ -40,8 +38,6 @@ const PackMultipleSchema = BasePackSchema.extend({
 }).refine((d) => d.inputFile || d.outputFiles.length > 0, {
   error: 'inputFile or outputFiles required',
 });
-
-// --- Helpers ---
 
 function showPackResult(result: FileOpResult, inputFile: string): void {
   switch (result.status) {
@@ -104,8 +100,6 @@ async function executePackOperation<T extends PackParams>(
     emitClearMissingOutputs(options);
   }
 }
-
-// --- Handlers ---
 
 async function handlePack(config: unknown): Promise<void> {
   return executePackOperation(
@@ -184,8 +178,6 @@ async function handlePackMultiple(
     }),
   );
 }
-
-// --- Registration ---
 
 export function registerPackCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(

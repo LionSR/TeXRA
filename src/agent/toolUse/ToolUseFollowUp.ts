@@ -13,8 +13,7 @@
 import { getToolUseFlowContext } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { AgentLogger } from '@logger/AgentLogger';
-import { STREAM_STATUS } from '@shared/schemas';
-import type { StreamTabId } from '@shared/schemas';
+import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
 
 /**
