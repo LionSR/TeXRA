@@ -25,7 +25,7 @@ export class ApprovalRequestHandler<
   show(item: T): void {
     const id = String(item[this.idField]);
     this.pending.set(id, item);
-    if (this.canSend()) {
+    if (this.canSend() && !this.delivered.has(id)) {
       this.delivered.add(id);
       this.sendShow(item);
     }
