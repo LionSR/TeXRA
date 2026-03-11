@@ -64,6 +64,9 @@ export enum GlobalStateKey {
   ENDPOINT_XAI = 'texra.endpoint.xai',
   ENDPOINT_MOONSHOT = 'texra.endpoint.moonshot',
   ENDPOINT_DASHSCOPE = 'texra.endpoint.dashscope',
+
+  // Transport settings
+  WEBSOCKET_OPENAI = 'texra.websocket.openai',
 }
 
 /** Prefix used for per-instruction suppression flags */

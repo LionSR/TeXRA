@@ -4,6 +4,8 @@ import * as path from 'path';
 
 // Third-party imports
 import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
+import { ResponsesWS } from 'openai/resources/responses/ws';
+import { WebSocketError } from 'openai/resources/responses/internal-base';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -26,6 +28,7 @@ import type { FileLocation } from '@utils/files';
 
 // Local imports - utils
 import { K_SLICE, getConfig } from '@utils/config';
+import { getWebSocketEnabled } from '@utils/config/providerConfig';
 import { delay } from '@utils/core';
 import { flexibleFS, OFFICE_MIME_TYPES } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
@@ -86,6 +89,11 @@ import type {
   ResponseInputMessageContentList,
   ResponseInputFile,
   ResponseStreamEvent,
+  ResponsesClientEvent,
+  ResponsesServerEvent,
+  ResponseCompletedEvent,
+  ResponseFailedEvent,
+  ResponseIncompleteEvent,
   ResponseStatus,
   ResponseFunctionCallOutputItemList,
   ResponseOutputItem,
@@ -104,6 +112,20 @@ interface UploadedOpenAIResponseAttachment {
   attachment: ToolFileAttachment;
   fileId: string;
   isImage: boolean;
+}
+
+/** Shared state for streaming event processing (WebSocket and HTTP paths). */
+interface StreamingEventState {
+  thinkingStream: { append(delta: string): void; finalize(finalText?: string): void };
+  outputStream: { append(delta: string): void; finalize(finalText?: string): void } | null;
+  emittedWebSearchIds: Set<string>;
+  hasThinkingContent: boolean;
+}
+
+/** Result of executeViaWebSocket: the API response plus streaming state for deferred finalization. */
+interface WebSocketExecutionResult {
+  response: Response;
+  state: StreamingEventState;
 }
 
 /**
@@ -216,6 +238,400 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Clears the pending background response ID. Single point of mutation. */
   private clearPendingBackgroundResponse(): void {
     this.pendingBackgroundResponseId = null;
+  }
+
+  // =========================================================================
+  // WebSocket transport
+  // =========================================================================
+
+  /** WebSocket connection for persistent transport mode. */
+  private wsConnection: ResponsesWS | null = null;
+  /** Timestamp when the WebSocket connection was created (for 60-min limit). */
+  private wsConnectionCreatedAt = 0;
+  /** Keepalive interval for the WebSocket connection. */
+  private wsKeepaliveInterval: ReturnType<typeof setInterval> | null = null;
+  /** Maximum WebSocket connection age before reconnecting (55 min, 5-min buffer before 60-min server limit). */
+  private static readonly WS_MAX_AGE_MS = 55 * 60 * 1000;
+  /** Keepalive ping interval to prevent idle timeouts (30 seconds). */
+  private static readonly WS_KEEPALIVE_INTERVAL_MS = 30_000;
+  /** WebSocket readyState value for an open connection. */
+  private static readonly WS_OPEN = 1;
+
+  /**
+   * Whether WebSocket transport is enabled for this handler.
+   *
+   * WebSocket transport connects directly to the OpenAI Responses API via the
+   * official SDK and is incompatible with any non-default base URL, including:
+   * - Server-side keys relay (Supabase Edge Function)
+   * - Improved connection proxy (proxy.texra.ai)
+   * - OpenRouter routing
+   * - Custom per-provider or per-model endpoints
+   *
+   * Also incompatible with background mode (polling-based, doesn't benefit
+   * from persistent connection).
+   */
+  private isWebSocketModeEnabled(): boolean {
+    return getWebSocketEnabled() && this.getBaseUrl() === null;
+  }
+
+  /**
+   * Get or create a WebSocket connection, reusing an existing one if still valid.
+   * Reconnects if the connection is approaching the 60-minute server limit.
+   */
+  private async getOrCreateWebSocket(
+    client: OpenAI,
+    signal?: AbortSignal,
+  ): Promise<ResponsesWS> {
+    // Check if existing connection is still valid
+    if (this.wsConnection) {
+      const age = Date.now() - this.wsConnectionCreatedAt;
+      const socketReady = this.wsConnection.socket.readyState === ModelHandlerOpenAIResponse.WS_OPEN;
+      if (age < ModelHandlerOpenAIResponse.WS_MAX_AGE_MS && socketReady) {
+        return this.wsConnection;
+      }
+      // Connection expired or closed — reconnect
+      this.logger.debug(
+        `WebSocket connection stale (age: ${Math.round(age / 1000)}s, ready: ${socketReady}) — reconnecting`,
+      );
+      this.closeWebSocket();
+    }
+
+    if (signal?.aborted) {
+      throw new DOMException('The operation was aborted', 'AbortError');
+    }
+
+    this.logger.debug('Opening WebSocket connection to Responses API');
+    const ws = new ResponsesWS(client);
+
+    // Wait for the socket to open, fail on error, or abort on signal.
+    // If the handshake fails or is aborted, close the orphaned socket
+    // to prevent resource leaks (it hasn't been assigned to wsConnection yet).
+    await new Promise<void>((resolve, reject) => {
+      if (ws.socket.readyState === ModelHandlerOpenAIResponse.WS_OPEN) {
+        resolve();
+        return;
+      }
+
+      const cleanup = (): void => {
+        ws.socket.removeListener('open', onOpen);
+        ws.socket.removeListener('error', onError);
+        signal?.removeEventListener('abort', onAbort);
+      };
+      const onOpen = (): void => {
+        cleanup();
+        resolve();
+      };
+      const onError = (err: Error): void => {
+        cleanup();
+        try { ws.close(); } catch { /* ignore */ }
+        reject(err);
+      };
+      const onAbort = (): void => {
+        cleanup();
+        try { ws.close(); } catch { /* ignore */ }
+        reject(new DOMException('The operation was aborted', 'AbortError'));
+      };
+
+      ws.socket.once('open', onOpen);
+      ws.socket.once('error', onError);
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
+
+    this.wsConnection = ws;
+    this.wsConnectionCreatedAt = Date.now();
+    this.startWsKeepalive(ws);
+
+    this.logger.debug('WebSocket connection established');
+    return ws;
+  }
+
+  /**
+   * Finalize and reset the thinking stream if it has content.
+   * Extracted as a method to avoid recreating a closure on every streaming event.
+   */
+  private rotateThinkingStream(state: StreamingEventState): void {
+    if (!state.hasThinkingContent) return;
+    state.thinkingStream.finalize();
+    state.hasThinkingContent = false;
+    state.thinkingStream = this.createThinkingStream();
+  }
+
+  /**
+   * Process a single streaming event, updating the shared streaming state.
+   * Used by both WebSocket and HTTP streaming paths for consistent behavior.
+   */
+  private processStreamingEvent(
+    event: ResponseStreamEvent,
+    state: StreamingEventState,
+  ): void {
+    if (this.isReasoningDeltaEvent(event)) {
+      state.thinkingStream.append(event.delta);
+      state.hasThinkingContent = true;
+    } else if (this.isTextDeltaEvent(event)) {
+      state.outputStream?.append(event.delta);
+    } else if (this.isWebSearchInProgressEvent(event)) {
+      this.rotateThinkingStream(state);
+    } else if (this.isFunctionCallArgumentsDoneEvent(event)) {
+      // Function call arguments complete - finalize streams since no more
+      // text/thinking deltas will arrive after tool calls begin.
+      this.rotateThinkingStream(state);
+      this.logger.debug(
+        `Tool call ready during streaming: ${event.name}`,
+      );
+    } else if (this.isOutputItemDoneEvent(event)) {
+      const item = event.item;
+      if (
+        this.isWebSearchItem(item) &&
+        !state.emittedWebSearchIds.has(item.id) &&
+        hasOpenAIWebSearchData(item)
+      ) {
+        this.rotateThinkingStream(state);
+        this.emitOpenAIWebSearch(item);
+        state.emittedWebSearchIds.add(item.id);
+      }
+    }
+  }
+
+  /** Create a fresh streaming event state for a new request. */
+  private createStreamingEventState(): StreamingEventState {
+    return {
+      thinkingStream: this.createThinkingStream(),
+      outputStream: this.isOutputStreamingEnabled()
+        ? this.createOutputStream()
+        : null,
+      emittedWebSearchIds: new Set<string>(),
+      hasThinkingContent: false,
+    };
+  }
+
+  /**
+   * Finalize thinking/output streams and emit remaining web searches.
+   * Shared by both WebSocket and HTTP streaming paths after background
+   * polling completes.
+   */
+  private finalizeStreams(response: Response, state: StreamingEventState): void {
+    if (state.hasThinkingContent) {
+      state.thinkingStream.finalize();
+    }
+    const { text: finalText } = this.extractResponse(response, '');
+    if (state.outputStream) state.outputStream.finalize(finalText);
+    this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
+  }
+
+  /**
+   * Execute a response request via WebSocket transport.
+   * Sends a response.create event and collects streaming events until
+   * a terminal event (completed, failed, incomplete) is received.
+   *
+   * Completed and incomplete responses are resolved so the caller's
+   * `finalizeResponse()` can handle non-completed statuses consistently
+   * with the HTTP streaming path. Failed responses are rejected so the
+   * caller's catch block can apply recovery logic.
+   */
+  private async executeViaWebSocket(
+    ws: ResponsesWS,
+    params: ResponseCreateParamsBase,
+    signal?: AbortSignal,
+  ): Promise<WebSocketExecutionResult> {
+    // Short-circuit if already aborted before sending the request
+    if (signal?.aborted) {
+      throw new DOMException('The operation was aborted', 'AbortError');
+    }
+
+    const state = this.createStreamingEventState();
+
+    return new Promise<WebSocketExecutionResult>((resolve, reject) => {
+      let settled = false;
+      // Track the response ID for this request so we only process events
+      // belonging to it (important when abort-and-retry reuses the connection).
+      // Starts as null — terminal events are ignored until response.created sets it,
+      // preventing stale events from a previous request from being accepted.
+      let currentResponseId: string | null = null;
+
+      /** Check whether a terminal event belongs to the current request. */
+      const isCurrentResponse = (response: Response): boolean =>
+        currentResponseId !== null && response.id === currentResponseId;
+
+      const onAbort = (): void => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        // Close the WebSocket on abort to prevent cross-talk on retry.
+        // The server runs responses sequentially, so after client-side abort
+        // it continues finishing the current response. If we reuse the socket,
+        // the new executeViaWebSocket call's listeners would receive stale
+        // events (including response.created) from the prior response, causing
+        // the new request to resolve with the wrong response.
+        this.closeWebSocket();
+        reject(new DOMException('The operation was aborted', 'AbortError'));
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
+
+      // Process streaming events, filtering by response ID.
+      const onEvent = (event: ResponsesServerEvent): void => {
+        const e = event as ResponseStreamEvent;
+
+        // Capture the response ID from the first response.created event
+        if (e.type === 'response.created') {
+          currentResponseId = e.response.id;
+          return;
+        }
+
+        // Discard any events that arrive before response.created identifies
+        // the current request. This guards against out-of-order delivery and
+        // prevents processing stale events on a reused connection.
+        if (!currentResponseId) return;
+
+        // Filter events by response ID: skip events from stale responses
+        if (
+          'response_id' in e &&
+          typeof (e as Record<string, unknown>).response_id === 'string' &&
+          (e as Record<string, unknown>).response_id !== currentResponseId
+        ) {
+          return;
+        }
+
+        this.processStreamingEvent(e, state);
+      };
+
+      const finalizeSuccess = (response: Response): void => {
+        if (settled || !isCurrentResponse(response)) return;
+        settled = true;
+        cleanup();
+        // Stream finalization is deferred to the caller so that background
+        // polling (if needed) can replace the response before streams close.
+        resolve({ response, state });
+      };
+
+      const onCompleted = (event: ResponseCompletedEvent): void =>
+        finalizeSuccess(event.response);
+
+      // Failed responses must be rejected so the caller's catch block can
+      // run error recovery (e.g., context-window compaction).
+      const onFailed = (event: ResponseFailedEvent): void => {
+        if (settled || !isCurrentResponse(event.response)) return;
+        settled = true;
+        cleanup();
+        const errorMsg =
+          event.response.error?.message ?? 'Response failed without details';
+        reject(new Error(`OpenAI WebSocket response failed: ${errorMsg}`));
+      };
+
+      // Incomplete responses are resolved (not rejected) to match the HTTP
+      // streaming path behavior. The caller's finalizeResponse() handles
+      // non-completed statuses (e.g., max_output_tokens truncation) by
+      // clearing previousResponseId and logging a warning.
+      const onIncomplete = (event: ResponseIncompleteEvent): void =>
+        finalizeSuccess(event.response);
+
+      const onWsError = (error: WebSocketError): void => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        // Invalidate the connection on error events (e.g., websocket_connection_limit_reached).
+        // The server may close the socket after sending the error, but the close event
+        // fires after this handler and would be a no-op (settled=true).
+        this.closeWebSocket();
+        reject(error);
+      };
+
+      // Handle unexpected socket close during a request
+      const onSocketClose = (code: number, reason: Buffer): void => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        this.closeWebSocket();
+        reject(
+          new Error(
+            `WebSocket closed unexpectedly (code: ${code}, reason: ${reason.toString()})`,
+          ),
+        );
+      };
+
+      const cleanup = (): void => {
+        signal?.removeEventListener('abort', onAbort);
+        ws.off('event', onEvent);
+        ws.off('response.completed', onCompleted);
+        // Type assertion needed: the EventEmitter generic maps event names to
+        // handler signatures via Extract<ResponsesServerEvent, {type?: EventType}>.
+        // Our handler types are compatible but TS can't prove it through the indirection.
+        ws.off('response.failed', onFailed as Parameters<typeof ws.off>[1]);
+        ws.off(
+          'response.incomplete',
+          onIncomplete as Parameters<typeof ws.off>[1],
+        );
+        ws.off('error', onWsError);
+        ws.socket.off('close', onSocketClose);
+      };
+
+      ws.on('event', onEvent);
+      ws.on('response.completed', onCompleted);
+      ws.on('response.failed', onFailed as Parameters<typeof ws.on>[1]);
+      ws.on(
+        'response.incomplete',
+        onIncomplete as Parameters<typeof ws.on>[1],
+      );
+      ws.on('error', onWsError);
+      ws.socket.on('close', onSocketClose);
+
+      // Build and send the WebSocket client event.
+      // ResponsesClientEvent mirrors ResponseCreateParamsBase fields with type: 'response.create'.
+      // Transport-specific fields (stream, background) are included but ignored by the server.
+      try {
+        ws.send({
+          type: 'response.create',
+          ...params,
+        } as ResponsesClientEvent);
+      } catch (sendError) {
+        // If send() throws synchronously, clean up listeners to prevent leaks
+        // on the reused WebSocket connection.
+        settled = true;
+        cleanup();
+        reject(sendError);
+      }
+    });
+  }
+
+  /** Release all resources held by this handler (WebSocket, keepalive). */
+  override dispose(): void {
+    this.closeWebSocket();
+  }
+
+  /** Close the WebSocket connection and clean up resources. */
+  private closeWebSocket(): void {
+    this.stopWsKeepalive();
+    if (this.wsConnection) {
+      try {
+        this.wsConnection.close();
+      } catch {
+        // Ignore close errors
+      }
+      this.wsConnection = null;
+      this.wsConnectionCreatedAt = 0;
+      this.logger.debug('WebSocket connection closed');
+    }
+  }
+
+  /** Start keepalive pings on the WebSocket connection. */
+  private startWsKeepalive(ws: ResponsesWS): void {
+    this.stopWsKeepalive();
+    this.wsKeepaliveInterval = setInterval(() => {
+      try {
+        if (ws.socket.readyState === ModelHandlerOpenAIResponse.WS_OPEN) {
+          ws.socket.ping();
+        }
+      } catch {
+        // Ignore ping errors
+      }
+    }, ModelHandlerOpenAIResponse.WS_KEEPALIVE_INTERVAL_MS);
+  }
+
+  /** Stop keepalive pings. */
+  private stopWsKeepalive(): void {
+    if (this.wsKeepaliveInterval) {
+      clearInterval(this.wsKeepaliveInterval);
+      this.wsKeepaliveInterval = null;
+    }
   }
 
   /**
@@ -738,6 +1154,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.previousResponseId = null;
     this.resetConversationState();
     this.clearPendingBackgroundResponse();
+    this.closeWebSocket();
 
     const messages: ResponseInputItem[] = [];
 
@@ -1072,6 +1489,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       backgroundToggleEnabled &&
       this.isBackgroundModeEligible();
     const useStreaming = streamingToggleEnabled && !useBackgroundResponses;
+    const useWebSocket =
+      this.isWebSocketModeEnabled() && !useBackgroundResponses;
 
     if (backgroundToggleEnabled && !useBackgroundResponses) {
       const reason = !this.backgroundModeSupported
@@ -1338,6 +1757,40 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // Resume failed or response failed remotely - fall through to create new request
       }
 
+      // WebSocket transport: persistent connection for lower-latency tool-use loops
+      if (useWebSocket) {
+        const ws = await this.getOrCreateWebSocket(client, signal);
+        const wsResult = await this.executeViaWebSocket(ws, params, signal);
+        let response = wsResult.response;
+        const state = wsResult.state;
+
+        // Safety net: handle unexpected pending status (shouldn't happen without background mode)
+        if (this.isBackgroundPending(response)) {
+          this.logger.warn(
+            `WebSocket response ${response.id} ended with pending status "${response.status}" — polling for completion`,
+          );
+          response = await this.waitForBackgroundCompletion(
+            client,
+            response,
+            signal,
+          );
+        }
+
+        // Finalize streams after background polling so the final text
+        // reflects the completed response, not the pre-poll snapshot.
+        this.finalizeStreams(response, state);
+
+        this.finalizeResponse(
+          response,
+          effectiveMessages.length,
+          compactedThisCall,
+        );
+        return {
+          response,
+          updatedMessages: compactedMessages,
+        };
+      }
+
       if (useStreaming) {
         const { stream: _stream, ...rest } = params;
         const streamParams: ResponseStreamParams = { ...rest, stream: true };
@@ -1345,54 +1798,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
         // State for handling interleaved thinking and web search
         // GPT can: think → web_search → think more → web_search → text
-        const state = {
-          thinkingStream: this.createThinkingStream(),
-          outputStream: this.isOutputStreamingEnabled()
-            ? this.createOutputStream()
-            : null,
-          emittedWebSearchIds: new Set<string>(),
-          hasThinkingContent: false,
-        };
-
-        /** Finalize and reset the thinking stream if it has content. */
-        const rotateThinkingStream = (): void => {
-          if (!state.hasThinkingContent) return;
-          state.thinkingStream.finalize();
-          state.hasThinkingContent = false;
-          state.thinkingStream = this.createThinkingStream();
-        };
+        const state = this.createStreamingEventState();
 
         for await (const event of stream) {
-          if (this.isReasoningDeltaEvent(event)) {
-            state.thinkingStream.append(event.delta);
-            state.hasThinkingContent = true;
-          } else if (this.isTextDeltaEvent(event)) {
-            state.outputStream?.append(event.delta);
-          } else if (this.isWebSearchInProgressEvent(event)) {
-            // Web search starting - finalize current thinking stream
-            // Don't emit placeholder here - wait for output_item.done with full data
-            rotateThinkingStream();
-          } else if (this.isFunctionCallArgumentsDoneEvent(event)) {
-            // Function call arguments complete - finalize streams since no more
-            // text/thinking deltas will arrive after tool calls begin.
-            rotateThinkingStream();
-            this.logger.debug(
-              `Tool call ready during streaming: ${event.name}`,
-            );
-          } else if (this.isOutputItemDoneEvent(event)) {
-            // When output item is done, we can get the full web search data
-            const item = event.item;
-            if (
-              this.isWebSearchItem(item) &&
-              !state.emittedWebSearchIds.has(item.id) &&
-              hasOpenAIWebSearchData(item)
-            ) {
-              // Finalize thinking if we have content (in case in_progress didn't fire)
-              rotateThinkingStream();
-              this.emitOpenAIWebSearch(item);
-              state.emittedWebSearchIds.add(item.id);
-            }
-          }
+          this.processStreamingEvent(event, state);
         }
 
         let response = await stream.finalResponse();
@@ -1411,15 +1820,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           );
         }
 
-        // Finalize any remaining thinking content (only if there's actual content)
-        if (state.hasThinkingContent) {
-          state.thinkingStream.finalize();
-        }
-        const { text: finalText } = this.extractResponse(response, '');
-        if (state.outputStream) state.outputStream.finalize(finalText);
-
-        // Emit any web searches not yet emitted (fallback for edge cases)
-        this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
+        this.finalizeStreams(response, state);
 
         this.finalizeResponse(
           response,
