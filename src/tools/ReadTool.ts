@@ -8,7 +8,12 @@ import { z } from 'zod';
 import { ToolResult } from '@tools/result';
 import { buildFileAttachment, formatLinesWithNumbers } from '@tools/utils';
 import { recordToolFileRead } from '@tools/fileInteractions';
-import { WorkspaceFS, getMimeType } from '@utils/files';
+import {
+  WorkspaceFS,
+  getMimeType,
+  OFFICE_EXTENSIONS,
+  OFFICE_MIME_TYPES,
+} from '@utils/files';
 import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -209,7 +214,7 @@ export class ReadFileTool extends defineTool({
     const isImage =
       mimeType?.startsWith('image/') || IMAGE_EXTENSIONS.has(extension);
     if (isImage) {
-      return { kind: 'image', label: 'image' };
+      return { kind: 'image', label: 'Image' };
     }
 
     // Office documents are binary formats that cannot be read as text.
@@ -217,7 +222,7 @@ export class ReadFileTool extends defineTool({
     const isDocument =
       OFFICE_EXTENSIONS.has(extension) || OFFICE_MIME_TYPES.has(mimeType ?? '');
     if (isDocument) {
-      return { kind: 'document', label: 'document' };
+      return { kind: 'document', label: 'Document' };
     }
 
     return null;
@@ -228,15 +233,9 @@ export class ReadFileTool extends defineTool({
     config: { kind: 'pdf' | 'image' | 'document'; label: string },
   ): Promise<ToolResult> {
     const copy = ATTACHMENT_COPY[config.kind];
-    const descriptionLabel =
-      config.kind === 'pdf'
-        ? 'PDF'
-        : config.kind === 'image'
-          ? 'Image'
-          : 'Document';
     const attachment = await buildFileAttachment({
       filePath: input.path,
-      description: `${descriptionLabel} returned by read_file tool.`,
+      description: `${config.label} returned by read_file tool.`,
     });
 
     const baseSummary = `Attached ${config.label} ${attachment.path}.`;
@@ -261,47 +260,6 @@ const IMAGE_EXTENSIONS = new Set([
   '.tif',
   '.tiff',
   '.svg',
-]);
-
-const OFFICE_EXTENSIONS = new Set([
-  // Word processing
-  '.doc',
-  '.docx',
-  '.odt',
-  '.rtf',
-  // Spreadsheets
-  '.xls',
-  '.xlsx',
-  '.ods',
-  // Presentations
-  '.ppt',
-  '.pptx',
-  '.odp',
-  // Apple iWork
-  '.pages',
-  '.numbers',
-  '.key',
-]);
-
-const OFFICE_MIME_TYPES = new Set([
-  // Word processing
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.oasis.opendocument.text',
-  'application/rtf',
-  'text/rtf',
-  // Spreadsheets
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.oasis.opendocument.spreadsheet',
-  // Presentations
-  'application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'application/vnd.oasis.opendocument.presentation',
-  // Apple iWork
-  'application/vnd.apple.pages',
-  'application/vnd.apple.numbers',
-  'application/vnd.apple.keynote',
 ]);
 
 const ATTACHMENT_COPY: Record<

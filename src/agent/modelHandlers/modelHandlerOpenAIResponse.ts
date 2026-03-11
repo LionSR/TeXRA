@@ -27,7 +27,7 @@ import type { FileLocation } from '@utils/files';
 // Local imports - utils
 import { K_SLICE, getConfig } from '@utils/config';
 import { delay } from '@utils/core';
-import { flexibleFS } from '@utils/files';
+import { flexibleFS, OFFICE_MIME_TYPES } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
@@ -108,38 +108,13 @@ interface UploadedOpenAIResponseAttachment {
 
 /**
  * MIME types that the OpenAI Responses API accepts as `input_file` content.
- * Includes PDFs, office documents (Word, Excel, PowerPoint), and open formats.
+ * Composed from the shared OFFICE_MIME_TYPES plus PDF.
  * Images are handled separately via `input_image`.
  */
-const INLINEABLE_FILE_MIME_TYPES = new Set([
+const INLINEABLE_FILE_MIME_TYPES: ReadonlySet<string> = new Set([
   'application/pdf',
-  // Word processing
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.oasis.opendocument.text',
-  'application/rtf',
-  'text/rtf',
-  // Spreadsheets
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.oasis.opendocument.spreadsheet',
-  // NOTE: text/csv and text/tab-separated-values are intentionally excluded —
-  // CSV/TSV files are plain text and read_file returns them as text with
-  // line-range support, so they won't arrive here as attachments.
-  // Presentations
-  'application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'application/vnd.oasis.opendocument.presentation',
-  // Apple iWork
-  'application/vnd.apple.pages',
-  'application/vnd.apple.numbers',
-  'application/vnd.apple.keynote',
+  ...OFFICE_MIME_TYPES,
 ]);
-
-/** Check whether a MIME type can be inlined as an `input_file` part. */
-function isInlineableFileType(mimeType: string): boolean {
-  return INLINEABLE_FILE_MIME_TYPES.has(mimeType);
-}
 
 /**
  * Handler for OpenAI's Responses API. This implementation works directly with
@@ -2453,7 +2428,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     for (const attachment of attachments) {
       const mimeType = attachment.mimeType ?? 'application/octet-stream';
       const isImage = mimeType.startsWith('image/');
-      const isFileInput = isInlineableFileType(mimeType);
+      const isFileInput = INLINEABLE_FILE_MIME_TYPES.has(mimeType);
 
       if (!isImage && !isFileInput) {
         skipped.push(attachment);
