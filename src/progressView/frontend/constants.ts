@@ -1,10 +1,4 @@
-// Local imports - shared schemas
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
-import { STREAM_STATUS } from '@shared/schemas';
-
-// Local imports - webview commands
-
-export { STREAM_STATUS };
 
 /**
  * DOM element IDs used across the progress view.
@@ -74,12 +68,10 @@ export const GROUP_DOM_IDS = Object.freeze({
   CONTENT_PREFIX: 'group-content-',
 });
 
-export const COMMANDS = PROGRESS_VIEW_COMMANDS;
-
 const STOP_STREAM_BUTTON = Object.freeze({
   id: ELEMENT_IDS.STOP_STREAM_BTN,
   icon: 'debug-stop',
-  command: COMMANDS.STOP_STREAM,
+  command: PROGRESS_VIEW_COMMANDS.STOP_STREAM,
   title:
     'Request task interruption (current API call will be aborted if supported)',
   className: 'stop-button',
@@ -89,7 +81,7 @@ const STOP_STREAM_BUTTON = Object.freeze({
 const RESTORE_STATE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.RESTORE_STATE_BTN,
   icon: 'reply',
-  command: COMMANDS.RESTORE_STATE,
+  command: PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
   title: 'Setup this configuration in the main view',
   className: 'restore-button',
   disabled: true,
@@ -98,7 +90,7 @@ const RESTORE_STATE_BUTTON = Object.freeze({
 const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   icon: 'folder-opened',
-  command: COMMANDS.OPEN_TASK_STORAGE,
+  command: PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE,
   title: 'Open the workspace storage folder for this run',
   className: 'storage-button',
   disabled: true,
@@ -109,7 +101,7 @@ const WORKFLOW_TOOLBAR = [
   {
     id: ELEMENT_IDS.RUN_NEW_BTN,
     icon: 'debug-start',
-    command: COMMANDS.RUN_NEW,
+    command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
     title: 'Start a fresh run (discards previous outputs)',
     className: 'run-button run-new-button',
     disabled: true,
@@ -117,7 +109,7 @@ const WORKFLOW_TOOLBAR = [
   {
     id: ELEMENT_IDS.RESUME_BTN,
     icon: 'debug-continue',
-    command: COMMANDS.RESUME,
+    command: PROGRESS_VIEW_COMMANDS.RESUME,
     title: 'Resume from saved outputs (continues where it left off)',
     className: 'run-button resume-button',
     disabled: true,
@@ -127,7 +119,7 @@ const WORKFLOW_TOOLBAR = [
   {
     id: ELEMENT_IDS.DIFF_STREAM_BTN,
     icon: 'diff-multiple',
-    command: COMMANDS.DIFF_STREAM,
+    command: PROGRESS_VIEW_COMMANDS.DIFF_STREAM,
     title: 'Run latexdiff on existing tex files',
     className: 'diff-button',
     disabled: true,
@@ -135,7 +127,7 @@ const WORKFLOW_TOOLBAR = [
   {
     id: ELEMENT_IDS.CLEAN_STREAM_BTN,
     icon: 'trash',
-    command: COMMANDS.CLEAN_STREAM,
+    command: PROGRESS_VIEW_COMMANDS.CLEAN_STREAM,
     title: 'Clean: Delete generated output files from this run',
     className: 'clean-button',
     disabled: true,
@@ -143,7 +135,7 @@ const WORKFLOW_TOOLBAR = [
   {
     id: ELEMENT_IDS.PACK_STREAM_BTN,
     icon: 'archive',
-    command: COMMANDS.PACK_STREAM,
+    command: PROGRESS_VIEW_COMMANDS.PACK_STREAM,
     title: 'Pack: Archive output files into a timestamped History folder',
     className: 'pack-button',
     disabled: true,
@@ -154,7 +146,7 @@ const YOLO_TOGGLE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.YOLO_TOGGLE_BTN,
   icon: 'shield',
   iconActive: 'flame',
-  command: COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
+  command: PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
   title: 'Enable YOLO mode (skip approval prompts)',
   titleActive: 'YOLO mode active - click to disable (resume approval prompts)',
   className: 'yolo-toggle-button',
@@ -165,7 +157,7 @@ const SUPER_YOLO_TOGGLE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
   icon: 'rocket',
   iconActive: 'zap',
-  command: COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
+  command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
   title: 'Enable Super YOLO (auto-approve agent proposals)',
   titleActive: 'Super YOLO active - click to disable',
   className: 'super-yolo-toggle-button',
@@ -175,7 +167,7 @@ const SUPER_YOLO_TOGGLE_BUTTON = Object.freeze({
 const COMPACT_RESPONSE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.COMPACT_RESPONSE_BTN,
   icon: 'fold',
-  command: COMMANDS.COMPACT_RESPONSE,
+  command: PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE,
   title:
     'Compact conversation context (summarize history to reduce token usage)',
   className: 'compact-button',
