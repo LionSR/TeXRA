@@ -46,17 +46,8 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     ],
   },
   {
-    id: 'computational-scientist',
-    name: 'Computational Scientist',
-    description:
-      'Numerical computation, Wolfram Language, data analysis, and scientific writing.',
-    icon: 'codicon-pulse',
-    workflowAgents: ['correct', 'polish', 'draw'],
-    toolUseAgents: ['research', 'chat', 'review', 'orchestrator'],
-  },
-  {
-    id: 'theoretical-physicist',
-    name: 'Theoretical Physicist',
+    id: 'physicist',
+    name: 'Physicist',
     description:
       'Symbolic derivations, mathematical verification, literature discussion, and rigorous manuscript review.',
     icon: 'codicon-symbol-operator',
