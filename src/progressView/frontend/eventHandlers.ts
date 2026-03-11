@@ -33,9 +33,6 @@ import type {
 } from './events';
 import type { MessageHandlerContext } from './messageDispatcher';
 
-// Local imports - component types
-import type { FollowUpInput } from './components/FollowUpInput';
-
 /**
  * Context passed to frontend event handlers providing access to state and refs.
  *
@@ -54,7 +51,6 @@ export interface FrontendEventHandlerContext {
     streamId: StreamTabId,
     updater: (prev: StreamLogs) => StreamLogs,
   ): void;
-  getFollowUpRef(): FollowUpInput | undefined;
   /** Persist filter/sort preferences to webview state. */
   savePrefs?(
     prefs: Partial<{ streamFilter: StreamFilter; streamSort: StreamSort }>,

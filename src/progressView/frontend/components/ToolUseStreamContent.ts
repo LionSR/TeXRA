@@ -11,7 +11,6 @@ import {
 } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
-import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 // Local imports - progress view
 import {
@@ -30,7 +29,6 @@ import type { ToolUseStreamState } from '../store';
 
 // Local imports - types
 import type { PermissionState } from './PermissionCard';
-import type { FollowUpInput } from './FollowUpInput';
 
 // Side-effect imports - sibling components
 import './StreamHeader';
@@ -62,8 +60,6 @@ export class ToolUseStreamContent extends LitElement {
   // Not @state(): always derived from streamContext/permissionContext (avoids double-render).
   private filteredPermissions: PermissionState[] = [];
   private runGroups: RunGroup[] = [];
-
-  private followUpRef: Ref<FollowUpInput> = createRef();
 
   protected override willUpdate(changedProperties: PropertyValues): void {
     if (changedProperties.has('streamContext')) {
@@ -125,7 +121,6 @@ export class ToolUseStreamContent extends LitElement {
       ></usage-panel>
 
       <follow-up-input
-        ${ref(this.followUpRef)}
         .visible=${true}
         .value=${currentState.ui.followUpText}
         .queuedMessages=${currentState.queuedFollowUps}
@@ -137,11 +132,6 @@ export class ToolUseStreamContent extends LitElement {
         @focus-complete=${this.handleFocusComplete}
       ></follow-up-input>
     `;
-  }
-
-  /** Get the FollowUpInput ref for imperative operations (e.g., focus, polished text). */
-  getFollowUpRef(): FollowUpInput | undefined {
-    return this.followUpRef.value;
   }
 
   private handleFocusComplete(): void {
