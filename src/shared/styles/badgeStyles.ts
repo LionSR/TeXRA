@@ -82,6 +82,39 @@ export const emptyStateStyles: CSSResult = css`
   }
 `;
 
+/**
+ * Tinted status badge — small pill with a tinted background.
+ * Set `--_tint` on the element to control the color.
+ *
+ * Usage:
+ *   <span class="tinted-badge" style="--_tint: var(--color-warning)">running</span>
+ *
+ * Or define a variant class:
+ *   .my-badge--error { --_tint: var(--color-error); }
+ */
+export const tintedBadgeStyles: CSSResult = css`
+  .tinted-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-tiny);
+    padding: 1px var(--spacing-small);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    color: var(--_tint, var(--color-text-secondary));
+    background: color-mix(
+      in srgb,
+      var(--_tint, var(--color-text-secondary)) 12%,
+      transparent
+    );
+    border-radius: var(--border-radius-small);
+    white-space: nowrap;
+  }
+
+  .tinted-badge .codicon {
+    font-size: var(--font-size-xs);
+  }
+`;
+
 export const badgeStyles: CSSResult[] = [
   baseBadgeStyles,
   categoryBadgeStyles,
