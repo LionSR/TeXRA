@@ -158,6 +158,21 @@ export function formatSubagentProgress(
       return `<subagent-progress ${idAttr} ${agentAttr} ${attrs.join(' ')} />`;
     }
 
+    case 'plan': {
+      if (!update.plan) {
+        return `<subagent-progress ${idAttr} ${agentAttr} type="plan" status="cleared" />`;
+      }
+      const steps = update.plan.steps;
+      const completed = steps.filter(
+        (s) => s.status === 'completed',
+      ).length;
+      const inProgress = steps.filter(
+        (s) => s.status === 'in_progress',
+      ).length;
+      const pending = steps.length - completed - inProgress;
+      return `<subagent-progress ${idAttr} ${agentAttr} type="plan" steps="${steps.length}" completed="${completed}" active="${inProgress}" pending="${pending}" />`;
+    }
+
     case 'started':
       return `<subagent-progress ${idAttr} ${agentAttr} type="started" />`;
   }

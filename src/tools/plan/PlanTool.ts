@@ -15,6 +15,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
+import { PlanState } from '@agent/core/AgentWorkspaceState';
 import {
   planApprovalCoordinator,
   type PlanApprovalResult,
@@ -119,16 +120,20 @@ Best practices:
       };
     }
 
-    // Update the plan in workspace state — shows it in the UI immediately
-    context.planState.updatePlan(input.plan);
-
     // Determine if this is a new plan (all steps pending) vs. a progress update
     const isNewPlan = input.plan.steps.every(
       (s) => s.status === TODO_STATUS.PENDING,
     );
 
+    // Show the plan in the UI immediately
+    context.planState.updatePlan(input.plan);
+
     if (isNewPlan && context.streamId) {
-      return this.requestApproval(input.plan, context.streamId);
+      return this.requestApproval(
+        input.plan,
+        context.streamId,
+        context.planState,
+      );
     }
 
     return this.buildProgressResult(input.plan);
@@ -140,6 +145,7 @@ Best practices:
   private async requestApproval(
     plan: Plan,
     streamId: string,
+    planState: PlanState,
   ): Promise<ToolResult> {
     const approvalId = `plan-${Date.now().toString(36)}-${++approvalCounter}`;
 
@@ -160,7 +166,9 @@ Best practices:
       };
     }
 
-    // Rejected or timed out
+    // Rejected or timed out — clear the plan from UI
+    planState.updatePlan(null);
+
     const feedback = 'feedback' in result ? result.feedback : undefined;
     const feedbackNote = feedback
       ? `\nUser feedback: ${feedback}`
