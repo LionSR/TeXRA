@@ -118,6 +118,7 @@ import type { PermissionState } from './components/PermissionCard';
 // ---------------------------------------------------------------------------
 
 function mapsEqual<K, V>(a: Map<K, V>, b: Map<K, V>): boolean {
+  if (a.size !== b.size) return false;
   for (const [k, v] of a) {
     if (b.get(k) !== v) return false;
   }
@@ -125,6 +126,7 @@ function mapsEqual<K, V>(a: Map<K, V>, b: Map<K, V>): boolean {
 }
 
 function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
+  if (a.size !== b.size) return false;
   for (const v of a) {
     if (!b.has(v)) return false;
   }
@@ -243,10 +245,7 @@ export class ProgressApp extends ProgressAppBase {
     }
     // Return stable reference when unchanged — Signal.Computed uses Object.is(),
     // so a new Set with identical contents would still propagate.
-    if (
-      ids.size === this._prevApprovalIds.size &&
-      setsEqual(ids, this._prevApprovalIds)
-    ) {
+    if (setsEqual(ids, this._prevApprovalIds)) {
       return this._prevApprovalIds;
     }
     this._prevApprovalIds = ids;
@@ -303,10 +302,7 @@ export class ProgressApp extends ProgressAppBase {
     }
     // Return stable reference when unchanged — Signal.Computed uses Object.is(),
     // so a new Map with identical contents would still propagate.
-    if (
-      map.size === this._prevDescriptions.size &&
-      mapsEqual(map, this._prevDescriptions)
-    ) {
+    if (mapsEqual(map, this._prevDescriptions)) {
       return this._prevDescriptions;
     }
     this._prevDescriptions = map;
