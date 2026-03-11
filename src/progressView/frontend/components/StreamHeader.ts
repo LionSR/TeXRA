@@ -575,13 +575,21 @@ export class StreamHeader extends LitElement {
 
   /** Render a child-count badge (subagents or processes). */
   private renderChildBadge(
-    active: { agentName: string }[],
+    active: { agentName: string; status?: string }[],
     finishedCount: number,
     icon: string,
     cssClass: string,
   ): TemplateResult | typeof nothing {
     const total = active.length + finishedCount;
     if (total === 0) return nothing;
+    const running = active.filter(
+      (c) => c.status !== STREAM_STATUS.WAITING && c.status !== STREAM_STATUS.READY,
+    ).length;
+    const waiting = active.length - running;
+    const segments: string[] = [];
+    if (running > 0) segments.push(`${running} running`);
+    if (waiting > 0) segments.push(`${waiting} waiting`);
+    if (finishedCount > 0) segments.push(`${finishedCount} done`);
     return html`<span
       class="child-badge child-badge--clickable ${cssClass}"
       role="button"
@@ -591,11 +599,7 @@ export class StreamHeader extends LitElement {
       @keydown=${this.handleBadgeKeydown}
     >
       <i class="codicon codicon-${icon}"></i>
-      ${active.length > 0
-        ? html`${active.length} running`
-        : nothing}${active.length > 0 && finishedCount > 0
-        ? html`, `
-        : nothing}${finishedCount > 0 ? html`${finishedCount} done` : nothing}
+      ${segments.join(', ')}
     </span>`;
   }
 

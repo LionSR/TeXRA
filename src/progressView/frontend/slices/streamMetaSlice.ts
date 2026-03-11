@@ -102,27 +102,28 @@ export const streamMetaHandlers: HandlerRegistry = {
         : combined;
     };
     ctx.setState((prev) => {
-      // Prune stale entries opportunistically — this is the only handler
-      // that fires for non-active streams, so it's the only chance to clean up.
-      const streamState = prev.streamStates.get(stream);
-      const activeIds = new Set(
-        (streamState?.activeProcesses ?? []).map(
-          (p: { executionId: string }) => p.executionId,
-        ),
-      );
+      // Only prune stale entries when this stream is active — badge data
+      // (activeProcesses) is only refreshed for the active stream, so for
+      // inactive streams the set would be stale and we'd incorrectly delete
+      // output for still-running sibling processes. For inactive streams,
+      // pruning is handled by UPDATE_STREAM_BADGES when the user switches back.
+      const isActiveStream = prev.activeStreamId === stream;
       return create(prev, (draft) => {
         let streamOutputs = draft.processOutputs.get(stream);
         if (!streamOutputs) {
           streamOutputs = new Map();
           draft.processOutputs.set(stream, streamOutputs);
         }
-        // Prune entries for finished processes — but never prune the
-        // incoming executionId, which we're about to update. The activeIds
-        // set can be stale for non-active streams (badge updates only fire
-        // for the active stream), so pruning the current ID would discard
-        // accumulated output and keep only the latest delta.
-        for (const id of [...streamOutputs.keys()]) {
-          if (id !== executionId && !activeIds.has(id)) streamOutputs.delete(id);
+        if (isActiveStream) {
+          const streamState = prev.streamStates.get(stream);
+          const activeIds = new Set(
+            (streamState?.activeProcesses ?? []).map(
+              (p: { executionId: string }) => p.executionId,
+            ),
+          );
+          for (const id of [...streamOutputs.keys()]) {
+            if (id !== executionId && !activeIds.has(id)) streamOutputs.delete(id);
+          }
         }
         const existing = streamOutputs.get(executionId) ?? {
           stdout: '',
