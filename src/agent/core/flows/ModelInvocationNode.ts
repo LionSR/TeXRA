@@ -142,11 +142,12 @@ export class ModelInvocationNode<
       if (this._config.getPostCompactionContext) {
         const context = this._config.getPostCompactionContext(this.services);
         if (context) {
-          shared.messages =
-            await this.services.modelHandler.createUserFollowUpMessages(
-              shared.messages,
-              context,
-            );
+          // All handler implementations mutate the array in-place and return
+          // the same reference, so no reassignment of shared.messages is needed.
+          await this.services.modelHandler.createUserFollowUpMessages(
+            shared.messages,
+            context,
+          );
         }
       }
     }
