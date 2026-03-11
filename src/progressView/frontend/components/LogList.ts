@@ -72,26 +72,6 @@ export class LogList extends LitElement {
   @state()
   private streamContext: StreamLogContextValue = EMPTY_LOG_CONTEXT;
 
-  private get groups(): TaskGroup[] {
-    return this.streamContext.taskGroups;
-  }
-
-  private get messages(): LogMessageData[] {
-    return this.streamContext.logs;
-  }
-
-  private get activeRunId(): string | null {
-    return this.streamContext.runId;
-  }
-
-  private get isToolUse(): boolean {
-    return this.streamContext.isToolUse;
-  }
-
-  private get hasStreams(): boolean {
-    return this.streamContext.hasStreams;
-  }
-
   /** Max cached stream DOM trees. Oldest non-active entries are evicted beyond this. */
   private static readonly MAX_CACHED_STREAMS = 5;
 
@@ -123,7 +103,7 @@ export class LogList extends LitElement {
     }
 
     // All streams removed — drop the entire cache
-    if (!this.hasStreams && this.streamCache.size > 0) {
+    if (!this.streamContext.hasStreams && this.streamCache.size > 0) {
       this.streamCache.clear();
       return;
     }
@@ -131,10 +111,10 @@ export class LogList extends LitElement {
     // Update cache for active stream with latest context data
     if (streamId) {
       const entry = this.getOrCreateEntry(streamId);
-      entry.groups = this.groups;
-      entry.messages = this.messages;
-      entry.activeRunId = this.activeRunId;
-      entry.isToolUse = this.isToolUse;
+      entry.groups = this.streamContext.taskGroups;
+      entry.messages = this.streamContext.logs;
+      entry.activeRunId = this.streamContext.runId;
+      entry.isToolUse = this.streamContext.isToolUse;
 
       // Evict oldest non-active entries when cache exceeds cap
       this.evictStaleCacheEntries();
@@ -142,9 +122,9 @@ export class LogList extends LitElement {
   }
 
   override render(): TemplateResult {
-    if (this.streamCache.size === 0 || !this.hasStreams) {
+    if (this.streamCache.size === 0 || !this.streamContext.hasStreams) {
       return html`<task-group-list
-        .hasStreams=${this.hasStreams}
+        .hasStreams=${this.streamContext.hasStreams}
       ></task-group-list>`;
     }
 
@@ -159,7 +139,7 @@ export class LogList extends LitElement {
           .messages=${data.messages}
           .activeRunId=${data.activeRunId}
           .isToolUse=${data.isToolUse}
-          .hasStreams=${this.hasStreams}
+          .hasStreams=${this.streamContext.hasStreams}
           .toggleStates=${data.toggleStates}
         ></task-group-list>
       `,
