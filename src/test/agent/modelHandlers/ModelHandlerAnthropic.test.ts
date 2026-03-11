@@ -292,7 +292,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
-  it('limits explicit cache control markers to three blocks (reserving one slot for top-level automatic caching)', () => {
+  it('limits message-level cache markers based on reserved slots', () => {
     const handler = createAnthropicHandler();
     const messageContent: ContentBlockParam[] = [];
 
@@ -309,7 +309,8 @@ describe('ModelHandlerAnthropic message guards', () => {
       { role: 'user', content: messageContent },
     ];
 
-    (handler as any).enforceCacheControlLimit(messages);
+    // Simulate 3 reserved slots (system + tools + automatic = typical case)
+    (handler as any).enforceCacheControlLimit(messages, 3);
 
     const cacheControlledBlocks = messageContent.filter(
       (block) =>
@@ -317,21 +318,15 @@ describe('ModelHandlerAnthropic message guards', () => {
         (block as { cache_control?: unknown }).cache_control !== undefined,
     );
 
-    assert.equal(cacheControlledBlocks.length, 3);
     assert.equal(
-      (messageContent[0] as { cache_control?: unknown }).cache_control,
-      undefined,
-      'the earliest cache markers should be removed',
-    );
-    assert.equal(
-      (messageContent[1] as { cache_control?: unknown }).cache_control,
-      undefined,
-      'the second earliest cache marker should also be removed',
+      cacheControlledBlocks.length,
+      1,
+      'only 1 message-level slot should remain when 3 are reserved',
     );
     assert.deepEqual(
       cacheControlledBlocks.map((block) => (block as { text?: string }).text),
-      ['block-2', 'block-3', 'block-4'],
-      'the three most recent blocks should retain cache control markers',
+      ['block-4'],
+      'only the most recent block should retain cache control',
     );
   });
 
@@ -351,7 +346,8 @@ describe('ModelHandlerAnthropic message guards', () => {
       { role: 'assistant', content: messageContent },
     ];
 
-    (handler as any).enforceCacheControlLimit(messages);
+    // 1 reserved slot (automatic only, no system or tools)
+    (handler as any).enforceCacheControlLimit(messages, 1);
 
     const preservedCompaction = (messages[0].content as any[]).find(
       (block) => block.type === 'compaction',

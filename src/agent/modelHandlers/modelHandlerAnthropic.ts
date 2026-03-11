@@ -224,10 +224,11 @@ const EPHEMERAL_CACHE_CONTROL: CacheControlEphemeral = {
   type: 'ephemeral',
 };
 
-// Anthropic allows up to 4 cache breakpoints total. Top-level automatic caching
-// uses 1 slot, so explicit block-level breakpoints (e.g. compaction blocks) are
-// limited to 3.
-const MAX_CACHE_CONTROLLED_BLOCKS = 3;
+// Anthropic allows up to 4 cache breakpoint slots total. Top-level automatic
+// caching, the system prompt, and the last tool definition each use one slot
+// when present. enforceCacheControlLimit dynamically computes the remaining
+// slots available for message-level blocks (e.g. compaction blocks).
+const MAX_CACHE_BREAKPOINT_SLOTS = 4;
 
 const isCacheControlEligibleBlock = (
   block: CacheControlInspectableBlock,
@@ -572,7 +573,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const isAnthropic1MBetaActive =
       effectiveContextWindow > this.config.contextWindow;
 
-    this.enforceCacheControlLimit(messages);
+    // Count cache slots reserved by system prompt, tools, and top-level automatic
+    // caching so enforceCacheControlLimit knows how many remain for message blocks.
+    const supportsCache = this.capabilities.supportsPromptCaching;
+    let reservedCacheSlots = 0;
+    if (supportsCache) {
+      reservedCacheSlots += 1; // top-level automatic caching
+      if (systemPrompt) reservedCacheSlots += 1; // system prompt breakpoint
+      if (tools?.length) reservedCacheSlots += 1; // last tool breakpoint
+    }
+    this.enforceCacheControlLimit(messages, reservedCacheSlots);
 
     const documentAnalysis = this.analyzeDocumentSources(messages);
     let hasFileReference = documentAnalysis.hasFileSource;
@@ -590,11 +600,23 @@ export class ModelHandlerAnthropic extends ModelHandler<
       messages,
       temperature,
       stop_sequences: endTag ? [endTag] : undefined,
-      system: systemPrompt,
+      // Structure system prompt as a block with an explicit cache breakpoint so
+      // it is independently cached even when conversations exceed the 20-block
+      // lookback window.
+      system:
+        systemPrompt && supportsCache
+          ? [
+              {
+                type: 'text' as const,
+                text: systemPrompt,
+                cache_control: EPHEMERAL_CACHE_CONTROL,
+              },
+            ]
+          : systemPrompt,
       // Top-level automatic caching: the API automatically applies a cache
       // breakpoint to the last cacheable block, moving it forward as conversations
       // grow. This replaces manual per-block cache_control assignment.
-      ...(this.capabilities.supportsPromptCaching && {
+      ...(supportsCache && {
         cache_control: EPHEMERAL_CACHE_CONTROL,
       }),
     };
@@ -606,6 +628,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
         supportsNativeWebFetch: this.capabilities.supportsNativeWebSearch,
         useDynamicFiltering: getAnthropicDynamicFiltering(),
       });
+
+      // Place an explicit cache breakpoint on the last tool definition so all
+      // tools are independently cached (tools rarely change between requests).
+      if (supportsCache && options.tools.length > 0) {
+        const lastTool = options.tools.at(-1)!;
+        (lastTool as { cache_control?: typeof EPHEMERAL_CACHE_CONTROL }).cache_control =
+          EPHEMERAL_CACHE_CONTROL;
+      }
+
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
 
       // Models using adaptive thinking get interleaved thinking automatically.
@@ -966,10 +997,25 @@ export class ModelHandlerAnthropic extends ModelHandler<
     );
   }
 
-  private enforceCacheControlLimit(messages: MessageParam[]): void {
+  /**
+   * Enforces the Anthropic cache breakpoint slot limit for message-level blocks.
+   *
+   * @param messages - The conversation messages to enforce limits on
+   * @param reservedSlots - Number of slots already used by system prompt,
+   *   tools, and top-level automatic caching
+   */
+  private enforceCacheControlLimit(
+    messages: MessageParam[],
+    reservedSlots: number,
+  ): void {
     if (!this.capabilities.supportsPromptCaching) {
       return;
     }
+
+    const availableSlots = Math.max(
+      0,
+      MAX_CACHE_BREAKPOINT_SLOTS - reservedSlots,
+    );
 
     const cacheControlledBlocks: Array<
       CacheControlEligibleBlock | CacheControlCompactionBlock
@@ -999,10 +1045,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
     }
 
-    // Remove excess cache control markers, keeping only the last MAX_CACHE_CONTROLLED_BLOCKS
+    // Remove excess cache control markers, keeping only the most recent ones
     const excess = Math.max(
       0,
-      cacheControlledBlocks.length - MAX_CACHE_CONTROLLED_BLOCKS,
+      cacheControlledBlocks.length - availableSlots,
     );
     for (let idx = 0; idx < excess; idx += 1) {
       delete cacheControlledBlocks[idx].cache_control;
