@@ -63,7 +63,7 @@ interface BuildSummaryParams {
 export class ReadFileTool extends defineTool({
   name: 'read_file',
   description:
-    'Read and return workspace files. For text files you can supply an optional line range. PDFs (.pdf), common image formats, and office documents (.docx, .xlsx, .pptx, .doc, .xls, .ppt, .odt, .rtf) are returned as file attachments so capable models can process their content.',
+    'Read and return workspace files. For text files you can supply an optional line range. PDFs (.pdf) and common image formats are returned as attachments so vision-capable models can inspect their pages or visual content.',
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
