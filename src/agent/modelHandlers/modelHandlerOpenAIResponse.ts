@@ -27,7 +27,7 @@ import type { FileLocation } from '@utils/files';
 // Local imports - utils
 import { K_SLICE, getConfig } from '@utils/config';
 import { delay } from '@utils/core';
-import { flexibleFS } from '@utils/files';
+import { flexibleFS, OFFICE_MIME_TYPES } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
@@ -105,6 +105,16 @@ interface UploadedOpenAIResponseAttachment {
   fileId: string;
   isImage: boolean;
 }
+
+/**
+ * MIME types that the OpenAI Responses API accepts as `input_file` content.
+ * Composed from the shared OFFICE_MIME_TYPES plus PDF.
+ * Images are handled separately via `input_image`.
+ */
+const INLINEABLE_FILE_MIME_TYPES: ReadonlySet<string> = new Set([
+  'application/pdf',
+  ...OFFICE_MIME_TYPES,
+]);
 
 /**
  * Handler for OpenAI's Responses API. This implementation works directly with
@@ -2400,7 +2410,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /**
    * Build inline base64 content parts for tool attachments when file uploads
    * are unavailable (e.g., OpenRouter routing). Images use data URI in
-   * `image_url`; PDFs use `file_data`. Non-visual attachments are skipped.
+   * `image_url`; PDFs and office documents use `file_data` in `input_file`.
+   * Unsupported MIME types are skipped.
    */
   private async buildInlineAttachmentParts(
     attachments: ToolFileAttachment[],
@@ -2417,9 +2428,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     for (const attachment of attachments) {
       const mimeType = attachment.mimeType ?? 'application/octet-stream';
       const isImage = mimeType.startsWith('image/');
-      const isPdf = mimeType === 'application/pdf';
+      const isFileInput = INLINEABLE_FILE_MIME_TYPES.has(mimeType);
 
-      if (!isImage && !isPdf) {
+      if (!isImage && !isFileInput) {
         skipped.push(attachment);
         continue;
       }
@@ -2444,14 +2455,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             image_url: `data:${mimeType};base64,${base64}`,
           });
         } else {
-          // PDF
+          // PDF, office documents, and other file types accepted by input_file
           const filename =
             typeof attachment.path === 'string' && attachment.path.length > 0
               ? path.basename(attachment.path)
-              : 'attachment.pdf';
+              : 'attachment';
           parts.push({
             type: 'input_file',
-            file_data: `data:application/pdf;base64,${base64}`,
+            file_data: `data:${mimeType};base64,${base64}`,
             filename,
           });
         }
