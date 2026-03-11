@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { getExecutionStore } from '@agent/storage';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
@@ -373,6 +374,8 @@ export class ProgressViewState {
 
     this.logger.info('[Persistence] Managers loaded');
 
+    await this.hydrateDescriptions();
+
     this.validateActiveStream();
     cleanupToolUseAgentRegistry(this.meta);
 
@@ -393,6 +396,41 @@ export class ProgressViewState {
   }
 
   // -- Private helpers --------------------------------------------------------
+
+  /**
+   * Populate ephemeral descriptions from persisted execution metadata.
+   * Runs after meta.load() so that execution IDs are available.
+   */
+  private async hydrateDescriptions(): Promise<void> {
+    const entries: { stream: StreamTabId; executionId: string }[] = [];
+    for (const stream of this.streamLogs.keys()) {
+      const executionId = this.meta.getExecutionId(stream);
+      if (executionId) entries.push({ stream, executionId });
+    }
+    if (entries.length === 0) return;
+
+    const results = await Promise.all(
+      entries.map(async ({ stream, executionId }) => {
+        try {
+          const meta = await getExecutionStore(executionId).readMeta();
+          return meta?.description ? { stream, description: meta.description } : null;
+        } catch {
+          return null;
+        }
+      }),
+    );
+
+    let count = 0;
+    for (const result of results) {
+      if (result) {
+        this._descriptions.set(result.stream, result.description);
+        count++;
+      }
+    }
+    if (count > 0) {
+      this.logger.info(`[Persistence] Hydrated ${count} session descriptions`);
+    }
+  }
 
   private async loadManagers(streamIds: StreamTabId[]): Promise<void> {
     await Promise.all([
