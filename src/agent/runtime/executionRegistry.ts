@@ -8,7 +8,7 @@
 import * as fs from 'fs';
 
 import { bus } from '@eventBus/ProgressEventBus';
-import type { StreamTabId } from '@shared/schemas';
+import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 import {
   type ExecutionHandle,
   AgentExecutionHandle,
@@ -222,8 +222,8 @@ export function interruptActiveChildren(parentStreamId: StreamTabId): void {
 
 /** Get active subagent and process children for a parent stream. */
 export function getActiveChildren(parentStreamId: StreamTabId): {
-  subagents: import('@shared/schemas').ActiveChildInfo[];
-  processes: import('@shared/schemas').ActiveChildInfo[];
+  subagents: ActiveChildInfo[];
+  processes: ActiveChildInfo[];
 } {
   return {
     subagents: collectChildSummary(

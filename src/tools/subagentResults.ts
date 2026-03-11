@@ -13,7 +13,7 @@ import type {
   OutputFileSummary,
 } from '@agent/runtime/AgentFlowResult';
 import type { ExecResult } from '@agent/types/ResultTypes';
-import type { SubagentProgressUpdate } from '@shared/schemas';
+import type { ActiveChildInfo, SubagentProgressUpdate } from '@shared/schemas';
 import { formatDuration } from '@utils/core';
 
 // ============================================================================
@@ -243,14 +243,6 @@ export function formatBashError(
 // Post-compaction execution context
 // ============================================================================
 
-/** Minimal execution info needed for post-compaction context formatting. */
-export interface ActiveExecutionSummary {
-  executionId: string;
-  agentName: string;
-  status?: string;
-  elapsed?: string | null;
-}
-
 /**
  * Format active execution state as context for the agent after compaction.
  * Returns null if there are no active children to report.
@@ -262,8 +254,8 @@ export interface ActiveExecutionSummary {
  * - Understand that pending results may arrive as follow-up messages
  */
 export function formatPostCompactionContext(
-  subagents: ActiveExecutionSummary[],
-  processes: ActiveExecutionSummary[],
+  subagents: ActiveChildInfo[],
+  processes: ActiveChildInfo[],
 ): string | null {
   if (subagents.length === 0 && processes.length === 0) {
     return null;
