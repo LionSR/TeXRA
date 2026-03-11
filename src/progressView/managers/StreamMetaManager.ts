@@ -21,6 +21,7 @@ export class StreamMetaManager {
   private executionIds = new Map<StreamTabId, ExecutionId>();
   private activeRunIds = new Map<StreamTabId, StorageKey | null>();
   private parentStreamIds = new Map<StreamTabId, StreamTabId>();
+  private descriptions = new Map<StreamTabId, string>();
   private loaded = false;
   private readonly logger: AgentLogger;
   private readonly pendingWrites = new Map<StreamTabId, Promise<void>>();
@@ -74,6 +75,17 @@ export class StreamMetaManager {
     this.save(child);
   }
 
+  // -- Descriptions -----------------------------------------------------------
+
+  getDescription(stream: StreamTabId): string | undefined {
+    return this.descriptions.get(stream);
+  }
+
+  setDescription(stream: StreamTabId, description: string): void {
+    this.descriptions.set(stream, description);
+    this.save(stream);
+  }
+
   // -- Queries ----------------------------------------------------------------
 
   /** Return stream IDs with active tool-use sessions. */
@@ -93,6 +105,7 @@ export class StreamMetaManager {
     this.executionIds.delete(stream);
     this.activeRunIds.delete(stream);
     this.parentStreamIds.delete(stream);
+    this.descriptions.delete(stream);
     this.pendingWrites.delete(stream);
   }
 
@@ -102,6 +115,7 @@ export class StreamMetaManager {
     this.executionIds.clear();
     this.activeRunIds.clear();
     this.parentStreamIds.clear();
+    this.descriptions.clear();
     this.pendingWrites.clear();
   }
 
@@ -146,6 +160,10 @@ export class StreamMetaManager {
 
       if (meta.parentStreamId) {
         this.parentStreamIds.set(streamId, meta.parentStreamId as StreamTabId);
+      }
+
+      if (meta.description) {
+        this.descriptions.set(streamId, meta.description);
       }
     }
 
@@ -196,6 +214,9 @@ export class StreamMetaManager {
 
     const parentStreamId = this.parentStreamIds.get(stream);
     if (parentStreamId) meta.parentStreamId = parentStreamId;
+
+    const description = this.descriptions.get(stream);
+    if (description) meta.description = description;
 
     return meta;
   }
