@@ -103,3 +103,12 @@ export async function setAnthropicDynamicFiltering(
 ): Promise<void> {
   await globalSM?.update(GlobalStateKey.ANTHROPIC_DYNAMIC_FILTERING, enabled);
 }
+
+// ---------------------------------------------------------------------------
+// WebSocket transport setting (globalSM-backed)
+// ---------------------------------------------------------------------------
+
+/** Read the WebSocket transport setting for OpenAI. */
+export function getWebSocketEnabled(): boolean {
+  return globalSM?.get<boolean>(GlobalStateKey.WEBSOCKET_OPENAI, false) ?? false;
+}

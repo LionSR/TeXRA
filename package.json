@@ -107,12 +107,6 @@
             "description": "Enable background mode for OpenAI Responses API to handle long-running generations (>10mins) more reliably by preventing request timeouts. Adds polling overhead.",
             "scope": "resource"
           },
-          "texra.model.useWebSocket": {
-            "type": "boolean",
-            "default": false,
-            "description": "Use WebSocket transport for OpenAI Responses API. Reduces latency in tool-heavy workflows (~40% faster with 20+ tool calls) by maintaining a persistent connection. Incompatible with OpenRouter.",
-            "scope": "resource"
-          },
           "texra.model.openaiParallelToolCalls": {
             "type": "boolean",
             "default": false,

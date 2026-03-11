@@ -28,6 +28,7 @@ import type { FileLocation } from '@utils/files';
 
 // Local imports - utils
 import { K_SLICE, getConfig } from '@utils/config';
+import { getWebSocketEnabled } from '@utils/config/providerConfig';
 import { delay } from '@utils/core';
 import { flexibleFS, OFFICE_MIME_TYPES } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
@@ -264,10 +265,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * from persistent connection).
    */
   private isWebSocketModeEnabled(): boolean {
-    return (
-      getConfig<boolean>('texra.model.useWebSocket', false) &&
-      this.getBaseUrl() === null
-    );
+    return getWebSocketEnabled() && this.getBaseUrl() === null;
   }
 
   /**
