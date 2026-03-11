@@ -207,10 +207,12 @@ function collectChildSummary(
     ) {
       continue;
     }
+    const statusInfo = handle.getStatus();
     result.push({
       executionId: handle.executionId,
       agentName: handle.agentName,
-      status: handle.getStatus().status,
+      status: statusInfo.status,
+      elapsed: statusInfo.elapsed ?? null,
       ...(handle instanceof AgentExecutionHandle
         ? { childStreamId: handle.childStreamId }
         : {}),

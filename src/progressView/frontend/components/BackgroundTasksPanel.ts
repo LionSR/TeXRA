@@ -109,6 +109,12 @@ export class BackgroundTasksPanel extends LitElement {
         text-decoration-color: var(--vscode-foreground);
       }
 
+      .task-elapsed {
+        flex-shrink: 0;
+        font-size: var(--font-size-xs, 10px);
+        color: var(--color-text-secondary);
+      }
+
       .task-status {
         flex-shrink: 0;
         font-size: var(--font-size-xs, 10px);
@@ -321,6 +327,9 @@ export class BackgroundTasksPanel extends LitElement {
               : nothing}
             >${child.agentName}</span
           >
+          ${child.elapsed
+            ? html`<span class="task-elapsed">(${child.elapsed})</span>`
+            : nothing}
           <span
             class=${classMap({
               'task-status': true,

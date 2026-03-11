@@ -36,6 +36,8 @@ export const ActiveChildInfoSchema = z.object({
   childStreamId: z.string().optional(),
   /** Current execution status (e.g. "running", "waiting"). Defaults to "running". */
   status: z.string().optional(),
+  /** Formatted elapsed time (e.g. "1m 23s"). */
+  elapsed: z.string().nullable().optional(),
 });
 
 export type ActiveChildInfo = z.infer<typeof ActiveChildInfoSchema>;
