@@ -4,7 +4,6 @@ import { create } from 'mutative';
 import { html, css, type TemplateResult } from 'lit';
 import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
-import { createRef, ref } from 'lit/directives/ref.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 import { z } from 'zod';
@@ -109,7 +108,6 @@ import './components/ContextManagement';
 
 // Local imports - progress view component types
 import type { PermissionState } from './components/PermissionCard';
-import type { ToolUseStreamContent } from './components/ToolUseStreamContent';
 
 // Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
 // Safe because ProgressApp implements all abstract members below.
@@ -253,9 +251,6 @@ export class ProgressApp extends ProgressAppBase {
   @provide({ context: processOutputContext })
   @state()
   private processOutputContextValue: ProcessOutputMap = EMPTY_PROCESS_OUTPUTS;
-
-  // Container ref for accessing child component methods (FollowUpInput)
-  private toolUseContentRef = createRef<ToolUseStreamContent>();
 
   // --- Selector computeds: extract fields, auto-memoized by Object.is ---
   private streamById$ = select(this.appState, (s) => s.streamById);
@@ -554,7 +549,6 @@ export class ProgressApp extends ProgressAppBase {
     if (isToolUse) {
       return html`
         <tool-use-stream-content
-          ${ref(this.toolUseContentRef)}
           @toolbar-command=${this.onToolbarCommand}
           @permission-action=${this.onPermissionAction}
           @followup-change=${this.onFollowUpChange}
@@ -641,7 +635,6 @@ export class ProgressApp extends ProgressAppBase {
         this.setStreamState(streamId, updater),
       setStreamLogs: (streamId, updater) =>
         this.setStreamLogs(streamId, updater),
-      getFollowUpRef: () => this.toolUseContentRef.value?.getFollowUpRef(),
       savePrefs: (prefs) => this.prefsManager.update(prefs),
     };
   }
