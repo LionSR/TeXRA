@@ -224,7 +224,10 @@ const EPHEMERAL_CACHE_CONTROL: CacheControlEphemeral = {
   type: 'ephemeral',
 };
 
-const MAX_CACHE_CONTROLLED_BLOCKS = 4;
+// Anthropic allows up to 4 cache breakpoints total. Top-level automatic caching
+// uses 1 slot, so explicit block-level breakpoints (e.g. compaction blocks) are
+// limited to 3.
+const MAX_CACHE_CONTROLLED_BLOCKS = 3;
 
 const isCacheControlEligibleBlock = (
   block: CacheControlInspectableBlock,
@@ -249,7 +252,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
   Anthropic,
   BetaMessage
 > {
-  private cacheControlledBlock?: CacheControlEligibleBlock;
 
   /** Flag to force compaction on the next API call, set by requestCompaction(). */
   private compactionRequested = false;
@@ -376,24 +378,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return true;
   }
 
-  /**
-   * Sets or clears the cache control target block.
-   * Pass a block to set it as the cache target, or undefined/null to clear.
-   */
-  private updateCacheControlTarget(
-    block: CacheControlEligibleBlock | null | undefined,
-  ): void {
-    // Clear existing cache_control if switching to different block
-    if (this.cacheControlledBlock && this.cacheControlledBlock !== block) {
-      delete this.cacheControlledBlock.cache_control;
-    }
-
-    if (block && this.capabilities.supportsPromptCaching) {
-      block.cache_control = EPHEMERAL_CACHE_CONTROL;
-    }
-
-    this.cacheControlledBlock = block ?? undefined;
-  }
 
   /** Ensures a beta flag is included in options, initializing the array if needed. */
   private ensureBeta(options: MessageCreateParams, beta: AnthropicBeta): void {
@@ -469,23 +453,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     } satisfies BetaContextManagementConfig;
   }
 
-  private assignCacheControlToLatest(
-    content: (ContentBlockParam | ContentBlock)[] | undefined,
-  ): void {
-    if (!this.capabilities.supportsPromptCaching) {
-      return;
-    }
-
-    const target = content?.findLast(isCacheControlEligibleBlock);
-    if (target) {
-      this.updateCacheControlTarget(target);
-    } else if (content?.length) {
-      this.logger.debug(
-        'No eligible content block available for Anthropic cache control marker',
-      );
-      this.updateCacheControlTarget(undefined);
-    }
-  }
 
   async getClient(): Promise<Anthropic> {
     const credential = await this.getApiKey();
@@ -624,6 +591,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
       temperature,
       stop_sequences: endTag ? [endTag] : undefined,
       system: systemPrompt,
+      // Top-level automatic caching: the API automatically applies a cache
+      // breakpoint to the last cacheable block, moving it forward as conversations
+      // grow. This replaces manual per-block cache_control assignment.
+      ...(this.capabilities.supportsPromptCaching && {
+        cache_control: EPHEMERAL_CACHE_CONTROL,
+      }),
     };
 
     if (tools?.length) {
@@ -1034,10 +1007,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     for (let idx = 0; idx < excess; idx += 1) {
       delete cacheControlledBlocks[idx].cache_control;
     }
-
-    this.cacheControlledBlock = cacheControlledBlocks.findLast(
-      isCacheControlEligibleBlock,
-    );
   }
 
   private async replaceDocumentDataWithUploads(
@@ -1333,8 +1302,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       throw new Error(errMsg);
     }
 
-    this.updateCacheControlTarget(undefined);
-
     // Create content list for the user message
     const userMessageContent: ContentBlockParam[] = [];
 
@@ -1368,8 +1335,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const messages: MessageParam[] = [
       { role: 'user', content: userMessageContent },
     ];
-
-    this.assignCacheControlToLatest(userMessageContent);
 
     return messages;
   }
@@ -1419,8 +1384,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     messages.push({ role: 'user', content: roundContent });
 
-    this.assignCacheControlToLatest(roundContent);
-
     return messages;
   }
 
@@ -1439,8 +1402,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       { type: 'text', text: trimmedMessage, citations: null },
     ];
     messages.push({ role: 'user', content });
-
-    this.assignCacheControlToLatest(content);
 
     return messages;
   }
@@ -1619,8 +1580,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       { type: 'text', text: userMessageContinuation },
     ];
     messages.push({ role: 'user', content });
-
-    this.assignCacheControlToLatest(content);
   }
 
   /** Initializes output file and handles prefill content, returning [isComplete, updatedMessages]. */
@@ -1686,7 +1645,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         content: [{ type: 'text', text: fileContent }],
       });
 
-      this.updateCacheControlTarget(undefined);
       return [true, messages];
     }
 
@@ -1702,8 +1660,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       `Using existing content as prefill: ${outputLocation.absolutePath}`,
     );
     messages.push({ role: 'assistant', content });
-
-    this.assignCacheControlToLatest(content);
 
     if (!this.capabilities.supportsAssistantPrefill) {
       // For models that don't support assistant prefill, we need to:
@@ -1877,9 +1833,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         ];
       }
 
-      this.assignCacheControlToLatest(
-        lastMessage.content as (ContentBlockParam | ContentBlock)[],
-      );
     }
   }
 
@@ -1925,7 +1878,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
           type: 'text',
           text: bestConnector + newResponse,
         } as ContentBlockParam);
-        this.assignCacheControlToLatest(secondLastMessage.content);
       }
 
       messages.pop();
@@ -1955,7 +1907,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       text: workspaceState.assembly.accumulatedOutput,
     } as ContentBlockParam);
 
-    this.assignCacheControlToLatest(content);
     messages.push({ role: 'assistant', content });
   }
 
@@ -2385,13 +2336,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         },
       ],
     };
-
-    const toolResultBlock = Array.isArray(resultMsg.content)
-      ? resultMsg.content.at(-1)
-      : undefined;
-    if (isCacheControlEligibleBlock(toolResultBlock)) {
-      this.updateCacheControlTarget(toolResultBlock);
-    }
 
     return [callMsg, resultMsg];
   }
