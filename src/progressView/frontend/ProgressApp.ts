@@ -274,6 +274,28 @@ export class ProgressApp extends ProgressAppBase {
 
   // --- Derived computeds: only re-evaluate when selector inputs propagate ---
 
+  /** streamId → description extracted from streamById (for context consumers). */
+  private _prevDescriptions: StreamDescriptionMap = EMPTY_DESCRIPTIONS;
+  private descriptions$ = new Signal.Computed((): StreamDescriptionMap => {
+    const streamById = this.streamById$.get();
+    const map: StreamDescriptionMap = new Map();
+    for (const [id, info] of streamById) {
+      if (info.description) map.set(id, info.description);
+    }
+    // Return stable reference when unchanged — Signal.Computed uses Object.is(),
+    // so a new Map with identical contents would still propagate.
+    if (
+      map.size === this._prevDescriptions.size &&
+      [...map].every(
+        ([k, v]) => this._prevDescriptions.get(k) === v,
+      )
+    ) {
+      return this._prevDescriptions;
+    }
+    this._prevDescriptions = map;
+    return map;
+  });
+
   /**
    * Filtered + sorted stream list.
    * Uses fine-grained selectors so log appends (which only change streamLogs$)
@@ -319,16 +341,6 @@ export class ProgressApp extends ProgressAppBase {
   // These return stable Map entry values (via Mutative structural sharing).
   // When stream B's state changes, activeStreamState$ still returns stream A's
   // state (same reference) → Object.is() passes → no downstream propagation.
-
-  /** streamId → description extracted from streamById (for context consumers). */
-  private descriptions$ = new Signal.Computed((): StreamDescriptionMap => {
-    const streamById = this.streamById$.get();
-    const map: StreamDescriptionMap = new Map();
-    for (const [id, info] of streamById) {
-      if (info.description) map.set(id, info.description);
-    }
-    return map;
-  });
 
   /** Only changes when active stream switches or stream list changes. */
   private activeStreamInfo$ = new Signal.Computed(() => {
