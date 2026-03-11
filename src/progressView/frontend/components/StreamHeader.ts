@@ -11,7 +11,11 @@ import {
   animationStyles,
   commonViewStyles,
 } from '@shared/styles';
-import { STREAM_STATUS, type StreamTabInfo } from '@shared/schemas';
+import {
+  STREAM_STATUS,
+  type ConversationProgress,
+  type StreamTabInfo,
+} from '@shared/schemas';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 
@@ -333,6 +337,27 @@ export class StreamHeader extends LitElement {
         font-size: var(--font-size-xs, 10px);
       }
 
+      .progress-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-tiny);
+        padding: 1px var(--spacing-small);
+        font-size: var(--font-size-xs, 10px);
+        font-weight: var(--font-weight-semibold);
+        color: var(--color-text-secondary);
+        background: color-mix(
+          in srgb,
+          var(--color-text-secondary) 12%,
+          transparent
+        );
+        border-radius: var(--border-radius-small);
+        white-space: nowrap;
+      }
+
+      .progress-badge .codicon {
+        font-size: var(--font-size-xs, 10px);
+      }
+
       @media (max-width: 500px) {
         .log-header {
           flex-wrap: wrap;
@@ -352,6 +377,7 @@ export class StreamHeader extends LitElement {
 
   @property({ attribute: false }) stream: StreamTabInfo | null = null;
   @property({ attribute: false }) status: string = STREAM_STATUS.READY;
+  @property({ attribute: false }) progress: ConversationProgress | undefined;
   @property({ attribute: false }) runId: string | null = null;
   @property({ attribute: false }) runs: Array<{
     id: string;
@@ -395,6 +421,7 @@ export class StreamHeader extends LitElement {
               })}
               data-status=${statusLabel}
             ></span>
+            ${this.renderProgressBadge()}
           </div>
           <div class="header-actions">
             <vscode-toolbar-container
@@ -481,6 +508,21 @@ export class StreamHeader extends LitElement {
     return { disabled, hidden };
   }
 
+  private renderProgressBadge(): TemplateResult | typeof nothing {
+    const p = this.progress;
+    if (!p || p.conversationTurns <= 0) return nothing;
+    return html`<span
+      class="progress-badge"
+      title="Conversation turns: ${p.conversationTurns}, Tool calls: ${p.toolCallCount}"
+    >
+      <i class="codicon codicon-pulse"></i>
+      ${p.conversationTurns}
+      turns${p.toolCallCount > 0
+        ? html`, ${p.toolCallCount} tool calls`
+        : nothing}
+    </span>`;
+  }
+
   private renderParentLink(): TemplateResult | typeof nothing {
     const parentStreamId = this.stream?.parentStreamId;
     if (!parentStreamId) return nothing;
@@ -524,5 +566,4 @@ export class StreamHeader extends LitElement {
   private handleRunSelected(event: CustomEvent) {
     this.dispatchEvent(ProgressEvents.runSelected(event.detail));
   }
-
 }

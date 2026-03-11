@@ -138,6 +138,7 @@ export class WorkflowStreamContent extends LitElement {
       <stream-header
         .stream=${streamInfo}
         .status=${state.status}
+        .progress=${state.conversationProgress}
         .runId=${runId}
         .runs=${this.runGroups}
         .yoloActive=${false}
@@ -173,5 +174,4 @@ export class WorkflowStreamContent extends LitElement {
       ></followup-section>
     `;
   }
-
 }
