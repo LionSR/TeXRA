@@ -112,9 +112,9 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
   // ===========================================================================
 
   private getFeedbackValue(): string | undefined {
-    const trimmed =
-      ((this.feedbackInput as HTMLElement & { value?: string })?.value ?? '')
-        .trim();
+    const trimmed = (
+      (this.feedbackInput as HTMLElement & { value?: string })?.value ?? ''
+    ).trim();
     return trimmed || undefined;
   }
 }
