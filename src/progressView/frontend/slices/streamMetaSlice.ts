@@ -88,7 +88,8 @@ export const streamMetaHandlers: HandlerRegistry = {
       const info = prev.streamById.get(stream);
       if (!info) return prev;
       return create(prev, (draft) => {
-        draft.streamById.set(stream, { ...info, description });
+        const draftInfo = draft.streamById.get(stream);
+        if (draftInfo) draftInfo.description = description;
       });
     });
   },

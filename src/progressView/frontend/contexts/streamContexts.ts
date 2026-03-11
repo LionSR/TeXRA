@@ -8,7 +8,12 @@
 import { createContext } from '@lit/context';
 
 // Local imports - progress view
-import type { LogMessageData, StreamTabInfo, TaskGroup } from '@shared/schemas';
+import type {
+  LogMessageData,
+  StreamTabId,
+  StreamTabInfo,
+  TaskGroup,
+} from '@shared/schemas';
 import type { FollowupOptionsState, StreamState } from '../store';
 
 // Local imports - progress view components
@@ -93,7 +98,7 @@ export const processOutputContext = createContext<ProcessOutputMap>(
  * Descriptions context: streamId → AI-generated session description.
  * Consumed by BackgroundTasksPanel to label subagent entries.
  */
-export type StreamDescriptionMap = Map<string, string>;
+export type StreamDescriptionMap = Map<StreamTabId, string>;
 
 export const EMPTY_DESCRIPTIONS: StreamDescriptionMap = new Map();
 
