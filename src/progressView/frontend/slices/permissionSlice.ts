@@ -87,25 +87,6 @@ export function removePrompt(
 }
 
 // ============================================================
-// ID extraction
-// ============================================================
-
-/** Extract the unique ID for a permission entry (used for deduplication). */
-function getPermissionId(p: PermissionState): string | undefined {
-  switch (p.kind) {
-    case PERMISSION_KIND.TOOL_EDIT:
-    case PERMISSION_KIND.BASH:
-      return `${p.kind}:${p.data.requestId}`;
-    case PERMISSION_KIND.RETRY:
-      return `${p.kind}:${p.data.streamId}`;
-    case PERMISSION_KIND.PROPOSAL:
-      return `${p.kind}:${p.data.proposalId}`;
-    default:
-      return undefined;
-  }
-}
-
-// ============================================================
 // Handlers
 // ============================================================
 
@@ -135,17 +116,11 @@ export const permissionHandlers: HandlerRegistry = {
         });
       } else {
         // Prepend newest permissions so keyboard shortcuts target the latest request.
-        // Deduplicate by ID to prevent duplicates from show() + replay() races
-        // (e.g., requestEnsureProgressView triggers replayPendingPrompts while
-        // the original show message was already delivered).
         const entry = {
           kind: permission.kind,
           data: permission.data,
         } as PermissionState;
-        const id = getPermissionId(entry);
-        const existing = ctx.getPermissions();
-        if (id && existing.some((p) => getPermissionId(p) === id)) return;
-        ctx.setPermissions([entry, ...existing]);
+        ctx.setPermissions([entry, ...ctx.getPermissions()]);
       }
       return;
     }
