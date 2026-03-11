@@ -25,7 +25,6 @@ import {
   TODO_STATUS,
   PlanSchema,
   type Plan,
-  type PlanStep,
   type TodoStatus,
 } from '@shared/schemas';
 import { type ToolResult } from '@tools/result';

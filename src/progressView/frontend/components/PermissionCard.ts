@@ -294,20 +294,20 @@ export class PermissionCard extends LitElement {
 
     return html`
       <p><strong>${plan.summary}</strong></p>
-      <div class="plan-steps-list">
+      <ol class="plan-steps-list">
         ${repeat(
           plan.steps,
-          (_step, i) => i,
-          (step, i) => html`
-            <p>
-              ${i + 1}. ${step.title}
+          (step) => step.title,
+          (step) => html`
+            <li>
+              ${step.title}
               ${step.description
                 ? html`<span class="meta-text"> — ${step.description}</span>`
                 : nothing}
-            </p>
+            </li>
           `,
         )}
-      </div>
+      </ol>
       ${this.renderFeedbackSection()}
     `;
   }

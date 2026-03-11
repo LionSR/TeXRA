@@ -312,7 +312,12 @@ export class PlanState {
 
   toSnapshot(): PlanStateSnapshot {
     return {
-      plan: this._plan ? { ...this._plan, steps: [...this._plan.steps] } : null,
+      plan: this._plan
+        ? {
+            ...this._plan,
+            steps: this._plan.steps.map((s) => ({ ...s, files: [...s.files] })),
+          }
+        : null,
     };
   }
 
