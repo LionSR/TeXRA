@@ -8,7 +8,12 @@ import { z } from 'zod';
 import type { ToolResult } from '@tools/result';
 import { buildFileAttachment, formatLinesWithNumbers } from '@tools/utils';
 import { recordToolFileRead } from '@tools/fileInteractions';
-import { WorkspaceFS, getMimeType } from '@utils/files';
+import {
+  WorkspaceFS,
+  getMimeType,
+  OFFICE_EXTENSIONS,
+  OFFICE_MIME_TYPES,
+} from '@utils/files';
 import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -194,7 +199,7 @@ export class ReadFileTool extends defineTool({
 
   private getAttachmentConfig(
     filePath: string,
-  ): { kind: 'pdf' | 'image'; label: string } | null {
+  ): { kind: 'pdf' | 'image' | 'document'; label: string } | null {
     const mimeType = getMimeType(filePath)?.toLowerCase();
     // Keep extension detection case-insensitive so users can reference files regardless of casing.
     const extension = path.extname(filePath.toLowerCase());
@@ -209,7 +214,15 @@ export class ReadFileTool extends defineTool({
     const isImage =
       mimeType?.startsWith('image/') || IMAGE_EXTENSIONS.has(extension);
     if (isImage) {
-      return { kind: 'image', label: 'image' };
+      return { kind: 'image', label: 'Image' };
+    }
+
+    // Office documents are binary formats that cannot be read as text.
+    // Return them as attachments so models with file input support can process them.
+    const isDocument =
+      OFFICE_EXTENSIONS.has(extension) || OFFICE_MIME_TYPES.has(mimeType ?? '');
+    if (isDocument) {
+      return { kind: 'document', label: 'Document' };
     }
 
     return null;
@@ -217,12 +230,12 @@ export class ReadFileTool extends defineTool({
 
   private async returnBinaryAttachment(
     input: ReadInput,
-    config: { kind: 'pdf' | 'image'; label: string },
+    config: { kind: 'pdf' | 'image' | 'document'; label: string },
   ): Promise<ToolResult> {
     const copy = ATTACHMENT_COPY[config.kind];
     const attachment = await buildFileAttachment({
       filePath: input.path,
-      description: `${config.label === 'PDF' ? 'PDF' : 'Image'} returned by read_file tool.`,
+      description: `${config.label} returned by read_file tool.`,
     });
 
     const baseSummary = `Attached ${config.label} ${attachment.path}.`;
@@ -250,7 +263,7 @@ const IMAGE_EXTENSIONS = new Set([
 ]);
 
 const ATTACHMENT_COPY: Record<
-  'pdf' | 'image',
+  'pdf' | 'image' | 'document',
   {
     rangeSummary: string;
     rangeOutput: string;
@@ -268,5 +281,12 @@ const ATTACHMENT_COPY: Record<
     rangeOutput: 'Line ranges are not supported when reading images.',
     coreOutput:
       'Returned the image as a file attachment. Vision-capable models can analyze the visual content directly.',
+  },
+  document: {
+    rangeSummary:
+      'Ignored requested line range because office documents are binary.',
+    rangeOutput: 'Line ranges are not supported when reading office documents.',
+    coreOutput:
+      'Returned the document as a file attachment. Models with file input support can extract and analyze the document content.',
   },
 };
