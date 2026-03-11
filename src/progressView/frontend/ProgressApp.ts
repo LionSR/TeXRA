@@ -83,15 +83,18 @@ import {
 
 // Local imports - progress view contexts
 import {
+  EMPTY_DESCRIPTIONS,
   EMPTY_LOG_CONTEXT,
   EMPTY_PROCESS_OUTPUTS,
   EMPTY_STREAM_CONTEXT,
   permissionsContext,
   processOutputContext,
+  streamDescriptionsContext,
   streamLogContext,
   streamStateContext,
   type ProcessOutputMap,
   type StreamContextValue,
+  type StreamDescriptionMap,
   type StreamLogContextValue,
 } from './contexts/streamContexts';
 import type { FrontendEventHandlerContext } from './eventHandlers';
@@ -252,6 +255,10 @@ export class ProgressApp extends ProgressAppBase {
   @state()
   private processOutputContextValue: ProcessOutputMap = EMPTY_PROCESS_OUTPUTS;
 
+  @provide({ context: streamDescriptionsContext })
+  @state()
+  private descriptionsContextValue: StreamDescriptionMap = EMPTY_DESCRIPTIONS;
+
   // --- Selector computeds: extract fields, auto-memoized by Object.is ---
   private streamById$ = select(this.appState, (s) => s.streamById);
   private streamFilter$ = select(this.appState, (s) => s.streamFilter);
@@ -312,6 +319,16 @@ export class ProgressApp extends ProgressAppBase {
   // These return stable Map entry values (via Mutative structural sharing).
   // When stream B's state changes, activeStreamState$ still returns stream A's
   // state (same reference) → Object.is() passes → no downstream propagation.
+
+  /** streamId → description extracted from streamById (for context consumers). */
+  private descriptions$ = new Signal.Computed((): StreamDescriptionMap => {
+    const streamById = this.streamById$.get();
+    const map: StreamDescriptionMap = new Map();
+    for (const [id, info] of streamById) {
+      if (info.description) map.set(id, info.description);
+    }
+    return map;
+  });
 
   /** Only changes when active stream switches or stream list changes. */
   private activeStreamInfo$ = new Signal.Computed(() => {
@@ -454,6 +471,7 @@ export class ProgressApp extends ProgressAppBase {
     this.streamLogContextValue = this.logContext$.get();
     this.permissionsContextValue = this.permissions$.get();
     this.processOutputContextValue = this.activeProcessOutputs$.get();
+    this.descriptionsContextValue = this.descriptions$.get();
   }
 
   render(): TemplateResult {

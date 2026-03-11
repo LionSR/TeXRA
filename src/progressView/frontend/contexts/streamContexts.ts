@@ -88,3 +88,15 @@ export const EMPTY_PROCESS_OUTPUTS: ProcessOutputMap = new Map();
 export const processOutputContext = createContext<ProcessOutputMap>(
   'progress-process-outputs',
 );
+
+/**
+ * Descriptions context: streamId → AI-generated session description.
+ * Consumed by BackgroundTasksPanel to label subagent entries.
+ */
+export type StreamDescriptionMap = Map<string, string>;
+
+export const EMPTY_DESCRIPTIONS: StreamDescriptionMap = new Map();
+
+export const streamDescriptionsContext = createContext<StreamDescriptionMap>(
+  'progress-stream-descriptions',
+);
