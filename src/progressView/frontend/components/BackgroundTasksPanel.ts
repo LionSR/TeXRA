@@ -20,17 +20,11 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
 
-// Local imports - shared styles
+// Local imports
+import { STREAM_STATUS, type ActiveChildInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
-
-// Local imports - shared utilities
 import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
-
-// Local imports - types
-import { STREAM_STATUS, type ActiveChildInfo } from '@shared/schemas';
-
-// Local imports - events
 import { ProgressEvents } from '../events';
 
 // Local imports - contexts
@@ -219,8 +213,7 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    const active =
-      this.activeProcesses.length + this.activeSubagents.length;
+    const active = this.activeProcesses.length + this.activeSubagents.length;
     const finished = this.finishedProcessCount + this.finishedSubagentCount;
     if (active + finished === 0) return nothing;
 
@@ -232,8 +225,16 @@ export class BackgroundTasksPanel extends LitElement {
         @vsc-collapsible-toggle=${this.handleCollapsibleToggle}
       >
         <div class="task-list">
-          ${this.renderSection(this.activeProcesses, this.finishedProcessCount, 'process')}
-          ${this.renderSection(this.activeSubagents, this.finishedSubagentCount, 'subagent')}
+          ${this.renderSection(
+            this.activeProcesses,
+            this.finishedProcessCount,
+            'process',
+          )}
+          ${this.renderSection(
+            this.activeSubagents,
+            this.finishedSubagentCount,
+            'subagent',
+          )}
         </div>
       </vscode-collapsible>
     `;
@@ -309,9 +310,7 @@ export class BackgroundTasksPanel extends LitElement {
               'task-name': true,
               'task-name--clickable': isClickable,
             })}
-            title=${isClickable
-              ? `Go to ${child.agentName}`
-              : child.agentName}
+            title=${isClickable ? `Go to ${child.agentName}` : child.agentName}
             role=${isClickable ? 'link' : 'text'}
             tabindex=${isClickable ? '0' : '-1'}
             @click=${isClickable
@@ -349,10 +348,7 @@ export class BackgroundTasksPanel extends LitElement {
     `;
   }
 
-  private renderOutputStream(
-    label: string,
-    text: string,
-  ): TemplateResult {
+  private renderOutputStream(label: string, text: string): TemplateResult {
     return html`
       <details class="task-output" open>
         <summary>
@@ -375,19 +371,12 @@ export class BackgroundTasksPanel extends LitElement {
   }
 }
 
-/** Toggle open state and scroll into view. Shared by ToolUseStreamContent and WorkflowStreamContent. */
-export function toggleBackgroundTasksPanel(
-  panelRef: { value: BackgroundTasksPanel | undefined },
-): void {
-  const panel = panelRef.value;
-  if (!panel) return;
-  panel.open = !panel.open;
-  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
 /** Check if a child is in a waiting/idle state rather than actively processing. */
 function isWaiting(child: ActiveChildInfo): boolean {
-  return child.status === STREAM_STATUS.WAITING || child.status === STREAM_STATUS.READY;
+  return (
+    child.status === STREAM_STATUS.WAITING ||
+    child.status === STREAM_STATUS.READY
+  );
 }
 
 declare global {
