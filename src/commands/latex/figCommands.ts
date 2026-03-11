@@ -4,7 +4,7 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - errors
+// Local imports
 import { showLoggedErrorMessage, showLoggedInfoMessage } from '@common/errors';
 import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
@@ -21,15 +21,10 @@ export const figureCommands = {
   compileTikzFigures: 'texra.compileTikzFigures',
 };
 
-/** Simple pluralization helper */
 function pluralize(count: number, singular: string): string {
   return count === 1 ? singular : `${singular}s`;
 }
 
-/**
- * Execute a LaTeX command with standardized error handling.
- * Wraps withLaTeXGuard and catches any errors to show them to the user.
- */
 async function runLaTeXCommand(
   action: string,
   commandName: string,

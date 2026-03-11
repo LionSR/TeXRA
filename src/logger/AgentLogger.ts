@@ -502,15 +502,12 @@ export class AgentLogger {
       if (!progressEnabled) return;
 
       if (!created) {
-        const appended = this.appendToStore(level, type, {
+        created = !!this.appendToStore(level, type, {
           id,
           timestamp: Date.now(),
           groupId,
           text: buffer,
         });
-        if (appended) {
-          created = true;
-        }
         return;
       }
 

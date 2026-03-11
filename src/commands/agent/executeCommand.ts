@@ -13,8 +13,6 @@ import { generateExecutionId } from '@utils/core/executionId';
 
 const CHANNEL = 'ExecuteCommand';
 
-// --- Command ---
-
 export function registerExecuteCommand(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.execute', runExecuteCommand),
@@ -32,17 +30,13 @@ export function registerExecuteCommand(context: vscode.ExtensionContext): void {
  */
 export async function runExecuteCommand(input: unknown): Promise<void> {
   try {
-    // Support both raw config and wrapped { config, executionId? } format
     const isWrappedInput =
       input !== null && typeof input === 'object' && 'config' in input;
     const wrapped = isWrappedInput
       ? (input as { config: unknown; executionId?: unknown })
       : null;
-    // Parse wrapped.config when wrapped (allows Zod to fail on undefined),
-    // otherwise parse input directly
     const config = AgentConfigSchema.parse(wrapped ? wrapped.config : input);
 
-    // Use provided executionId (resume) or create new one (fresh)
     const executionId =
       (wrapped?.executionId as ExecutionId | undefined) ??
       generateExecutionId();

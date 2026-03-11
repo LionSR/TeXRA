@@ -1,7 +1,5 @@
-// Utility for saving debug objects (messages/responses) during debugging
 import * as path from 'path';
 
-// Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
 import type { ExecutionId } from '@shared/schemas';
 import { getConfig } from '@utils/config';
@@ -68,14 +66,7 @@ export async function maybeSaveDebugObject({
   fileOptions = {},
 }: SaveDebugParams): Promise<void> {
   const shouldSave = getConfig<boolean>('texra.debug.saveDebugObjects', false);
-  if (!shouldSave) {
-    return;
-  }
-
-  // Skip saving for remote agents to avoid leaking prompts
-  if (context.isRemote) {
-    return;
-  }
+  if (!shouldSave || context.isRemote) return;
 
   const { logger, modelName, executionId } = context;
   const { outputFile, baseName = objectType, continuationCount } = fileOptions;

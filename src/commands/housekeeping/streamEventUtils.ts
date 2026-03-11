@@ -11,10 +11,6 @@ export interface ClearMissingOutputsOptions {
   streamIdOverride?: string;
 }
 
-/**
- * Emit clearMissingOutputs event to update the progress view.
- * Used after pack/clean operations to clear missing output indicators.
- */
 export function emitClearMissingOutputs(
   options: ClearMissingOutputsOptions,
 ): void {

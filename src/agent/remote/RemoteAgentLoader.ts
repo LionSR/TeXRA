@@ -2,7 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import yaml from 'yaml';
 
 import {
-  AgentSetting,
+  type AgentSetting,
   AgentPromptSchema,
   AgentSettingSchema,
   AgentDefinitionSchema,

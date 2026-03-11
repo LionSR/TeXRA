@@ -18,7 +18,7 @@ import {
   runCleanLatexdiffvcMultiple,
 } from '@housekeeping';
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
-import { LaTeXdiffService, type LaTeXdiffResult } from '@latex/latexdiff';
+import { LaTeXdiffService } from '@latex/latexdiff';
 import {
   DEFAULT_MATH_MARKUP,
   MATH_MARKUP_OPTIONS,
@@ -46,11 +46,6 @@ const service = new LaTeXdiffService(CHANNEL);
 
 type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
 
-/**
- * Ensures the required latexdiff tool is installed before running a command.
- * @param tool The tool name to verify.
- * @returns True when the tool is available, false otherwise.
- */
 async function ensureLatexdiffToolInstalled(
   tool: LatexdiffTool,
 ): Promise<boolean> {
@@ -61,10 +56,6 @@ async function ensureLatexdiffToolInstalled(
   return installed;
 }
 
-/**
- * Wraps a latexdiff operation with tool verification and error handling.
- * Eliminates repetitive try-catch patterns across handlers.
- */
 async function withLatexdiffTool<T>(
   tool: LatexdiffTool,
   errorMessage: string,
@@ -81,10 +72,6 @@ async function withLatexdiffTool<T>(
   }
 }
 
-/**
- * Prompts the user to select a math markup granularity for latexdiff operations.
- * @returns The selected math markup option, or undefined if the user cancels.
- */
 async function promptForLatexdiffMathMarkup(): Promise<
   MathMarkupOption | undefined
 > {
@@ -113,12 +100,6 @@ async function promptForLatexdiffMathMarkup(): Promise<
   return selection?.value;
 }
 
-/**
- * Opens a generated latexdiff result in the LaTeX build preview after verifying it exists.
- * @param base The base file location used when generating the diff.
- * @param diffFileName The generated diff file name returned by the service.
- * @returns The diff file path when successfully opened.
- */
 async function openLatexdiffResult(
   base: FileLocation,
   diffFileName: string,
@@ -334,10 +315,6 @@ async function handleCleanLatexdiffvcMultiple(
   );
 }
 
-/**
- * Handles the runLatexdiff command triggered from the log view.
- * Performs both round diffs and between-round diffs on existing tex files.
- */
 interface RunLatexdiffCommandConfig {
   agent: string;
   model: string;
@@ -420,7 +397,6 @@ async function handleRunLatexdiff(
 
     const runId = config.runId ?? undefined;
 
-    // Normalize outputsByRound from raw config
     let outputsByRound: Map<number, OutputFileInfo[]> | null = null;
     if (config.outputsByRound) {
       const roundMap = new Map<number, OutputFileInfo[]>();
@@ -527,10 +503,6 @@ async function handleRunLatexdiff(
   }
 }
 
-/**
- * Shared executor for diff operations. Both metadata-driven and workspace-scan
- * paths build a list of DiffOperation[], then delegate to this function.
- */
 async function executeDiffOperations(
   operations: DiffOperation[],
   mathMarkup: MathMarkupOption | undefined,
@@ -769,7 +741,6 @@ async function runLatexdiffViaWorkspaceScan(params: {
     return { results: [], totalOperations: 0 };
   }
 
-  // Build operations list from scanned workspace files
   const operations: DiffOperation[] = [];
 
   for (const [baseFile, roundOutputs] of inputToOutputsMap.entries()) {

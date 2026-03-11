@@ -133,13 +133,10 @@ export class StreamLogStore {
             : 'running';
         if (status !== 'running') continue;
 
-        const updated = logInstance.update(entry.id, {
+        updatedAny ||= !!logInstance.update(entry.id, {
           type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
           data: { ...existingData, status: 'error', endTime: now },
         });
-        if (updated) {
-          updatedAny = true;
-        }
       }
 
       if (updatedAny) {
@@ -304,12 +301,11 @@ export class StreamLogStore {
 
     if (this.logs.size === 0) return;
 
-    // Write all streams to disk in parallel
-    const writes: Promise<void>[] = [];
-    for (const [streamId, logInstance] of this.logs.entries()) {
-      writes.push(this.kv.write(streamId, logInstance.toJSON()));
-    }
-    await Promise.all(writes);
+    await Promise.all(
+      [...this.logs].map(([streamId, logInstance]) =>
+        this.kv.write(streamId, logInstance.toJSON()),
+      ),
+    );
 
     log.info(
       LOG_TAG,
@@ -364,15 +360,12 @@ export class StreamLogStore {
       return Promise.resolve();
     }
 
-    const writes: Promise<void>[] = [];
-    for (const streamId of dirtyIds) {
-      const logInstance = this.logs.get(streamId);
-      if (logInstance) {
-        writes.push(this.kv.write(streamId, logInstance.toJSON()));
-      }
-    }
-
     log.debug(LOG_TAG, `Writing ${dirtyIds.length} dirty stream(s)`);
+
+    const writes = dirtyIds.flatMap((streamId) => {
+      const logInstance = this.logs.get(streamId);
+      return logInstance ? [this.kv.write(streamId, logInstance.toJSON())] : [];
+    });
 
     const writePromise = Promise.all(writes)
       .then(() => {})

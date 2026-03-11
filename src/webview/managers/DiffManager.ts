@@ -87,7 +87,6 @@ export class DiffManager extends BaseWebviewManager {
     );
     if (!data) return;
 
-    // Convert null to undefined (schema uses .nullish(), function expects boolean | undefined)
     await this.postRecentCommits(data.notifyWhenEmpty ?? undefined);
   }
 

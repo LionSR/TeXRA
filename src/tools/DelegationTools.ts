@@ -52,7 +52,7 @@ import {
 } from '@shared/schemas';
 
 // Local imports - tools
-import { ToolResult } from '@tools/result';
+import type { ToolResult } from '@tools/result';
 import {
   isSuperYoloFeatureEnabled,
   isProposalBypassedForStream,

@@ -52,14 +52,13 @@ import {
 import {
   STREAM_STATUS,
   END_GROUP_STATUS,
-  type EndGroupStatus,
   type StreamTabId,
   type ExecutionId,
   type StorageKey,
   type OutputFileInfo,
   type RoundOutput,
+  type SubagentProgressUpdate,
 } from '@shared/schemas';
-import type { SubagentProgressUpdate } from '@shared/schemas';
 import { TaskRunFileService } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
 import { generateExecutionId } from '@utils/core/executionId';
@@ -97,7 +96,7 @@ export async function getAgentPath(
   throw new Error(`Could not find agent: ${agentIdentifier}`);
 }
 
-async function validateAndGetModelConfig(modelName: string): Promise<void> {
+async function validateModelExists(modelName: string): Promise<void> {
   if (modelName in MODEL_CONFIGS) return;
 
   bus.emit('requestShowInstruction', {
@@ -163,7 +162,7 @@ async function resolveAgentBase(
     resolution.entry.source,
   );
 
-  await validateAndGetModelConfig(fullConfig.model);
+  await validateModelExists(fullConfig.model);
 
   const useMultipleOutputs =
     fullConfig.useMultipleOutputs &&

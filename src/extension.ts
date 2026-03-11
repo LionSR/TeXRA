@@ -107,7 +107,6 @@ export async function activate(context: vscode.ExtensionContext) {
   });
   await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
 
-  // Initialize storage systems
   SecretManager.initialize(context);
   StorageFS.initialize(context);
   agentDirectories.initialize(context);
@@ -115,23 +114,17 @@ export async function activate(context: vscode.ExtensionContext) {
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   initializeStateManagers(context);
   FileLister.initialize(context);
-  // Initialize server-side key access with SupabaseClient as auth provider
   initializeServerSideKeyAccess(context, {
     isAuthenticated: () => SupabaseClient.isAuthenticated(),
     getUserTier: () => SupabaseClient.getUserTier(),
     getAccessToken: () => SupabaseClient.getAccessToken(),
   });
 
-  // Copy default agents BEFORE initializing the agent index
-  // This ensures built-in agents are available when the index scans directories
+  // Copy default agents before loading the agent index so built-in agents
+  // are available when the index scans directories
   await copyDefaultAgents(context);
-
-  // Refresh model list to defaults if version changed (adds new models for existing users)
   await refreshModelListIfNeeded();
 
-  // Initialize agent index (single source of truth for agent metadata)
-  // Start loading the agent index in the background
-  // This will scan all directories and fetch remote agents
   loadAgents().catch((err) => {
     logger.error(
       'extension',
@@ -139,20 +132,15 @@ export async function activate(context: vscode.ExtensionContext) {
     );
   });
 
-  // Initialize Supabase authentication
   try {
-    // Set the runtime extension ID for OAuth redirects
-    // This ensures the redirect URI matches the actual extension ID
     setRuntimeExtensionId(context.extension.id);
 
-    // Check if Supabase credentials are configured
     if (!isSupabaseConfigured()) {
       logger.warn(
         'extension',
         'Supabase authentication is enabled but credentials are not configured. Please configure credentials in src/auth/config.ts before building.',
       );
     } else {
-      // Register authentication provider
       const authProvider = new SupabaseAuthProvider(context);
       context.subscriptions.push(
         vscode.authentication.registerAuthenticationProvider(
@@ -163,23 +151,13 @@ export async function activate(context: vscode.ExtensionContext) {
         ),
       );
 
-      // Register URI handler for OAuth callbacks
       const uriHandler = new SupabaseUriHandler();
       context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
-
-      // Connect URI handler to auth provider
       authProvider.setUriHandler(uriHandler);
-
-      // Mark provider as registered AFTER all auth-critical setup succeeds
       SupabaseClient.setVSCodeProviderRegistered();
 
       logger.info('extension', 'Supabase authentication provider registered');
 
-      // Note: Auth state change listener is handled in MainViewProvider.setupAuthListener()
-      // to avoid duplicate refresh calls when user logs in/out.
-
-      // Initialize usage logging service for backend analytics (only when auth is available)
-      // This is separate from auth - failures here shouldn't block sign-in
       try {
         const extensionVersion =
           typeof context.extension.packageJSON?.version === 'string'
@@ -187,7 +165,6 @@ export async function activate(context: vscode.ExtensionContext) {
             : undefined;
         const editorType = vscode.env.appName || undefined;
         UsageLogService.initialize({}, extensionVersion, editorType);
-        // Add safety net disposable in case deactivate() isn't called
         context.subscriptions.push({
           dispose: () => void UsageLogService.dispose(),
         });
@@ -208,34 +185,20 @@ export async function activate(context: vscode.ExtensionContext) {
     );
   }
 
-  // Create the log view provider
   const progressViewProvider = new ProgressViewProvider(context);
   progressViewProviderInstance = progressViewProvider;
   await progressViewProvider.initialize();
 
-  // Log activation message to ensure the logger is working correctly
   logger.info('extension', 'TeXRA extension activated');
 
-  // Clean up UI state: mark running streams as ERROR.
-  // Note: Waiting stream detection is now lazy - happens when user sends follow-up.
-  // See followUpCommand.ts lazyDetectWaitingStatus() for details.
   await progressViewProvider.cleanupTasksAfterRestart();
-
-  // Configure LaTeX settings if LaTeX Workshop is installed
   configureLatexSettings();
-
-  // Register commands first - this will create and store the MainViewProvider
   registerCommands(context);
 
   initializeNativeToolEditApproval(context);
-
-  // Register Lean VS Code integration services
   setLeanVscodeServices(leanVscodeIntegration);
-
-  // Register VS Code extension checker for external tool availability
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
 
-  // Register VS Code notification handler for unavailable tool groups
   setToolNotificationHandler((message, actionCommand) => {
     if (actionCommand) {
       void vscode.window
@@ -250,7 +213,6 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  // Create a status bar item to show TeXRA progress
   statusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
   );
@@ -263,7 +225,6 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.StatusBarAlignment.Left,
   );
   context.subscriptions.push(apiKeyStatusBarItem);
-  // Non-blocking refresh to avoid delaying extension activation
   void refreshApiKeyStatus().catch((err) =>
     logger.error(
       'extension',
@@ -306,7 +267,6 @@ export async function activate(context: vscode.ExtensionContext) {
     await vscode.commands.executeCommand('texra.mainView.focus');
   };
 
-  // Bridge agent core/runtime events to frontend UI operations
   const agentEventDisposable = registerAgentEventListeners();
 
   context.subscriptions.push(
@@ -327,8 +287,6 @@ export async function activate(context: vscode.ExtensionContext) {
     ),
   );
 
-  // Wire progress and main view providers together so the sidebar
-  // can switch between launcher and progress content.
   const mainViewProvider = getMainViewProvider();
   if (mainViewProvider) {
     progressViewProvider.setSidebarWebviewGetter(
@@ -371,19 +329,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
 export async function deactivate() {
   disposeStatusListener?.();
-
-  // Flush any pending usage logs before deactivating
   await UsageLogService.dispose();
-
-  // PersistedFlow cleanup is handled automatically via ExecutionKVStore.
-
-  // Flush pending progress-view persistence writes before teardown.
   await progressViewProviderInstance?.flushState();
-
-  // Release cached KV store wrappers
   clearStoreCache();
-
-  // Notify all listeners that extension is deactivating
   bus.emit('extensionDeactivating', undefined);
 
   statusBarItem?.dispose();

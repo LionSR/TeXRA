@@ -564,9 +564,16 @@ function markdownHeader(meta: DocumentMeta): string {
       ].join('\n')
     : '';
 
-  return [fields, '', instruction, fileList, '---', '', '## Conversation', '']
-    .filter((line) => line !== undefined)
-    .join('\n');
+  return [
+    fields,
+    '',
+    instruction,
+    fileList,
+    '---',
+    '',
+    '## Conversation',
+    '',
+  ].join('\n');
 }
 
 const ATTACHMENT_LABELS: Record<string, string> = {
