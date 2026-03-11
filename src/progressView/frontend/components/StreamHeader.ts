@@ -10,6 +10,7 @@ import {
   designTokens,
   animationStyles,
   commonViewStyles,
+  tintedBadgeStyles,
 } from '@shared/styles';
 import {
   STREAM_STATUS,
@@ -123,6 +124,7 @@ export class StreamHeader extends LitElement {
     commonViewStyles,
     codiconIconClasses,
     statusIndicatorStyles,
+    tintedBadgeStyles,
     css`
       :host {
         display: block;
@@ -285,7 +287,7 @@ export class StreamHeader extends LitElement {
       }
 
       .super-yolo-toggle-button.is-active {
-        --_toggle-color: var(--color-warning, var(--vscode-charts-orange));
+        --_toggle-color: var(--color-warning);
       }
 
       /* Shared active toggle styles */
@@ -337,26 +339,7 @@ export class StreamHeader extends LitElement {
         font-size: var(--font-size-xs, 10px);
       }
 
-      .progress-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--spacing-tiny);
-        padding: 1px var(--spacing-small);
-        font-size: var(--font-size-xs, 10px);
-        font-weight: var(--font-weight-semibold);
-        color: var(--color-text-secondary);
-        background: color-mix(
-          in srgb,
-          var(--color-text-secondary) 12%,
-          transparent
-        );
-        border-radius: var(--border-radius-small);
-        white-space: nowrap;
-      }
-
-      .progress-badge .codicon {
-        font-size: var(--font-size-xs, 10px);
-      }
+      /* Uses shared .tinted-badge base; no --_tint override = inherits text-secondary default */
 
       @media (max-width: 500px) {
         .log-header {
@@ -512,7 +495,7 @@ export class StreamHeader extends LitElement {
     const p = this.progress;
     if (!p || p.conversationTurns <= 0) return nothing;
     return html`<span
-      class="progress-badge"
+      class="tinted-badge"
       title="Conversation turns: ${p.conversationTurns}, Tool calls: ${p.toolCallCount}"
     >
       <i class="codicon codicon-pulse"></i>
