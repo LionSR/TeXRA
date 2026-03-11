@@ -8,11 +8,12 @@
 import * as fs from 'fs';
 
 import { bus } from '@eventBus/ProgressEventBus';
-import type { StreamTabId } from '@shared/schemas';
+import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 import {
   type ExecutionHandle,
   AgentExecutionHandle,
   ProcessExecutionHandle,
+  collectChildSummary,
   emitActiveSubagentsUpdate,
   emitActiveProcessesUpdate,
   interruptActiveChildren as interruptActiveChildrenImpl,
@@ -217,6 +218,25 @@ export function waitForAnyExecutionChange(
  */
 export function interruptActiveChildren(parentStreamId: StreamTabId): void {
   interruptActiveChildrenImpl(parentStreamId, registry.values());
+}
+
+/** Get active subagent and process children for a parent stream. */
+export function getActiveChildren(parentStreamId: StreamTabId): {
+  subagents: ActiveChildInfo[];
+  processes: ActiveChildInfo[];
+} {
+  return {
+    subagents: collectChildSummary(
+      parentStreamId,
+      registry.values(),
+      AgentExecutionHandle,
+    ),
+    processes: collectChildSummary(
+      parentStreamId,
+      registry.values(),
+      ProcessExecutionHandle,
+    ),
+  };
 }
 
 // ============================================================================
