@@ -22,6 +22,7 @@ import { PersistedState, createWebviewStorage } from '@shared/state';
 import {
   AgentCategoryFilterSchema,
   createStreamState,
+  STREAM_STATUS,
   type ProgressViewPlacement,
   type ProgressViewOutboundMessage,
   type StreamTabId,
@@ -38,10 +39,7 @@ import { getEffectiveRunId } from '@shared/streams/runSelection';
 import { sortStreams, StreamSortSchema } from '@shared/streams/streamSort';
 import { codiconStyles } from '@shared/styles/codiconStyles';
 
-// Local imports - webview commands
-
 // Local imports - progress view frontend
-import { STREAM_STATUS } from './constants';
 import {
   createInitialState,
   EMPTY_STREAM_LOGS,
@@ -79,7 +77,10 @@ import {
   handleToolbarCommand,
   sendFollowupCommand,
 } from './eventHandlers';
-import { dispatchMessage } from './messageDispatcher';
+import {
+  dispatchMessage,
+  type MessageHandlerContext,
+} from './messageDispatcher';
 
 // Local imports - progress view contexts
 import {
@@ -96,9 +97,6 @@ import {
 } from './contexts/streamContexts';
 import type { FrontendEventHandlerContext } from './eventHandlers';
 import type { VscTabsSelectEvent } from '@vscode-elements/elements/dist/vscode-tabs/vscode-tabs.js';
-
-// Local imports - progress view message handlers
-import type { MessageHandlerContext } from './messageDispatcher';
 
 // Local imports - progress view components
 import './components/StreamTabs';
@@ -270,10 +268,7 @@ export class ProgressApp extends ProgressAppBase {
     this.appState,
     (s) => s.followupOptionsByStream,
   );
-  private processOutputs$ = select(
-    this.appState,
-    (s) => s.processOutputs,
-  );
+  private processOutputs$ = select(this.appState, (s) => s.processOutputs);
 
   // --- Derived computeds: only re-evaluate when selector inputs propagate ---
 

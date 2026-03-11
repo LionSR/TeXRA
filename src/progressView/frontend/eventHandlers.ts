@@ -6,8 +6,6 @@ import { postMessage } from '@shared/vscode';
 import type { StreamTabId } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
-// Local imports - webview commands
-
 // Local imports - progress view
 import {
   firstStreamId,
@@ -34,8 +32,6 @@ import type {
   ToolbarCommandDetail,
 } from './events';
 import type { MessageHandlerContext } from './messageDispatcher';
-
-// Local imports - shared schemas (types)
 
 // Local imports - component types
 import type { FollowUpInput } from './components/FollowUpInput';

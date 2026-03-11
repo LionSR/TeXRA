@@ -30,10 +30,6 @@ import type { ToolUseStreamState } from '../store';
 
 // Local imports - types
 import type { PermissionState } from './PermissionCard';
-import {
-  type BackgroundTasksPanel,
-  toggleBackgroundTasksPanel,
-} from './BackgroundTasksPanel';
 import type { FollowUpInput } from './FollowUpInput';
 
 // Side-effect imports - sibling components
@@ -67,7 +63,6 @@ export class ToolUseStreamContent extends LitElement {
   private filteredPermissions: PermissionState[] = [];
   private runGroups: RunGroup[] = [];
 
-  private backgroundTasksRef: Ref<BackgroundTasksPanel> = createRef();
   private followUpRef: Ref<FollowUpInput> = createRef();
 
   protected override willUpdate(changedProperties: PropertyValues): void {
@@ -104,12 +99,11 @@ export class ToolUseStreamContent extends LitElement {
     return html`
       <stream-header
         .stream=${streamInfo}
-        .streamState=${currentState}
+        .status=${currentState.status}
         .runId=${null}
         .runs=${this.runGroups}
         .yoloActive=${Boolean(currentState.toolEditBypass)}
         .superYoloActive=${Boolean(currentState.superYoloBypass)}
-        @background-tasks-toggle=${this.handleBackgroundTasksToggle}
       ></stream-header>
 
       <request-panels .permissions=${this.filteredPermissions}></request-panels>
@@ -117,7 +111,6 @@ export class ToolUseStreamContent extends LitElement {
       <todo-list .todos=${currentState.todos}></todo-list>
 
       <background-tasks-panel
-        ${ref(this.backgroundTasksRef)}
         .activeProcesses=${currentState.activeProcesses}
         .finishedProcessCount=${currentState.finishedProcessCount}
         .activeSubagents=${currentState.activeSubagents}
@@ -155,7 +148,4 @@ export class ToolUseStreamContent extends LitElement {
     this.dispatchEvent(ProgressEvents.followupFocusComplete());
   }
 
-  private handleBackgroundTasksToggle(): void {
-    toggleBackgroundTasksPanel(this.backgroundTasksRef);
-  }
 }

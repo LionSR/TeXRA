@@ -14,8 +14,6 @@ import type { FollowupOptionsState, StreamState } from '../store';
 // Local imports - progress view components
 import type { PermissionState } from '../components/PermissionCard';
 
-// Local imports - shared schemas
-
 /** Context value for stream state, providing all data needed by stream content components. */
 export interface StreamContextValue {
   streamInfo: StreamTabInfo | null;
