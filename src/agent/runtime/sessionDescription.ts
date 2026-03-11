@@ -28,11 +28,11 @@ function buildUserPrompt(
   agentDescription: string | undefined,
   instruction: string,
 ): string {
-  const parts = [`Agent: ${agentName}`];
+  const parts = [`<agent>${agentName}</agent>`];
   if (agentDescription) {
-    parts.push(`Agent purpose: ${agentDescription}`);
+    parts.push(`<agent-purpose>${agentDescription}</agent-purpose>`);
   }
-  parts.push(`User instruction: ${instruction}`);
+  parts.push(`<instruction>${instruction}</instruction>`);
   return parts.join('\n');
 }
 
