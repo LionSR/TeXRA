@@ -13,7 +13,7 @@ import type {
   OutputFileSummary,
 } from '@agent/runtime/AgentFlowResult';
 import type { ExecResult } from '@agent/types/ResultTypes';
-import type { SubagentProgressUpdate } from '@shared/schemas';
+import type { ActiveChildInfo, SubagentProgressUpdate } from '@shared/schemas';
 import { formatDuration } from '@utils/core';
 
 // ============================================================================
@@ -232,6 +232,62 @@ export function formatBashError(
     `<message>${escapeText(message)}</message>`,
     '</background-error>',
   ].join('\n');
+}
+
+// ============================================================================
+// Post-compaction execution context
+// ============================================================================
+
+/**
+ * Format active execution state as context for the agent after compaction.
+ * Returns null if there are no active children to report.
+ *
+ * This helps the agent understand what subagents and background processes
+ * are still running after context was compressed, so it can:
+ * - Avoid launching duplicate subagents
+ * - Know which execution IDs to check on
+ * - Understand that pending results may arrive as follow-up messages
+ */
+export function formatPostCompactionContext(
+  subagents: ActiveChildInfo[],
+  processes: ActiveChildInfo[],
+): string | null {
+  if (subagents.length === 0 && processes.length === 0) {
+    return null;
+  }
+
+  const lines: string[] = [
+    '<post-compaction-context>',
+    '<note>Your conversation context was compacted (summarized) to free up space. The following executions were launched before compaction and may still be active. Their results will be delivered as follow-up messages when they complete. Use the executions tool to check on their status or read their results.</note>',
+  ];
+
+  if (subagents.length > 0) {
+    lines.push(`<active-subagents count="${subagents.length}">`);
+    for (const sa of subagents) {
+      const statusAttr = sa.status ? ` status="${escapeAttr(sa.status)}"` : '';
+      const elapsedAttr =
+        sa.elapsed ? ` elapsed="${escapeAttr(sa.elapsed)}"` : '';
+      lines.push(
+        `  <subagent id="${escapeAttr(sa.executionId)}" agent="${escapeAttr(sa.agentName)}"${statusAttr}${elapsedAttr} />`,
+      );
+    }
+    lines.push('</active-subagents>');
+  }
+
+  if (processes.length > 0) {
+    lines.push(`<active-background-bash count="${processes.length}">`);
+    for (const proc of processes) {
+      const elapsedAttr =
+        proc.elapsed ? ` elapsed="${escapeAttr(proc.elapsed)}"` : '';
+      lines.push(
+        `  <background-bash id="${escapeAttr(proc.executionId)}" command="${escapeAttr(proc.agentName)}"${elapsedAttr} />`,
+      );
+    }
+    lines.push('</active-background-bash>');
+  }
+
+  lines.push('</post-compaction-context>');
+  return lines.join('\n');
 }
 
 function lastNLines(text: string, n: number): string {

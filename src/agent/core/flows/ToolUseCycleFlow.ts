@@ -49,6 +49,8 @@ import { isNonEmptyString } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
 
 // Local file imports
+import { getActiveChildren } from '@agent/runtime/executionRegistry';
+import { formatPostCompactionContext } from '@tools/subagentResults';
 import { FlowTransition } from './FlowTransitions';
 import { ModelInvocationNode } from './ModelInvocationNode';
 import type { CycleParams, ToolUseCycleServices } from './CycleServices';
@@ -902,6 +904,10 @@ export function createToolUseCycleFlow<C>(): Flow<
     streaming: true,
     storeResponse: (shared, response) => {
       shared.response = response;
+    },
+    getPostCompactionContext: (services) => {
+      const { subagents, processes } = getActiveChildren(services.streamId);
+      return formatPostCompactionContext(subagents, processes);
     },
     getDebugSaveOptions: (shared, services) => ({
       context: {
