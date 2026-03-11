@@ -1,6 +1,7 @@
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { styleMap } from 'lit/directives/style-map.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - shared styles
@@ -213,11 +214,14 @@ export class UsagePanel extends LitElement {
         <span class="context-gauge__track">
           <span
             class="context-gauge__fill"
-            style="width: ${clamped}%; background-color: ${fillColor(clamped)}"
+            style=${styleMap({
+              width: `${clamped}%`,
+              backgroundColor: fillColor(clamped),
+            })}
           ></span>
           <span
             class="context-gauge__tick"
-            style="left: ${COMPACTION_THRESHOLD}%"
+            style=${styleMap({ left: `${COMPACTION_THRESHOLD}%` })}
             title="Compaction at ${COMPACTION_THRESHOLD}%"
           ></span>
         </span>
