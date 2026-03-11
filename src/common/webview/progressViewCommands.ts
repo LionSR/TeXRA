@@ -1,12 +1,8 @@
-/**
- * Command constants for the progress view.
- */
 import { COMMON_COMMANDS } from './commonCommands';
 
-// Progress view specific commands
 export const PROGRESS_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
-  // Stream management
+
   SWITCH_STREAM: 'switchStream',
   DELETE_STREAM: 'deleteStream',
   CLEAN_STREAM: 'cleanStream',
@@ -14,23 +10,14 @@ export const PROGRESS_VIEW_COMMANDS = {
   UPDATE_STREAMS: 'updateStreams',
   DELETE_ALL: 'deleteAll',
 
-  // Logging
   LOG_DELTA: 'logDelta',
 
-  // Instruction panel
   UPDATE_INSTRUCTION: 'updateInstruction',
-
-  // Todo List
   UPDATE_TODOS: 'updateTodos',
-
-  // Queued follow-ups
   UPDATE_QUEUED_FOLLOW_UPS: 'updateQueuedFollowUps',
-
-  // Batched metadata sync on tab switch (non-log content only)
   SYNC_STREAM_CONTENT: 'syncStreamContent',
 
-  // Status and files
-  UPDATE_STREAM_STATUS: 'updateStreamStatus', // Update single stream's status in tabs
+  UPDATE_STREAM_STATUS: 'updateStreamStatus',
   SET_ACTIVE_STREAM: 'setActiveStream',
   UPDATE_CONVERSATION_PROGRESS: 'updateConversationProgress',
   UPDATE_STREAM_BADGES: 'updateStreamBadges',
@@ -41,10 +28,8 @@ export const PROGRESS_VIEW_COMMANDS = {
   UPDATE_PERMISSION: 'updatePermission',
   UPDATE_BYPASS: 'updateBypass',
 
-  // Usage
-  UPDATE_RUN_USAGE: 'updateRunUsage', // Update single run's usage (incremental)
+  UPDATE_RUN_USAGE: 'updateRunUsage',
 
-  // Actions
   RESUME: 'resume',
   RUN_NEW: 'runNew',
   COMPACT_RESPONSE: 'compactResponse',
@@ -70,10 +55,8 @@ export const PROGRESS_VIEW_COMMANDS = {
   RESTORE_PROPOSAL_CONFIG: 'restoreProposalConfig',
   TOGGLE_SUPER_YOLO_BYPASS: 'toggleSuperYoloBypass',
 
-  // Memory
   OPEN_MEMORY_VIEW: 'openMemoryView',
 
-  // File operations
   OPEN_FILE: 'openFile',
   OPEN_FILE_COMPILE: 'openFileCompile',
   COMPARE_ORIGINAL: 'compareOriginal',
@@ -83,10 +66,8 @@ export const PROGRESS_VIEW_COMMANDS = {
   LATEXDIFF_FILE: 'latexdiffFile',
   OPEN_LABEL: 'openLabel',
 
-  // Profile
   OPEN_PROFILE: 'openProfile',
 
-  // Followup task (workflow continuation)
   SETUP_FOLLOWUP: 'setupFollowup',
   RUN_FOLLOWUP: 'runFollowup',
   GET_FOLLOWUP_OPTIONS: 'getFollowupOptions',

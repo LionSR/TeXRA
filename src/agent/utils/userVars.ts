@@ -1,10 +1,7 @@
-// Utility functions for building user variables for prompts
 import * as path from 'path';
 
-// Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { getVisibleAgents, type AgentEntry } from '@agent/index/agentRegistry';
-// Internal imports
 import {
   AgentSetting,
   AgentPrompt,

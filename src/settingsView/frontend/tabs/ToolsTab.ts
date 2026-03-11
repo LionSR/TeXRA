@@ -18,9 +18,7 @@ import type {
   ToolCategory,
 } from '@shared/schemas/settingsViewMessages';
 
-// Local imports - shared utilities
-
-// Local imports - tool card component (side-effect: register)
+// Side-effect: register tool card component
 import '../components/tools/ToolCard';
 
 /** Per-category display metadata. */

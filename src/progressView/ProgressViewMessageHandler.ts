@@ -1364,14 +1364,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     runOutputs: Map<number, OutputFileInfo[]> | null | undefined,
   ): string[] {
     if (!runOutputs) return [];
-    const paths: string[] = [];
-    for (const infos of runOutputs.values()) {
-      for (const info of infos) {
-        if (info.location?.absolutePath) {
-          paths.push(info.location.absolutePath);
-        }
-      }
-    }
-    return paths;
+    return [...runOutputs.values()]
+      .flat()
+      .map((info) => info.location?.absolutePath)
+      .filter((p): p is string => !!p);
   }
 }

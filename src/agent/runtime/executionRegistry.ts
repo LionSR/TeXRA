@@ -227,10 +227,7 @@ export function interruptActiveChildren(parentStreamId: StreamTabId): void {
 const OUTPUT_POLL_INTERVAL_MS = 500;
 
 /** Tracks byte offsets already sent per executionId per stream. */
-const outputOffsets = new Map<
-  string,
-  { stdout: number; stderr: number }
->();
+const outputOffsets = new Map<string, { stdout: number; stderr: number }>();
 
 let outputPollTimer: ReturnType<typeof setTimeout> | null = null;
 let pollInFlight = false;
@@ -337,7 +334,10 @@ async function readTail(
     const { bytesRead } = await fh.read(buf, 0, toRead, byteOffset);
     // Avoid splitting multi-byte UTF-8 characters at the read boundary
     const safeEnd = lastCompleteUtf8(buf, bytesRead);
-    return { text: buf.toString('utf-8', 0, safeEnd), newOffset: byteOffset + safeEnd };
+    return {
+      text: buf.toString('utf-8', 0, safeEnd),
+      newOffset: byteOffset + safeEnd,
+    };
   } finally {
     await fh.close();
   }
@@ -366,8 +366,14 @@ async function readIncremental(
     try {
       const prev = outputOffsets.get(executionId) ?? { stdout: 0, stderr: 0 };
       const [out, err] = await Promise.all([
-        readTail(stdoutPath, prev.stdout).catch(() => ({ text: '', newOffset: prev.stdout })),
-        readTail(stderrPath, prev.stderr).catch(() => ({ text: '', newOffset: prev.stderr })),
+        readTail(stdoutPath, prev.stdout).catch(() => ({
+          text: '',
+          newOffset: prev.stdout,
+        })),
+        readTail(stderrPath, prev.stderr).catch(() => ({
+          text: '',
+          newOffset: prev.stderr,
+        })),
       ]);
       if (!out.text && !err.text) return;
 

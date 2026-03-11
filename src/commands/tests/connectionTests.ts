@@ -1,15 +1,13 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - utilities
+// Local imports
 import { showLoggedErrorMessage } from '@common/errors';
 import {
   bestConnectionMethod,
   bestConnectionMethodAnthropic,
 } from '@latex/textConnection';
 import * as logger from '@logger/logUtils';
-
-// Local imports - log
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);

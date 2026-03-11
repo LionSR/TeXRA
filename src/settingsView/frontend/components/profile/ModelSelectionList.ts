@@ -25,8 +25,6 @@ import {
 import { profileViewStyles } from './styles';
 import { ModelSelectionEvents } from './events';
 
-// Local imports - shared schemas
-
 /** Display labels for reasoning level options. */
 const REASONING_LEVEL_LABELS: Record<ReasoningLevel, string> = {
   none: 'None',
@@ -125,8 +123,10 @@ export class ModelSelectionList extends LitElement {
     );
   }
 
-  private renderReasoningDropdown(model: ModelSelectionItem): TemplateResult {
-    if (!model.supportsReasoningLevel) return html`${nothing}`;
+  private renderReasoningDropdown(
+    model: ModelSelectionItem,
+  ): TemplateResult | typeof nothing {
+    if (!model.supportsReasoningLevel) return nothing;
 
     const currentValue = model.reasoningLevel ?? '';
     const defaultLabel = model.defaultReasoningLevel

@@ -1,8 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - shared schemas
-
 // Local imports - agent
 import { refresh, computeAgentOptionsData } from '@agent/index';
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -17,7 +15,6 @@ import {
 } from '@common/webview';
 import { consumePendingState } from '@common/state';
 
-// Local imports - frontend
 import { agentDirectories } from '@frontend/agents';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { MainViewPersistedStateSchema } from '@shared/schemas';
@@ -89,8 +86,6 @@ export class MainViewProvider
   }
 
   private setupAuthListener() {
-    // Listen for authentication state changes to refresh model availability
-    // When user logs in/out, server-side key availability may change
     this.context.subscriptions.push(
       vscode.authentication.onDidChangeSessions((e) => {
         if (e.provider.id === 'texra-supabase') {
@@ -98,8 +93,6 @@ export class MainViewProvider
         }
       }),
     );
-
-    // Listen for model access setting changes (included vs personal keys)
     this.context.subscriptions.push(
       getServerSideKeyService().onDidChangeModelAccess(() => {
         void this.refreshOptionsAndView();
@@ -160,16 +153,11 @@ export class MainViewProvider
   }
 
   private setupFileWatcher() {
-    // Create a file system watcher for relevant file types
     const filePattern =
       '**/*.{tex,txt,md,cls,png,pdf,jpeg,jpg,svg,gif,heic,heif,webp,wav,mp3,m4a,aiff,aac,ogg,flac}';
     this.fileWatcher = vscode.workspace.createFileSystemWatcher(filePattern);
-
-    // Handle file changes
     this.fileWatcher.onDidCreate(this.refreshFiles.bind(this));
     this.fileWatcher.onDidDelete(this.refreshFiles.bind(this));
-
-    // Dispose watcher when extension is deactivated
     this.context.subscriptions.push(this.fileWatcher);
   }
 
@@ -202,7 +190,6 @@ export class MainViewProvider
       ]),
     };
 
-    // Manage message listener via _messageDisposable so it can be swapped on mode switch.
     this.cleanupView();
     this._view = webviewView;
 

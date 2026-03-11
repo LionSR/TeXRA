@@ -3,14 +3,12 @@ import * as vscode from 'vscode';
 
 // Local imports - common webview
 import { BaseWebviewProvider, SETTINGS_VIEW_COMMANDS } from '@common/webview';
-import { type SettingsTab } from '@shared/schemas/settingsViewMessages';
+import type { SettingsTab } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - settings view components
 import type { AgentCategory } from '@shared/schemas/agent';
 import { SettingsViewContentProvider } from './SettingsViewContentProvider';
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';
-
-// Local imports - shared schemas
 
 export class SettingsViewProvider
   extends BaseWebviewProvider

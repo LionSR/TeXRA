@@ -51,17 +51,13 @@ import {
 } from '@shared/schemas/settingsViewMessages';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
-// Local imports - settings view commands
-
-// Local imports - settings view styles
+// Local imports - settings view
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
 import { settingsViewStyles } from './styles';
 import type { VscTabsSelectEvent } from '@vscode-elements/elements/dist/vscode-tabs/vscode-tabs.js';
 
-// Local imports - shared schema types
-
-// Local imports - settings view tabs (side-effect: register)
+// Side-effect: register tab components
 import './tabs/MemoryTab';
 import './tabs/HistoryTab';
 import './tabs/ModelsTab';

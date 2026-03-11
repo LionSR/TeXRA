@@ -304,11 +304,10 @@ export class XmlOutputManager {
   private removeTrailingEndDocument(content: string, fileName: string): string {
     const trimmed = content.trimEnd();
 
-    const hasEndWithoutBegin =
-      !trimmed.includes('\\begin{document}') &&
-      trimmed.endsWith('\\end{document}');
-
-    if (!hasEndWithoutBegin) {
+    if (
+      trimmed.includes('\\begin{document}') ||
+      !trimmed.endsWith('\\end{document}')
+    ) {
       return trimmed;
     }
 

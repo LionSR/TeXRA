@@ -5,7 +5,7 @@ import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports - tools
-import { ToolResult } from '@tools/result';
+import type { ToolResult } from '@tools/result';
 import { buildFileAttachment, formatLinesWithNumbers } from '@tools/utils';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { WorkspaceFS, getMimeType } from '@utils/files';

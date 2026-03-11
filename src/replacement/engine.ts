@@ -13,11 +13,7 @@ const CHANNEL = 'ReplacementEngine';
 logger.initialize(CHANNEL);
 
 // Local file imports
-import {
-  ReplacementCategory,
-  ReplacementFunction,
-  ReplacementValue,
-} from './types';
+import { ReplacementCategory, ReplacementValue } from './types';
 import {
   applyLatexQuotesFormatting,
   replaceMathUnicode,

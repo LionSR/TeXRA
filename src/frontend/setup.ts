@@ -1,13 +1,8 @@
-// Standard library imports
 import * as path from 'path';
 
-// Third-party imports
 import fsExtra from 'fs-extra';
-
-// VS Code imports
 import * as vscode from 'vscode';
 
-// Local imports
 import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
@@ -193,12 +188,10 @@ export async function configureLatexSettings(): Promise<void> {
     const latexWorkshop = vscode.extensions.getExtension(LATEX_WORKSHOP_EXT_ID);
 
     if (!latexWorkshop) {
-      // Prompt has its own suppression — run every activation, not gated by version.
       await promptLatexWorkshopInstall();
       return;
     }
 
-    // Only write VS Code config once per version bump
     const storedVersion = globalSM.get<number>(
       GlobalStateKey.LATEX_CONFIG_VERSION,
     );
@@ -211,13 +204,10 @@ export async function configureLatexSettings(): Promise<void> {
       'LaTeX Workshop extension detected, configuring settings',
     );
 
-    // ── Migration: clean up settings that older TeXRA versions force-wrote ──
-    // These are now either opt-in (LaTeX tab) or left to LaTeX Workshop defaults.
     if (storedVersion === undefined || storedVersion < 2) {
       await resetLegacyLatexSettings();
     }
 
-    // Settings that TeXRA still auto-configures (write-once).
     const settings: Array<[string, unknown]> = [
       [
         '[latex]',

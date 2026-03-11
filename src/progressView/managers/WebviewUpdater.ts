@@ -137,9 +137,6 @@ export class WebviewUpdater {
     });
   }
 
-  /**
-   * Update output files for a stream
-   */
   updateFiles(
     stream: StreamTabId,
     payload: {
@@ -155,9 +152,6 @@ export class WebviewUpdater {
     });
   }
 
-  /**
-   * Update missing outputs for a stream
-   */
   updateMissingOutputs(
     stream: StreamTabId,
     payload: {
@@ -237,9 +231,6 @@ export class WebviewUpdater {
     });
   }
 
-  /**
-   * Update the code highlight theme
-   */
   updateTheme(theme: 'dark' | 'light'): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.THEME_SET,
@@ -340,9 +331,6 @@ export class WebviewUpdater {
     });
   }
 
-  /**
-   * Update the todo list for a stream
-   */
   updateTodos(stream: StreamTabId, todos: TodoItem[]): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
@@ -351,9 +339,6 @@ export class WebviewUpdater {
     });
   }
 
-  /**
-   * Update the queued follow-ups display for a stream
-   */
   updateQueuedFollowUps(stream: StreamTabId, messages: string[]): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS,
@@ -437,9 +422,6 @@ export class WebviewUpdater {
     return activeStream;
   }
 
-  /**
-   * Check if any webview is available
-   */
   isAvailable(): boolean {
     return this.getWebviews().some((w) => w !== undefined);
   }

@@ -28,7 +28,6 @@ import {
   computeUserPatch,
   firstChangedLine,
   isApprovalBypassedForStream,
-  markToolEditApprovalInitialized,
   registerPendingApproval,
   REVEAL_TIMEOUT_MS,
   setToolEditApprovalHandler,
@@ -436,6 +435,5 @@ export function initializeNativeToolEditApproval(
 ): void {
   const baseDir = context.storageUri ?? context.globalStorageUri;
   storageDirectory = path.join(baseDir.fsPath, 'tool-edit-previews');
-  markToolEditApprovalInitialized();
   setToolEditApprovalHandler(nativeRequestApproval);
 }
