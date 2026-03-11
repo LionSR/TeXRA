@@ -416,6 +416,10 @@ async function runFlowWithLifecycle(
     }
 
     throw new Error(errorMsg);
+  } finally {
+    // Release long-lived resources (e.g., WebSocket connections, keepalive intervals)
+    // to prevent leaks when handler instances are discarded after execution.
+    ctx.modelHandler.dispose();
   }
 }
 
