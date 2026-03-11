@@ -32,6 +32,12 @@ export type FollowupMode = z.infer<typeof FollowupModeSchema>;
 export const ActiveChildInfoSchema = z.object({
   executionId: z.string(),
   agentName: z.string(),
+  /** Stream tab ID for subagents (they have their own tab). Absent for processes. */
+  childStreamId: z.string().optional(),
+  /** Current execution status (e.g. "running", "waiting"). Defaults to "running". */
+  status: z.string().optional(),
+  /** Formatted elapsed time (e.g. "1m 23s"). */
+  elapsed: z.string().nullable().optional(),
 });
 
 export type ActiveChildInfo = z.infer<typeof ActiveChildInfoSchema>;
