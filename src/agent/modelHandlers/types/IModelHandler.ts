@@ -430,4 +430,11 @@ export interface IModelHandler<
     messages: M[],
     mediaFiles: FileLocation[],
   ): Promise<void>;
+
+  /**
+   * Release any resources held by the handler (e.g., WebSocket connections,
+   * keepalive intervals). Called when the handler is no longer needed.
+   * No-op by default.
+   */
+  dispose(): void;
 }
