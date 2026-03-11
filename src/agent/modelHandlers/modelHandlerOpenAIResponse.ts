@@ -122,6 +122,12 @@ interface StreamingEventState {
   hasThinkingContent: boolean;
 }
 
+/** Result of executeViaWebSocket: the API response plus streaming state for deferred finalization. */
+interface WebSocketExecutionResult {
+  response: Response;
+  state: StreamingEventState;
+}
+
 /**
  * MIME types that the OpenAI Responses API accepts as `input_file` content.
  * Composed from the shared OFFICE_MIME_TYPES plus PDF.
@@ -399,6 +405,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
+   * Finalize thinking/output streams and emit remaining web searches.
+   * Shared by both WebSocket and HTTP streaming paths after background
+   * polling completes.
+   */
+  private finalizeStreams(response: Response, state: StreamingEventState): void {
+    if (state.hasThinkingContent) {
+      state.thinkingStream.finalize();
+    }
+    const { text: finalText } = this.extractResponse(response, '');
+    if (state.outputStream) state.outputStream.finalize(finalText);
+    this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
+  }
+
+  /**
    * Execute a response request via WebSocket transport.
    * Sends a response.create event and collects streaming events until
    * a terminal event (completed, failed, incomplete) is received.
@@ -412,7 +432,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     ws: ResponsesWS,
     params: ResponseCreateParamsBase,
     signal?: AbortSignal,
-  ): Promise<{ response: Response; state: StreamingEventState }> {
+  ): Promise<WebSocketExecutionResult> {
     // Short-circuit if already aborted before sending the request
     if (signal?.aborted) {
       throw new DOMException('The operation was aborted', 'AbortError');
@@ -420,7 +440,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const state = this.createStreamingEventState();
 
-    return new Promise<{ response: Response; state: StreamingEventState }>((resolve, reject) => {
+    return new Promise<WebSocketExecutionResult>((resolve, reject) => {
       let settled = false;
       // Track the response ID for this request so we only process events
       // belonging to it (important when abort-and-retry reuses the connection).
@@ -1758,12 +1778,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
         // Finalize streams after background polling so the final text
         // reflects the completed response, not the pre-poll snapshot.
-        if (state.hasThinkingContent) {
-          state.thinkingStream.finalize();
-        }
-        const { text: finalText } = this.extractResponse(response, '');
-        if (state.outputStream) state.outputStream.finalize(finalText);
-        this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
+        this.finalizeStreams(response, state);
 
         this.finalizeResponse(
           response,
@@ -1805,15 +1820,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           );
         }
 
-        // Finalize any remaining thinking content (only if there's actual content)
-        if (state.hasThinkingContent) {
-          state.thinkingStream.finalize();
-        }
-        const { text: finalText } = this.extractResponse(response, '');
-        if (state.outputStream) state.outputStream.finalize(finalText);
-
-        // Emit any web searches not yet emitted (fallback for edge cases)
-        this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
+        this.finalizeStreams(response, state);
 
         this.finalizeResponse(
           response,
