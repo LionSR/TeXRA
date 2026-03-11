@@ -48,12 +48,16 @@ const SEVERITY_CONFIG: Record<
   [SEVERITY_HINT]: { label: 'hint', countKey: 'hints', plural: 'hints' },
 };
 
-/** Ordered keys for consistent formatting output */
-const COUNT_KEY_ORDER: Array<keyof SeverityCounts> = [
-  'errors',
-  'warnings',
-  'info',
-  'hints',
+/** Ordered formatting config for consistent output */
+const COUNT_FORMAT_ORDER: Array<{
+  key: keyof SeverityCounts;
+  label: string;
+  plural: string;
+}> = [
+  { key: 'errors', label: 'error', plural: 'errors' },
+  { key: 'warnings', label: 'warning', plural: 'warnings' },
+  { key: 'info', label: 'info', plural: 'info' },
+  { key: 'hints', label: 'hint', plural: 'hints' },
 ];
 
 /** Get the string label for a severity level. */
@@ -79,15 +83,10 @@ export function countBySeverity(
  */
 export function formatCounts(counts: SeverityCounts): string {
   const parts: string[] = [];
-  for (const key of COUNT_KEY_ORDER) {
+  for (const { key, label, plural } of COUNT_FORMAT_ORDER) {
     const count = counts[key];
     if (count > 0) {
-      const config = Object.values(SEVERITY_CONFIG).find(
-        (c) => c.countKey === key,
-      );
-      if (config) {
-        parts.push(`${count} ${count === 1 ? config.label : config.plural}`);
-      }
+      parts.push(`${count} ${count === 1 ? label : plural}`);
     }
   }
   return parts.length > 0 ? parts.join(', ') : 'No issues';
