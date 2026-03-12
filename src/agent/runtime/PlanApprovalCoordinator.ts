@@ -55,6 +55,9 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
     idFieldName: 'approvalId',
   };
 
+  /** Maps streamId → approvalId for stream-based cleanup. */
+  private readonly streamApprovalMap = new Map<string, string>();
+
   protected getDefaultCancelResult(): PlanApprovalResult {
     return { action: 'reject' };
   }
@@ -65,6 +68,9 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
     options: PlanApprovalRequestOptions,
   ): Promise<PlanApprovalResult> {
     const { approvalId, plan, timeoutMs } = options;
+
+    // Track stream → approval mapping for cleanup
+    this.streamApprovalMap.set(streamId, approvalId);
 
     // Show progress view to ensure user sees the approval prompt
     void safeExecuteCommand('texra.showProgressView');
@@ -79,6 +85,29 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
       { approvalId, streamId, plan },
       { timeoutMs },
     );
+  }
+
+  /**
+   * Clear any pending plan approval for the given stream.
+   * Used for cleanup when flows are interrupted or streams are deleted.
+   */
+  clearForStream(streamId: string): void {
+    const approvalId = this.streamApprovalMap.get(streamId);
+    if (approvalId) {
+      this.clearRequest(approvalId);
+      this.streamApprovalMap.delete(streamId);
+    }
+  }
+
+  /**
+   * Clear all pending plan approvals.
+   * Used for cleanup when all streams are deleted.
+   */
+  clearAll(): void {
+    for (const [streamId, approvalId] of this.streamApprovalMap) {
+      this.clearRequest(approvalId);
+      this.streamApprovalMap.delete(streamId);
+    }
   }
 }
 

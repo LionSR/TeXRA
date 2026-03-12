@@ -140,7 +140,7 @@ export async function runToolUseFlow<C = unknown>(
     interrupt(): void {
       onInterrupt?.();
       retryCoordinator.clearRequest(streamId);
-      planApprovalCoordinator.clearRequest(streamId);
+      planApprovalCoordinator.clearForStream(streamId);
       sessionLifecycle.interrupt();
     },
   };
@@ -228,7 +228,7 @@ export async function runToolUseFlow<C = unknown>(
     }
 
     sessionLifecycle.dispose();
-    planApprovalCoordinator.clearRequest(streamId);
+    planApprovalCoordinator.clearForStream(streamId);
     unregisterInterruptible(streamId);
   }
 

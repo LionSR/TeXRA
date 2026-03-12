@@ -197,7 +197,7 @@ export async function runReflectionFlow<C = unknown>(
     interrupt(): void {
       input.onInterrupt?.();
       retryCoordinator.clearRequest(streamId);
-      planApprovalCoordinator.clearRequest(streamId);
+      planApprovalCoordinator.clearForStream(streamId);
     },
   };
 
@@ -328,7 +328,7 @@ export async function runReflectionFlow<C = unknown>(
     }
 
     retryCoordinator.clearRequest(streamId);
-    planApprovalCoordinator.clearRequest(streamId);
+    planApprovalCoordinator.clearForStream(streamId);
 
     unregisterInterruptible(streamId);
   }
