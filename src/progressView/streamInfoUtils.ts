@@ -75,6 +75,7 @@ function buildStreamInfo(
     creationTimestamp,
     executionId: state.meta.getExecutionId(id),
     parentStreamId: state.meta.getParentStreamId(id),
+    description: state.getDescription(id),
   };
 }
 

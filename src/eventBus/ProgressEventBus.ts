@@ -102,6 +102,10 @@ export interface ProgressEventPayloads {
     stdout: string;
     stderr: string;
   };
+  updateStreamDescription: {
+    streamId: StreamTabId;
+    description: string;
+  };
   setParentStream: {
     childStreamId: StreamTabId;
     parentStreamId: StreamTabId;

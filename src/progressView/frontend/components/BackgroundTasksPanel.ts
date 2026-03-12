@@ -33,9 +33,12 @@ import { ProgressEvents } from '../events';
 
 // Local imports - contexts
 import {
+  EMPTY_DESCRIPTIONS,
   EMPTY_PROCESS_OUTPUTS,
   processOutputContext,
+  streamDescriptionsContext,
   type ProcessOutputMap,
+  type StreamDescriptionMap,
 } from '../contexts/streamContexts';
 
 // Side-effect imports - sibling components
@@ -106,6 +109,16 @@ export class BackgroundTasksPanel extends LitElement {
 
       .task-name--clickable:hover {
         text-decoration-color: var(--vscode-foreground);
+      }
+
+      .task-description {
+        font-size: var(--font-size-xs);
+        color: var(--color-text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        width: 100%;
+        padding-left: calc(var(--font-size-sm) + var(--spacing-small));
       }
 
       .task-elapsed {
@@ -195,6 +208,10 @@ export class BackgroundTasksPanel extends LitElement {
   @consume({ context: processOutputContext, subscribe: true })
   @state()
   private processOutputs: ProcessOutputMap = EMPTY_PROCESS_OUTPUTS;
+
+  @consume({ context: streamDescriptionsContext, subscribe: true })
+  @state()
+  private descriptions: StreamDescriptionMap = EMPTY_DESCRIPTIONS;
 
   /** Track previous active count to detect 0→N transitions for auto-open. */
   private prevActiveCount = 0;
@@ -289,6 +306,8 @@ export class BackgroundTasksPanel extends LitElement {
     const hasStdout = Boolean(entry?.stdout);
     const hasStderr = Boolean(entry?.stderr);
     const isClickable = kind === 'subagent' && Boolean(child.childStreamId);
+    const description =
+      child.childStreamId ? this.descriptions.get(child.childStreamId) : undefined;
 
     return html`
       <div class="task-item">
@@ -335,6 +354,9 @@ export class BackgroundTasksPanel extends LitElement {
             >${isWaiting(child) ? 'waiting' : 'running'}</span
           >
         </div>
+        ${description
+          ? html`<div class="task-description" title=${description}>${description}</div>`
+          : nothing}
         ${hasStdout
           ? this.renderOutputStream('stdout', entry!.stdout)
           : nothing}
