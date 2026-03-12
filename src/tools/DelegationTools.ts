@@ -56,6 +56,7 @@ import type { ToolResult } from '@tools/result';
 import {
   isSuperYoloFeatureEnabled,
   isProposalBypassedForStream,
+  isApprovalBypassedForStream,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
 import {
@@ -356,6 +357,7 @@ async function proposeAndExecute(
     }),
   };
   return executeSubagent(toConfigPayload(effective), agentName, streamId, {
+    enableYoloOnChild: isApprovalBypassedForStream(streamId),
     approvalMeta,
   });
 }
