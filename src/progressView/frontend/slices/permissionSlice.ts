@@ -116,11 +116,25 @@ export const permissionHandlers: HandlerRegistry = {
         });
       } else {
         // Prepend newest permissions so keyboard shortcuts target the latest request.
+        // Deduplicate by requestId to prevent duplicate UI when replay() re-sends
+        // pending items (e.g., on view visibility change).
         const entry = {
           kind: permission.kind,
           data: permission.data,
         } as PermissionState;
-        ctx.setPermissions([entry, ...ctx.getPermissions()]);
+        const idField =
+          permission.kind === PERMISSION_KIND.RETRY ? 'streamId' : 'requestId';
+        const id = (permission.data as Record<string, unknown>)[idField];
+        const existing = ctx.getPermissions();
+        const alreadyPresent =
+          id != null &&
+          existing.some(
+            (p) =>
+              p.kind === permission.kind &&
+              (p.data as Record<string, unknown>)[idField] === id,
+          );
+        if (alreadyPresent) return;
+        ctx.setPermissions([entry, ...existing]);
       }
       return;
     }
