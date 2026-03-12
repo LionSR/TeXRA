@@ -403,6 +403,7 @@ export class ProgressViewProvider
   }
 
   public async showInSidebar(options?: { inPlace?: boolean }): Promise<void> {
+    const placementChanged = this._activePlacement !== 'sidebar';
     this._activePlacement = 'sidebar';
 
     if (this._mainViewProvider) {
@@ -418,7 +419,10 @@ export class ProgressViewProvider
 
     if (this.isActivePlacementReady()) {
       this.syncFullView({ forceRebuild: true });
-      this.replayPendingPrompts();
+      // Only replay permissions when switching from editor → sidebar.
+      // If already on sidebar, the webview already has the correct permissions;
+      // replaying would cause duplicates.
+      if (placementChanged) this.replayPendingPrompts();
     }
   }
 
@@ -443,11 +447,12 @@ export class ProgressViewProvider
 
   public async popOutToEditor(): Promise<void> {
     if (this._panelView) {
+      const placementChanged = this._activePlacement !== 'editor';
       this._activePlacement = 'editor';
       await this.restoreSidebarToLauncher();
       this.revealEditorPanel();
       this.syncFullView({ forceRebuild: true });
-      this.replayPendingPrompts();
+      if (placementChanged) this.replayPendingPrompts();
       return;
     }
 
