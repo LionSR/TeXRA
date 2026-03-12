@@ -203,7 +203,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
 
   {
     id: 'codex',
-    tools: [],
+    tools: ['codex'],
     name: 'OpenAI Codex CLI',
     category: 'computation',
     description:
