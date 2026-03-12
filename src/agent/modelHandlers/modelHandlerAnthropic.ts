@@ -580,7 +580,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (supportsCache) {
       reservedCacheSlots += 1; // top-level automatic caching
       if (systemPrompt) reservedCacheSlots += 1; // system prompt breakpoint
-      if (tools?.length) reservedCacheSlots += 1; // last tool breakpoint
     }
     this.enforceCacheControlLimit(messages, reservedCacheSlots);
 
@@ -628,14 +627,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         supportsNativeWebFetch: this.capabilities.supportsNativeWebSearch,
         useDynamicFiltering: getAnthropicDynamicFiltering(),
       });
-
-      // Place an explicit cache breakpoint on the last tool definition so all
-      // tools are independently cached (tools rarely change between requests).
-      if (supportsCache && options.tools.length > 0) {
-        const lastTool = options.tools.at(-1)!;
-        (lastTool as { cache_control?: typeof EPHEMERAL_CACHE_CONTROL }).cache_control =
-          EPHEMERAL_CACHE_CONTROL;
-      }
 
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
 
