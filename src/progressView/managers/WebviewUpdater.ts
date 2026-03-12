@@ -263,6 +263,14 @@ export class WebviewUpdater {
     });
   }
 
+  updateStreamDescription(stream: StreamTabId, description: string): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION,
+      stream,
+      description,
+    });
+  }
+
   setActiveStream(activeStream: StreamTabId): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,

@@ -119,6 +119,12 @@ export class ProgressEventHandler {
             );
           }
         },
+        updateStreamDescription: (_, { streamId, description }) => {
+          this.state.setDescription(streamId, description);
+          if (this.webviewUpdater.isAvailable()) {
+            this.webviewUpdater.updateStreamDescription(streamId, description);
+          }
+        },
         setParentStream: (_, { childStreamId, parentStreamId }) => {
           this.state.meta.setParentStream(childStreamId, parentStreamId);
           if (this.webviewUpdater.isAvailable()) {
