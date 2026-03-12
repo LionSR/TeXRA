@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.36.6] - 2026-03-12
+
+### Features
+
+- **Background tasks panel** — a new collapsible panel in the Progress Board shows running background processes and subagents with real-time terminal output streaming, so you can monitor what's happening without switching tabs.
+- **Office document attachments** — attach Word, Excel, PowerPoint, and other office documents directly in file attachments alongside images and PDFs.
+- **Elevate agents** — new `elevate` and `elevate_multiple` agents for enhancing academic writing quality, available in agent presets.
+- **WebSocket mode for OpenAI** — optional persistent WebSocket connections for OpenAI Responses API (`texra.model.useWebSocket`), reducing latency in multi-turn tool-use workflows.
+- **Session descriptions in stream tabs** — each agent session now generates a short description from your instruction, shown in the stream tab for easier identification. Cancelled or errored sessions get descriptions too.
+- **Multi-provider chat export** — chat export now works correctly with Google GenAI, OpenAI (both Response API and Chat Completions), and Anthropic conversations.
+
+### Bug Fixes
+
+- Fixed **duplicate approval dialogs** appearing when switching between sidebar and editor panel views.
+- Fixed **pending approvals being silently dropped** when the editor panel was disposed and fell back to the sidebar.
+- Fixed **permission race conditions** where show/replay timing could cause duplicate permission entries.
+
+### Improvements
+
+- **Automatic prompt caching for Anthropic** — switched to the API's built-in automatic caching, which manages cache breakpoints more efficiently without client-side tracking.
+- **Post-compaction context** — after context compaction, agents now receive a summary of active subagents and background processes so they can track pending results instead of losing awareness.
+- **Approval bypass propagation** — when you approve a delegation, subagents now inherit the parent's approval-bypass state, reducing redundant approval prompts.
+- Updated dependencies.
+
 ## [0.36.5] - 2026-03-08
 
 ### Features
