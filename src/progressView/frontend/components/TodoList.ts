@@ -31,7 +31,6 @@ export class TodoList extends LitElement {
     css`
       :host {
         display: block;
-        margin: var(--spacing-small) 0;
       }
 
       :host([hidden]) {
