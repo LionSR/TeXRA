@@ -3,6 +3,7 @@ import {
   registerInterruptible,
   unregisterInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
+import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import {
   PersistedFlow,
@@ -139,6 +140,7 @@ export async function runToolUseFlow<C = unknown>(
     interrupt(): void {
       onInterrupt?.();
       retryCoordinator.clearRequest(streamId);
+      planApprovalCoordinator.clearRequest(streamId);
       sessionLifecycle.interrupt();
     },
   };
@@ -226,6 +228,7 @@ export async function runToolUseFlow<C = unknown>(
     }
 
     sessionLifecycle.dispose();
+    planApprovalCoordinator.clearRequest(streamId);
     unregisterInterruptible(streamId);
   }
 

@@ -4,7 +4,8 @@ export const requestPanelStyles: CSSResult = css`
   .approval-requests,
   .bash-approval-requests,
   .retry-requests,
-  .workflow-proposals {
+  .workflow-proposals,
+  .plan-approval-requests {
     margin: var(--spacing-large) 0;
     padding: var(--spacing-large);
     border-radius: var(--border-radius-large);
@@ -17,7 +18,8 @@ export const requestPanelStyles: CSSResult = css`
   .approval-requests__header,
   .bash-approval-requests__header,
   .retry-requests__header,
-  .workflow-proposals__header {
+  .workflow-proposals__header,
+  .plan-approval-requests__header {
     display: flex;
     align-items: center;
     gap: var(--spacing-medium);
@@ -28,7 +30,8 @@ export const requestPanelStyles: CSSResult = css`
   .approval-requests__list,
   .bash-approval-requests__list,
   .retry-requests__list,
-  .workflow-proposals__list {
+  .workflow-proposals__list,
+  .plan-approval-requests__list {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-large);
@@ -37,7 +40,8 @@ export const requestPanelStyles: CSSResult = css`
   .approval-request,
   .bash-approval-request,
   .retry-request,
-  .workflow-proposal {
+  .workflow-proposal,
+  .plan-approval-request {
     display: flex;
     flex-direction: column;
     border-radius: var(--border-radius);
@@ -51,7 +55,8 @@ export const requestPanelStyles: CSSResult = css`
   .approval-request__details,
   .bash-approval-request__details,
   .retry-request__details,
-  .workflow-proposal__details {
+  .workflow-proposal__details,
+  .plan-approval-request__details {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-small);
@@ -70,7 +75,8 @@ export const requestPanelStyles: CSSResult = css`
   .approval-request__actions,
   .bash-approval-request__actions,
   .retry-request__actions,
-  .workflow-proposal__actions {
+  .workflow-proposal__actions,
+  .plan-approval-request__actions {
     display: flex;
     flex-wrap: wrap;
     gap: var(--spacing-small);
@@ -79,7 +85,8 @@ export const requestPanelStyles: CSSResult = css`
   .approval-request__actions::part(container),
   .bash-approval-request__actions::part(container),
   .retry-request__actions::part(container),
-  .workflow-proposal__actions::part(container) {
+  .workflow-proposal__actions::part(container),
+  .plan-approval-request__actions::part(container) {
     display: flex;
     flex-wrap: wrap;
     gap: var(--spacing-small);
@@ -88,14 +95,16 @@ export const requestPanelStyles: CSSResult = css`
   .approval-request__actions vscode-toolbar-button,
   .bash-approval-request__actions vscode-toolbar-button,
   .retry-request__actions vscode-toolbar-button,
-  .workflow-proposal__actions vscode-toolbar-button {
+  .workflow-proposal__actions vscode-toolbar-button,
+  .plan-approval-request__actions vscode-toolbar-button {
     min-width: auto;
   }
 
   .approval-request__actions vscode-toolbar-button::part(control),
   .bash-approval-request__actions vscode-toolbar-button::part(control),
   .retry-request__actions vscode-toolbar-button::part(control),
-  .workflow-proposal__actions vscode-toolbar-button::part(control) {
+  .workflow-proposal__actions vscode-toolbar-button::part(control),
+  .plan-approval-request__actions vscode-toolbar-button::part(control) {
     justify-content: flex-start;
     gap: var(--spacing-small);
   }
@@ -103,7 +112,8 @@ export const requestPanelStyles: CSSResult = css`
   /* Shared container chrome — approval, bash, and retry all use the same border/bg */
   .approval-requests,
   .bash-approval-requests,
-  .retry-requests {
+  .retry-requests,
+  .plan-approval-requests {
     border: var(--border-thin) solid var(--vscode-input-border);
     background: var(--vscode-editor-background);
   }
@@ -431,16 +441,57 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-textLink-foreground);
   }
 
-  /* Rejection feedback (shared across approval, bash, proposal) */
+  /* Plan approval requests */
+  .plan-approval-requests__header .codicon {
+    color: var(--vscode-textLink-foreground);
+  }
+
+  .plan-approval-request__summary {
+    font-weight: var(--font-weight-semibold);
+    color: var(--vscode-editor-foreground);
+  }
+
+  .plan-approval-request__steps {
+    margin: var(--spacing-small) 0;
+    padding-left: var(--spacing-xlarge);
+  }
+
+  .plan-approval-request__steps li {
+    margin-bottom: var(--spacing-small);
+  }
+
+  .plan-approval-request__step-desc {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+  }
+
+  .plan-approval-request__step-files {
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin-top: var(--spacing-tiny);
+  }
+
+  .plan-approval-request__file {
+    color: var(--vscode-textLink-foreground);
+  }
+
+  .plan-approval-request__actions vscode-toolbar-button {
+    flex: 1 1 12rem;
+  }
+
+  /* Rejection feedback (shared across approval, bash, proposal, plan-approval) */
   .approval-request__feedback,
   .bash-approval-request__feedback,
-  .workflow-proposal__feedback {
+  .workflow-proposal__feedback,
+  .plan-approval-request__feedback {
     margin-top: var(--spacing-small);
   }
 
   .approval-request__feedback-input,
   .bash-approval-request__feedback-input,
-  .workflow-proposal__feedback-input {
+  .workflow-proposal__feedback-input,
+  .plan-approval-request__feedback-input {
     width: 100%;
   }
 
@@ -452,6 +503,9 @@ export const requestPanelStyles: CSSResult = css`
     vscode-toolbar-button[data-action='reject']::part(control),
   .workflow-proposal--feedback-active
     .workflow-proposal__actions
+    vscode-toolbar-button[data-action='reject']::part(control),
+  .plan-approval-request--feedback-active
+    .plan-approval-request__actions
     vscode-toolbar-button[data-action='reject']::part(control) {
     color: var(--vscode-inputValidation-warningBorder);
   }

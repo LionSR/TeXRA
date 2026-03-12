@@ -14,6 +14,7 @@ import {
   type IInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
+import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { createRunState } from '@agent/core/AgentState';
@@ -196,6 +197,7 @@ export async function runReflectionFlow<C = unknown>(
     interrupt(): void {
       input.onInterrupt?.();
       retryCoordinator.clearRequest(streamId);
+      planApprovalCoordinator.clearRequest(streamId);
     },
   };
 
@@ -326,6 +328,7 @@ export async function runReflectionFlow<C = unknown>(
     }
 
     retryCoordinator.clearRequest(streamId);
+    planApprovalCoordinator.clearRequest(streamId);
 
     unregisterInterruptible(streamId);
   }
