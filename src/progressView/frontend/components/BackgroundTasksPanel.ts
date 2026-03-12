@@ -268,7 +268,7 @@ export class BackgroundTasksPanel extends LitElement {
     const label = kind === 'process' ? 'Processes' : 'Subagents';
 
     return html`
-      <details open>
+      <details>
         <summary class="section-label">
           <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
           <i class="codicon ${icon}"></i>
