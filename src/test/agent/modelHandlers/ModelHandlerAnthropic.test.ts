@@ -397,7 +397,11 @@ describe('ModelHandlerAnthropic message guards', () => {
     const withMarkers = (messages[0].content as any[]).filter(
       (block: any) => block.cache_control,
     );
-    assert.equal(withMarkers.length, 2, 'only 2 compaction markers should remain');
+    assert.equal(
+      withMarkers.length,
+      2,
+      'only 2 compaction markers should remain',
+    );
     assert.equal(
       (messageContent[0] as any).cache_control,
       undefined,
