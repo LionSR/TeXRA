@@ -64,6 +64,8 @@ export class ProgressViewProvider
   private _panelView?: vscode.WebviewPanel;
   private _panelDisposables: vscode.Disposable[] = [];
   private _activePlacement: ProgressViewPlacement = 'sidebar';
+  /** Set by disposePanelResources so showInSidebar knows replay is needed. */
+  private _panelJustDisposed = false;
   private _pendingUpdateOptions: { forceRebuild: boolean } | null = null;
   private readonly logger: AgentLogger;
 
@@ -306,6 +308,7 @@ export class ProgressViewProvider
     }
 
     this._pendingUpdateOptions = null;
+    this._panelJustDisposed = false;
     this.syncFullView({ forceRebuild: true });
     this.replayPendingPrompts();
   }
@@ -403,6 +406,12 @@ export class ProgressViewProvider
   }
 
   public async showInSidebar(options?: { inPlace?: boolean }): Promise<void> {
+    // disposePanelResources resets _activePlacement to 'sidebar' before we
+    // get here, so also check the _panelJustDisposed flag to detect a real
+    // editor → sidebar transition that needs permission replay.
+    const placementChanged =
+      this._activePlacement !== 'sidebar' || this._panelJustDisposed;
+    this._panelJustDisposed = false;
     this._activePlacement = 'sidebar';
 
     if (this._mainViewProvider) {
@@ -418,7 +427,10 @@ export class ProgressViewProvider
 
     if (this.isActivePlacementReady()) {
       this.syncFullView({ forceRebuild: true });
-      this.replayPendingPrompts();
+      // Only replay permissions when switching from editor → sidebar.
+      // If already on sidebar, the webview already has the correct permissions;
+      // replaying would cause duplicates.
+      if (placementChanged) this.replayPendingPrompts();
     }
   }
 
@@ -443,11 +455,12 @@ export class ProgressViewProvider
 
   public async popOutToEditor(): Promise<void> {
     if (this._panelView) {
+      const placementChanged = this._activePlacement !== 'editor';
       this._activePlacement = 'editor';
       await this.restoreSidebarToLauncher();
       this.revealEditorPanel();
       this.syncFullView({ forceRebuild: true });
-      this.replayPendingPrompts();
+      if (placementChanged) this.replayPendingPrompts();
       return;
     }
 
@@ -545,6 +558,7 @@ export class ProgressViewProvider
     this._panelReady = false;
     if (this._activePlacement === 'editor') {
       this._activePlacement = 'sidebar';
+      this._panelJustDisposed = true;
     }
     if (disposeView) {
       panelView?.dispose();
