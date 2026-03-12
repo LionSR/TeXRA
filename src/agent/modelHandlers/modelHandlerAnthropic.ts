@@ -210,7 +210,7 @@ const EPHEMERAL_CACHE_CONTROL: CacheControlEphemeral = {
 };
 
 // Anthropic allows up to 4 cache breakpoint slots total. Top-level automatic
-// caching and the system prompt each use one slot when present.
+// caching uses one slot, and the system prompt uses another when present.
 // enforceCacheControlLimit dynamically computes the remaining slots available
 // for message-level blocks (e.g. compaction blocks).
 const MAX_CACHE_BREAKPOINT_SLOTS = 4;
@@ -550,8 +550,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const isAnthropic1MBetaActive =
       effectiveContextWindow > this.config.contextWindow;
 
-    // Count cache slots reserved by system prompt, tools, and top-level automatic
-    // caching so enforceCacheControlLimit knows how many remain for message blocks.
+    // Count cache slots reserved by top-level automatic caching and system prompt
+    // so enforceCacheControlLimit knows how many remain for message blocks.
     const supportsCache = this.capabilities.supportsPromptCaching;
     let reservedCacheSlots = 0;
     if (supportsCache) {
