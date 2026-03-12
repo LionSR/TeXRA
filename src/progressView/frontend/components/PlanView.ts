@@ -15,17 +15,11 @@ import {
   animationStyles,
   commonViewStyles,
 } from '@shared/styles';
-import { TODO_STATUS, type Plan, type PlanStep } from '@shared/schemas';
+import { TODO_STATUS, STATUS_ICONS, type Plan, type PlanStep } from '@shared/schemas';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
-
-const STATUS_ICONS: Record<string, string> = {
-  [TODO_STATUS.PENDING]: 'circle-outline',
-  [TODO_STATUS.IN_PROGRESS]: 'loading',
-  [TODO_STATUS.COMPLETED]: 'pass-filled',
-};
 
 @customElement('plan-view')
 export class PlanView extends LitElement {
@@ -174,7 +168,7 @@ export class PlanView extends LitElement {
         <div id=${ELEMENT_IDS.PLAN_VIEW} class="plan-steps">
           ${repeat(
             this.plan.steps,
-            (_step, index) => index,
+            (step) => `${step.title}:${step.status}`,
             (step, index) => this.renderStep(step, index),
           )}
         </div>

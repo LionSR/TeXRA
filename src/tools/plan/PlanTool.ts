@@ -24,9 +24,9 @@ import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInt
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   TODO_STATUS,
+  STATUS_DISPLAY,
   PlanSchema,
   type Plan,
-  type TodoStatus,
 } from '@shared/schemas';
 import { type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
@@ -35,13 +35,6 @@ const logger = new AgentLogger('PlanTool');
 
 /** Counter for generating unique approval IDs */
 let approvalCounter = 0;
-
-/** Configuration for displaying plan step status — icon and label for each status */
-const STATUS_DISPLAY: Record<TodoStatus, { icon: string; label: string }> = {
-  [TODO_STATUS.PENDING]: { icon: '○', label: 'PENDING' },
-  [TODO_STATUS.IN_PROGRESS]: { icon: '◐', label: 'IN PROGRESS' },
-  [TODO_STATUS.COMPLETED]: { icon: '●', label: 'COMPLETED' },
-};
 
 /**
  * Schema for the plan tool input.

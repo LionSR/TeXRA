@@ -10,16 +10,10 @@ import {
   animationStyles,
   commonViewStyles,
 } from '@shared/styles';
-import { TODO_STATUS, type TodoItem } from '@shared/schemas';
+import { TODO_STATUS, STATUS_ICONS, type TodoItem } from '@shared/schemas';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 import { ELEMENT_IDS } from '../constants';
-
-const STATUS_ICONS: Record<string, string> = {
-  [TODO_STATUS.PENDING]: 'circle-outline',
-  [TODO_STATUS.IN_PROGRESS]: 'loading',
-  [TODO_STATUS.COMPLETED]: 'pass-filled',
-};
 
 @customElement('todo-list')
 export class TodoList extends LitElement {
@@ -120,7 +114,7 @@ export class TodoList extends LitElement {
         <div id=${ELEMENT_IDS.TODO_LIST} class="todo-list">
           ${repeat(
             this.todos,
-            (_todo, index) => index,
+            (todo) => `${todo.content}:${todo.status}`,
             (todo) => this.renderTodo(todo),
           )}
         </div>

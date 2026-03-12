@@ -14,21 +14,14 @@ import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInt
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   TODO_STATUS,
+  STATUS_DISPLAY,
   TodoItemSchema,
   type TodoItem,
-  type TodoStatus,
 } from '@shared/schemas';
 import { type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
 const logger = new AgentLogger('TodoWriteTool');
-
-/** Configuration for displaying todo status - icon and label for each status */
-const STATUS_DISPLAY: Record<TodoStatus, { icon: string; label: string }> = {
-  [TODO_STATUS.PENDING]: { icon: '○', label: 'PENDING' },
-  [TODO_STATUS.IN_PROGRESS]: { icon: '◐', label: 'IN PROGRESS' },
-  [TODO_STATUS.COMPLETED]: { icon: '●', label: 'COMPLETED' },
-};
 
 /**
  * Schema for the todo_write tool input.

@@ -104,10 +104,10 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
    * Used for cleanup when all streams are deleted.
    */
   clearAll(): void {
-    for (const [streamId, approvalId] of this.streamApprovalMap) {
+    for (const approvalId of this.streamApprovalMap.values()) {
       this.clearRequest(approvalId);
-      this.streamApprovalMap.delete(streamId);
     }
+    this.streamApprovalMap.clear();
   }
 }
 
