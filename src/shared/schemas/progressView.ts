@@ -159,6 +159,12 @@ export const UpdateParentStreamMessageSchema = z.object({
   parentStreamId: StreamTabIdSchema.nullish(),
 });
 
+export const UpdateStreamDescriptionMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION),
+  stream: StreamTabIdSchema,
+  description: z.string(),
+});
+
 export const UpdateStreamStatusMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS),
   stream: StreamTabIdSchema,
@@ -360,6 +366,7 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateStreamBadgesMessageSchema,
     UpdateProcessOutputMessageSchema,
     UpdateParentStreamMessageSchema,
+    UpdateStreamDescriptionMessageSchema,
     UpdateStreamStatusMessageSchema,
     LogDeltaMessageSchema,
     UpdateFilesMessageSchema,
