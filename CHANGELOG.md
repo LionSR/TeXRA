@@ -14,7 +14,6 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
-- Fixed **duplicate approval dialogs** appearing when switching between sidebar and editor panel views.
 - Fixed **pending approvals being dropped** when the editor panel closed and fell back to the sidebar.
 
 ### Improvements
