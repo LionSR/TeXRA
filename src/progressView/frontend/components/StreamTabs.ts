@@ -287,7 +287,9 @@ export class StreamTab extends LitElement {
             ? nothing
             : html`
                 ${stream.description
-                  ? html`<div class="tab-description">${stream.description}</div>`
+                  ? html`<div class="tab-description">
+                      ${stream.description}
+                    </div>`
                   : nothing}
                 <div class="tab-meta">
                   <span class="last-active"
