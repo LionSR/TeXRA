@@ -265,8 +265,9 @@ export function formatPostCompactionContext(
     lines.push(`<active-subagents count="${subagents.length}">`);
     for (const sa of subagents) {
       const statusAttr = sa.status ? ` status="${escapeAttr(sa.status)}"` : '';
-      const elapsedAttr =
-        sa.elapsed ? ` elapsed="${escapeAttr(sa.elapsed)}"` : '';
+      const elapsedAttr = sa.elapsed
+        ? ` elapsed="${escapeAttr(sa.elapsed)}"`
+        : '';
       lines.push(
         `  <subagent id="${escapeAttr(sa.executionId)}" agent="${escapeAttr(sa.agentName)}"${statusAttr}${elapsedAttr} />`,
       );
@@ -277,8 +278,9 @@ export function formatPostCompactionContext(
   if (processes.length > 0) {
     lines.push(`<active-background-bash count="${processes.length}">`);
     for (const proc of processes) {
-      const elapsedAttr =
-        proc.elapsed ? ` elapsed="${escapeAttr(proc.elapsed)}"` : '';
+      const elapsedAttr = proc.elapsed
+        ? ` elapsed="${escapeAttr(proc.elapsed)}"`
+        : '';
       lines.push(
         `  <background-bash id="${escapeAttr(proc.executionId)}" command="${escapeAttr(proc.agentName)}"${elapsedAttr} />`,
       );
