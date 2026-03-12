@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.36.6] - 2026-03-12
+
+### Features
+
+- **Background tasks panel** — a new collapsible panel in the Progress Board shows running background processes and subagents with real-time terminal output streaming, so you can monitor what's happening without switching tabs.
+- **Office document attachments** — attach Word, Excel, PowerPoint, and other office documents directly in file attachments alongside images and PDFs.
+- **WebSocket mode for OpenAI** — enable persistent WebSocket connections (`texra.model.useWebSocket`) for lower-latency streaming with OpenAI models, especially in multi-turn tool-use workflows.
+- **Session descriptions in stream tabs** — each agent session now generates a short description from your instruction, shown in the stream tab for easier identification. Cancelled or errored sessions get descriptions too.
+- **Multi-provider chat export** — chat export now works correctly with Google GenAI, OpenAI, and Anthropic conversations.
+
+### Bug Fixes
+
+- Fixed **pending approvals being dropped** when the editor panel closed and fell back to the sidebar.
+
+### Improvements
+
+- **Lower costs with Anthropic models** — prompt caching is now handled more efficiently, reducing token usage in long conversations.
+- **Agents stay aware during long conversations** — after context is compacted in long sessions, agents now retain a summary of running subagents and background processes instead of losing track of them.
+- Updated dependencies.
+
 ## [0.36.5] - 2026-03-08
 
 ### Features
