@@ -292,10 +292,11 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
-  it('limits message-level cache markers based on reserved slots', () => {
+  it('strips legacy cache markers from non-compaction blocks in restored conversations', () => {
     const handler = createAnthropicHandler();
     const messageContent: ContentBlockParam[] = [];
 
+    // Simulate a saved conversation with old-style cache_control on text blocks
     for (let idx = 0; idx < 5; idx += 1) {
       messageContent.push({
         type: 'text',
@@ -309,36 +310,36 @@ describe('ModelHandlerAnthropic message guards', () => {
       { role: 'user', content: messageContent },
     ];
 
-    // Simulate 3 reserved slots (system + tools + automatic = typical case)
-    (handler as any).enforceCacheControlLimit(messages, 3);
+    (handler as any).enforceCacheControlLimit(messages, 2);
 
-    const cacheControlledBlocks = messageContent.filter(
+    const remaining = messageContent.filter(
       (block) =>
         'cache_control' in block &&
         (block as { cache_control?: unknown }).cache_control !== undefined,
     );
 
     assert.equal(
-      cacheControlledBlocks.length,
-      1,
-      'only 1 message-level slot should remain when 3 are reserved',
-    );
-    assert.deepEqual(
-      cacheControlledBlocks.map((block) => (block as { text?: string }).text),
-      ['block-4'],
-      'only the most recent block should retain cache control',
+      remaining.length,
+      0,
+      'all legacy text block cache markers should be stripped',
     );
   });
 
-  it('preserves compaction cache markers during cache control enforcement', () => {
+  it('preserves compaction cache markers while stripping legacy text markers', () => {
     const handler = createAnthropicHandler();
     const compactionBlock = {
       type: 'compaction',
       content: '<summary>state</summary>',
       cache_control: { type: 'ephemeral' },
     };
+    const legacyTextBlock = {
+      type: 'text',
+      text: 'old-cached-block',
+      citations: null,
+      cache_control: { type: 'ephemeral' },
+    } as ContentBlockParam & { cache_control: { type: 'ephemeral' } };
     const messageContent: ContentBlockParam[] = [
-      { type: 'text', text: 'block-0', citations: null },
+      legacyTextBlock,
       compactionBlock as unknown as ContentBlockParam,
       { type: 'text', text: 'block-1', citations: null },
     ];
@@ -346,16 +347,66 @@ describe('ModelHandlerAnthropic message guards', () => {
       { role: 'assistant', content: messageContent },
     ];
 
-    // 1 reserved slot (automatic only, no system or tools)
-    (handler as any).enforceCacheControlLimit(messages, 1);
+    (handler as any).enforceCacheControlLimit(messages, 2);
 
+    // Legacy text marker stripped
+    assert.equal(
+      (legacyTextBlock as { cache_control?: unknown }).cache_control,
+      undefined,
+      'legacy text cache marker should be stripped',
+    );
+
+    // Compaction marker preserved
     const preservedCompaction = (messages[0].content as any[]).find(
       (block) => block.type === 'compaction',
     );
     assert.deepEqual(
       preservedCompaction?.cache_control,
       { type: 'ephemeral' },
-      'compaction cache marker should remain on replayed assistant content',
+      'compaction cache marker should remain',
+    );
+  });
+
+  it('trims excess compaction markers when they exceed available slots', () => {
+    const handler = createAnthropicHandler();
+    const messageContent = [
+      {
+        type: 'compaction',
+        content: '<summary>old</summary>',
+        cache_control: { type: 'ephemeral' },
+      },
+      {
+        type: 'compaction',
+        content: '<summary>mid</summary>',
+        cache_control: { type: 'ephemeral' },
+      },
+      {
+        type: 'compaction',
+        content: '<summary>new</summary>',
+        cache_control: { type: 'ephemeral' },
+      },
+    ] as unknown as ContentBlockParam[];
+
+    const messages: MessageParam[] = [
+      { role: 'assistant', content: messageContent },
+    ];
+
+    // 2 reserved (system + automatic) → 2 available for compaction
+    (handler as any).enforceCacheControlLimit(messages, 2);
+
+    const withMarkers = (messages[0].content as any[]).filter(
+      (block: any) => block.cache_control,
+    );
+    assert.equal(withMarkers.length, 2, 'only 2 compaction markers should remain');
+    assert.equal(
+      (messageContent[0] as any).cache_control,
+      undefined,
+      'oldest compaction marker should be removed',
+    );
+    assert.deepEqual(
+      (messageContent[2] as any).cache_control,
+      { type: 'ephemeral' },
+      'newest compaction marker should be preserved',
     );
   });
 

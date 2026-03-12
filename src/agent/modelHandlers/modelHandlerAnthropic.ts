@@ -200,46 +200,23 @@ interface ContextManagementSetupOptions {
   thresholdPercent: number;
 }
 
-/**
- * Block types that support cache_control for prompt caching.
- * Uses SDK's ContentBlockParam with Extract to get text and tool_result types.
- */
-type CacheControlEligibleBlock = Extract<
-  ContentBlockParam,
-  { type: 'text' | 'tool_result' }
->;
-
 type CacheControlCompactionBlock = Extract<
   BetaContentBlockParam,
   { type: 'compaction' }
 >;
-
-type CacheControlInspectableBlock =
-  | ContentBlockParam
-  | ContentBlock
-  | BetaContentBlockParam
-  | undefined;
 
 const EPHEMERAL_CACHE_CONTROL: CacheControlEphemeral = {
   type: 'ephemeral',
 };
 
 // Anthropic allows up to 4 cache breakpoint slots total. Top-level automatic
-// caching, the system prompt, and the last tool definition each use one slot
-// when present. enforceCacheControlLimit dynamically computes the remaining
-// slots available for message-level blocks (e.g. compaction blocks).
+// caching and the system prompt each use one slot when present.
+// enforceCacheControlLimit dynamically computes the remaining slots available
+// for message-level blocks (e.g. compaction blocks).
 const MAX_CACHE_BREAKPOINT_SLOTS = 4;
 
-const isCacheControlEligibleBlock = (
-  block: CacheControlInspectableBlock,
-): block is CacheControlEligibleBlock => {
-  if (block == null || typeof block !== 'object') return false;
-  const blockType = (block as { type?: string }).type;
-  return blockType === 'text' || blockType === 'tool_result';
-};
-
 const isCompactionCacheControlBlock = (
-  block: CacheControlInspectableBlock,
+  block: ContentBlockParam | ContentBlock | BetaContentBlockParam | undefined,
 ): block is CacheControlCompactionBlock => {
   if (block == null || typeof block !== 'object') return false;
   return (block as { type?: string }).type === 'compaction';
@@ -991,9 +968,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /**
    * Enforces the Anthropic cache breakpoint slot limit for message-level blocks.
    *
+   * With top-level automatic caching, only compaction blocks need explicit
+   * cache_control markers in messages. All other block-level markers (including
+   * legacy markers from saved conversations) are stripped. Compaction markers
+   * are then trimmed to fit within the remaining slot budget.
+   *
    * @param messages - The conversation messages to enforce limits on
-   * @param reservedSlots - Number of slots already used by system prompt,
-   *   tools, and top-level automatic caching
+   * @param reservedSlots - Number of slots already used by system prompt
+   *   and top-level automatic caching
    */
   private enforceCacheControlLimit(
     messages: MessageParam[],
@@ -1003,14 +985,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return;
     }
 
-    const availableSlots = Math.max(
-      0,
-      MAX_CACHE_BREAKPOINT_SLOTS - reservedSlots,
-    );
-
-    const cacheControlledBlocks: Array<
-      CacheControlEligibleBlock | CacheControlCompactionBlock
-    > = [];
+    const compactionBlocks: CacheControlCompactionBlock[] = [];
 
     for (const message of messages) {
       const content = message.content;
@@ -1019,30 +994,40 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
 
       for (const block of content) {
-        // Clear cache_control from ineligible blocks (defensive cleanup)
-        if (
-          !isCacheControlEligibleBlock(block) &&
-          !isCompactionCacheControlBlock(block)
-        ) {
-          if (block && typeof block === 'object' && 'cache_control' in block) {
-            delete (block as { cache_control?: unknown }).cache_control;
+        if (!block || typeof block !== 'object') {
+          continue;
+        }
+
+        // Cast to a broader type that includes compaction blocks (which appear
+        // at runtime via server-side context management but aren't in
+        // ContentBlockParam).
+        const anyBlock = block as ContentBlockParam | BetaContentBlockParam;
+
+        // Compaction blocks keep their markers — track them for slot limiting
+        if (isCompactionCacheControlBlock(anyBlock)) {
+          if (anyBlock.cache_control) {
+            compactionBlocks.push(anyBlock);
           }
           continue;
         }
 
-        if (block.cache_control) {
-          cacheControlledBlocks.push(block);
+        // Strip cache_control from all other blocks (legacy markers from saved
+        // conversations or ineligible block types). Top-level automatic caching
+        // handles the "last block" breakpoint now.
+        if ('cache_control' in block) {
+          delete (block as { cache_control?: unknown }).cache_control;
         }
       }
     }
 
-    // Remove excess cache control markers, keeping only the most recent ones
-    const excess = Math.max(
+    // Trim compaction markers if they exceed the remaining slot budget
+    const availableSlots = Math.max(
       0,
-      cacheControlledBlocks.length - availableSlots,
+      MAX_CACHE_BREAKPOINT_SLOTS - reservedSlots,
     );
+    const excess = Math.max(0, compactionBlocks.length - availableSlots);
     for (let idx = 0; idx < excess; idx += 1) {
-      delete cacheControlledBlocks[idx].cache_control;
+      delete compactionBlocks[idx].cache_control;
     }
   }
 
