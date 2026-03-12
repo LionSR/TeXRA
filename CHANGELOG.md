@@ -20,7 +20,6 @@ All notable changes to this project will be documented in this file.
 
 - **Lower costs with Anthropic models** — prompt caching is now handled more efficiently, reducing token usage in long conversations.
 - **Agents stay aware during long conversations** — after context is compacted in long sessions, agents now retain a summary of running subagents and background processes instead of losing track of them.
-- **Fewer redundant approval prompts** — when you approve a delegation, subagents now inherit the parent's approval settings.
 - Updated dependencies.
 
 ## [0.36.5] - 2026-03-08
