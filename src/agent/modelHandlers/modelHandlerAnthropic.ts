@@ -230,7 +230,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
   Anthropic,
   BetaMessage
 > {
-
   /** Flag to force compaction on the next API call, set by requestCompaction(). */
   private compactionRequested = false;
 
@@ -356,7 +355,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return true;
   }
 
-
   /** Ensures a beta flag is included in options, initializing the array if needed. */
   private ensureBeta(options: MessageCreateParams, beta: AnthropicBeta): void {
     if (!options.betas) {
@@ -430,7 +428,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       edits: contextManagementEdits,
     } satisfies BetaContextManagementConfig;
   }
-
 
   async getClient(): Promise<Anthropic> {
     const credential = await this.getApiKey();
@@ -1854,7 +1851,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
           } as ContentBlockParam,
         ];
       }
-
     }
   }
 

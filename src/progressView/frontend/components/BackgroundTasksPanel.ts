@@ -306,8 +306,9 @@ export class BackgroundTasksPanel extends LitElement {
     const hasStdout = Boolean(entry?.stdout);
     const hasStderr = Boolean(entry?.stderr);
     const isClickable = kind === 'subagent' && Boolean(child.childStreamId);
-    const description =
-      child.childStreamId ? this.descriptions.get(child.childStreamId) : undefined;
+    const description = child.childStreamId
+      ? this.descriptions.get(child.childStreamId)
+      : undefined;
 
     return html`
       <div class="task-item">
@@ -355,7 +356,9 @@ export class BackgroundTasksPanel extends LitElement {
           >
         </div>
         ${description
-          ? html`<div class="task-description" title=${description}>${description}</div>`
+          ? html`<div class="task-description" title=${description}>
+              ${description}
+            </div>`
           : nothing}
         ${hasStdout
           ? this.renderOutputStream('stdout', entry!.stdout)
