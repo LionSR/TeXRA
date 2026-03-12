@@ -85,12 +85,21 @@ function notifyBypassState(streamId: StreamTabId): void {
   });
 }
 
+/**
+ * Set YOLO bypass state for a stream.
+ * @param silent - Skip UI notification. Use when the bypass is set before
+ *   the stream is activated (the subsequent SYNC_STREAM_CONTENT will carry
+ *   the correct state from isApprovalBypassedForStream).
+ */
 export function setToolEditApprovalSessionBypass(
   streamId: StreamTabId,
   enabled: boolean,
+  options?: { silent?: boolean },
 ): void {
   bypassedByStream.set(streamId, enabled);
-  notifyBypassState(streamId);
+  if (!options?.silent) {
+    notifyBypassState(streamId);
+  }
 }
 
 export function toggleToolEditApprovalSessionBypass(
