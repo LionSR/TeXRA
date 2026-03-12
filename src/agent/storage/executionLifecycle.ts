@@ -13,6 +13,43 @@ import type { ExecutionId } from '@shared/schemas';
 import { type ExecutionMeta, getExecutionStore } from './ExecutionKVStore';
 import { invalidateListingCache } from './executionListing';
 
+// ---------------------------------------------------------------------------
+// Per-execution write queue — serializes read-modify-write cycles on meta
+// so that concurrent writeTerminalStatus / writeSessionDescription calls
+// never race and silently drop each other's fields.
+// ---------------------------------------------------------------------------
+
+const metaWriteQueues = new Map<ExecutionId, Promise<void>>();
+
+/**
+ * Enqueue a read-modify-write operation on an execution's metadata.
+ * Operations for the same executionId are serialized; different IDs run
+ * independently. The queue entry is cleaned up when the chain settles.
+ */
+function enqueueMetaUpdate(
+  executionId: ExecutionId,
+  updater: (existing: ExecutionMeta) => Partial<ExecutionMeta>,
+): Promise<void> {
+  const prev = metaWriteQueues.get(executionId) ?? Promise.resolve();
+  const next = prev.then(async () => {
+    const store = getExecutionStore(executionId);
+    const existing = await store.readMeta();
+    if (!existing) return;
+    await store.writeMeta({ ...existing, ...updater(existing) });
+    invalidateListingCache();
+  });
+  // Swallow errors in the chain so subsequent enqueued ops still run.
+  const safe = next.catch(() => {});
+  metaWriteQueues.set(executionId, safe);
+  // Clean up when chain settles to avoid unbounded growth.
+  safe.then(() => {
+    if (metaWriteQueues.get(executionId) === safe) {
+      metaWriteQueues.delete(executionId);
+    }
+  });
+  return next;
+}
+
 /**
  * Register a new execution: persist config, metadata, and parent linkage.
  * Awaits all writes before returning, then invalidates the listing cache.
@@ -50,7 +87,8 @@ export async function registerExecution(
 
 /**
  * Persist a terminal status on an existing execution's metadata.
- * Reads the current meta, merges `terminalStatus`, and writes back.
+ * Serialized with other meta updates for the same execution to prevent
+ * read-modify-write races (e.g. with writeSessionDescription).
  * Never throws — storage failures are swallowed so callers' lifecycle
  * logic (untrackExecution, follow-up delivery) always runs.
  */
@@ -59,11 +97,7 @@ export async function writeTerminalStatus(
   status: string,
 ): Promise<void> {
   try {
-    const store = getExecutionStore(executionId);
-    const existing = await store.readMeta();
-    if (!existing) return;
-    await store.writeMeta({ ...existing, terminalStatus: status });
-    invalidateListingCache();
+    await enqueueMetaUpdate(executionId, () => ({ terminalStatus: status }));
   } catch {
     // Non-critical bookkeeping — don't let I/O errors disrupt execution lifecycle.
   }
@@ -71,6 +105,8 @@ export async function writeTerminalStatus(
 
 /**
  * Persist an AI-generated session description on an existing execution's metadata.
+ * Serialized with other meta updates for the same execution to prevent
+ * read-modify-write races (e.g. with writeTerminalStatus).
  * Never throws — description is supplementary data.
  */
 export async function writeSessionDescription(
@@ -78,11 +114,7 @@ export async function writeSessionDescription(
   description: string,
 ): Promise<void> {
   try {
-    const store = getExecutionStore(executionId);
-    const existing = await store.readMeta();
-    if (!existing) return;
-    await store.writeMeta({ ...existing, description });
-    invalidateListingCache();
+    await enqueueMetaUpdate(executionId, () => ({ description }));
   } catch {
     // Non-critical bookkeeping — don't let I/O errors disrupt execution lifecycle.
   }

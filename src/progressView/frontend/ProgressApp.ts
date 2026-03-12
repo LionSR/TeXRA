@@ -83,15 +83,18 @@ import {
 
 // Local imports - progress view contexts
 import {
+  EMPTY_DESCRIPTIONS,
   EMPTY_LOG_CONTEXT,
   EMPTY_PROCESS_OUTPUTS,
   EMPTY_STREAM_CONTEXT,
   permissionsContext,
   processOutputContext,
+  streamDescriptionsContext,
   streamLogContext,
   streamStateContext,
   type ProcessOutputMap,
   type StreamContextValue,
+  type StreamDescriptionMap,
   type StreamLogContextValue,
 } from './contexts/streamContexts';
 import type { FrontendEventHandlerContext } from './eventHandlers';
@@ -108,6 +111,27 @@ import './components/ContextManagement';
 
 // Local imports - progress view component types
 import type { PermissionState } from './components/PermissionCard';
+
+// ---------------------------------------------------------------------------
+// Collection equality helpers — avoid allocating temporary arrays in
+// Signal.Computed evaluations that run on every state change.
+// ---------------------------------------------------------------------------
+
+function mapsEqual<K, V>(a: Map<K, V>, b: Map<K, V>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [k, v] of a) {
+    if (b.get(k) !== v) return false;
+  }
+  return true;
+}
+
+function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
+  if (a.size !== b.size) return false;
+  for (const v of a) {
+    if (!b.has(v)) return false;
+  }
+  return true;
+}
 
 // Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
 // Safe because ProgressApp implements all abstract members below.
@@ -221,10 +245,7 @@ export class ProgressApp extends ProgressAppBase {
     }
     // Return stable reference when unchanged — Signal.Computed uses Object.is(),
     // so a new Set with identical contents would still propagate.
-    if (
-      ids.size === this._prevApprovalIds.size &&
-      [...ids].every((id) => this._prevApprovalIds.has(id))
-    ) {
+    if (setsEqual(ids, this._prevApprovalIds)) {
       return this._prevApprovalIds;
     }
     this._prevApprovalIds = ids;
@@ -252,6 +273,10 @@ export class ProgressApp extends ProgressAppBase {
   @state()
   private processOutputContextValue: ProcessOutputMap = EMPTY_PROCESS_OUTPUTS;
 
+  @provide({ context: streamDescriptionsContext })
+  @state()
+  private descriptionsContextValue: StreamDescriptionMap = EMPTY_DESCRIPTIONS;
+
   // --- Selector computeds: extract fields, auto-memoized by Object.is ---
   private streamById$ = select(this.appState, (s) => s.streamById);
   private streamFilter$ = select(this.appState, (s) => s.streamFilter);
@@ -266,6 +291,23 @@ export class ProgressApp extends ProgressAppBase {
   private processOutputs$ = select(this.appState, (s) => s.processOutputs);
 
   // --- Derived computeds: only re-evaluate when selector inputs propagate ---
+
+  /** streamId → description extracted from streamById (for context consumers). */
+  private _prevDescriptions: StreamDescriptionMap = EMPTY_DESCRIPTIONS;
+  private descriptions$ = new Signal.Computed((): StreamDescriptionMap => {
+    const streamById = this.streamById$.get();
+    const map: StreamDescriptionMap = new Map();
+    for (const [id, info] of streamById) {
+      if (info.description) map.set(id, info.description);
+    }
+    // Return stable reference when unchanged — Signal.Computed uses Object.is(),
+    // so a new Map with identical contents would still propagate.
+    if (mapsEqual(map, this._prevDescriptions)) {
+      return this._prevDescriptions;
+    }
+    this._prevDescriptions = map;
+    return map;
+  });
 
   /**
    * Filtered + sorted stream list.
@@ -454,6 +496,7 @@ export class ProgressApp extends ProgressAppBase {
     this.streamLogContextValue = this.logContext$.get();
     this.permissionsContextValue = this.permissions$.get();
     this.processOutputContextValue = this.activeProcessOutputs$.get();
+    this.descriptionsContextValue = this.descriptions$.get();
   }
 
   render(): TemplateResult {
