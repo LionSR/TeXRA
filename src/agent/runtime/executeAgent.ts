@@ -138,6 +138,8 @@ async function beginRunStage(
 
 interface ResolveAgentOptions {
   streamTabIdOverride?: StreamTabId;
+  /** Fires after streamId is assigned but before setActiveStream is emitted. */
+  onBeforeActivation?: (streamId: StreamTabId) => void;
 }
 
 async function resolveAgentBase(
@@ -192,6 +194,8 @@ async function resolveAgentBase(
   );
   modelHandler.setAgentCategory(setting.agentCategory);
   modelHandler.setLogger(agentLogger);
+
+  options?.onBeforeActivation?.(streamId);
 
   bus.emit('setActiveStream', {
     streamId,
@@ -452,12 +456,14 @@ async function resolveAndAcquireStream(
   options?: {
     streamTabIdOverride?: StreamTabId;
     taskType?: string;
+    onBeforeActivation?: (streamId: StreamTabId) => void;
   },
 ): Promise<ResolvedAgentBase> {
   if (options?.streamTabIdOverride) {
     // Direct resolution with known stream ID (e.g., resume from snapshot)
     return resolveAgentBase(configPayload, executionId, {
       streamTabIdOverride: options.streamTabIdOverride,
+      onBeforeActivation: options?.onBeforeActivation,
     });
   }
 
@@ -479,7 +485,9 @@ async function resolveAndAcquireStream(
 
   let ctx: ResolvedAgentBase;
   try {
-    ctx = await resolveAgentBase(configPayload, executionId);
+    ctx = await resolveAgentBase(configPayload, executionId, {
+      onBeforeActivation: options?.onBeforeActivation,
+    });
   } catch (err) {
     StreamStatusService.releaseIfInitializing(preliminaryStreamId);
     if (!(err instanceof ZodError)) {
@@ -516,7 +524,7 @@ export interface ExecuteAgentOptions {
   isSubagent?: boolean;
   /** Parent stream ID for subagent lineage tracking. Defaults to own streamId. */
   parentStreamId?: StreamTabId;
-  /** Fires early with the real streamId, before flow execution starts. */
+  /** Fires with the real streamId before the stream is activated (before UI sync). */
   onStreamResolved?: (streamId: StreamTabId) => void;
   /** Fires before a tool-use subagent enters WAITING, delivering interim result to orchestrator. */
   onBeforeWaiting?: (lastResponse: string | undefined) => void | Promise<void>;
@@ -531,11 +539,11 @@ export async function executeAgent(
   executionId?: ExecutionId,
   options?: ExecuteAgentOptions,
 ): Promise<AgentFlowResult> {
-  const ctx = await resolveAndAcquireStream(configPayload, executionId);
+  const ctx = await resolveAndAcquireStream(configPayload, executionId, {
+    onBeforeActivation: options?.onStreamResolved,
+  });
   const { setting, streamId, config } = ctx;
   const agentName = config.agent;
-
-  options?.onStreamResolved?.(streamId);
 
   const isSubagent = options?.isSubagent;
 
