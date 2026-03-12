@@ -215,6 +215,14 @@ export class ProgressViewState {
     }
   }
 
+  setDescription(stream: StreamTabId, description: string): void {
+    this.meta.setDescription(stream, description);
+  }
+
+  getDescription(stream: StreamTabId): string | undefined {
+    return this.meta.getDescription(stream);
+  }
+
   setTodos(stream: StreamTabId, todos: TodoItem[]): void {
     this.getOrCreateSession(stream).todos = todos;
   }
