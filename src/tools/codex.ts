@@ -11,6 +11,7 @@
 
 // Third-party imports
 import { z } from 'zod';
+import type { RunResult, ThreadItem, Thread } from '@openai/codex-sdk';
 
 // Local imports - agent
 import {
@@ -67,39 +68,6 @@ const CodexInputSchema = z.strictObject({
 export type CodexInput = z.infer<typeof CodexInputSchema>;
 
 // ============================================================================
-// Types from @openai/codex-sdk (imported dynamically to avoid hard dep)
-// ============================================================================
-
-type ThreadItem = {
-  id: string;
-  type: string;
-  // Common fields across item types
-  text?: string;
-  command?: string;
-  aggregated_output?: string;
-  exit_code?: number;
-  status?: string;
-  changes?: { path: string; kind: string }[];
-  query?: string;
-  message?: string;
-  items?: { text: string; completed: boolean }[];
-};
-
-type Turn = {
-  items: ThreadItem[];
-  finalResponse: string;
-  usage: { input_tokens: number; output_tokens: number } | null;
-};
-
-type ThreadEvent = {
-  type: string;
-  item?: ThreadItem;
-  usage?: { input_tokens: number; output_tokens: number };
-  error?: { message: string };
-  thread_id?: string;
-};
-
-// ============================================================================
 // Result formatting
 // ============================================================================
 
@@ -111,26 +79,36 @@ function escapeXml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+/** Extract file change summaries from a list of thread items. */
+function collectFileChanges(
+  items: readonly ThreadItem[],
+): { kind: string; path: string }[] {
+  return items
+    .filter(
+      (i): i is ThreadItem & { type: 'file_change' } =>
+        i.type === 'file_change',
+    )
+    .flatMap((i) => i.changes);
+}
+
 /** Format a completed Codex turn into a readable string. */
-function formatTurnResult(turn: Turn): string {
+function formatTurnResult(turn: RunResult): string {
   const parts: string[] = [];
 
   // File changes
-  const fileChanges = turn.items.filter((i) => i.type === 'file_change');
-  if (fileChanges.length > 0) {
-    const allChanges = fileChanges.flatMap((i) => i.changes ?? []);
-    if (allChanges.length > 0) {
-      parts.push(
-        `Files changed: ${allChanges.map((c) => `${c.kind} ${c.path}`).join(', ')}`,
-      );
-    }
+  const changes = collectFileChanges(turn.items);
+  if (changes.length > 0) {
+    parts.push(
+      `Files changed: ${changes.map((c) => `${c.kind} ${c.path}`).join(', ')}`,
+    );
   }
 
   // Commands executed
-  const commands = turn.items.filter((i) => i.type === 'command_execution');
-  for (const cmd of commands) {
-    const status = cmd.exit_code === 0 ? 'ok' : `exit ${cmd.exit_code}`;
-    parts.push(`Command: ${cmd.command} (${status})`);
+  for (const item of turn.items) {
+    if (item.type === 'command_execution') {
+      const status = item.exit_code === 0 ? 'ok' : `exit ${item.exit_code}`;
+      parts.push(`Command: ${item.command} (${status})`);
+    }
   }
 
   // Final response
@@ -153,7 +131,7 @@ function formatCodexDelivery(
   executionId: string,
   prompt: string,
   wallTimeMs: number,
-  turn: Turn,
+  turn: RunResult,
 ): string {
   const durationSec = (wallTimeMs / 1000).toFixed(1);
   const response = turn.finalResponse || '(no response)';
@@ -162,12 +140,10 @@ function formatCodexDelivery(
     `<wall-time>${durationSec}s</wall-time>`,
   ];
 
-  const fileChanges = turn.items
-    .filter((i) => i.type === 'file_change')
-    .flatMap((i) => i.changes ?? []);
-  if (fileChanges.length > 0) {
+  const changes = collectFileChanges(turn.items);
+  if (changes.length > 0) {
     lines.push(
-      `<files-changed>${escapeXml(fileChanges.map((c) => `${c.kind} ${c.path}`).join(', '))}</files-changed>`,
+      `<files-changed>${escapeXml(changes.map((c) => `${c.kind} ${c.path}`).join(', '))}</files-changed>`,
     );
   }
 
@@ -236,7 +212,6 @@ export class CodexTool extends defineTool({
 
     if (input.run_in_background) {
       return this.executeBackground(
-        codex,
         thread,
         input,
         ctx?.streamId,
@@ -248,7 +223,7 @@ export class CodexTool extends defineTool({
   }
 
   private async executeForeground(
-    thread: { run: (input: string) => Promise<Turn> },
+    thread: Thread,
     input: CodexInput,
   ): Promise<ToolResult> {
     const turn = await thread.run(input.prompt);
@@ -263,12 +238,7 @@ export class CodexTool extends defineTool({
   }
 
   private async executeBackground(
-    _codex: unknown,
-    thread: {
-      runStreamed: (
-        input: string,
-      ) => Promise<{ events: AsyncGenerator<ThreadEvent> }>;
-    },
+    thread: Thread,
     input: CodexInput,
     parentStreamId: StreamTabId | undefined,
     parentExecutionId: ExecutionId | undefined,
@@ -313,22 +283,25 @@ export class CodexTool extends defineTool({
 
     const startedAt = Date.now();
 
-    const promise = (async (): Promise<Turn> => {
+    const promise = (async (): Promise<RunResult> => {
       const { events } = await thread.runStreamed(input.prompt);
       const items: ThreadItem[] = [];
-      let finalResponse = '';
-      let usage: Turn['usage'] = null;
+      const responseParts: string[] = [];
+      let usage: RunResult['usage'] = null;
 
       for await (const event of events) {
-        if (event.type === 'item.completed' && event.item) {
-          items.push(event.item);
+        if (event.type === 'item.completed') {
+          const item = (event as { item: ThreadItem }).item;
+          items.push(item);
 
           // Progress updates for the orchestrator
-          if (event.item.type === 'command_execution') {
-            const progressMsg = `Running: ${event.item.command}`;
-            ToolUseFollowUpQueue.enqueue(parentStreamId, progressMsg);
-          } else if (event.item.type === 'file_change') {
-            const changed = (event.item.changes ?? [])
+          if (item.type === 'command_execution') {
+            ToolUseFollowUpQueue.enqueue(
+              parentStreamId,
+              `Running: ${item.command}`,
+            );
+          } else if (item.type === 'file_change') {
+            const changed = item.changes
               .map((c) => `${c.kind} ${c.path}`)
               .join(', ');
             if (changed) {
@@ -337,19 +310,22 @@ export class CodexTool extends defineTool({
                 `Codex file changes: ${changed}`,
               );
             }
-          }
-
-          if (event.item.type === 'agent_message') {
-            finalResponse = event.item.text ?? '';
+          } else if (item.type === 'agent_message') {
+            responseParts.push(item.text);
           }
         } else if (event.type === 'turn.completed') {
-          usage = event.usage ?? null;
+          usage = (event as { usage: RunResult['usage'] }).usage ?? null;
         } else if (event.type === 'turn.failed') {
-          throw new Error(event.error?.message ?? 'Codex turn failed');
+          const msg = (event as { error?: { message: string } }).error?.message;
+          throw new Error(msg ?? 'Codex turn failed');
         }
       }
 
-      return { items, finalResponse, usage };
+      return {
+        items,
+        finalResponse: responseParts.join('\n\n'),
+        usage,
+      };
     })();
 
     void promise
