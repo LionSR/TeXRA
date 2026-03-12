@@ -56,6 +56,7 @@ import type { ToolResult } from '@tools/result';
 import {
   isSuperYoloFeatureEnabled,
   isProposalBypassedForStream,
+  isApprovalBypassedForStream,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
 import {
@@ -175,7 +176,11 @@ async function executeSubagent(
     onStreamResolved: (resolvedStreamId) => {
       childStreamId = resolvedStreamId;
       if (options?.enableYoloOnChild) {
-        setToolEditApprovalSessionBypass(resolvedStreamId, true);
+        // Silent: fires before stream activation so the UI notification would
+        // be dropped. The subsequent SYNC_STREAM_CONTENT reads from the map.
+        setToolEditApprovalSessionBypass(resolvedStreamId, true, {
+          silent: true,
+        });
       }
     },
     onProgress,
@@ -356,6 +361,7 @@ async function proposeAndExecute(
     }),
   };
   return executeSubagent(toConfigPayload(effective), agentName, streamId, {
+    enableYoloOnChild: isApprovalBypassedForStream(streamId),
     approvalMeta,
   });
 }
