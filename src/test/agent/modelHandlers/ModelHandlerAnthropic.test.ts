@@ -216,7 +216,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
-  it('moves the cache control marker to the newest message block', async () => {
+  it('does not set block-level cache markers on messages (top-level automatic caching handles this)', async () => {
     const handler = createAnthropicHandler();
     const baseMessages = await handler.initializeMessages(
       'prefix',
@@ -224,11 +224,11 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
     const initialContent = baseMessages[0].content as ContentBlockParam[];
     const initialBlock = initialContent.at(-1);
-    const initialMarker = getCacheMarker(initialBlock);
 
-    assert.ok(
-      initialMarker,
-      'expected the initial request to include a cache control marker',
+    assert.equal(
+      getCacheMarker(initialBlock),
+      undefined,
+      'initial message blocks should not include block-level cache markers',
     );
 
     const updated = await handler.createRoundMessages(
@@ -238,67 +238,15 @@ describe('ModelHandlerAnthropic message guards', () => {
     const followUp = updated.at(-1)!;
     const followUpContent = followUp.content as ContentBlockParam[];
     const followUpBlock = followUpContent.at(-1);
-    const followUpMarker = getCacheMarker(followUpBlock);
 
-    assert.ok(
-      followUpMarker,
-      'expected the newest message block to keep the cache marker',
-    );
     assert.equal(
-      getCacheMarker(initialBlock),
+      getCacheMarker(followUpBlock),
       undefined,
-      'previous message should have its cache marker removed',
+      'follow-up message blocks should not include block-level cache markers',
     );
   });
 
-  it('avoids assigning cache control to non-text media blocks', async () => {
-    const handler = new PdfStubAnthropicHandler(
-      buildAnthropicConfig({ supportsVision: true }),
-    );
-
-    handler.setMediaContent([
-      { type: 'text', text: 'Image: diagram.png', citations: null },
-      {
-        type: 'image',
-        source: {
-          type: 'base64',
-          media_type: 'image/png',
-          data: 'ZHVtbXk=',
-        },
-      },
-    ] as ContentBlockParam[]);
-
-    const messages = await handler.initializeMessages('prefix text', '', [
-      pathToLocation('/tmp/diagram.png'),
-    ]);
-
-    const content = messages[0].content as ContentBlockParam[];
-    const finalBlock = content.at(-1);
-    assert.equal(
-      finalBlock?.type,
-      'image',
-      'expected the final block to be an image',
-    );
-    assert.equal(
-      getCacheMarker(finalBlock),
-      undefined,
-      'image block should not carry cache control metadata',
-    );
-
-    const lastTextBlock = [...content]
-      .reverse()
-      .find((block) => block.type === 'text');
-    assert.ok(
-      lastTextBlock,
-      'expected at least one text block in the message content',
-    );
-    assert.ok(
-      getCacheMarker(lastTextBlock),
-      'last eligible text block should include cache control metadata',
-    );
-  });
-
-  it('applies cache control to tool result follow-ups when supported', async () => {
+  it('does not set block-level cache markers on tool result follow-ups', async () => {
     const handler = createAnthropicHandler();
     const call: ToolUseBlock = {
       id: 'tool-call',
@@ -323,20 +271,15 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
 
     const toolResultBlock = (resultMsg.content as ContentBlockParam[])[0];
-    assert.ok(
+    assert.equal(
       getCacheMarker(toolResultBlock),
-      'tool result block should include cache control metadata',
+      undefined,
+      'tool result block should not include block-level cache markers (top-level automatic caching handles this)',
     );
   });
 
   it('skips cache control when prompt caching is disabled', async () => {
     const handler = createAnthropicHandler({ supportsPromptCaching: false });
-    const call: ToolUseBlock = {
-      id: 'tool-call',
-      type: 'tool_use',
-      name: 'demo',
-      input: {},
-    } as ToolUseBlock;
 
     const baseMessages = await handler.initializeMessages('prefix', 'request');
     const initialContent = baseMessages[0].content as ContentBlockParam[];
@@ -347,34 +290,13 @@ describe('ModelHandlerAnthropic message guards', () => {
       undefined,
       'initial message should not include cache metadata when disabled',
     );
-
-    const providerCall = {
-      provider: 'anthropic',
-      callId: call.id,
-      name: call.name,
-      input: call.input,
-      raw: call,
-    } as const;
-
-    const [, resultMsg] = await handler.createToolUseFollowUpMessages(
-      undefined,
-      providerCall,
-      { output: 'ok' },
-      [],
-    );
-
-    const toolResultBlock = (resultMsg.content as ContentBlockParam[])[0];
-    assert.equal(
-      getCacheMarker(toolResultBlock),
-      undefined,
-      'tool result block should remain untouched when caching disabled',
-    );
   });
 
-  it('limits cache control markers to the latest four message blocks', () => {
+  it('strips legacy cache markers from non-compaction blocks in restored conversations', () => {
     const handler = createAnthropicHandler();
     const messageContent: ContentBlockParam[] = [];
 
+    // Simulate a saved conversation with old-style cache_control on text blocks
     for (let idx = 0; idx < 5; idx += 1) {
       messageContent.push({
         type: 'text',
@@ -388,36 +310,36 @@ describe('ModelHandlerAnthropic message guards', () => {
       { role: 'user', content: messageContent },
     ];
 
-    (handler as any).enforceCacheControlLimit(messages);
+    (handler as any).enforceCacheControlLimit(messages, 2);
 
-    const cacheControlledBlocks = messageContent.filter(
+    const remaining = messageContent.filter(
       (block) =>
         'cache_control' in block &&
         (block as { cache_control?: unknown }).cache_control !== undefined,
     );
 
-    assert.equal(cacheControlledBlocks.length, 4);
     assert.equal(
-      (messageContent[0] as { cache_control?: unknown }).cache_control,
-      undefined,
-      'the earliest cache markers should be removed',
-    );
-    assert.deepEqual(
-      cacheControlledBlocks.map((block) => (block as { text?: string }).text),
-      ['block-1', 'block-2', 'block-3', 'block-4'],
-      'the four most recent blocks should retain cache control markers',
+      remaining.length,
+      0,
+      'all legacy text block cache markers should be stripped',
     );
   });
 
-  it('preserves compaction cache markers during cache control enforcement', () => {
+  it('preserves compaction cache markers while stripping legacy text markers', () => {
     const handler = createAnthropicHandler();
     const compactionBlock = {
       type: 'compaction',
       content: '<summary>state</summary>',
       cache_control: { type: 'ephemeral' },
     };
+    const legacyTextBlock = {
+      type: 'text',
+      text: 'old-cached-block',
+      citations: null,
+      cache_control: { type: 'ephemeral' },
+    } as ContentBlockParam & { cache_control: { type: 'ephemeral' } };
     const messageContent: ContentBlockParam[] = [
-      { type: 'text', text: 'block-0', citations: null },
+      legacyTextBlock,
       compactionBlock as unknown as ContentBlockParam,
       { type: 'text', text: 'block-1', citations: null },
     ];
@@ -425,15 +347,66 @@ describe('ModelHandlerAnthropic message guards', () => {
       { role: 'assistant', content: messageContent },
     ];
 
-    (handler as any).enforceCacheControlLimit(messages);
+    (handler as any).enforceCacheControlLimit(messages, 2);
 
+    // Legacy text marker stripped
+    assert.equal(
+      (legacyTextBlock as { cache_control?: unknown }).cache_control,
+      undefined,
+      'legacy text cache marker should be stripped',
+    );
+
+    // Compaction marker preserved
     const preservedCompaction = (messages[0].content as any[]).find(
       (block) => block.type === 'compaction',
     );
     assert.deepEqual(
       preservedCompaction?.cache_control,
       { type: 'ephemeral' },
-      'compaction cache marker should remain on replayed assistant content',
+      'compaction cache marker should remain',
+    );
+  });
+
+  it('trims excess compaction markers when they exceed available slots', () => {
+    const handler = createAnthropicHandler();
+    const messageContent = [
+      {
+        type: 'compaction',
+        content: '<summary>old</summary>',
+        cache_control: { type: 'ephemeral' },
+      },
+      {
+        type: 'compaction',
+        content: '<summary>mid</summary>',
+        cache_control: { type: 'ephemeral' },
+      },
+      {
+        type: 'compaction',
+        content: '<summary>new</summary>',
+        cache_control: { type: 'ephemeral' },
+      },
+    ] as unknown as ContentBlockParam[];
+
+    const messages: MessageParam[] = [
+      { role: 'assistant', content: messageContent },
+    ];
+
+    // 2 reserved (system + automatic) → 2 available for compaction
+    (handler as any).enforceCacheControlLimit(messages, 2);
+
+    const withMarkers = (messages[0].content as any[]).filter(
+      (block: any) => block.cache_control,
+    );
+    assert.equal(withMarkers.length, 2, 'only 2 compaction markers should remain');
+    assert.equal(
+      (messageContent[0] as any).cache_control,
+      undefined,
+      'oldest compaction marker should be removed',
+    );
+    assert.deepEqual(
+      (messageContent[2] as any).cache_control,
+      { type: 'ephemeral' },
+      'newest compaction marker should be preserved',
     );
   });
 
