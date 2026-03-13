@@ -11,11 +11,15 @@
  * panel as write_file), so the user can review, edit, or reject each file.
  */
 
+// Standard library imports
+import * as path from 'path';
+
 // Third-party imports
 import { z } from 'zod';
 
 // Local imports - shared
 import { getExecutionStore } from '@agent/storage';
+import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { ExecutionIdSchema } from '@shared/schemas';
 
 // Local imports - tools
@@ -83,7 +87,11 @@ export type AcceptRunFilesInput = z.infer<typeof AcceptRunFilesInputSchema>;
 
 export class AcceptRunFilesTool extends defineTool({
   name: 'accept_run_files',
-  description: `Accept output files from a completed run into the workspace.
+  description: `Accept output files from a completed workflow run into the workspace.
+
+Use this tool ONLY for workflow subagent results (category="workflow").
+Do NOT use it for tool-use subagent results — those produce text responses,
+not output files.
 
 Locates output files in run storage or the workspace (depending on storage
 mode) and writes them to the workspace. Each file goes through an approval
@@ -171,6 +179,7 @@ Call:
     // Phase 2: Request approval and write each file
     const results: string[] = [];
     const edits: ToolResult['edits'] = [];
+    const acceptedEntries: { outputPath: string; originalPath: string }[] = [];
     let rejected = 0;
     const rejectionMessages: string[] = [];
 
@@ -206,6 +215,7 @@ Call:
         lineChanges: approval.lineChanges,
         startLine: approval.startLine,
       });
+      acceptedEntries.push({ outputPath: entry.path, originalPath: entry.original });
     }
 
     // Single rejection → return rejection result
@@ -215,6 +225,12 @@ Call:
         'accept_run_files',
         rejectionMessages.join('\n'),
       );
+    }
+
+    // Phase 3: Clean up diff files from workspace for accepted files
+    const cleaned = await this.cleanupDiffFiles(acceptedEntries);
+    for (const f of cleaned) {
+      results.push(`cleaned: ${f}`);
     }
 
     const accepted = files.length - rejected;
@@ -267,5 +283,38 @@ Call:
       `File not found in run storage or workspace: ${runPath}. ` +
         `Use executions tool with path /executions/${executionId}/files to list available files.`,
     );
+  }
+
+  /**
+   * Remove diff files from the workspace that correspond to accepted output files.
+   * Uses generateDiffFileName (the same logic that creates diff files) to derive names.
+   */
+  private async cleanupDiffFiles(
+    entries: { outputPath: string; originalPath: string }[],
+  ): Promise<string[]> {
+    const results = await Promise.all(
+      entries.map(async ({ outputPath, originalPath }) => {
+        const diffFileName = generateDiffFileName(
+          originalPath,
+          outputPath,
+          '_diff',
+        );
+        const dir = path.dirname(originalPath);
+        const fullDiffPath = dir === '.' ? diffFileName : `${dir}/${diffFileName}`;
+
+        const loc = WorkspaceFS.locatePath(fullDiffPath);
+        if (loc.kind === 'external') return null;
+
+        try {
+          await WorkspaceFS.delete(loc.relativePath);
+          return loc.relativePath;
+        } catch {
+          // Non-fatal: file may not exist or may be locked
+          return null;
+        }
+      }),
+    );
+
+    return results.filter((f): f is string => f !== null);
   }
 }
