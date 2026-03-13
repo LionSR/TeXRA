@@ -12,6 +12,7 @@ import type {
   AgentProposalPermission,
   BashPermission,
   ModelOptionData,
+  PlanApprovalPermission,
   RetryPermission,
   ToolEditPermission,
   WorkflowAgentProposalPermission,
@@ -42,6 +43,10 @@ export type PermissionState =
       kind: typeof PERMISSION_KIND.PROPOSAL;
       data: AgentProposalPermission;
       modelOptions?: ModelOptionData[];
+    }
+  | {
+      kind: typeof PERMISSION_KIND.PLAN_APPROVAL;
+      data: PlanApprovalPermission;
     };
 
 /** Action button configuration */
@@ -62,6 +67,7 @@ const PERMISSION_ICONS: Record<PermissionState['kind'], string> = {
   [PERMISSION_KIND.BASH]: 'codicon-terminal',
   [PERMISSION_KIND.RETRY]: 'codicon-refresh',
   [PERMISSION_KIND.PROPOSAL]: 'codicon-rocket',
+  [PERMISSION_KIND.PLAN_APPROVAL]: 'codicon-tasklist',
 };
 
 /** Title for each permission type */
@@ -70,6 +76,7 @@ const PERMISSION_TITLES: Record<PermissionState['kind'], string> = {
   [PERMISSION_KIND.BASH]: 'Command approval',
   [PERMISSION_KIND.RETRY]: 'Retry request',
   [PERMISSION_KIND.PROPOSAL]: 'Agent proposal',
+  [PERMISSION_KIND.PLAN_APPROVAL]: 'Plan approval',
 };
 
 /** Primary actions (approve/reject) for each permission type */
@@ -102,6 +109,15 @@ const PRIMARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
     { action: 'cancel', label: 'Cancel', icon: 'codicon-x', variant: 'reject' },
   ],
   [PERMISSION_KIND.PROPOSAL]: [
+    {
+      action: 'approve',
+      label: 'Approve',
+      icon: 'codicon-check',
+      variant: 'approve',
+    },
+    { action: 'reject', label: 'Reject', icon: 'codicon-x', variant: 'reject' },
+  ],
+  [PERMISSION_KIND.PLAN_APPROVAL]: [
     {
       action: 'approve',
       label: 'Approve',
@@ -144,6 +160,7 @@ const SECONDARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
       variant: 'secondary',
     },
   ],
+  [PERMISSION_KIND.PLAN_APPROVAL]: [],
 };
 
 // =============================================================================
@@ -215,6 +232,8 @@ export class PermissionCard extends LitElement {
         return this.renderRetryBody(this.permission.data);
       case PERMISSION_KIND.PROPOSAL:
         return this.renderProposalBody(this.permission.data);
+      case PERMISSION_KIND.PLAN_APPROVAL:
+        return this.renderPlanApprovalBody(this.permission.data);
       default:
         return nothing;
     }
@@ -264,6 +283,31 @@ export class PermissionCard extends LitElement {
       ${isWorkflow
         ? this.renderWorkflowFiles(data as WorkflowAgentProposalPermission)
         : nothing}
+      ${this.renderFeedbackSection()}
+    `;
+  }
+
+  private renderPlanApprovalBody(
+    data: PlanApprovalPermission,
+  ): TemplateResult {
+    const { plan } = data;
+
+    return html`
+      <p><strong>${plan.summary}</strong></p>
+      <ol class="plan-steps-list">
+        ${repeat(
+          plan.steps,
+          (_step, index) => index,
+          (step) => html`
+            <li>
+              ${step.title}
+              ${step.description
+                ? html`<span class="meta-text"> — ${step.description}</span>`
+                : nothing}
+            </li>
+          `,
+        )}
+      </ol>
       ${this.renderFeedbackSection()}
     `;
   }

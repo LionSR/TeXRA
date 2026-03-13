@@ -211,6 +211,13 @@ export class ProgressEventHandler {
             ctx.webviewUpdater.updateTodos(streamId, todos),
           );
         },
+        // Plan events
+        updatePlan: (ctx, { streamId, plan }) => {
+          ctx.state.setPlan(streamId, plan);
+          this.sendIfActive(streamId, () =>
+            ctx.webviewUpdater.updatePlan(streamId, plan),
+          );
+        },
         // Follow-up events
         updateQueuedFollowUps: (ctx, { streamId }) => {
           this.sendIfActive(streamId, () => {
@@ -502,6 +509,7 @@ export class ProgressEventHandler {
         action: 'clear',
         activeRunId: null,
         todos: [],
+        plan: null,
         queuedFollowUps: [],
         instruction: null,
       });
@@ -512,6 +520,7 @@ export class ProgressEventHandler {
 
     const { extras, activeRunId } = this.prepareStreamSyncExtras(stream);
     const todos = this.state.getTodos(stream);
+    const plan = this.state.getPlan(stream);
     const queuedFollowUps = ToolUseFollowUpQueue.getAll(stream);
 
     let instruction: import('@shared/schemas').InstructionUpdate | null = null;
@@ -553,6 +562,7 @@ export class ProgressEventHandler {
       action: 'render',
       ...extras,
       todos,
+      plan,
       queuedFollowUps,
       instruction,
       agentCategory,

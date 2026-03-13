@@ -14,21 +14,14 @@ import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInt
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   TODO_STATUS,
+  STATUS_DISPLAY,
   TodoItemSchema,
   type TodoItem,
-  type TodoStatus,
 } from '@shared/schemas';
 import { type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
 const logger = new AgentLogger('TodoWriteTool');
-
-/** Configuration for displaying todo status - icon and label for each status */
-const STATUS_DISPLAY: Record<TodoStatus, { icon: string; label: string }> = {
-  [TODO_STATUS.PENDING]: { icon: '○', label: 'PENDING' },
-  [TODO_STATUS.IN_PROGRESS]: { icon: '◐', label: 'IN PROGRESS' },
-  [TODO_STATUS.COMPLETED]: { icon: '●', label: 'COMPLETED' },
-};
 
 /**
  * Schema for the todo_write tool input.
@@ -105,15 +98,14 @@ Best practices:
     // This triggers the onUpdate callback which emits events to the UI
     context.todoState.updateTodos(input.todos);
 
-    const inProgressCount = input.todos.filter(
-      (t) => t.status === TODO_STATUS.IN_PROGRESS,
-    ).length;
-    const completedCount = input.todos.filter(
-      (t) => t.status === TODO_STATUS.COMPLETED,
-    ).length;
-    const pendingCount = input.todos.filter(
-      (t) => t.status === TODO_STATUS.PENDING,
-    ).length;
+    let completedCount = 0;
+    let inProgressCount = 0;
+    let pendingCount = 0;
+    for (const t of input.todos) {
+      if (t.status === TODO_STATUS.COMPLETED) completedCount++;
+      else if (t.status === TODO_STATUS.IN_PROGRESS) inProgressCount++;
+      else pendingCount++;
+    }
 
     const summary = `Todo list updated: ${completedCount} completed, ${inProgressCount} in progress, ${pendingCount} pending`;
 

@@ -40,6 +40,10 @@ export interface UICallbacks {
     payload: ProgressEventPayloads['showAgentProposal'],
   ) => void;
   resolveAgentProposal: (proposalId: string) => void;
+  showPlanApproval: (
+    payload: ProgressEventPayloads['showPlanApproval'],
+  ) => void;
+  resolvePlanApproval: (approvalId: string) => void;
 }
 
 /** Helper to register an event with error handling wrapper. */
@@ -145,6 +149,22 @@ export function registerUIEvents(
     'resolveAgentProposal',
     (p) => callbacks.resolveAgentProposal(p.proposalId),
     'failed to resolve agent proposal',
+    signal,
+  );
+
+  // Plan approval events
+  registerEvent(
+    bus,
+    'showPlanApproval',
+    callbacks.showPlanApproval,
+    'failed to show plan approval',
+    signal,
+  );
+  registerEvent(
+    bus,
+    'resolvePlanApproval',
+    (p) => callbacks.resolvePlanApproval(p.approvalId),
+    'failed to resolve plan approval',
     signal,
   );
 }

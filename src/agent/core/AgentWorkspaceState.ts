@@ -3,8 +3,10 @@ import { z } from 'zod';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import {
   TodoItemSchema,
+  PlanSchema,
   FileLocationSchema,
   type TodoItem,
+  type Plan,
   type FileLocation,
 } from '@shared/schemas';
 import { FlattenedEditRecordSchema } from '@tools/result';
@@ -290,6 +292,80 @@ export class TodoState {
   }
 }
 
+/** Internal schema for plan state snapshot. */
+const PlanStateSnapshotSchema = z.object({
+  plan: PlanSchema.nullable().prefault(null),
+});
+
+type PlanStateSnapshot = z.output<typeof PlanStateSnapshotSchema>;
+
+export class PlanState {
+  private _plan: Plan | null = null;
+  private _onUpdate?: (plan: Plan | null) => void;
+
+  static fromSnapshot(snapshot: unknown): PlanState {
+    const parsed = PlanStateSnapshotSchema.parse(snapshot);
+    const state = new PlanState();
+    state._plan = parsed.plan;
+    return state;
+  }
+
+  toSnapshot(): PlanStateSnapshot {
+    return {
+      plan: this._plan
+        ? {
+            ...this._plan,
+            steps: this._plan.steps.map((s) => ({ ...s, files: [...s.files] })),
+          }
+        : null,
+    };
+  }
+
+  get plan(): Plan | null {
+    return this._plan;
+  }
+
+  setOnUpdate(callback: (plan: Plan | null) => void): void {
+    this._onUpdate = callback;
+  }
+
+  clearOnUpdate(): void {
+    this._onUpdate = undefined;
+  }
+
+  updatePlan(plan: Plan | null): void {
+    if (this._planEqual(this._plan, plan)) return;
+    this._plan = plan;
+    this._onUpdate?.(plan);
+  }
+
+  private _planEqual(a: Plan | null, b: Plan | null): boolean {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    if (a.summary !== b.summary) return false;
+    if (a.steps.length !== b.steps.length) return false;
+    for (let i = 0; i < a.steps.length; i++) {
+      const ai = a.steps[i],
+        bi = b.steps[i];
+      if (!ai || !bi) return false;
+      if (
+        ai.title !== bi.title ||
+        ai.description !== bi.description ||
+        ai.status !== bi.status ||
+        ai.files.length !== bi.files.length ||
+        ai.files.some((f, j) => f !== bi.files[j])
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  reset(): void {
+    this._plan = null;
+  }
+}
+
 export const AgentWorkspaceStateSnapshotSchema = z.object({
   assembly: ResponseAssemblyStateSchema.prefault({
     lastResponse: '',
@@ -305,6 +381,7 @@ export const AgentWorkspaceStateSnapshotSchema = z.object({
     edits: [],
   }),
   todos: TodoStateSnapshotSchema.prefault({ todos: [] }),
+  plan: PlanStateSnapshotSchema.prefault({ plan: null }),
 });
 
 export type AgentWorkspaceSnapshot = z.output<
@@ -318,6 +395,7 @@ export class AgentWorkspaceState {
   public readonly interactions: FileInteractionState;
   public readonly serverToolContent: ServerToolContentState;
   public readonly todos: TodoState;
+  public readonly plan: PlanState;
 
   private constructor(
     assembly: ResponseAssemblyState,
@@ -326,6 +404,7 @@ export class AgentWorkspaceState {
     interactions: FileInteractionState,
     serverToolContent: ServerToolContentState,
     todos: TodoState,
+    plan: PlanState,
   ) {
     this.assembly = assembly;
     this.media = media;
@@ -333,6 +412,7 @@ export class AgentWorkspaceState {
     this.interactions = interactions;
     this.serverToolContent = serverToolContent;
     this.todos = todos;
+    this.plan = plan;
   }
 
   static create(): AgentWorkspaceState {
@@ -343,6 +423,7 @@ export class AgentWorkspaceState {
       new FileInteractionState(),
       ServerToolContentStateSchema.parse({}),
       new TodoState(),
+      new PlanState(),
     );
   }
 
@@ -364,6 +445,7 @@ export class AgentWorkspaceState {
       FileInteractionState.fromSnapshot(parsed.interactions),
       ServerToolContentStateSchema.parse({}),
       TodoState.fromSnapshot(parsed.todos),
+      PlanState.fromSnapshot(parsed.plan),
     );
   }
 
@@ -383,6 +465,7 @@ export class AgentWorkspaceState {
       },
       interactions: this.interactions.toSnapshot(),
       todos: this.todos.toSnapshot(),
+      plan: this.plan.toSnapshot(),
     };
   }
 
