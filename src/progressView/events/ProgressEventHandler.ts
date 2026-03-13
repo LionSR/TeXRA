@@ -211,12 +211,17 @@ export class ProgressEventHandler {
             ctx.webviewUpdater.updateTodos(streamId, todos),
           );
         },
-        // Plan events
+        // Plan events — always send when webview is available, not just
+        // when the stream is active. During initial plan creation the
+        // PlanApprovalCoordinator switches to this stream right after,
+        // but the stream may not be active yet at the time of this event.
+        // Unlike high-frequency log events, plan updates are rare and
+        // critical for the approval UX.
         updatePlan: (ctx, { streamId, plan }) => {
           ctx.state.setPlan(streamId, plan);
-          this.sendIfActive(streamId, () =>
-            ctx.webviewUpdater.updatePlan(streamId, plan),
-          );
+          if (this.webviewUpdater.isAvailable()) {
+            ctx.webviewUpdater.updatePlan(streamId, plan);
+          }
         },
         // Follow-up events
         updateQueuedFollowUps: (ctx, { streamId }) => {
