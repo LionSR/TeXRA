@@ -201,6 +201,50 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     check: async () => extensionChecker(LEAN4_EXT_ID),
   },
 
+  {
+    id: 'codex',
+    tools: ['codex'],
+    name: 'OpenAI Codex CLI',
+    category: 'computation',
+    description:
+      'OpenAI Codex agent runtime. Required by the Codex SDK for local code generation and analysis.',
+    installGuide:
+      'Install the Codex CLI via npm:\n\n' +
+      '  npm install -g @openai/codex\n\n' +
+      'The CLI includes platform-specific binaries that the SDK\n' +
+      'spawns as a child process. An OpenAI API key is required\n' +
+      'and can be set via OPENAI_API_KEY environment variable.',
+    installUrl: 'https://github.com/openai/codex',
+    configNotes:
+      'Requires @openai/codex npm package with platform binaries. Used by @openai/codex-sdk.',
+    check: async () => {
+      try {
+        const { Codex } = await import('@openai/codex-sdk');
+        // Constructor resolves the binary path — throws if not found
+        new Codex();
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    detailCheck: async () => {
+      try {
+        const { Codex } = await import('@openai/codex-sdk');
+        new Codex();
+        return 'Codex CLI binary found. Ready for SDK use.';
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes('Unable to locate')) {
+          return 'Codex CLI binaries not found. Install @openai/codex with optional dependencies.';
+        }
+        if (msg.includes('Unsupported platform')) {
+          return `Platform not supported: ${msg}`;
+        }
+        return `Codex CLI check failed: ${msg}`;
+      }
+    },
+  },
+
   // System dependencies (latexindent, image processing) have moved to the
   // LaTeX settings tab — see LaTeXTab.ts and SettingsViewMessageHandler.ts.
 ];
