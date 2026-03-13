@@ -23,13 +23,13 @@ For 1M-token context on Opus 4.6 and Sonnet 4.6, enable `texra.model.useAnthropi
 
 ## OpenAI Models
 
-| Model ID      | Use Case                   | Cost | Speed  |
-| :------------ | :------------------------- | :--- | :----- |
-| `gpt54pro`    | Premium reasoning          | $$$$ | Slow   |
-| `gpt54`       | Flagship reasoning         | $$$  | Medium |
-| `gpt53codex`  | Coding specialist          | $$$  | Medium |
-| `gpt41`       | Long context (1M), vision  | $$$  | Medium |
-| `gpt5-`       | Fast flagship              | $$   | Fast   |
+| Model ID     | Use Case                  | Cost | Speed  |
+| :----------- | :------------------------ | :--- | :----- |
+| `gpt54pro`   | Premium reasoning         | $$$$ | Slow   |
+| `gpt54`      | Flagship reasoning        | $$$  | Medium |
+| `gpt53codex` | Coding specialist         | $$$  | Medium |
+| `gpt41`      | Long context (1M), vision | $$$  | Medium |
+| `gpt5-`      | Fast flagship             | $$   | Fast   |
 
 GPT-5 reasoning summaries require account verification. Enable with `texra.model.gpt5ReasoningSummary`.
 
