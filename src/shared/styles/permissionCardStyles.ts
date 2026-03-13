@@ -41,6 +41,8 @@ export const permissionCardStyles: CSSResult = css`
   .permission-body {
     font-size: var(--font-size);
     line-height: var(--line-height-relaxed);
+    max-height: 50vh;
+    overflow-y: auto;
   }
 
   .code-block {
