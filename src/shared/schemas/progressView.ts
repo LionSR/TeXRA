@@ -21,6 +21,8 @@ import {
   AgentProposalSchema,
   AgentProposalPermissionSchema,
   BashPermissionSchema,
+  PLAN_APPROVAL_ACTIONS,
+  PlanApprovalPermissionSchema,
   RetryPermissionSchema,
   ToolEditPermissionSchema,
 } from './prompts';
@@ -34,6 +36,7 @@ import {
   ConversationProgressSchema,
   StreamMetadataSchema,
 } from './streamState';
+import { PlanSchema } from './plan';
 import { TodoItemSchema } from './todo';
 import { ContextStateSchema, TokenUsageStatsSchema } from './usage';
 
@@ -209,6 +212,12 @@ export const UpdateTodosMessageSchema = z.object({
   todos: z.array(TodoItemSchema),
 });
 
+export const UpdatePlanMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PLAN),
+  stream: StreamTabIdSchema,
+  plan: PlanSchema.nullable(),
+});
+
 export const UpdateRunUsageMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE),
   stream: StreamTabIdSchema,
@@ -222,7 +231,13 @@ export const UpdateQueuedFollowUpsMessageSchema = z.object({
   messages: z.array(z.string()),
 });
 
-const PermissionKindSchema = z.enum(['toolEdit', 'bash', 'retry', 'proposal']);
+const PermissionKindSchema = z.enum([
+  'toolEdit',
+  'bash',
+  'retry',
+  'proposal',
+  'planApproval',
+]);
 export type ProgressPermissionKind = z.infer<typeof PermissionKindSchema>;
 
 const PermissionPayloadSchema = z.discriminatedUnion('kind', [
@@ -242,6 +257,10 @@ const PermissionPayloadSchema = z.discriminatedUnion('kind', [
     kind: z.literal('proposal'),
     data: AgentProposalPermissionSchema,
     modelOptionsData: z.array(ModelOptionDataSchema).optional(),
+  }),
+  z.object({
+    kind: z.literal('planApproval'),
+    data: PlanApprovalPermissionSchema,
   }),
 ]);
 export type PermissionPayload = z.infer<typeof PermissionPayloadSchema>;
@@ -318,6 +337,7 @@ export const SyncStreamContentMessageSchema = z.object({
     .optional(),
   contextState: ContextStateSchema.optional(),
   todos: z.array(TodoItemSchema).optional(),
+  plan: PlanSchema.nullable().optional(),
   queuedFollowUps: z.array(z.string()).optional(),
   instruction: InstructionUpdateSchema.nullable().optional(),
   agentCategory: z.string().optional(),
@@ -373,6 +393,7 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateMissingOutputsMessageSchema,
     UpdateInstructionMessageSchema,
     UpdateTodosMessageSchema,
+    UpdatePlanMessageSchema,
     UpdateRunUsageMessageSchema,
     UpdateQueuedFollowUpsMessageSchema,
     SyncStreamContentMessageSchema,
@@ -593,6 +614,13 @@ const AgentProposalActionMessageSchema = z.object({
   model: z.string().optional(),
 });
 
+const PlanApprovalActionMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION),
+  approvalId: z.string().min(1),
+  action: z.enum(PLAN_APPROVAL_ACTIONS),
+  feedback: z.string().optional(),
+});
+
 const RestoreProposalConfigMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG),
   proposal: AgentProposalSchema,
@@ -697,6 +725,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     ToggleSuperYoloBypassMessageSchema,
     BashApprovalActionMessageSchema,
     AgentProposalActionMessageSchema,
+    PlanApprovalActionMessageSchema,
     RestoreProposalConfigMessageSchema,
     ShowInformationMessageSchema,
     OpenProfileMessageSchema,

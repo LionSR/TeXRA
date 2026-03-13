@@ -21,6 +21,7 @@ import type {
   AgentProposalPermission,
   BashPermission,
   ModelOptionData,
+  PlanApprovalPermission,
   ProgressViewPlacement,
   StorageKey,
   StreamTabId,
@@ -88,6 +89,10 @@ export class ProgressViewProvider
     AgentProposalPermission,
     'proposalId'
   >;
+  private readonly planApprovalHandler: ApprovalRequestHandler<
+    PlanApprovalPermission,
+    'approvalId'
+  >;
 
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
@@ -136,6 +141,13 @@ export class ProgressViewProvider
       (id) => u.resolvePermission(PERMISSION_KIND.PROPOSAL, id),
       canSend,
     );
+    this.planApprovalHandler = new ApprovalRequestHandler(
+      'approvalId',
+      (p) =>
+        u.showPermission({ kind: PERMISSION_KIND.PLAN_APPROVAL, data: p }),
+      (id) => u.resolvePermission(PERMISSION_KIND.PLAN_APPROVAL, id),
+      canSend,
+    );
 
     this.eventHandler = new ProgressEventHandler(
       this.state,
@@ -158,6 +170,8 @@ export class ProgressViewProvider
         resolveBashPermission: (id) => this.bashApprovalHandler.resolve(id),
         showAgentProposal: (p) => this.agentProposalHandler.show(p),
         resolveAgentProposal: (id) => this.agentProposalHandler.resolve(id),
+        showPlanApproval: (p) => this.planApprovalHandler.show(p),
+        resolvePlanApproval: (id) => this.planApprovalHandler.resolve(id),
       },
       (streamId) => this.hasPendingPermissionsForStream(streamId),
     );
@@ -325,6 +339,7 @@ export class ProgressViewProvider
 
     this.retryRequestHandler.replay();
     this.agentProposalHandler.replay();
+    this.planApprovalHandler.replay();
   }
 
   public getPendingAgentProposal(
@@ -342,7 +357,8 @@ export class ProgressViewProvider
       this.retryRequestHandler.hasPendingForStream(streamId) ||
       this.toolEditHandler.hasPendingForStream(streamId) ||
       this.bashApprovalHandler.hasPendingForStream(streamId) ||
-      this.agentProposalHandler.hasPendingForStream(streamId)
+      this.agentProposalHandler.hasPendingForStream(streamId) ||
+      this.planApprovalHandler.hasPendingForStream(streamId)
     );
   }
 

@@ -148,6 +148,9 @@ export const permissionHandlers: HandlerRegistry = {
       case PERMISSION_KIND.RETRY:
         removePrompt(ctx, kind, 'streamId', id);
         break;
+      case PERMISSION_KIND.PLAN_APPROVAL:
+        removePrompt(ctx, kind, 'approvalId', id);
+        break;
       default: {
         const removed = removePrompt(
           ctx,

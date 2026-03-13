@@ -8,6 +8,7 @@
  */
 
 // Local file imports - individual approval modules
+import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import type { StreamTabId } from '@shared/schemas';
 import {
   _rejectAllPendingBashApprovals,
@@ -27,24 +28,26 @@ import {
 
 /**
  * Clean up all approval state for a deleted stream.
- * Handles pending approvals (tool edits + bash) and YOLO mode state.
+ * Handles pending approvals (tool edits + bash), plan approvals, and YOLO mode state.
  */
 export function cleanupApprovalsForStream(streamId: StreamTabId): void {
   _rejectPendingToolEditApprovalsForStream(streamId);
   _rejectPendingBashApprovalsForStream(streamId);
   _clearApprovalBypassForStream(streamId);
   _clearProposalBypassForStream(streamId);
+  planApprovalCoordinator.clearForStream(streamId);
 }
 
 /**
  * Clean up all approval state when deleting all streams.
- * Handles pending approvals (tool edits + bash) and YOLO mode state.
+ * Handles pending approvals (tool edits + bash), plan approvals, and YOLO mode state.
  */
 export function cleanupAllApprovals(): void {
   _rejectAllPendingToolEditApprovals();
   _rejectAllPendingBashApprovals();
   _clearAllApprovalBypass();
   _clearAllProposalBypass();
+  planApprovalCoordinator.clearAll();
 }
 
 // Re-export commonly used functions from individual modules

@@ -30,6 +30,7 @@ import { WebSearchTool } from './web/WebSearchTool';
 import { WolframTool } from './wolfram';
 import { TexcountTool } from './texcount';
 import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
+import { PlanTool } from './plan';
 import { TodoWriteTool } from './todo';
 import { MemoryTool } from './memory';
 import { ZoteroAddTool, ZoteroSearchTool, ZoteroExportTool } from './zotero';
@@ -90,6 +91,7 @@ function createDefaultTools() {
     web_fetch: new WebFetchTool(),
     web_search: new WebSearchTool(),
     todo_write: new TodoWriteTool(),
+    plan: new PlanTool(),
     memory: new MemoryTool(),
     lean_diagnostics: new LeanDiagnosticsTool(),
     lean_file: new LeanFileTool(),
