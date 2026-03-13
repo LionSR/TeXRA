@@ -207,6 +207,11 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-terminal-ansiYellow);
   }
 
+  .bash-approval-request__details {
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
   .bash-approval-request__command {
     font-family: var(--vscode-editor-font-family);
     font-size: var(--font-size-sm);
@@ -451,6 +456,11 @@ export const requestPanelStyles: CSSResult = css`
 
   .plan-approval-requests__header .codicon {
     color: var(--vscode-textLink-foreground);
+  }
+
+  .plan-approval-request__details {
+    max-height: 50vh;
+    overflow-y: auto;
   }
 
   .plan-approval-request__summary {
