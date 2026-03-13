@@ -344,7 +344,7 @@ export class BackgroundTasksPanel extends LitElement {
           >
           ${description
             ? html`<span class="task-description" title=${description}
-                >${description}</span
+                >(${description})</span
               >`
             : nothing}
           ${child.elapsed
