@@ -254,10 +254,12 @@ export class StreamTab extends LitElement {
     const status = this.status || STREAM_STATUS.READY;
     const tooltip = buildTooltip(stream, this.lastTimestamp, status);
     const agentDecorator = getAgentCategoryDecorator(stream.agentCategory);
+    const rawCompactLabel =
+      `${stream.parentStreamId ? '↳' : ''}${stream.label || stream.name}`.trim();
     const compactLabel =
-      `${stream.parentStreamId ? '↳' : ''}${stream.label || stream.name}`
-        .trim()
-        .slice(0, 5);
+      rawCompactLabel.length > 8
+        ? rawCompactLabel.slice(0, 7) + '…'
+        : rawCompactLabel;
 
     return html`
       <div
