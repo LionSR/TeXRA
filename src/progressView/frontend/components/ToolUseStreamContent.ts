@@ -34,6 +34,7 @@ import type { PermissionState } from './PermissionCard';
 import './StreamHeader';
 import './RequestPanels';
 import './TodoList';
+import './PlanView';
 import './TaskGroupList';
 import './LogList';
 import './UsagePanel';
@@ -106,6 +107,8 @@ export class ToolUseStreamContent extends LitElement {
       <request-panels .permissions=${this.filteredPermissions}></request-panels>
 
       <todo-list .todos=${currentState.todos}></todo-list>
+
+      <plan-view .plan=${currentState.plan}></plan-view>
 
       <background-tasks-panel
         .activeProcesses=${currentState.activeProcesses}
