@@ -123,6 +123,16 @@ export class ModelSelectionList extends LitElement {
     );
   }
 
+  private handleCustomNameChange(modelName: string, e: Event): void {
+    const value = (e.currentTarget as HTMLInputElement).value.trim();
+    this.dispatchEvent(
+      ModelSelectionEvents.setCustomName({
+        modelName,
+        customName: value || null,
+      }),
+    );
+  }
+
   private renderReasoningDropdown(
     model: ModelSelectionItem,
   ): TemplateResult | typeof nothing {
@@ -151,6 +161,25 @@ export class ModelSelectionList extends LitElement {
           `,
         )}
       </vscode-single-select>
+    `;
+  }
+
+  private renderCustomNameInput(
+    model: ModelSelectionItem,
+  ): TemplateResult | typeof nothing {
+    if (!model.fullName) return nothing;
+
+    return html`
+      <div class="custom-name-row">
+        <label class="custom-name-label">API name:</label>
+        <vscode-text-field
+          class="custom-name-input"
+          placeholder=${model.fullName}
+          .value=${model.customName ?? ''}
+          title="Custom API model name (leave empty to use default: ${model.fullName})"
+          @change=${(e: Event) => this.handleCustomNameChange(model.name, e)}
+        ></vscode-text-field>
+      </div>
     `;
   }
 
@@ -187,6 +216,7 @@ export class ModelSelectionList extends LitElement {
             : nothing}
           ${model.cost ? html`<span>${model.cost}</span>` : nothing}
         </span>
+        ${this.renderCustomNameInput(model)}
       </div>
     `;
   }

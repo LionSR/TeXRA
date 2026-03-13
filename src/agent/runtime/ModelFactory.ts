@@ -93,10 +93,30 @@ function shouldUseResponsesAPI(
 }
 
 /**
- * Creates a model handler instance based on provider and routing configuration.
- * Applies user reasoning level overrides when the model supports configurable effort.
+ * Apply a user's custom model name override to a config, if set.
+ * Returns a new config with the overridden fullName, or the original if no override.
  */
-export function createModelHandler(config: ModelConfig): ModelHandler {
+function withCustomModelName(config: ModelConfig): ModelConfig {
+  const overrides = globalSM.get<Record<string, string>>(
+    GlobalStateKey.CUSTOM_MODEL_NAMES,
+    {},
+  );
+  const customName = overrides[config.name];
+  if (!customName) return config;
+
+  logger.debug(
+    CHANNEL,
+    `Applying custom model name for ${config.name}: ${config.fullName} → ${customName}`,
+  );
+  return { ...config, fullName: customName };
+}
+
+/**
+ * Creates a model handler instance based on provider and routing configuration.
+ * Applies user custom model name and reasoning level overrides.
+ */
+export function createModelHandler(originalConfig: ModelConfig): ModelHandler {
+  const config = withCustomModelName(originalConfig);
   const useOpenRouter = getConfig<boolean>('texra.model.useOpenRouter', false);
 
   // OpenAI Responses API (required or optional)

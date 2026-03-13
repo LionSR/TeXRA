@@ -459,6 +459,10 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL,
   );
 
+  private handleSetCustomName = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_MODEL_CUSTOM_NAME,
+  );
+
   // Agent selection event handlers
   private handleOpenAgentYaml = forwardDetail(
     SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML,
@@ -681,6 +685,7 @@ export class SettingsApp extends SettingsAppBase {
               @model-enabled-set=${this.handleSetModelEnabled}
               @helper-model-set=${this.handleSetHelperModel}
               @model-reasoning-level-set=${this.handleSetReasoningLevel}
+              @model-custom-name-set=${this.handleSetCustomName}
             ></models-tab>
           </vscode-tab-panel>
 
