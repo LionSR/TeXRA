@@ -297,7 +297,7 @@ export class PermissionCard extends LitElement {
       <ol class="plan-steps-list">
         ${repeat(
           plan.steps,
-          (step) => step.title,
+          (_step, index) => index,
           (step) => html`
             <li>
               ${step.title}

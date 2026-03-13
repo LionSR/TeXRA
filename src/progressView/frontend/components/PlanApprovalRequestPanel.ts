@@ -55,7 +55,7 @@ export class PlanApprovalRequestPanel extends BaseFeedbackPanel {
           <ol class="plan-approval-request__steps">
             ${repeat(
               plan.steps,
-              (step) => step.title,
+              (_step, index) => index,
               (step) => html`
                 <li>
                   <strong>${step.title}</strong>

@@ -55,8 +55,9 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
     idFieldName: 'approvalId',
   };
 
-  /** Maps streamId → approvalId for stream-based cleanup. */
+  /** Bidirectional maps for stream ↔ approval ID lookup. */
   private readonly streamApprovalMap = new Map<string, string>();
+  private readonly approvalStreamMap = new Map<string, string>();
 
   protected getDefaultCancelResult(): PlanApprovalResult {
     return { action: 'reject' };
@@ -69,8 +70,9 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
   ): Promise<PlanApprovalResult> {
     const { approvalId, plan, timeoutMs } = options;
 
-    // Track stream → approval mapping for cleanup
+    // Track bidirectional mapping for cleanup
     this.streamApprovalMap.set(streamId, approvalId);
+    this.approvalStreamMap.set(approvalId, streamId);
 
     // Show progress view to ensure user sees the approval prompt
     void safeExecuteCommand('texra.showProgressView');
@@ -87,6 +89,19 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
     );
   }
 
+  /** Override to clean up stream mapping on normal resolution. */
+  override resolveRequest(
+    id: string,
+    result: PlanApprovalResult,
+  ): boolean {
+    const streamId = this.approvalStreamMap.get(id);
+    if (streamId) {
+      this.streamApprovalMap.delete(streamId);
+      this.approvalStreamMap.delete(id);
+    }
+    return super.resolveRequest(id, result);
+  }
+
   /**
    * Clear any pending plan approval for the given stream.
    * Used for cleanup when flows are interrupted or streams are deleted.
@@ -96,6 +111,7 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
     if (approvalId) {
       this.clearRequest(approvalId);
       this.streamApprovalMap.delete(streamId);
+      this.approvalStreamMap.delete(approvalId);
     }
   }
 
@@ -108,6 +124,7 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
       this.clearRequest(approvalId);
     }
     this.streamApprovalMap.clear();
+    this.approvalStreamMap.clear();
   }
 }
 
