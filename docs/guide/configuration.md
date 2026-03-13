@@ -42,7 +42,7 @@ default list is maintained in the [Models Guide](./models.md). Override it by
 specifying your own model identifiers:
 
 ```json
-"texra.models": ["sonnet45T", "opus46T", "gemini31p", "gpt52"]
+"texra.models": ["sonnet46T", "opus46T", "gemini31p", "gpt54"]
 ```
 
 ### API Provider Settings
@@ -59,7 +59,7 @@ Configure how TeXRA connects to AI model providers:
 "texra.model.useStreamingOpenAIReasoning": false,
 "texra.model.useOpenAIResponsesAPI": true,
 "texra.model.gpt5ReasoningSummary": false,
-"texra.model.instructionPolishModel": "sonnet45"
+"texra.model.instructionPolishModel": "sonnet46"
 ```
 
 - `useOpenRouter`: Access models through OpenRouter instead of direct APIs
@@ -72,7 +72,7 @@ Configure how TeXRA connects to AI model providers:
 - `useStreamingOpenAIReasoning`: Enable streaming specifically for OpenAI reasoning models
 - `useOpenAIResponsesAPI`: Use OpenAI's Responses API instead of Chat Completions when available
 - `instructionPolishModel`: Short name of the model TeXRA uses to polish instruction text when Copilot is disabled. Values match the identifiers listed in [Models](./models.md).
-- `gpt5ReasoningSummary`: Request reasoning summaries from the GPT-5 family, including GPT-5.1 and GPT-5 Pro (requires verified account and user tier)
+- `gpt5ReasoningSummary`: Request reasoning summaries from the GPT-5 family, including GPT-5.4 and GPT-5.4 Pro (requires verified account and user tier)
 - `useCopilot`: Use the Copilot language model through VS Code's Language Model API for instruction polishing and text connection
 
 | Provider         | Proxy path                  | Supported |
@@ -93,7 +93,7 @@ Configure how TeXRA connects to AI model providers:
 
 ### Anthropic 1M Context Window
 
-Enable the extended 1M-token context window for Claude Opus 4.6 and Sonnet 4/4.5:
+Enable the extended 1M-token context window for Claude Opus 4.6 and Sonnet 4.6:
 
 ```json
 "texra.model.useAnthropic1MBeta": true

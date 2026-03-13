@@ -120,7 +120,7 @@ export const PROVIDER_URLS: Record<string, string> = {
 };
 
 /** Default model used for auxiliary/helper tasks (polishing, agent creation, merge, session descriptions). */
-export const DEFAULT_HELPER_MODEL = 'sonnet45';
+export const DEFAULT_HELPER_MODEL = 'sonnet46';
 
 /**
  * Zod schema for a VS Code boolean setting surfaced per provider (without runtime value).

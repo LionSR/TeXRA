@@ -56,7 +56,7 @@ This is the crucial part for generating multiple distinct files:
 
 ## Tracking Multi-Output Runs
 
-TeXRA records whether a run expects multiple files through the `useMultipleOutputs` flag stored in each agent configuration. The UI toggles this flag whenever you expand the "Multiple Outputs" section, and the backend propagates it through task history, housekeeping commands, and progress logs. Stream identifiers still append `_multiple` for readability, but that suffix is now derived from the flag rather than being hard-coded into agent names.
+TeXRA records whether a run expects multiple files through the `isMultipleOutput` flag stored in each agent configuration. The UI toggles this flag whenever you expand the "Multiple Outputs" section, and the backend propagates it through task history, housekeeping commands, and progress logs. Stream identifiers still append `_multiple` for readability, but that suffix is now derived from the flag rather than being hard-coded into agent names.
 
 ### Declaring multi-output agents in YAML
 
