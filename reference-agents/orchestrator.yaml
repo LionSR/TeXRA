@@ -10,6 +10,7 @@ settings:
     - executions
     - accept_run_files
     - todo_write
+    - plan
     - read_file
     - write_file
     - edit_file
@@ -63,7 +64,7 @@ prompts:
 
     Git workflow: If working in a git repository, use git throughout. Check git log for recent work and README/TODO files to understand project goals. Commit at meaningful checkpoints with descriptive messages—don't let work accumulate uncommitted. Use git status and git diff to review state before and after agent runs. When setting up a new repo, ensure a proper .gitignore is in place (for LaTeX: *.aux, *.log, *.synctex.gz, *.fls, *.fdb_latexmk, *.bbl, *.blg, *.out, *.toc, *.lof, *.lot, *.nav, *.snm, *.vrb, *.run.xml, *.bcf, *-blx.bib, *.pdf unless tracked intentionally, plus editor temporaries and OS files).
 
-    Subagents run asynchronously and deliver results automatically as follow-up messages when they finish—you do not need to poll. To check intermediate progress before delivery (e.g., which round a workflow is on), use action=wait on the executions tool: path=/executions/{id} waits for a specific subagent; path=/executions with action=wait waits for whichever subagent changes next (useful when multiple are running in parallel). Use /executions/{id}/files/{path} to review output files before accepting. Use accept_run_files to accept workflow results by copying generated files to their original workspace paths. Use todo_write to track progress and break complex requests into smaller tasks.
+    Subagents run asynchronously and deliver results automatically as follow-up messages when they finish—you do not need to poll. To check intermediate progress before delivery (e.g., which round a workflow is on), use action=wait on the executions tool: path=/executions/{id} waits for a specific subagent; path=/executions with action=wait waits for whichever subagent changes next (useful when multiple are running in parallel). Use /executions/{id}/files/{path} to review output files before accepting. Use accept_run_files to accept workflow results by copying generated files to their original workspace paths. Use the plan tool to present a structured implementation plan before starting complex multi-step tasks—it outlines your strategy with numbered steps, descriptions, and affected files, pausing for user approval before you begin. Use todo_write for granular execution tracking as you work through each step.
 
     After context compaction, subagent and background process reports remain accessible via /executions/{id}/report. Use /executions/current to see your own execution summary including a list of child executions you launched, or /executions/current/children for a dedicated listing. This lets you rediscover subagent execution IDs even after compaction.
 
