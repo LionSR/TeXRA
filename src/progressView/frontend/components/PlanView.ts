@@ -15,7 +15,12 @@ import {
   animationStyles,
   commonViewStyles,
 } from '@shared/styles';
-import { TODO_STATUS, STATUS_ICONS, type Plan, type PlanStep } from '@shared/schemas';
+import {
+  TODO_STATUS,
+  STATUS_ICONS,
+  type Plan,
+  type PlanStep,
+} from '@shared/schemas';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view constants
