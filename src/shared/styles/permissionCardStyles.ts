@@ -160,6 +160,15 @@ export const permissionCardStyles: CSSResult = css`
     border-radius: var(--border-radius-small);
   }
 
+  .plan-steps-list {
+    margin: var(--spacing-small) 0;
+    padding-left: var(--spacing-xlarge);
+  }
+
+  .plan-steps-list li {
+    margin-bottom: var(--spacing-small);
+  }
+
   .feedback-section {
     margin-top: var(--spacing-large);
   }
