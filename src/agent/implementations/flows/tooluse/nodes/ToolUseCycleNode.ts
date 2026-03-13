@@ -6,6 +6,7 @@ import {
   createToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import { getExecutionStore } from '@agent/storage';
 import { formatProviderHttpError } from '@common/errors';
 import { bus } from '@eventBus/ProgressEventBus';
 
@@ -83,12 +84,15 @@ export class ToolUseCycleNode<C> extends Node<
       agentName: config.agent,
     });
 
-    const { onProgress } = this.services;
+    const { onProgress, executionId } = this.services;
+    const kvStore = getExecutionStore(executionId);
     prepRes.workspaceState.todos.setOnUpdate((todos) => {
       bus.emit('updateTodos', {
         streamId,
         todos,
       });
+      // Persist immediately so the orchestrator can read via /executions/{id}/todos
+      kvStore.writeTodos(todos).catch(() => {});
       onProgress?.({ kind: 'todos', todos });
     });
     prepRes.workspaceState.plan.setOnUpdate((plan) => {
