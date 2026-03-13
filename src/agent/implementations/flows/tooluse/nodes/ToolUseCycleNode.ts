@@ -83,12 +83,19 @@ export class ToolUseCycleNode<C> extends Node<
       agentName: config.agent,
     });
 
-    const { onProgress } = this.services;
+    const { onProgress, persistTodos } = this.services;
+    // Serialize writes so rapid updates don't persist out of order
+    let todoPersistChain = Promise.resolve();
     prepRes.workspaceState.todos.setOnUpdate((todos) => {
       bus.emit('updateTodos', {
         streamId,
         todos,
       });
+      if (persistTodos) {
+        todoPersistChain = todoPersistChain
+          .then(() => persistTodos(todos))
+          .catch(() => {});
+      }
       onProgress?.({ kind: 'todos', todos });
     });
     prepRes.workspaceState.plan.setOnUpdate((plan) => {
@@ -116,6 +123,9 @@ export class ToolUseCycleNode<C> extends Node<
     } finally {
       prepRes.workspaceState.todos.clearOnUpdate();
       prepRes.workspaceState.plan.clearOnUpdate();
+      // Drain in-flight persist writes before returning so they don't
+      // race with the projection's writeTodos after this node completes.
+      await todoPersistChain;
     }
   }
 
