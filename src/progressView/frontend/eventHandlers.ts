@@ -351,5 +351,18 @@ export function handlePermissionAction(
         resolvedProposalIds.add(permission.data.proposalId);
       }
       break;
+    case PERMISSION_KIND.PLAN_APPROVAL:
+      postMessage(PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION, {
+        approvalId: permission.data.approvalId,
+        action,
+        feedback,
+      });
+      removePrompt(
+        ctx,
+        PERMISSION_KIND.PLAN_APPROVAL,
+        'approvalId',
+        permission.data.approvalId,
+      );
+      break;
   }
 }

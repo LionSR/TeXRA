@@ -16,6 +16,8 @@ export const ELEMENT_IDS = {
   CONTEXT_STATE: 'contextState',
   TODO_LIST_CONTAINER: 'todoListContainer',
   TODO_LIST: 'todoList',
+  PLAN_VIEW_CONTAINER: 'planViewContainer',
+  PLAN_VIEW: 'planView',
   INSTRUCTION_CONTAINER: 'instructionContainer',
   INSTRUCTION_TEXT: 'instructionText',
   INSTRUCTION_TOGGLE_BTN: 'instructionToggleBtn',
