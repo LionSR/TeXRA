@@ -60,6 +60,7 @@ import {
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
 import {
+  computeWorkflowDiffs,
   formatSubagentDelivery,
   formatSubagentError,
   formatSubagentProgress,
@@ -204,10 +205,22 @@ async function executeSubagent(
       deliveryState.hasDelivered = true;
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     },
-    onCompleted: (result) => {
+    onCompleted: async (result) => {
       if (deliveryState.hasDelivered) return;
       deliveryState.hasDelivered = true;
-      const msg = formatSubagentDelivery(agentName, result);
+
+      // For workflow results, compute inline diffs so the orchestrator can
+      // immediately assess the scope of changes (e.g. comments/polish vs rewrite).
+      let diffs: Map<string, string> | undefined;
+      if (result.category === 'workflow' && result.outputs.length > 0) {
+        try {
+          diffs = await computeWorkflowDiffs(result.outputs);
+        } catch {
+          // Diff computation failure is non-fatal — deliver without diffs.
+        }
+      }
+
+      const msg = formatSubagentDelivery(agentName, result, diffs);
       void getExecutionStore(executionId).writeReport(msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     },

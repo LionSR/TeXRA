@@ -345,7 +345,7 @@ async function runFlowWithLifecycle(
     isSubagent?: boolean;
     category?: 'workflow' | 'toolUse';
     parentStreamId?: StreamTabId;
-    onCompleted?: (result: AgentFlowResult) => void;
+    onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   },
 ): Promise<AgentFlowResult> {
   const category = options?.category ?? 'workflow';
@@ -360,7 +360,7 @@ async function runFlowWithLifecycle(
   trackExecution(handle);
   try {
     const result = await runner();
-    options?.onCompleted?.(result);
+    await options?.onCompleted?.(result);
     await writeTerminalStatus(ctx.executionId, result.status).catch(() => {});
 
     untrackExecution(ctx.executionId);
@@ -531,7 +531,7 @@ export interface ExecuteAgentOptions {
   /** Fires on meaningful progress: todo changes, round completions, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Fires after flow completes but BEFORE untrackExecution, so follow-ups are enqueued before waiters resolve. */
-  onCompleted?: (result: AgentFlowResult) => void;
+  onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
 }
 
 export async function executeAgent(

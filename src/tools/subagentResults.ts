@@ -8,6 +8,8 @@
  * (just before injection into model context via FollowUpQueue).
  */
 
+import { diff_match_patch } from 'diff-match-patch';
+
 import type {
   AgentFlowResult,
   OutputFileSummary,
@@ -16,13 +18,76 @@ import type { ExecResult } from '@agent/types/ResultTypes';
 import type { ActiveChildInfo, SubagentProgressUpdate } from '@shared/schemas';
 import { TODO_STATUS } from '@shared/schemas/todo';
 import { formatDuration } from '@utils/core';
+import { AbsoluteFS } from '@utils/files';
+
+// ============================================================================
+// Diff computation for workflow deliveries
+// ============================================================================
+
+/** Maximum lines of unified diff to include per file in deliveries. */
+const MAX_DIFF_LINES = 200;
+
+/**
+ * Compute a unified diff between two strings.
+ * Returns a patch-style diff string, or null if files are identical.
+ */
+function computeUnifiedDiff(original: string, modified: string): string | null {
+  const dmp = new diff_match_patch();
+  const patches = dmp.patch_make(original, modified);
+  if (patches.length === 0) return null;
+  return dmp.patch_toText(patches);
+}
+
+/**
+ * Truncate diff text to a maximum number of lines.
+ * Appends a truncation notice if the diff exceeds the limit.
+ */
+function truncateDiff(diff: string, maxLines: number): string {
+  const lines = diff.split('\n');
+  if (lines.length <= maxLines) return diff;
+  return lines.slice(0, maxLines).join('\n') + '\n[... diff truncated]';
+}
+
+/**
+ * Compute diffs for all workflow output files that have an original path.
+ * Returns a map from output absolutePath to truncated diff text.
+ * Files without an original (new files) or where reading fails are skipped.
+ */
+export async function computeWorkflowDiffs(
+  outputs: OutputFileSummary[],
+): Promise<Map<string, string>> {
+  const diffs = new Map<string, string>();
+
+  await Promise.all(
+    outputs.map(async (o) => {
+      if (!o.originalPath) return;
+      try {
+        const [original, modified] = await Promise.all([
+          AbsoluteFS.read(o.originalPath),
+          AbsoluteFS.read(o.absolutePath),
+        ]);
+        const diff = computeUnifiedDiff(original, modified);
+        if (diff) {
+          diffs.set(o.absolutePath, truncateDiff(diff, MAX_DIFF_LINES));
+        }
+      } catch {
+        // File read failure is non-fatal — skip diff for this file.
+      }
+    }),
+  );
+
+  return diffs;
+}
 
 // ============================================================================
 // Formatting helpers
 // ============================================================================
 
-/** Format a single output file summary as XML. */
-function formatOutputFile(o: OutputFileSummary): string {
+/** Format a single output file summary as XML, optionally including inline diff. */
+function formatOutputFile(
+  o: OutputFileSummary,
+  diff?: string,
+): string {
   const attrs = [
     `path="${escapeAttr(o.relativePath)}"`,
     `location="${escapeAttr(o.location)}"`,
@@ -32,16 +97,30 @@ function formatOutputFile(o: OutputFileSummary): string {
   ]
     .filter(Boolean)
     .join(' ');
+
+  if (diff) {
+    return [
+      `<file ${attrs}>`,
+      `<diff>${escapeText(diff)}</diff>`,
+      '</file>',
+    ].join('\n');
+  }
   return `<file ${attrs} />`;
 }
 
-/** Format workflow output files, grouping by round when there are multiple rounds. */
-function formatWorkflowOutputs(outputs: OutputFileSummary[]): string[] {
+/**
+ * Format workflow output files, grouping by round when there are multiple rounds.
+ * When diffs are provided, they are included inline within each <file> element.
+ */
+function formatWorkflowOutputs(
+  outputs: OutputFileSummary[],
+  diffs?: Map<string, string>,
+): string[] {
   const rounds = new Set(outputs.map((o) => o.round));
   if (rounds.size <= 1) {
     return [
       '<output-files>',
-      ...outputs.map(formatOutputFile),
+      ...outputs.map((o) => formatOutputFile(o, diffs?.get(o.absolutePath))),
       '</output-files>',
     ];
   }
@@ -50,7 +129,11 @@ function formatWorkflowOutputs(outputs: OutputFileSummary[]): string[] {
   for (const round of [...rounds].sort((a, b) => a - b)) {
     const roundFiles = outputs.filter((o) => o.round === round);
     lines.push(`<round number="${round}">`);
-    lines.push(...roundFiles.map(formatOutputFile));
+    lines.push(
+      ...roundFiles.map((o) =>
+        formatOutputFile(o, diffs?.get(o.absolutePath)),
+      ),
+    );
     lines.push('</round>');
   }
   lines.push('</output-files>');
@@ -65,10 +148,15 @@ function agentFriendlyStatus(status: string): string {
 /**
  * Format an AgentFlowResult as a delivery message.
  * Injected into the orchestrator's FollowUpQueue as a user-role message.
+ *
+ * For workflow results, an optional `diffs` map (output absolutePath → diff text)
+ * can be provided to include inline diffs so the orchestrator can immediately
+ * assess the scope of changes without reading files manually.
  */
 export function formatSubagentDelivery(
   agentName: string,
   result: AgentFlowResult,
+  diffs?: Map<string, string>,
 ): string {
   const displayStatus = agentFriendlyStatus(result.status);
   const lines = [
@@ -76,7 +164,7 @@ export function formatSubagentDelivery(
   ];
 
   if (result.category === 'workflow' && result.outputs.length > 0) {
-    lines.push(...formatWorkflowOutputs(result.outputs));
+    lines.push(...formatWorkflowOutputs(result.outputs, diffs));
   } else if (result.category === 'toolUse' && result.lastResponse) {
     lines.push('<response>', result.lastResponse, '</response>');
   }
