@@ -266,6 +266,53 @@ Preserve mathematical notation and citations from the original.
 
 See [Intelligent Merge](./intelligent-merge.md) for details on the merge workflow.
 
+## Remote Agents
+
+The following agents are available as [remote agents](./remote-agents.md) through the Research Access Program. Sign in to TeXRA to access them.
+
+### `search`
+
+Finds papers and web content for you. Give it a topic and it comes back with relevant preprints, published articles, and web resources. Read-only — it won't touch your files.
+
+**Best for:** Literature reviews, finding citations, fact-checking
+
+**Example instruction:**
+
+```
+Find recent papers on transformer architectures for scientific document understanding.
+Focus on papers from 2023-2024 that address mathematical equation handling.
+```
+
+### `discuss`
+
+A brainstorming partner that can pull in relevant literature as you talk. Useful for thinking through research directions, poking holes in methodology, or connecting ideas across papers. Read-only.
+
+**Best for:** Brainstorming, methodology critique, research direction guidance
+
+**Example instruction:**
+
+```
+I'm considering attention mechanisms for my theorem prover. What are the
+tradeoffs compared to tree-based approaches? What does the literature say?
+```
+
+### `simplifier`
+
+Cuts through complexity in your code and writing. Whether it's duplicated logic across files, overly-abstract wrappers, or LLM-generated filler prose, `simplifier` cleans things up while preserving correctness.
+
+**Best for:** Refactoring research code, tightening manuscript prose, cleaning up verbose AI-generated text
+
+**Example instruction:**
+
+```
+Simplify the numerical solver in solver.py. Look for duplicated code, inline any
+single-use helper functions, and remove dead code. Run existing tests after each change.
+```
+
+::: tip
+Additional remote agents may be available depending on your access level. Check **TeXRA: View Profile** for the full list.
+:::
+
 ## Next Steps
 
 - [Agent Architecture](./agent-architecture.md) - How agents work internally
