@@ -121,6 +121,7 @@ const BUILTIN_TOOLS: (Omit<ToolDashboardItem, 'status' | 'tools'> & {
     toolNames: [
       'memory',
       'todo_write',
+      'plan',
       'delegate_workflow',
       'delegate_agent',
       'executions',
