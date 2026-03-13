@@ -68,6 +68,8 @@ export const requestPanelStyles: CSSResult = css`
     display: flex;
     flex-direction: column;
     gap: var(--spacing-small);
+    max-height: 50vh;
+    overflow-y: auto;
   }
 
   .approval-request__meta,
@@ -205,11 +207,6 @@ export const requestPanelStyles: CSSResult = css`
 
   .bash-approval-requests__header .codicon {
     color: var(--vscode-terminal-ansiYellow);
-  }
-
-  .bash-approval-request__details {
-    max-height: 50vh;
-    overflow-y: auto;
   }
 
   .bash-approval-request__command {
@@ -456,11 +453,6 @@ export const requestPanelStyles: CSSResult = css`
 
   .plan-approval-requests__header .codicon {
     color: var(--vscode-textLink-foreground);
-  }
-
-  .plan-approval-request__details {
-    max-height: 50vh;
-    overflow-y: auto;
   }
 
   .plan-approval-request__summary {
