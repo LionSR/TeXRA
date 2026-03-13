@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { AGENT_CATEGORY } from './agent';
 import { ProviderErrorPartialSchema } from './errors';
 import { StreamTabIdSchema } from './identifiers';
+import { PlanSchema } from './plan';
 import {
   BaseProposalFieldsSchema,
   WorkflowSpecificFieldsSchema,
@@ -101,4 +102,20 @@ export const AgentProposalPermissionSchema = z.discriminatedUnion(
 );
 export type AgentProposalPermission = z.infer<
   typeof AgentProposalPermissionSchema
+>;
+
+// ============================================================================
+// Plan Approval
+// ============================================================================
+
+export const PLAN_APPROVAL_ACTIONS = ['approve', 'reject'] as const;
+export type PlanApprovalAction = (typeof PLAN_APPROVAL_ACTIONS)[number];
+
+export const PlanApprovalPermissionSchema = z.strictObject({
+  approvalId: z.string(),
+  streamId: StreamTabIdSchema,
+  plan: PlanSchema,
+});
+export type PlanApprovalPermission = z.infer<
+  typeof PlanApprovalPermissionSchema
 >;

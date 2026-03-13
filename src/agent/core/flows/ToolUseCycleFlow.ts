@@ -31,6 +31,7 @@ import {
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type {
   FileInteractionState,
+  PlanState,
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
@@ -608,6 +609,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
       this.services,
       workspace.interactions,
       workspace.todos,
+      workspace.plan,
     );
   }
 
@@ -625,6 +627,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     options: ToolUseCycleServices<C>,
     tracker: FileInteractionState,
     todoState: TodoState,
+    planState: PlanState,
     onExecutionReady?: () => void,
     onToolOutput?: (chunk: string) => void,
   ): Promise<ToolResult> {
@@ -637,6 +640,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
         {
           tracker,
           todoState,
+          planState,
           streamId: options.logger.streamId,
           executionId: options.executionId,
           toolCallId: call.callId,
@@ -659,6 +663,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     options: ToolUseCycleServices<C>,
     tracker: FileInteractionState,
     todoState: TodoState,
+    planState: PlanState,
   ): Promise<ToolExecutionResult> {
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
     const tool = options.toolRegistry.get(call.name);
@@ -715,6 +720,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
       options,
       tracker,
       todoState,
+      planState,
       onExecutionReady,
       onToolOutput,
     );

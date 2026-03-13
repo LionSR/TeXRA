@@ -52,6 +52,12 @@ export class ToolUseCycleNode<C> extends Node<
           todos: prepRes.workspaceState.todos.todos,
         });
       }
+      if (prepRes.workspaceState.plan.plan) {
+        bus.emit('updatePlan', {
+          streamId,
+          plan: prepRes.workspaceState.plan.plan,
+        });
+      }
       return { outcome: 'skipped' };
     }
 
@@ -85,6 +91,13 @@ export class ToolUseCycleNode<C> extends Node<
       });
       onProgress?.({ kind: 'todos', todos });
     });
+    prepRes.workspaceState.plan.setOnUpdate((plan) => {
+      bus.emit('updatePlan', {
+        streamId,
+        plan,
+      });
+      onProgress?.({ kind: 'plan', plan });
+    });
 
     try {
       await flow.run(cycleShared);
@@ -102,6 +115,7 @@ export class ToolUseCycleNode<C> extends Node<
       return { outcome: 'completed', messages: cycleShared.messages };
     } finally {
       prepRes.workspaceState.todos.clearOnUpdate();
+      prepRes.workspaceState.plan.clearOnUpdate();
     }
   }
 

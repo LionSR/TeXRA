@@ -7,6 +7,7 @@
  * agent runtime and tools.
  */
 
+import type { Plan } from './plan';
 import type { TodoItem } from './todo';
 
 /** Todo state changed in a tool-use subagent. */
@@ -30,6 +31,12 @@ export interface OverviewProgressUpdate {
   readonly cost?: number;
 }
 
+/** Plan state changed in a tool-use subagent. */
+export interface PlanProgressUpdate {
+  readonly kind: 'plan';
+  readonly plan: Plan | null;
+}
+
 /** Subagent has finished initialization and is about to call the model. */
 export interface StartedProgressUpdate {
   readonly kind: 'started';
@@ -37,6 +44,7 @@ export interface StartedProgressUpdate {
 
 export type SubagentProgressUpdate =
   | TodoProgressUpdate
+  | PlanProgressUpdate
   | RoundProgressUpdate
   | OverviewProgressUpdate
   | StartedProgressUpdate;

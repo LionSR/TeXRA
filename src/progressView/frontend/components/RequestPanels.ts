@@ -38,10 +38,11 @@ import './ToolEditRequestPanel';
 import './BashRequestPanel';
 import './RetryRequestPanel';
 import './ProposalRequestPanel';
+import './PlanApprovalRequestPanel';
 
 /** Selector to find any sub-panel in shadow DOM */
 const PANEL_SELECTOR =
-  'tool-edit-request-panel, bash-request-panel, retry-request-panel, proposal-request-panel';
+  'tool-edit-request-panel, bash-request-panel, retry-request-panel, proposal-request-panel, plan-approval-request-panel';
 
 /** Section configuration for rendering permission groups */
 interface SectionConfig {
@@ -81,6 +82,15 @@ const SECTION_CONFIGS: Record<string, SectionConfig> = {
     title: 'Agent proposal',
     renderPanel: (p) =>
       html`<proposal-request-panel .permission=${p}></proposal-request-panel>`,
+  },
+  planApproval: {
+    cssClass: 'plan-approval-requests',
+    icon: 'checklist',
+    title: 'Plan approval',
+    renderPanel: (p) =>
+      html`<plan-approval-request-panel
+        .permission=${p}
+      ></plan-approval-request-panel>`,
   },
 };
 
@@ -122,6 +132,7 @@ export class RequestPanels extends LitElement {
   private bashPermissions: PermissionState[] = [];
   private retryPermissions: PermissionState[] = [];
   private proposalPermissions: PermissionState[] = [];
+  private planApprovalPermissions: PermissionState[] = [];
 
   protected override willUpdate(changedProperties: PropertyValues<this>): void {
     if (!changedProperties.has('permissions')) return;
@@ -137,6 +148,9 @@ export class RequestPanels extends LitElement {
     );
     this.proposalPermissions = this.permissions.filter(
       (p) => p.kind === PERMISSION_KIND.PROPOSAL,
+    );
+    this.planApprovalPermissions = this.permissions.filter(
+      (p) => p.kind === PERMISSION_KIND.PLAN_APPROVAL,
     );
   }
 
@@ -158,6 +172,7 @@ export class RequestPanels extends LitElement {
       ${this.renderSection(SECTION_CONFIGS.bash, this.bashPermissions)}
       ${this.renderSection(SECTION_CONFIGS.retry, this.retryPermissions)}
       ${this.renderSection(SECTION_CONFIGS.proposal, this.proposalPermissions)}
+      ${this.renderSection(SECTION_CONFIGS.planApproval, this.planApprovalPermissions)}
     `;
   }
 
@@ -241,6 +256,9 @@ export class RequestPanels extends LitElement {
         break;
       case PERMISSION_KIND.PROPOSAL:
         id = permission.data.proposalId;
+        break;
+      case PERMISSION_KIND.PLAN_APPROVAL:
+        id = permission.data.approvalId;
         break;
       default:
         id = permission.data.requestId;

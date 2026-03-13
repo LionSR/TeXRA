@@ -11,6 +11,7 @@ export const PERMISSION_KIND = {
   BASH: 'bash',
   RETRY: 'retry',
   PROPOSAL: 'proposal',
+  PLAN_APPROVAL: 'planApproval',
 } as const;
 
 export type PermissionKind =
@@ -21,6 +22,7 @@ export const FEEDBACK_ELIGIBLE_KINDS = new Set<PermissionKind>([
   PERMISSION_KIND.TOOL_EDIT,
   PERMISSION_KIND.BASH,
   PERMISSION_KIND.PROPOSAL,
+  PERMISSION_KIND.PLAN_APPROVAL,
 ]);
 
 /** Generates the getting started banner HTML with command links. */

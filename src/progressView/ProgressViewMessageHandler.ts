@@ -5,6 +5,7 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getAgent } from '@agent/index/agentRegistry';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
+import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import {
@@ -254,6 +255,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.handleRestoreProposalConfig(data),
       [PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION]: (data) =>
         handleProgressViewBashApprovalAction(data),
+      [PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION]: (data) =>
+        this.handlePlanApprovalAction(data),
 
       // Profile & Memory - direct command execution
       [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: async () => {
@@ -563,6 +566,25 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         break;
       case 'reject':
         proposalCoordinator.resolveRequest(proposalId, {
+          action: 'reject',
+          feedback: data.feedback,
+        });
+        break;
+    }
+  }
+
+  private handlePlanApprovalAction(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION>,
+  ): void {
+    const { approvalId, action } = data;
+    switch (action) {
+      case 'approve':
+        planApprovalCoordinator.resolveRequest(approvalId, {
+          action: 'approve',
+        });
+        break;
+      case 'reject':
+        planApprovalCoordinator.resolveRequest(approvalId, {
           action: 'reject',
           feedback: data.feedback,
         });
