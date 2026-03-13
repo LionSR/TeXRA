@@ -69,6 +69,10 @@ export interface ProgressState {
   /** Background process outputs per stream — separated so output appends don't trigger meta context updates.
    *  Outer key: streamId, inner key: executionId → { stdout, stderr }. */
   processOutputs: Map<StreamTabId, ProcessOutputMap>;
+  /** AI-generated session descriptions keyed by stream ID.
+   *  Stored independently of streamById so descriptions arriving before
+   *  stream registration (common for subagents) are not dropped. */
+  streamDescriptions: Map<StreamTabId, string>;
 }
 
 /** Return the first stream ID from a streamById Map, or null if empty. */
@@ -88,6 +92,7 @@ export function createInitialState(): ProgressState {
     streamLogs: new Map(),
     followupOptionsByStream: new Map(),
     processOutputs: new Map(),
+    streamDescriptions: new Map(),
   };
 }
 

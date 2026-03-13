@@ -84,14 +84,14 @@ export const streamMetaHandlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION]: (data, ctx) => {
     const { stream, description } = data;
-    ctx.setState((prev) => {
-      const info = prev.streamById.get(stream);
-      if (!info) return prev;
-      return create(prev, (draft) => {
+    ctx.setState((prev) =>
+      create(prev, (draft) => {
+        draft.streamDescriptions.set(stream, description);
+        // Also update streamById entry if it exists (for consistency).
         const draftInfo = draft.streamById.get(stream);
         if (draftInfo) draftInfo.description = description;
-      });
-    });
+      }),
+    );
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS]: (data, ctx) => {
