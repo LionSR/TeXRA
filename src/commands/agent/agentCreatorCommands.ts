@@ -222,8 +222,8 @@ const TOOL_GROUPS: Record<string, ToolGroup> = {
   },
   Utility: {
     description: 'Memory, todo tracking, and diagnostics',
-    tools: ['memory', 'todo_write', 'diagnostics'],
-    keywords: ['memory', 'todo', 'diagnostic', 'track'],
+    tools: ['memory', 'todo_write', 'plan', 'diagnostics'],
+    keywords: ['memory', 'todo', 'plan', 'diagnostic', 'track'],
   },
 };
 
