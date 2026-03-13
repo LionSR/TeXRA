@@ -123,7 +123,9 @@ Best practices:
 
     if (isNewPlan) {
       if (!context.streamId) {
-        logger.warn('New plan created without streamId — skipping approval gate');
+        logger.warn(
+          'New plan created without streamId — skipping approval gate',
+        );
       } else {
         return this.requestApproval(
           input.plan,
@@ -181,9 +183,7 @@ Best practices:
       ? `\nUser feedback: ${feedback}`
       : '\nNo specific feedback was provided.';
 
-    logger.info(
-      `Plan rejected by user${feedback ? `: ${feedback}` : ''}`,
-    );
+    logger.info(`Plan rejected by user${feedback ? `: ${feedback}` : ''}`);
 
     return {
       summary: 'Plan rejected — revise approach',

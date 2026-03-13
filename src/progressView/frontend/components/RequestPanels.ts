@@ -172,7 +172,10 @@ export class RequestPanels extends LitElement {
       ${this.renderSection(SECTION_CONFIGS.bash, this.bashPermissions)}
       ${this.renderSection(SECTION_CONFIGS.retry, this.retryPermissions)}
       ${this.renderSection(SECTION_CONFIGS.proposal, this.proposalPermissions)}
-      ${this.renderSection(SECTION_CONFIGS.planApproval, this.planApprovalPermissions)}
+      ${this.renderSection(
+        SECTION_CONFIGS.planApproval,
+        this.planApprovalPermissions,
+      )}
     `;
   }
 
