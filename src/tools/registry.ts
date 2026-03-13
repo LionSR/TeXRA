@@ -34,6 +34,7 @@ import { PlanTool } from './plan';
 import { TodoWriteTool } from './todo';
 import { MemoryTool } from './memory';
 import { ZoteroAddTool, ZoteroSearchTool, ZoteroExportTool } from './zotero';
+import { CodexTool } from './codex';
 import {
   LeanDiagnosticsTool,
   LeanFileTool,
@@ -98,6 +99,7 @@ function createDefaultTools() {
     lean_project: new LeanProjectTool(),
     lean_inspect: new LeanInspectTool(),
     lean_loogle: new LeanLoogleTool(),
+    codex: new CodexTool(),
     delegate_workflow: new WorkflowAgentTool(),
     delegate_agent: new DelegateAgentTool(),
     resume_agent: new ResumeAgentTool(),
