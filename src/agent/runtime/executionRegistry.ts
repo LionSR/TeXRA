@@ -30,8 +30,9 @@ export {
 const registry = new Map<string, ExecutionHandle>();
 const changeCallbacks = new Map<string, Array<() => void>>();
 
-// Notify waiters when stream status changes (e.g. RUNNING → WAITING).
-// Without this, waitForExecutionChange only resolves on progress/kill/untrack.
+// Notify waiters and refresh UI badges when stream status changes (e.g. RUNNING → WAITING).
+// Without this, waitForExecutionChange only resolves on progress/kill/untrack,
+// and the background tasks panel would show stale running/waiting badges.
 bus.on('updateStreamStatus', ({ streamId }) => {
   for (const [executionId, handle] of registry) {
     if (
@@ -39,6 +40,11 @@ bus.on('updateStreamStatus', ({ streamId }) => {
       handle.childStreamId === streamId
     ) {
       notifyWaiters(executionId);
+      // Re-emit badge update so the parent's background tasks panel
+      // reflects the new status (e.g. running → waiting).
+      if (handle.parentStreamId !== handle.childStreamId) {
+        emitActiveSubagentsUpdate(handle.parentStreamId, registry.values());
+      }
       break;
     }
   }

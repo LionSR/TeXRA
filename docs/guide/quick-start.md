@@ -71,7 +71,7 @@ For complex documents with multiple input files, use the "Multiple" dropdown to 
 
 1. In the dropdown menus at the bottom of the instruction box, select:
    - **Agent**: `polish` (for improving writing)
-   - **Model**: `sonnet45` (Claude Sonnet 4.5) or another available model
+   - **Model**: `sonnet46` (Claude Sonnet 4.6) or another available model
 
 ::: tip Onboarding Prompt
 When you first open the agent or model dropdown, a tooltip explains its role.
@@ -239,19 +239,19 @@ Here are some common tasks you can try with TeXRA:
 ### Fixing Grammar and Typos
 
 - **Agent**: `correct`
-- **Model**: `gemini3f`, `gemini31p`, `gpt41`, or `sonnet45`
+- **Model**: `gemini3f`, `gemini31p`, `gpt41`, or `sonnet46`
 - **Instruction**: "Fix grammatical errors and typos without changing the content or technical terminology."
 
 ### Converting a Paper to Slides
 
 - **Agent**: `paper2slide`
-- **Model**: `sonnet45T`, `opus46`, or `gpt52`
+- **Model**: `sonnet46T`, `opus46`, or `gpt54`
 - **Instruction**: "Convert this paper into presentation slides using the beamer template. Create approximately 12-15 slides highlighting the key points, methodology, and results."
 
 ### Improving Writing Style
 
 - **Agent**: `polish`
-- **Model**: `opus46` or `sonnet45T`
+- **Model**: `opus46` or `sonnet46T`
 - **Instruction**: "Improve the writing style to make it more engaging and clear. Enhance the flow between paragraphs while preserving all technical content."
 
 ## Understanding the Output
@@ -265,8 +265,8 @@ When TeXRA completes a task, it produces:
 Output files are saved in the same directory as your input file with a naming pattern:
 `original_filename_agent_r0_model.extension`
 
-For example, if your input file is `paper.tex` and you used the `polish` agent with `sonnet45` model, the output file would be named:
-`paper_polish_r0_sonnet45.tex`
+For example, if your input file is `paper.tex` and you used the `polish` agent with `sonnet46` model, the output file would be named:
+`paper_polish_r0_sonnet46.tex`
 
 ## Next Steps
 

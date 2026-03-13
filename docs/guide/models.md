@@ -14,30 +14,22 @@ TeXRA supports models from multiple providers. Select models from the dropdown i
 | :---------- | :--------------------------- | :--- | :----- |
 | `opus46T`   | Complex tasks with reasoning | $$$$ | Slow   |
 | `opus46`    | High quality, complex tasks  | $$$$ | Slow   |
-| `opus45T`   | Complex tasks with reasoning | $$$$ | Slow   |
-| `opus45`    | High quality, complex tasks  | $$$$ | Slow   |
-| `sonnet45T` | All-rounder with reasoning   | $$$  | Medium |
-| `sonnet45`  | Strong all-rounder           | $$$  | Medium |
+| `sonnet46T` | All-rounder with reasoning   | $$$  | Medium |
+| `sonnet46`  | Strong all-rounder           | $$$  | Medium |
 | `haiku45T`  | Fast with reasoning          | $$   | Fast   |
 | `haiku45`   | Fast responses               | $$   | Fast   |
-| `haiku35`   | Budget option                | $    | Fast   |
 
-For 1M-token context on Opus 4.6 and Sonnet 4/4.5, enable `texra.model.useAnthropic1MBeta` in settings.
+For 1M-token context on Opus 4.6 and Sonnet 4.6, enable `texra.model.useAnthropic1MBeta` in settings.
 
 ## OpenAI Models
 
-| Model ID   | Use Case                   | Cost | Speed  |
-| :--------- | :------------------------- | :--- | :----- |
-| `gpt52pro` | Premium reasoning          | $$$$ | Slow   |
-| `gpt52`    | Flagship reasoning         | $$$  | Medium |
-| `gpt51`    | Flagship, 400k context     | $$$  | Medium |
-| `gpt5`     | Flagship reasoning         | $$$  | Medium |
-| `gpt5-`    | Fast flagship              | $$   | Fast   |
-| `gpt41`    | Long context (1M), vision  | $$$  | Medium |
-| `gpt4o`    | Strong all-rounder, vision | $$$  | Medium |
-| `o3pro`    | Heavy compute reasoning    | $$$$ | Slow   |
-| `o3`       | Coding, tool calling       | $$$  | Medium |
-| `o1`       | Advanced reasoning         | $$$$ | Slow   |
+| Model ID      | Use Case                   | Cost | Speed  |
+| :------------ | :------------------------- | :--- | :----- |
+| `gpt54pro`    | Premium reasoning          | $$$$ | Slow   |
+| `gpt54`       | Flagship reasoning         | $$$  | Medium |
+| `gpt53codex`  | Coding specialist          | $$$  | Medium |
+| `gpt41`       | Long context (1M), vision  | $$$  | Medium |
+| `gpt5-`       | Fast flagship              | $$   | Fast   |
 
 GPT-5 reasoning summaries require account verification. Enable with `texra.model.gpt5ReasoningSummary`.
 
@@ -84,10 +76,10 @@ GPT-5 reasoning summaries require account verification. Enable with `texra.model
 
 ## Choosing a Model
 
-- **Simple tasks**: Fast, cheap models (`gemini25f-`, `gpt5-`, `haiku35`)
-- **Complex tasks**: Powerful models (`opus46`, `gpt52pro`, `o1`)
-- **Reasoning-heavy**: Thinking models (`sonnet45T`, `deepseekT`, `o3`)
-- **Large documents**: High-context models (`gemini*`, `gpt41`, `gpt5`)
+- **Simple tasks**: Fast, cheap models (`gemini3f`, `gpt5-`, `haiku45`)
+- **Complex tasks**: Powerful models (`opus46`, `gpt54pro`)
+- **Reasoning-heavy**: Thinking models (`sonnet46T`, `opus46T`, `deepseekT`)
+- **Large documents**: High-context models (`gemini*`, `gpt41`)
 
 ## Configuration
 
@@ -96,9 +88,9 @@ Customize available models in VS Code Settings under `texra.models`:
 ```json
 "texra.models": [
   "gemini31p",
-  "sonnet45T",
+  "sonnet46T",
   "opus46T",
-  "gpt52",
+  "gpt54",
   "deepseekT"
 ]
 ```

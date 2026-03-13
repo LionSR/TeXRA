@@ -10,7 +10,7 @@ export interface ToolFileInteractionContext {
   streamId?: StreamTabId;
   executionId?: ExecutionId;
   toolCallId?: string;
-  /** Model short name of the parent agent (e.g. "opus46", "sonnet45"). */
+  /** Model short name of the parent agent (e.g. "opus46T", "sonnet46T"). */
   model?: string;
   /** Agent name of the parent agent (e.g. "orchestrator", "search-agent"). */
   agentName?: string;

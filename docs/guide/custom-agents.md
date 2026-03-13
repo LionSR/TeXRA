@@ -9,7 +9,7 @@ Before creating a custom agent, it's highly recommended to understand the underl
 
 - **Agent Architecture & Execution Flow**: Learn about the `.yaml` structure, settings, prompts, and how agents run. See the [Agent Architecture & Execution Flow](./agent-architecture.md) guide.
 - **Built-in Agents**: Review the standard agents provided by TeXRA for examples and potential inheritance parents. See the [Built-in Agent Reference](./built-in-agents.md).
-- **Agent Explorer**: Learn how to browse and manage agent files using the [Agent Explorer](./agent-explorer.md) view in the TeXRA sidebar.
+- **Agents Tab**: Browse and manage agent files from the **Agents** tab in the TeXRA Dashboard.
   :::
 
 ## Reference Agents
@@ -24,18 +24,18 @@ Follow these steps to create a new custom agent:
 
 Custom agents reside in a dedicated directory that TeXRA prepares for you.
 
-1.  **Find the Default Folder**: TeXRA automatically seeds a `custom_agents` directory inside its global storage. Look for the "Custom Agents" section in the [Agent Explorer](./agent-explorer.md); it points to this location by default.
+1.  **Find the Default Folder**: TeXRA automatically seeds a `custom_agents` directory inside its global storage. Open the **Agents** tab in the TeXRA Dashboard to see this location.
 2.  **Override (Optional)**: If you prefer to manage agents elsewhere, open the **Agents** tab in the TeXRA Dashboard and click **Change** in the directory info bar to select a new folder. TeXRA will ensure that directory exists and use it instead of the default.
 
 ### Automatic Creation
 
-If you'd like TeXRA to draft an agent for you, use the **Create AI Agent** <i class="codicon codicon-sparkle"></i> button in the Agent Explorer title bar. The wizard only asks for a short description and the default output filenames. TeXRA sends this information to a Claude model, which replies with the YAML enclosed in `<yaml>...</yaml>` tags. The extension extracts the content between those tags and saves it as a basic CoT template (single or multiple files) in your Custom Agents folder.
+If you'd like TeXRA to draft an agent for you, use the **New Agent** button in the **Agents** tab of the TeXRA Dashboard. The wizard only asks for a short description and the default output filenames. TeXRA sends this information to a Claude model, which replies with the YAML enclosed in `<yaml>...</yaml>` tags. The extension extracts the content between those tags and saves it as a basic CoT template (single or multiple files) in your Custom Agents folder.
 
 ### Step 2: Create a New YAML File
 
-1.  Using the [Agent Explorer](./agent-explorer.md), right-click within your "Custom Agents" directory (or a subfolder).
-2.  Select "New File".
-3.  You'll be prompted for a name. Choose a descriptive name using underscores and ending with `.yaml` (e.g., `literature_review_generator.yaml`).
+1.  In the **Agents** tab of the TeXRA Dashboard, click **From Template** to create a new agent YAML file in your custom agents directory.
+2.  Alternatively, click **Open Folder** to open the directory and create a `.yaml` file manually.
+3.  Choose a descriptive name using underscores and ending with `.yaml` (e.g., `literature_review_generator.yaml`).
 
 ### Step 3: Define the Agent
 
@@ -195,7 +195,7 @@ To create your own tool-use agent, set `agentCategory: toolUse` and list the too
 | **Figures**        | Extract and compile figures and TikZ diagrams               |
 | **Memory & tasks** | Remember context across sessions; track multi-step progress |
 
-For the exact tool names to list in your YAML, browse any of the built-in tool-use agents (like `chat`, `search`, or `ask`) in the Agent Explorer—their `tools:` array shows exactly which tools are available.
+For the exact tool names to list in your YAML, browse any of the built-in tool-use agents (like `chat`, `search`, or `ask`) in the **Agents** tab—their `tools:` array shows exactly which tools are available.
 
 Example skeleton:
 
@@ -263,4 +263,4 @@ for more details.
 
 TeXRA expects the model's output to use properly closed XML tags. For agents producing multiple files, each `<document>` block must include a `name` attribute matching one of the filenames from the UI. If tags are mismatched or a filename doesn't match, extraction fails and no files are saved—check the ProgressBoard logs for details.
 
-For more examples and advanced options, browse the built-in agent definitions through the [Agent Explorer](./agent-explorer.md).
+For more examples and advanced options, browse the built-in agent definitions through the **Agents** tab in the TeXRA Dashboard.
