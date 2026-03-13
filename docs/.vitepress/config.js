@@ -163,7 +163,6 @@ const baseConfig = {
             },
             { text: 'File Management', link: '/guide/file-management' },
             { text: 'ProgressBoard', link: '/guide/progress-board' },
-            { text: 'Agent Explorer', link: '/guide/agent-explorer' },
           ],
         },
         {
