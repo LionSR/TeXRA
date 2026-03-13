@@ -33,10 +33,13 @@ const MAX_DIFF_LINES = 200;
 
 /**
  * When the changed lines (added + removed) exceed this fraction of the
- * original file's line count, the diff is considered too large to be useful
- * (full rewrite). The orchestrator should read the output file directly.
+ * original file's line count, the diff is truncated more aggressively.
+ * The orchestrator still gets a diff file it can read on demand.
  */
-const CHANGE_RATIO_THRESHOLD = 0.4;
+const LARGE_CHANGE_RATIO = 0.4;
+
+/** Reduced line budget for diffs that represent near-rewrites. */
+const MAX_DIFF_LINES_LARGE_CHANGE = 80;
 
 /**
  * Compute a unified diff between two strings.
@@ -72,8 +75,8 @@ function countLinesSimple(text: string): number {
 export interface DiffFileInfo {
   /** The relative path within the run directory (e.g. "diffs/chapter1.tex.diff"). */
   diffRelPath: string;
-  /** True when the change was too large and no diff was written. */
-  skipped: boolean;
+  /** True when the change ratio exceeded the large-change threshold (diff is truncated shorter). */
+  largeChange: boolean;
 }
 
 /**
@@ -104,22 +107,20 @@ export async function computeAndWriteWorkflowDiffs(
           AbsoluteFS.read(o.absolutePath),
         ]);
 
-        // Skip diff when changes are too large relative to the original.
+        // Detect large changes — still compute diff but truncate shorter.
+        let largeChange = false;
         const originalLines = countLinesSimple(original);
         if (originalLines > 0 && o.added !== null && o.removed !== null) {
           const changedLines = (o.added ?? 0) + (o.removed ?? 0);
-          if (changedLines / originalLines > CHANGE_RATIO_THRESHOLD) {
-            const diffRelPath = `diffs/${path.basename(o.relativePath)}.diff`;
-            results.set(o.absolutePath, { diffRelPath, skipped: true });
-            return;
-          }
+          largeChange = changedLines / originalLines > LARGE_CHANGE_RATIO;
         }
 
         const diff = computeUnifiedDiff(original, modified);
         if (diff) {
-          const truncated = truncateDiff(diff, MAX_DIFF_LINES);
+          const limit = largeChange ? MAX_DIFF_LINES_LARGE_CHANGE : MAX_DIFF_LINES;
+          const truncated = truncateDiff(diff, limit);
           const diffRelPath = `diffs/${path.basename(o.relativePath)}.diff`;
-          results.set(o.absolutePath, { diffRelPath, skipped: false });
+          results.set(o.absolutePath, { diffRelPath, largeChange });
           diffsToWrite.push({ diffRelPath, content: truncated, absPath: o.absolutePath });
         }
       } catch {
@@ -153,8 +154,8 @@ export async function computeAndWriteWorkflowDiffs(
 /**
  * Format a single output file summary as XML.
  * When diff info is provided, includes a `diff` attribute pointing to the diff
- * file path (readable via /executions/{id}/files/...) or a `diff-omitted`
- * attribute when the change was too large for a useful diff.
+ * file path (readable via /executions/{id}/files/...). Large changes are
+ * flagged with `large-change="true"` but still include a (shorter) diff.
  */
 function formatOutputFile(
   o: OutputFileSummary,
@@ -170,14 +171,11 @@ function formatOutputFile(
     .filter(Boolean)
     .join(' ');
 
-  if (diffInfo?.skipped) {
-    // Large change ratio — no diff file written. Orchestrator should
-    // read the output file directly to review.
-    return `<file ${attrs} diff-omitted="large-change" />`;
-  }
   if (diffInfo) {
     // Diff available as a file — orchestrator can read it on demand.
-    return `<file ${attrs} diff="${escapeAttr(diffInfo.diffRelPath)}" />`;
+    // Large changes get a shorter truncated diff but are still readable.
+    const extra = diffInfo.largeChange ? ' large-change="true"' : '';
+    return `<file ${attrs} diff="${escapeAttr(diffInfo.diffRelPath)}"${extra} />`;
   }
   return `<file ${attrs} />`;
 }
