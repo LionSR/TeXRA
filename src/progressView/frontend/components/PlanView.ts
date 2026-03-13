@@ -168,7 +168,7 @@ export class PlanView extends LitElement {
         <div id=${ELEMENT_IDS.PLAN_VIEW} class="plan-steps">
           ${repeat(
             this.plan.steps,
-            (step) => `${step.title}:${step.status}`,
+            (_step, index) => index,
             (step, index) => this.renderStep(step, index),
           )}
         </div>

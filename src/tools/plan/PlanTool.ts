@@ -121,12 +121,16 @@ Best practices:
     // Show the plan in the UI immediately
     context.planState.updatePlan(input.plan);
 
-    if (isNewPlan && context.streamId) {
-      return this.requestApproval(
-        input.plan,
-        context.streamId,
-        context.planState,
-      );
+    if (isNewPlan) {
+      if (!context.streamId) {
+        logger.warn('New plan created without streamId — skipping approval gate');
+      } else {
+        return this.requestApproval(
+          input.plan,
+          context.streamId,
+          context.planState,
+        );
+      }
     }
 
     return this.buildProgressResult(input.plan);
