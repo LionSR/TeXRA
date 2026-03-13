@@ -166,7 +166,17 @@ Best practices:
     // Rejected or timed out — clear the plan from UI
     planState.updatePlan(null);
 
-    const feedback = 'feedback' in result ? result.feedback : undefined;
+    if (result.action === 'timeout') {
+      logger.warn('Plan approval timed out');
+      return {
+        summary: 'Plan approval timed out',
+        output:
+          'The plan approval request timed out before the user responded. Please try again or proceed without a plan.',
+        isError: true,
+      };
+    }
+
+    const feedback = result.feedback;
     const feedbackNote = feedback
       ? `\nUser feedback: ${feedback}`
       : '\nNo specific feedback was provided.';
