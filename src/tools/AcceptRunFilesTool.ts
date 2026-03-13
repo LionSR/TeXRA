@@ -32,6 +32,9 @@ import {
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 
+// Local imports - common
+import { isFileNotFoundError } from '@common/errors';
+
 // Local imports - utils
 import {
   StorageFS,
@@ -174,6 +177,7 @@ Call:
     // Phase 2: Request approval and write each file
     const results: string[] = [];
     const edits: ToolResult['edits'] = [];
+    const acceptedPaths: string[] = [];
     let rejected = 0;
     const rejectionMessages: string[] = [];
 
@@ -209,6 +213,7 @@ Call:
         lineChanges: approval.lineChanges,
         startLine: approval.startLine,
       });
+      acceptedPaths.push(entry.path);
     }
 
     // Single rejection → return rejection result
@@ -221,12 +226,6 @@ Call:
     }
 
     // Phase 3: Clean up diff files from workspace for accepted files
-    const acceptedPaths: string[] = [];
-    for (let i = 0; i < prepared.length; i++) {
-      if (!results[i].startsWith('rejected')) {
-        acceptedPaths.push(prepared[i].path);
-      }
-    }
     const cleaned = await this.cleanupDiffFiles(acceptedPaths);
     for (const f of cleaned) {
       results.push(`cleaned: ${f}`);
@@ -289,24 +288,28 @@ Call:
    * Diff files follow the pattern `{baseName}_diff{ext}` (e.g. `paper_r0_gemini_diff.tex`).
    */
   private async cleanupDiffFiles(acceptedPaths: string[]): Promise<string[]> {
-    const deleted: string[] = [];
+    const results = await Promise.all(
+      acceptedPaths.map(async (filePath) => {
+        const { name, ext } = path.parse(filePath);
+        const diffPath = `${name}_diff${ext}`;
+        const dir = path.dirname(filePath);
+        const fullDiffPath = dir === '.' ? diffPath : `${dir}/${diffPath}`;
 
-    for (const filePath of acceptedPaths) {
-      const ext = path.extname(filePath);
-      const baseName = filePath.slice(0, -ext.length);
-      const diffPath = `${baseName}_diff${ext}`;
+        const loc = WorkspaceFS.locatePath(fullDiffPath);
+        if (loc.kind === 'external') return null;
 
-      const loc = WorkspaceFS.locatePath(diffPath);
-      if (loc.kind !== 'external' && (await WorkspaceFS.exists(loc.relativePath))) {
         try {
           await WorkspaceFS.delete(loc.relativePath);
-          deleted.push(loc.relativePath);
-        } catch {
-          // Silently ignore deletion failures (e.g. file locked)
+          return loc.relativePath;
+        } catch (err) {
+          if (!isFileNotFoundError(err)) {
+            // Silently ignore not-found; other errors (e.g. locked) are also non-fatal
+          }
+          return null;
         }
-      }
-    }
+      }),
+    );
 
-    return deleted;
+    return results.filter((f): f is string => f !== null);
   }
 }
