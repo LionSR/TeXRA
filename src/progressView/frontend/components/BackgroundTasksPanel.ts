@@ -92,8 +92,7 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .task-name {
-        flex: 1;
-        min-width: 0;
+        flex-shrink: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -112,13 +111,13 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .task-description {
+        flex: 1;
+        min-width: 0;
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        width: 100%;
-        padding-left: calc(var(--font-size-sm) + var(--spacing-small));
       }
 
       .task-elapsed {
@@ -343,6 +342,11 @@ export class BackgroundTasksPanel extends LitElement {
               : nothing}
             >${child.agentName}</span
           >
+          ${description
+            ? html`<span class="task-description" title=${description}
+                >${description}</span
+              >`
+            : nothing}
           ${child.elapsed
             ? html`<span class="task-elapsed">(${child.elapsed})</span>`
             : nothing}
@@ -355,11 +359,6 @@ export class BackgroundTasksPanel extends LitElement {
             >${isWaiting(child) ? 'waiting' : 'running'}</span
           >
         </div>
-        ${description
-          ? html`<div class="task-description" title=${description}>
-              ${description}
-            </div>`
-          : nothing}
         ${hasStdout
           ? this.renderOutputStream('stdout', entry!.stdout)
           : nothing}
