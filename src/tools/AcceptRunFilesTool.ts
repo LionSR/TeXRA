@@ -11,6 +11,9 @@
  * panel as write_file), so the user can review, edit, or reject each file.
  */
 
+// Standard library imports
+import * as path from 'path';
+
 // Third-party imports
 import { z } from 'zod';
 
@@ -217,6 +220,18 @@ Call:
       );
     }
 
+    // Phase 3: Clean up diff files from workspace for accepted files
+    const acceptedPaths: string[] = [];
+    for (let i = 0; i < prepared.length; i++) {
+      if (!results[i].startsWith('rejected')) {
+        acceptedPaths.push(prepared[i].path);
+      }
+    }
+    const cleaned = await this.cleanupDiffFiles(acceptedPaths);
+    for (const f of cleaned) {
+      results.push(`cleaned: ${f}`);
+    }
+
     const accepted = files.length - rejected;
     const summary = `Accepted ${accepted}/${files.length} file${files.length > 1 ? 's' : ''} from run ${executionId}`;
     return {
@@ -267,5 +282,31 @@ Call:
       `File not found in run storage or workspace: ${runPath}. ` +
         `Use executions tool with path /executions/${executionId}/files to list available files.`,
     );
+  }
+
+  /**
+   * Remove diff files from the workspace that correspond to accepted output files.
+   * Diff files follow the pattern `{baseName}_diff{ext}` (e.g. `paper_r0_gemini_diff.tex`).
+   */
+  private async cleanupDiffFiles(acceptedPaths: string[]): Promise<string[]> {
+    const deleted: string[] = [];
+
+    for (const filePath of acceptedPaths) {
+      const ext = path.extname(filePath);
+      const baseName = filePath.slice(0, -ext.length);
+      const diffPath = `${baseName}_diff${ext}`;
+
+      const loc = WorkspaceFS.locatePath(diffPath);
+      if (loc.kind !== 'external' && (await WorkspaceFS.exists(loc.relativePath))) {
+        try {
+          await WorkspaceFS.delete(loc.relativePath);
+          deleted.push(loc.relativePath);
+        } catch {
+          // Silently ignore deletion failures (e.g. file locked)
+        }
+      }
+    }
+
+    return deleted;
   }
 }
