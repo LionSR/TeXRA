@@ -125,6 +125,8 @@ export async function runToolUseFlow<C = unknown>(
     isSubagent: input.isSubagent,
   });
 
+  const kv = getExecutionStore(executionId);
+
   const services: ToolUseServices<C> = {
     ...input,
     session: sessionLifecycle,
@@ -132,6 +134,7 @@ export async function runToolUseFlow<C = unknown>(
     toolRegistry: registry,
     snapshot: input.resumeSnapshot ?? null,
     onRoundFinalized: input.onRoundFinalized ?? (async () => {}),
+    persistTodos: (todos) => kv.writeTodos(todos),
   };
 
   const flowContext: ToolUseFlowContext = {
@@ -152,8 +155,6 @@ export async function runToolUseFlow<C = unknown>(
     shouldSkipCycle: false,
     stateSlices: null,
   };
-
-  const kv = getExecutionStore(executionId);
 
   try {
     registerInterruptible(streamId, flowContext);
