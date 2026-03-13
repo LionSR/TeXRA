@@ -82,11 +82,19 @@ function updateStreamInfo(
         draft.streamStates.delete(key);
         draft.streamLogs.delete(key);
         draft.processOutputs.delete(key);
+        draft.streamDescriptions.delete(key);
       }
     }
 
     for (const [name, merged] of mergedStates) {
       draft.streamStates.set(name, merged);
+    }
+
+    // Hydrate streamDescriptions from StreamTabInfo (initial load / refresh).
+    for (const stream of streams) {
+      if (stream.description) {
+        draft.streamDescriptions.set(stream.name, stream.description);
+      }
     }
 
     draft.streamById = newStreamById;
@@ -156,6 +164,7 @@ export const streamLifecycleHandlers: HandlerRegistry = {
         draft.streamStates.delete(streamId);
         draft.streamLogs.delete(streamId);
         draft.processOutputs.delete(streamId);
+        draft.streamDescriptions.delete(streamId);
         draft.streamById.delete(streamId);
         if (draft.activeStreamId === streamId) {
           draft.activeStreamId = null;
@@ -179,6 +188,7 @@ export const streamLifecycleHandlers: HandlerRegistry = {
         draft.streamStates = new Map();
         draft.streamLogs = new Map();
         draft.processOutputs = new Map();
+        draft.streamDescriptions = new Map();
         draft.activeStreamId = null;
         draft.followupOptionsByStream = new Map();
       }),
