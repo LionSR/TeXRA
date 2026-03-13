@@ -123,6 +123,9 @@ export class ToolUseCycleNode<C> extends Node<
     } finally {
       prepRes.workspaceState.todos.clearOnUpdate();
       prepRes.workspaceState.plan.clearOnUpdate();
+      // Drain in-flight persist writes before returning so they don't
+      // race with the projection's writeTodos after this node completes.
+      await todoPersistChain;
     }
   }
 
