@@ -148,6 +148,10 @@ The `polish` agent improves the writing quality of your document while preservin
 
 This agent is ideal for refining drafts that are technically sound but need language improvements before submission.
 
+#### Example Output
+
+Try running `polish` on the [sample document](/examples/draft.pdf) to see a colour-coded diff showing exactly what changed. The agent produces versioned output files with latexdiff highlighting additions in blue and deletions in red.
+
 ## Content Generation & Transformation Agents
 
 ### `paper2slide`
