@@ -503,6 +503,19 @@ export const profileViewStyles: CSSResult = css`
     font-size: var(--font-size-xs);
   }
 
+  .custom-names-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-medium);
+    margin-bottom: var(--spacing-medium);
+    font-size: var(--font-size-sm);
+  }
+
+  .custom-names-description {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+  }
+
   .model-name {
     font-family: var(--vscode-editor-font-family);
     white-space: nowrap;

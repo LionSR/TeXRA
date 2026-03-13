@@ -55,6 +55,11 @@ export class ModelSelectionList extends LitElement {
 
   @state() private expandedProvider: string | null = null;
   @state() private expandedDeprecated: Set<string> = new Set();
+  @state() private showCustomNames = false;
+
+  private hasAnyCustomName(): boolean {
+    return this.models.some((m) => m.customName);
+  }
 
   private getProviderGroups(): ProviderGroup[] {
     const byProvider = new Map<string, ModelSelectionItem[]>();
@@ -167,7 +172,8 @@ export class ModelSelectionList extends LitElement {
   private renderCustomNameInput(
     model: ModelSelectionItem,
   ): TemplateResult | typeof nothing {
-    if (!model.fullName) return nothing;
+    if (!(this.showCustomNames || this.hasAnyCustomName()) || !model.fullName)
+      return nothing;
 
     return html`
       <div class="custom-name-row">
@@ -302,11 +308,25 @@ export class ModelSelectionList extends LitElement {
 
   override render(): TemplateResult {
     const groups = this.getProviderGroups();
+    const hasCustomNames = this.hasAnyCustomName();
 
     return html`
       <div class="model-selection-section">
         <h2>Model Selection</h2>
         ${this.renderHelperModelDropdown()}
+        <div class="custom-names-toggle">
+          <vscode-checkbox
+            ?checked=${this.showCustomNames || hasCustomNames}
+            @change=${(e: Event) => {
+              this.showCustomNames = (e.target as HTMLInputElement).checked;
+            }}
+          >
+            Custom API model names
+          </vscode-checkbox>
+          <span class="custom-names-description">
+            Override model names sent to API providers
+          </span>
+        </div>
         ${groups.map((g) => this.renderProviderGroup(g))}
       </div>
     `;
