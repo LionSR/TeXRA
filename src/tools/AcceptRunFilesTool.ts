@@ -32,9 +32,6 @@ import {
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 
-// Local imports - common
-import { isFileNotFoundError } from '@common/errors';
-
 // Local imports - utils
 import {
   StorageFS,
@@ -89,11 +86,16 @@ export type AcceptRunFilesInput = z.infer<typeof AcceptRunFilesInputSchema>;
 
 export class AcceptRunFilesTool extends defineTool({
   name: 'accept_run_files',
-  description: `Accept output files from a completed run into the workspace.
+  description: `Accept output files from a completed workflow run into the workspace.
+
+Use this tool ONLY for workflow subagent results (category="workflow").
+Do NOT use it for tool-use subagent results — those produce text responses,
+not output files.
 
 Locates output files in run storage or the workspace (depending on storage
 mode) and writes them to the workspace. Each file goes through an approval
-step before writing and may be rejected.
+step before writing and may be rejected. Associated diff files (e.g.
+paper_r0_gemini_diff.tex) are automatically cleaned up from the workspace.
 
 Parameters map directly to subagent-result delivery attributes:
   execution_id ← <subagent-result id="...">
@@ -301,10 +303,8 @@ Call:
         try {
           await WorkspaceFS.delete(loc.relativePath);
           return loc.relativePath;
-        } catch (err) {
-          if (!isFileNotFoundError(err)) {
-            // Silently ignore not-found; other errors (e.g. locked) are also non-fatal
-          }
+        } catch {
+          // Non-fatal: file may not exist or may be locked
           return null;
         }
       }),
