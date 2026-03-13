@@ -1384,6 +1384,7 @@
     "@lit-labs/virtualizer": "^2.1.1",
     "@lit/context": "^1.1.6",
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "@openai/codex-sdk": "^0.114.0",
     "@openrouter/sdk": "^0.9.11",
     "@supabase/supabase-js": "^2.99.1",
     "@vscode-elements/elements": "^2.5.1",
