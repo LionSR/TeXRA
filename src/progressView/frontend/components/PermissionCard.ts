@@ -287,9 +287,7 @@ export class PermissionCard extends LitElement {
     `;
   }
 
-  private renderPlanApprovalBody(
-    data: PlanApprovalPermission,
-  ): TemplateResult {
+  private renderPlanApprovalBody(data: PlanApprovalPermission): TemplateResult {
     const { plan } = data;
 
     return html`

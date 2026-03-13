@@ -90,10 +90,7 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
   }
 
   /** Override to clean up stream mapping on normal resolution. */
-  override resolveRequest(
-    id: string,
-    result: PlanApprovalResult,
-  ): boolean {
+  override resolveRequest(id: string, result: PlanApprovalResult): boolean {
     const streamId = this.approvalStreamMap.get(id);
     if (streamId) {
       this.streamApprovalMap.delete(streamId);
