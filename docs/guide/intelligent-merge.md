@@ -38,7 +38,7 @@ The merge process generates a new file, typically named following the pattern:
 
 `basename_agent_rX_full_model.tex`
 
-(e.g., `paper_polish_r0_full_sonnet45.tex`)
+(e.g., `paper_polish_r0_full_sonnet46.tex`)
 
 This `_full_` file contains the complete document content, incorporating the changes from the agent's output.
 
