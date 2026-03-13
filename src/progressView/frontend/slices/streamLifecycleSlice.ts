@@ -90,13 +90,12 @@ function updateStreamInfo(
       draft.streamStates.set(name, merged);
     }
 
-    // Sync streamDescriptions from StreamTabInfo (initial load / refresh).
-    // Clear descriptions for streams that no longer have one, and set new ones.
+    // Hydrate streamDescriptions from StreamTabInfo (initial load / refresh).
+    // Only set — never delete here, because descriptions may have arrived via
+    // UPDATE_STREAM_DESCRIPTION before the stream payload carries them.
     for (const stream of streams) {
       if (stream.description) {
         draft.streamDescriptions.set(stream.name, stream.description);
-      } else {
-        draft.streamDescriptions.delete(stream.name);
       }
     }
 
