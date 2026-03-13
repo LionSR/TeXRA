@@ -38,7 +38,7 @@ You can also install TeXRA directly in your preferred editor using protocol-base
 ### From VSIX File
 
 1. Open VS Code
-2. Obtain the newest release (`.vsix` file, e.g., `texra-0.35.10.vsix`)
+2. Obtain the newest release (`.vsix` file, e.g., `texra-0.36.7.vsix`)
 3. Find the `.vsix` file in the VS Code file explorer
 4. Right-click on the `.vsix` file
 5. From the context menu, select "Install Extension VSIX"
