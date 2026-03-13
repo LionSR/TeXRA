@@ -60,7 +60,7 @@ import {
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
 import {
-  computeWorkflowDiffs,
+  computeAndWriteWorkflowDiffs,
   formatSubagentDelivery,
   formatSubagentError,
   formatSubagentProgress,
@@ -209,19 +209,19 @@ async function executeSubagent(
       if (deliveryState.hasDelivered) return;
       deliveryState.hasDelivered = true;
 
-      // For workflow results, compute inline diffs so the orchestrator can
-      // immediately assess the scope of changes (e.g. comments/polish vs rewrite).
-      // Diffs are only included for modest changes; full rewrites are skipped.
-      let diffs: Awaited<ReturnType<typeof computeWorkflowDiffs>> | undefined;
+      // For workflow results, compute diffs and write them as files to the
+      // execution's run directory. The delivery references diff file paths
+      // so the orchestrator can read them on demand via /executions/{id}/files/.
+      let diffInfos: Awaited<ReturnType<typeof computeAndWriteWorkflowDiffs>> | undefined;
       if (result.category === 'workflow' && result.outputs.length > 0) {
         try {
-          diffs = await computeWorkflowDiffs(result.outputs);
+          diffInfos = await computeAndWriteWorkflowDiffs(executionId, result.outputs);
         } catch {
           // Diff computation failure is non-fatal — deliver without diffs.
         }
       }
 
-      const msg = formatSubagentDelivery(agentName, result, diffs);
+      const msg = formatSubagentDelivery(agentName, result, diffInfos);
       void getExecutionStore(executionId).writeReport(msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     },

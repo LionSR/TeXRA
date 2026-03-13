@@ -8,6 +8,8 @@
  * (just before injection into model context via FollowUpQueue).
  */
 
+import path from 'path';
+
 import { diff_match_patch } from 'diff-match-patch';
 
 import type {
@@ -16,9 +18,11 @@ import type {
 } from '@agent/runtime/AgentFlowResult';
 import type { ExecResult } from '@agent/types/ResultTypes';
 import type { ActiveChildInfo, SubagentProgressUpdate } from '@shared/schemas';
+import type { ExecutionId } from '@shared/schemas';
 import { TODO_STATUS } from '@shared/schemas/todo';
 import { formatDuration } from '@utils/core';
 import { AbsoluteFS } from '@utils/files';
+import { getRunDir, ensureRunDir } from '@utils/files/taskRunStorage';
 
 // ============================================================================
 // Diff computation for workflow deliveries
@@ -30,13 +34,9 @@ const MAX_DIFF_LINES = 200;
 /**
  * When the changed lines (added + removed) exceed this fraction of the
  * original file's line count, the diff is considered too large to be useful
- * and is skipped. Full rewrites produce noisy diffs that waste context;
- * the orchestrator is better off reading the output directly.
+ * (full rewrite). The orchestrator should read the output file directly.
  */
 const CHANGE_RATIO_THRESHOLD = 0.4;
-
-/** Sentinel value indicating the diff was intentionally skipped (too large). */
-const DIFF_SKIPPED = Symbol('diff-skipped');
 
 /**
  * Compute a unified diff between two strings.
@@ -59,20 +59,42 @@ function truncateDiff(diff: string, maxLines: number): string {
   return lines.slice(0, maxLines).join('\n') + '\n[... diff truncated]';
 }
 
+/** Fast line counter — avoids allocating a split array. */
+function countLinesSimple(text: string): number {
+  let count = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) === 10) count++;
+  }
+  return count > 0 || text.length > 0 ? count + 1 : 0;
+}
+
+/** Info about a diff file written to the execution's run directory. */
+export interface DiffFileInfo {
+  /** The relative path within the run directory (e.g. "diffs/chapter1.tex.diff"). */
+  diffRelPath: string;
+  /** True when the change was too large and no diff was written. */
+  skipped: boolean;
+}
+
 /**
- * Compute diffs for workflow output files where changes are modest.
+ * Compute diffs for workflow output files and write them to the execution's
+ * run directory as `.diff` files. Returns a map from output absolutePath to
+ * diff file info, so the delivery formatter can reference them by path.
  *
- * Returns a map from output absolutePath to either:
- * - A truncated diff string (when the change ratio is below the threshold)
- * - The DIFF_SKIPPED sentinel (when the diff is too large / full rewrite)
+ * Diffs are only written when the change ratio is modest. For full rewrites
+ * (change ratio > threshold), no diff file is created and the entry is marked
+ * as skipped so the orchestrator knows to read the output directly.
  *
  * Files without an original (new files) or where reading fails are omitted.
  */
-export async function computeWorkflowDiffs(
+export async function computeAndWriteWorkflowDiffs(
+  executionId: ExecutionId,
   outputs: OutputFileSummary[],
-): Promise<Map<string, string | typeof DIFF_SKIPPED>> {
-  const diffs = new Map<string, string | typeof DIFF_SKIPPED>();
+): Promise<Map<string, DiffFileInfo>> {
+  const results = new Map<string, DiffFileInfo>();
+  const diffsToWrite: Array<{ diffRelPath: string; content: string; absPath: string }> = [];
 
+  // First pass: compute diffs and decide which to write.
   await Promise.all(
     outputs.map(async (o) => {
       if (!o.originalPath) return;
@@ -87,14 +109,18 @@ export async function computeWorkflowDiffs(
         if (originalLines > 0 && o.added !== null && o.removed !== null) {
           const changedLines = (o.added ?? 0) + (o.removed ?? 0);
           if (changedLines / originalLines > CHANGE_RATIO_THRESHOLD) {
-            diffs.set(o.absolutePath, DIFF_SKIPPED);
+            const diffRelPath = `diffs/${path.basename(o.relativePath)}.diff`;
+            results.set(o.absolutePath, { diffRelPath, skipped: true });
             return;
           }
         }
 
         const diff = computeUnifiedDiff(original, modified);
         if (diff) {
-          diffs.set(o.absolutePath, truncateDiff(diff, MAX_DIFF_LINES));
+          const truncated = truncateDiff(diff, MAX_DIFF_LINES);
+          const diffRelPath = `diffs/${path.basename(o.relativePath)}.diff`;
+          results.set(o.absolutePath, { diffRelPath, skipped: false });
+          diffsToWrite.push({ diffRelPath, content: truncated, absPath: o.absolutePath });
         }
       } catch {
         // File read failure is non-fatal — skip diff for this file.
@@ -102,26 +128,37 @@ export async function computeWorkflowDiffs(
     }),
   );
 
-  return diffs;
-}
+  // Second pass: write diff files to disk.
+  if (diffsToWrite.length > 0) {
+    const runDir = getRunDir(executionId);
+    await ensureRunDir(executionId);
+    const diffsDir = path.join(runDir, 'diffs');
+    await AbsoluteFS.ensureDir(diffsDir);
 
-/** Fast line counter — avoids allocating a split array. */
-function countLinesSimple(text: string): number {
-  let count = 0;
-  for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) === 10) count++;
+    await Promise.all(
+      diffsToWrite.map(async ({ diffRelPath, content }) => {
+        const fullPath = path.join(runDir, diffRelPath);
+        await AbsoluteFS.write(fullPath, content);
+      }),
+    );
   }
-  return count > 0 || text.length > 0 ? count + 1 : 0;
+
+  return results;
 }
 
 // ============================================================================
 // Formatting helpers
 // ============================================================================
 
-/** Format a single output file summary as XML, optionally including inline diff. */
+/**
+ * Format a single output file summary as XML.
+ * When diff info is provided, includes a `diff` attribute pointing to the diff
+ * file path (readable via /executions/{id}/files/...) or a `diff-omitted`
+ * attribute when the change was too large for a useful diff.
+ */
 function formatOutputFile(
   o: OutputFileSummary,
-  diff?: string | typeof DIFF_SKIPPED,
+  diffInfo?: DiffFileInfo,
 ): string {
   const attrs = [
     `path="${escapeAttr(o.relativePath)}"`,
@@ -133,34 +170,32 @@ function formatOutputFile(
     .filter(Boolean)
     .join(' ');
 
-  if (diff === DIFF_SKIPPED) {
-    // Large change ratio — omit diff, signal that the orchestrator should
-    // read the output file directly rather than rely on an inline diff.
+  if (diffInfo?.skipped) {
+    // Large change ratio — no diff file written. Orchestrator should
+    // read the output file directly to review.
     return `<file ${attrs} diff-omitted="large-change" />`;
   }
-  if (diff) {
-    return [
-      `<file ${attrs}>`,
-      `<diff>${escapeText(diff)}</diff>`,
-      '</file>',
-    ].join('\n');
+  if (diffInfo) {
+    // Diff available as a file — orchestrator can read it on demand.
+    return `<file ${attrs} diff="${escapeAttr(diffInfo.diffRelPath)}" />`;
   }
   return `<file ${attrs} />`;
 }
 
 /**
  * Format workflow output files, grouping by round when there are multiple rounds.
- * When diffs are provided, they are included inline within each <file> element.
+ * When diff info is provided, each <file> element includes a `diff` attribute
+ * pointing to the diff file path (readable via /executions/{id}/files/...).
  */
 function formatWorkflowOutputs(
   outputs: OutputFileSummary[],
-  diffs?: Map<string, string | typeof DIFF_SKIPPED>,
+  diffInfos?: Map<string, DiffFileInfo>,
 ): string[] {
   const rounds = new Set(outputs.map((o) => o.round));
   if (rounds.size <= 1) {
     return [
       '<output-files>',
-      ...outputs.map((o) => formatOutputFile(o, diffs?.get(o.absolutePath))),
+      ...outputs.map((o) => formatOutputFile(o, diffInfos?.get(o.absolutePath))),
       '</output-files>',
     ];
   }
@@ -171,7 +206,7 @@ function formatWorkflowOutputs(
     lines.push(`<round number="${round}">`);
     lines.push(
       ...roundFiles.map((o) =>
-        formatOutputFile(o, diffs?.get(o.absolutePath)),
+        formatOutputFile(o, diffInfos?.get(o.absolutePath)),
       ),
     );
     lines.push('</round>');
@@ -189,14 +224,15 @@ function agentFriendlyStatus(status: string): string {
  * Format an AgentFlowResult as a delivery message.
  * Injected into the orchestrator's FollowUpQueue as a user-role message.
  *
- * For workflow results, an optional `diffs` map (output absolutePath → diff text)
- * can be provided to include inline diffs so the orchestrator can immediately
- * assess the scope of changes without reading files manually.
+ * For workflow results, an optional `diffInfos` map (output absolutePath →
+ * DiffFileInfo) can be provided. Diff files are accessible via
+ * /executions/{id}/files/{diffRelPath} — the delivery only includes
+ * the path reference, not the diff content itself.
  */
 export function formatSubagentDelivery(
   agentName: string,
   result: AgentFlowResult,
-  diffs?: Map<string, string | typeof DIFF_SKIPPED>,
+  diffInfos?: Map<string, DiffFileInfo>,
 ): string {
   const displayStatus = agentFriendlyStatus(result.status);
   const lines = [
@@ -204,7 +240,7 @@ export function formatSubagentDelivery(
   ];
 
   if (result.category === 'workflow' && result.outputs.length > 0) {
-    lines.push(...formatWorkflowOutputs(result.outputs, diffs));
+    lines.push(...formatWorkflowOutputs(result.outputs, diffInfos));
   } else if (result.category === 'toolUse' && result.lastResponse) {
     lines.push('<response>', result.lastResponse, '</response>');
   }

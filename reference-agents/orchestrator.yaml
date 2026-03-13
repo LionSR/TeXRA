@@ -52,7 +52,13 @@ prompts:
 
     The LaTeX preamble (packages, macros) is typically extracted separately into auxiliary files and does not need to be included in output files. Focus workflow proposals on document content rather than preamble.
 
-    Proposals execute asynchronously once approved. Output files are written alongside the input with a model-specific suffix by default, or to custom paths if you specify outputFiles. After a workflow completes, always review before accepting. When changes are modest (annotations, comments, polishing), the delivery includes an inline <diff> for each output file showing exactly what changed—read the diff first to assess the scope. If the diff is small or clearly shows only the expected changes (e.g., added \criticize comments, minor wording tweaks), you can accept with confidence. When changes are extensive (full rewrites, large restructuring), the diff is omitted (marked diff-omitted="large-change") because it would be noisy and unhelpful—instead read the output directly via /executions/{id}/files/{path} to verify quality. Once satisfied, use accept_run_files to accept the results into the workspace.
+    Proposals execute asynchronously once approved. Output files are written alongside the input with a model-specific suffix by default, or to custom paths if you specify outputFiles. After a workflow completes, always review before accepting. The delivery message includes metadata for each output file (path, lines added/removed) but not the content itself—diffs and outputs are available as files you read on demand.
+
+    For modest changes (annotations, comments, polishing), each <file> element includes a diff="diffs/filename.diff" attribute pointing to a diff file. Read it via /executions/{id}/files/diffs/filename.diff to assess the scope. If the diff is small or clearly shows only the expected changes (e.g., added \criticize comments, minor wording tweaks), you can accept with confidence. For larger or unexpected diffs, also read sections of the output file via /executions/{id}/files/{path}.
+
+    For extensive changes (full rewrites, large restructuring), the diff is omitted (marked diff-omitted="large-change") because it would be noisy and unhelpful. Read the output file directly via /executions/{id}/files/{path} to verify quality.
+
+    Once satisfied, use accept_run_files to accept the results into the workspace.
 
     Delegate liberally. Compute-intensive tasks (long derivations, full document corrections, extensive rewrites) belong to specialized agents. Propose separate workflows for batch operations across multiple files. For diverse perspectives, propose the same work to different agents or models and synthesize results yourself. When consolidating multiple drafts, establish a single source of truth with internal self-consistency.
 
