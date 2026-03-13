@@ -117,14 +117,6 @@ import type { PermissionState } from './components/PermissionCard';
 // Signal.Computed evaluations that run on every state change.
 // ---------------------------------------------------------------------------
 
-function mapsEqual<K, V>(a: Map<K, V>, b: Map<K, V>): boolean {
-  if (a.size !== b.size) return false;
-  for (const [k, v] of a) {
-    if (b.get(k) !== v) return false;
-  }
-  return true;
-}
-
 function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
   if (a.size !== b.size) return false;
   for (const v of a) {
@@ -289,25 +281,12 @@ export class ProgressApp extends ProgressAppBase {
     (s) => s.followupOptionsByStream,
   );
   private processOutputs$ = select(this.appState, (s) => s.processOutputs);
+  private streamDescriptions$ = select(
+    this.appState,
+    (s) => s.streamDescriptions,
+  );
 
   // --- Derived computeds: only re-evaluate when selector inputs propagate ---
-
-  /** streamId → description extracted from streamById (for context consumers). */
-  private _prevDescriptions: StreamDescriptionMap = EMPTY_DESCRIPTIONS;
-  private descriptions$ = new Signal.Computed((): StreamDescriptionMap => {
-    const streamById = this.streamById$.get();
-    const map: StreamDescriptionMap = new Map();
-    for (const [id, info] of streamById) {
-      if (info.description) map.set(id, info.description);
-    }
-    // Return stable reference when unchanged — Signal.Computed uses Object.is(),
-    // so a new Map with identical contents would still propagate.
-    if (mapsEqual(map, this._prevDescriptions)) {
-      return this._prevDescriptions;
-    }
-    this._prevDescriptions = map;
-    return map;
-  });
 
   /**
    * Filtered + sorted stream list.
@@ -496,7 +475,7 @@ export class ProgressApp extends ProgressAppBase {
     this.streamLogContextValue = this.logContext$.get();
     this.permissionsContextValue = this.permissions$.get();
     this.processOutputContextValue = this.activeProcessOutputs$.get();
-    this.descriptionsContextValue = this.descriptions$.get();
+    this.descriptionsContextValue = this.streamDescriptions$.get();
   }
 
   render(): TemplateResult {
