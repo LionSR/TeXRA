@@ -25,22 +25,30 @@ export interface HelperModelKit {
 
 /**
  * Resolve the configured helper model name from global state.
- * Falls back to the first enabled model when the configured (or default)
- * helper model is not in the user's visible model list.
+ *
+ * When the user has explicitly configured a helper model, we validate it
+ * against the enabled model list and fall back to the first enabled model
+ * if the configured one was removed. The built-in default is always
+ * accepted — it doesn't need to appear in the user's visible model list
+ * since it's used for internal auxiliary tasks, not user-facing generation.
  *
  * Used for merge operations, progress view defaults, and anywhere
  * only the model name (not a full handler) is needed.
  */
 export function getHelperModelName(): string {
-  const configuredModel = globalSM.get<string>(
-    GlobalStateKey.HELPER_MODEL,
-    DEFAULT_HELPER_MODEL,
-  );
-  const resolved = isNonEmptyString(configuredModel)
-    ? configuredModel.trim()
-    : DEFAULT_HELPER_MODEL;
+  const configuredModel = globalSM.get<string>(GlobalStateKey.HELPER_MODEL);
+  const userExplicitlySet = isNonEmptyString(configuredModel);
 
-  // Ensure the resolved model is actually in the user's enabled list.
+  if (!userExplicitlySet) {
+    return DEFAULT_HELPER_MODEL;
+  }
+
+  const resolved = configuredModel.trim();
+
+  // Only validate user-chosen models against the enabled list.
+  // The built-in default doesn't need to be in the list.
+  if (resolved === DEFAULT_HELPER_MODEL) return resolved;
+
   const enabledModels = globalSM.get<string[]>(
     GlobalStateKey.ENABLED_MODELS,
     [],

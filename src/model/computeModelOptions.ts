@@ -18,7 +18,6 @@ import type { ModelOptionData } from '@shared/schemas';
 export const DEFAULT_MODELS = [
   'gemini31p',
   'gemini3f',
-  'sonnet46',
   'sonnet46T',
   'opus46T',
   'gpt54',
@@ -36,7 +35,7 @@ export const DEFAULT_MODELS = [
  * to get the updated defaults. A simple integer avoids hash-collision risks
  * and doesn't trigger on harmless reordering.
  */
-export const MODEL_LIST_VERSION = 8;
+export const MODEL_LIST_VERSION = 7;
 
 /**
  * Get the list of visible models from extension global state.
