@@ -133,12 +133,12 @@ For example:
 
 - Input: `paper.tex`
 - Agent: `polish`
-- Model: `sonnet45`
-- Output: `paper_polish_r0_sonnet45.tex`
+- Model: `sonnet46`
+- Output: `paper_polish_r0_sonnet46.tex`
 
 When the agent definition includes reflection rounds, you may also see:
 
-- Round 1: `paper_polish_r1_sonnet45.tex`
+- Round 1: `paper_polish_r1_sonnet46.tex`
 
 ## File Management Commands
 

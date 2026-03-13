@@ -144,7 +144,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         }
       },
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS]: () =>
-        safeExecuteCommand('texra.openDoc', ['agent-explorer'], this.viewName),
+        safeExecuteCommand('texra.openDoc', ['custom-agents'], this.viewName),
       [MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS]: () =>
         safeExecuteCommand('texra.openDoc', ['installation'], this.viewName),
 
