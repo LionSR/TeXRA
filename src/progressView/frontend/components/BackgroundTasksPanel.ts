@@ -93,6 +93,7 @@ export class BackgroundTasksPanel extends LitElement {
 
       .task-name {
         flex-shrink: 0;
+        max-width: 40%;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
