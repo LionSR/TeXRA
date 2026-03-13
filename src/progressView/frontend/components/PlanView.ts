@@ -36,7 +36,6 @@ export class PlanView extends LitElement {
     css`
       :host {
         display: block;
-        margin: var(--spacing-small) 0;
       }
 
       :host([hidden]) {
@@ -45,6 +44,11 @@ export class PlanView extends LitElement {
 
       .plan-collapsible {
         border-bottom: var(--border-thin) solid var(--color-border);
+      }
+
+      .plan-collapsible::part(body) {
+        max-height: var(--height-xlarge);
+        overflow-y: auto;
       }
 
       .plan-summary {
@@ -168,6 +172,7 @@ export class PlanView extends LitElement {
         id=${ELEMENT_IDS.PLAN_VIEW_CONTAINER}
         class="plan-collapsible panel-collapsible"
         title=${`Plan (${completed}/${total})`}
+        open
       >
         <div class="plan-summary">${this.plan.summary}</div>
         <div id=${ELEMENT_IDS.PLAN_VIEW} class="plan-steps">

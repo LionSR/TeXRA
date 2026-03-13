@@ -70,6 +70,17 @@ export const requestPanelStyles: CSSResult = css`
     gap: var(--spacing-small);
   }
 
+  /* Scroll constraint for panels with potentially long content.
+     Excluded: workflow-proposal__details (has an absolutely-positioned
+     dropdown that would be clipped by overflow-y: auto). */
+  .approval-request__details,
+  .bash-approval-request__details,
+  .retry-request__details,
+  .plan-approval-request__details {
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
   .approval-request__meta,
   .retry-request__meta {
     font-size: var(--font-size-sm);
