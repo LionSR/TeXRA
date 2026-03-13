@@ -12,10 +12,13 @@
 // Third-party imports
 import { z } from 'zod';
 import type {
+  ItemCompletedEvent,
   RunResult,
   SandboxMode,
   ThreadItem,
   Thread,
+  TurnCompletedEvent,
+  TurnFailedEvent,
 } from '@openai/codex-sdk';
 
 // Local imports - agent
@@ -53,9 +56,12 @@ import { defineTool } from './core/define';
 // Schema
 // ============================================================================
 
-/** Sandbox modes exposed to the LLM (excludes danger-full-access intentionally). */
-const SANDBOX_MODES = ['read-only', 'workspace-write'] as const satisfies
-  readonly SandboxMode[];
+/** All sandbox modes from the SDK, exposed to the LLM. */
+const SANDBOX_MODES = [
+  'read-only',
+  'workspace-write',
+  'danger-full-access',
+] as const satisfies readonly SandboxMode[];
 
 const CodexInputSchema = z.strictObject({
   prompt: z.string().describe('Instruction for the Codex agent'),
@@ -293,7 +299,7 @@ export class CodexTool extends defineTool({
 
       for await (const event of events) {
         if (event.type === 'item.completed') {
-          const item = (event as { item: ThreadItem }).item;
+          const { item } = event as ItemCompletedEvent;
           items.push(item);
 
           // Progress updates for the orchestrator
@@ -316,10 +322,11 @@ export class CodexTool extends defineTool({
             responseParts.push(item.text);
           }
         } else if (event.type === 'turn.completed') {
-          usage = (event as { usage: RunResult['usage'] }).usage ?? null;
+          usage = (event as TurnCompletedEvent).usage ?? null;
         } else if (event.type === 'turn.failed') {
-          const msg = (event as { error?: { message: string } }).error?.message;
-          throw new Error(msg ?? 'Codex turn failed');
+          throw new Error(
+            (event as TurnFailedEvent).error.message ?? 'Codex turn failed',
+          );
         }
       }
 
