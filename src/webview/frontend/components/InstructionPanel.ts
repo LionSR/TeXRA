@@ -169,14 +169,11 @@ export class InstructionPanel extends LitElement {
       }
 
       .agent-select--hidden {
-        position: absolute;
-        inset: 0;
-        visibility: hidden;
-        pointer-events: none;
+        display: none;
       }
 
       .agent-select--active {
-        position: relative;
+        display: block;
       }
 
       /* Dropdowns in footer open upward */
@@ -451,6 +448,12 @@ export class InstructionPanel extends LitElement {
                     })}
                     data-session-type="toolUse"
                     aria-label="Tool-use agent"
+                    tabindex=${session.sessionType === SESSION_TYPES.TOOL_USE
+                      ? 0
+                      : -1}
+                    aria-hidden=${session.sessionType === SESSION_TYPES.TOOL_USE
+                      ? 'false'
+                      : 'true'}
                     position="above"
                     .value=${session.toolUseAgent}
                     @focus=${this.handleAgentFocus}
