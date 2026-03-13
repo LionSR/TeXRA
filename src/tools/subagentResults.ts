@@ -14,6 +14,7 @@ import type {
 } from '@agent/runtime/AgentFlowResult';
 import type { ExecResult } from '@agent/types/ResultTypes';
 import type { ActiveChildInfo, SubagentProgressUpdate } from '@shared/schemas';
+import { TODO_STATUS } from '@shared/schemas/todo';
 import { formatDuration } from '@utils/core';
 
 // ============================================================================
@@ -116,15 +117,15 @@ export function formatSubagentProgress(
   switch (update.kind) {
     case 'todos': {
       const completed = update.todos.filter(
-        (t) => t.status === 'completed',
+        (t) => t.status === TODO_STATUS.COMPLETED,
       ).length;
       const inProgress = update.todos.filter(
-        (t) => t.status === 'in_progress',
+        (t) => t.status === TODO_STATUS.IN_PROGRESS,
       ).length;
       const pending = update.todos.length - completed - inProgress;
       const TODO_PROGRESS_ICON: Record<string, string> = {
-        completed: '[x]',
-        in_progress: '[>]',
+        [TODO_STATUS.COMPLETED]: '[x]',
+        [TODO_STATUS.IN_PROGRESS]: '[>]',
       };
       const items = update.todos
         .map((t) => {
@@ -164,10 +165,10 @@ export function formatSubagentProgress(
       }
       const steps = update.plan.steps;
       const completed = steps.filter(
-        (s) => s.status === 'completed',
+        (s) => s.status === TODO_STATUS.COMPLETED,
       ).length;
       const inProgress = steps.filter(
-        (s) => s.status === 'in_progress',
+        (s) => s.status === TODO_STATUS.IN_PROGRESS,
       ).length;
       const pending = steps.length - completed - inProgress;
       return `<subagent-progress ${idAttr} ${agentAttr} type="plan" steps="${steps.length}" completed="${completed}" active="${inProgress}" pending="${pending}" />`;
