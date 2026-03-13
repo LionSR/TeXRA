@@ -248,6 +248,8 @@ export class FollowupSection extends LitElement {
                 id=${ELEMENT_IDS.FOLLOWUP_AGENT}
                 class="followup-agent-select"
                 position="above"
+                tabindex=${this.mode === 'merge' ? -1 : 0}
+                aria-hidden=${this.mode === 'merge' ? 'true' : 'false'}
                 .value=${this.selectedAgent}
                 @change=${this.handleAgentChange}
               >
@@ -278,16 +280,23 @@ export class FollowupSection extends LitElement {
             ></vscode-textarea>
           </div>
 
-          <div class="followup-options">
+          <div
+            class="followup-options"
+            aria-hidden=${this.mode === 'chat' || this.mode === 'merge'
+              ? 'true'
+              : 'false'}
+          >
             <vscode-checkbox
               id=${ELEMENT_IDS.FOLLOWUP_INCLUDE_INSTRUCTION}
               ?checked=${this.includeInstruction}
+              tabindex=${this.mode === 'workflow' ? 0 : -1}
               @change=${this.handleIncludeChange}
               >Include previous instruction</vscode-checkbox
             >
             <vscode-checkbox
               id=${ELEMENT_IDS.FOLLOWUP_ATTACH_OUTPUTS}
               ?checked=${this.attachOutputs}
+              tabindex=${this.mode === 'workflow' ? 0 : -1}
               @change=${this.handleAttachChange}
               >Modify originals (attach outputs as reference)</vscode-checkbox
             >
