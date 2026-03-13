@@ -1159,10 +1159,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     await globalSM.update(GlobalStateKey.ENABLED_MODELS, updated);
 
-    // Auto-reset helper model if it was just disabled
+    // Auto-reset helper model if it was just disabled.
+    // Store the first remaining enabled model; getHelperModelName()
+    // validates against the enabled list at read time as a safety net.
     if (!data.enabled && getHelperModelName() === data.modelName) {
-      const newHelper = updated[0] ?? DEFAULT_HELPER_MODEL;
-      await globalSM.update(GlobalStateKey.HELPER_MODEL, newHelper);
+      await globalSM.update(
+        GlobalStateKey.HELPER_MODEL,
+        updated[0] ?? DEFAULT_HELPER_MODEL,
+      );
     }
 
     // Enabled model list changed — invalidate cached options.

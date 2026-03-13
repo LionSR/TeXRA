@@ -25,6 +25,9 @@ export interface HelperModelKit {
 
 /**
  * Resolve the configured helper model name from global state.
+ * Falls back to the first enabled model when the configured (or default)
+ * helper model is not in the user's visible model list.
+ *
  * Used for merge operations, progress view defaults, and anywhere
  * only the model name (not a full handler) is needed.
  */
@@ -33,9 +36,18 @@ export function getHelperModelName(): string {
     GlobalStateKey.HELPER_MODEL,
     DEFAULT_HELPER_MODEL,
   );
-  return isNonEmptyString(configuredModel)
+  const resolved = isNonEmptyString(configuredModel)
     ? configuredModel.trim()
     : DEFAULT_HELPER_MODEL;
+
+  // Ensure the resolved model is actually in the user's enabled list.
+  const enabledModels = globalSM.get<string[]>(
+    GlobalStateKey.ENABLED_MODELS,
+    [],
+  );
+  if (enabledModels.length === 0) return resolved;
+  if (enabledModels.includes(resolved)) return resolved;
+  return enabledModels[0];
 }
 
 /**
