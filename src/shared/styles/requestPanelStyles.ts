@@ -75,6 +75,7 @@ export const requestPanelStyles: CSSResult = css`
      dropdown that would be clipped by overflow-y: auto). */
   .approval-request__details,
   .bash-approval-request__details,
+  .retry-request__details,
   .plan-approval-request__details {
     max-height: 50vh;
     overflow-y: auto;
