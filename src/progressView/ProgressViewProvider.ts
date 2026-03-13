@@ -143,8 +143,7 @@ export class ProgressViewProvider
     );
     this.planApprovalHandler = new ApprovalRequestHandler(
       'approvalId',
-      (p) =>
-        u.showPermission({ kind: PERMISSION_KIND.PLAN_APPROVAL, data: p }),
+      (p) => u.showPermission({ kind: PERMISSION_KIND.PLAN_APPROVAL, data: p }),
       (id) => u.resolvePermission(PERMISSION_KIND.PLAN_APPROVAL, id),
       canSend,
     );
