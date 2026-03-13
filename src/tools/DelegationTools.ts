@@ -211,7 +211,8 @@ async function executeSubagent(
 
       // For workflow results, compute inline diffs so the orchestrator can
       // immediately assess the scope of changes (e.g. comments/polish vs rewrite).
-      let diffs: Map<string, string> | undefined;
+      // Diffs are only included for modest changes; full rewrites are skipped.
+      let diffs: Awaited<ReturnType<typeof computeWorkflowDiffs>> | undefined;
       if (result.category === 'workflow' && result.outputs.length > 0) {
         try {
           diffs = await computeWorkflowDiffs(result.outputs);

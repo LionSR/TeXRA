@@ -28,6 +28,17 @@ import { AbsoluteFS } from '@utils/files';
 const MAX_DIFF_LINES = 200;
 
 /**
+ * When the changed lines (added + removed) exceed this fraction of the
+ * original file's line count, the diff is considered too large to be useful
+ * and is skipped. Full rewrites produce noisy diffs that waste context;
+ * the orchestrator is better off reading the output directly.
+ */
+const CHANGE_RATIO_THRESHOLD = 0.4;
+
+/** Sentinel value indicating the diff was intentionally skipped (too large). */
+const DIFF_SKIPPED = Symbol('diff-skipped');
+
+/**
  * Compute a unified diff between two strings.
  * Returns a patch-style diff string, or null if files are identical.
  */
@@ -49,14 +60,18 @@ function truncateDiff(diff: string, maxLines: number): string {
 }
 
 /**
- * Compute diffs for all workflow output files that have an original path.
- * Returns a map from output absolutePath to truncated diff text.
- * Files without an original (new files) or where reading fails are skipped.
+ * Compute diffs for workflow output files where changes are modest.
+ *
+ * Returns a map from output absolutePath to either:
+ * - A truncated diff string (when the change ratio is below the threshold)
+ * - The DIFF_SKIPPED sentinel (when the diff is too large / full rewrite)
+ *
+ * Files without an original (new files) or where reading fails are omitted.
  */
 export async function computeWorkflowDiffs(
   outputs: OutputFileSummary[],
-): Promise<Map<string, string>> {
-  const diffs = new Map<string, string>();
+): Promise<Map<string, string | typeof DIFF_SKIPPED>> {
+  const diffs = new Map<string, string | typeof DIFF_SKIPPED>();
 
   await Promise.all(
     outputs.map(async (o) => {
@@ -66,6 +81,17 @@ export async function computeWorkflowDiffs(
           AbsoluteFS.read(o.originalPath),
           AbsoluteFS.read(o.absolutePath),
         ]);
+
+        // Skip diff when changes are too large relative to the original.
+        const originalLines = countLinesSimple(original);
+        if (originalLines > 0 && o.added !== null && o.removed !== null) {
+          const changedLines = (o.added ?? 0) + (o.removed ?? 0);
+          if (changedLines / originalLines > CHANGE_RATIO_THRESHOLD) {
+            diffs.set(o.absolutePath, DIFF_SKIPPED);
+            return;
+          }
+        }
+
         const diff = computeUnifiedDiff(original, modified);
         if (diff) {
           diffs.set(o.absolutePath, truncateDiff(diff, MAX_DIFF_LINES));
@@ -79,6 +105,15 @@ export async function computeWorkflowDiffs(
   return diffs;
 }
 
+/** Fast line counter — avoids allocating a split array. */
+function countLinesSimple(text: string): number {
+  let count = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) === 10) count++;
+  }
+  return count > 0 || text.length > 0 ? count + 1 : 0;
+}
+
 // ============================================================================
 // Formatting helpers
 // ============================================================================
@@ -86,7 +121,7 @@ export async function computeWorkflowDiffs(
 /** Format a single output file summary as XML, optionally including inline diff. */
 function formatOutputFile(
   o: OutputFileSummary,
-  diff?: string,
+  diff?: string | typeof DIFF_SKIPPED,
 ): string {
   const attrs = [
     `path="${escapeAttr(o.relativePath)}"`,
@@ -98,6 +133,11 @@ function formatOutputFile(
     .filter(Boolean)
     .join(' ');
 
+  if (diff === DIFF_SKIPPED) {
+    // Large change ratio — omit diff, signal that the orchestrator should
+    // read the output file directly rather than rely on an inline diff.
+    return `<file ${attrs} diff-omitted="large-change" />`;
+  }
   if (diff) {
     return [
       `<file ${attrs}>`,
@@ -114,7 +154,7 @@ function formatOutputFile(
  */
 function formatWorkflowOutputs(
   outputs: OutputFileSummary[],
-  diffs?: Map<string, string>,
+  diffs?: Map<string, string | typeof DIFF_SKIPPED>,
 ): string[] {
   const rounds = new Set(outputs.map((o) => o.round));
   if (rounds.size <= 1) {
@@ -156,7 +196,7 @@ function agentFriendlyStatus(status: string): string {
 export function formatSubagentDelivery(
   agentName: string,
   result: AgentFlowResult,
-  diffs?: Map<string, string>,
+  diffs?: Map<string, string | typeof DIFF_SKIPPED>,
 ): string {
   const displayStatus = agentFriendlyStatus(result.status);
   const lines = [
