@@ -4,7 +4,7 @@ Every time you click "Execute" in TeXRA, an **agent** takes your files and instr
 
 ## Agent Definition Files (`.yaml`)
 
-Each agent is defined in a simple `.yaml` file that tells TeXRA what to say to the AI model and how to handle the response. You can browse these files in the Agent Explorer, or create your own (see [Custom Agents](./custom-agents.md)).
+Each agent is defined in a simple `.yaml` file that tells TeXRA what to say to the AI model and how to handle the response. You can browse and manage these files from the **Agents** tab in the TeXRA Dashboard, or create your own (see [Custom Agents](./custom-agents.md)).
 
 ## Understanding the YAML Structure
 

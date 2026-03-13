@@ -6,14 +6,16 @@ TeXRA provides extensive configuration options that allow you to customize its b
 
 The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open it from the Command Palette (`Ctrl+Shift+P`) with **TeXRA: Show Dashboard**:
 
-- **Agents** - Turn agents on or off for the current workspace. Agents that support multiple output files are marked with a badge.
-- **Models** - Pick which models show up in your dropdown. Models are grouped by provider (Anthropic, OpenAI, Google, etc.) and you can set or remove API keys for each provider right there - no need to hunt through settings.
-- **History** - Search and browse past runs. Handy for finding that polish job you ran last week.
 - **Memory** - See what your tool-use agents have remembered across sessions, and delete entries you no longer need.
-- **Profile** - Check your account, access level, and available remote agents.
+- **History** - Search and browse past runs. Handy for finding that polish job you ran last week.
+- **Models** - Pick which models show up in your dropdown. Models are grouped by provider (Anthropic, OpenAI, Google, etc.) and you can set or remove API keys for each provider right there - no need to hunt through settings.
+- **Agents** - Turn agents on or off for the current workspace. Agents that support multiple output files are marked with a badge.
+- **Multi-Agent** - Configure multi-agent orchestration and presets.
+- **Tools** - Manage tool-use agent capabilities and approval settings.
+- **LaTeX** - Configure LaTeX formatting, diff, and TikZ settings.
 
 ::: tip
-Streaming and connection settings have moved out of VS Code settings and into the **Settings View**, accessible from the Dashboard.
+Many connection and model settings are configured through VS Code's standard settings. The Dashboard tabs provide convenient access to agent, model, and tool configuration.
 :::
 
 ## Accessing Configuration
@@ -37,13 +39,9 @@ matching `_multiple.yaml` file are flagged with a multi-output badge.
 
 ### Model Configuration
 
-Define which AI models appear in the model selection dropdown. The current
-default list is maintained in the [Models Guide](./models.md). Override it by
-specifying your own model identifiers:
-
-```json
-"texra.models": ["sonnet46T", "opus46T", "gemini31p", "gpt54"]
-```
+Which models appear in the selection dropdown is managed through the **Models**
+tab in the TeXRA Dashboard. Toggle individual models on or off per provider.
+See the [Models Guide](./models.md) for the full list of supported models.
 
 ### API Provider Settings
 
@@ -53,25 +51,16 @@ Configure how TeXRA connects to AI model providers:
 "texra.model.useOpenRouter": false,
 "texra.model.useImprovedConnection": false,
 "texra.model.improvedConnectionDomain": "",
-"texra.model.baseUrlDeepSeek": "",
-"texra.model.useStreaming": false,
-"texra.model.useStreamingAnthropicReasoning": false,
-"texra.model.useStreamingOpenAIReasoning": false,
 "texra.model.useOpenAIResponsesAPI": true,
 "texra.model.gpt5ReasoningSummary": false,
-"texra.model.instructionPolishModel": "sonnet46"
+"texra.model.useCopilot": false
 ```
 
 - `useOpenRouter`: Access models through OpenRouter instead of direct APIs
 - `useImprovedConnection`: Route all API requests through a proxy server
 - `improvedConnectionDomain`: Custom proxy domain when `useImprovedConnection` is enabled. Defaults to the built-in proxy when unset.
   - ⚠️ **Security Warning:** When using a proxy, ensure you trust the proxy server as it will receive your API keys. Only use proxies from trusted sources.
-- `baseUrlDeepSeek`: Custom base URL for DeepSeek models; overrides the default `https://api.deepseek.com` endpoint
-- `useStreaming`: Enable streaming responses for better handling of long outputs
-- `useStreamingAnthropicReasoning`: Enable streaming specifically for Anthropic reasoning models
-- `useStreamingOpenAIReasoning`: Enable streaming specifically for OpenAI reasoning models
 - `useOpenAIResponsesAPI`: Use OpenAI's Responses API instead of Chat Completions when available
-- `instructionPolishModel`: Short name of the model TeXRA uses to polish instruction text when Copilot is disabled. Values match the identifiers listed in [Models](./models.md).
 - `gpt5ReasoningSummary`: Request reasoning summaries from the GPT-5 family, including GPT-5.4 and GPT-5.4 Pro (requires verified account and user tier)
 - `useCopilot`: Use the Copilot language model through VS Code's Language Model API for instruction polishing and text connection
 
@@ -85,7 +74,6 @@ Configure how TeXRA connects to AI model providers:
 | Groq             | `groq/openai/v1`            | ✅ Yes    |
 | Perplexity       | `pplx`                      | ✅ Yes    |
 | Mistral          | `mistral`                   | ✅ Yes    |
-| DeepSeek         | N/A                         | ❌ No     |
 | Moonshot (Kimi)  | N/A                         | ❌ No     |
 | DashScope (Qwen) | N/A                         | ❌ No     |
 
@@ -235,16 +223,6 @@ Configure how TikZ figures are extracted and compiled:
 - `includeWorkspaceInTexinputs`: Whether to include the workspace root in TEXINPUTS
 - `tikzTemplate`: The template used for generating standalone TikZ documents
 
-## Execution Configuration
-
-Control agent execution behavior:
-
-```json
-"texra.agent.pauseForConfirmation": false
-```
-
-When set to `true`, TeXRA will pause for confirmation after each agent, even when reflection is enabled.
-
 ## Git Integration
 
 Configure Git integration features:
@@ -331,18 +309,8 @@ While TeXRA doesn't have built-in profile support, you can create multiple confi
 For better performance:
 
 ```json
-"texra.model.useStreaming": true,
 "texra.files.ignored.directories": ["build", "node_modules", "versions", "history"],
 "texra.logger.debugMode": false
-```
-
-### Optimizing for Quality
-
-For highest quality results:
-
-```json
-"texra.model.useStreamingAnthropicReasoning": true,
-"texra.model.useStreamingOpenAIReasoning": true
 ```
 
 ### Optimizing for Collaboration
@@ -366,19 +334,6 @@ For advanced configurations, you can directly edit the VS Code settings JSON:
 1. Open Command Palette (Ctrl+Shift+P or Cmd+Shift+P on macOS)
 2. Run "Preferences: Open User Settings (JSON)"
 3. Add or modify TeXRA settings
-
-### Command-Specific Configuration
-
-Some TeXRA commands can be configured through their own settings:
-
-```json
-"texra.setApiKey": {
-  "defaultProvider": "anthropic"
-},
-"texra.cleanOutput": {
-  "confirmBeforeDeleting": true
-}
-```
 
 ### Cross-Extension Compatibility
 

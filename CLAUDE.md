@@ -98,7 +98,6 @@ Key directories in `src/`:
 - `progressView/` - Task tracking board
 - `settingsView/` - Unified settings webview (History, Memory, Models, Agents, Multi-Agent, LaTeX, Tools tabs)
 - `shared/` - Shared schemas and message handlers across webviews
-- `explorer/` - VS Code file explorer integration
 - `auth/` - Authentication logic
 - `housekeeping/` - Cleanup and packing operations
 - `types/` - Shared type definitions
@@ -277,7 +276,6 @@ For good separation of concerns, testability, and platform independence, core bu
 - `src/utils/config/` (wraps `vscode.workspace.getConfiguration`)
 - `src/utils/files/workspaceFS.ts`, `storageFS.ts` (wraps `vscode.workspace.fs`)
 - `src/auth/` (authentication providers)
-- `src/explorer/` (file explorer integration)
 - `src/logger/LogChannelRegistry.ts` (creates `vscode.OutputChannel`)
 
 **Patterns for keeping code platform-agnostic:**
