@@ -35,6 +35,7 @@ import {
   requestBashApproval,
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
+import { escapeAttr, escapeText } from '@tools/subagentResults';
 
 // Local imports - utils
 import { generateExecutionId } from '@utils/core/executionId';
@@ -70,14 +71,6 @@ export type CodexInput = z.infer<typeof CodexInputSchema>;
 // ============================================================================
 // Result formatting
 // ============================================================================
-
-function escapeXml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 /** Extract file change summaries from a list of thread items. */
 function collectFileChanges(
@@ -136,18 +129,18 @@ function formatCodexDelivery(
   const durationSec = (wallTimeMs / 1000).toFixed(1);
   const response = turn.finalResponse || '(no response)';
   const lines = [
-    `<codex-result id="${escapeXml(executionId)}" prompt="${escapeXml(prompt.slice(0, 200))}">`,
+    `<codex-result id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, 200))}">`,
     `<wall-time>${durationSec}s</wall-time>`,
   ];
 
   const changes = collectFileChanges(turn.items);
   if (changes.length > 0) {
     lines.push(
-      `<files-changed>${escapeXml(changes.map((c) => `${c.kind} ${c.path}`).join(', '))}</files-changed>`,
+      `<files-changed>${escapeText(changes.map((c) => `${c.kind} ${c.path}`).join(', '))}</files-changed>`,
     );
   }
 
-  lines.push(`<response>${escapeXml(response)}</response>`);
+  lines.push(`<response>${escapeText(response)}</response>`);
 
   if (turn.usage) {
     lines.push(
@@ -167,8 +160,8 @@ function formatCodexError(
 ): string {
   const message = err instanceof Error ? err.message : String(err);
   return [
-    `<codex-error id="${escapeXml(executionId)}" prompt="${escapeXml(prompt.slice(0, 200))}">`,
-    `<message>${escapeXml(message)}</message>`,
+    `<codex-error id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, 200))}">`,
+    `<message>${escapeText(message)}</message>`,
     '</codex-error>',
   ].join('\n');
 }

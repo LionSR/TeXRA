@@ -239,7 +239,7 @@ function lastNLines(text: string, n: number): string {
   return lines.length <= n ? text : lines.slice(-n).join('\n');
 }
 
-function escapeAttr(s: string): string {
+export function escapeAttr(s: string): string {
   return s
     .replaceAll('&', '&amp;')
     .replaceAll('"', '&quot;')
@@ -247,6 +247,6 @@ function escapeAttr(s: string): string {
 }
 
 /** Escape XML text content (element bodies). */
-function escapeText(s: string): string {
+export function escapeText(s: string): string {
   return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
 }
