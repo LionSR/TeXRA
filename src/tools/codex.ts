@@ -11,7 +11,12 @@
 
 // Third-party imports
 import { z } from 'zod';
-import type { RunResult, ThreadItem, Thread } from '@openai/codex-sdk';
+import type {
+  RunResult,
+  SandboxMode,
+  ThreadItem,
+  Thread,
+} from '@openai/codex-sdk';
 
 // Local imports - agent
 import {
@@ -48,6 +53,10 @@ import { defineTool } from './core/define';
 // Schema
 // ============================================================================
 
+/** Sandbox modes exposed to the LLM (excludes danger-full-access intentionally). */
+const SANDBOX_MODES = ['read-only', 'workspace-write'] as const satisfies
+  readonly SandboxMode[];
+
 const CodexInputSchema = z.strictObject({
   prompt: z.string().describe('Instruction for the Codex agent'),
   working_directory: z
@@ -55,7 +64,7 @@ const CodexInputSchema = z.strictObject({
     .optional()
     .describe('Directory to run in (defaults to workspace root)'),
   sandbox_mode: z
-    .enum(['read-only', 'workspace-write'])
+    .enum(SANDBOX_MODES)
     .prefault('read-only')
     .describe('File access level for the Codex agent'),
   run_in_background: z
