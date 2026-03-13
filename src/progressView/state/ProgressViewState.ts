@@ -28,6 +28,8 @@ import {
   type ContextStateData,
   type StreamTabId,
   type TodoItem,
+  type Plan,
+  PlanSchema,
 } from '@shared/schemas';
 import {
   PersistedState,
@@ -49,6 +51,7 @@ export type StreamHints = z.infer<typeof StreamHintsSchema>;
 const StreamSessionStateSchema = z.object({
   hints: StreamHintsSchema.prefault({}),
   todos: z.array(TodoItemSchema).prefault([]),
+  plan: PlanSchema.nullable().prefault(null),
   contextState: ContextStateDataSchema.nullable().prefault(null),
 });
 
@@ -229,6 +232,14 @@ export class ProgressViewState {
 
   getTodos(stream: StreamTabId): TodoItem[] {
     return this._sessionState.get(stream)?.todos ?? [];
+  }
+
+  setPlan(stream: StreamTabId, plan: Plan | null): void {
+    this.getOrCreateSession(stream).plan = plan;
+  }
+
+  getPlan(stream: StreamTabId): Plan | null {
+    return this._sessionState.get(stream)?.plan ?? null;
   }
 
   getContextState(stream: StreamTabId): ContextStateData | undefined {

@@ -1,10 +1,35 @@
-import { css, type CSSResult } from 'lit';
+import { css, unsafeCSS, type CSSResult } from 'lit';
+
+/**
+ * Shared selector groups for :is() consolidation.
+ * When adding a new request panel type, add its class names here
+ * and the shared layout rules apply automatically.
+ */
+const CONTAINERS = unsafeCSS(
+  '.approval-requests, .bash-approval-requests, .retry-requests, .workflow-proposals, .plan-approval-requests',
+);
+const HEADERS = unsafeCSS(
+  '.approval-requests__header, .bash-approval-requests__header, .retry-requests__header, .workflow-proposals__header, .plan-approval-requests__header',
+);
+const LISTS = unsafeCSS(
+  '.approval-requests__list, .bash-approval-requests__list, .retry-requests__list, .workflow-proposals__list, .plan-approval-requests__list',
+);
+const ITEMS = unsafeCSS(
+  '.approval-request, .bash-approval-request, .retry-request, .workflow-proposal, .plan-approval-request',
+);
+const DETAILS = unsafeCSS(
+  '.approval-request__details, .bash-approval-request__details, .retry-request__details, .workflow-proposal__details, .plan-approval-request__details',
+);
+const ACTIONS = unsafeCSS(
+  '.approval-request__actions, .bash-approval-request__actions, .retry-request__actions, .workflow-proposal__actions, .plan-approval-request__actions',
+);
 
 export const requestPanelStyles: CSSResult = css`
-  .approval-requests,
-  .bash-approval-requests,
-  .retry-requests,
-  .workflow-proposals {
+  /* ================================================================
+   * Shared request panel layout (all panel types)
+   * ================================================================ */
+
+  :is(${CONTAINERS}) {
     margin: var(--spacing-large) 0;
     padding: var(--spacing-large);
     border-radius: var(--border-radius-large);
@@ -14,10 +39,7 @@ export const requestPanelStyles: CSSResult = css`
     gap: var(--spacing-large);
   }
 
-  .approval-requests__header,
-  .bash-approval-requests__header,
-  .retry-requests__header,
-  .workflow-proposals__header {
+  :is(${HEADERS}) {
     display: flex;
     align-items: center;
     gap: var(--spacing-medium);
@@ -25,19 +47,13 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-editor-foreground);
   }
 
-  .approval-requests__list,
-  .bash-approval-requests__list,
-  .retry-requests__list,
-  .workflow-proposals__list {
+  :is(${LISTS}) {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-large);
   }
 
-  .approval-request,
-  .bash-approval-request,
-  .retry-request,
-  .workflow-proposal {
+  :is(${ITEMS}) {
     display: flex;
     flex-direction: column;
     border-radius: var(--border-radius);
@@ -48,10 +64,7 @@ export const requestPanelStyles: CSSResult = css`
     position: relative;
   }
 
-  .approval-request__details,
-  .bash-approval-request__details,
-  .retry-request__details,
-  .workflow-proposal__details {
+  :is(${DETAILS}) {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-small);
@@ -67,43 +80,32 @@ export const requestPanelStyles: CSSResult = css`
     flex-wrap: wrap;
   }
 
-  .approval-request__actions,
-  .bash-approval-request__actions,
-  .retry-request__actions,
-  .workflow-proposal__actions {
+  :is(${ACTIONS}) {
     display: flex;
     flex-wrap: wrap;
     gap: var(--spacing-small);
   }
 
-  .approval-request__actions::part(container),
-  .bash-approval-request__actions::part(container),
-  .retry-request__actions::part(container),
-  .workflow-proposal__actions::part(container) {
+  :is(${ACTIONS})::part(container) {
     display: flex;
     flex-wrap: wrap;
     gap: var(--spacing-small);
   }
 
-  .approval-request__actions vscode-toolbar-button,
-  .bash-approval-request__actions vscode-toolbar-button,
-  .retry-request__actions vscode-toolbar-button,
-  .workflow-proposal__actions vscode-toolbar-button {
+  :is(${ACTIONS}) vscode-toolbar-button {
     min-width: auto;
   }
 
-  .approval-request__actions vscode-toolbar-button::part(control),
-  .bash-approval-request__actions vscode-toolbar-button::part(control),
-  .retry-request__actions vscode-toolbar-button::part(control),
-  .workflow-proposal__actions vscode-toolbar-button::part(control) {
+  :is(${ACTIONS}) vscode-toolbar-button::part(control) {
     justify-content: flex-start;
     gap: var(--spacing-small);
   }
 
-  /* Shared container chrome — approval, bash, and retry all use the same border/bg */
+  /* Shared container chrome — approval, bash, retry, and plan use the same border/bg */
   .approval-requests,
   .bash-approval-requests,
-  .retry-requests {
+  .retry-requests,
+  .plan-approval-requests {
     border: var(--border-thin) solid var(--vscode-input-border);
     background: var(--vscode-editor-background);
   }
@@ -114,7 +116,10 @@ export const requestPanelStyles: CSSResult = css`
     flex: 1 1 12rem;
   }
 
-  /* Approval requests */
+  /* ================================================================
+   * Approval requests (tool edits)
+   * ================================================================ */
+
   .approval-requests__header .codicon {
     color: var(--vscode-editor-foreground);
   }
@@ -194,7 +199,10 @@ export const requestPanelStyles: CSSResult = css`
     transform: rotate(180deg);
   }
 
-  /* Bash approval requests */
+  /* ================================================================
+   * Bash approval requests
+   * ================================================================ */
+
   .bash-approval-requests__header .codicon {
     color: var(--vscode-terminal-ansiYellow);
   }
@@ -213,7 +221,10 @@ export const requestPanelStyles: CSSResult = css`
     word-break: break-word;
   }
 
-  /* Retry requests */
+  /* ================================================================
+   * Retry requests
+   * ================================================================ */
+
   .retry-requests__header .codicon {
     color: var(--color-warning);
   }
@@ -285,7 +296,10 @@ export const requestPanelStyles: CSSResult = css`
     border-radius: var(--border-radius-small) 0 0 var(--border-radius-small);
   }
 
-  /* Workflow proposals */
+  /* ================================================================
+   * Workflow proposals
+   * ================================================================ */
+
   .workflow-proposals {
     border: var(--border-thin) solid var(--vscode-inputValidation-infoBorder);
     background: var(--vscode-inputValidation-infoBackground);
@@ -431,16 +445,63 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-textLink-foreground);
   }
 
-  /* Rejection feedback (shared across approval, bash, proposal) */
+  /* ================================================================
+   * Plan approval requests
+   * ================================================================ */
+
+  .plan-approval-requests__header .codicon {
+    color: var(--vscode-textLink-foreground);
+  }
+
+  .plan-approval-request__summary {
+    font-weight: var(--font-weight-semibold);
+    color: var(--vscode-editor-foreground);
+  }
+
+  .plan-approval-request__steps {
+    margin: var(--spacing-small) 0;
+    padding-left: var(--spacing-xlarge);
+  }
+
+  .plan-approval-request__steps li {
+    margin-bottom: var(--spacing-small);
+  }
+
+  .plan-approval-request__step-desc {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+  }
+
+  .plan-approval-request__step-files {
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin-top: var(--spacing-tiny);
+  }
+
+  .plan-approval-request__file {
+    color: var(--vscode-textLink-foreground);
+  }
+
+  .plan-approval-request__actions vscode-toolbar-button {
+    flex: 1 1 12rem;
+  }
+
+  /* ================================================================
+   * Rejection feedback (shared across panels with feedback support)
+   * ================================================================ */
+
   .approval-request__feedback,
   .bash-approval-request__feedback,
-  .workflow-proposal__feedback {
+  .workflow-proposal__feedback,
+  .plan-approval-request__feedback {
     margin-top: var(--spacing-small);
   }
 
   .approval-request__feedback-input,
   .bash-approval-request__feedback-input,
-  .workflow-proposal__feedback-input {
+  .workflow-proposal__feedback-input,
+  .plan-approval-request__feedback-input {
     width: 100%;
   }
 
@@ -452,6 +513,9 @@ export const requestPanelStyles: CSSResult = css`
     vscode-toolbar-button[data-action='reject']::part(control),
   .workflow-proposal--feedback-active
     .workflow-proposal__actions
+    vscode-toolbar-button[data-action='reject']::part(control),
+  .plan-approval-request--feedback-active
+    .plan-approval-request__actions
     vscode-toolbar-button[data-action='reject']::part(control) {
     color: var(--vscode-inputValidation-warningBorder);
   }

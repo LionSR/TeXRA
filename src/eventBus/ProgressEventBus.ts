@@ -10,12 +10,14 @@ import type {
   ExecutionId,
   FileLocation,
   OutputFileInfo,
+  PlanApprovalPermission,
   RetryPermission,
   StorageKey,
   StreamStatus,
   StreamTabId,
   TokenUsageStats,
   ToolEditPermission,
+  UpdatePlanPayload,
   UpdateTodosPayload,
 } from '@shared/schemas';
 
@@ -82,7 +84,10 @@ export interface ProgressEventPayloads {
   resolveBashPermission: { requestId: string };
   showAgentProposal: AgentProposalPermission;
   resolveAgentProposal: { proposalId: string };
+  showPlanApproval: PlanApprovalPermission;
+  resolvePlanApproval: { approvalId: string };
   updateTodos: UpdateTodosPayload;
+  updatePlan: UpdatePlanPayload;
   updateConversationProgress: {
     streamId: StreamTabId;
     progress: ConversationProgress;

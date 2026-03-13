@@ -22,6 +22,7 @@ import type {
   StreamStatus,
   StreamTabId,
   StreamTabInfo,
+  Plan,
   TodoItem,
   TokenUsageStats,
   StorageKey,
@@ -61,6 +62,7 @@ export interface SyncStreamContentPayload {
   runMissingOutputs?: Record<string, { [key: number]: string[] }>;
   contextState?: ContextState;
   todos: TodoItem[];
+  plan: Plan | null;
   queuedFollowUps: string[];
   instruction: InstructionUpdate | null;
   agentCategory?: string;
@@ -344,6 +346,14 @@ export class WebviewUpdater {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
       stream,
       todos,
+    });
+  }
+
+  updatePlan(stream: StreamTabId, plan: Plan | null): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_PLAN,
+      stream,
+      plan,
     });
   }
 
