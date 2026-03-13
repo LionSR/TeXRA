@@ -19,6 +19,7 @@ import { z } from 'zod';
 
 // Local imports - shared
 import { getExecutionStore } from '@agent/storage';
+import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { ExecutionIdSchema } from '@shared/schemas';
 
 // Local imports - tools
@@ -94,8 +95,7 @@ not output files.
 
 Locates output files in run storage or the workspace (depending on storage
 mode) and writes them to the workspace. Each file goes through an approval
-step before writing and may be rejected. Associated diff files (e.g.
-paper_r0_gemini_diff.tex) are automatically cleaned up from the workspace.
+step before writing and may be rejected.
 
 Parameters map directly to subagent-result delivery attributes:
   execution_id ← <subagent-result id="...">
@@ -179,7 +179,7 @@ Call:
     // Phase 2: Request approval and write each file
     const results: string[] = [];
     const edits: ToolResult['edits'] = [];
-    const acceptedPaths: string[] = [];
+    const acceptedEntries: { outputPath: string; originalPath: string }[] = [];
     let rejected = 0;
     const rejectionMessages: string[] = [];
 
@@ -215,7 +215,7 @@ Call:
         lineChanges: approval.lineChanges,
         startLine: approval.startLine,
       });
-      acceptedPaths.push(entry.path);
+      acceptedEntries.push({ outputPath: entry.path, originalPath: entry.original });
     }
 
     // Single rejection → return rejection result
@@ -228,7 +228,7 @@ Call:
     }
 
     // Phase 3: Clean up diff files from workspace for accepted files
-    const cleaned = await this.cleanupDiffFiles(acceptedPaths);
+    const cleaned = await this.cleanupDiffFiles(acceptedEntries);
     for (const f of cleaned) {
       results.push(`cleaned: ${f}`);
     }
@@ -287,15 +287,20 @@ Call:
 
   /**
    * Remove diff files from the workspace that correspond to accepted output files.
-   * Diff files follow the pattern `{baseName}_diff{ext}` (e.g. `paper_r0_gemini_diff.tex`).
+   * Uses generateDiffFileName (the same logic that creates diff files) to derive names.
    */
-  private async cleanupDiffFiles(acceptedPaths: string[]): Promise<string[]> {
+  private async cleanupDiffFiles(
+    entries: { outputPath: string; originalPath: string }[],
+  ): Promise<string[]> {
     const results = await Promise.all(
-      acceptedPaths.map(async (filePath) => {
-        const { name, ext } = path.parse(filePath);
-        const diffPath = `${name}_diff${ext}`;
-        const dir = path.dirname(filePath);
-        const fullDiffPath = dir === '.' ? diffPath : `${dir}/${diffPath}`;
+      entries.map(async ({ outputPath, originalPath }) => {
+        const diffFileName = generateDiffFileName(
+          originalPath,
+          outputPath,
+          '_diff',
+        );
+        const dir = path.dirname(originalPath);
+        const fullDiffPath = dir === '.' ? diffFileName : `${dir}/${diffFileName}`;
 
         const loc = WorkspaceFS.locatePath(fullDiffPath);
         if (loc.kind === 'external') return null;
