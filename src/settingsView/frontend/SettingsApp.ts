@@ -698,7 +698,8 @@ export class SettingsApp extends SettingsAppBase {
               @model-enabled-set=${this.handleSetModelEnabled}
               @helper-model-set=${this.handleSetHelperModel}
               @model-reasoning-level-set=${this.handleSetReasoningLevel}
-              @prefer-short-model-names-set=${this.handleSetPreferShortModelNames}
+              @prefer-short-model-names-set=${this
+                .handleSetPreferShortModelNames}
             ></models-tab>
           </vscode-tab-panel>
 

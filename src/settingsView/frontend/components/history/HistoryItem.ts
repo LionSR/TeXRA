@@ -343,7 +343,9 @@ export class HistoryItem extends LitElement {
           <span class="history-label">Instruction:</span>
           <div class="history-value">
             ${instructionText
-              ? html`<div class="markdown-content">${unsafeHTML(this.renderMarkdown(instructionText))}</div>`
+              ? html`<div class="markdown-content">
+                  ${unsafeHTML(this.renderMarkdown(instructionText))}
+                </div>`
               : html`<em class="history-none">Not set</em>`}
           </div>
           <span class="history-label">InputFile:</span>
