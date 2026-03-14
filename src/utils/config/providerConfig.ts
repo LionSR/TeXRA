@@ -105,6 +105,17 @@ export async function setAnthropicDynamicFiltering(
 }
 
 // ---------------------------------------------------------------------------
+// DashScope region setting (globalSM-backed)
+// ---------------------------------------------------------------------------
+
+/** Whether DashScope is set to use the China (Bailian) region. */
+export function getDashScopeUseChina(): boolean {
+  return (
+    globalSM?.get<boolean>(GlobalStateKey.DASHSCOPE_USE_CHINA, false) ?? false
+  );
+}
+
+// ---------------------------------------------------------------------------
 // WebSocket transport setting (globalSM-backed)
 // ---------------------------------------------------------------------------
 
