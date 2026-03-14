@@ -19,41 +19,9 @@ import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 import type { RegisteredToolName } from '@tools/registry';
 import { getZoteroPort } from '@tools/zotero/bbtClient';
 import { checkToolInstalled } from '@utils/system/toolUtils';
+import { importCodexClass } from '@tools/codexImport';
 
 const LEAN4_EXT_ID = 'leanprover.lean4';
-
-/**
- * Robustly import the Codex constructor from the ESM-only @openai/codex-sdk.
- *
- * In some Electron/Node.js versions, dynamic `import()` of ESM modules from
- * CJS bundles wraps named exports under `default`, so `{ Codex }` destructuring
- * yields `undefined` and `new Codex()` throws "e is not a constructor".
- */
-async function importCodexClassForCheck(): Promise<new () => unknown> {
-  const mod: Record<string, unknown> = await import('@openai/codex-sdk');
-
-  if (typeof mod.Codex === 'function') {
-    console.log('[Codex check] Imported via named export (mod.Codex)');
-    return mod.Codex as never;
-  }
-
-  const def = mod.default as Record<string, unknown> | undefined;
-  if (def && typeof def.Codex === 'function') {
-    console.log('[Codex check] Imported via default wrapper (mod.default.Codex)');
-    return def.Codex as never;
-  }
-  if (typeof def === 'function') {
-    console.log('[Codex check] Imported via default export (mod.default)');
-    return def as never;
-  }
-
-  console.log(
-    `[Codex check] Import failed. Module keys: [${Object.keys(mod).join(', ')}]`,
-  );
-  throw new Error(
-    `Failed to import Codex class. Module keys: [${Object.keys(mod).join(', ')}]`,
-  );
-}
 
 /**
  * Pluggable check for VS Code extension availability.
@@ -255,7 +223,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'Supports OAuth via `codex login` or OPENAI_API_KEY env var.',
     check: async () => {
       try {
-        const Codex = await importCodexClassForCheck();
+        const Codex = await importCodexClass();
         // Constructor resolves the binary path — throws if not found
         new Codex();
         return true;
@@ -265,7 +233,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     },
     detailCheck: async () => {
       try {
-        const Codex = await importCodexClassForCheck();
+        const Codex = await importCodexClass();
         new Codex();
         return 'Codex CLI binary found. Ready for SDK use.';
       } catch (err: unknown) {
