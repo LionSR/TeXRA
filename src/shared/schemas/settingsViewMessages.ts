@@ -170,10 +170,6 @@ export const ModelSelectionItemSchema = z.object({
   defaultReasoningLevel: ReasoningLevelSchema.optional(),
   /** The user's chosen reasoning level override (undefined = use default). */
   reasoningLevel: ReasoningLevelSchema.optional(),
-  /** The full API model name (e.g., "gpt-5.4-2026-03-05") for display. */
-  fullName: z.string().optional(),
-  /** The user's custom API model name override (undefined = use default fullName). */
-  customName: z.string().optional(),
 });
 export type ModelSelectionItem = z.infer<typeof ModelSelectionItemSchema>;
 
@@ -182,6 +178,8 @@ export const UpdateModelSelectionMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION),
   models: z.array(ModelSelectionItemSchema),
   helperModel: z.string(),
+  /** Whether the user prefers short (unpinned) model names. */
+  preferShortModelNames: z.boolean(),
 });
 export type UpdateModelSelectionMessage = z.infer<
   typeof UpdateModelSelectionMessageSchema
@@ -413,11 +411,9 @@ const SetModelReasoningLevelMessageSchema = z.object({
   level: ReasoningLevelSchema.nullable(),
 });
 
-const SetModelCustomNameMessageSchema = z.object({
-  command: z.literal(CMD.SET_MODEL_CUSTOM_NAME),
-  modelName: z.string().min(1),
-  /** The custom API model name to use, or null to reset to default. */
-  customName: z.string().nullable(),
+const SetPreferShortModelNamesMessageSchema = z.object({
+  command: z.literal(CMD.SET_PREFER_SHORT_MODEL_NAMES),
+  enabled: z.boolean(),
 });
 
 // Agent selection inbound messages
@@ -605,7 +601,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetModelEnabledMessageSchema,
     SetHelperModelMessageSchema,
     SetModelReasoningLevelMessageSchema,
-    SetModelCustomNameMessageSchema,
+    SetPreferShortModelNamesMessageSchema,
     // Agent selection messages
     GetAgentSelectionMessageSchema,
     OpenAgentYamlMessageSchema,

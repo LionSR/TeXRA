@@ -53,13 +53,11 @@ export class ModelSelectionList extends LitElement {
     'personal';
   @property({ attribute: false }) allowedModels: string[] | null = [];
 
+  @property({ type: Boolean, attribute: 'prefer-short-model-names' })
+  preferShortModelNames = false;
+
   @state() private expandedProvider: string | null = null;
   @state() private expandedDeprecated: Set<string> = new Set();
-  @state() private showCustomNames = false;
-
-  private hasAnyCustomName(): boolean {
-    return this.models.some((m) => m.customName);
-  }
 
   private getProviderGroups(): ProviderGroup[] {
     const byProvider = new Map<string, ModelSelectionItem[]>();
@@ -128,16 +126,6 @@ export class ModelSelectionList extends LitElement {
     );
   }
 
-  private handleCustomNameChange(modelName: string, e: Event): void {
-    const value = (e.currentTarget as HTMLInputElement).value.trim();
-    this.dispatchEvent(
-      ModelSelectionEvents.setCustomName({
-        modelName,
-        customName: value || null,
-      }),
-    );
-  }
-
   private renderReasoningDropdown(
     model: ModelSelectionItem,
   ): TemplateResult | typeof nothing {
@@ -166,26 +154,6 @@ export class ModelSelectionList extends LitElement {
           `,
         )}
       </vscode-single-select>
-    `;
-  }
-
-  private renderCustomNameInput(
-    model: ModelSelectionItem,
-  ): TemplateResult | typeof nothing {
-    if (!(this.showCustomNames || this.hasAnyCustomName()) || !model.fullName)
-      return nothing;
-
-    return html`
-      <div class="custom-name-row">
-        <label class="custom-name-label">API name:</label>
-        <vscode-text-field
-          class="custom-name-input"
-          placeholder=${model.fullName}
-          .value=${model.customName ?? ''}
-          title="Custom API model name (leave empty to use default: ${model.fullName})"
-          @change=${(e: Event) => this.handleCustomNameChange(model.name, e)}
-        ></vscode-text-field>
-      </div>
     `;
   }
 
@@ -222,7 +190,6 @@ export class ModelSelectionList extends LitElement {
             : nothing}
           ${model.cost ? html`<span>${model.cost}</span>` : nothing}
         </span>
-        ${this.renderCustomNameInput(model)}
       </div>
     `;
   }
@@ -308,23 +275,25 @@ export class ModelSelectionList extends LitElement {
 
   override render(): TemplateResult {
     const groups = this.getProviderGroups();
-    const hasCustomNames = this.hasAnyCustomName();
 
     return html`
       <div class="model-selection-section">
         <h2>Model Selection</h2>
         ${this.renderHelperModelDropdown()}
-        <div class="custom-names-toggle">
+        <div class="short-names-toggle">
           <vscode-checkbox
-            ?checked=${this.showCustomNames || hasCustomNames}
+            ?checked=${this.preferShortModelNames}
             @change=${(e: Event) => {
-              this.showCustomNames = (e.target as HTMLInputElement).checked;
+              const enabled = (e.target as HTMLInputElement).checked;
+              this.dispatchEvent(
+                ModelSelectionEvents.setPreferShortModelNames({ enabled }),
+              );
             }}
           >
-            Custom API model names
+            Use short model names
           </vscode-checkbox>
-          <span class="custom-names-description">
-            Override model names sent to API providers
+          <span class="short-names-description">
+            Send unpinned names (e.g. gpt-5.4 instead of gpt-5.4-2026-03-05)
           </span>
         </div>
         ${groups.map((g) => this.renderProviderGroup(g))}

@@ -93,30 +93,31 @@ function shouldUseResponsesAPI(
 }
 
 /**
- * Apply a user's custom model name override to a config, if set.
- * Returns a new config with the overridden fullName, or the original if no override.
+ * Apply the user's "prefer short model names" setting.
+ * When enabled, uses the model's shortName (e.g. "gpt-5.4") instead of the
+ * date-pinned fullName (e.g. "gpt-5.4-2026-03-05"). Useful for proxies/gateways
+ * that only accept unpinned model identifiers.
  */
-function withCustomModelName(config: ModelConfig): ModelConfig {
-  const overrides = globalSM.get<Record<string, string>>(
-    GlobalStateKey.CUSTOM_MODEL_NAMES,
-    {},
-  );
-  const customName = overrides[config.name];
-  if (!customName) return config;
+function withShortModelName(config: ModelConfig): ModelConfig {
+  if (!globalSM.get<boolean>(GlobalStateKey.PREFER_SHORT_MODEL_NAMES, false)) {
+    return config;
+  }
+  const short = config.shortName;
+  if (!short || short === config.fullName) return config;
 
   logger.debug(
     CHANNEL,
-    `Applying custom model name for ${config.name}: ${config.fullName} → ${customName}`,
+    `Using short model name for ${config.name}: ${config.fullName} → ${short}`,
   );
-  return { ...config, fullName: customName };
+  return { ...config, fullName: short };
 }
 
 /**
  * Creates a model handler instance based on provider and routing configuration.
- * Applies user custom model name and reasoning level overrides.
+ * Applies short model name preference and reasoning level overrides.
  */
 export function createModelHandler(originalConfig: ModelConfig): ModelHandler {
-  const config = withCustomModelName(originalConfig);
+  const config = withShortModelName(originalConfig);
   const useOpenRouter = getConfig<boolean>('texra.model.useOpenRouter', false);
 
   // OpenAI Responses API (required or optional)

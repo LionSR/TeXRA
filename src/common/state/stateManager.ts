@@ -34,7 +34,7 @@ export enum GlobalStateKey {
   ENABLED_MODELS = 'enabledModels',
   HELPER_MODEL = 'polishModel',
   REASONING_LEVELS = 'texra.reasoningLevels',
-  CUSTOM_MODEL_NAMES = 'texra.customModelNames',
+  PREFER_SHORT_MODEL_NAMES = 'texra.preferShortModelNames',
 
   // Streaming settings
   STREAMING_GLOBAL = 'texra.streaming.global',

@@ -222,20 +222,11 @@ function getReasoningLevelOverrides(): Record<string, string> {
   );
 }
 
-/** Read persisted custom model name overrides from global state. */
-function getCustomModelNameOverrides(): Record<string, string> {
-  return globalSM.get<Record<string, string>>(
-    GlobalStateKey.CUSTOM_MODEL_NAMES,
-    {},
-  );
-}
-
 function buildModelSelectionItems(): ModelSelectionItem[] {
   const enabledSet = new Set(
     globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS, DEFAULT_MODELS),
   );
   const reasoningOverrides = getReasoningLevelOverrides();
-  const customNameOverrides = getCustomModelNameOverrides();
 
   const items: ModelSelectionItem[] = [];
   for (const name of MODELS) {
@@ -251,14 +242,7 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
       deprecated: config.deprecated ?? false,
       contextWindow: formatContext(config.contextWindow),
       cost: formatCost(config.inputPrice, config.outputPrice),
-      fullName: config.fullName,
     };
-
-    // Add custom model name override if set.
-    const customName = customNameOverrides[name];
-    if (customName) {
-      item.customName = customName;
-    }
 
     if (supportsReasoningEffort) {
       item.supportsReasoningLevel = true;
@@ -379,8 +363,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleSetHelperModel(data),
       [SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL]: (data) =>
         this.handleSetModelReasoningLevel(data),
-      [SETTINGS_VIEW_COMMANDS.SET_MODEL_CUSTOM_NAME]: (data) =>
-        this.handleSetModelCustomName(data),
+      [SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES]: (data) =>
+        this.handleSetPreferShortModelNames(data),
 
       // Super YOLO handlers
       [SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED]: () =>
@@ -639,6 +623,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       models,
       helperModel: getHelperModelName(),
+      preferShortModelNames: globalSM.get<boolean>(
+        GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+        false,
+      ),
     });
   }
 
@@ -1218,19 +1206,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
-  private async handleSetModelCustomName(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MODEL_CUSTOM_NAME>,
+  private async handleSetPreferShortModelNames(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PREFER_SHORT_MODEL_NAMES>,
   ): Promise<void> {
-    const overrides = getCustomModelNameOverrides();
-
-    const trimmed = data.customName?.trim();
-    if (trimmed) {
-      overrides[data.modelName] = trimmed;
-    } else {
-      delete overrides[data.modelName];
-    }
-
-    await globalSM.update(GlobalStateKey.CUSTOM_MODEL_NAMES, overrides);
+    await globalSM.update(
+      GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+      data.enabled,
+    );
     await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 

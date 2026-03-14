@@ -14,8 +14,8 @@ export const ModelSelectionEvents = {
     createEvent('helper-model-set', detail),
   setReasoningLevel: (detail: { modelName: string; level: string | null }) =>
     createEvent('model-reasoning-level-set', detail),
-  setCustomName: (detail: { modelName: string; customName: string | null }) =>
-    createEvent('model-custom-name-set', detail),
+  setPreferShortModelNames: (detail: { enabled: boolean }) =>
+    createEvent('prefer-short-model-names-set', detail),
 } as const;
 
 export const ProviderKeyEvents = {

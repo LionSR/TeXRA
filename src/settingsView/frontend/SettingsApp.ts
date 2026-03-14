@@ -156,6 +156,7 @@ export class SettingsApp extends SettingsAppBase {
   // Model selection state
   private readonly modelSelectionItems = signal<ModelSelectionItem[]>([]);
   private readonly helperModel = signal(DEFAULT_HELPER_MODEL);
+  private readonly preferShortModelNames = signal(false);
 
   // Agent selection state
   private readonly workflowAgents = signal<AgentSelectionItem[]>([]);
@@ -284,6 +285,7 @@ export class SettingsApp extends SettingsAppBase {
         if (!data) return;
         this.modelSelectionItems.set(data.models);
         this.helperModel.set(data.helperModel);
+        this.preferShortModelNames.set(data.preferShortModelNames);
         return;
       }
 
@@ -459,8 +461,8 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL,
   );
 
-  private handleSetCustomName = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_MODEL_CUSTOM_NAME,
+  private handleSetPreferShortModelNames = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES,
   );
 
   // Agent selection event handlers
@@ -672,6 +674,7 @@ export class SettingsApp extends SettingsAppBase {
               .globalStreamingDefault=${this.globalStreamingDefault.get()}
               .modelSelectionItems=${this.modelSelectionItems.get()}
               .helperModel=${this.helperModel.get()}
+              .preferShortModelNames=${this.preferShortModelNames.get()}
               @profile-api-access-mode=${this.handleApiAccessMode}
               @provider-key-set=${this.handleSetProviderKey}
               @provider-key-remove=${this.handleRemoveProviderKey}
@@ -685,7 +688,7 @@ export class SettingsApp extends SettingsAppBase {
               @model-enabled-set=${this.handleSetModelEnabled}
               @helper-model-set=${this.handleSetHelperModel}
               @model-reasoning-level-set=${this.handleSetReasoningLevel}
-              @model-custom-name-set=${this.handleSetCustomName}
+              @prefer-short-model-names-set=${this.handleSetPreferShortModelNames}
             ></models-tab>
           </vscode-tab-panel>
 

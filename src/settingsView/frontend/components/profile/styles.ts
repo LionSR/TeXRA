@@ -467,10 +467,9 @@ export const profileViewStyles: CSSResult = css`
 
   .model-row {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
     padding: var(--spacing-small) var(--spacing-medium);
-    gap: var(--spacing-small) var(--spacing-medium);
+    gap: var(--spacing-medium);
   }
 
   .model-row:hover {
@@ -483,27 +482,7 @@ export const profileViewStyles: CSSResult = css`
     font-size: var(--font-size-sm);
   }
 
-  .custom-name-row {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-small);
-    width: 100%;
-    padding-left: 24px;
-  }
-
-  .custom-name-label {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-xs);
-    white-space: nowrap;
-  }
-
-  .custom-name-input {
-    flex: 1;
-    max-width: 300px;
-    font-size: var(--font-size-xs);
-  }
-
-  .custom-names-toggle {
+  .short-names-toggle {
     display: flex;
     align-items: center;
     gap: var(--spacing-medium);
@@ -511,7 +490,7 @@ export const profileViewStyles: CSSResult = css`
     font-size: var(--font-size-sm);
   }
 
-  .custom-names-description {
+  .short-names-description {
     color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
   }
