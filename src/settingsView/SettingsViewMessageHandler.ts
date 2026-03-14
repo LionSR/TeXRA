@@ -97,6 +97,7 @@ import {
   getProviderEndpoint,
   setProviderEndpoint,
   supportsCustomEndpoint,
+  getDashScopeUseChina,
 } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
 import { loadMemoryItems } from './utils/memoryFileSystem';
@@ -186,11 +187,19 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
         status = 'not-set';
       }
 
+      // DashScope display name and key URL switch based on China region setting
+      let displayName = PROVIDER_DISPLAY_NAMES[provider];
+      let keyUrl = PROVIDER_URLS[provider];
+      if (provider === 'dashscope' && getDashScopeUseChina()) {
+        displayName = 'Bailian';
+        keyUrl = 'https://bailian.console.aliyun.com/';
+      }
+
       return {
         provider,
-        displayName: PROVIDER_DISPLAY_NAMES[provider],
+        displayName,
         status,
-        keyUrl: PROVIDER_URLS[provider],
+        keyUrl,
         streaming: getProviderStreaming(provider),
         customEndpoint: getProviderEndpoint(provider),
         supportsCustomEndpoint: supportsCustomEndpoint(provider),
@@ -1069,7 +1078,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_PROVIDER_KEY_URL>,
   ): Promise<void> {
     const provider = data.provider as ApiProvider;
-    const url = PROVIDER_URLS[provider];
+    let url = PROVIDER_URLS[provider];
+    if (provider === 'dashscope' && getDashScopeUseChina()) {
+      url = 'https://bailian.console.aliyun.com/';
+    }
     if (url) {
       await vscode.env.openExternal(vscode.Uri.parse(url));
     }
