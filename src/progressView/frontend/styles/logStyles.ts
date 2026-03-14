@@ -9,13 +9,13 @@ import katexStyles from 'katex/dist/katex.min.css?inline';
 // Shared styles
 import { animationStyles } from '@shared/styles/litStyles';
 import { commonViewStyles } from '@shared/styles/commonViewStyles';
+import { markdownStyles } from '@shared/styles/markdownStyles';
 
 // Import and re-export individual style modules
 import { logEntryStyles } from './logEntryStyles';
 import { groupStyles } from './groupStyles';
 import { codeBlockStyles } from './codeBlockStyles';
 import { toolUseStyles } from './toolUseStyles';
-import { markdownStyles } from './markdownStyles';
 
 const katexStyleSheet = new CSSStyleSheet();
 katexStyleSheet.replaceSync(katexStyles);
