@@ -7,6 +7,7 @@
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, queryAll } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import Mark from 'mark.js';
 
 // Local imports - shared styles
@@ -16,8 +17,10 @@ import {
   commonViewStyles,
   designTokens,
 } from '@shared/styles';
+import { markdownStyles } from '@progressView/frontend/styles/markdownStyles';
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
+import { processMarkdownContent } from '@progressView/frontend/formatters/markdownRenderer';
 
 // Local imports - history view styles
 import { historyViewStyles } from './styles';
@@ -35,6 +38,7 @@ export class HistoryItem extends LitElement {
     commonViewStyles,
     ...badgeStyles,
     historyViewStyles,
+    markdownStyles,
   ];
 
   @property({ attribute: false }) item?: HistoryItemData;
@@ -312,7 +316,7 @@ export class HistoryItem extends LitElement {
           <span class="history-label">Instruction:</span>
           <span class="history-value">
             ${instructionText
-              ? instructionText
+              ? html`<div class="markdown-content">${unsafeHTML(processMarkdownContent(instructionText))}</div>`
               : html`<em class="history-none">Not set</em>`}
           </span>
           <span class="history-label">InputFile:</span>
