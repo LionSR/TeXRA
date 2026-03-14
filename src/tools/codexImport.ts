@@ -38,22 +38,36 @@ export async function importCodexClass(): Promise<CodexConstructor> {
     throw err;
   }
 
-  // Normal named export
-  if (typeof mod.Codex === 'function') {
-    return mod.Codex as CodexConstructor;
+  // Probe all possible export shapes — Electron's ESM/CJS interop may
+  // wrap named exports under `default`, sometimes double-nested.
+  const candidates: unknown[] = [
+    mod.Codex,                                              // named export
+    (mod.default as Record<string, unknown> | undefined)?.Codex,  // default.Codex
+    mod.default,                                            // default IS the class
+  ];
+
+  // Double-nested: mod.default.default.Codex or mod.default.default
+  const innerDefault = (mod.default as Record<string, unknown> | undefined)?.default;
+  if (innerDefault && typeof innerDefault === 'object') {
+    candidates.push((innerDefault as Record<string, unknown>).Codex);
+  }
+  candidates.push(innerDefault);
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'function') {
+      return candidate as CodexConstructor;
+    }
   }
 
-  // Wrapped under default (some ESM/CJS interop scenarios)
-  const def = mod.default as Record<string, unknown> | undefined;
-  if (def && typeof def.Codex === 'function') {
-    return def.Codex as CodexConstructor;
-  }
-  if (typeof def === 'function') {
-    return def as unknown as CodexConstructor;
-  }
-
+  // Build a diagnostic message showing what we actually got
+  const defType = typeof mod.default;
+  const defKeys = mod.default && typeof mod.default === 'object'
+    ? Object.keys(mod.default as Record<string, unknown>).join(', ')
+    : defType;
   throw new Error(
-    `Failed to resolve Codex class from @openai/codex-sdk. Module keys: [${Object.keys(mod).join(', ')}]`,
+    'Failed to resolve Codex class from @openai/codex-sdk. ' +
+      `Module keys: [${Object.keys(mod).join(', ')}], ` +
+      `default type: ${defType}, default keys: [${defKeys}]`,
   );
 }
 
