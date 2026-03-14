@@ -4,11 +4,12 @@
  * 1. `importCodexClass()` — dynamically import the Codex constructor from
  *    @openai/codex-sdk. Handles ESM/CJS interop edge cases.
  *
- * 2. `findCodexBinaryPath()` — locate the native Codex CLI binary from a
- *    global npm install. The SDK bundles its own `findCodexPath()` but it
- *    resolves `@openai/codex` relative to the SDK itself (inside the VSIX).
- *    Since we don't ship the 130 MB platform binaries in the VSIX, we probe
- *    the global npm prefix instead and return the path for `codexPathOverride`.
+ * 2. `findCodexBinaryPath()` — locate the native Codex CLI binary. The SDK
+ *    bundles its own `findCodexPath()` but it resolves `@openai/codex`
+ *    relative to the SDK itself (inside the VSIX). Since we don't ship the
+ *    130 MB platform binaries in the VSIX, we probe PATH, the global npm
+ *    prefix, and local node_modules, then return the path for
+ *    `codexPathOverride`. Results are cached for the session.
  */
 
 import { execSync } from 'child_process';
@@ -37,8 +38,6 @@ export async function importCodexClass(): Promise<CodexConstructor> {
     throw err;
   }
 
-  console.log(`[Codex] Module keys: [${Object.keys(mod).join(', ')}]`);
-
   // Normal named export
   if (typeof mod.Codex === 'function') {
     return mod.Codex as CodexConstructor;
@@ -59,39 +58,40 @@ export async function importCodexClass(): Promise<CodexConstructor> {
 }
 
 // ---------------------------------------------------------------------------
-// Binary resolution from global npm install
+// Binary resolution
 // ---------------------------------------------------------------------------
 
-const PLATFORM_PACKAGE: Record<string, string> = {
-  'linux-x64': '@openai/codex-linux-x64',
-  'linux-arm64': '@openai/codex-linux-arm64',
-  'darwin-x64': '@openai/codex-darwin-x64',
-  'darwin-arm64': '@openai/codex-darwin-arm64',
-  'win32-x64': '@openai/codex-win32-x64',
-  'win32-arm64': '@openai/codex-win32-arm64',
+/** Platform key → npm package name and target triple for the native binary. */
+const PLATFORM_INFO: Record<string, { pkg: string; triple: string }> = {
+  'linux-x64': { pkg: '@openai/codex-linux-x64', triple: 'x86_64-unknown-linux-musl' },
+  'linux-arm64': { pkg: '@openai/codex-linux-arm64', triple: 'aarch64-unknown-linux-musl' },
+  'darwin-x64': { pkg: '@openai/codex-darwin-x64', triple: 'x86_64-apple-darwin' },
+  'darwin-arm64': { pkg: '@openai/codex-darwin-arm64', triple: 'aarch64-apple-darwin' },
+  'win32-x64': { pkg: '@openai/codex-win32-x64', triple: 'x86_64-pc-windows-msvc' },
+  'win32-arm64': { pkg: '@openai/codex-win32-arm64', triple: 'aarch64-pc-windows-msvc' },
 };
 
-const TARGET_TRIPLE: Record<string, string> = {
-  'linux-x64': 'x86_64-unknown-linux-musl',
-  'linux-arm64': 'aarch64-unknown-linux-musl',
-  'darwin-x64': 'x86_64-apple-darwin',
-  'darwin-arm64': 'aarch64-apple-darwin',
-  'win32-x64': 'x86_64-pc-windows-msvc',
-  'win32-arm64': 'aarch64-pc-windows-msvc',
-};
+/** Cached result — found paths are cached; misses are retried. */
+let cachedBinaryPath: string | undefined;
 
 /**
- * Attempt to locate the native Codex CLI binary from a global npm install.
+ * Locate the native Codex CLI binary. Results are cached for the session
+ * (misses are always retried so mid-session installs are picked up).
  *
- * Returns the absolute path to the binary, or `undefined` if not found.
  * The caller should pass the result as `codexPathOverride` to the Codex
  * constructor.
  */
 export function findCodexBinaryPath(): string | undefined {
-  const key = `${process.platform}-${process.arch}`;
-  const platformPkg = PLATFORM_PACKAGE[key];
-  const triple = TARGET_TRIPLE[key];
-  if (!platformPkg || !triple) return undefined;
+  if (cachedBinaryPath !== undefined) return cachedBinaryPath;
+
+  const result = findCodexBinaryPathUncached();
+  if (result) cachedBinaryPath = result;
+  return result;
+}
+
+function findCodexBinaryPathUncached(): string | undefined {
+  const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
+  if (!info) return undefined;
 
   const binaryName = process.platform === 'win32' ? 'codex.exe' : 'codex';
 
@@ -106,7 +106,6 @@ export function findCodexBinaryPath(): string | undefined {
     }).trim().split('\n')[0]; // `where` on Windows may return multiple
 
     if (codexOnPath && existsSync(codexOnPath)) {
-      console.log(`[Codex] Found binary on PATH: ${codexOnPath}`);
       return codexOnPath;
     }
   } catch {
@@ -132,13 +131,10 @@ export function findCodexBinaryPath(): string | undefined {
 
       try {
         const req = createRequire(path.join(codexPkgDir, 'package.json'));
-        const platformPkgJson = req.resolve(`${platformPkg}/package.json`);
+        const platformPkgJson = req.resolve(`${info.pkg}/package.json`);
         const vendorRoot = path.join(path.dirname(platformPkgJson), 'vendor');
-        const binary = path.join(vendorRoot, triple, 'codex', binaryName);
-        if (existsSync(binary)) {
-          console.log(`[Codex] Found binary via global npm: ${binary}`);
-          return binary;
-        }
+        const binary = path.join(vendorRoot, info.triple, 'codex', binaryName);
+        if (existsSync(binary)) return binary;
       } catch {
         // Platform package not resolvable from this root
       }
@@ -150,17 +146,13 @@ export function findCodexBinaryPath(): string | undefined {
   // Strategy 3: resolve from local project's node_modules
   try {
     const localReq = createRequire(path.join(__dirname, 'package.json'));
-    const pkgJson = localReq.resolve(`${platformPkg}/package.json`);
+    const pkgJson = localReq.resolve(`${info.pkg}/package.json`);
     const vendorRoot = path.join(path.dirname(pkgJson), 'vendor');
-    const binary = path.join(vendorRoot, triple, 'codex', binaryName);
-    if (existsSync(binary)) {
-      console.log(`[Codex] Found binary via local node_modules: ${binary}`);
-      return binary;
-    }
+    const binary = path.join(vendorRoot, info.triple, 'codex', binaryName);
+    if (existsSync(binary)) return binary;
   } catch {
     // Not available locally
   }
 
-  console.log('[Codex] Native binary not found');
   return undefined;
 }
