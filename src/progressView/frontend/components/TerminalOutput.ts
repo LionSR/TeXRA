@@ -78,13 +78,14 @@ export class TerminalOutput extends LitElement {
   };
 
   override firstUpdated(): void {
+    const { theme, fontFamily } = this.resolveTerminalOptions();
     this.terminal = new Terminal({
       disableStdin: true,
       convertEol: true,
       scrollback: MIN_SCROLLBACK,
-      fontFamily: this.resolveFontFamily(),
+      fontFamily,
       fontSize: 12,
-      theme: this.resolveThemeFromCssVars(),
+      theme,
     });
 
     this.fitAddon = new FitAddon();
@@ -213,7 +214,11 @@ export class TerminalOutput extends LitElement {
     }
   }
 
-  private resolveThemeFromCssVars(): Record<string, string> {
+  /** Resolve theme colors and font family from VS Code CSS variables in a single getComputedStyle call. */
+  private resolveTerminalOptions(): {
+    theme: Record<string, string>;
+    fontFamily: string;
+  } {
     const styles = getComputedStyle(this);
 
     const theme: Record<string, string> = {
@@ -240,15 +245,11 @@ export class TerminalOutput extends LitElement {
       .trim();
     if (selectionBg) theme['selectionBackground'] = selectionBg;
 
-    return theme;
-  }
+    const fontFamily =
+      styles.getPropertyValue('--vscode-editor-font-family').trim() ||
+      DEFAULT_THEME.fontFamily;
 
-  private resolveFontFamily(): string {
-    return (
-      getComputedStyle(this)
-        .getPropertyValue('--vscode-editor-font-family')
-        .trim() || DEFAULT_THEME.fontFamily
-    );
+    return { theme, fontFamily };
   }
 
   override render() {

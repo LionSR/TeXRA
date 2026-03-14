@@ -349,7 +349,7 @@ export class ProgressViewProvider
 
   /**
    * Check if a stream has any pending approval requests (tool-edit, bash,
-   * retry, or proposal) that require user interaction.
+   * retry, proposal, or plan approval) that require user interaction.
    */
   public hasPendingPermissionsForStream(streamId: string): boolean {
     return (

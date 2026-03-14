@@ -3,6 +3,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas';
 import type { ToolResult } from '@tools/result';
 import { getConfig } from '@utils/config';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import { isApprovalBypassedForStream } from './toolEditApproval';
 
@@ -151,7 +152,7 @@ export function buildBashApprovalRejectedResult(
   command: string,
   userMessage?: string,
 ): ToolResult {
-  const preview = command.length > 60 ? `${command.slice(0, 57)}…` : command;
+  const preview = truncateWithEllipsis(command, 60);
   const message = `User rejected bash command: ${preview}`;
   const feedback = userMessage?.trim();
   const result: ToolResult = {

@@ -34,6 +34,7 @@ import { executeCommand, signalProcessGroup } from '@utils/system/execUtils';
 // Local imports - utils
 import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -122,8 +123,7 @@ export class BashTool extends defineTool({
     }
 
     if (result.success) {
-      const preview =
-        command.length > 60 ? `${command.slice(0, 57)}…` : command;
+      const preview = truncateWithEllipsis(command, 60);
       return {
         summary: `Executed: ${preview} (exit 0)`,
         output: result.stdout ?? '',
@@ -166,7 +166,7 @@ export class BashTool extends defineTool({
 
     await ensureRunDir(executionId);
 
-    const preview = command.length > 60 ? `${command.slice(0, 57)}…` : command;
+    const preview = truncateWithEllipsis(command, 60);
 
     let pid: number | undefined;
     const startedAt = Date.now();

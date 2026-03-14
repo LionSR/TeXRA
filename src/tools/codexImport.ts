@@ -18,7 +18,6 @@ import * as path from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { pathToFileURL } from 'url';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CodexConstructor = new (options?: any) => any;
 
 // ---------------------------------------------------------------------------

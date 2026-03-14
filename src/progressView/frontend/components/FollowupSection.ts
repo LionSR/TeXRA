@@ -282,9 +282,7 @@ export class FollowupSection extends LitElement {
 
           <div
             class="followup-options"
-            aria-hidden=${this.mode === 'chat' || this.mode === 'merge'
-              ? 'true'
-              : 'false'}
+            aria-hidden=${this.mode !== 'workflow' ? 'true' : 'false'}
           >
             <vscode-checkbox
               id=${ELEMENT_IDS.FOLLOWUP_INCLUDE_INSTRUCTION}
