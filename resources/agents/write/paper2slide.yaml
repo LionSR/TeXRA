@@ -24,7 +24,6 @@ prompts:
     - Prioritize visual representations and key takeaways over verbose descriptions
     - Cite relevant key papers using commands like \cite{Author2020Title} (e.g., \cite{Smith2020Analysis}) which include the author, year, and first word of the paper title
     - Output a complete, self-contained LaTeX file that can be compiled directly
-    - IMPORTANT: The output presentation must be entirely self-contained. Do not include any internal thoughts, change notes, or references to previous versions or conversations (e.g., "Changed X to Y," "Previously this said A," "As requested, we updated..."). A third-party reader with no context about the editing process must find the presentation clear and complete on its own.
 
   userPrefix: |
     You are tasked with creating a LaTeX Beamer presentation based on the following research paper:
