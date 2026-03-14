@@ -240,10 +240,8 @@ export class CodexTool extends defineTool({
     const ctx = getCurrentToolFileInteractionContext();
     ctx?.onExecutionReady?.();
 
-    // Dynamic import — variable indirection hides the specifier from webpack
-    // so it doesn't try to bundle/resolve the optional ESM-only package.
-    const codexSdkModule = '@openai/codex-sdk';
-    const { Codex } = await import(/* webpackIgnore: true */ codexSdkModule);
+    // Dynamic import — resolved at runtime, not bundled (see webpack externals)
+    const { Codex } = await import('@openai/codex-sdk');
 
     const codex = new Codex();
     const thread = codex.startThread({

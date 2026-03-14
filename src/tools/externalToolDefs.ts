@@ -219,8 +219,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'Requires @openai/codex npm package with platform binaries. Used by @openai/codex-sdk.',
     check: async () => {
       try {
-        const mod = '@openai/codex-sdk';
-        const { Codex } = await import(/* webpackIgnore: true */ mod);
+        const { Codex } = await import('@openai/codex-sdk');
         // Constructor resolves the binary path — throws if not found
         new Codex();
         return true;
@@ -230,8 +229,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     },
     detailCheck: async () => {
       try {
-        const mod = '@openai/codex-sdk';
-        const { Codex } = await import(/* webpackIgnore: true */ mod);
+        const { Codex } = await import('@openai/codex-sdk');
         new Codex();
         return 'Codex CLI binary found. Ready for SDK use.';
       } catch (err: unknown) {
