@@ -1,7 +1,10 @@
 import { ModelProvider } from 'llm-zoo';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { getConfig } from '@utils/config';
-import { getProviderEndpoint } from '@utils/config/providerConfig';
+import {
+  getProviderEndpoint,
+  getDashScopeUseChina,
+} from '@utils/config/providerConfig';
 
 // NOTE: getProviderEndpoint reads from globalSM (VS Code global state), which is
 // where the Settings dashboard writes custom endpoints. The legacy settings.json
@@ -41,8 +44,7 @@ const BASE_URLS: Record<ModelProvider, string | null> = {
   [ModelProvider.DEEPSEEK]: 'https://api.deepseek.com',
   [ModelProvider.XAI]: 'https://api.x.ai/v1',
   [ModelProvider.MOONSHOT]: 'https://api.moonshot.cn/v1',
-  [ModelProvider.DASHSCOPE]:
-    'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+  [ModelProvider.DASHSCOPE]: null, // Resolved dynamically via getDashScopeBaseUrl()
   [ModelProvider.COPILOT]: null,
   [ModelProvider.OTHERS]: null,
 };
@@ -153,6 +155,14 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
       `Using custom base URL for ${config.provider}: ${customUrl}`,
     );
     return `https://${normalizeUrl(customUrl)}`;
+  }
+
+  // DashScope base URL depends on the China/international region toggle
+  if (config.provider === ModelProvider.DASHSCOPE) {
+    const domain = getDashScopeUseChina()
+      ? 'dashscope.aliyuncs.com'
+      : 'dashscope-intl.aliyuncs.com';
+    return `https://${domain}/compatible-mode/v1`;
   }
 
   return BASE_URLS[config.provider];
