@@ -16,6 +16,7 @@ import { execSync } from 'child_process';
 import { createRequire } from 'module';
 import * as path from 'path';
 import { existsSync } from 'fs';
+import { pathToFileURL } from 'url';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CodexConstructor = new (options?: any) => any;
@@ -38,8 +39,44 @@ export async function importCodexClass(): Promise<CodexConstructor> {
     throw err;
   }
 
-  // Probe all possible export shapes — Electron's ESM/CJS interop may
-  // wrap named exports under `default`, sometimes double-nested.
+  const resolved = resolveCodexConstructor(mod);
+  if (resolved) return resolved;
+
+  // When the extension host runs in CJS mode, dynamic import() of an ESM-only
+  // package may lose named exports (only an empty `default` object appears).
+  // Re-import using the resolved file:// URL so Node handles it as true ESM.
+  try {
+    const req = createRequire(__filename);
+    const entryPath = req.resolve('@openai/codex-sdk');
+    const fileUrl = pathToFileURL(entryPath).href;
+    const esmMod = (await import(fileUrl)) as Record<string, unknown>;
+    const esmResolved = resolveCodexConstructor(esmMod);
+    if (esmResolved) return esmResolved;
+  } catch {
+    // Fall through to error below
+  }
+
+  // Build a diagnostic message showing what we actually got
+  const defType = typeof mod.default;
+  const defKeys =
+    mod.default && typeof mod.default === 'object'
+      ? Object.keys(mod.default as Record<string, unknown>).join(', ')
+      : defType;
+  throw new Error(
+    'Failed to resolve Codex class from @openai/codex-sdk. ' +
+      `Module keys: [${Object.keys(mod).join(', ')}], ` +
+      `default type: ${defType}, default keys: [${defKeys}]`,
+  );
+}
+
+/**
+ * Probe all possible export shapes for the Codex constructor.
+ * Electron's ESM/CJS interop may wrap named exports under `default`,
+ * sometimes double-nested.
+ */
+function resolveCodexConstructor(
+  mod: Record<string, unknown>,
+): CodexConstructor | undefined {
   const candidates: unknown[] = [
     mod.Codex, // named export
     (mod.default as Record<string, unknown> | undefined)?.Codex, // default.Codex
@@ -59,18 +96,7 @@ export async function importCodexClass(): Promise<CodexConstructor> {
       return candidate as CodexConstructor;
     }
   }
-
-  // Build a diagnostic message showing what we actually got
-  const defType = typeof mod.default;
-  const defKeys =
-    mod.default && typeof mod.default === 'object'
-      ? Object.keys(mod.default as Record<string, unknown>).join(', ')
-      : defType;
-  throw new Error(
-    'Failed to resolve Codex class from @openai/codex-sdk. ' +
-      `Module keys: [${Object.keys(mod).join(', ')}], ` +
-      `default type: ${defType}, default keys: [${defKeys}]`,
-  );
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
