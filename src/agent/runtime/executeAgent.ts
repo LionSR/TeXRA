@@ -549,9 +549,7 @@ export async function executeAgent(
 
   // Fire-and-forget: generate AI session description from the user's instruction.
   // Triggered at the start so cancelled/errored sessions still get descriptions.
-  generateSessionDescription(ctx.executionId, streamId, config).catch(
-    () => {},
-  );
+  generateSessionDescription(ctx.executionId, streamId, config).catch(() => {});
   const category =
     setting.agentCategory === AgentCategory.ToolUse
       ? ('toolUse' as const)
