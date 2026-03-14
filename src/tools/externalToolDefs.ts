@@ -210,11 +210,11 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     description:
       'OpenAI Codex agent runtime. Required by the Codex SDK for local code generation and analysis.',
     installGuide:
-      'Install the Codex CLI globally:\n\n' +
-      '  npm install -g @openai/codex\n\n' +
-      'This installs the SDK and platform-specific CLI binaries.\n\n' +
+      'Install the Codex CLI (choose one):\n\n' +
+      '  npm install -g @openai/codex\n' +
+      '  brew install codex          (macOS)\n\n' +
       'Authentication (choose one):\n' +
-      '  • codex login        — OAuth sign-in (recommended)\n' +
+      '  • codex login        — sign in with ChatGPT account (recommended)\n' +
       '  • OPENAI_API_KEY     — environment variable with API key',
     installUrl: 'https://github.com/openai/codex',
     configNotes:

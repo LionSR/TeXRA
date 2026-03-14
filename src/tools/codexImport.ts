@@ -166,6 +166,25 @@ export function findCodexBinaryPath(): string | undefined {
     // Not available locally
   }
 
+  // Strategy 3: Homebrew / PATH-based install (e.g. `brew install codex`)
+  // The `codex` on PATH may be the native binary directly (Homebrew) or a
+  // Node.js wrapper script (npm). We accept it either way — the SDK's
+  // CodexExec spawns it the same regardless.
+  try {
+    const whichCmd = process.platform === 'win32' ? 'where codex' : 'which codex';
+    const codexOnPath = execSync(whichCmd, {
+      encoding: 'utf8',
+      timeout: 5000,
+    }).trim().split('\n')[0]; // `where` on Windows may return multiple
+
+    if (codexOnPath && existsSync(codexOnPath)) {
+      console.log(`[Codex] Found binary on PATH: ${codexOnPath}`);
+      return codexOnPath;
+    }
+  } catch {
+    // codex not on PATH
+  }
+
   console.log('[Codex] Native binary not found');
   return undefined;
 }
