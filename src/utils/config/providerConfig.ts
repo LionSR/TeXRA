@@ -115,6 +115,31 @@ export function getDashScopeUseChina(): boolean {
   );
 }
 
+const BAILIAN_DISPLAY_NAME = 'Bailian';
+const BAILIAN_KEY_URL = 'https://bailian.console.aliyun.com/';
+
+/** Resolve display name for a provider, accounting for DashScope China region. */
+export function getProviderDisplayName(
+  provider: string,
+  defaultName: string,
+): string {
+  if (provider === 'dashscope' && getDashScopeUseChina()) {
+    return BAILIAN_DISPLAY_NAME;
+  }
+  return defaultName;
+}
+
+/** Resolve key URL for a provider, accounting for DashScope China region. */
+export function getProviderKeyUrl(
+  provider: string,
+  defaultUrl: string,
+): string {
+  if (provider === 'dashscope' && getDashScopeUseChina()) {
+    return BAILIAN_KEY_URL;
+  }
+  return defaultUrl;
+}
+
 // ---------------------------------------------------------------------------
 // WebSocket transport setting (globalSM-backed)
 // ---------------------------------------------------------------------------
