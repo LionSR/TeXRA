@@ -4,8 +4,15 @@
  */
 
 // Third-party imports
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import {
+  LitElement,
+  html,
+  css,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
+import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
 
@@ -157,6 +164,22 @@ export class PlanView extends LitElement {
 
   @property({ attribute: false }) plan: Plan | null = null;
 
+  /** Open state — managed internally. Auto-opens when plan is updated. */
+  @state() private open = true;
+
+  /** Snapshot of previous plan for detecting meaningful changes. */
+  private prevPlanJson = '';
+
+  protected override willUpdate(changed: PropertyValues): void {
+    if (changed.has('plan') && this.plan) {
+      const json = JSON.stringify(this.plan);
+      if (json !== this.prevPlanJson) {
+        this.open = true;
+        this.prevPlanJson = json;
+      }
+    }
+  }
+
   override render(): TemplateResult | typeof nothing {
     if (!this.plan) {
       return nothing;
@@ -172,7 +195,8 @@ export class PlanView extends LitElement {
         id=${ELEMENT_IDS.PLAN_VIEW_CONTAINER}
         class="plan-collapsible panel-collapsible"
         title=${`Plan (${completed}/${total})`}
-        open
+        ?open=${this.open}
+        @vsc-collapsible-toggle=${this.handleCollapsibleToggle}
       >
         <div class="plan-summary">${this.plan.summary}</div>
         <div id=${ELEMENT_IDS.PLAN_VIEW} class="plan-steps">
@@ -225,5 +249,9 @@ export class PlanView extends LitElement {
         </div>
       </div>
     `;
+  }
+
+  private handleCollapsibleToggle(e: CustomEvent<{ open?: boolean }>): void {
+    this.open = e.detail?.open ?? this.open;
   }
 }
