@@ -213,6 +213,8 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'Install the Codex CLI (choose one):\n\n' +
       '  npm install -g @openai/codex\n' +
       '  brew install codex          (macOS)\n\n' +
+      'On Windows, use WSL or the Codex app.\n' +
+      'See: https://developers.openai.com/codex/cli\n\n' +
       'Authentication (choose one):\n' +
       '  • codex login        — sign in with ChatGPT account (recommended)\n' +
       '  • OPENAI_API_KEY     — environment variable with API key',
