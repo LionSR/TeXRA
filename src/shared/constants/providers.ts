@@ -194,4 +194,13 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
         'Enable the 1M-token context window for Claude Opus 4.6, Sonnet 4.6, and Sonnet 4 (usage capped at 200K by extension).',
     },
   ],
+  dashscope: [
+    {
+      key: GlobalStateKey.DASHSCOPE_USE_CHINA,
+      label: 'China Region (Bailian)',
+      description:
+        'Use the China region endpoint (dashscope.aliyuncs.com) instead of international (dashscope-intl.aliyuncs.com). Provider displays as "Bailian".',
+      globalStateKey: GlobalStateKey.DASHSCOPE_USE_CHINA,
+    },
+  ],
 };

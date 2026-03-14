@@ -97,6 +97,7 @@ import {
   getProviderEndpoint,
   setProviderEndpoint,
   supportsCustomEndpoint,
+  getDashScopeUseChina,
 } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
 import { loadMemoryItems } from './utils/memoryFileSystem';
@@ -186,11 +187,19 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
         status = 'not-set';
       }
 
+      // DashScope display name and key URL switch based on China region setting
+      let displayName = PROVIDER_DISPLAY_NAMES[provider];
+      let keyUrl = PROVIDER_URLS[provider];
+      if (provider === 'dashscope' && getDashScopeUseChina()) {
+        displayName = 'Bailian';
+        keyUrl = 'https://bailian.console.aliyun.com/';
+      }
+
       return {
         provider,
-        displayName: PROVIDER_DISPLAY_NAMES[provider],
+        displayName,
         status,
-        keyUrl: PROVIDER_URLS[provider],
+        keyUrl,
         streaming: getProviderStreaming(provider),
         customEndpoint: getProviderEndpoint(provider),
         supportsCustomEndpoint: supportsCustomEndpoint(provider),

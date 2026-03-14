@@ -65,6 +65,9 @@ export enum GlobalStateKey {
   ENDPOINT_MOONSHOT = 'texra.endpoint.moonshot',
   ENDPOINT_DASHSCOPE = 'texra.endpoint.dashscope',
 
+  // Region settings
+  DASHSCOPE_USE_CHINA = 'texra.dashscope.useChina',
+
   // Transport settings
   WEBSOCKET_OPENAI = 'texra.websocket.openai',
 }
