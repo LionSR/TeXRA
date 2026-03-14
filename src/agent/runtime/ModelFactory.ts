@@ -93,10 +93,31 @@ function shouldUseResponsesAPI(
 }
 
 /**
- * Creates a model handler instance based on provider and routing configuration.
- * Applies user reasoning level overrides when the model supports configurable effort.
+ * Apply the user's "prefer short model names" setting.
+ * When enabled, uses the model's shortName (e.g. "gpt-5.4") instead of the
+ * date-pinned fullName (e.g. "gpt-5.4-2026-03-05"). Useful for proxies/gateways
+ * that only accept unpinned model identifiers.
  */
-export function createModelHandler(config: ModelConfig): ModelHandler {
+function withShortModelName(config: ModelConfig): ModelConfig {
+  if (!globalSM.get<boolean>(GlobalStateKey.PREFER_SHORT_MODEL_NAMES, false)) {
+    return config;
+  }
+  const short = config.shortName;
+  if (!short || short === config.fullName) return config;
+
+  logger.debug(
+    CHANNEL,
+    `Using short model name for ${config.name}: ${config.fullName} → ${short}`,
+  );
+  return { ...config, fullName: short };
+}
+
+/**
+ * Creates a model handler instance based on provider and routing configuration.
+ * Applies short model name preference and reasoning level overrides.
+ */
+export function createModelHandler(originalConfig: ModelConfig): ModelHandler {
+  const config = withShortModelName(originalConfig);
   const useOpenRouter = getConfig<boolean>('texra.model.useOpenRouter', false);
 
   // OpenAI Responses API (required or optional)
