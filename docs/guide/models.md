@@ -19,7 +19,7 @@ TeXRA supports models from multiple providers. Select models from the dropdown i
 | `haiku45T`  | Fast with reasoning          | $$   | Fast   |
 | `haiku45`   | Fast responses               | $$   | Fast   |
 
-For 1M-token context on Opus 4.6 and Sonnet 4.6, enable `texra.model.useAnthropic1MBeta` in settings.
+Opus 4.6 and Sonnet 4.6 include the full 1M context window at standard pricing — no opt-in or beta header required.
 
 ## OpenAI Models
 

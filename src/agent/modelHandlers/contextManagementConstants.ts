@@ -25,8 +25,8 @@ export const CHAINED_RESPONSE_SAFETY_MARGIN_PERCENT = 5;
 /** Max character length for tool result text (200KB ~ 50-66k tokens). */
 export const MAX_TOOL_RESULT_TEXT_LENGTH = 200_000;
 
-/** Max PDF pages per Anthropic API request. */
-export const ANTHROPIC_MAX_PDF_PAGES = 100;
+/** Max PDF pages per Anthropic API request (increased from 100 to 600 with GA 1M context). */
+export const ANTHROPIC_MAX_PDF_PAGES = 600;
 
 /** Compute reduced max tokens under context pressure (minimum 1). */
 export function computeReducedMaxTokens(

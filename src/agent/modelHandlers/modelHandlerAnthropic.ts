@@ -155,7 +155,6 @@ const isBetaToolUseBlock = (block: BetaContentBlock): block is ToolUseBlock =>
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
  */
 
-const CONTEXT_1M_BETA: AnthropicBeta = 'context-1m-2025-08-07';
 const FILES_API_BETA: AnthropicBeta = 'files-api-2025-04-14';
 const SONNET_37_OUTPUT_BETA: AnthropicBeta = 'output-128k-2025-02-19';
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
@@ -172,13 +171,10 @@ const MIN_COMPACTION_TRIGGER_TOKENS = 50_000;
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
 /**
- * Long-context pricing: when 1M beta is active and input exceeds 200K tokens,
- * all tokens in the request are charged at premium rates.
- * See https://platform.claude.com/docs/en/about-claude/pricing#long-context-pricing
+ * Long-context pricing multipliers have been removed.
+ * As of GA, standard pricing applies across the full 1M context window —
+ * no premium for requests over 200K tokens.
  */
-const LONG_CONTEXT_TOKEN_THRESHOLD = 200_000;
-const LONG_CONTEXT_INPUT_MULTIPLIER = 2;
-const LONG_CONTEXT_OUTPUT_MULTIPLIER = 1.5;
 
 /**
  * Model patterns that require temperature removal when thinking is enabled.
@@ -287,21 +283,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return this.isClaudeOpus46() || this.isClaudeSonnet46();
   }
 
-  private isAnthropic1MBetaEligible(): boolean {
+  private hasNative1MContext(): boolean {
     return (
-      this.config.fullName === 'claude-sonnet-4-20250514' ||
-      this.config.fullName === 'claude-sonnet-4-5' ||
       this.config.fullName === SONNET_46_FULLNAME ||
       this.config.fullName === OPUS_46_FULLNAME
     );
   }
 
   public override getEffectiveContextWindow(): number {
-    const useAnthropic1MBeta = getConfig<boolean>(
-      'texra.model.useAnthropic1MBeta',
-      false,
-    );
-    return useAnthropic1MBeta && this.isAnthropic1MBetaEligible()
+    // Opus 4.6 and Sonnet 4.6 include the full 1M context window at standard pricing (GA).
+    // No beta header or opt-in setting required.
+    return this.hasNative1MContext()
       ? ANTHROPIC_1M_CONTEXT_WINDOW
       : this.config.contextWindow;
   }
@@ -508,7 +500,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // while keeping context headers needed for accurate token counting.
     const countTokenBetas = options?.betas?.filter(
       (beta) =>
-        beta === CONTEXT_1M_BETA ||
         beta === CONTEXT_MANAGEMENT_BETA ||
         beta === COMPACTION_BETA,
     );
@@ -544,8 +535,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Track input token count for client-side context management triggering
     let measuredInputTokens: number | undefined;
     const effectiveContextWindow = this.getEffectiveContextWindow();
-    const isAnthropic1MBetaActive =
-      effectiveContextWindow > this.config.contextWindow;
 
     // Count cache slots reserved by top-level automatic caching and system prompt
     // so enforceCacheControlLimit knows how many remain for message blocks.
@@ -674,10 +663,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // The thinking configuration is now handled above for all reasoning models
     }
 
-    // Opt-in beta for 1M context window on eligible Claude models
-    if (isAnthropic1MBetaActive) {
-      this.ensureBeta(options, CONTEXT_1M_BETA);
-    }
+    // 1M context window is now GA for Opus 4.6 and Sonnet 4.6 — no beta header required.
 
     // Set up context management before token counting so estimates use matching options.
     const compactionThresholdPercent = getConfig<number>(
@@ -1706,21 +1692,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Note: Anthropic doesn't provide tool_use_tokens in their API response
     const usageTotals = this.getUsageTokenTotals(responseUsage);
 
-    // Apply long-context premium when 1M beta is active and input exceeds 200K.
-    // All tokens in the request are charged at premium rates.
-    const totalInputTokens =
-      usageTotals.baseInputTokens +
-      usageTotals.cacheReadTokens +
-      usageTotals.cacheCreationTokens;
-    const isLongContext =
-      this.getEffectiveContextWindow() > LONG_CONTEXT_TOKEN_THRESHOLD &&
-      totalInputTokens > LONG_CONTEXT_TOKEN_THRESHOLD;
-    const inputPrice = isLongContext
-      ? this.config.inputPrice * LONG_CONTEXT_INPUT_MULTIPLIER
-      : this.config.inputPrice;
-    const outputPrice = isLongContext
-      ? this.config.outputPrice * LONG_CONTEXT_OUTPUT_MULTIPLIER
-      : this.config.outputPrice;
+    // Standard pricing applies across the full 1M context window (no long-context premium).
+    const inputPrice = this.config.inputPrice;
+    const outputPrice = this.config.outputPrice;
 
     let basePrice = calculateTokenPrice(
       usageTotals.baseInputTokens,
