@@ -33,13 +33,10 @@ const MAX_DIFF_LINES = 200;
 
 /**
  * When the changed lines (added + removed) exceed this fraction of the
- * original file's line count, the diff is truncated more aggressively.
+ * original file's line count, the diff is flagged as a large change.
  * The orchestrator still gets a diff file it can read on demand.
  */
 const LARGE_CHANGE_RATIO = 0.4;
-
-/** Reduced line budget for diffs that represent near-rewrites. */
-const MAX_DIFF_LINES_LARGE_CHANGE = 80;
 
 /**
  * Compute a unified diff between two strings.
@@ -117,8 +114,7 @@ export async function computeAndWriteWorkflowDiffs(
 
         const diff = computeUnifiedDiff(original, modified);
         if (diff) {
-          const limit = largeChange ? MAX_DIFF_LINES_LARGE_CHANGE : MAX_DIFF_LINES;
-          const truncated = truncateDiff(diff, limit);
+          const truncated = truncateDiff(diff, MAX_DIFF_LINES);
           const diffRelPath = `diffs/${path.basename(o.relativePath)}.diff`;
           results.set(o.absolutePath, { diffRelPath, largeChange });
           diffsToWrite.push({ diffRelPath, content: truncated, absPath: o.absolutePath });
