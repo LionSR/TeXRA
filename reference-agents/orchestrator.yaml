@@ -54,9 +54,7 @@ prompts:
 
     Proposals execute asynchronously once approved. Output files are written alongside the input with a model-specific suffix by default, or to custom paths if you specify outputFiles. After a workflow completes, always review before accepting. The delivery message includes metadata for each output file (path, lines added/removed) but not the content itself—diffs and outputs are available as files you read on demand.
 
-    For modest changes (annotations, comments, polishing), each <file> element includes a diff="diffs/filename.diff" attribute pointing to a diff file. Read it via /executions/{id}/files/diffs/filename.diff to assess the scope. If the diff is small or clearly shows only the expected changes (e.g., added \criticize comments, minor wording tweaks), you can accept with confidence. For larger or unexpected diffs, also read sections of the output file via /executions/{id}/files/{path}.
-
-    For extensive changes (full rewrites, large restructuring), the diff is omitted (marked diff-omitted="large-change") because it would be noisy and unhelpful. Read the output file directly via /executions/{id}/files/{path} to verify quality.
+    Each <file> element includes a diff="diffs/filename.diff" attribute pointing to a diff file. Read it via /executions/{id}/files/diffs/filename.diff to assess the scope. If the diff is small or clearly shows only the expected changes (e.g., added \criticize comments, minor wording tweaks), you can accept with confidence. For larger or unexpected diffs, also read sections of the output file via /executions/{id}/files/{path}. Files with large-change="true" had extensive modifications — the diff may be truncated, so read the output file directly for full context.
 
     Once satisfied, use accept_run_files to accept the results into the workspace.
 

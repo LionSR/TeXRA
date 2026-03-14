@@ -23,6 +23,7 @@ import { TODO_STATUS } from '@shared/schemas/todo';
 import { formatDuration } from '@utils/core';
 import { AbsoluteFS } from '@utils/files';
 import { getRunDir, ensureRunDir } from '@utils/files/taskRunStorage';
+import { countLines } from '@utils/text/stringUtils';
 
 // ============================================================================
 // Diff computation for workflow deliveries
@@ -59,20 +60,11 @@ function truncateDiff(diff: string, maxLines: number): string {
   return lines.slice(0, maxLines).join('\n') + '\n[... diff truncated]';
 }
 
-/** Fast line counter — avoids allocating a split array. */
-function countLinesSimple(text: string): number {
-  let count = 0;
-  for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) === 10) count++;
-  }
-  return count > 0 || text.length > 0 ? count + 1 : 0;
-}
-
 /** Info about a diff file written to the execution's run directory. */
 export interface DiffFileInfo {
   /** The relative path within the run directory (e.g. "diffs/chapter1.tex.diff"). */
   diffRelPath: string;
-  /** True when the change ratio exceeded the large-change threshold (diff is truncated shorter). */
+  /** True when the change ratio exceeded the large-change threshold. */
   largeChange: boolean;
 }
 
@@ -81,9 +73,9 @@ export interface DiffFileInfo {
  * run directory as `.diff` files. Returns a map from output absolutePath to
  * diff file info, so the delivery formatter can reference them by path.
  *
- * Diffs are only written when the change ratio is modest. For full rewrites
- * (change ratio > threshold), no diff file is created and the entry is marked
- * as skipped so the orchestrator knows to read the output directly.
+ * All diffs are written regardless of change size. Large changes (ratio above
+ * {@link LARGE_CHANGE_RATIO}) are flagged so the orchestrator knows the diff
+ * may be truncated and can read the full output file for context.
  *
  * Files without an original (new files) or where reading fails are omitted.
  */
@@ -92,7 +84,7 @@ export async function computeAndWriteWorkflowDiffs(
   outputs: OutputFileSummary[],
 ): Promise<Map<string, DiffFileInfo>> {
   const results = new Map<string, DiffFileInfo>();
-  const diffsToWrite: Array<{ diffRelPath: string; content: string; absPath: string }> = [];
+  const diffsToWrite: Array<{ diffRelPath: string; content: string }> = [];
 
   // First pass: compute diffs and decide which to write.
   await Promise.all(
@@ -104,9 +96,9 @@ export async function computeAndWriteWorkflowDiffs(
           AbsoluteFS.read(o.absolutePath),
         ]);
 
-        // Detect large changes — still compute diff but truncate shorter.
+        // Detect large changes — diff is still written but flagged.
         let largeChange = false;
-        const originalLines = countLinesSimple(original);
+        const originalLines = countLines(original);
         if (originalLines > 0 && o.added !== null && o.removed !== null) {
           const changedLines = (o.added ?? 0) + (o.removed ?? 0);
           largeChange = changedLines / originalLines > LARGE_CHANGE_RATIO;
@@ -115,9 +107,12 @@ export async function computeAndWriteWorkflowDiffs(
         const diff = computeUnifiedDiff(original, modified);
         if (diff) {
           const truncated = truncateDiff(diff, MAX_DIFF_LINES);
-          const diffRelPath = `diffs/${path.basename(o.relativePath)}.diff`;
+          // Use full relativePath (with separators replaced) to avoid collisions
+          // when multiple files share the same basename in different directories.
+          const safeName = o.relativePath.replace(/[\\/]/g, '_');
+          const diffRelPath = `diffs/${safeName}.diff`;
           results.set(o.absolutePath, { diffRelPath, largeChange });
-          diffsToWrite.push({ diffRelPath, content: truncated, absPath: o.absolutePath });
+          diffsToWrite.push({ diffRelPath, content: truncated });
         }
       } catch {
         // File read failure is non-fatal — skip diff for this file.
@@ -151,7 +146,7 @@ export async function computeAndWriteWorkflowDiffs(
  * Format a single output file summary as XML.
  * When diff info is provided, includes a `diff` attribute pointing to the diff
  * file path (readable via /executions/{id}/files/...). Large changes are
- * flagged with `large-change="true"` but still include a (shorter) diff.
+ * flagged with `large-change="true"` but still include a diff file.
  */
 function formatOutputFile(
   o: OutputFileSummary,
@@ -169,7 +164,6 @@ function formatOutputFile(
 
   if (diffInfo) {
     // Diff available as a file — orchestrator can read it on demand.
-    // Large changes get a shorter truncated diff but are still readable.
     const extra = diffInfo.largeChange ? ' large-change="true"' : '';
     return `<file ${attrs} diff="${escapeAttr(diffInfo.diffRelPath)}"${extra} />`;
   }
