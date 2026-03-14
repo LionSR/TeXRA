@@ -467,7 +467,7 @@ export function formatPostCompactionContext(
 
   const lines: string[] = [
     '<post-compaction-context>',
-    '<note>Your conversation context was compacted (summarized) to free up space. The following state was preserved from before compaction.</note>',
+    '<note>Your conversation context was compacted (summarized) to free up space. The following state was preserved from before compaction. Any active executions listed below may still be running and their results will be delivered as follow-up messages when they complete.</note>',
   ];
 
   if (subagents.length > 0) {
@@ -516,7 +516,7 @@ function formatTodoContext(todos: TodoItem[]): string[] {
   const lines: string[] = [`<current-todos count="${todos.length}">`];
   for (const todo of todos) {
     lines.push(
-      `  <todo status="${escapeAttr(todo.status)}">${escapeText(todo.content)}</todo>`,
+      `  <todo status="${escapeAttr(todo.status)}" activeForm="${escapeAttr(todo.activeForm)}">${escapeText(todo.content)}</todo>`,
     );
   }
   lines.push('</current-todos>');
