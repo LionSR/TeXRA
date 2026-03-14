@@ -13,6 +13,7 @@ import Mark from 'mark.js';
 
 // Local imports - shared
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
+import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import {
   badgeStyles,
   codiconStyles,
@@ -237,11 +238,9 @@ export class HistoryItem extends LitElement {
 
     const config = this.item.agentConfig;
     const timestamp = new Date(this.item.timestamp).toLocaleString();
-    const isToolUse = config.agentCategory === 'toolUse';
+    const isToolUse = config.agentCategory === AGENT_CATEGORY.TOOL_USE;
     const categoryClass = isToolUse ? 'category-tool-use' : 'category-workflow';
-    const decorator = getAgentCategoryDecorator(
-      isToolUse ? 'toolUse' : 'workflow',
-    );
+    const decorator = getAgentCategoryDecorator(config.agentCategory);
     const instructionText = config.instruction?.trim()
       ? config.instruction
       : null;
@@ -249,32 +248,35 @@ export class HistoryItem extends LitElement {
 
     const extraDetails: Array<TemplateResult> = [];
 
-    const referenceSection = this.renderConfigSection('Reference', [
-      ['ReferenceFile', config.referenceFile],
-      ['ReferenceFiles', config.referenceFiles],
-    ]);
-    if (referenceSection) extraDetails.push(referenceSection);
+    // File fields only exist on workflow configs (discriminated union)
+    if (config.agentCategory === AGENT_CATEGORY.WORKFLOW) {
+      const referenceSection = this.renderConfigSection('Reference', [
+        ['ReferenceFile', config.referenceFile],
+        ['ReferenceFiles', config.referenceFiles],
+      ]);
+      if (referenceSection) extraDetails.push(referenceSection);
 
-    const auxiliarySection = this.renderConfigSection('Auxiliary', [
-      ['AuxiliaryFile', config.auxiliaryFile],
-      ['AuxiliaryFiles', config.auxiliaryFiles],
-    ]);
-    if (auxiliarySection) extraDetails.push(auxiliarySection);
+      const auxiliarySection = this.renderConfigSection('Auxiliary', [
+        ['AuxiliaryFile', config.auxiliaryFile],
+        ['AuxiliaryFiles', config.auxiliaryFiles],
+      ]);
+      if (auxiliarySection) extraDetails.push(auxiliarySection);
 
-    const outputSection = this.renderConfigSection('Output Files', [
-      ['Files', config.outputFiles],
-    ]);
-    if (outputSection) extraDetails.push(outputSection);
+      const outputSection = this.renderConfigSection('Output Files', [
+        ['Files', config.outputFiles],
+      ]);
+      if (outputSection) extraDetails.push(outputSection);
 
-    if (config.toolConfig && !isToolUse) {
-      const toolEntries = (
-        Object.entries(config.toolConfig) as Array<[string, ConfigValue]>
-      ).filter(([, value]) => this.hasValue(value));
-      const toolSection = this.renderConfigSection(
-        html`<i class="codicon codicon-tools"></i> Config`,
-        toolEntries,
-      );
-      if (toolSection) extraDetails.push(toolSection);
+      if (config.toolConfig) {
+        const toolEntries = (
+          Object.entries(config.toolConfig) as Array<[string, ConfigValue]>
+        ).filter(([, value]) => this.hasValue(value));
+        const toolSection = this.renderConfigSection(
+          html`<i class="codicon codicon-tools"></i> Config`,
+          toolEntries,
+        );
+        if (toolSection) extraDetails.push(toolSection);
+      }
     }
 
     return html`
@@ -348,28 +350,36 @@ export class HistoryItem extends LitElement {
                 </div>`
               : html`<em class="history-none">Not set</em>`}
           </div>
-          <span class="history-label">InputFile:</span>
-          <span class="history-value"> ${config.inputFile || 'None'} </span>
-          ${config.inputFiles?.length
+          ${config.agentCategory === AGENT_CATEGORY.WORKFLOW
             ? html`
-                <span class="history-label">InputFiles:</span>
-                <span class="history-value"
-                  >${config.inputFiles.join(', ')}</span
-                >
-              `
-            : nothing}
-          ${config.mediaFile
-            ? html`
-                <span class="history-label">MediaFile:</span>
-                <span class="history-value">${config.mediaFile}</span>
-              `
-            : nothing}
-          ${config.mediaFiles?.length
-            ? html`
-                <span class="history-label">MediaFiles:</span>
-                <span class="history-value"
-                  >${config.mediaFiles.join(', ')}</span
-                >
+                ${config.inputFile
+                  ? html`
+                      <span class="history-label">InputFile:</span>
+                      <span class="history-value">${config.inputFile}</span>
+                    `
+                  : nothing}
+                ${config.inputFiles?.length
+                  ? html`
+                      <span class="history-label">InputFiles:</span>
+                      <span class="history-value"
+                        >${config.inputFiles.join(', ')}</span
+                      >
+                    `
+                  : nothing}
+                ${config.mediaFile
+                  ? html`
+                      <span class="history-label">MediaFile:</span>
+                      <span class="history-value">${config.mediaFile}</span>
+                    `
+                  : nothing}
+                ${config.mediaFiles?.length
+                  ? html`
+                      <span class="history-label">MediaFiles:</span>
+                      <span class="history-value"
+                        >${config.mediaFiles.join(', ')}</span
+                      >
+                    `
+                  : nothing}
               `
             : nothing}
         </div>
