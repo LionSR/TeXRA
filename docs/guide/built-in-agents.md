@@ -8,12 +8,10 @@ TeXRA ships with built-in agents for common research tasks—polishing prose, fi
 | ------------------ | -------- | --------------------------------------- |
 | `chat`             | Tool-use | General assistance, file editing        |
 | `ask`              | Tool-use | Read-only questions and exploration     |
-| `search`           | Tool-use | Literature discovery, web search        |
 | `research`         | Tool-use | Computational verification with Wolfram |
-| `discuss`          | Tool-use | Academic brainstorming with literature  |
+| `review`           | Tool-use | Mathematical and manuscript verification|
 | `lean`             | Tool-use | Lean 4 proof development                |
 | `presenter`        | Tool-use | Interactive presentation builder        |
-| `simplifier`       | Tool-use | Simplify code and LaTeX for clarity     |
 | `correct`          | Workflow | Fix errors without style changes        |
 | `polish`           | Workflow | Improve writing quality                 |
 | `paper2slide`      | Workflow | Convert papers to beamer slides         |
@@ -60,19 +58,6 @@ What packages does this LaTeX project use? Summarize the document structure.
 
 ## Research & Discovery Agents
 
-### `search`
-
-Finds papers and web content for you. Give it a topic and it comes back with relevant preprints, published articles, and web resources. Read-only—it won't touch your files.
-
-**Best for:** Literature reviews, finding citations, fact-checking
-
-**Example instruction:**
-
-```
-Find recent papers on transformer architectures for scientific document understanding.
-Focus on papers from 2023-2024 that address mathematical equation handling.
-```
-
 ### `research`
 
 A hands-on research agent that can edit your files **and** verify mathematics computationally. When you need to check a derivation or run a symbolic calculation alongside your writing, this is the one.
@@ -86,17 +71,20 @@ Derive the variational equations for the Lagrangian in equations.tex.
 Verify each step computationally and update the file with results.
 ```
 
-### `discuss`
+## Verification Agents
 
-A brainstorming partner that can pull in relevant literature as you talk. Useful for thinking through research directions, poking holes in methodology, or connecting ideas across papers. Read-only.
+### `review`
 
-**Best for:** Brainstorming, methodology critique, research direction guidance
+A meticulous scientific auditor that systematically verifies your research manuscript. It checks mathematical correctness, derivation soundness, notation consistency, code-manuscript agreement, and goal achievement — using Wolfram for computational verification.
+
+**Best for:** Pre-submission audits, mathematical verification, notation consistency checks
 
 **Example instruction:**
 
 ```
-I'm considering attention mechanisms for my theorem prover. What are the
-tradeoffs compared to tree-based approaches? What does the literature say?
+Audit this manuscript: verify every derivation step-by-step, check notation
+consistency across all sections, and confirm that every stated goal in the
+abstract is actually delivered in the paper.
 ```
 
 ## Formal Methods Agents
@@ -130,19 +118,6 @@ algorithm, key results, and future work. Use the metropolis theme and include Ti
 diagrams for the architecture.
 ```
 
-### `simplifier`
-
-Cuts through complexity in your code and writing. Whether it's duplicated logic across files, overly-abstract wrappers, or LLM-generated filler prose, `simplifier` cleans things up while preserving correctness.
-
-**Best for:** Refactoring research code, tightening manuscript prose, cleaning up verbose AI-generated text
-
-**Example instruction:**
-
-```
-Simplify the numerical solver in solver.py. Look for duplicated code, inline any
-single-use helper functions, and remove dead code. Run existing tests after each change.
-```
-
 ## Correction & Polishing Agents
 
 ### `correct`
@@ -174,6 +149,8 @@ The `polish` agent improves the writing quality of your document while preservin
 This agent is ideal for refining drafts that are technically sound but need language improvements before submission.
 
 #### Example Output
+
+Try running `polish` on the [sample document](/examples/draft.pdf) to see a colour-coded diff showing exactly what changed. The agent produces versioned output files with latexdiff highlighting additions in blue and deletions in red.
 
 <div class="agent-pdf-viewer">
   <iframe src="/examples/draft_polish_r1_gemini25p_diff.pdf" title="Polish Agent Example" class="agent-pdf-frame"></iframe>
@@ -327,6 +304,53 @@ Preserve mathematical notation and citations from the original.
 ```
 
 See [Intelligent Merge](./intelligent-merge.md) for details on the merge workflow.
+
+## Remote Agents
+
+The following agents are available as [remote agents](./remote-agents.md) through the Research Access Program. Sign in to TeXRA to access them.
+
+### `search`
+
+Finds papers and web content for you. Give it a topic and it comes back with relevant preprints, published articles, and web resources. Read-only — it won't touch your files.
+
+**Best for:** Literature reviews, finding citations, fact-checking
+
+**Example instruction:**
+
+```
+Find recent papers on transformer architectures for scientific document understanding.
+Focus on papers from 2023-2024 that address mathematical equation handling.
+```
+
+### `discuss`
+
+A brainstorming partner that can pull in relevant literature as you talk. Useful for thinking through research directions, poking holes in methodology, or connecting ideas across papers. Read-only.
+
+**Best for:** Brainstorming, methodology critique, research direction guidance
+
+**Example instruction:**
+
+```
+I'm considering attention mechanisms for my theorem prover. What are the
+tradeoffs compared to tree-based approaches? What does the literature say?
+```
+
+### `simplifier`
+
+Cuts through complexity in your code and writing. Whether it's duplicated logic across files, overly-abstract wrappers, or LLM-generated filler prose, `simplifier` cleans things up while preserving correctness.
+
+**Best for:** Refactoring research code, tightening manuscript prose, cleaning up verbose AI-generated text
+
+**Example instruction:**
+
+```
+Simplify the numerical solver in solver.py. Look for duplicated code, inline any
+single-use helper functions, and remove dead code. Run existing tests after each change.
+```
+
+::: tip
+Additional remote agents may be available depending on your access level. Check **TeXRA: View Profile** for the full list.
+:::
 
 ## Next Steps
 
