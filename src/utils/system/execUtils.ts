@@ -16,6 +16,8 @@ type ExecaEncodingOption =
   | 'latin1'
   | 'ascii';
 
+import * as path from 'path';
+
 // Local imports - log
 import type { ExecResult } from '@agent/types/ResultTypes';
 
@@ -104,6 +106,10 @@ export async function executeCommand(
 
     const env = { ...process.env, ...options.env };
     env.PATH = extendEnvPath(env.PATH);
+
+    // Export project context so AI agents can orient themselves immediately.
+    env.PROJECT_DIR = workspacePath;
+    env.PROJECT_NAME = path.basename(workspacePath);
 
     // Normalize 'utf-8' to 'utf8' for execa compatibility
     const rawEncoding = options.encoding ?? 'utf8';
