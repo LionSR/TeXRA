@@ -78,18 +78,13 @@ export class TerminalOutput extends LitElement {
   };
 
   override firstUpdated(): void {
-    const resolvedTheme = this.resolveThemeFromCssVars();
     this.terminal = new Terminal({
       disableStdin: true,
       convertEol: true,
       scrollback: MIN_SCROLLBACK,
-      fontFamily: resolvedTheme.fontFamily,
+      fontFamily: this.resolveFontFamily(),
       fontSize: 12,
-      theme: {
-        background: resolvedTheme.background,
-        foreground: resolvedTheme.foreground,
-        ...resolvedTheme.ansiColors,
-      },
+      theme: this.resolveThemeFromCssVars(),
     });
 
     this.fitAddon = new FitAddon();
@@ -218,40 +213,42 @@ export class TerminalOutput extends LitElement {
     }
   }
 
-  private resolveThemeFromCssVars(): {
-    background: string;
-    foreground: string;
-    fontFamily: string;
-    ansiColors: Record<string, string>;
-  } {
+  private resolveThemeFromCssVars(): Record<string, string> {
     const styles = getComputedStyle(this);
 
-    const background =
-      styles.getPropertyValue('--vscode-editor-background').trim() ||
-      DEFAULT_THEME.background;
-    const foreground =
-      styles.getPropertyValue('--vscode-editor-foreground').trim() ||
-      DEFAULT_THEME.foreground;
-    const fontFamily =
-      styles.getPropertyValue('--vscode-editor-font-family').trim() ||
-      DEFAULT_THEME.fontFamily;
+    const theme: Record<string, string> = {
+      background:
+        styles.getPropertyValue('--vscode-editor-background').trim() ||
+        DEFAULT_THEME.background,
+      foreground:
+        styles.getPropertyValue('--vscode-editor-foreground').trim() ||
+        DEFAULT_THEME.foreground,
+    };
 
-    const ansiColors: Record<string, string> = {};
     for (const [key, cssVar] of ANSI_COLOR_MAP) {
       const value = styles.getPropertyValue(cssVar).trim();
-      if (value) ansiColors[key] = value;
+      if (value) theme[key] = value;
     }
 
-    // Also resolve cursor and selection colors
-    const cursor =
-      styles.getPropertyValue('--vscode-terminalCursor-foreground').trim();
-    if (cursor) ansiColors['cursor'] = cursor;
+    const cursor = styles
+      .getPropertyValue('--vscode-terminalCursor-foreground')
+      .trim();
+    if (cursor) theme['cursor'] = cursor;
+
     const selectionBg = styles
       .getPropertyValue('--vscode-terminal-selectionBackground')
       .trim();
-    if (selectionBg) ansiColors['selectionBackground'] = selectionBg;
+    if (selectionBg) theme['selectionBackground'] = selectionBg;
 
-    return { background, foreground, fontFamily, ansiColors };
+    return theme;
+  }
+
+  private resolveFontFamily(): string {
+    return (
+      getComputedStyle(this)
+        .getPropertyValue('--vscode-editor-font-family')
+        .trim() || DEFAULT_THEME.fontFamily
+    );
   }
 
   override render() {
