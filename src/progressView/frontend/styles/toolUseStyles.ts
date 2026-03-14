@@ -143,7 +143,7 @@ export const toolUseStyles = css`
     display: block;
     border-radius: var(--border-radius-small);
     overflow: hidden;
-    background: var(--vscode-editor-background, #1e1e1e);
+    background: var(--vscode-editor-background);
     border: var(--border-thin) solid var(--color-border);
   }
 
@@ -195,7 +195,7 @@ export const toolUseStyles = css`
     margin: 0;
     padding: var(--spacing-small);
     border-radius: var(--border-radius-small);
-    background-color: var(--vscode-editor-background, #1e1e1e);
+    background-color: var(--vscode-editor-background);
     white-space: pre-wrap;
     word-break: break-word;
     line-height: var(--line-height-relaxed);
