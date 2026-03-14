@@ -28,6 +28,7 @@ import {
 import {
   MEMORY_STORAGE_ROOT,
   MAX_VIEW_LINES,
+  MAX_PINNED_MEMORIES,
   DIRECTORY_LISTING_DEPTH,
   shouldSkipEntry,
 } from './constants';
@@ -37,6 +38,7 @@ import {
   buildFile,
   createMeta,
   formatAttribution,
+  setPinnedMeta,
 } from './memoryMeta';
 
 const MemoryToolInputSchema = z.strictObject({
@@ -47,6 +49,8 @@ const MemoryToolInputSchema = z.strictObject({
     'insert',
     'delete',
     'rename',
+    'pin',
+    'unpin',
   ]),
   path: z.string().nullish(),
   file_text: z.string().nullish(),
@@ -73,9 +77,11 @@ export type MemoryToolInput = z.infer<typeof MemoryToolInputSchema>;
  */
 export class MemoryTool extends defineTool({
   name: 'memory',
-  description: `Manage persistent memory files under /memories (view, create, str_replace, insert, delete, rename).
+  description: `Manage persistent memory files under /memories (view, create, str_replace, insert, delete, rename, pin, unpin).
 
-Paths must start with /memories. Use /memories to list files, /memories/file.md for specific files. "/" alone is invalid.`,
+Paths must start with /memories. Use /memories to list files, /memories/file.md for specific files. "/" alone is invalid.
+
+Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies, pitfalls, best practices). Pinned memories are always loaded at session start. Use \`unpin\` to remove the pinned status. Maximum ${MAX_PINNED_MEMORIES} pinned memories allowed.`,
   schema: MemoryToolInputSchema,
 }) {
   /**
@@ -127,6 +133,14 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
           this.canonicalize(
             requireField(input.new_path, 'new_path', input.command),
           ),
+        );
+      case 'pin':
+        return this.pin(
+          this.canonicalize(requireField(input.path, 'path', input.command)),
+        );
+      case 'unpin':
+        return this.unpin(
+          this.canonicalize(requireField(input.path, 'path', input.command)),
         );
       default:
         throw new ToolError(`Unrecognized command: ${input.command}`);
@@ -220,7 +234,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
         summary: `Listed directory: ${inputPath}`,
         output: [
           `Contents of ${inputPath} (up to 2 levels deep):`,
-          `SIZE\tMODIFIED\tBY\tPATH`,
+          `SIZE\tMODIFIED\tBY\tPINNED\tPATH`,
           ...listing,
         ].join('\n'),
       };
@@ -404,6 +418,77 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     };
   }
 
+  private async pin(inputPath: string): Promise<ToolResult> {
+    const resolvedPath = this.resolveMemoryPath(inputPath);
+    await this.requireEditableFile(resolvedPath, inputPath);
+
+    const { meta, content } = await this.readMemoryFile(resolvedPath);
+    if (meta?.pinned) {
+      return {
+        summary: `Already pinned: ${inputPath}`,
+        output: `The memory file ${inputPath} is already pinned.`,
+      };
+    }
+
+    const pinnedCount = await this.countPinnedFiles();
+    if (pinnedCount >= MAX_PINNED_MEMORIES) {
+      throw new ToolError(
+        `Cannot pin ${inputPath}: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
+      );
+    }
+
+    const updatedMeta = setPinnedMeta(meta, true);
+    await StorageFS.write(resolvedPath, buildFile(content, updatedMeta));
+
+    return {
+      summary: `Pinned memory: ${inputPath}`,
+      output: `Successfully pinned ${inputPath} as a core long-term memory. (${pinnedCount + 1}/${MAX_PINNED_MEMORIES} pinned)`,
+    };
+  }
+
+  private async unpin(inputPath: string): Promise<ToolResult> {
+    const resolvedPath = this.resolveMemoryPath(inputPath);
+    await this.requireEditableFile(resolvedPath, inputPath);
+
+    const { meta, content } = await this.readMemoryFile(resolvedPath);
+    if (!meta?.pinned) {
+      return {
+        summary: `Not pinned: ${inputPath}`,
+        output: `The memory file ${inputPath} is not pinned.`,
+      };
+    }
+
+    const updatedMeta = setPinnedMeta(meta, false);
+    await StorageFS.write(resolvedPath, buildFile(content, updatedMeta));
+
+    return {
+      summary: `Unpinned memory: ${inputPath}`,
+      output: `Successfully unpinned ${inputPath}.`,
+    };
+  }
+
+  private async countPinnedFiles(): Promise<number> {
+    const exists = await StorageFS.exists(MEMORY_STORAGE_ROOT);
+    if (!exists) return 0;
+    return this.countPinnedInDir(MEMORY_STORAGE_ROOT);
+  }
+
+  private async countPinnedInDir(dirPath: string): Promise<number> {
+    const children = await StorageFS.readDir(dirPath);
+    let count = 0;
+    for (const [name, type] of children) {
+      if (shouldSkipEntry(name)) continue;
+      const childPath = path.join(dirPath, name);
+      if (isDirectory(type)) {
+        count += await this.countPinnedInDir(childPath);
+      } else {
+        const { meta } = await this.readMemoryFile(childPath);
+        if (meta?.pinned) count++;
+      }
+    }
+    return count;
+  }
+
   private async buildDirectoryListing(resolvedPath: string): Promise<string[]> {
     const entries: Array<{
       path: string;
@@ -426,15 +511,19 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
         const display = toDisplayPath(entry.path);
         const age = formatRelativeTime(entry.mtime);
         let by = '-';
+        let pinned = '-';
         if (!entry.isDir) {
           try {
             const { meta } = await this.readMemoryFile(entry.path);
-            if (meta) by = formatAttribution(meta);
+            if (meta) {
+              by = formatAttribution(meta);
+              if (meta.pinned) pinned = '📌';
+            }
           } catch {
             // Unreadable file — skip attribution
           }
         }
-        return `${formatSize(entry.size)}\t${age}\t${by}\t${display}`;
+        return `${formatSize(entry.size)}\t${age}\t${by}\t${pinned}\t${display}`;
       }),
     );
   }

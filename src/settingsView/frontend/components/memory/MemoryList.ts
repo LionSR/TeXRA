@@ -53,7 +53,11 @@ export class MemoryList extends LitElement {
         ${repeat(
           this.items,
           (item) => item.storagePath,
-          (item) => html`<memory-item .item=${item}></memory-item>`,
+          (item) =>
+            html`<memory-item
+              .item=${item}
+              ?pinned=${item.pinned}
+            ></memory-item>`,
         )}
       </div>
     `;

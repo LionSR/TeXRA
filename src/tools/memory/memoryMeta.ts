@@ -13,6 +13,8 @@ export interface MemoryFileMeta {
   executionId?: string;
   /** ISO 8601 timestamp of last modification. */
   modifiedAt: string;
+  /** Whether this memory is pinned as a core long-term insight. */
+  pinned?: boolean;
 }
 
 const FRONTMATTER_FENCE = '---';
@@ -58,6 +60,7 @@ export function parseFrontmatter(raw: string): {
       modifiedBy: fields.modifiedBy,
       executionId: fields.executionId || undefined,
       modifiedAt: fields.modifiedAt || new Date().toISOString(),
+      pinned: fields.pinned === 'true' ? true : undefined,
     },
     content: raw.slice(endIdx + FRONTMATTER_FENCE.length + 2), // skip "\n---\n"
   };
@@ -71,6 +74,9 @@ function buildFrontmatter(meta: MemoryFileMeta): string {
     lines.push(`executionId: ${meta.executionId}`);
   }
   lines.push(`modifiedAt: ${meta.modifiedAt}`);
+  if (meta.pinned) {
+    lines.push('pinned: true');
+  }
   lines.push(FRONTMATTER_FENCE);
   return lines.join('\n');
 }
@@ -100,6 +106,27 @@ export function createMeta(
     modifiedBy: agentName,
     executionId,
     modifiedAt: new Date().toISOString(),
+  };
+}
+
+// ── Pin/Unpin ──────────────────────────────────────────────────────
+
+/**
+ * Update the pinned state of a memory file's frontmatter.
+ * Reads, modifies the pinned flag, and writes back.
+ * Returns the parsed content for convenience.
+ */
+export function setPinnedMeta(
+  meta: MemoryFileMeta | null,
+  pinned: boolean,
+): MemoryFileMeta {
+  const base = meta ?? {
+    modifiedBy: 'user',
+    modifiedAt: new Date().toISOString(),
+  };
+  return {
+    ...base,
+    pinned: pinned || undefined,
   };
 }
 

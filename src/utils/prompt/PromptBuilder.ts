@@ -41,6 +41,14 @@ MEMORY PROTOCOL:
 Your memory persists across conversations, allowing you to continue tasks and remember user preferences over time.
 
 Note: when editing your memory folder, always try to keep its content up-to-date, coherent and organized. You can rename or delete files that are no longer relevant. Do not create new files unless necessary.
+
+PINNED MEMORIES:
+Some memories may be marked as "pinned" (shown with 📌 in directory listings). These are core long-term insights—techniques, strategies, pitfalls, and best practices accumulated over time. They represent the kind of knowledge a seasoned researcher would build up through years of project experience.
+
+- Always consult pinned memories at session start; they contain the most valuable accumulated knowledge.
+- When you discover a reusable trick, technique, strategy, pitfall, or best practice, consider using the \`pin\` command to mark it as a core memory.
+- Do NOT pin task-specific progress notes or ephemeral status updates. Only pin long-term reusable insights.
+- Use \`unpin\` to remove the pinned status when a memory is no longer relevant as a core insight.
 </memory_tool_instructions>`;
 
 /** Memory instructions for orchestrators that launch subagents. */

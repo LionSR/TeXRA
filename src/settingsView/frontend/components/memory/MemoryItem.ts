@@ -54,10 +54,17 @@ export class MemoryItem extends LitElement {
         max-height: 200px;
         overflow-y: auto;
       }
+
+      :host([pinned]) .memory-item {
+        border-left: 3px solid var(--vscode-textLink-foreground);
+        padding-left: calc(var(--spacing-medium) - 3px);
+      }
     `,
   ];
 
   @property({ attribute: false }) item?: MemoryViewItem;
+
+  @property({ type: Boolean, reflect: true }) pinned = false;
 
   private handleOpen(): void {
     if (!this.item) return;
@@ -76,11 +83,27 @@ export class MemoryItem extends LitElement {
     );
   }
 
+  private handleTogglePin(): void {
+    if (!this.item) return;
+    if (this.item.pinned) {
+      this.dispatchEvent(
+        MemoryViewEvents.unpinItem({ storagePath: this.item.storagePath }),
+      );
+    } else {
+      this.dispatchEvent(
+        MemoryViewEvents.pinItem({ storagePath: this.item.storagePath }),
+      );
+    }
+  }
+
   private renderMeta(item: MemoryViewItem): string {
-    const size = formatBytes(item.size ?? 0);
-    const lines = formatLineCount(item.lineCount ?? 0);
-    const updated = formatUpdatedDate(item.mtime);
-    const parts = [size, lines, updated];
+    const parts: string[] = [];
+    if (item.pinned) {
+      parts.push('Pinned');
+    }
+    parts.push(formatBytes(item.size ?? 0));
+    parts.push(formatLineCount(item.lineCount ?? 0));
+    parts.push(formatUpdatedDate(item.mtime));
     if (item.modifiedBy) {
       parts.push(`by ${item.modifiedBy}`);
     }
@@ -101,6 +124,15 @@ export class MemoryItem extends LitElement {
         <div class="list-item-header">
           <div class="memory-path">${this.item.displayPath}</div>
           <vscode-toolbar-container>
+            <vscode-toolbar-button
+              class="pin-memory-btn"
+              icon=${this.item.pinned ? 'pinned' : 'pin'}
+              label=${this.item.pinned ? 'Unpin' : 'Pin'}
+              title=${this.item.pinned
+                ? 'Unpin this memory'
+                : 'Pin as core long-term memory'}
+              @click=${this.handleTogglePin}
+            ></vscode-toolbar-button>
             <vscode-toolbar-button
               class="open-memory-btn"
               icon="go-to-file"
