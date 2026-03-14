@@ -112,7 +112,7 @@ export class TodoList extends LitElement {
     if (changed.has('todos') && this.todos.length > 0) {
       const json = JSON.stringify(this.todos);
       if (json !== this.prevTodosJson) {
-        this.open = true;
+        if (!this.open) this.open = true;
         this.prevTodosJson = json;
       }
     }

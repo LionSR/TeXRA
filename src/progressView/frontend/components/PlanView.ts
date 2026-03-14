@@ -174,7 +174,7 @@ export class PlanView extends LitElement {
     if (changed.has('plan') && this.plan) {
       const json = JSON.stringify(this.plan);
       if (json !== this.prevPlanJson) {
-        this.open = true;
+        if (!this.open) this.open = true;
         this.prevPlanJson = json;
       }
     }
