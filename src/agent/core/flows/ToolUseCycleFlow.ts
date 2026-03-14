@@ -488,7 +488,7 @@ const SLOW_TOOLS = new Set([
 ]);
 
 /** Tools that defer in-progress logging until after approval. */
-const DEFERRED_LOG_TOOLS = new Set(['bash']);
+const DEFERRED_LOG_TOOLS = new Set(['bash', 'codex']);
 
 /** Tools that support streaming partial output to the UI. */
 const STREAMABLE_TOOLS = new Set(['bash', 'codex']);
