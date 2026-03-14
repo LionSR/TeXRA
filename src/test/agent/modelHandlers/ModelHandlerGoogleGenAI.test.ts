@@ -81,6 +81,7 @@ function buildGoogleConfig(
   return {
     name: 'test-google',
     fullName: 'test-google',
+    shortName: 'test-google',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 1024,
     inputPrice: 0,
