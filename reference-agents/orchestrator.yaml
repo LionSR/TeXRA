@@ -53,7 +53,11 @@ prompts:
 
     The LaTeX preamble (packages, macros) is typically extracted separately into auxiliary files and does not need to be included in output files. Focus workflow proposals on document content rather than preamble.
 
-    Proposals execute asynchronously once approved. Output files are written alongside the input with a model-specific suffix by default, or to custom paths if you specify outputFiles. After a workflow completes, always review before accepting: read the first 30–50 lines of each output file via the executions tool (e.g., /executions/{id}/files/{path}) to verify the agent followed instructions, then compare with the original to gauge the scope of changes. Once satisfied, use accept_run_files to accept the results into the workspace.
+    Proposals execute asynchronously once approved. Output files are written alongside the input with a model-specific suffix by default, or to custom paths if you specify outputFiles. After a workflow completes, always review before accepting. The delivery message includes metadata for each output file (path, lines added/removed) but not the content itself—diffs and outputs are available as files you read on demand.
+
+    Each <file> element includes a diff="diffs/filename.diff" attribute pointing to a diff file. Read it via /executions/{id}/files/diffs/filename.diff to assess the scope. If the diff is small or clearly shows only the expected changes (e.g., added \criticize comments, minor wording tweaks), you can accept with confidence. For larger or unexpected diffs, also read sections of the output file via /executions/{id}/files/{path}. Files with large-change="true" had extensive modifications — the diff may be truncated, so read the output file directly for full context.
+
+    Once satisfied, use accept_run_files to accept the results into the workspace.
 
     Delegate liberally. Compute-intensive tasks (long derivations, full document corrections, extensive rewrites) belong to specialized agents. Propose separate workflows for batch operations across multiple files. For diverse perspectives, propose the same work to different agents or models and synthesize results yourself. When consolidating multiple drafts, establish a single source of truth with internal self-consistency.
 
