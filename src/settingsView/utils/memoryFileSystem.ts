@@ -89,6 +89,7 @@ export async function walkMemoryDirectory(
       lineCount: previewData.lineCount,
       preview: previewData.preview,
       modifiedBy: meta ? formatAttribution(meta) : undefined,
+      pinned: meta?.pinned,
     });
   }
 
@@ -106,5 +107,12 @@ export async function loadMemoryItems(): Promise<MemoryViewItem[]> {
   }
 
   const items = await walkMemoryDirectory(MEMORY_STORAGE_ROOT);
-  return items.sort((a, b) => b.mtime.localeCompare(a.mtime));
+  return items.sort((a, b) => {
+    // Pinned items first
+    const aPinned = a.pinned ? 1 : 0;
+    const bPinned = b.pinned ? 1 : 0;
+    if (aPinned !== bPinned) return bPinned - aPinned;
+    // Then by modification time (newest first)
+    return b.mtime.localeCompare(a.mtime);
+  });
 }

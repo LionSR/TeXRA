@@ -19,6 +19,8 @@ export const SETTINGS_VIEW_CMD = {
   DELETE_MEMORY: 'deleteMemory',
   GET_MEMORY_ENABLED: 'getMemoryEnabled',
   SET_MEMORY_ENABLED: 'setMemoryEnabled',
+  PIN_MEMORY: 'pinMemory',
+  UNPIN_MEMORY: 'unpinMemory',
   // History commands
   GET_HISTORY_DATA: 'getHistoryData',
   RERUN_AGENT: 'rerunAgent',
