@@ -2,27 +2,42 @@ import { css, unsafeCSS, type CSSResult } from 'lit';
 
 /**
  * Shared selector groups for :is() consolidation.
- * When adding a new request panel type, add its class names here
+ * To add a new request panel type, add its class names to these two arrays
  * and the shared layout rules apply automatically.
  */
-const CONTAINERS = unsafeCSS(
-  '.approval-requests, .bash-approval-requests, .retry-requests, .workflow-proposals, .plan-approval-requests',
-);
-const HEADERS = unsafeCSS(
-  '.approval-requests__header, .bash-approval-requests__header, .retry-requests__header, .workflow-proposals__header, .plan-approval-requests__header',
-);
-const LISTS = unsafeCSS(
-  '.approval-requests__list, .bash-approval-requests__list, .retry-requests__list, .workflow-proposals__list, .plan-approval-requests__list',
-);
-const ITEMS = unsafeCSS(
-  '.approval-request, .bash-approval-request, .retry-request, .workflow-proposal, .plan-approval-request',
-);
-const DETAILS = unsafeCSS(
-  '.approval-request__details, .bash-approval-request__details, .retry-request__details, .workflow-proposal__details, .plan-approval-request__details',
-);
-const ACTIONS = unsafeCSS(
-  '.approval-request__actions, .bash-approval-request__actions, .retry-request__actions, .workflow-proposal__actions, .plan-approval-request__actions',
-);
+
+/** Container class names (plural, used as the outer wrapper). */
+const CONTAINER_NAMES = [
+  'approval-requests',
+  'bash-approval-requests',
+  'retry-requests',
+  'workflow-proposals',
+  'plan-approval-requests',
+] as const;
+
+/** Item class names (singular, used for individual cards and BEM children). */
+const ITEM_NAMES = [
+  'approval-request',
+  'bash-approval-request',
+  'retry-request',
+  'workflow-proposal',
+  'plan-approval-request',
+] as const;
+
+/** Build a :is()-ready selector group from class names with an optional BEM suffix. */
+function selectorGroup(
+  names: readonly string[],
+  suffix = '',
+): ReturnType<typeof unsafeCSS> {
+  return unsafeCSS(names.map((n) => `.${n}${suffix}`).join(', '));
+}
+
+const CONTAINERS = selectorGroup(CONTAINER_NAMES);
+const HEADERS = selectorGroup(CONTAINER_NAMES, '__header');
+const LISTS = selectorGroup(CONTAINER_NAMES, '__list');
+const ITEMS = selectorGroup(ITEM_NAMES);
+const DETAILS = selectorGroup(ITEM_NAMES, '__details');
+const ACTIONS = selectorGroup(ITEM_NAMES, '__actions');
 
 export const requestPanelStyles: CSSResult = css`
   /* ================================================================

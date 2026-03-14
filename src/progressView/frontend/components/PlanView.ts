@@ -83,7 +83,7 @@ export class PlanView extends LitElement {
 
       .plan-step__number {
         flex-shrink: 0;
-        font-size: var(--font-size-small);
+        font-size: var(--font-size-sm);
         min-width: 1.4em;
         text-align: right;
         color: var(--color-text-secondary);
@@ -110,8 +110,8 @@ export class PlanView extends LitElement {
 
       .plan-step__description {
         color: var(--color-text-secondary);
-        font-size: var(--font-size-small);
-        margin-top: 2px;
+        font-size: var(--font-size-sm);
+        margin-top: var(--spacing-tiny);
         word-break: break-word;
       }
 
@@ -119,15 +119,15 @@ export class PlanView extends LitElement {
         display: flex;
         flex-wrap: wrap;
         gap: var(--spacing-tiny);
-        margin-top: 4px;
+        margin-top: var(--spacing-small);
       }
 
       .plan-step__file {
-        font-size: var(--font-size-small);
+        font-size: var(--font-size-sm);
         color: var(--vscode-textLink-foreground);
         background: var(--vscode-badge-background);
-        padding: 1px 6px;
-        border-radius: 3px;
+        padding: var(--border-thin) var(--spacing-medium);
+        border-radius: var(--border-radius);
         font-family: var(--vscode-editor-font-family, monospace);
       }
 
