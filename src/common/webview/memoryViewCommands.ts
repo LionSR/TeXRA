@@ -14,4 +14,6 @@ export const MEMORY_VIEW_COMMANDS = {
   GET_MEMORY_ENABLED: 'getMemoryEnabled',
   SET_MEMORY_ENABLED: 'setMemoryEnabled',
   UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
+  PIN_MEMORY: 'pinMemory',
+  UNPIN_MEMORY: 'unpinMemory',
 } as const;
