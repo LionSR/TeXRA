@@ -95,81 +95,9 @@ export function findCodexBinaryPath(): string | undefined {
 
   const binaryName = process.platform === 'win32' ? 'codex.exe' : 'codex';
 
-  // Strategy 1: resolve from global npm prefix
-  try {
-    const prefix = execSync('npm prefix -g', {
-      encoding: 'utf8',
-      timeout: 5000,
-    }).trim();
-
-    // Global packages live under <prefix>/lib/node_modules on Unix,
-    // <prefix>/node_modules on Windows
-    const roots = [
-      path.join(prefix, 'lib', 'node_modules'),
-      path.join(prefix, 'node_modules'),
-    ];
-
-    for (const root of roots) {
-      const codexPkgDir = path.join(root, '@openai', 'codex');
-      if (!existsSync(codexPkgDir)) continue;
-
-      // Try resolving the platform binary package from the codex package
-      try {
-        const req = createRequire(path.join(codexPkgDir, 'package.json'));
-        const platformPkgJson = req.resolve(`${platformPkg}/package.json`);
-        const vendorRoot = path.join(
-          path.dirname(platformPkgJson),
-          'vendor',
-        );
-        const binary = path.join(vendorRoot, triple, 'codex', binaryName);
-        if (existsSync(binary)) {
-          console.log(`[Codex] Found binary via global npm: ${binary}`);
-          return binary;
-        }
-      } catch {
-        // Platform package not resolvable from this root, try next
-      }
-
-      // Also check if binaries are vendored directly in the codex package
-      const localBinary = path.join(
-        codexPkgDir,
-        'vendor',
-        triple,
-        'codex',
-        binaryName,
-      );
-      if (existsSync(localBinary)) {
-        console.log(
-          `[Codex] Found binary via global npm (local vendor): ${localBinary}`,
-        );
-        return localBinary;
-      }
-    }
-  } catch {
-    // npm prefix -g failed, try other strategies
-  }
-
-  // Strategy 2: resolve from the local project's node_modules
-  // (for development environments where `npm install` was run)
-  try {
-    // Use the bundle's actual path — __filename in the built extension
-    // points to dist/extension.js, which can resolve local node_modules
-    const localReq = createRequire(path.join(__dirname, 'package.json'));
-    const pkgJson = localReq.resolve(`${platformPkg}/package.json`);
-    const vendorRoot = path.join(path.dirname(pkgJson), 'vendor');
-    const binary = path.join(vendorRoot, triple, 'codex', binaryName);
-    if (existsSync(binary)) {
-      console.log(`[Codex] Found binary via local node_modules: ${binary}`);
-      return binary;
-    }
-  } catch {
-    // Not available locally
-  }
-
-  // Strategy 3: Homebrew / PATH-based install (e.g. `brew install codex`)
-  // The `codex` on PATH may be the native binary directly (Homebrew) or a
-  // Node.js wrapper script (npm). We accept it either way — the SDK's
-  // CodexExec spawns it the same regardless.
+  // Strategy 1: PATH lookup (Homebrew, npm global bin, or any install method)
+  // Fastest and most reliable — works for `brew install codex`, npm global,
+  // and any other install that puts `codex` on PATH.
   try {
     const whichCmd = process.platform === 'win32' ? 'where codex' : 'which codex';
     const codexOnPath = execSync(whichCmd, {
@@ -183,6 +111,54 @@ export function findCodexBinaryPath(): string | undefined {
     }
   } catch {
     // codex not on PATH
+  }
+
+  // Strategy 2: resolve from global npm prefix
+  // (covers cases where npm global bin isn't on PATH)
+  try {
+    const prefix = execSync('npm prefix -g', {
+      encoding: 'utf8',
+      timeout: 5000,
+    }).trim();
+
+    const roots = [
+      path.join(prefix, 'lib', 'node_modules'),
+      path.join(prefix, 'node_modules'),
+    ];
+
+    for (const root of roots) {
+      const codexPkgDir = path.join(root, '@openai', 'codex');
+      if (!existsSync(codexPkgDir)) continue;
+
+      try {
+        const req = createRequire(path.join(codexPkgDir, 'package.json'));
+        const platformPkgJson = req.resolve(`${platformPkg}/package.json`);
+        const vendorRoot = path.join(path.dirname(platformPkgJson), 'vendor');
+        const binary = path.join(vendorRoot, triple, 'codex', binaryName);
+        if (existsSync(binary)) {
+          console.log(`[Codex] Found binary via global npm: ${binary}`);
+          return binary;
+        }
+      } catch {
+        // Platform package not resolvable from this root
+      }
+    }
+  } catch {
+    // npm prefix -g failed
+  }
+
+  // Strategy 3: resolve from local project's node_modules
+  try {
+    const localReq = createRequire(path.join(__dirname, 'package.json'));
+    const pkgJson = localReq.resolve(`${platformPkg}/package.json`);
+    const vendorRoot = path.join(path.dirname(pkgJson), 'vendor');
+    const binary = path.join(vendorRoot, triple, 'codex', binaryName);
+    if (existsSync(binary)) {
+      console.log(`[Codex] Found binary via local node_modules: ${binary}`);
+      return binary;
+    }
+  } catch {
+    // Not available locally
   }
 
   console.log('[Codex] Native binary not found');
