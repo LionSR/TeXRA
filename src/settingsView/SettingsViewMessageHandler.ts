@@ -725,8 +725,18 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     try {
       const resolvedPath = resolveMemoryStoragePath(data.storagePath);
       const absolutePath = StorageFS.fullPath(resolvedPath);
-      const doc = await vscode.workspace.openTextDocument(absolutePath);
-      await vscode.window.showTextDocument(doc, { preview: false });
+      const fileUri = vscode.Uri.file(absolutePath);
+
+      // Open markdown files in preview mode (read-only rendered view)
+      if (absolutePath.toLowerCase().endsWith('.md')) {
+        await vscode.commands.executeCommand(
+          'markdown.showPreview',
+          fileUri,
+        );
+      } else {
+        const doc = await vscode.workspace.openTextDocument(fileUri);
+        await vscode.window.showTextDocument(doc, { preview: false });
+      }
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
