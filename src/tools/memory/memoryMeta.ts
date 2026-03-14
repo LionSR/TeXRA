@@ -112,9 +112,8 @@ export function createMeta(
 // ── Pin/Unpin ──────────────────────────────────────────────────────
 
 /**
- * Update the pinned state of a memory file's frontmatter.
- * Reads, modifies the pinned flag, and writes back.
- * Returns the parsed content for convenience.
+ * Create a new MemoryFileMeta with the pinned flag toggled.
+ * If no existing meta is provided, creates a default attribution.
  */
 export function setPinnedMeta(
   meta: MemoryFileMeta | null,
@@ -126,7 +125,7 @@ export function setPinnedMeta(
   };
   return {
     ...base,
-    pinned: pinned || undefined,
+    pinned: pinned ? true : undefined,
   };
 }
 

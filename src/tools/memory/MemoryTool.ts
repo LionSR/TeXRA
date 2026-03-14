@@ -517,7 +517,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
             const { meta } = await this.readMemoryFile(entry.path);
             if (meta) {
               by = formatAttribution(meta);
-              if (meta.pinned) pinned = '📌';
+              if (meta.pinned) pinned = '[pinned]';
             }
           } catch {
             // Unreadable file — skip attribution
