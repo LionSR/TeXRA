@@ -471,20 +471,24 @@ export class CodexTool extends defineTool({
       let usage: RunResult['usage'] = null;
 
       for await (const event of events) {
-        if (event.type === 'item.completed') {
-          const { item } = event as ItemCompletedEvent;
-          // Write readable progress to the temp file for the process view
-          stdoutStream.write(formatItemForLog(item));
-          if (item.type === 'agent_message') {
-            responseParts.push(item.text);
+        switch (event.type) {
+          case 'item.completed': {
+            const { item } = event;
+            const line = formatItemForLog(item);
+            if (line) stdoutStream.write(line);
+            if (item.type === 'agent_message') {
+              responseParts.push(item.text);
+            }
+            break;
           }
-        } else if (event.type === 'turn.completed') {
-          usage = (event as TurnCompletedEvent).usage ?? null;
-        } else if (event.type === 'turn.failed') {
-          const msg =
-            (event as TurnFailedEvent).error.message ?? 'Codex turn failed';
-          stderrStream.write(`Error: ${msg}\n`);
-          throw new Error(msg);
+          case 'turn.completed':
+            usage = event.usage ?? null;
+            break;
+          case 'turn.failed': {
+            const msg = event.error.message ?? 'Codex turn failed';
+            stderrStream.write(`Error: ${msg}\n`);
+            throw new Error(msg);
+          }
         }
       }
 
