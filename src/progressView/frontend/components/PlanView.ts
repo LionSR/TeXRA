@@ -167,16 +167,9 @@ export class PlanView extends LitElement {
   /** Open state — managed internally. Auto-opens when plan is updated. */
   @state() private open = true;
 
-  /** Snapshot of previous plan for detecting meaningful changes. */
-  private prevPlanJson = '';
-
   protected override willUpdate(changed: PropertyValues): void {
-    if (changed.has('plan') && this.plan) {
-      const json = JSON.stringify(this.plan);
-      if (json !== this.prevPlanJson) {
-        if (!this.open) this.open = true;
-        this.prevPlanJson = json;
-      }
+    if (changed.has('plan') && this.plan && !this.open) {
+      this.open = true;
     }
   }
 

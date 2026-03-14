@@ -105,16 +105,9 @@ export class TodoList extends LitElement {
   /** Open state — managed internally. Auto-opens when todos are updated. */
   @state() private open = true;
 
-  /** Snapshot of previous todos for detecting meaningful changes. */
-  private prevTodosJson = '';
-
   protected override willUpdate(changed: PropertyValues): void {
-    if (changed.has('todos') && this.todos.length > 0) {
-      const json = JSON.stringify(this.todos);
-      if (json !== this.prevTodosJson) {
-        if (!this.open) this.open = true;
-        this.prevTodosJson = json;
-      }
+    if (changed.has('todos') && this.todos.length > 0 && !this.open) {
+      this.open = true;
     }
   }
 
