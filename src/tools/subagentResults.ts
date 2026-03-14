@@ -17,7 +17,12 @@ import type {
   OutputFileSummary,
 } from '@agent/runtime/AgentFlowResult';
 import type { ExecResult } from '@agent/types/ResultTypes';
-import type { ActiveChildInfo, SubagentProgressUpdate } from '@shared/schemas';
+import type {
+  ActiveChildInfo,
+  SubagentProgressUpdate,
+  TodoItem,
+  Plan,
+} from '@shared/schemas';
 import type { ExecutionId } from '@shared/schemas';
 import { TODO_STATUS } from '@shared/schemas/todo';
 import { formatDuration } from '@utils/core';
@@ -449,14 +454,20 @@ export function formatBashError(
 export function formatPostCompactionContext(
   subagents: ActiveChildInfo[],
   processes: ActiveChildInfo[],
+  todos?: TodoItem[],
+  plan?: Plan | null,
 ): string | null {
-  if (subagents.length === 0 && processes.length === 0) {
+  const hasChildren = subagents.length > 0 || processes.length > 0;
+  const hasTodos = todos != null && todos.length > 0;
+  const hasPlan = plan != null;
+
+  if (!hasChildren && !hasTodos && !hasPlan) {
     return null;
   }
 
   const lines: string[] = [
     '<post-compaction-context>',
-    '<note>Your conversation context was compacted (summarized) to free up space. The following executions were launched before compaction and may still be active. Their results will be delivered as follow-up messages when they complete. Use the executions tool to check on their status or read their results.</note>',
+    '<note>Your conversation context was compacted (summarized) to free up space. The following state was preserved from before compaction.</note>',
   ];
 
   if (subagents.length > 0) {
@@ -486,8 +497,51 @@ export function formatPostCompactionContext(
     lines.push('</active-background-bash>');
   }
 
+  if (hasTodos) {
+    lines.push(...formatTodoContext(todos));
+  }
+
+  if (hasPlan) {
+    lines.push(...formatPlanContext(plan));
+  }
+
   lines.push('</post-compaction-context>');
   return lines.join('\n');
+}
+
+/**
+ * Format todo items as XML lines for post-compaction context.
+ */
+function formatTodoContext(todos: TodoItem[]): string[] {
+  const lines: string[] = [`<current-todos count="${todos.length}">`];
+  for (const todo of todos) {
+    lines.push(
+      `  <todo status="${escapeAttr(todo.status)}">${escapeText(todo.content)}</todo>`,
+    );
+  }
+  lines.push('</current-todos>');
+  return lines;
+}
+
+/**
+ * Format plan as XML lines for post-compaction context.
+ */
+function formatPlanContext(plan: Plan): string[] {
+  const lines: string[] = [
+    `<current-plan summary="${escapeAttr(plan.summary)}">`,
+  ];
+  for (let i = 0; i < plan.steps.length; i++) {
+    const step = plan.steps[i]!;
+    const filesAttr =
+      step.files.length > 0
+        ? ` files="${escapeAttr(step.files.join(', '))}"`
+        : '';
+    lines.push(
+      `  <step index="${i + 1}" status="${escapeAttr(step.status)}" title="${escapeAttr(step.title)}"${filesAttr}>${escapeText(step.description)}</step>`,
+    );
+  }
+  lines.push('</current-plan>');
+  return lines;
 }
 
 function lastNLines(text: string, n: number): string {
