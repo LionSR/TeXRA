@@ -281,6 +281,48 @@ function formatItemForLog(item: ThreadItem): string {
 }
 
 // ============================================================================
+// ESM/CJS interop helper
+// ============================================================================
+
+/**
+ * Robustly import the Codex class from @openai/codex-sdk.
+ *
+ * The SDK is ESM-only but the extension is bundled as CJS. In some
+ * Electron/Node.js versions the module namespace object from `import()`
+ * may wrap named exports under a `default` property, causing a bare
+ * `{ Codex }` destructure to yield `undefined` and the subsequent
+ * `new Codex()` to throw "e is not a constructor" (minified name).
+ */
+async function importCodexClass(): Promise<
+  new (options?: Record<string, unknown>) => {
+    startThread(options?: Record<string, unknown>): Thread;
+  }
+> {
+  const mod: Record<string, unknown> = await import('@openai/codex-sdk');
+
+  // Normal named export
+  if (typeof mod.Codex === 'function') {
+    return mod.Codex as never;
+  }
+
+  // Wrapped under default (some ESM/CJS interop scenarios)
+  const def = mod.default as Record<string, unknown> | undefined;
+  if (def && typeof def.Codex === 'function') {
+    return def.Codex as never;
+  }
+
+  // Default export IS the class (unlikely, but defensive)
+  if (typeof def === 'function') {
+    return def as never;
+  }
+
+  throw new Error(
+    'Failed to import Codex class from @openai/codex-sdk. ' +
+      `Module keys: [${Object.keys(mod).join(', ')}]`,
+  );
+}
+
+// ============================================================================
 // Tool
 // ============================================================================
 
