@@ -187,20 +187,6 @@ Try running `polish` on the [sample document](/examples/draft.pdf) to see a colo
 }
 </style>
 
-#### Embedded PDF Examples
-
-<div class="pdf-examples">
-  <div class="pdf-tabs">
-    <button type="button" class="pdf-tab active" data-pdf="/examples/draft_polish_r0_gemini25p_diff.pdf">Round 0: Initial AI Edit</button>
-    <button type="button" class="pdf-tab" data-pdf="/examples/draft_polish_r1_gemini25p_diff.pdf">Round 1: After Reflection</button>
-    <button type="button" class="pdf-tab" data-pdf="/examples/draft_polish_r1_gemini25p_diffr1r0.pdf">Reflection Changes</button>
-  </div>
-  <div class="pdf-viewer">
-    <iframe src="/examples/draft_polish_r0_gemini25p_diff.pdf" id="pdf-frame" class="pdf-frame"></iframe>
-    <a href="/examples/draft_polish_r0_gemini25p_diff.pdf" target="_blank" id="pdf-link" class="pdf-link">Open in new tab</a>
-  </div>
-</div>
-
 ## Content Generation & Transformation Agents
 
 ### `paper2slide`
