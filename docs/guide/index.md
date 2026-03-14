@@ -41,14 +41,14 @@ graph TB
 
 ### Two types of agents
 
-**Workflow agents** (`polish`, `correct`, `draw`, `paper2slide`, `paper2poster`) execute structured pipelines:
+**Workflow agents** (`polish`, `correct`, `draw`, `paper2slide`, `paper2poster`, `ocr`, `transcribe_audio`, `merge`) execute structured pipelines:
 
 1. Analyze your input files and instructions
 2. Plan and execute changes via LLM calls
 3. Optionally reflect on their output and iterate
 4. Produce versioned output files (`*_r0_*`, `*_r1_*`) with diffs
 
-**Interactive agents** (`chat`, `search`, `research`, `presenter`) operate conversationally with tool access:
+**Interactive agents** (`chat`, `ask`, `research`, `review`, `lean`, `presenter`) operate conversationally with tool access:
 
 - Read and edit files across your entire workspace
 - Search arXiv, Crossref, and Zotero for references with verified BibTeX
@@ -72,8 +72,9 @@ The agent system is built on three established AI design patterns:
 | Polish a manuscript  | `polish`                      | Rewrites for clarity and precision, preserving all math environments and cross-references. Outputs a reviewable diff.                                    |
 | Fix LaTeX errors     | `correct`                     | Finds and repairs compilation errors, notation inconsistencies, broken references, and formatting issues across multi-file projects.                     |
 | Generate figures     | `draw`                        | Creates TikZ diagrams — commutative diagrams, Feynman diagrams, phase portraits, lattice structures. Compiles and visually verifies every figure.        |
-| Search literature    | `search`                      | Queries arXiv, Crossref, Zotero. Returns verified citations with BibTeX — no hallucinated references.                                                    |
-| Work with Lean 4     | `research`                    | Search Mathlib theorems via Loogle by type signature, inspect proof states, check diagnostics, manage builds and cache.                                  |
+| Search literature    | `research`                    | Queries arXiv, Crossref, Zotero. Returns verified citations with BibTeX — no hallucinated references.                                                    |
+| Verify manuscript    | `review`                      | Systematically audits mathematical correctness, derivation soundness, notation consistency, and goal achievement.                                         |
+| Work with Lean 4     | `lean`                        | Search Mathlib theorems via Loogle by type signature, inspect proof states, check diagnostics, manage builds and cache.                                  |
 | Symbolic computation | `research`                    | Run WolframScript to evaluate integrals, check identities, simplify expressions, or verify numerical results.                                            |
 | Build slide decks    | `presenter`                   | Reads your paper, drafts a Beamer deck that preserves logical structure — definitions before theorems, diagrams in TikZ. Compiles and checks every page. |
 | General research     | `research`                    | Open-ended agent with full tool access for any research task.                                                                                            |
