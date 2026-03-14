@@ -215,7 +215,10 @@ Call:
         lineChanges: approval.lineChanges,
         startLine: approval.startLine,
       });
-      acceptedEntries.push({ outputPath: entry.path, originalPath: entry.original });
+      acceptedEntries.push({
+        outputPath: entry.path,
+        originalPath: entry.original,
+      });
     }
 
     // Single rejection → return rejection result
@@ -300,7 +303,8 @@ Call:
           '_diff',
         );
         const dir = path.dirname(originalPath);
-        const fullDiffPath = dir === '.' ? diffFileName : `${dir}/${diffFileName}`;
+        const fullDiffPath =
+          dir === '.' ? diffFileName : `${dir}/${diffFileName}`;
 
         const loc = WorkspaceFS.locatePath(fullDiffPath);
         if (loc.kind === 'external') return null;
