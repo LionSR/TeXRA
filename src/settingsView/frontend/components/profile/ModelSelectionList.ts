@@ -53,6 +53,9 @@ export class ModelSelectionList extends LitElement {
     'personal';
   @property({ attribute: false }) allowedModels: string[] | null = [];
 
+  @property({ type: Boolean, attribute: 'prefer-short-model-names' })
+  preferShortModelNames = false;
+
   @state() private expandedProvider: string | null = null;
   @state() private expandedDeprecated: Set<string> = new Set();
 
@@ -277,6 +280,22 @@ export class ModelSelectionList extends LitElement {
       <div class="model-selection-section">
         <h2>Model Selection</h2>
         ${this.renderHelperModelDropdown()}
+        <div class="short-names-toggle">
+          <vscode-checkbox
+            ?checked=${this.preferShortModelNames}
+            @change=${(e: Event) => {
+              const enabled = (e.target as HTMLInputElement).checked;
+              this.dispatchEvent(
+                ModelSelectionEvents.setPreferShortModelNames({ enabled }),
+              );
+            }}
+          >
+            Use short model names
+          </vscode-checkbox>
+          <span class="short-names-description">
+            Send unpinned names (e.g. gpt-5.4 instead of gpt-5.4-2026-03-05)
+          </span>
+        </div>
         ${groups.map((g) => this.renderProviderGroup(g))}
       </div>
     `;
