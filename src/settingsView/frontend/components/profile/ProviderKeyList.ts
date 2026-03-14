@@ -86,23 +86,23 @@ export class ProviderKeyList extends LitElement {
 
   private renderDetailRow(entry: ProviderKeyStatus): TemplateResult {
     const streamingToggle = html`
-          <div class="provider-setting">
-            <vscode-checkbox
-              ?checked=${entry.streaming}
-              @change=${(e: Event) => {
-                const checked = (e.target as HTMLInputElement).checked;
-                this.dispatchEvent(
-                  ProviderKeyEvents.setStreaming({
-                    provider: entry.provider,
-                    enabled: checked,
-                  }),
-                );
-              }}
-            >
-              Streaming
-            </vscode-checkbox>
-          </div>
-        `;
+      <div class="provider-setting">
+        <vscode-checkbox
+          ?checked=${entry.streaming}
+          @change=${(e: Event) => {
+            const checked = (e.target as HTMLInputElement).checked;
+            this.dispatchEvent(
+              ProviderKeyEvents.setStreaming({
+                provider: entry.provider,
+                enabled: checked,
+              }),
+            );
+          }}
+        >
+          Streaming
+        </vscode-checkbox>
+      </div>
+    `;
 
     const endpointInput = entry.supportsCustomEndpoint
       ? html`

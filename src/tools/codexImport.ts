@@ -63,12 +63,30 @@ export async function importCodexClass(): Promise<CodexConstructor> {
 
 /** Platform key → npm package name and target triple for the native binary. */
 const PLATFORM_INFO: Record<string, { pkg: string; triple: string }> = {
-  'linux-x64': { pkg: '@openai/codex-linux-x64', triple: 'x86_64-unknown-linux-musl' },
-  'linux-arm64': { pkg: '@openai/codex-linux-arm64', triple: 'aarch64-unknown-linux-musl' },
-  'darwin-x64': { pkg: '@openai/codex-darwin-x64', triple: 'x86_64-apple-darwin' },
-  'darwin-arm64': { pkg: '@openai/codex-darwin-arm64', triple: 'aarch64-apple-darwin' },
-  'win32-x64': { pkg: '@openai/codex-win32-x64', triple: 'x86_64-pc-windows-msvc' },
-  'win32-arm64': { pkg: '@openai/codex-win32-arm64', triple: 'aarch64-pc-windows-msvc' },
+  'linux-x64': {
+    pkg: '@openai/codex-linux-x64',
+    triple: 'x86_64-unknown-linux-musl',
+  },
+  'linux-arm64': {
+    pkg: '@openai/codex-linux-arm64',
+    triple: 'aarch64-unknown-linux-musl',
+  },
+  'darwin-x64': {
+    pkg: '@openai/codex-darwin-x64',
+    triple: 'x86_64-apple-darwin',
+  },
+  'darwin-arm64': {
+    pkg: '@openai/codex-darwin-arm64',
+    triple: 'aarch64-apple-darwin',
+  },
+  'win32-x64': {
+    pkg: '@openai/codex-win32-x64',
+    triple: 'x86_64-pc-windows-msvc',
+  },
+  'win32-arm64': {
+    pkg: '@openai/codex-win32-arm64',
+    triple: 'aarch64-pc-windows-msvc',
+  },
 };
 
 /** Cached result — found paths are cached; misses are retried. */
@@ -99,11 +117,14 @@ function findCodexBinaryPathUncached(): string | undefined {
   // Fastest and most reliable — works for `brew install codex`, npm global,
   // and any other install that puts `codex` on PATH.
   try {
-    const whichCmd = process.platform === 'win32' ? 'where codex' : 'which codex';
+    const whichCmd =
+      process.platform === 'win32' ? 'where codex' : 'which codex';
     const codexOnPath = execSync(whichCmd, {
       encoding: 'utf8',
       timeout: 5000,
-    }).trim().split(/\r?\n/)[0]; // `where` on Windows returns \r\n-separated paths
+    })
+      .trim()
+      .split(/\r?\n/)[0]; // `where` on Windows returns \r\n-separated paths
 
     if (codexOnPath && existsSync(codexOnPath)) {
       return codexOnPath;
