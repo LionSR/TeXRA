@@ -11,15 +11,46 @@
 
 // Third-party imports
 import { z } from 'zod';
-import type {
-  ItemCompletedEvent,
-  RunResult,
-  SandboxMode,
-  ThreadItem,
-  Thread,
-  TurnCompletedEvent,
-  TurnFailedEvent,
-} from '@openai/codex-sdk';
+
+// ---------------------------------------------------------------------------
+// Codex SDK types — defined locally to avoid a static import of the optional
+// @openai/codex-sdk package, which is ESM-only and breaks webpack CJS builds.
+// ---------------------------------------------------------------------------
+
+type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
+
+interface ThreadItem {
+  type: string;
+  // file_change items
+  changes: { kind: string; path: string }[];
+  // command_execution items
+  command: string;
+  exit_code: number;
+  // agent_message items
+  text: string;
+}
+
+interface RunResult {
+  items: ThreadItem[];
+  finalResponse: string | null;
+  usage: { input_tokens: number; output_tokens: number } | null;
+}
+
+interface Thread {
+  run(prompt: string): Promise<RunResult>;
+  runStreamed(prompt: string): Promise<{ events: AsyncIterable<CodexEvent> }>;
+}
+
+interface CodexEvent {
+  type: string;
+  item?: ThreadItem;
+  usage?: RunResult['usage'];
+  error?: { message: string };
+}
+
+type ItemCompletedEvent = CodexEvent & { item: ThreadItem };
+type TurnCompletedEvent = CodexEvent & { usage: RunResult['usage'] };
+type TurnFailedEvent = CodexEvent & { error: { message: string } };
 
 // Local imports - agent
 import {
@@ -209,7 +240,7 @@ export class CodexTool extends defineTool({
     const ctx = getCurrentToolFileInteractionContext();
     ctx?.onExecutionReady?.();
 
-    // Dynamic import — avoids hard dependency when CLI is not installed
+    // Dynamic import — resolved at runtime, not bundled (see webpack externals)
     const { Codex } = await import('@openai/codex-sdk');
 
     const codex = new Codex();
