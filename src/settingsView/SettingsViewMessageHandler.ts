@@ -779,7 +779,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       const raw = await StorageFS.read(resolvedPath);
       const { meta, content } = parseFrontmatter(raw);
 
-      if (meta?.pinned) return; // Already pinned
+      if (meta?.pinned) return; // Already pinned, no refresh needed
 
       // Count current pinned memories to enforce limit
       const items = await loadMemoryItems();
@@ -788,15 +788,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         void vscode.window.showWarningMessage(
           `Cannot pin: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
         );
-        return;
+        return; // No change, no refresh needed
       }
 
       const updatedMeta = setPinnedMeta(meta, true);
       await StorageFS.write(resolvedPath, buildFile(content, updatedMeta));
+      await this.withActiveWebview((w) => this.sendMemoryData(w));
     } catch (error) {
       await showLoggedErrorMessage(this.channel, 'Failed to pin memory', error);
-    } finally {
-      await this.withActiveWebview((w) => this.sendMemoryData(w));
     }
   }
 
@@ -808,18 +807,17 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       const raw = await StorageFS.read(resolvedPath);
       const { meta, content } = parseFrontmatter(raw);
 
-      if (!meta?.pinned) return; // Not pinned
+      if (!meta?.pinned) return; // Not pinned, no refresh needed
 
       const updatedMeta = setPinnedMeta(meta, false);
       await StorageFS.write(resolvedPath, buildFile(content, updatedMeta));
+      await this.withActiveWebview((w) => this.sendMemoryData(w));
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
         'Failed to unpin memory',
         error,
       );
-    } finally {
-      await this.withActiveWebview((w) => this.sendMemoryData(w));
     }
   }
 
