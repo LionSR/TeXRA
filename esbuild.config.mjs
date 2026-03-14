@@ -115,6 +115,7 @@ const extensionConfig = {
     'fsevents', // macOS native module
     'bufferutil', // Optional native module
     'utf-8-validate', // Optional native module
+    '@openai/codex-sdk', // Optional runtime dependency — dynamically imported when Codex CLI is installed
   ],
   loader: { '.tex': 'text' },
   plugins: [aliasPlugin, progressPlugin],
