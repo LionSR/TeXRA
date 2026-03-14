@@ -89,7 +89,7 @@ export async function walkMemoryDirectory(
       lineCount: previewData.lineCount,
       preview: previewData.preview,
       modifiedBy: meta ? formatAttribution(meta) : undefined,
-      pinned: meta?.pinned ?? undefined,
+      pinned: meta?.pinned,
     });
   }
 

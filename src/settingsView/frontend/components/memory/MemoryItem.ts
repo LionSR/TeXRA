@@ -55,7 +55,7 @@ export class MemoryItem extends LitElement {
         overflow-y: auto;
       }
 
-      :host([pinned]) .memory-item {
+      .memory-item.pinned {
         border-left: 3px solid var(--vscode-textLink-foreground);
         padding-left: calc(var(--spacing-medium) - 3px);
       }
@@ -63,8 +63,6 @@ export class MemoryItem extends LitElement {
   ];
 
   @property({ attribute: false }) item?: MemoryViewItem;
-
-  @property({ type: Boolean, reflect: true }) pinned = false;
 
   private handleOpen(): void {
     if (!this.item) return;
@@ -120,7 +118,7 @@ export class MemoryItem extends LitElement {
       : 'This note is empty.';
 
     return html`
-      <div class="list-item memory-item">
+      <div class="list-item memory-item ${this.item.pinned ? 'pinned' : ''}">
         <div class="list-item-header">
           <div class="memory-path">${this.item.displayPath}</div>
           <vscode-toolbar-container>

@@ -109,14 +109,12 @@ export const SetMemoryEnabledMessageSchema = z.object({
   enabled: z.boolean(),
 });
 
-export const PinMemoryMessageSchema = z.object({
+export const PinMemoryMessageSchema = MemoryPathMessageSchema.extend({
   command: z.literal(MEMORY_VIEW_COMMANDS.PIN_MEMORY),
-  storagePath: z.string().min(1),
 });
 
-export const UnpinMemoryMessageSchema = z.object({
+export const UnpinMemoryMessageSchema = MemoryPathMessageSchema.extend({
   command: z.literal(MEMORY_VIEW_COMMANDS.UNPIN_MEMORY),
-  storagePath: z.string().min(1),
 });
 
 // ============================================================

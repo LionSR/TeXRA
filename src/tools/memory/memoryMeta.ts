@@ -6,6 +6,13 @@
  * no locking, no orphan cleanup — delete/rename just works.
  */
 
+import * as path from 'path';
+
+import { isDirectory } from '@common/files/fsEntryType';
+import { StorageFS } from '@utils/files';
+
+import { MEMORY_STORAGE_ROOT, shouldSkipEntry } from './constants';
+
 export interface MemoryFileMeta {
   /** Agent name that last modified this file. */
   modifiedBy: string;
@@ -127,6 +134,38 @@ export function setPinnedMeta(
     ...base,
     pinned: pinned ? true : undefined,
   };
+}
+
+/**
+ * Count pinned memory files under MEMORY_STORAGE_ROOT.
+ * Short-circuits once `limit` is reached to avoid unnecessary reads.
+ * Returns 0 if the storage root does not exist.
+ */
+export async function countPinnedMemories(limit?: number): Promise<number> {
+  const exists = await StorageFS.exists(MEMORY_STORAGE_ROOT);
+  if (!exists) return 0;
+  return countPinnedInDir(MEMORY_STORAGE_ROOT, limit ?? Infinity);
+}
+
+async function countPinnedInDir(
+  dirPath: string,
+  limit: number,
+): Promise<number> {
+  let count = 0;
+  const children = await StorageFS.readDir(dirPath);
+  for (const [name, type] of children) {
+    if (shouldSkipEntry(name)) continue;
+    const childPath = path.join(dirPath, name);
+    if (isDirectory(type)) {
+      count += await countPinnedInDir(childPath, limit - count);
+    } else {
+      const raw = await StorageFS.read(childPath);
+      const { meta } = parseFrontmatter(raw);
+      if (meta?.pinned) count++;
+    }
+    if (count >= limit) break;
+  }
+  return count;
 }
 
 // ── Display ────────────────────────────────────────────────────────

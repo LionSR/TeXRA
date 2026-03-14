@@ -39,6 +39,7 @@ import {
   createMeta,
   formatAttribution,
   setPinnedMeta,
+  countPinnedMemories,
 } from './memoryMeta';
 
 const MemoryToolInputSchema = z.strictObject({
@@ -430,7 +431,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       };
     }
 
-    const pinnedCount = await this.countPinnedFiles();
+    const pinnedCount = await countPinnedMemories(MAX_PINNED_MEMORIES);
     if (pinnedCount >= MAX_PINNED_MEMORIES) {
       throw new ToolError(
         `Cannot pin ${inputPath}: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
@@ -465,28 +466,6 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       summary: `Unpinned memory: ${inputPath}`,
       output: `Successfully unpinned ${inputPath}.`,
     };
-  }
-
-  private async countPinnedFiles(): Promise<number> {
-    const exists = await StorageFS.exists(MEMORY_STORAGE_ROOT);
-    if (!exists) return 0;
-    return this.countPinnedInDir(MEMORY_STORAGE_ROOT);
-  }
-
-  private async countPinnedInDir(dirPath: string): Promise<number> {
-    const children = await StorageFS.readDir(dirPath);
-    let count = 0;
-    for (const [name, type] of children) {
-      if (shouldSkipEntry(name)) continue;
-      const childPath = path.join(dirPath, name);
-      if (isDirectory(type)) {
-        count += await this.countPinnedInDir(childPath);
-      } else {
-        const { meta } = await this.readMemoryFile(childPath);
-        if (meta?.pinned) count++;
-      }
-    }
-    return count;
   }
 
   private async buildDirectoryListing(resolvedPath: string): Promise<string[]> {

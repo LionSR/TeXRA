@@ -89,6 +89,7 @@ import {
   parseFrontmatter,
   buildFile,
   setPinnedMeta,
+  countPinnedMemories,
 } from '@tools/memory/memoryMeta';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
@@ -781,9 +782,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       if (meta?.pinned) return; // Already pinned, no refresh needed
 
-      // Count current pinned memories to enforce limit
-      const items = await loadMemoryItems();
-      const pinnedCount = items.filter((i) => i.pinned).length;
+      // Count current pinned memories to enforce limit (short-circuits at max)
+      const pinnedCount = await countPinnedMemories(MAX_PINNED_MEMORIES);
       if (pinnedCount >= MAX_PINNED_MEMORIES) {
         void vscode.window.showWarningMessage(
           `Cannot pin: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
