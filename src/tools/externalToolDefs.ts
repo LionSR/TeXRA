@@ -23,6 +23,27 @@ import { checkToolInstalled } from '@utils/system/toolUtils';
 const LEAN4_EXT_ID = 'leanprover.lean4';
 
 /**
+ * Robustly import the Codex constructor from the ESM-only @openai/codex-sdk.
+ *
+ * In some Electron/Node.js versions, dynamic `import()` of ESM modules from
+ * CJS bundles wraps named exports under `default`, so `{ Codex }` destructuring
+ * yields `undefined` and `new Codex()` throws "e is not a constructor".
+ */
+async function importCodexClassForCheck(): Promise<new () => unknown> {
+  const mod: Record<string, unknown> = await import('@openai/codex-sdk');
+
+  if (typeof mod.Codex === 'function') return mod.Codex as never;
+
+  const def = mod.default as Record<string, unknown> | undefined;
+  if (def && typeof def.Codex === 'function') return def.Codex as never;
+  if (typeof def === 'function') return def as never;
+
+  throw new Error(
+    `Failed to import Codex class. Module keys: [${Object.keys(mod).join(', ')}]`,
+  );
+}
+
+/**
  * Pluggable check for VS Code extension availability.
  * Set by the extension host at activation; defaults to false (not available).
  */
@@ -212,14 +233,17 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'Install the Codex CLI via npm:\n\n' +
       '  npm install -g @openai/codex\n\n' +
       'The CLI includes platform-specific binaries that the SDK\n' +
-      'spawns as a child process. An OpenAI API key is required\n' +
-      'and can be set via OPENAI_API_KEY environment variable.',
+      'spawns as a child process.\n\n' +
+      'Authentication (choose one):\n' +
+      '  • codex login        — OAuth sign-in (recommended)\n' +
+      '  • OPENAI_API_KEY     — environment variable with API key',
     installUrl: 'https://github.com/openai/codex',
     configNotes:
-      'Requires @openai/codex npm package with platform binaries. Used by @openai/codex-sdk.',
+      'Requires @openai/codex npm package with platform binaries. Used by @openai/codex-sdk. ' +
+      'Supports OAuth via `codex login` or OPENAI_API_KEY env var.',
     check: async () => {
       try {
-        const { Codex } = await import('@openai/codex-sdk');
+        const Codex = await importCodexClassForCheck();
         // Constructor resolves the binary path — throws if not found
         new Codex();
         return true;
@@ -229,7 +253,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     },
     detailCheck: async () => {
       try {
-        const { Codex } = await import('@openai/codex-sdk');
+        const Codex = await importCodexClassForCheck();
         new Codex();
         return 'Codex CLI binary found. Ready for SDK use.';
       } catch (err: unknown) {
@@ -239,6 +263,9 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
         }
         if (msg.includes('Unsupported platform')) {
           return `Platform not supported: ${msg}`;
+        }
+        if (msg.includes('not a constructor') || msg.includes('Failed to import')) {
+          return 'Codex SDK import failed — ESM/CJS interop issue. Try reinstalling: npm install @openai/codex-sdk';
         }
         return `Codex CLI check failed: ${msg}`;
       }
