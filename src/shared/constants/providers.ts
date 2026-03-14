@@ -64,7 +64,7 @@ const PROVIDER_REGISTRY = [
   },
   {
     id: ModelProvider.DASHSCOPE,
-    displayName: 'DashScope',
+    displayName: 'Qwen',
     hasServerKey: true,
     keyUrl: 'https://dashscope.aliyun.com/api-console/',
   },
@@ -73,7 +73,6 @@ const PROVIDER_REGISTRY = [
 /** Providers not in the main registry (no server-side keys, no model selection). */
 const EXTRA_DISPLAY_NAMES: Record<string, string> = {
   openRouter: 'OpenRouter',
-  wolframllmapp: 'Wolfram',
   [ModelProvider.COPILOT]: 'Copilot',
   [ModelProvider.OTHERS]: 'Others',
 };
@@ -116,7 +115,6 @@ export const PROVIDER_URLS: Record<string, string> = {
     PROVIDER_REGISTRY.filter((p) => p.keyUrl).map((p) => [p.id, p.keyUrl!]),
   ),
   openRouter: 'https://openrouter.ai/keys',
-  wolframllmapp: 'https://llm-api.wolframalpha.com/',
 };
 
 /** Default model used for auxiliary/helper tasks (polishing, agent creation, merge, session descriptions). */
@@ -194,6 +192,15 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
       label: '1M Context Window Beta',
       description:
         'Enable the 1M-token context window for Claude Opus 4.6, Sonnet 4.6, and Sonnet 4 (usage capped at 200K by extension).',
+    },
+  ],
+  dashscope: [
+    {
+      key: GlobalStateKey.DASHSCOPE_USE_CHINA,
+      label: 'China Region (Bailian)',
+      description:
+        'Use the China region endpoint (dashscope.aliyuncs.com) instead of international (dashscope-intl.aliyuncs.com). Display name switches to "Bailian".',
+      globalStateKey: GlobalStateKey.DASHSCOPE_USE_CHINA,
     },
   ],
 };

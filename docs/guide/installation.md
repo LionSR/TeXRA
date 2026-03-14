@@ -237,7 +237,6 @@ TeXRA also loads environment variables from a `.env` file in your workspace. Def
 - **DeepSeek API Key**: Available from [DeepSeek Platform](https://platform.deepseek.com/api_keys)
 - **Moonshot API Key**: Available from [Moonshot Console](https://platform.moonshot.cn/console)
 - **DashScope API Key**: Available from [DashScope Console](https://dashscope.aliyun.com/api-console/)
-- **Wolfram LLM API Key**: Available from [Wolfram LLM App](https://llm-api.wolframalpha.com/)
   :::
 
 ## Verifying Installation

@@ -43,7 +43,7 @@ const MODEL_PROVIDER_DECORATORS: Record<string, ProviderDecorator> = {
   },
   dashscope: {
     unicode: '\u2604', // ☄ - Comet (Alibaba Cloud)
-    label: 'DashScope',
+    label: 'Qwen',
     hint: 'Alibaba Cloud Qwen models',
   },
   copilot: {
