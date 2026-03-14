@@ -383,6 +383,10 @@ export class CodexTool extends defineTool({
           throw new ToolError(
             event.error.message ?? 'Codex turn failed',
           );
+        case 'error':
+          throw new ToolError(
+            event.message ?? 'Codex stream error',
+          );
       }
     }
 
@@ -486,6 +490,11 @@ export class CodexTool extends defineTool({
             break;
           case 'turn.failed': {
             const msg = event.error.message ?? 'Codex turn failed';
+            stderrStream.write(`Error: ${msg}\n`);
+            throw new Error(msg);
+          }
+          case 'error': {
+            const msg = event.message ?? 'Codex stream error';
             stderrStream.write(`Error: ${msg}\n`);
             throw new Error(msg);
           }
