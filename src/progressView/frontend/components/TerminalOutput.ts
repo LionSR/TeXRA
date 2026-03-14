@@ -11,6 +11,26 @@ const DEFAULT_THEME = {
   fontFamily: 'monospace',
 } as const;
 
+/** VS Code terminal ANSI color CSS variables mapped to xterm.js theme keys. */
+const ANSI_COLOR_MAP = [
+  ['black', '--vscode-terminal-ansiBlack'],
+  ['red', '--vscode-terminal-ansiRed'],
+  ['green', '--vscode-terminal-ansiGreen'],
+  ['yellow', '--vscode-terminal-ansiYellow'],
+  ['blue', '--vscode-terminal-ansiBlue'],
+  ['magenta', '--vscode-terminal-ansiMagenta'],
+  ['cyan', '--vscode-terminal-ansiCyan'],
+  ['white', '--vscode-terminal-ansiWhite'],
+  ['brightBlack', '--vscode-terminal-ansiBrightBlack'],
+  ['brightRed', '--vscode-terminal-ansiBrightRed'],
+  ['brightGreen', '--vscode-terminal-ansiBrightGreen'],
+  ['brightYellow', '--vscode-terminal-ansiBrightYellow'],
+  ['brightBlue', '--vscode-terminal-ansiBrightBlue'],
+  ['brightMagenta', '--vscode-terminal-ansiBrightMagenta'],
+  ['brightCyan', '--vscode-terminal-ansiBrightCyan'],
+  ['brightWhite', '--vscode-terminal-ansiBrightWhite'],
+] as const;
+
 const MIN_SCROLLBACK = 4_000;
 
 /** Maximum visible rows before terminal scrolls internally. */
@@ -68,6 +88,7 @@ export class TerminalOutput extends LitElement {
       theme: {
         background: resolvedTheme.background,
         foreground: resolvedTheme.foreground,
+        ...resolvedTheme.ansiColors,
       },
     });
 
@@ -201,6 +222,7 @@ export class TerminalOutput extends LitElement {
     background: string;
     foreground: string;
     fontFamily: string;
+    ansiColors: Record<string, string>;
   } {
     const styles = getComputedStyle(this);
 
@@ -214,7 +236,22 @@ export class TerminalOutput extends LitElement {
       styles.getPropertyValue('--vscode-editor-font-family').trim() ||
       DEFAULT_THEME.fontFamily;
 
-    return { background, foreground, fontFamily };
+    const ansiColors: Record<string, string> = {};
+    for (const [key, cssVar] of ANSI_COLOR_MAP) {
+      const value = styles.getPropertyValue(cssVar).trim();
+      if (value) ansiColors[key] = value;
+    }
+
+    // Also resolve cursor and selection colors
+    const cursor =
+      styles.getPropertyValue('--vscode-terminalCursor-foreground').trim();
+    if (cursor) ansiColors['cursor'] = cursor;
+    const selectionBg = styles
+      .getPropertyValue('--vscode-terminal-selectionBackground')
+      .trim();
+    if (selectionBg) ansiColors['selectionBackground'] = selectionBg;
+
+    return { background, foreground, fontFamily, ansiColors };
   }
 
   override render() {
