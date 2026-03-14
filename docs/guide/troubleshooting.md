@@ -263,7 +263,7 @@ Even the best research assistants (human or AI) have off days. This guide helps 
 
 3. **Use better models**:
    - Upgrade to more capable models for complex tasks
-   - Try Claude 3 Opus or GPT-4o for highest quality
+   - Try Claude 4.6 Opus or GPT-5.4 Pro for highest quality
    - Match the model to your specific task
 
 4. **Reference materials**:
@@ -361,7 +361,7 @@ Even the best research assistants (human or AI) have off days. This guide helps 
 **Solutions**:
 
 1. **Model selection**:
-   - Faster models: Gemini Flash, Claude Haiku, GPT-4o Mini
+   - Faster models: Gemini Flash, Claude Haiku, GPT-5.4
    - Match model to task complexity
    - Reserve powerful models for tasks that need them
 2. **Document size**:
