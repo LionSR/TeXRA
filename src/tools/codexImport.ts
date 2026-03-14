@@ -41,13 +41,14 @@ export async function importCodexClass(): Promise<CodexConstructor> {
   // Probe all possible export shapes — Electron's ESM/CJS interop may
   // wrap named exports under `default`, sometimes double-nested.
   const candidates: unknown[] = [
-    mod.Codex,                                              // named export
-    (mod.default as Record<string, unknown> | undefined)?.Codex,  // default.Codex
-    mod.default,                                            // default IS the class
+    mod.Codex, // named export
+    (mod.default as Record<string, unknown> | undefined)?.Codex, // default.Codex
+    mod.default, // default IS the class
   ];
 
   // Double-nested: mod.default.default.Codex or mod.default.default
-  const innerDefault = (mod.default as Record<string, unknown> | undefined)?.default;
+  const innerDefault = (mod.default as Record<string, unknown> | undefined)
+    ?.default;
   if (innerDefault && typeof innerDefault === 'object') {
     candidates.push((innerDefault as Record<string, unknown>).Codex);
   }
@@ -61,9 +62,10 @@ export async function importCodexClass(): Promise<CodexConstructor> {
 
   // Build a diagnostic message showing what we actually got
   const defType = typeof mod.default;
-  const defKeys = mod.default && typeof mod.default === 'object'
-    ? Object.keys(mod.default as Record<string, unknown>).join(', ')
-    : defType;
+  const defKeys =
+    mod.default && typeof mod.default === 'object'
+      ? Object.keys(mod.default as Record<string, unknown>).join(', ')
+      : defType;
   throw new Error(
     'Failed to resolve Codex class from @openai/codex-sdk. ' +
       `Module keys: [${Object.keys(mod).join(', ')}], ` +
