@@ -45,6 +45,7 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
     [];
   @property({ attribute: false }) helperModel = '';
+  @property({ type: Boolean }) preferShortModelNames = false;
 
   override render(): TemplateResult {
     const apiAccessSection = this.authenticated
@@ -62,6 +63,7 @@ export class ModelsTab extends LitElement {
           .authenticated=${this.authenticated}
           .apiAccessMode=${this.apiAccessMode}
           .allowedModels=${this.allowedModels}
+          .preferShortModelNames=${this.preferShortModelNames}
         ></model-selection-list>
         <provider-key-list
           .providerKeyStatuses=${this.providerKeyStatuses}

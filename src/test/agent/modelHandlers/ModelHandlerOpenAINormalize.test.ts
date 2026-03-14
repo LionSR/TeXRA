@@ -104,6 +104,7 @@ function buildConfig(
   return {
     name: 'test-model',
     fullName: 'test-model',
+    shortName: 'test-model',
     provider,
     maxOutputTokens: 1024,
     inputPrice: 0,

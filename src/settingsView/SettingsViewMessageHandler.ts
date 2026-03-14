@@ -384,6 +384,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleSetHelperModel(data),
       [SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL]: (data) =>
         this.handleSetModelReasoningLevel(data),
+      [SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES]: (data) =>
+        this.handleSetPreferShortModelNames(data),
 
       // Super YOLO handlers
       [SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED]: () =>
@@ -642,6 +644,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       models,
       helperModel: getHelperModelName(),
+      preferShortModelNames: globalSM.get<boolean>(
+        GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+        false,
+      ),
     });
   }
 
@@ -1278,6 +1284,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     }
 
     await globalSM.update(GlobalStateKey.REASONING_LEVELS, overrides);
+    await this.withActiveWebview((w) => this.sendModelSelectionData(w));
+  }
+
+  private async handleSetPreferShortModelNames(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PREFER_SHORT_MODEL_NAMES>,
+  ): Promise<void> {
+    await globalSM.update(
+      GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+      data.enabled,
+    );
     await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
