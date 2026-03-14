@@ -477,7 +477,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Include tools in token counting for accurate measurement.
     // Tool schemas can be substantial and affect context utilization.
     if (options?.anthropicTools?.length) {
-      countTokensParams.tools = options.anthropicTools;
+      // Filter out memory tool as countTokens API doesn't support it yet
+      const countableTools = options.anthropicTools.filter(
+        (tool) => !('type' in tool && tool.type === 'memory_20250818'),
+      );
+      if (countableTools.length > 0) {
+        countTokensParams.tools = countableTools;
+      }
     }
 
     // If thinking is enabled, we need to pass it to countTokens as well
