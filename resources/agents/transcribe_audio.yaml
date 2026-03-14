@@ -25,7 +25,6 @@ prompts:
         \item Pay attention to punctuation and grammar for readability.
         \item Handle overlapping speech or unclear audio segments gracefully, indicating uncertainty where necessary (e.g., [unintelligible]).
         \item **Do not use any markdown formatting (like bold or italics) in the final transcript output.**
-        \item **IMPORTANT:** The output transcript must be entirely self-contained. Do not include any internal thoughts, change notes, or references to previous versions or conversations (e.g., "Changed X to Y," "Previously this said A," "As requested, we updated..."). A third-party reader with no context about the editing process must find the transcript clear and complete on its own.
     \end{itemize}
 
   userPrefix: |

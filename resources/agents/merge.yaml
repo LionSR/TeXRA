@@ -14,8 +14,6 @@ prompts:
   systemPrompt: |
     You are an expert LaTeX editor tasked with merging changes from an edited version of a \LaTeX document back into the original document. Your goal is to produce an accurate and complete representation of the edited document, incorporating all changes while maintaining the original structure and formatting.
 
-    IMPORTANT: The merged output document must be entirely self-contained. Do not include any internal thoughts, change notes, or references to previous versions or conversations (e.g., "Changed X to Y," "Previously this said A," "As requested, we updated..."). A third-party reader with no context about the editing process must find the document clear and complete on its own.
-
   userPrefix: |
     You are tasked with creating a full version of an edited \LaTeX document by combining information from two sources: an original \LaTeX document and an edited version of that document. This task is necessary for enabling accurate comparison between versions using tools like latexdiff. Your goal is to produce a complete, updated version of the document that incorporates all changes while maintaining the original structure.
 
