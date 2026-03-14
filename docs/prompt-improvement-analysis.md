@@ -640,4 +640,545 @@ Ranked by expected improvement in output quality:
 
 ---
 
-*This analysis is based on a complete reading of all 11 workflow agent YAMLs, 6 tool-use agent YAMLs, 15+ tool implementations, the PromptBuilder, delegation system, memory system, subagent result formatting, and workspace info infrastructure.*
+*The structural analysis above is based on a complete reading of all 11 workflow agent YAMLs, 6 tool-use agent YAMLs, 15+ tool implementations, the PromptBuilder, delegation system, memory system, subagent result formatting, and workspace info infrastructure.*
+
+---
+
+# Part II: Cognitive Problems
+
+*The structural issues above are about prompt hygiene — formatting, deduplication, consistency. The problems below are deeper: they affect how the model reasons, what failure modes it falls into, and what kinds of errors systematically appear in outputs.*
+
+---
+
+## 16. The Scope Creep Trap: Instructions That Invite Overreach
+
+### The core cognitive problem
+
+Every workflow agent asks the model to output a *complete* document. The `correct` agent says "ensure that all mathematical equations are correct and all statements are factually accurate." The `polish` agent says "you must give the complete output containing all the sections."
+
+This creates a fundamental tension: the instruction says "focus solely on the given instruction" but the output format demands "reproduce the entire document." When a model regenerates 40 pages of LaTeX, it *will* make unintended changes. Not because it's disobedient — because regenerating a long document from memory is a lossy process. Every token the model outputs is a new opportunity to drift.
+
+This is the **faithfulness-completeness tradeoff**: the more text you ask the model to reproduce, the more it will accidentally mutate.
+
+### Evidence in the prompts
+
+`polish.yaml` line 115:
+> "Include all the changes you added in the previous step."
+
+This instruction, in round 2, asks the model to *remember and faithfully reproduce* changes it made in round 1 while also incorporating new changes. The model has its round 1 output in the conversation history, but it's regenerating the whole document, not diffing. It's doing lossless transcription and creative editing simultaneously — two cognitive modes that conflict.
+
+`correct.yaml` asks the model to fix typos while reproducing the *entire* document verbatim except for corrections. This is like asking a proofreader to simultaneously be a photocopier. The model will "improve" sentences that weren't broken, drop comments it didn't notice, or subtly rephrase things near actual corrections.
+
+### Recommendations
+
+**a) Acknowledge the faithfulness-completeness tradeoff explicitly in prompts.** Tell the model the specific failure mode to watch for:
+
+```
+WARNING: When reproducing sections you did not modify, copy them verbatim.
+Do not "improve" text outside the scope of your corrections. If you are
+unsure whether something is an error or intentional, preserve the original.
+The user wants minimal, targeted changes — not a rewrite.
+```
+
+**b) Consider a "changes-only" output mode** for agents like `correct` where the edits are typically sparse. Instead of regenerating 40 pages with 5 fixes, output a structured diff:
+
+```xml
+<corrections>
+  <correction location="line 47" original="thier" replacement="their" />
+  <correction location="Eq. 12" original="$\dot$" replacement="$\dots$" />
+</corrections>
+```
+
+The merge agent could then apply these. This eliminates the faithfulness problem entirely for the correction case.
+
+**c) For `polish`, the scratchpad already identifies *what* to change. Add an explicit step: "For each section you do NOT plan to modify, reproduce it exactly as given. Your modifications should be surgical — change only the sentences that need changing."**
+
+---
+
+## 17. The Sycophancy Problem: Prompts That Don't Model Disagreement
+
+### The cognitive problem
+
+None of the agent prompts give the model permission or guidance to **push back on the user's instruction**.
+
+The `polish` agent says "focusing solely on addressing the given instructions." The `correct` agent says "Specific instructions that you must follow closely." The `chat` agent says "Confirm with User to sync with the user's intentions."
+
+But what if the user's instruction is wrong? "Add more equations to the introduction" might be bad advice for a paper where the introduction should be accessible. "Fix the grammar in section 3" applied to a paper with a fundamental mathematical error in section 3 means the model polishes the prose around a wrong derivation.
+
+The prompts currently encode a **servile epistemology**: the user is always right, the model's job is to execute. But the model is positioned as "a professional scientist" and "a collaborator" — roles that require the ability to say "I disagree" or "I notice something more important."
+
+### Evidence in the prompts
+
+`chat.yaml`:
+> "Converse with the user and ensure mathematical accuracy. Confirm with User to sync with the user's intentions when a big task is to be completed."
+
+This gets close to the right idea — it says "ensure mathematical accuracy" and "confirm with user." But it doesn't say what to do when mathematical accuracy *conflicts* with the user's instruction. The model defaults to compliance.
+
+`review.yaml` is the exception — it's explicitly designed to find problems. But even it says: "When editing files, always ask for user confirmation before making changes." The auditor defers to the author on fixes.
+
+### Recommendations
+
+**a) Add a "professional judgment" clause to agents where the model has domain expertise:**
+
+```
+You are a collaborator, not a contractor. If the user's instruction would
+damage the paper's quality (e.g., adding fluff to meet a word count,
+removing a necessary derivation, or introducing incorrect mathematics),
+flag the concern before proceeding. Suggest an alternative that achieves
+the user's underlying goal.
+
+However: if the user acknowledges the tradeoff and insists, respect their
+decision. They may have context you don't.
+```
+
+**b) For the `correct` agent specifically, add a "triage" instinct:**
+
+```
+If you discover an error that is more severe than what the instruction
+addresses (e.g., a sign error in a key equation while correcting grammar),
+note it with a LaTeX comment:
+  % [TeXRA note] Possible sign error in Eq. (7): $-\alpha$ should be $+\alpha$?
+Do not silently fix mathematical content the user didn't ask you to touch.
+```
+
+**c) For `polish`, add a "diminishing returns" signal:**
+
+```
+If the instruction has been fully addressed and further changes would
+only add marginal value or risk introducing new issues, say so in the
+scratchpad and stop. A paper that is 95% improved with zero regressions
+is better than 100% improved with accidental damage elsewhere.
+```
+
+---
+
+## 18. The Attention Allocation Problem: Long Documents, Uneven Effort
+
+### The cognitive problem
+
+When a model processes a 30-page paper, it doesn't allocate attention uniformly. The beginning and end of the document get disproportionate attention (primacy/recency effects). Sections near the instruction get more attention than sections far from it.
+
+None of the prompts address this. They all say "read the entire document carefully" — which is aspirational but doesn't change the model's attention distribution.
+
+### Evidence in the prompts
+
+`correct.yaml` userRequest:
+> "Please carefully read through the entire document, looking for any typos, grammatical errors..."
+
+`polish.yaml` userPrefix:
+> "Please carefully read through the entire research paper above and ensure you fully understand all the details."
+
+These instructions are equivalent to telling a human "pay equal attention to everything." Humans can't do this, and neither can models. The result: corrections cluster in the first few sections, with later sections getting lighter treatment.
+
+### Recommendations
+
+**a) Add section-awareness to workflow agents.** Before processing, have the scratchpad list all sections:
+
+```
+Before making any changes, list every section in the document:
+1. Section name, approximate line range
+2. One-sentence summary of content
+3. How relevant this section is to the instruction (high/medium/low/none)
+
+Then work through each section systematically, spending time proportional
+to its relevance and error density.
+```
+
+This forces the model to *see* the whole document structure before starting edits, counteracting the tendency to front-load effort.
+
+**b) For multi-round agents, consider alternating the direction of processing:**
+
+```
+Round 1: Process the document from beginning to end.
+Round 2: Review your changes from END to BEGINNING. This counteracts the
+natural tendency to invest more effort in early sections.
+```
+
+**c) For the `correct` agent, consider explicit section-by-section processing instructions:**
+
+```
+Process the document one section at a time. For each section:
+1. Read it completely
+2. List any corrections needed
+3. Apply corrections
+4. Move to the next section
+
+Do not skip ahead or go back. This ensures every section receives equal scrutiny.
+```
+
+---
+
+## 19. The Phantom Knowledge Problem: Models Inventing Content
+
+### The cognitive problem
+
+The `polish` agent is told: "brainstorm concrete ways to significantly improve the quality of the paper." The `draw` agent is told to "create informative, condensed, and aesthetically pleasing figures."
+
+These instructions invite the model to *add content* to the paper. But the model doesn't know the research. It knows the text of the paper, but it doesn't know what's true in the field, what the authors' other results are, or what the correct interpretation of an ambiguous equation is.
+
+When told to "improve," the model will:
+- Add sentences that sound authoritative but may be factually wrong
+- Introduce connections to other work it hallucinates
+- Expand on results in ways that go beyond what the authors proved
+- Add "discussion" that is generic rather than specific to the actual findings
+
+This is particularly dangerous in `draw.yaml`, where the model creates TikZ figures. A figure that *looks* correct but misrepresents a mathematical relationship is worse than no figure at all.
+
+### Evidence in the prompts
+
+`polish.yaml` round 2 reflection item 7:
+> "In the added parts, are there any fluffy statements like 'XXX provides crucial insights into the structure and behavior of these systems' that can be densed using the 'show not tell' technique?"
+
+This is excellent — it shows awareness of the problem. But it's checking for fluff *after* the model has already generated it, rather than preventing it. The reflection catches symptom (fluff) rather than cause (model inventing content it doesn't have knowledge to write).
+
+`draw.yaml`:
+> "When working with TikZ diagrams connected to mathematical formulas, always reflect whether the visual representation accurately matches the underlying equations and relationships."
+
+Good instinct, but "reflect" is a vague cognitive instruction. *How* should it verify? By re-deriving? By checking specific numerical values?
+
+### Recommendations
+
+**a) Add epistemic honesty rules to all agents that generate content:**
+
+```
+EPISTEMIC RULES:
+- Only add content that is directly supported by the text of the paper
+- Do not introduce claims, citations, or connections not present in the original
+- If expanding a discussion, every sentence must be traceable to a specific
+  result or equation already in the paper
+- When uncertain whether a statement is correct, add a LaTeX comment:
+  % [TeXRA note] Please verify: [the uncertain claim]
+- Never invent numerical values, experimental results, or citations
+```
+
+**b) For `draw.yaml`, add concrete verification steps:**
+
+```
+After creating a TikZ figure:
+1. List every mathematical relationship the figure depicts
+2. For each relationship, cite the specific equation in the paper
+3. Verify that the visual topology (arrows, connections, orderings)
+   matches the mathematical structure (compositions, dependencies, orderings)
+4. If the figure includes numerical axis values or specific points,
+   verify them against the paper's stated values
+```
+
+**c) For `polish.yaml`, distinguish between editing and authoring:**
+
+```
+You are EDITING this paper, not CO-AUTHORING it. The distinction:
+- Editing: Improving how existing ideas are expressed (clarity, flow, precision)
+- Authoring: Adding new ideas, claims, or content
+
+Stay in editing mode. If the instruction requires new content (e.g., "add a
+discussion of limitations"), draw ONLY from what is already implied or stated
+in the paper. Do not introduce external knowledge the authors may not endorse.
+```
+
+---
+
+## 20. The Instruction-Following Ceiling: Scratchpads as Performance Theater
+
+### The cognitive problem
+
+The scratchpad/reflection pattern is designed to improve output quality through deliberate planning. But there's a failure mode: **the model fills in the template without genuine reasoning**.
+
+When `polish.yaml` provides a reflection template with 7 items, the model will generate 7 answers — but they may be post-hoc rationalizations of the output it already produced, not genuine critical evaluation. The template structure makes it *look* like deep reflection while potentially being pattern-completion.
+
+The key indicator: scratchpad items that are all positive. "The modifications address the instruction well." "The enhancements are clear and effective." "The changes maintain coherence." If the model never flags actual problems in its own work, the reflection is theater.
+
+### Evidence in the prompts
+
+`polish.yaml` reflection template asks questions as numbered items. Each item is phrased as a question that can be answered "yes" or "yes, but slightly better now." There's no template slot for "I made a mistake here and need to fix it."
+
+`draw.yaml` reflection:
+> "How well do the modifications address the specific instruction provided?"
+
+This invites a self-congratulatory answer. Compare with:
+> "List three specific ways the figure fails to accurately represent the mathematics."
+
+The second phrasing forces the model to find problems. The first lets it celebrate.
+
+### Recommendations
+
+**a) Reframe reflection prompts as adversarial self-review:**
+
+Instead of:
+```
+How well do the modifications address the instruction?
+```
+
+Use:
+```
+Find the three weakest changes you made. For each:
+- What was the change?
+- Why is it weak? (inaccurate, unnecessary, introduces inconsistency, etc.)
+- How would you fix it?
+```
+
+This reframes reflection from "evaluate your work" (which invites positive assessment) to "find your mistakes" (which forces critical engagement).
+
+**b) Add a "null check" to scratchpads:**
+
+```
+If the instruction is already fully addressed by the original document
+and no changes are needed, say so explicitly in the scratchpad. Do not
+invent changes to justify your existence. It is acceptable — and sometimes
+correct — to return the document unchanged.
+```
+
+This gives the model an exit ramp from the "I must produce changes" assumption.
+
+**c) For round 2 reflection, require specific evidence:**
+
+Instead of:
+```
+Are the enhancements clear, condensed, and effective?
+```
+
+Use:
+```
+Quote a specific paragraph you changed. Show the before and after.
+Is the 'after' genuinely better, or just different? If just different,
+revert it.
+```
+
+Requiring the model to cite specific evidence forces it out of vague self-assessment.
+
+---
+
+## 21. The Context Window Trap: Prompts That Don't Scale
+
+### The cognitive problem
+
+The `correct_multiple` agent processes multiple documents in a single context window. All documents are injected via `{{ ALL_INPUTS }}` plus the main `{{ INPUT_CONTENT }}`. For a project with 5 chapters of 10 pages each, that's 50 pages of input, plus system prompt, plus output — potentially 100k+ tokens.
+
+The prompts don't acknowledge this scaling problem. They say "carefully read through the entire document" regardless of whether "the entire document" is 3 pages or 50 pages. The model's behavior degrades gracefully — it doesn't crash, it just gets less careful. Late documents in a multi-file set get less attention than early ones.
+
+### Evidence in the prompts
+
+`correct_multiple.yaml` has no instruction about prioritization when processing multiple files. `merge_multiple.yaml` says "Process each document pair independently" — good — but doesn't say anything about what to do if the combined length exceeds comfortable processing capacity.
+
+### Recommendations
+
+**a) Add context-aware instructions for multi-document agents:**
+
+```
+You will process multiple documents. If the combined length is substantial:
+- Process each document as a separate unit of work
+- Give later documents the same care as earlier ones
+- If you notice your attention flagging on later documents,
+  explicitly re-read them before editing
+```
+
+**b) For the orchestrator, add guidance on when to split vs. batch:**
+
+```
+When delegating multi-file tasks:
+- If total input exceeds ~20 pages, prefer separate delegations per file
+  over a single multi-file delegation
+- For uniform operations (correct all files), parallel single-file
+  delegations are both faster and more reliable than one multi-file batch
+```
+
+---
+
+## 22. The Grounding Gap: Models Without Feedback Loops
+
+### The cognitive problem
+
+Workflow agents operate open-loop: they receive input, produce output, and have no way to verify their work against reality. The `correct` agent can't compile the LaTeX to check for errors. The `draw` agent can't render the TikZ to see if the figure looks right. The `polish` agent can't run chktex to verify zero warnings.
+
+The prompts ask for these quality standards ("zero warnings when checked by chktex") without giving the model any way to actually verify compliance. This is like asking someone to paint a wall while blindfolded and then asking "is it even?"
+
+Tool-use agents (`chat`, `research`, `review`) *do* have feedback loops via bash, but the system prompts don't always emphasize using them for verification.
+
+### Recommendations
+
+**a) For workflow agents, be honest about the limitation:**
+
+```
+You cannot compile or verify the LaTeX output. Therefore:
+- Be conservative: when unsure whether a change is correct, don't make it
+- Prefer changes where you are confident of correctness over ambitious changes
+  that might introduce compilation errors
+- Pay extra attention to matching braces, environments, and command arguments
+```
+
+**b) For tool-use agents, explicitly require verification loops:**
+
+In `chat.yaml` and `research.yaml`:
+```
+After writing or editing any LaTeX file:
+1. If latexmk is available, compile and check for errors
+2. If chktex is available, run it and fix any warnings
+3. If neither is available, manually verify matching braces and environments
+```
+
+**c) For `draw.yaml`, the inability to render is particularly costly. Consider adding a recommendation to compile:**
+
+```
+After generating TikZ code, the user will need to compile it to verify
+visual correctness. Structure your TikZ code to be compilable standalone
+(with appropriate documentclass and packages) so the user can preview it
+quickly.
+```
+
+---
+
+## 23. The Merge Agent's Impossible Task
+
+### The cognitive problem
+
+The `merge` agent receives an "original" and an "edited" version and must produce the merged result. The edited version may contain markers like "previous parts remain unchanged."
+
+This requires the model to:
+1. Identify which parts of the edited version are actual edits vs. elision markers
+2. Copy unchanged sections *verbatim* from the original
+3. Insert edited sections at the correct positions
+4. Maintain perfect LaTeX structural integrity
+
+Step 2 is the hard one. "Copy verbatim" over potentially hundreds of lines is asking the model to be a photocopier — the thing it's worst at. Every line it "copies" is actually *regenerated*, with potential for subtle mutations (whitespace changes, comment modifications, equation reformatting).
+
+The prompt says "Accuracy is paramount — even small discrepancies can affect diff tools." This is the right standard, but the prompt doesn't give the model strategies for meeting it.
+
+### Recommendations
+
+**a) Give the merge agent explicit strategies for the verbatim copying problem:**
+
+```
+CRITICAL: For unchanged sections, your goal is EXACT byte-for-byte reproduction.
+Strategies:
+- Do not "clean up" or "improve" unchanged sections, even if you notice issues
+- Do not change whitespace, indentation, or line breaks in unchanged sections
+- If an unchanged section has a LaTeX warning or style issue, preserve it exactly
+  — the user wants an accurate merge, not a surprise correction
+- When in doubt between what the original says and what you think it should say,
+  always use the original verbatim
+```
+
+**b) Consider whether merge should even be a generative task.** A deterministic algorithm that identifies edited ranges and splices them into the original would be more reliable. The merge agent is using a probabilistic text generator for a task that requires deterministic text manipulation. This might be a case where code beats prompting.
+
+---
+
+## 24. The Missing Metacognition: Models Don't Know When They're Failing
+
+### The cognitive problem
+
+None of the prompts teach the model to recognize its own failure modes. The model doesn't know that:
+- It's worse at the end of long documents than at the beginning
+- It tends to over-edit when told to "improve"
+- It hallucinates content when told to "expand"
+- It loses track of nesting in deeply nested LaTeX environments
+- It struggles with verbatim reproduction of mathematical notation
+
+If the model knew these tendencies, it could compensate. A human editor who knows they get sloppy after page 20 takes a break and re-reads. A model that knows it over-edits can add a final check: "Did I change anything I wasn't asked to change?"
+
+### Recommendations
+
+**a) Add a "known failure modes" section to agents where it matters most:**
+
+For `correct.yaml`:
+```
+KNOWN TENDENCIES TO WATCH FOR:
+- You may "improve" sentences that weren't broken — resist this
+- You may drop LaTeX comments that look like dead code — preserve all comments
+- You may normalize spacing or formatting in ways that affect compilation — preserve original whitespace
+- You tend to pay less attention to sections near the end — check those sections explicitly
+```
+
+For `polish.yaml`:
+```
+KNOWN TENDENCIES TO WATCH FOR:
+- You may add generic academic filler ("This provides crucial insights...") — every sentence should say something specific
+- You may lose mathematical precision when rephrasing — if you change a sentence containing math, verify the math is still correct
+- You may rewrite sections that only needed minor tweaks — prefer surgical changes over rewrites
+```
+
+**b) For the orchestrator, teach it to recognize when a subagent's result is suspect:**
+
+```
+When reviewing subagent results:
+- If a workflow agent changed more than ~30% of the document, the changes
+  may include unintended modifications. Review the diff carefully.
+- If a tool-use agent's response is very short for a complex task, it may
+  have given up or misunderstood. Check the conversation history.
+- If multiple corrections cluster in the first half of the document,
+  the agent may have lost attention. Consider re-running on the second half.
+```
+
+---
+
+## 25. The Evaluation Asymmetry: Harder to Check Than to Generate
+
+### The cognitive problem
+
+The `review.yaml` agent is asked to "reproduce [every key derivation] step-by-step" and "verify limiting cases." This is computationally expensive even for a model — reproducing a derivation requires as many tokens as the derivation itself.
+
+But the prompt doesn't help the agent *triage*. It lists 8 mathematical verification items, 5 notation items, 4 goal items, 8 code items, 4 figure items, and 3 reference items. That's 32 verification tasks. For a 30-page paper, this could require hundreds of tool calls and enormous token expenditure.
+
+The review agent needs *prioritization heuristics* — which things are most likely to be wrong and most important to check?
+
+### Recommendations
+
+**a) Add prioritization guidance:**
+
+```
+Triage your verification effort:
+
+HIGH PRIORITY (check first):
+- Main theorem statements and their proofs
+- Equations referenced by multiple later results (errors propagate)
+- Numerical results that appear in the abstract or conclusion
+- Any result the authors flag as "novel" or "key contribution"
+
+MEDIUM PRIORITY:
+- Supporting lemmas and intermediate results
+- Notation consistency across sections
+- Figure accuracy for figures discussed in the main text
+
+LOW PRIORITY (check if time permits):
+- Formatting and style issues
+- References to well-known results
+- Peripheral remarks and footnotes
+
+If you find a HIGH PRIORITY error, STOP and report it immediately —
+it may invalidate downstream results and change what else needs checking.
+```
+
+**b) Teach the review agent to use Wolfram/computation *strategically*:**
+
+```
+Do not verify every equation computationally. Use computation for:
+- Results that look surprising or counterintuitive
+- Equations with specific numerical values (easy to spot-check)
+- Claims about limits, asymptotics, or special cases (quick to verify)
+- Any equation where you suspect an error based on reading
+
+For straightforward algebraic manipulations, trace them mentally first.
+Only invoke Wolfram when your manual check is uncertain.
+```
+
+---
+
+## Summary of Cognitive Problems
+
+The structural issues from Part I are about *what the prompts say*. The cognitive issues in Part II are about *how the prompts shape thinking*:
+
+| # | Problem | Agents affected | Severity |
+|---|---------|----------------|----------|
+| 16 | Faithfulness-completeness tradeoff | All workflow agents | **Critical** |
+| 17 | Sycophancy / no pushback | All agents | High |
+| 18 | Uneven attention allocation | All workflow agents | High |
+| 19 | Phantom knowledge / hallucination | polish, draw, chat | **Critical** |
+| 20 | Reflection as performance theater | polish, draw, ocr | High |
+| 21 | Context window scaling | _multiple variants | Medium |
+| 22 | No feedback loops in workflows | All workflow agents | High |
+| 23 | Merge as impossible copying task | merge | High |
+| 24 | Missing metacognition | All agents | Medium |
+| 25 | Evaluation without triage | review | Medium |
+
+The three most impactful changes would be:
+1. **Acknowledge the faithfulness problem** (#16) — this is the single biggest source of unintended changes
+2. **Add epistemic honesty rules** (#19) — prevent models from inventing content the authors didn't write
+3. **Reframe reflection as adversarial self-review** (#20) — force genuine critical engagement instead of template-filling
