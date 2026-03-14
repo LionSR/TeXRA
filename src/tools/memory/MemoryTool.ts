@@ -235,7 +235,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         summary: `Listed directory: ${inputPath}`,
         output: [
           `Contents of ${inputPath} (up to 2 levels deep):`,
-          `SIZE\tMODIFIED\tBY\tPINNED\tPATH`,
+          `SIZE\tMODIFIED\tBY\tPATH`,
           ...listing,
         ].join('\n'),
       };
@@ -256,8 +256,13 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const selected = lines.slice(startIndex, endIndex);
     const numbered = formatLinesWithNumbers(selected, startIndex + 1);
 
-    const header = meta
-      ? `Here's the content of ${inputPath} (last modified by: ${formatAttribution(meta)}) with line numbers:`
+    const metaParts: string[] = [];
+    if (meta) {
+      metaParts.push(`last modified by: ${formatAttribution(meta)}`);
+      if (meta.pinned) metaParts.push('[pinned]');
+    }
+    const header = metaParts.length
+      ? `Here's the content of ${inputPath} (${metaParts.join(', ')}) with line numbers:`
       : `Here's the content of ${inputPath} with line numbers:`;
 
     return {
@@ -487,22 +492,21 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
     return Promise.all(
       entries.map(async (entry) => {
-        const display = toDisplayPath(entry.path);
+        let display = toDisplayPath(entry.path);
         const age = formatRelativeTime(entry.mtime);
         let by = '-';
-        let pinned = '-';
         if (!entry.isDir) {
           try {
             const { meta } = await this.readMemoryFile(entry.path);
             if (meta) {
               by = formatAttribution(meta);
-              if (meta.pinned) pinned = '[pinned]';
+              if (meta.pinned) display += ' [pinned]';
             }
           } catch {
             // Unreadable file — skip attribution
           }
         }
-        return `${formatSize(entry.size)}\t${age}\t${by}\t${pinned}\t${display}`;
+        return `${formatSize(entry.size)}\t${age}\t${by}\t${display}`;
       }),
     );
   }
