@@ -11,6 +11,26 @@ const DEFAULT_THEME = {
   fontFamily: 'monospace',
 } as const;
 
+/** VS Code terminal ANSI color CSS variables mapped to xterm.js theme keys. */
+const ANSI_COLOR_MAP = [
+  ['black', '--vscode-terminal-ansiBlack'],
+  ['red', '--vscode-terminal-ansiRed'],
+  ['green', '--vscode-terminal-ansiGreen'],
+  ['yellow', '--vscode-terminal-ansiYellow'],
+  ['blue', '--vscode-terminal-ansiBlue'],
+  ['magenta', '--vscode-terminal-ansiMagenta'],
+  ['cyan', '--vscode-terminal-ansiCyan'],
+  ['white', '--vscode-terminal-ansiWhite'],
+  ['brightBlack', '--vscode-terminal-ansiBrightBlack'],
+  ['brightRed', '--vscode-terminal-ansiBrightRed'],
+  ['brightGreen', '--vscode-terminal-ansiBrightGreen'],
+  ['brightYellow', '--vscode-terminal-ansiBrightYellow'],
+  ['brightBlue', '--vscode-terminal-ansiBrightBlue'],
+  ['brightMagenta', '--vscode-terminal-ansiBrightMagenta'],
+  ['brightCyan', '--vscode-terminal-ansiBrightCyan'],
+  ['brightWhite', '--vscode-terminal-ansiBrightWhite'],
+] as const;
+
 const MIN_SCROLLBACK = 4_000;
 
 /** Maximum visible rows before terminal scrolls internally. */
@@ -58,17 +78,13 @@ export class TerminalOutput extends LitElement {
   };
 
   override firstUpdated(): void {
-    const resolvedTheme = this.resolveThemeFromCssVars();
     this.terminal = new Terminal({
       disableStdin: true,
       convertEol: true,
       scrollback: MIN_SCROLLBACK,
-      fontFamily: resolvedTheme.fontFamily,
+      fontFamily: this.resolveFontFamily(),
       fontSize: 12,
-      theme: {
-        background: resolvedTheme.background,
-        foreground: resolvedTheme.foreground,
-      },
+      theme: this.resolveThemeFromCssVars(),
     });
 
     this.fitAddon = new FitAddon();
@@ -197,24 +213,42 @@ export class TerminalOutput extends LitElement {
     }
   }
 
-  private resolveThemeFromCssVars(): {
-    background: string;
-    foreground: string;
-    fontFamily: string;
-  } {
+  private resolveThemeFromCssVars(): Record<string, string> {
     const styles = getComputedStyle(this);
 
-    const background =
-      styles.getPropertyValue('--vscode-editor-background').trim() ||
-      DEFAULT_THEME.background;
-    const foreground =
-      styles.getPropertyValue('--vscode-editor-foreground').trim() ||
-      DEFAULT_THEME.foreground;
-    const fontFamily =
-      styles.getPropertyValue('--vscode-editor-font-family').trim() ||
-      DEFAULT_THEME.fontFamily;
+    const theme: Record<string, string> = {
+      background:
+        styles.getPropertyValue('--vscode-editor-background').trim() ||
+        DEFAULT_THEME.background,
+      foreground:
+        styles.getPropertyValue('--vscode-editor-foreground').trim() ||
+        DEFAULT_THEME.foreground,
+    };
 
-    return { background, foreground, fontFamily };
+    for (const [key, cssVar] of ANSI_COLOR_MAP) {
+      const value = styles.getPropertyValue(cssVar).trim();
+      if (value) theme[key] = value;
+    }
+
+    const cursor = styles
+      .getPropertyValue('--vscode-terminalCursor-foreground')
+      .trim();
+    if (cursor) theme['cursor'] = cursor;
+
+    const selectionBg = styles
+      .getPropertyValue('--vscode-terminal-selectionBackground')
+      .trim();
+    if (selectionBg) theme['selectionBackground'] = selectionBg;
+
+    return theme;
+  }
+
+  private resolveFontFamily(): string {
+    return (
+      getComputedStyle(this)
+        .getPropertyValue('--vscode-editor-font-family')
+        .trim() || DEFAULT_THEME.fontFamily
+    );
   }
 
   override render() {
