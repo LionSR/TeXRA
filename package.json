@@ -1341,10 +1341,10 @@
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.0",
-    "vite": "^7.3.1",
+    "vite": "^8.0.0",
     "vscode-languageserver-protocol": "^3.17.5",
     "webpack": "^5.105.4",
-    "webpack-cli": "^6.0.1",
+    "webpack-cli": "^7.0.0",
     "zod-v3-to-v4": "^1.19.1"
   },
   "repository": {
@@ -1377,8 +1377,8 @@
   "homepage": "https://texra.ai",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
-    "@cantoo/pdf-lib": "^2.6.1",
-    "@google/genai": "^1.44.0",
+    "@cantoo/pdf-lib": "^2.6.2",
+    "@google/genai": "^1.45.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@lit-labs/signals": "^0.2.0",
     "@lit-labs/virtualizer": "^2.1.1",
@@ -1419,7 +1419,7 @@
     "mutative": "^1.3.0",
     "nanoid": "^5.1.6",
     "node-pandoc": "^0.3.0",
-    "openai": "^6.27.0",
+    "openai": "^6.29.0",
     "p-map": "^7.0.4",
     "pdf2pic": "^3.2.0",
     "perfect-debounce": "^2.1.0",
