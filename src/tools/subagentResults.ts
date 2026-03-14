@@ -465,10 +465,14 @@ export function formatPostCompactionContext(
     return null;
   }
 
-  const lines: string[] = [
-    '<post-compaction-context>',
-    '<note>Your conversation context was compacted (summarized) to free up space. The following state was preserved from before compaction. Any active executions listed below may still be running and their results will be delivered as follow-up messages when they complete.</note>',
-  ];
+  let note =
+    'Your conversation context was compacted (summarized) to free up space. The following state was preserved from before compaction.';
+  if (hasChildren) {
+    note +=
+      ' Any active executions listed below may still be running and their results will be delivered as follow-up messages when they complete.';
+  }
+
+  const lines: string[] = ['<post-compaction-context>', `<note>${note}</note>`];
 
   if (subagents.length > 0) {
     lines.push(`<active-subagents count="${subagents.length}">`);
