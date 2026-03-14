@@ -302,20 +302,26 @@ async function importCodexClass(): Promise<
 
   // Normal named export
   if (typeof mod.Codex === 'function') {
+    console.log('[Codex] Imported via named export (mod.Codex)');
     return mod.Codex as never;
   }
 
   // Wrapped under default (some ESM/CJS interop scenarios)
   const def = mod.default as Record<string, unknown> | undefined;
   if (def && typeof def.Codex === 'function') {
+    console.log('[Codex] Imported via default wrapper (mod.default.Codex)');
     return def.Codex as never;
   }
 
   // Default export IS the class (unlikely, but defensive)
   if (typeof def === 'function') {
+    console.log('[Codex] Imported via default export (mod.default)');
     return def as never;
   }
 
+  console.log(
+    `[Codex] Import failed. Module keys: [${Object.keys(mod).join(', ')}]`,
+  );
   throw new Error(
     'Failed to import Codex class from @openai/codex-sdk. ' +
       `Module keys: [${Object.keys(mod).join(', ')}]`,
