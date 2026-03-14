@@ -710,7 +710,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       const fileUri = vscode.Uri.file(absolutePath);
 
       // Open markdown files in preview mode (read-only rendered view)
-      if (absolutePath.endsWith('.md')) {
+      if (absolutePath.toLowerCase().endsWith('.md')) {
         await vscode.commands.executeCommand(
           'markdown.showPreview',
           fileUri,
