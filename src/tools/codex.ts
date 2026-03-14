@@ -131,32 +131,22 @@ function collectFileChanges(
     .flatMap((i) => i.changes);
 }
 
-/** Format a completed Codex turn into a readable string. */
+/**
+ * Format a completed Codex turn for the tool result returned to the LLM.
+ *
+ * Only includes the final model response (what the LLM needs to act on) plus
+ * a compact usage note. Intermediate details (commands run, files changed) are
+ * streamed to the UI via onToolOutput and don't need to be in the result.
+ */
 function formatTurnResult(turn: RunResult): string {
   const parts: string[] = [];
 
-  // File changes
-  const changes = collectFileChanges(turn.items);
-  if (changes.length > 0) {
-    parts.push(
-      `Files changed: ${changes.map((c) => `${c.kind} ${c.path}`).join(', ')}`,
-    );
-  }
-
-  // Commands executed
-  for (const item of turn.items) {
-    if (item.type === 'command_execution') {
-      const status = item.exit_code === 0 ? 'ok' : `exit ${item.exit_code}`;
-      parts.push(`Command: ${item.command} (${status})`);
-    }
-  }
-
-  // Final response
   if (turn.finalResponse) {
     parts.push(turn.finalResponse);
+  } else {
+    parts.push('(no response)');
   }
 
-  // Usage
   if (turn.usage) {
     parts.push(
       `[Tokens: ${turn.usage.input_tokens} in / ${turn.usage.output_tokens} out]`,
