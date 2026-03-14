@@ -29,7 +29,9 @@ import {
   GetMemoryEnabledMessageSchema,
   OpenMemoryFileMessageSchema,
   OpenMemoryFolderMessageSchema,
+  PinMemoryMessageSchema,
   SetMemoryEnabledMessageSchema,
+  UnpinMemoryMessageSchema,
 } from './memoryViewMessages';
 import {
   ClearHistoryMessageSchema,
@@ -567,6 +569,8 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     DeleteMemoryMessageSchema,
     GetMemoryEnabledMessageSchema,
     SetMemoryEnabledMessageSchema,
+    PinMemoryMessageSchema,
+    UnpinMemoryMessageSchema,
     // History messages
     GetHistoryDataMessageSchema,
     RerunAgentMessageSchema,
