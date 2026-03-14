@@ -82,6 +82,7 @@ import { ensureRunDir } from '@utils/files/taskRunStorage';
 
 // Local file imports
 import { defineTool } from './core/define';
+import { importCodexClass } from './codexImport';
 
 // ============================================================================
 // Schema
@@ -222,7 +223,7 @@ export class CodexTool extends defineTool({
     'Spin off an OpenAI Codex agent to perform code analysis, generation, or research in a sandboxed environment. ' +
     'The agent runs the Codex CLI locally and can read files, run commands, and make edits within its sandbox. ' +
     'Requires the Codex CLI to be installed (`npm install -g @openai/codex`). ' +
-    'Auth is handled by the CLI itself (`codex login` or OPENAI_API_KEY env var).',
+    'Auth is handled by the CLI itself — use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var.',
   schema: CodexInputSchema,
 }) {
   protected async execute(input: CodexInput): Promise<ToolResult> {
@@ -241,7 +242,7 @@ export class CodexTool extends defineTool({
     ctx?.onExecutionReady?.();
 
     // Dynamic import — resolved at runtime, not bundled (see webpack externals)
-    const { Codex } = await import('@openai/codex-sdk');
+    const Codex = await importCodexClass();
 
     const codex = new Codex();
     const thread = codex.startThread({
