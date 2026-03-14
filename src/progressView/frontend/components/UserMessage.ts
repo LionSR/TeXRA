@@ -101,7 +101,6 @@ export class UserMessage extends LitElement {
 
   private copyController = new CopyButtonController(this, {
     defaultTitle: 'Copy message',
-    successTitle: 'Copied!',
   });
 
   override render(): TemplateResult {
