@@ -26,6 +26,8 @@ export const MemoryViewItemSchema = z.object({
   preview: z.string(),
   /** Agent that last modified this file (from frontmatter attribution). */
   modifiedBy: z.string().optional(),
+  /** Whether this memory is pinned as a core long-term insight. */
+  pinned: z.boolean().optional(),
 });
 export type MemoryViewItem = z.infer<typeof MemoryViewItemSchema>;
 
@@ -107,6 +109,14 @@ export const SetMemoryEnabledMessageSchema = z.object({
   enabled: z.boolean(),
 });
 
+export const PinMemoryMessageSchema = MemoryPathMessageSchema.extend({
+  command: z.literal(MEMORY_VIEW_COMMANDS.PIN_MEMORY),
+});
+
+export const UnpinMemoryMessageSchema = MemoryPathMessageSchema.extend({
+  command: z.literal(MEMORY_VIEW_COMMANDS.UNPIN_MEMORY),
+});
+
 // ============================================================
 // Discriminated union of all inbound messages
 // ============================================================
@@ -118,6 +128,8 @@ export const MemoryViewInboundMessageSchema = z.discriminatedUnion('command', [
   DeleteMemoryMessageSchema,
   GetMemoryEnabledMessageSchema,
   SetMemoryEnabledMessageSchema,
+  PinMemoryMessageSchema,
+  UnpinMemoryMessageSchema,
 ]);
 
 export type MemoryViewInboundMessage = z.infer<

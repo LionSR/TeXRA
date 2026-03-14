@@ -81,7 +81,16 @@ import {
   _disableAllProposalBypasses,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
-import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
+import {
+  MEMORY_STORAGE_ROOT,
+  MAX_PINNED_MEMORIES,
+} from '@tools/memory/constants';
+import {
+  parseFrontmatter,
+  buildFile,
+  setPinnedMeta,
+  countPinnedMemories,
+} from '@tools/memory/memoryMeta';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
@@ -319,6 +328,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.withActiveWebview((w) => this.sendMemoryEnabled(w)),
       [SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED]: (data) =>
         this.handleSetMemoryEnabled(data),
+      [SETTINGS_VIEW_COMMANDS.PIN_MEMORY]: (data) => this.handlePinMemory(data),
+      [SETTINGS_VIEW_COMMANDS.UNPIN_MEMORY]: (data) =>
+        this.handleUnpinMemory(data),
 
       // History handlers
       [SETTINGS_VIEW_COMMANDS.GET_HISTORY_DATA]: () =>
@@ -767,6 +779,63 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     await setToolUseMemoryEnabled(data.enabled);
     await this.withActiveWebview((w) => this.sendMemoryEnabled(w));
+  }
+
+  private async handlePinMemory(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.PIN_MEMORY>,
+  ): Promise<void> {
+    try {
+      const resolvedPath = resolveMemoryStoragePath(data.storagePath);
+      const raw = await StorageFS.read(resolvedPath);
+      const { meta, content } = parseFrontmatter(raw);
+
+      if (meta?.pinned) {
+        // Already pinned — still refresh to sync potentially stale UI
+        await this.withActiveWebview((w) => this.sendMemoryData(w));
+        return;
+      }
+
+      // Count current pinned memories to enforce limit (short-circuits at max)
+      const pinnedCount = await countPinnedMemories(MAX_PINNED_MEMORIES);
+      if (pinnedCount >= MAX_PINNED_MEMORIES) {
+        void vscode.window.showWarningMessage(
+          `Cannot pin: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
+        );
+        return;
+      }
+
+      const updatedMeta = setPinnedMeta(meta, true);
+      await StorageFS.write(resolvedPath, buildFile(content, updatedMeta));
+      await this.withActiveWebview((w) => this.sendMemoryData(w));
+    } catch (error) {
+      await showLoggedErrorMessage(this.channel, 'Failed to pin memory', error);
+    }
+  }
+
+  private async handleUnpinMemory(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.UNPIN_MEMORY>,
+  ): Promise<void> {
+    try {
+      const resolvedPath = resolveMemoryStoragePath(data.storagePath);
+      const raw = await StorageFS.read(resolvedPath);
+      const { meta, content } = parseFrontmatter(raw);
+
+      if (!meta?.pinned) {
+        // Already unpinned — still refresh to sync potentially stale UI
+        await this.withActiveWebview((w) => this.sendMemoryData(w));
+        return;
+      }
+
+      const updatedMeta = setPinnedMeta(meta, false);
+      await StorageFS.write(resolvedPath, buildFile(content, updatedMeta));
+      await this.withActiveWebview((w) => this.sendMemoryData(w));
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to unpin memory',
+        error,
+      );
+    }
   }
 
   // ============================================================
