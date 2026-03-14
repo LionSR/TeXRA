@@ -514,8 +514,6 @@ export class CodexTool extends defineTool({
         const store = getExecutionStore(executionId);
 
         await writeTerminalStatus(executionId, 'completed').catch(() => {});
-        untrackExecution(executionId);
-        cleanupTempFiles();
 
         const msg = formatCodexDelivery(
           executionId,
@@ -528,12 +526,14 @@ export class CodexTool extends defineTool({
       })
       .catch(async (err: unknown) => {
         await writeTerminalStatus(executionId, 'error').catch(() => {});
-        untrackExecution(executionId);
-        cleanupTempFiles();
 
         const msg = formatCodexError(executionId, input.prompt, err);
         await getExecutionStore(executionId).writeReport(msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
+      })
+      .finally(() => {
+        untrackExecution(executionId);
+        cleanupTempFiles();
       });
 
     return {
