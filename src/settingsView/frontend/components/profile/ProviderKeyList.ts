@@ -24,9 +24,6 @@ const STATUS_LABELS: Record<ProviderKeyStatus['status'], string> = {
   'not-set': 'Not Set',
 };
 
-/** Providers that have no per-provider streaming config (Wolfram uses a different protocol). */
-const NO_STREAMING_PROVIDERS = new Set(['wolframllmapp']);
-
 @customElement('provider-key-list')
 export class ProviderKeyList extends LitElement {
   static override styles = [
@@ -43,12 +40,9 @@ export class ProviderKeyList extends LitElement {
 
   @state() private expandedProvider: string | null = null;
 
-  private hasSettings(entry: ProviderKeyStatus): boolean {
-    return (
-      !NO_STREAMING_PROVIDERS.has(entry.provider) ||
-      entry.supportsCustomEndpoint ||
-      entry.vscodeSettings.length > 0
-    );
+  /** All providers have at least a streaming toggle, so settings are always available. */
+  private hasSettings(_entry: ProviderKeyStatus): boolean {
+    return true;
   }
 
   private toggleExpanded(provider: string): void {
@@ -91,10 +85,7 @@ export class ProviderKeyList extends LitElement {
   }
 
   private renderDetailRow(entry: ProviderKeyStatus): TemplateResult {
-    const hasStreaming = !NO_STREAMING_PROVIDERS.has(entry.provider);
-
-    const streamingToggle = hasStreaming
-      ? html`
+    const streamingToggle = html`
           <div class="provider-setting">
             <vscode-checkbox
               ?checked=${entry.streaming}
@@ -111,8 +102,7 @@ export class ProviderKeyList extends LitElement {
               Streaming
             </vscode-checkbox>
           </div>
-        `
-      : nothing;
+        `;
 
     const endpointInput = entry.supportsCustomEndpoint
       ? html`
