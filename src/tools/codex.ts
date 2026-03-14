@@ -119,18 +119,6 @@ export type CodexInput = z.infer<typeof CodexInputSchema>;
 // Result formatting
 // ============================================================================
 
-/** Extract file change summaries from a list of thread items. */
-function collectFileChanges(
-  items: readonly ThreadItem[],
-): { kind: string; path: string }[] {
-  return items
-    .filter(
-      (i): i is ThreadItem & { type: 'file_change' } =>
-        i.type === 'file_change',
-    )
-    .flatMap((i) => i.changes);
-}
-
 /**
  * Format a completed Codex turn for the tool result returned to the LLM.
  *
@@ -168,16 +156,8 @@ function formatCodexDelivery(
   const lines = [
     `<codex-result id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, 200))}">`,
     `<wall-time>${durationSec}s</wall-time>`,
+    `<response>${escapeText(response)}</response>`,
   ];
-
-  const changes = collectFileChanges(turn.items);
-  if (changes.length > 0) {
-    lines.push(
-      `<files-changed>${escapeText(changes.map((c) => `${c.kind} ${c.path}`).join(', '))}</files-changed>`,
-    );
-  }
-
-  lines.push(`<response>${escapeText(response)}</response>`);
 
   if (turn.usage) {
     lines.push(
@@ -378,23 +358,7 @@ export class CodexTool extends defineTool({
           const { item } = event as ItemCompletedEvent;
           items.push(item);
 
-          // Progress updates for the orchestrator
-          if (item.type === 'command_execution') {
-            ToolUseFollowUpQueue.enqueue(
-              parentStreamId,
-              `Running: ${item.command}`,
-            );
-          } else if (item.type === 'file_change') {
-            const changed = item.changes
-              .map((c) => `${c.kind} ${c.path}`)
-              .join(', ');
-            if (changed) {
-              ToolUseFollowUpQueue.enqueue(
-                parentStreamId,
-                `Codex file changes: ${changed}`,
-              );
-            }
-          } else if (item.type === 'agent_message') {
+          if (item.type === 'agent_message') {
             responseParts.push(item.text);
           }
         } else if (event.type === 'turn.completed') {
