@@ -212,10 +212,15 @@ async function executeSubagent(
       // For workflow results, compute diffs and write them as files to the
       // execution's run directory. The delivery references diff file paths
       // so the orchestrator can read them on demand via /executions/{id}/files/.
-      let diffInfos: Awaited<ReturnType<typeof computeAndWriteWorkflowDiffs>> | undefined;
+      let diffInfos:
+        | Awaited<ReturnType<typeof computeAndWriteWorkflowDiffs>>
+        | undefined;
       if (result.category === 'workflow' && result.outputs.length > 0) {
         try {
-          diffInfos = await computeAndWriteWorkflowDiffs(executionId, result.outputs);
+          diffInfos = await computeAndWriteWorkflowDiffs(
+            executionId,
+            result.outputs,
+          );
         } catch {
           // Diff computation failure is non-fatal — deliver without diffs.
         }
