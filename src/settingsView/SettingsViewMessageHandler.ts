@@ -729,10 +729,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       // Open markdown files in preview mode (read-only rendered view)
       if (absolutePath.toLowerCase().endsWith('.md')) {
-        await vscode.commands.executeCommand(
-          'markdown.showPreview',
-          fileUri,
-        );
+        await vscode.commands.executeCommand('markdown.showPreview', fileUri);
       } else {
         const doc = await vscode.workspace.openTextDocument(fileUri);
         await vscode.window.showTextDocument(doc, { preview: false });

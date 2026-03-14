@@ -48,7 +48,10 @@ const LARGE_CHANGE_RATIO = 0.4;
  * diff_charsToLines_) to produce clean whole-line diffs with +/- prefixes.
  * Returns null if the strings are identical.
  */
-function computeReadableDiff(original: string, modified: string): string | null {
+function computeReadableDiff(
+  original: string,
+  modified: string,
+): string | null {
   const dmp = new diff_match_patch();
 
   // Convert to line-mode: each line becomes a single "character" so
@@ -213,7 +216,9 @@ function formatWorkflowOutputs(
   if (rounds.size <= 1) {
     return [
       '<output-files>',
-      ...outputs.map((o) => formatOutputFile(o, diffInfos?.get(o.absolutePath))),
+      ...outputs.map((o) =>
+        formatOutputFile(o, diffInfos?.get(o.absolutePath)),
+      ),
       '</output-files>',
     ];
   }
