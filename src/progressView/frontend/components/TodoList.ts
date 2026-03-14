@@ -1,6 +1,13 @@
 // Third-party imports
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import {
+  LitElement,
+  html,
+  css,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
+import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
 
@@ -95,6 +102,15 @@ export class TodoList extends LitElement {
 
   @property({ attribute: false }) todos: TodoItem[] = [];
 
+  /** Open state — managed internally. Auto-opens when todos are updated. */
+  @state() private open = true;
+
+  protected override willUpdate(changed: PropertyValues): void {
+    if (changed.has('todos') && this.todos.length > 0 && !this.open) {
+      this.open = true;
+    }
+  }
+
   override render(): TemplateResult | typeof nothing {
     if (this.todos.length === 0) {
       return nothing;
@@ -110,6 +126,8 @@ export class TodoList extends LitElement {
         id=${ELEMENT_IDS.TODO_LIST_CONTAINER}
         class="todo-collapsible panel-collapsible"
         title=${`Todos (${completed}/${total})`}
+        ?open=${this.open}
+        @vsc-collapsible-toggle=${this.handleCollapsibleToggle}
       >
         <div id=${ELEMENT_IDS.TODO_LIST} class="todo-list">
           ${repeat(
@@ -150,5 +168,9 @@ export class TodoList extends LitElement {
         <span class="todo-item__content">${content}</span>
       </div>
     `;
+  }
+
+  private handleCollapsibleToggle(e: CustomEvent<{ open?: boolean }>): void {
+    this.open = e.detail?.open ?? this.open;
   }
 }
