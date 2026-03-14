@@ -19,7 +19,7 @@ import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 import type { RegisteredToolName } from '@tools/registry';
 import { getZoteroPort } from '@tools/zotero/bbtClient';
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import { importCodexClass } from '@tools/codexImport';
+import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
 
 const LEAN4_EXT_ID = 'leanprover.lean4';
 
@@ -210,10 +210,9 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     description:
       'OpenAI Codex agent runtime. Required by the Codex SDK for local code generation and analysis.',
     installGuide:
-      'Install the Codex CLI via npm:\n\n' +
+      'Install the Codex CLI globally:\n\n' +
       '  npm install -g @openai/codex\n\n' +
-      'The CLI includes platform-specific binaries that the SDK\n' +
-      'spawns as a child process.\n\n' +
+      'This installs the SDK and platform-specific CLI binaries.\n\n' +
       'Authentication (choose one):\n' +
       '  • codex login        — OAuth sign-in (recommended)\n' +
       '  • OPENAI_API_KEY     — environment variable with API key',
@@ -223,32 +222,39 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'Supports OAuth via `codex login` or OPENAI_API_KEY env var.',
     check: async () => {
       try {
-        const Codex = await importCodexClass();
-        // Constructor resolves the binary path — throws if not found
-        new Codex();
-        return true;
+        await importCodexClass();
+        const codexPath = findCodexBinaryPath();
+        return codexPath != null;
       } catch {
         return false;
       }
     },
     detailCheck: async () => {
+      // Step 1: Can we import the SDK?
       try {
-        const Codex = await importCodexClass();
-        new Codex();
-        return 'Codex CLI binary found. Ready for SDK use.';
+        await importCodexClass();
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes('Unable to locate')) {
-          return 'Codex CLI binaries not found. Install @openai/codex with optional dependencies.';
+        if (
+          msg.includes('not found') ||
+          msg.includes('MODULE_NOT_FOUND') ||
+          msg.includes('Cannot find package')
+        ) {
+          return '@openai/codex-sdk not found. Install with: npm install -g @openai/codex';
         }
         if (msg.includes('Unsupported platform')) {
           return `Platform not supported: ${msg}`;
         }
-        if (msg.includes('not a constructor') || msg.includes('Failed to import')) {
-          return 'Codex SDK import failed — ESM/CJS interop issue. Try reinstalling: npm install @openai/codex-sdk';
-        }
-        return `Codex CLI check failed: ${msg}`;
+        return `Codex SDK import failed: ${msg}`;
       }
+
+      // Step 2: Can we find the native binary?
+      const codexPath = findCodexBinaryPath();
+      if (!codexPath) {
+        return 'Codex SDK loaded but native binary not found. Install with: npm install -g @openai/codex';
+      }
+
+      return `Codex CLI ready. Binary: ${codexPath}`;
     },
   },
 
