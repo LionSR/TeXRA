@@ -7,23 +7,41 @@
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, queryAll } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+import MarkdownIt from 'markdown-it';
 import Mark from 'mark.js';
 
-// Local imports - shared styles
+// Local imports - shared
+import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 import {
   badgeStyles,
   codiconStyles,
   commonViewStyles,
   designTokens,
 } from '@shared/styles';
-import type { HistoryItem as HistoryItemData } from '@shared/schemas';
+import { markdownStyles } from '@shared/styles/markdownStyles';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
+import { highlightCode } from '@shared/highlighting/highlightCode';
 
 // Local imports - history view styles
 import { historyViewStyles } from './styles';
 
 // Local imports - history view events
 import { HistoryViewEvents } from './events';
+
+/** Lazy-initialized lightweight markdown renderer (no LaTeX/KaTeX). */
+let md: MarkdownIt | null = null;
+const getMd = (): MarkdownIt => {
+  if (!md) {
+    md = new MarkdownIt({
+      breaks: false,
+      linkify: true,
+      html: false,
+      highlight: highlightCode,
+    });
+  }
+  return md;
+};
 
 type ConfigValue = string | number | boolean | string[] | null | undefined;
 
@@ -35,6 +53,7 @@ export class HistoryItem extends LitElement {
     commonViewStyles,
     ...badgeStyles,
     historyViewStyles,
+    markdownStyles,
   ];
 
   @property({ attribute: false }) item?: HistoryItemData;
@@ -45,6 +64,10 @@ export class HistoryItem extends LitElement {
   private markInstance: Mark | null = null;
   private previousHighlightedIndex: number | null = null;
   private previousItemId: string | undefined = undefined;
+
+  /** Cached markdown render to avoid re-parsing on every Lit update cycle. */
+  private cachedInstructionSource: string | null = null;
+  private cachedInstructionHtml = '';
 
   @queryAll('mark')
   private markElements!: HTMLElement[];
@@ -73,6 +96,14 @@ export class HistoryItem extends LitElement {
       this.markInstance = null;
     }
     this.previousHighlightedIndex = null;
+  }
+
+  private renderMarkdown(text: string): string {
+    if (text !== this.cachedInstructionSource) {
+      this.cachedInstructionSource = text;
+      this.cachedInstructionHtml = getMd().render(text);
+    }
+    return this.cachedInstructionHtml;
   }
 
   private handleAction(action: string): void {
@@ -310,11 +341,11 @@ export class HistoryItem extends LitElement {
           <span class="history-label">Model:</span>
           <span class="history-value">${config.model ?? 'Unknown'}</span>
           <span class="history-label">Instruction:</span>
-          <span class="history-value">
+          <div class="history-value">
             ${instructionText
-              ? instructionText
+              ? html`<div class="markdown-content">${unsafeHTML(this.renderMarkdown(instructionText))}</div>`
               : html`<em class="history-none">Not set</em>`}
-          </span>
+          </div>
           <span class="history-label">InputFile:</span>
           <span class="history-value"> ${config.inputFile || 'None'} </span>
           ${config.inputFiles?.length
