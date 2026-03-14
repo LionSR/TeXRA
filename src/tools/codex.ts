@@ -9,48 +9,115 @@
  * externalToolDefs.ts.
  */
 
+// Node builtins
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
 // Third-party imports
 import { z } from 'zod';
 
 // ---------------------------------------------------------------------------
 // Codex SDK types — defined locally to avoid a static import of the optional
 // @openai/codex-sdk package, which is ESM-only and breaks webpack CJS builds.
+// These mirror the canonical types from @openai/codex-sdk/dist/index.d.ts.
 // ---------------------------------------------------------------------------
 
 type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
 
-interface ThreadItem {
-  type: string;
-  // file_change items
-  changes: { kind: string; path: string }[];
-  // command_execution items
-  command: string;
-  exit_code: number;
-  // agent_message items
-  text: string;
-}
+// -- Thread items (discriminated union) ------------------------------------
 
-interface RunResult {
+type CommandExecutionItem = {
+  id: string;
+  type: 'command_execution';
+  command: string;
+  aggregated_output: string;
+  exit_code?: number;
+  status: 'in_progress' | 'completed' | 'failed';
+};
+
+type FileUpdateChange = { path: string; kind: 'add' | 'delete' | 'update' };
+
+type FileChangeItem = {
+  id: string;
+  type: 'file_change';
+  changes: FileUpdateChange[];
+  status: 'completed' | 'failed';
+};
+
+type AgentMessageItem = {
+  id: string;
+  type: 'agent_message';
+  text: string;
+};
+
+type ReasoningItem = {
+  id: string;
+  type: 'reasoning';
+  text: string;
+};
+
+type ErrorItem = {
+  id: string;
+  type: 'error';
+  message: string;
+};
+
+// We only need to discriminate on types we handle; the rest share a common shape.
+type OtherItem = {
+  id: string;
+  type: 'web_search' | 'mcp_tool_call' | 'todo_list';
+};
+
+type ThreadItem =
+  | CommandExecutionItem
+  | FileChangeItem
+  | AgentMessageItem
+  | ReasoningItem
+  | ErrorItem
+  | OtherItem;
+
+// -- Usage -----------------------------------------------------------------
+
+type Usage = {
+  input_tokens: number;
+  cached_input_tokens: number;
+  output_tokens: number;
+};
+
+// -- Turn / RunResult ------------------------------------------------------
+
+type Turn = {
   items: ThreadItem[];
-  finalResponse: string | null;
-  usage: { input_tokens: number; output_tokens: number } | null;
-}
+  finalResponse: string;
+  usage: Usage | null;
+};
+
+type RunResult = Turn;
+
+// -- Thread ----------------------------------------------------------------
 
 interface Thread {
   run(prompt: string): Promise<RunResult>;
-  runStreamed(prompt: string): Promise<{ events: AsyncIterable<CodexEvent> }>;
+  runStreamed(
+    prompt: string,
+  ): Promise<{ events: AsyncIterable<ThreadEvent> }>;
 }
 
-interface CodexEvent {
-  type: string;
-  item?: ThreadItem;
-  usage?: RunResult['usage'];
-  error?: { message: string };
-}
+// -- Events (discriminated union) ------------------------------------------
 
-type ItemCompletedEvent = CodexEvent & { item: ThreadItem };
-type TurnCompletedEvent = CodexEvent & { usage: RunResult['usage'] };
-type TurnFailedEvent = CodexEvent & { error: { message: string } };
+type ItemCompletedEvent = { type: 'item.completed'; item: ThreadItem };
+type TurnCompletedEvent = { type: 'turn.completed'; usage: Usage };
+type TurnFailedEvent = { type: 'turn.failed'; error: { message: string } };
+type ThreadEvent =
+  | { type: 'thread.started'; thread_id: string }
+  | { type: 'turn.started' }
+  | TurnCompletedEvent
+  | TurnFailedEvent
+  | { type: 'item.started'; item: ThreadItem }
+  | { type: 'item.updated'; item: ThreadItem }
+  | ItemCompletedEvent
+  | { type: 'error'; message: string };
 
 // Local imports - agent
 import {
@@ -183,6 +250,35 @@ function formatCodexError(
   ].join('\n');
 }
 
+/** Format a completed thread item as a human-readable log line for the process view. */
+function formatItemForLog(item: ThreadItem): string {
+  switch (item.type) {
+    case 'command_execution': {
+      const status =
+        item.exit_code === undefined
+          ? item.status
+          : item.exit_code === 0
+            ? 'ok'
+            : `exit ${item.exit_code}`;
+      return `$ ${item.command} (${status})\n`;
+    }
+    case 'file_change': {
+      const changed = item.changes
+        .map((c) => `${c.kind} ${c.path}`)
+        .join(', ');
+      return changed ? `Files: ${changed}\n` : '';
+    }
+    case 'agent_message':
+      return `${item.text}\n`;
+    case 'reasoning':
+      return `[reasoning] ${item.text}\n`;
+    case 'error':
+      return `Error: ${item.message}\n`;
+    default:
+      return '';
+  }
+}
+
 // ============================================================================
 // Tool
 // ============================================================================
@@ -269,28 +365,24 @@ export class CodexTool extends defineTool({
     let usage: RunResult['usage'] = null;
 
     for await (const event of events) {
-      if (event.type === 'item.completed') {
-        const { item } = event as ItemCompletedEvent;
-        items.push(item);
-
-        if (item.type === 'command_execution') {
-          const status = item.exit_code === 0 ? 'ok' : `exit ${item.exit_code}`;
-          onToolOutput(`Command: ${item.command} (${status})\n`);
-        } else if (item.type === 'file_change') {
-          const changed = item.changes
-            .map((c) => `${c.kind} ${c.path}`)
-            .join(', ');
-          if (changed) onToolOutput(`Files changed: ${changed}\n`);
-        } else if (item.type === 'agent_message') {
-          responseParts.push(item.text);
-          onToolOutput(item.text + '\n');
+      switch (event.type) {
+        case 'item.completed': {
+          const { item } = event;
+          items.push(item);
+          const line = formatItemForLog(item);
+          if (line) onToolOutput(line);
+          if (item.type === 'agent_message') {
+            responseParts.push(item.text);
+          }
+          break;
         }
-      } else if (event.type === 'turn.completed') {
-        usage = (event as TurnCompletedEvent).usage ?? null;
-      } else if (event.type === 'turn.failed') {
-        throw new ToolError(
-          (event as TurnFailedEvent).error.message ?? 'Codex turn failed',
-        );
+        case 'turn.completed':
+          usage = event.usage ?? null;
+          break;
+        case 'turn.failed':
+          throw new ToolError(
+            event.error.message ?? 'Codex turn failed',
+          );
       }
     }
 
@@ -324,12 +416,28 @@ export class CodexTool extends defineTool({
       instruction: input.prompt,
     });
 
+    // Temp file for live output — the execution registry poller reads this
+    // incrementally and surfaces it in the clickable process view.
+    const stdoutPath = path.join(
+      os.tmpdir(),
+      `texra-bg-${executionId}-stdout.log`,
+    );
+    const stderrPath = path.join(
+      os.tmpdir(),
+      `texra-bg-${executionId}-stderr.log`,
+    );
+    const stdoutStream = fs.createWriteStream(stdoutPath, { flags: 'a' });
+    const stderrStream = fs.createWriteStream(stderrPath, { flags: 'a' });
+    stdoutStream.on('error', () => {}); // prevent unhandled emitter crash
+    stderrStream.on('error', () => {});
+
     const handle = new ProcessExecutionHandle(
       executionId,
       parentStreamId,
       preview,
       () => false, // Codex SDK doesn't expose PID for kill — AbortController would be future work
     );
+    handle.outputPaths = { stdout: stdoutPath, stderr: stderrPath };
 
     try {
       await registerExecution(
@@ -340,12 +448,22 @@ export class CodexTool extends defineTool({
         'process',
       );
     } catch {
+      stdoutStream.end();
+      stderrStream.end();
       throw new ToolError('Failed to register background Codex execution.');
     }
 
     trackExecution(handle);
 
     const startedAt = Date.now();
+
+    const cleanupTempFiles = (): void => {
+      stdoutStream.end();
+      stderrStream.end();
+      handle.outputPaths = undefined;
+      void fs.promises.unlink(stdoutPath).catch(() => {});
+      void fs.promises.unlink(stderrPath).catch(() => {});
+    };
 
     const promise = (async (): Promise<RunResult> => {
       const { events } = await thread.runStreamed(input.prompt);
@@ -355,15 +473,18 @@ export class CodexTool extends defineTool({
       for await (const event of events) {
         if (event.type === 'item.completed') {
           const { item } = event as ItemCompletedEvent;
+          // Write readable progress to the temp file for the process view
+          stdoutStream.write(formatItemForLog(item));
           if (item.type === 'agent_message') {
             responseParts.push(item.text);
           }
         } else if (event.type === 'turn.completed') {
           usage = (event as TurnCompletedEvent).usage ?? null;
         } else if (event.type === 'turn.failed') {
-          throw new Error(
-            (event as TurnFailedEvent).error.message ?? 'Codex turn failed',
-          );
+          const msg =
+            (event as TurnFailedEvent).error.message ?? 'Codex turn failed';
+          stderrStream.write(`Error: ${msg}\n`);
+          throw new Error(msg);
         }
       }
 
@@ -381,6 +502,7 @@ export class CodexTool extends defineTool({
 
         await writeTerminalStatus(executionId, 'completed').catch(() => {});
         untrackExecution(executionId);
+        cleanupTempFiles();
 
         const msg = formatCodexDelivery(
           executionId,
@@ -394,6 +516,7 @@ export class CodexTool extends defineTool({
       .catch(async (err: unknown) => {
         await writeTerminalStatus(executionId, 'error').catch(() => {});
         untrackExecution(executionId);
+        cleanupTempFiles();
 
         const msg = formatCodexError(executionId, input.prompt, err);
         await getExecutionStore(executionId).writeReport(msg);
