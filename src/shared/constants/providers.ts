@@ -64,7 +64,7 @@ const PROVIDER_REGISTRY = [
   },
   {
     id: ModelProvider.DASHSCOPE,
-    displayName: 'DashScope',
+    displayName: 'Qwen',
     hasServerKey: true,
     keyUrl: 'https://dashscope.aliyun.com/api-console/',
   },
@@ -199,7 +199,7 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
       key: GlobalStateKey.DASHSCOPE_USE_CHINA,
       label: 'China Region (Bailian)',
       description:
-        'Use the China region endpoint (dashscope.aliyuncs.com) instead of international (dashscope-intl.aliyuncs.com). Provider displays as "Bailian".',
+        'Use the China region endpoint (dashscope.aliyuncs.com) instead of international (dashscope-intl.aliyuncs.com). Display name switches to "Bailian".',
       globalStateKey: GlobalStateKey.DASHSCOPE_USE_CHINA,
     },
   ],
