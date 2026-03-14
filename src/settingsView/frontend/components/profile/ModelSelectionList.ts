@@ -278,7 +278,7 @@ export class ModelSelectionList extends LitElement {
 
     return html`
       <div class="model-selection-section">
-        <h2>Model Selection</h2>
+        <h2>Models & API</h2>
         ${this.renderHelperModelDropdown()}
         <div class="short-names-toggle">
           <vscode-checkbox
