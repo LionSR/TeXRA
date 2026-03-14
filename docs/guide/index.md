@@ -73,7 +73,7 @@ The agent system is built on three established AI design patterns:
 | Fix LaTeX errors     | `correct`                     | Finds and repairs compilation errors, notation inconsistencies, broken references, and formatting issues across multi-file projects.                     |
 | Generate figures     | `draw`                        | Creates TikZ diagrams — commutative diagrams, Feynman diagrams, phase portraits, lattice structures. Compiles and visually verifies every figure.        |
 | Search literature    | `research`                    | Queries arXiv, Crossref, Zotero. Returns verified citations with BibTeX — no hallucinated references.                                                    |
-| Verify manuscript    | `review`                      | Systematically audits mathematical correctness, derivation soundness, notation consistency, and goal achievement.                                         |
+| Verify manuscript    | `review`                      | Systematically audits mathematical correctness, derivation soundness, notation consistency, and goal achievement.                                        |
 | Work with Lean 4     | `lean`                        | Search Mathlib theorems via Loogle by type signature, inspect proof states, check diagnostics, manage builds and cache.                                  |
 | Symbolic computation | `research`                    | Run WolframScript to evaluate integrals, check identities, simplify expressions, or verify numerical results.                                            |
 | Build slide decks    | `presenter`                   | Reads your paper, drafts a Beamer deck that preserves logical structure — definitions before theorems, diagrams in TikZ. Compiles and checks every page. |
