@@ -37,6 +37,7 @@ CLAUDE.md
 !node_modules/@vscode/codicons/dist/**
 !node_modules/split.js/**
 !node_modules/@vscode-elements/elements/dist/**
+!node_modules/@openai/codex-sdk/**
 
 # Exclude codicon font AFTER negations (loaded via VS Code webview URI, not bundled)
 **/codicon.ttf
