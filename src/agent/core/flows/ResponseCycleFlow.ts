@@ -648,7 +648,12 @@ export function createResponseCycleFlow<C>(): Flow<
     },
     getPostCompactionContext: (services) => {
       const { subagents, processes } = getActiveChildren(services.streamId);
-      return formatPostCompactionContext(subagents, processes);
+      return formatPostCompactionContext(
+        subagents,
+        processes,
+        services.workspace.todos.todos,
+        services.workspace.plan.plan,
+      );
     },
     getDebugSaveOptions: (shared, services) => ({
       context: {
