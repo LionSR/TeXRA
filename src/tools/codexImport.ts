@@ -103,7 +103,7 @@ function findCodexBinaryPathUncached(): string | undefined {
     const codexOnPath = execSync(whichCmd, {
       encoding: 'utf8',
       timeout: 5000,
-    }).trim().split('\n')[0]; // `where` on Windows may return multiple
+    }).trim().split(/\r?\n/)[0]; // `where` on Windows returns \r\n-separated paths
 
     if (codexOnPath && existsSync(codexOnPath)) {
       return codexOnPath;
