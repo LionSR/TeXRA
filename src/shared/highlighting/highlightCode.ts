@@ -7,7 +7,7 @@
 
 import { hljs } from './hljs';
 
-export const highlightCode = (code: string, lang: string): string => {
+export function highlightCode(code: string, lang: string): string {
   if (lang && hljs.getLanguage(lang)) {
     try {
       const highlighted = hljs.highlight(code, {
@@ -25,4 +25,4 @@ export const highlightCode = (code: string, lang: string): string => {
   }
   // Return empty string — markdown-it will escape and wrap in its own <pre><code>
   return '';
-};
+}
