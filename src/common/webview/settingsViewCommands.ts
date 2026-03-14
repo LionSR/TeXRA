@@ -48,6 +48,7 @@ export const SETTINGS_VIEW_CMD = {
   SET_MODEL_ENABLED: 'setModelEnabled',
   SET_HELPER_MODEL: 'setPolishModel',
   SET_MODEL_REASONING_LEVEL: 'setModelReasoningLevel',
+  SET_PREFER_SHORT_MODEL_NAMES: 'setPreferShortModelNames',
   // Agent selection commands
   GET_AGENT_SELECTION: 'getAgentSelection',
   OPEN_AGENT_YAML: 'openAgentYaml',

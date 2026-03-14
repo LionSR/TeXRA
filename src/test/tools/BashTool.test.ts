@@ -130,6 +130,7 @@ describe('BashTool', () => {
     const config: ModelConfig = {
       name: 'test',
       fullName: 'test',
+      shortName: 'test',
       provider: ModelProvider.OPENAI,
       maxOutputTokens: 10,
       inputPrice: 0,

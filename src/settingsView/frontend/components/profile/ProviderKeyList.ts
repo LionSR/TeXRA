@@ -252,7 +252,7 @@ export class ProviderKeyList extends LitElement {
 
     return html`
       <div class="provider-keys-section">
-        <h2>API Keys</h2>
+        <h2>API Configuration</h2>
         <p class="provider-keys-description">${description}</p>
         ${this.renderGlobalStreamingToggle()}
         <table class="provider-keys-table">
