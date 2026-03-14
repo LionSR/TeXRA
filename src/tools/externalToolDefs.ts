@@ -220,7 +220,14 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     configNotes:
       'Requires @openai/codex npm package with platform binaries. Used by @openai/codex-sdk. ' +
       'Supports OAuth via `codex login` or OPENAI_API_KEY env var.',
-    check: async () => findCodexBinaryPath() != null,
+    check: async () => {
+      try {
+        await importCodexClass();
+        return findCodexBinaryPath() != null;
+      } catch {
+        return false;
+      }
+    },
     detailCheck: async () => {
       // Step 1: Can we import the SDK?
       try {

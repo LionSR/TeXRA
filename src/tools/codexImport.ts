@@ -133,15 +133,20 @@ function findCodexBinaryPathUncached(): string | undefined {
   try {
     const whichCmd =
       process.platform === 'win32' ? 'where codex' : 'which codex';
-    const codexOnPath = execSync(whichCmd, {
+    const pathHits = execSync(whichCmd, {
       encoding: 'utf8',
       timeout: 5000,
     })
       .trim()
-      .split(/\r?\n/)[0]; // `where` on Windows returns \r\n-separated paths
+      .split(/\r?\n/);
 
-    if (codexOnPath && existsSync(codexOnPath)) {
-      return codexOnPath;
+    // On Windows, skip .cmd/.ps1 shims (npm wrappers) — the SDK spawns
+    // the binary directly without shell:true, so shims aren't executable.
+    for (const hit of pathHits) {
+      const p = hit.trim();
+      if (!p) continue;
+      if (process.platform === 'win32' && /\.(cmd|ps1)$/i.test(p)) continue;
+      if (existsSync(p)) return p;
     }
   } catch {
     // codex not on PATH
