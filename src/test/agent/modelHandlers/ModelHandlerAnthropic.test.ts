@@ -38,6 +38,7 @@ function buildAnthropicConfig(
   return {
     name: 'test-anthropic',
     fullName: 'claude-test',
+    shortName: 'claude-test',
     provider: ModelProvider.ANTHROPIC,
     maxOutputTokens: 1024,
     inputPrice: 0,

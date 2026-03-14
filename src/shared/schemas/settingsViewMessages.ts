@@ -180,6 +180,8 @@ export const UpdateModelSelectionMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION),
   models: z.array(ModelSelectionItemSchema),
   helperModel: z.string(),
+  /** Whether the user prefers short (unpinned) model names. */
+  preferShortModelNames: z.boolean(),
 });
 export type UpdateModelSelectionMessage = z.infer<
   typeof UpdateModelSelectionMessageSchema
@@ -411,6 +413,11 @@ const SetModelReasoningLevelMessageSchema = z.object({
   level: ReasoningLevelSchema.nullable(),
 });
 
+const SetPreferShortModelNamesMessageSchema = z.object({
+  command: z.literal(CMD.SET_PREFER_SHORT_MODEL_NAMES),
+  enabled: z.boolean(),
+});
+
 // Agent selection inbound messages
 const GetAgentSelectionMessageSchema = commandOnly(CMD.GET_AGENT_SELECTION);
 
@@ -598,6 +605,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetModelEnabledMessageSchema,
     SetHelperModelMessageSchema,
     SetModelReasoningLevelMessageSchema,
+    SetPreferShortModelNamesMessageSchema,
     // Agent selection messages
     GetAgentSelectionMessageSchema,
     OpenAgentYamlMessageSchema,

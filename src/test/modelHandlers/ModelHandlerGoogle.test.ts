@@ -21,6 +21,7 @@ describe('ModelHandlerGoogleGenAI.shouldContinue', () => {
   const handler = new ModelHandlerGoogleGenAI({
     name: 'test-google-model',
     fullName: 'google/test',
+    shortName: 'google/test',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 1024,
     inputPrice: 0,
@@ -70,6 +71,7 @@ describe('ModelHandlerGoogleGenAI.extractToolUse', () => {
   const handler = new ModelHandlerGoogleGenAI({
     name: 'test-google-model',
     fullName: 'google/test',
+    shortName: 'google/test',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 1024,
     inputPrice: 0,
@@ -111,6 +113,7 @@ describe('ModelHandlerGoogleGenAI.createToolUseFollowUpMessages', () => {
   const handler = new ModelHandlerGoogleGenAI({
     name: 'test-google-model',
     fullName: 'google/test',
+    shortName: 'google/test',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 1024,
     inputPrice: 0,
@@ -156,6 +159,7 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
     const handler = new ModelHandlerGoogleGenAI({
       name: 'test-google-model',
       fullName: 'google/test',
+      shortName: 'google/test',
       provider: ModelProvider.GOOGLE,
       maxOutputTokens: 1024,
       inputPrice: 0,
@@ -249,6 +253,7 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
     const handler = new ModelHandlerGoogleGenAI({
       name: 'test-google-model',
       fullName: 'google/test',
+      shortName: 'google/test',
       provider: ModelProvider.GOOGLE,
       maxOutputTokens: 1024,
       inputPrice: 0,
@@ -346,6 +351,7 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
     const handler = new ModelHandlerGoogleGenAI({
       name: 'test-google-model',
       fullName: 'google/test',
+      shortName: 'google/test',
       provider: ModelProvider.GOOGLE,
       maxOutputTokens: 1024,
       inputPrice: 0,
