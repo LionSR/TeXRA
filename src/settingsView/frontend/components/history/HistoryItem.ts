@@ -8,25 +8,44 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, queryAll } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+import MarkdownIt from 'markdown-it';
 import Mark from 'mark.js';
 
-// Local imports - shared styles
+// Local imports - shared
+import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 import {
   badgeStyles,
   codiconStyles,
   commonViewStyles,
   designTokens,
 } from '@shared/styles';
-import { markdownStyles } from '@progressView/frontend/styles/markdownStyles';
-import type { HistoryItem as HistoryItemData } from '@shared/schemas';
+import { markdownStyles } from '@shared/styles/markdownStyles';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
-import { processMarkdownContent } from '@progressView/frontend/formatters/markdownRenderer';
+import { hljs } from '@shared/highlighting/hljs';
 
 // Local imports - history view styles
 import { historyViewStyles } from './styles';
 
 // Local imports - history view events
 import { HistoryViewEvents } from './events';
+
+/** Lightweight markdown renderer for instruction text (no LaTeX/KaTeX). */
+const md = new MarkdownIt({
+  breaks: false,
+  linkify: true,
+  html: false,
+  highlight: (code: string, lang: string): string => {
+    if (lang && hljs.getLanguage(lang)) {
+      try {
+        const safeLang = lang.replaceAll(/[^a-zA-Z0-9_-]/g, '');
+        return `<pre class="hljs"><code class="language-${safeLang}">${hljs.highlight(code, { language: lang, ignoreIllegals: true }).value}</code></pre>`;
+      } catch {
+        // fall through
+      }
+    }
+    return '';
+  },
+});
 
 type ConfigValue = string | number | boolean | string[] | null | undefined;
 
@@ -316,7 +335,7 @@ export class HistoryItem extends LitElement {
           <span class="history-label">Instruction:</span>
           <span class="history-value">
             ${instructionText
-              ? html`<div class="markdown-content">${unsafeHTML(processMarkdownContent(instructionText))}</div>`
+              ? html`<div class="markdown-content">${unsafeHTML(md.render(instructionText))}</div>`
               : html`<em class="history-none">Not set</em>`}
           </span>
           <span class="history-label">InputFile:</span>
