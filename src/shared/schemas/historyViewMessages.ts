@@ -13,17 +13,22 @@ import {
 } from '@shared/utils/dispatcher';
 import { commandOnly } from './messageFactories';
 
-import { AgentCategorySchema } from './agent';
+import { AGENT_CATEGORY } from './agent';
 
 // ============================================================
 // Data schemas
 // ============================================================
 
-const AgentConfigSummarySchema = z.object({
+/** Fields shared by all agent categories. */
+const BaseConfigSummarySchema = z.object({
   agent: z.string().optional(),
   model: z.string().optional(),
   instruction: z.string().optional(),
-  agentCategory: AgentCategorySchema.optional(),
+});
+
+/** Workflow agents carry file-related fields. */
+const WorkflowConfigSummarySchema = BaseConfigSummarySchema.extend({
+  agentCategory: z.literal(AGENT_CATEGORY.WORKFLOW),
   inputFile: z.string().optional(),
   inputFiles: z.array(z.string()).optional(),
   mediaFile: z.string().nullish(),
@@ -35,6 +40,16 @@ const AgentConfigSummarySchema = z.object({
   outputFiles: z.array(z.string()).optional(),
   toolConfig: z.record(z.string(), z.unknown()).nullish(),
 });
+
+/** Tool-use agents only have the base fields. */
+const ToolUseConfigSummarySchema = BaseConfigSummarySchema.extend({
+  agentCategory: z.literal(AGENT_CATEGORY.TOOL_USE),
+});
+
+const AgentConfigSummarySchema = z.discriminatedUnion('agentCategory', [
+  WorkflowConfigSummarySchema,
+  ToolUseConfigSummarySchema,
+]);
 
 export const HistoryItemSchema = z.object({
   id: z.string(),
