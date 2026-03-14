@@ -55,6 +55,7 @@ import {
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
 import type { ExecutionId } from '@shared/schemas';
+import type { HistoryItem } from '@shared/schemas/historyViewMessages';
 import {
   dispatchSettingsViewInbound,
   type SettingsViewInboundHandlerRegistry,
@@ -550,12 +551,38 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       .filter(
         (entry) => entry.agentConfig !== null && entry.category !== 'process',
       )
-      .map((entry) => ({
-        id: entry.id,
-        timestamp: entry.timestamp,
-        agentConfig: entry.agentConfig!,
-        description: entry.description,
-      }));
+      .map((entry): HistoryItem => {
+        const cfg = entry.agentConfig!;
+        return {
+          id: entry.id,
+          timestamp: entry.timestamp,
+          agentConfig:
+            cfg.agentCategory === 'toolUse'
+              ? {
+                  agentCategory: 'toolUse',
+                  agent: cfg.agent,
+                  model: cfg.model,
+                  instruction: cfg.instruction,
+                }
+              : {
+                  agentCategory: 'workflow',
+                  agent: cfg.agent,
+                  model: cfg.model,
+                  instruction: cfg.instruction,
+                  inputFile: cfg.inputFile,
+                  inputFiles: cfg.inputFiles,
+                  mediaFile: cfg.mediaFile,
+                  mediaFiles: cfg.mediaFiles,
+                  referenceFile: cfg.referenceFile,
+                  referenceFiles: cfg.referenceFiles,
+                  auxiliaryFile: cfg.auxiliaryFile,
+                  auxiliaryFiles: cfg.auxiliaryFiles,
+                  outputFiles: cfg.outputFiles,
+                  toolConfig: cfg.toolConfig,
+                },
+          description: entry.description,
+        };
+      });
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY,
       historyItems,
