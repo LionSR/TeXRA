@@ -70,7 +70,6 @@ export const codeBlockStyles = css`
         --vscode-toolbar-activeBackground,
         rgba(99, 102, 103, 0.31)
       );
-      transform: scale(0.92);
     }
 
     &.copied {

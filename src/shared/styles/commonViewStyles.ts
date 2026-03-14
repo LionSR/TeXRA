@@ -36,6 +36,7 @@ export const commonViewStyles: CSSResult = css`
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: var(--spacing-small);
   }
 
   .collapsible {

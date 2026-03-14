@@ -113,7 +113,7 @@ export class QueuedFollowUps extends LitElement {
         >
           ${repeat(
             this.messages,
-            (message, index) => `${index}-${message}`,
+            (_message, index) => index,
             (message) => {
               const { display, full } = this.truncateMessage(message);
               return html`
