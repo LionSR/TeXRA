@@ -17,7 +17,7 @@ export const codeBlockStyles = css`
     align-items: center;
     justify-content: space-between;
     padding: var(--spacing-tiny) var(--spacing-small);
-    background-color: var(--vscode-editorGroupHeader-tabsBackground, #252526);
+    background-color: var(--vscode-editorGroupHeader-tabsBackground);
     border-bottom: var(--border-thin) solid var(--color-border);
     font-size: var(--font-size-xs);
   }
