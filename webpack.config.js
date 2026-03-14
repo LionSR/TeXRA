@@ -130,6 +130,7 @@ const extensionConfig = {
     'split.js': 'Split',
     '@vscode/codicons': 'commonjs @vscode/codicons',
     vscode: 'commonjs vscode', // the vscode-module is created on-the-fly and must be excluded. Add other modules that cannot be webpack'ed, 📖 -> https://webpack.js.org/configuration/externals/
+    '@openai/codex-sdk': "promise import('@openai/codex-sdk')", // ESM-only — must use import(), not require()
     // modules added here also need to be added in the .vscodeignore file
   },
   resolve: {
