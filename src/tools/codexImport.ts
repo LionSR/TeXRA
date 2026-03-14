@@ -7,9 +7,9 @@
  * 2. `findCodexBinaryPath()` — locate the native Codex CLI binary. The SDK
  *    bundles its own `findCodexPath()` but it resolves `@openai/codex`
  *    relative to the SDK itself (inside the VSIX). Since we don't ship the
- *    130 MB platform binaries in the VSIX, we probe PATH, the global npm
- *    prefix, and local node_modules, then return the path for
- *    `codexPathOverride`. Results are cached for the session.
+ *    130 MB platform binaries in the VSIX, we probe local node_modules,
+ *    the global npm prefix, and PATH (in that priority order), then return
+ *    the path for `codexPathOverride`. Results are cached for the session.
  */
 
 import { execSync } from 'child_process';

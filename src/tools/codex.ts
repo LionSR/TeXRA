@@ -349,15 +349,12 @@ export class CodexTool extends defineTool({
 
     const promise = (async (): Promise<RunResult> => {
       const { events } = await thread.runStreamed(input.prompt);
-      const items: ThreadItem[] = [];
       const responseParts: string[] = [];
       let usage: RunResult['usage'] = null;
 
       for await (const event of events) {
         if (event.type === 'item.completed') {
           const { item } = event as ItemCompletedEvent;
-          items.push(item);
-
           if (item.type === 'agent_message') {
             responseParts.push(item.text);
           }
@@ -371,7 +368,7 @@ export class CodexTool extends defineTool({
       }
 
       return {
-        items,
+        items: [],
         finalResponse: responseParts.join('\n\n'),
         usage,
       };
