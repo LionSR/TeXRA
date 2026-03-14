@@ -7,8 +7,8 @@ import MarkdownIt from 'markdown-it';
 import texmath from 'markdown-it-texmath';
 import katex from 'katex';
 
-// Local imports - optimized highlight.js with only TeXRA-relevant languages
-import { hljs } from '@shared/highlighting/hljs';
+// Local imports - shared highlighting
+import { highlightCode } from '@shared/highlighting/highlightCode';
 
 // Local imports - progress view helpers
 import { katexMacros } from '../katexMacros';
@@ -31,32 +31,6 @@ const CACHE_MAX_ENTRY_CHARS = 200_000;
 const CACHE_MAX_TOTAL_CHARS = 2_000_000;
 const markdownCache = new Map<string, string>();
 let markdownCacheChars = 0;
-
-/**
- * Custom highlight function for markdown-it using optimized hljs.
- * Returns a full <pre class="hljs"> wrapper so markdown-it uses it directly
- * (skipping its default wrapper), ensuring hljs CSS rules apply.
- * Falls back to empty string for unknown languages (markdown-it escapes).
- */
-const highlightCode = (code: string, lang: string): string => {
-  if (lang && hljs.getLanguage(lang)) {
-    try {
-      const highlighted = hljs.highlight(code, {
-        language: lang,
-        ignoreIllegals: true,
-      }).value;
-      // Sanitize lang for safe HTML attribute insertion (defense-in-depth;
-      // hljs.getLanguage() above already restricts to registered names)
-      const safeLang = lang.replaceAll(/[^a-zA-Z0-9_-]/g, '');
-      // Return full <pre> so markdown-it uses it as-is (detects leading <pre)
-      return `<pre class="hljs"><code class="language-${safeLang}">${highlighted}</code></pre>`;
-    } catch {
-      // Fall through to plain text
-    }
-  }
-  // Return empty string — markdown-it will escape and wrap in its own <pre><code>
-  return '';
-};
 
 /** Get the shared markdown renderer instance. */
 export const getMarkdownRenderer = (): MarkdownIt => {
