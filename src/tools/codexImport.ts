@@ -15,7 +15,8 @@
 import { execSync } from 'child_process';
 import { createRequire } from 'module';
 import * as path from 'path';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
+import { pathToFileURL } from 'url';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CodexConstructor = new (options?: any) => any;
@@ -38,8 +39,46 @@ export async function importCodexClass(): Promise<CodexConstructor> {
     throw err;
   }
 
-  // Probe all possible export shapes — Electron's ESM/CJS interop may
-  // wrap named exports under `default`, sometimes double-nested.
+  const resolved = resolveCodexConstructor(mod);
+  if (resolved) return resolved;
+
+  // When the extension host runs in CJS mode (Electron), dynamic import() of
+  // an ESM-only package may lose named exports (only an empty `default` object
+  // appears). Locate the package on disk, read its ESM entry point from
+  // package.json, and re-import via file:// URL so Node loads it as true ESM.
+  try {
+    const entryFile = resolveEsmEntryPoint('@openai/codex-sdk');
+    if (entryFile) {
+      const fileUrl = pathToFileURL(entryFile).href;
+      const esmMod = (await import(fileUrl)) as Record<string, unknown>;
+      const esmResolved = resolveCodexConstructor(esmMod);
+      if (esmResolved) return esmResolved;
+    }
+  } catch {
+    // Fall through to error below
+  }
+
+  // Build a diagnostic message showing what we actually got
+  const defType = typeof mod.default;
+  const defKeys =
+    mod.default && typeof mod.default === 'object'
+      ? Object.keys(mod.default as Record<string, unknown>).join(', ')
+      : defType;
+  throw new Error(
+    'Failed to resolve Codex class from @openai/codex-sdk. ' +
+      `Module keys: [${Object.keys(mod).join(', ')}], ` +
+      `default type: ${defType}, default keys: [${defKeys}]`,
+  );
+}
+
+/**
+ * Probe all possible export shapes for the Codex constructor.
+ * Electron's ESM/CJS interop may wrap named exports under `default`,
+ * sometimes double-nested.
+ */
+function resolveCodexConstructor(
+  mod: Record<string, unknown>,
+): CodexConstructor | undefined {
   const candidates: unknown[] = [
     mod.Codex, // named export
     (mod.default as Record<string, unknown> | undefined)?.Codex, // default.Codex
@@ -59,18 +98,56 @@ export async function importCodexClass(): Promise<CodexConstructor> {
       return candidate as CodexConstructor;
     }
   }
+  return undefined;
+}
 
-  // Build a diagnostic message showing what we actually got
-  const defType = typeof mod.default;
-  const defKeys =
-    mod.default && typeof mod.default === 'object'
-      ? Object.keys(mod.default as Record<string, unknown>).join(', ')
-      : defType;
-  throw new Error(
-    'Failed to resolve Codex class from @openai/codex-sdk. ' +
-      `Module keys: [${Object.keys(mod).join(', ')}], ` +
-      `default type: ${defType}, default keys: [${defKeys}]`,
-  );
+// ---------------------------------------------------------------------------
+// ESM entry-point resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Walk node_modules directories upward from `__dirname` to find an ESM-only
+ * package and return the absolute path to its ESM entry file.
+ *
+ * We can't use `require.resolve()` because the package exports map has no
+ * `"require"` condition — only `"import"`.  Instead we locate the package
+ * directory manually, read its `package.json`, and extract the entry from
+ * `exports["."].import` (falling back to the `module` field).
+ */
+function resolveEsmEntryPoint(packageName: string): string | undefined {
+  let dir = __dirname;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const pkgJsonPath = path.join(
+      dir,
+      'node_modules',
+      packageName,
+      'package.json',
+    );
+    if (existsSync(pkgJsonPath)) {
+      try {
+        const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf8'));
+        // Prefer exports["."].import, then top-level "module"
+        const relEntry =
+          (typeof pkg.exports === 'object' &&
+            pkg.exports['.'] &&
+            (typeof pkg.exports['.'] === 'string'
+              ? pkg.exports['.']
+              : pkg.exports['.'].import)) ||
+          pkg.module;
+        if (typeof relEntry === 'string') {
+          const abs = path.resolve(path.dirname(pkgJsonPath), relEntry);
+          if (existsSync(abs)) return abs;
+        }
+      } catch {
+        // Malformed package.json — skip
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
