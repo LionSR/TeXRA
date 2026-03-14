@@ -29,26 +29,36 @@ import { countLines } from '@utils/text/stringUtils';
 // Diff computation for workflow deliveries
 // ============================================================================
 
-/** Maximum lines of unified diff to include per file in deliveries. */
+/** Maximum lines of diff to include per file in deliveries. */
 const MAX_DIFF_LINES = 200;
+
+/** Shorter truncation limit for large changes (>40% of file modified). */
+const LARGE_CHANGE_DIFF_LINES = 80;
 
 /**
  * When the changed lines (added + removed) exceed this fraction of the
  * original file's line count, the diff is flagged as a large change.
- * The orchestrator still gets a diff file it can read on demand.
+ * The orchestrator still gets a diff file but truncated shorter.
  */
 const LARGE_CHANGE_RATIO = 0.4;
 
 /**
  * Compute a human-readable line-level diff between two strings.
- * Uses diff-match-patch with semantic cleanup to produce a clear
- * unified-style format with +/- prefixed lines and context.
+ * Uses diff-match-patch's line-mode diffing (diff_linesToChars_ /
+ * diff_charsToLines_) to produce clean whole-line diffs with +/- prefixes.
  * Returns null if the strings are identical.
  */
 function computeReadableDiff(original: string, modified: string): string | null {
   const dmp = new diff_match_patch();
-  const diffs = dmp.diff_main(original, modified);
-  dmp.diff_cleanupSemantic(diffs);
+
+  // Convert to line-mode: each line becomes a single "character" so
+  // diff_main operates on whole lines, not individual characters.
+  const { chars1, chars2, lineArray } = dmp.diff_linesToChars_(
+    original,
+    modified,
+  );
+  const diffs = dmp.diff_main(chars1, chars2, false);
+  dmp.diff_charsToLines_(diffs, lineArray);
 
   // Check if there are any actual changes.
   if (diffs.every(([op]) => op === 0)) return null;
@@ -56,9 +66,13 @@ function computeReadableDiff(original: string, modified: string): string | null 
   const lines: string[] = [];
   for (const [op, text] of diffs) {
     const prefix = op === 1 ? '+' : op === -1 ? '-' : ' ';
-    // Split into lines, preserving the prefix on each.
-    for (const line of text.split('\n')) {
-      lines.push(`${prefix}${line}`);
+    // Each chunk is one or more complete lines (with trailing \n).
+    // Split and prefix each line, dropping the trailing empty entry from split.
+    const chunkLines = text.split('\n');
+    for (let i = 0; i < chunkLines.length; i++) {
+      // Skip the empty string after the final \n
+      if (i === chunkLines.length - 1 && chunkLines[i] === '') continue;
+      lines.push(`${prefix}${chunkLines[i]}`);
     }
   }
   return lines.join('\n');
@@ -121,7 +135,8 @@ export async function computeAndWriteWorkflowDiffs(
 
         const diff = computeReadableDiff(original, modified);
         if (diff) {
-          const truncated = truncateDiff(diff, MAX_DIFF_LINES);
+          const limit = largeChange ? LARGE_CHANGE_DIFF_LINES : MAX_DIFF_LINES;
+          const truncated = truncateDiff(diff, limit);
           // Use full relativePath (with separators replaced) to avoid collisions
           // when multiple files share the same basename in different directories.
           const safeName = o.relativePath.replace(/[\\/]/g, '_');
