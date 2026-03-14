@@ -40,6 +40,7 @@ import {
   formatAttribution,
   setPinnedMeta,
   countPinnedMemories,
+  type MemoryFileMeta,
 } from './memoryMeta';
 
 const MemoryToolInputSchema = z.strictObject({
@@ -153,13 +154,14 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     return parseFrontmatter(await StorageFS.read(resolvedPath));
   }
 
-  /** Write a memory file with fresh attribution frontmatter. */
+  /** Write a memory file with fresh attribution frontmatter, preserving pinned status from existing file. */
   private async writeMemoryFile(
     resolvedPath: string,
     content: string,
+    existingMeta?: MemoryFileMeta | null,
   ): Promise<void> {
     const ctx = getCurrentToolFileInteractionContext();
-    const meta = createMeta(ctx?.agentName, ctx?.executionId);
+    const meta = createMeta(ctx?.agentName, ctx?.executionId, existingMeta);
     await StorageFS.write(resolvedPath, buildFile(content, meta));
   }
 
@@ -309,7 +311,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const readGate = this.requireViewBeforeModify(inputPath);
     if (readGate) return readGate;
 
-    const { content } = await this.readMemoryFile(resolvedPath);
+    const { content, meta } = await this.readMemoryFile(resolvedPath);
     const occurrences = countOccurrences(content, oldStr);
     if (occurrences === 0) {
       throw new ToolError(
@@ -332,7 +334,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const idx = content.indexOf(oldStr);
     const updated =
       content.slice(0, idx) + newStr + content.slice(idx + oldStr.length);
-    await this.writeMemoryFile(resolvedPath, updated);
+    await this.writeMemoryFile(resolvedPath, updated, meta);
     recordToolFileRead(inputPath);
 
     const updatedLines = updated.split('\n');
@@ -355,7 +357,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const readGate = this.requireViewBeforeModify(inputPath);
     if (readGate) return readGate;
 
-    const { content } = await this.readMemoryFile(resolvedPath);
+    const { content, meta } = await this.readMemoryFile(resolvedPath);
     const lines = content.split('\n');
     const totalLines = lines.length;
     if (insertLine < 0 || insertLine > totalLines) {
@@ -371,7 +373,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       ...lines.slice(insertLine),
     ];
 
-    await this.writeMemoryFile(resolvedPath, updatedLines.join('\n'));
+    await this.writeMemoryFile(resolvedPath, updatedLines.join('\n'), meta);
     recordToolFileRead(inputPath);
 
     return {

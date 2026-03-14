@@ -107,12 +107,14 @@ export function buildFile(
 export function createMeta(
   agentName: string | undefined,
   executionId: string | undefined,
+  existingMeta?: MemoryFileMeta | null,
 ): MemoryFileMeta | null {
   if (!agentName) return null;
   return {
     modifiedBy: agentName,
     executionId,
     modifiedAt: new Date().toISOString(),
+    pinned: existingMeta?.pinned,
   };
 }
 
