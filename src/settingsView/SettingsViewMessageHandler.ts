@@ -106,7 +106,8 @@ import {
   getProviderEndpoint,
   setProviderEndpoint,
   supportsCustomEndpoint,
-  getDashScopeUseChina,
+  getProviderDisplayName,
+  getProviderKeyUrl,
 } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
 import { loadMemoryItems } from './utils/memoryFileSystem';
@@ -196,19 +197,14 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
         status = 'not-set';
       }
 
-      // DashScope display name and key URL switch based on China region setting
-      let displayName = PROVIDER_DISPLAY_NAMES[provider];
-      let keyUrl = PROVIDER_URLS[provider];
-      if (provider === 'dashscope' && getDashScopeUseChina()) {
-        displayName = 'Bailian';
-        keyUrl = 'https://bailian.console.aliyun.com/';
-      }
-
       return {
         provider,
-        displayName,
+        displayName: getProviderDisplayName(
+          provider,
+          PROVIDER_DISPLAY_NAMES[provider],
+        ),
         status,
-        keyUrl,
+        keyUrl: getProviderKeyUrl(provider, PROVIDER_URLS[provider]),
         streaming: getProviderStreaming(provider),
         customEndpoint: getProviderEndpoint(provider),
         supportsCustomEndpoint: supportsCustomEndpoint(provider),
@@ -797,55 +793,50 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handlePinMemory(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.PIN_MEMORY>,
   ): Promise<void> {
-    try {
-      const resolvedPath = resolveMemoryStoragePath(data.storagePath);
-      const raw = await StorageFS.read(resolvedPath);
-      const { meta, content } = parseFrontmatter(raw);
-
-      if (meta?.pinned) {
-        // Already pinned — still refresh to sync potentially stale UI
-        await this.withActiveWebview((w) => this.sendMemoryData(w));
-        return;
-      }
-
-      // Count current pinned memories to enforce limit (short-circuits at max)
-      const pinnedCount = await countPinnedMemories(MAX_PINNED_MEMORIES);
-      if (pinnedCount >= MAX_PINNED_MEMORIES) {
-        void vscode.window.showWarningMessage(
-          `Cannot pin: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
-        );
-        return;
-      }
-
-      const updatedMeta = setPinnedMeta(meta, true);
-      await StorageFS.write(resolvedPath, buildFile(content, updatedMeta));
-      await this.withActiveWebview((w) => this.sendMemoryData(w));
-    } catch (error) {
-      await showLoggedErrorMessage(this.channel, 'Failed to pin memory', error);
-    }
+    await this.setMemoryPinned(data.storagePath, true);
   }
 
   private async handleUnpinMemory(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.UNPIN_MEMORY>,
   ): Promise<void> {
+    await this.setMemoryPinned(data.storagePath, false);
+  }
+
+  /** Shared implementation for pin/unpin with limit enforcement. */
+  private async setMemoryPinned(
+    storagePath: string,
+    pinned: boolean,
+  ): Promise<void> {
     try {
-      const resolvedPath = resolveMemoryStoragePath(data.storagePath);
+      const resolvedPath = resolveMemoryStoragePath(storagePath);
       const raw = await StorageFS.read(resolvedPath);
       const { meta, content } = parseFrontmatter(raw);
 
-      if (!meta?.pinned) {
-        // Already unpinned — still refresh to sync potentially stale UI
+      const alreadyInState = pinned ? !!meta?.pinned : !meta?.pinned;
+      if (alreadyInState) {
+        // Already in desired state — still refresh to sync potentially stale UI
         await this.withActiveWebview((w) => this.sendMemoryData(w));
         return;
       }
 
-      const updatedMeta = setPinnedMeta(meta, false);
+      if (pinned) {
+        const pinnedCount = await countPinnedMemories(MAX_PINNED_MEMORIES);
+        if (pinnedCount >= MAX_PINNED_MEMORIES) {
+          void vscode.window.showWarningMessage(
+            `Cannot pin: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
+          );
+          return;
+        }
+      }
+
+      const updatedMeta = setPinnedMeta(meta, pinned);
       await StorageFS.write(resolvedPath, buildFile(content, updatedMeta));
       await this.withActiveWebview((w) => this.sendMemoryData(w));
     } catch (error) {
+      const action = pinned ? 'pin' : 'unpin';
       await showLoggedErrorMessage(
         this.channel,
-        'Failed to unpin memory',
+        `Failed to ${action} memory`,
         error,
       );
     }
@@ -1160,10 +1151,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_PROVIDER_KEY_URL>,
   ): Promise<void> {
     const provider = data.provider as ApiProvider;
-    let url = PROVIDER_URLS[provider];
-    if (provider === 'dashscope' && getDashScopeUseChina()) {
-      url = 'https://bailian.console.aliyun.com/';
-    }
+    const url = getProviderKeyUrl(provider, PROVIDER_URLS[provider]);
     if (url) {
       await vscode.env.openExternal(vscode.Uri.parse(url));
     }

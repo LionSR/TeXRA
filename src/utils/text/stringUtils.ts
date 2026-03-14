@@ -50,3 +50,19 @@ export function splitContentLines(text: string): string[] {
 export function countLines(text: string): number {
   return splitContentLines(text).length;
 }
+
+/**
+ * Truncate a string to `maxLen` characters with a trailing ellipsis (`…`).
+ * Returns the original string unchanged if it fits within the limit.
+ *
+ * The ellipsis is a single Unicode character (U+2026), so the truncated
+ * result is exactly `maxLen` characters long.
+ *
+ * @example
+ * truncateWithEllipsis('short', 60)           // 'short'
+ * truncateWithEllipsis('a very long text', 10) // 'a very lo…'
+ */
+export function truncateWithEllipsis(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  return `${text.slice(0, maxLen - 1)}…`;
+}

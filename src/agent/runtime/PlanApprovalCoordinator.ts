@@ -78,9 +78,7 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
     void safeExecuteCommand('texra.showProgressView');
 
     // Activate the stream that needs approval so user sees the prompt immediately
-    if (streamId) {
-      bus.emit('setActiveStream', { streamId });
-    }
+    bus.emit('setActiveStream', { streamId });
 
     return this.waitForUserAction(
       approvalId,

@@ -16,6 +16,7 @@ import {
   TODO_STATUS,
   STATUS_DISPLAY,
   TodoItemSchema,
+  countByStatus,
   type TodoItem,
 } from '@shared/schemas';
 import { type ToolResult } from '@tools/result';
@@ -98,16 +99,9 @@ Best practices:
     // This triggers the onUpdate callback which emits events to the UI
     context.todoState.updateTodos(input.todos);
 
-    let completedCount = 0;
-    let inProgressCount = 0;
-    let pendingCount = 0;
-    for (const t of input.todos) {
-      if (t.status === TODO_STATUS.COMPLETED) completedCount++;
-      else if (t.status === TODO_STATUS.IN_PROGRESS) inProgressCount++;
-      else pendingCount++;
-    }
+    const { completed, inProgress, pending } = countByStatus(input.todos);
 
-    const summary = `Todo list updated: ${completedCount} completed, ${inProgressCount} in progress, ${pendingCount} pending`;
+    const summary = `Todo list updated: ${completed} completed, ${inProgress} in progress, ${pending} pending`;
 
     // Return minimal output - the UI already shows the input, no need to repeat the list
     return {

@@ -6,7 +6,7 @@ import { css } from 'lit';
  */
 export const groupStyles = css`
   .log-group-header {
-    padding: var(--spacing-tiny) var(--spacing-medium);
+    padding: var(--spacing-small) var(--spacing-medium);
     margin: var(--spacing-tiny) 0;
     border-radius: var(--border-radius-small);
     cursor: pointer;

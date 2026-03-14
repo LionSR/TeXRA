@@ -26,6 +26,7 @@ import {
   TODO_STATUS,
   STATUS_DISPLAY,
   PlanSchema,
+  countByStatus,
   type Plan,
 } from '@shared/schemas';
 import { type ToolResult } from '@tools/result';
@@ -197,16 +198,9 @@ Best practices:
    * Build result for a progress update (no approval needed).
    */
   private buildProgressResult(plan: Plan): ToolResult {
-    let completedCount = 0;
-    let inProgressCount = 0;
-    let pendingCount = 0;
-    for (const s of plan.steps) {
-      if (s.status === TODO_STATUS.COMPLETED) completedCount++;
-      else if (s.status === TODO_STATUS.IN_PROGRESS) inProgressCount++;
-      else pendingCount++;
-    }
+    const { completed, inProgress, pending } = countByStatus(plan.steps);
 
-    const summary = `Plan updated: ${completedCount} completed, ${inProgressCount} in progress, ${pendingCount} pending`;
+    const summary = `Plan updated: ${completed} completed, ${inProgress} in progress, ${pending} pending`;
 
     return {
       summary,

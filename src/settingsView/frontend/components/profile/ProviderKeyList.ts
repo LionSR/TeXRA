@@ -40,11 +40,6 @@ export class ProviderKeyList extends LitElement {
 
   @state() private expandedProvider: string | null = null;
 
-  /** All providers have at least a streaming toggle, so settings are always available. */
-  private hasSettings(_entry: ProviderKeyStatus): boolean {
-    return true;
-  }
-
   private toggleExpanded(provider: string): void {
     this.expandedProvider =
       this.expandedProvider === provider ? null : provider;
@@ -183,24 +178,19 @@ export class ProviderKeyList extends LitElement {
   private renderRow(
     entry: ProviderKeyStatus,
   ): TemplateResult | TemplateResult[] {
-    const hasSettings = this.hasSettings(entry);
     const isExpanded = this.expandedProvider === entry.provider;
-
-    const chevron = hasSettings
-      ? html`<button
-          class="provider-expand-btn ${isExpanded ? 'expanded' : ''}"
-          title="${isExpanded ? 'Collapse settings' : 'Expand settings'}"
-          @click=${() => this.toggleExpanded(entry.provider)}
-        >
-          <span class="codicon codicon-chevron-right"></span>
-        </button>`
-      : nothing;
 
     const mainRow = html`
       <tr>
         <td>
           <div class="provider-name-cell">
-            ${chevron}
+            <button
+              class="provider-expand-btn ${isExpanded ? 'expanded' : ''}"
+              title="${isExpanded ? 'Collapse settings' : 'Expand settings'}"
+              @click=${() => this.toggleExpanded(entry.provider)}
+            >
+              <span class="codicon codicon-chevron-right"></span>
+            </button>
             <span class="provider-name">${entry.displayName}</span>
           </div>
         </td>
@@ -213,7 +203,7 @@ export class ProviderKeyList extends LitElement {
       </tr>
     `;
 
-    if (isExpanded && hasSettings) {
+    if (isExpanded) {
       return [mainRow, this.renderDetailRow(entry)];
     }
     return mainRow;
