@@ -19,6 +19,7 @@ import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 import type { RegisteredToolName } from '@tools/registry';
 import { getZoteroPort } from '@tools/zotero/bbtClient';
 import { checkToolInstalled } from '@utils/system/toolUtils';
+import { importCodexClass } from '@tools/codexImport';
 
 const LEAN4_EXT_ID = 'leanprover.lean4';
 
@@ -212,14 +213,17 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'Install the Codex CLI via npm:\n\n' +
       '  npm install -g @openai/codex\n\n' +
       'The CLI includes platform-specific binaries that the SDK\n' +
-      'spawns as a child process. An OpenAI API key is required\n' +
-      'and can be set via OPENAI_API_KEY environment variable.',
+      'spawns as a child process.\n\n' +
+      'Authentication (choose one):\n' +
+      '  • codex login        — OAuth sign-in (recommended)\n' +
+      '  • OPENAI_API_KEY     — environment variable with API key',
     installUrl: 'https://github.com/openai/codex',
     configNotes:
-      'Requires @openai/codex npm package with platform binaries. Used by @openai/codex-sdk.',
+      'Requires @openai/codex npm package with platform binaries. Used by @openai/codex-sdk. ' +
+      'Supports OAuth via `codex login` or OPENAI_API_KEY env var.',
     check: async () => {
       try {
-        const { Codex } = await import('@openai/codex-sdk');
+        const Codex = await importCodexClass();
         // Constructor resolves the binary path — throws if not found
         new Codex();
         return true;
@@ -229,7 +233,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     },
     detailCheck: async () => {
       try {
-        const { Codex } = await import('@openai/codex-sdk');
+        const Codex = await importCodexClass();
         new Codex();
         return 'Codex CLI binary found. Ready for SDK use.';
       } catch (err: unknown) {
@@ -239,6 +243,9 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
         }
         if (msg.includes('Unsupported platform')) {
           return `Platform not supported: ${msg}`;
+        }
+        if (msg.includes('not a constructor') || msg.includes('Failed to import')) {
+          return 'Codex SDK import failed — ESM/CJS interop issue. Try reinstalling: npm install @openai/codex-sdk';
         }
         return `Codex CLI check failed: ${msg}`;
       }
