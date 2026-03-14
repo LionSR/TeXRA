@@ -82,7 +82,7 @@ import { ensureRunDir } from '@utils/files/taskRunStorage';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { importCodexClass } from './codexImport';
+import { importCodexClass, findCodexBinaryPath } from './codexImport';
 
 // ============================================================================
 // Schema
@@ -244,7 +244,11 @@ export class CodexTool extends defineTool({
     // Dynamic import — resolved at runtime, not bundled (see webpack externals)
     const Codex = await importCodexClass();
 
-    const codex = new Codex();
+    // The SDK resolves the native binary relative to itself, but we don't
+    // ship the 130 MB platform binaries in the VSIX. Find the binary from
+    // the user's global npm install and pass it via codexPathOverride.
+    const codexPathOverride = findCodexBinaryPath();
+    const codex = new Codex({ codexPathOverride });
     const thread = codex.startThread({
       workingDirectory: input.working_directory,
       sandboxMode: input.sandbox_mode,
