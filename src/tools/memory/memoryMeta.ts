@@ -6,6 +6,13 @@
  * no locking, no orphan cleanup — delete/rename just works.
  */
 
+import * as path from 'path';
+
+import { isDirectory } from '@common/files/fsEntryType';
+import { StorageFS } from '@utils/files';
+
+import { MEMORY_STORAGE_ROOT, shouldSkipEntry } from './constants';
+
 export interface MemoryFileMeta {
   /** Agent name that last modified this file. */
   modifiedBy: string;
@@ -13,6 +20,8 @@ export interface MemoryFileMeta {
   executionId?: string;
   /** ISO 8601 timestamp of last modification. */
   modifiedAt: string;
+  /** Whether this memory is pinned as a core long-term insight. */
+  pinned?: boolean;
 }
 
 const FRONTMATTER_FENCE = '---';
@@ -58,6 +67,7 @@ export function parseFrontmatter(raw: string): {
       modifiedBy: fields.modifiedBy,
       executionId: fields.executionId || undefined,
       modifiedAt: fields.modifiedAt || new Date().toISOString(),
+      pinned: fields.pinned === 'true' ? true : undefined,
     },
     content: raw.slice(endIdx + FRONTMATTER_FENCE.length + 2), // skip "\n---\n"
   };
@@ -71,6 +81,9 @@ function buildFrontmatter(meta: MemoryFileMeta): string {
     lines.push(`executionId: ${meta.executionId}`);
   }
   lines.push(`modifiedAt: ${meta.modifiedAt}`);
+  if (meta.pinned) {
+    lines.push('pinned: true');
+  }
   lines.push(FRONTMATTER_FENCE);
   return lines.join('\n');
 }
@@ -94,13 +107,67 @@ export function buildFile(
 export function createMeta(
   agentName: string | undefined,
   executionId: string | undefined,
+  existingMeta?: MemoryFileMeta | null,
 ): MemoryFileMeta | null {
   if (!agentName) return null;
   return {
     modifiedBy: agentName,
     executionId,
     modifiedAt: new Date().toISOString(),
+    pinned: existingMeta?.pinned,
   };
+}
+
+// ── Pin/Unpin ──────────────────────────────────────────────────────
+
+/**
+ * Create a new MemoryFileMeta with the pinned flag toggled.
+ * If no existing meta is provided, creates a default attribution.
+ */
+export function setPinnedMeta(
+  meta: MemoryFileMeta | null,
+  pinned: boolean,
+): MemoryFileMeta {
+  const base = meta ?? {
+    modifiedBy: 'user',
+    modifiedAt: new Date().toISOString(),
+  };
+  return {
+    ...base,
+    pinned: pinned ? true : undefined,
+  };
+}
+
+/**
+ * Count pinned memory files under MEMORY_STORAGE_ROOT.
+ * Short-circuits once `limit` is reached to avoid unnecessary reads.
+ * Returns 0 if the storage root does not exist.
+ */
+export async function countPinnedMemories(limit?: number): Promise<number> {
+  const exists = await StorageFS.exists(MEMORY_STORAGE_ROOT);
+  if (!exists) return 0;
+  return countPinnedInDir(MEMORY_STORAGE_ROOT, limit ?? Infinity);
+}
+
+async function countPinnedInDir(
+  dirPath: string,
+  limit: number,
+): Promise<number> {
+  let count = 0;
+  const children = await StorageFS.readDir(dirPath);
+  for (const [name, type] of children) {
+    if (shouldSkipEntry(name)) continue;
+    const childPath = path.join(dirPath, name);
+    if (isDirectory(type)) {
+      count += await countPinnedInDir(childPath, limit - count);
+    } else {
+      const raw = await StorageFS.read(childPath);
+      const { meta } = parseFrontmatter(raw);
+      if (meta?.pinned) count++;
+    }
+    if (count >= limit) break;
+  }
+  return count;
 }
 
 // ── Display ────────────────────────────────────────────────────────

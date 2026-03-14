@@ -392,6 +392,14 @@ export class SettingsApp extends SettingsAppBase {
     });
   }
 
+  private handleMemoryPinItem = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.PIN_MEMORY,
+  );
+
+  private handleMemoryUnpinItem = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.UNPIN_MEMORY,
+  );
+
   // History event handlers
   private handleHistoryAction(
     event: CustomEvent<{ action: string; historyId: string }>,
@@ -648,6 +656,8 @@ export class SettingsApp extends SettingsAppBase {
               @memory-toggle-enabled=${this.handleMemoryToggleEnabled}
               @memory-open-item=${this.handleMemoryOpenItem}
               @memory-delete-item=${this.handleMemoryDeleteItem}
+              @memory-pin-item=${this.handleMemoryPinItem}
+              @memory-unpin-item=${this.handleMemoryUnpinItem}
             ></memory-tab>
           </vscode-tab-panel>
 
