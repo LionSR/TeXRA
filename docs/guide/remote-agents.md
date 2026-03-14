@@ -59,6 +59,8 @@ The **Research Access Program** provides access to specialized remote agents des
 - **Beta features**: Early access to experimental agents and capabilities
 - **Priority improvements**: Your feedback directly influences agent development
 
+Current remote agents include `search` (literature discovery), `discuss` (academic brainstorming with literature), and `simplifier` (code and writing simplification). See [Built-in Agents — Remote Agents](./built-in-agents.md#remote-agents) for details on each.
+
 Different agents may be available to different research groups based on their domain and needs.
 
 ### Joining the Program
