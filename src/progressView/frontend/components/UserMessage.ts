@@ -7,10 +7,14 @@
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles/litStyles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
+
+// Local imports - controllers
+import { CopyButtonController } from '@shared/controllers';
 
 // Local imports - formatter helpers
 import { formatTimestamp } from '../formatters/timestampUtils';
@@ -48,6 +52,26 @@ export class UserMessage extends LitElement {
         color: var(--vscode-descriptionForeground);
       }
 
+      .user-message-header-left {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-tiny);
+        flex: 1;
+      }
+
+      .user-message-copy {
+        opacity: 0;
+        transition: opacity 0.15s ease;
+      }
+
+      .user-message:hover .user-message-copy {
+        opacity: 1;
+      }
+
+      .user-message-copy.copy-success {
+        opacity: 1;
+      }
+
       .user-message-icon {
         font-size: var(--font-size-xs);
       }
@@ -75,19 +99,37 @@ export class UserMessage extends LitElement {
   /** Message timestamp (Unix ms) */
   @property({ attribute: false }) timestamp = 0;
 
+  private copyController = new CopyButtonController(this, {
+    defaultTitle: 'Copy message',
+    successTitle: 'Copied!',
+  });
+
   override render(): TemplateResult {
     const { timeDisplay, tooltipTimestamp } = formatTimestamp(
       new Date(this.timestamp),
     );
+    const copyState = this.copyController.state;
 
     return html`
       <div class="user-message-container">
         <div class="user-message">
           <div class="user-message-header">
-            <i class="codicon codicon-comment user-message-icon"></i>
-            <span class="user-message-timestamp" title=${tooltipTimestamp}
-              >${timeDisplay}</span
-            >
+            <span class="user-message-header-left">
+              <i class="codicon codicon-comment user-message-icon"></i>
+              <span class="user-message-timestamp" title=${tooltipTimestamp}
+                >${timeDisplay}</span
+              >
+            </span>
+            <vscode-toolbar-button
+              class=${classMap({
+                'user-message-copy': true,
+                [copyState.successClass]: copyState.copied,
+              })}
+              icon="copy"
+              title=${copyState.title}
+              aria-label=${copyState.ariaLabel}
+              @click=${() => this.copyController.copy(this.text)}
+            ></vscode-toolbar-button>
           </div>
           <div
             class="user-message-content"
