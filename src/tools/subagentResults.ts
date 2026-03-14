@@ -40,14 +40,28 @@ const MAX_DIFF_LINES = 200;
 const LARGE_CHANGE_RATIO = 0.4;
 
 /**
- * Compute a unified diff between two strings.
- * Returns a patch-style diff string, or null if files are identical.
+ * Compute a human-readable line-level diff between two strings.
+ * Uses diff-match-patch with semantic cleanup to produce a clear
+ * unified-style format with +/- prefixed lines and context.
+ * Returns null if the strings are identical.
  */
-function computeUnifiedDiff(original: string, modified: string): string | null {
+function computeReadableDiff(original: string, modified: string): string | null {
   const dmp = new diff_match_patch();
-  const patches = dmp.patch_make(original, modified);
-  if (patches.length === 0) return null;
-  return dmp.patch_toText(patches);
+  const diffs = dmp.diff_main(original, modified);
+  dmp.diff_cleanupSemantic(diffs);
+
+  // Check if there are any actual changes.
+  if (diffs.every(([op]) => op === 0)) return null;
+
+  const lines: string[] = [];
+  for (const [op, text] of diffs) {
+    const prefix = op === 1 ? '+' : op === -1 ? '-' : ' ';
+    // Split into lines, preserving the prefix on each.
+    for (const line of text.split('\n')) {
+      lines.push(`${prefix}${line}`);
+    }
+  }
+  return lines.join('\n');
 }
 
 /**
@@ -96,7 +110,8 @@ export async function computeAndWriteWorkflowDiffs(
           AbsoluteFS.read(o.absolutePath),
         ]);
 
-        // Detect large changes — diff is still written but flagged.
+        // Flag large changes so the orchestrator knows to also read the
+        // full output file — the diff alone may not capture everything.
         let largeChange = false;
         const originalLines = countLines(original);
         if (originalLines > 0 && o.added !== null && o.removed !== null) {
@@ -104,7 +119,7 @@ export async function computeAndWriteWorkflowDiffs(
           largeChange = changedLines / originalLines > LARGE_CHANGE_RATIO;
         }
 
-        const diff = computeUnifiedDiff(original, modified);
+        const diff = computeReadableDiff(original, modified);
         if (diff) {
           const truncated = truncateDiff(diff, MAX_DIFF_LINES);
           // Use full relativePath (with separators replaced) to avoid collisions
