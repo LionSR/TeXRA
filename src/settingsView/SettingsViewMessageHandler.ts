@@ -1078,7 +1078,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_PROVIDER_KEY_URL>,
   ): Promise<void> {
     const provider = data.provider as ApiProvider;
-    const url = PROVIDER_URLS[provider];
+    let url = PROVIDER_URLS[provider];
+    if (provider === 'dashscope' && getDashScopeUseChina()) {
+      url = 'https://bailian.console.aliyun.com/';
+    }
     if (url) {
       await vscode.env.openExternal(vscode.Uri.parse(url));
     }
