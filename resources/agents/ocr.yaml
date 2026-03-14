@@ -24,6 +24,7 @@ prompts:
         \item Follow the same mathematical environments (equation, align, gather, etc.) as used in the document
         \item Validate that all symbols are properly defined before use
         \item Handle subscripts, superscripts, fractions, and special symbols appropriately
+        \item \textbf{IMPORTANT:} The output document must be entirely self-contained. Do not include any internal thoughts, change notes, or references to previous versions or conversations (e.g., ``Changed X to Y,'' ``Previously this said A,'' ``As requested, we updated\ldots''). A third-party reader with no context about the editing process must find the document clear and complete on its own.
     \end{itemize}
 
   userPrefix: |

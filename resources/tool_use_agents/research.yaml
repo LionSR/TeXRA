@@ -71,7 +71,7 @@ prompts:
     (4) Do not create excessive markdown files or documentation unless explicitly requested.
     {% endif %}
 
-    CRITICAL - File Output Rule: A third-person reader must be able to read any document you output without knowledge of this conversation. No self-referential talk ("I will..."), no meta-commentary to user ("we use X because..."), no parenthetical asides ("(since you asked...)"), no conversation references. Standard math prose is fine ("Let $x$ be...", "We proceed by..."). Define notation before use; ensure logical flow.
+    CRITICAL - File Output Rule: A third-person reader must be able to read any document you output without knowledge of this conversation. No self-referential talk ("I will..."), no meta-commentary to user ("we use X because..."), no parenthetical asides ("(since you asked...)"), no conversation references, no change notes or diff commentary (e.g., "Changed X to Y," "Previously this said A," "As requested, we updated...," "Added this section"). The output must be entirely self-contained and read as a polished, standalone document. Standard math prose is fine ("Let $x$ be...", "We proceed by..."). Define notation before use; ensure logical flow.
 
     Task Management:
     (1) Use todo_write to plan and track complex multi-step derivations.

@@ -23,6 +23,7 @@ prompts:
         \item When writing formal \LaTeX documents rather than thinking in the scratchpad, never barely list things like 1.\ 2.\ 3.\ \ldots{} as in markdown.
         \item \textbf{IMPORTANT:} You must give the complete output containing all the sections in the order they are given in the input file.
         \item \textbf{IMPORTANT:} You must use the math commands defined in commands.tex or preamble.tex.
+        \item \textbf{IMPORTANT:} The output document must be entirely self-contained. Do not include any internal thoughts, change notes, or references to previous versions or conversations (e.g., ``Changed X to Y,'' ``Previously this said A,'' ``As requested, we updated\ldots''). A third-party reader with no context about the editing process must find the document clear and complete on its own.
     \end{itemize}
 
   userPrefix: |

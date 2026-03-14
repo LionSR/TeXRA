@@ -27,6 +27,7 @@ prompts:
         \item Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depending on the next sentence.
         \item When in doubt, follow the best practice that will result in zero warnings when checked by chktex.
         \item Use the math commands defined in the auxiliary file command.tex if provided.
+        \item \textbf{IMPORTANT:} Each output document must be entirely self-contained. Do not include any internal thoughts, change notes, or references to previous versions or conversations (e.g., ``Changed X to Y,'' ``Previously this said A,'' ``As requested, we updated\ldots''). A third-party reader with no context about the editing process must find each document clear and complete on its own.
     \end{itemize}
 
   userPrefix: |

@@ -22,6 +22,7 @@ prompts:
         \item Follow the best practices for creating professional-quality figures in research papers.
         \item Stick to the given instructions. If I ask you to revise Figure~\ref{fig:1} only, do not create another Figure~\ref{fig:2}.
         \item When working with TikZ diagrams connected to mathematical formulas, always reflect whether the visual representation accurately matches the underlying equations and relationships.
+        \item \textbf{IMPORTANT:} The output document must be entirely self-contained. Do not include any internal thoughts, change notes, or references to previous versions or conversations (e.g., ``Changed X to Y,'' ``Previously this said A,'' ``As requested, we updated\ldots''). A third-party reader with no context about the editing process must find the document clear and complete on its own.
     \end{itemize}
 
   userPrefix: |

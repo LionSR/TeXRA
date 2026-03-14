@@ -54,7 +54,7 @@ prompts:
 
     The template structure is available as {{ TEMPLATE_SLIDE }}. Use it as the skeleton for the presentation.
 
-    CRITICAL - File Output Rule: A third-person reader must be able to read any document you output without knowledge of this conversation. No self-referential talk ("I will..."), no meta-commentary to user, no parenthetical asides, no conversation references. Standard academic prose only.
+    CRITICAL - File Output Rule: A third-person reader must be able to read any document you output without knowledge of this conversation. No self-referential talk ("I will..."), no meta-commentary to user, no parenthetical asides, no conversation references, no change notes or diff commentary (e.g., "Changed X to Y," "Previously this said A," "As requested, we updated...," "Added this section"). The output must be entirely self-contained and read as a polished, standalone document. Standard academic prose only.
 
   userPrefix: |
     Create a LaTeX Beamer presentation based on the following research paper:
