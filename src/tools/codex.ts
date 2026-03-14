@@ -264,14 +264,19 @@ export class CodexTool extends defineTool({
       );
     }
 
-    return this.executeForeground(thread, input);
+    return this.executeForeground(thread, input, ctx?.onToolOutput);
   }
 
   private async executeForeground(
     thread: Thread,
     input: CodexInput,
+    onToolOutput?: (chunk: string) => void,
   ): Promise<ToolResult> {
-    const turn = await thread.run(input.prompt);
+    // Use streaming path when the framework provides a live-output callback,
+    // so partial results appear in the UI as they arrive (like slow bash).
+    const turn = onToolOutput
+      ? await this.runStreamedForeground(thread, input, onToolOutput)
+      : await thread.run(input.prompt);
 
     const preview =
       input.prompt.length > 60 ? `${input.prompt.slice(0, 57)}…` : input.prompt;
@@ -279,6 +284,50 @@ export class CodexTool extends defineTool({
     return {
       summary: `Codex: ${preview}`,
       output: formatTurnResult(turn),
+    };
+  }
+
+  /** Run a foreground turn via the streaming API, pushing chunks to the UI. */
+  private async runStreamedForeground(
+    thread: Thread,
+    input: CodexInput,
+    onToolOutput: (chunk: string) => void,
+  ): Promise<RunResult> {
+    const { events } = await thread.runStreamed(input.prompt);
+    const items: ThreadItem[] = [];
+    const responseParts: string[] = [];
+    let usage: RunResult['usage'] = null;
+
+    for await (const event of events) {
+      if (event.type === 'item.completed') {
+        const { item } = event as ItemCompletedEvent;
+        items.push(item);
+
+        if (item.type === 'command_execution') {
+          const status = item.exit_code === 0 ? 'ok' : `exit ${item.exit_code}`;
+          onToolOutput(`Command: ${item.command} (${status})\n`);
+        } else if (item.type === 'file_change') {
+          const changed = item.changes
+            .map((c) => `${c.kind} ${c.path}`)
+            .join(', ');
+          if (changed) onToolOutput(`Files changed: ${changed}\n`);
+        } else if (item.type === 'agent_message') {
+          responseParts.push(item.text);
+          onToolOutput(item.text + '\n');
+        }
+      } else if (event.type === 'turn.completed') {
+        usage = (event as TurnCompletedEvent).usage ?? null;
+      } else if (event.type === 'turn.failed') {
+        throw new ToolError(
+          (event as TurnFailedEvent).error.message ?? 'Codex turn failed',
+        );
+      }
+    }
+
+    return {
+      items,
+      finalResponse: responseParts.join('\n\n'),
+      usage,
     };
   }
 

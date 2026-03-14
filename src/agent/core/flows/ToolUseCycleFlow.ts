@@ -491,7 +491,7 @@ const SLOW_TOOLS = new Set([
 const DEFERRED_LOG_TOOLS = new Set(['bash']);
 
 /** Tools that support streaming partial output to the UI. */
-const STREAMABLE_TOOLS = new Set(['bash']);
+const STREAMABLE_TOOLS = new Set(['bash', 'codex']);
 
 /** Maximum size of the streaming output buffer sent to the UI (bytes). */
 const STREAM_BUFFER_MAX = 50_000;
