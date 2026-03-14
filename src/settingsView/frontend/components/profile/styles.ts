@@ -81,6 +81,10 @@ export const profileViewStyles: CSSResult = css`
     margin-top: var(--spacing-xlarge);
   }
 
+  /* ============================================
+   * Provider Keys Table
+   * ============================================ */
+
   .provider-keys-table {
     width: 100%;
     border-collapse: collapse;
@@ -129,6 +133,10 @@ export const profileViewStyles: CSSResult = css`
     white-space: nowrap;
   }
 
+  /* ============================================
+   * API Access Options
+   * ============================================ */
+
   .api-access-section {
     margin-top: var(--spacing-xlarge);
     margin-bottom: var(--spacing-xlarge);
@@ -137,6 +145,7 @@ export const profileViewStyles: CSSResult = css`
   .api-access-description {
     color: var(--color-text-secondary);
     margin-bottom: var(--spacing-medium);
+    line-height: var(--line-height-normal);
   }
 
   .api-access-options {
@@ -185,7 +194,12 @@ export const profileViewStyles: CSSResult = css`
   .option-description {
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
   }
+
+  /* ============================================
+   * Provider Keys Section
+   * ============================================ */
 
   .provider-keys-section {
     margin-top: var(--spacing-xlarge);
@@ -198,6 +212,7 @@ export const profileViewStyles: CSSResult = css`
   .provider-keys-description {
     color: var(--color-text-secondary);
     margin-bottom: var(--spacing-medium);
+    line-height: var(--line-height-normal);
   }
 
   .provider-name {
@@ -383,6 +398,7 @@ export const profileViewStyles: CSSResult = css`
   .model-selection-description {
     color: var(--color-text-secondary);
     margin-bottom: var(--spacing-medium);
+    line-height: var(--line-height-normal);
   }
 
   .helper-model-row {

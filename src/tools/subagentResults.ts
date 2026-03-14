@@ -20,6 +20,7 @@ import type { ExecResult } from '@agent/types/ResultTypes';
 import type { ActiveChildInfo, SubagentProgressUpdate } from '@shared/schemas';
 import type { ExecutionId } from '@shared/schemas';
 import { TODO_STATUS } from '@shared/schemas/todo';
+import { countByStatus } from '@shared/schemas/todoDisplay';
 import { formatDuration } from '@utils/core';
 import { AbsoluteFS } from '@utils/files';
 import { getRunDir, ensureRunDir } from '@utils/files/taskRunStorage';
@@ -303,13 +304,7 @@ export function formatSubagentProgress(
 
   switch (update.kind) {
     case 'todos': {
-      const completed = update.todos.filter(
-        (t) => t.status === TODO_STATUS.COMPLETED,
-      ).length;
-      const inProgress = update.todos.filter(
-        (t) => t.status === TODO_STATUS.IN_PROGRESS,
-      ).length;
-      const pending = update.todos.length - completed - inProgress;
+      const { completed, inProgress, pending } = countByStatus(update.todos);
       const TODO_PROGRESS_ICON: Record<string, string> = {
         [TODO_STATUS.COMPLETED]: '[x]',
         [TODO_STATUS.IN_PROGRESS]: '[>]',
@@ -351,13 +346,7 @@ export function formatSubagentProgress(
         return `<subagent-progress ${idAttr} ${agentAttr} type="plan" status="cleared" />`;
       }
       const steps = update.plan.steps;
-      const completed = steps.filter(
-        (s) => s.status === TODO_STATUS.COMPLETED,
-      ).length;
-      const inProgress = steps.filter(
-        (s) => s.status === TODO_STATUS.IN_PROGRESS,
-      ).length;
-      const pending = steps.length - completed - inProgress;
+      const { completed, inProgress, pending } = countByStatus(steps);
       return `<subagent-progress ${idAttr} ${agentAttr} type="plan" steps="${steps.length}" completed="${completed}" active="${inProgress}" pending="${pending}" />`;
     }
 

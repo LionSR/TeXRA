@@ -47,7 +47,7 @@ export class MultiAgentTab extends LitElement {
 
       .setting-description {
         margin: var(--spacing-small) 0 0 0;
-        font-size: var(--font-size-small);
+        font-size: var(--font-size-sm);
       }
 
       /* Preset cards */

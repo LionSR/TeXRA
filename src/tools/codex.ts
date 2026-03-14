@@ -79,6 +79,7 @@ import { escapeAttr, escapeText } from '@tools/subagentResults';
 // Local imports - utils
 import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -272,8 +273,7 @@ export class CodexTool extends defineTool({
   ): Promise<ToolResult> {
     const turn = await thread.run(input.prompt);
 
-    const preview =
-      input.prompt.length > 60 ? `${input.prompt.slice(0, 57)}…` : input.prompt;
+    const preview = truncateWithEllipsis(input.prompt, 60);
 
     return {
       summary: `Codex: ${preview}`,
@@ -296,8 +296,7 @@ export class CodexTool extends defineTool({
     const executionId = generateExecutionId();
     await ensureRunDir(executionId);
 
-    const preview =
-      input.prompt.length > 60 ? `${input.prompt.slice(0, 57)}…` : input.prompt;
+    const preview = truncateWithEllipsis(input.prompt, 60);
 
     const syntheticConfig = AgentConfigSchema.parse({
       agent: 'codex',
