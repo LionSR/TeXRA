@@ -252,6 +252,7 @@ export class CodexTool extends defineTool({
     const thread = codex.startThread({
       workingDirectory: input.working_directory,
       sandboxMode: input.sandbox_mode,
+      skipGitRepoCheck: true,
     });
 
     if (input.run_in_background) {
