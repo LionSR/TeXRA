@@ -337,7 +337,9 @@ export async function fetchDiagnosticsForFile(
   const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(file));
   const diagnosticsWait = waitForDiagnosticsChange(uri, 10000);
 
-  const openedPath = await openFileInEditor(file);
+  const openedPath = await openFileInEditor(file, undefined, undefined, {
+    preserveFocus: true,
+  });
   if (!openedPath) return null;
 
   await diagnosticsWait;

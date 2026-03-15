@@ -16,8 +16,10 @@ export async function openFileInEditor(
   filePath: string,
   line?: number,
   column?: number,
+  options?: { preserveFocus?: boolean },
 ): Promise<string | undefined> {
   try {
+    const preserveFocus = options?.preserveFocus ?? false;
     const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
     const existingEditor = vscode.window.visibleTextEditors.find(
       (e) => e.document.uri.fsPath === uri.fsPath,
@@ -27,13 +29,13 @@ export async function openFileInEditor(
     if (existingEditor) {
       editor = await vscode.window.showTextDocument(existingEditor.document, {
         viewColumn: existingEditor.viewColumn,
-        preserveFocus: false,
+        preserveFocus,
       });
     } else {
       const document = await vscode.workspace.openTextDocument(uri);
       editor = await vscode.window.showTextDocument(document, {
         preview: false,
-        preserveFocus: false,
+        preserveFocus,
       });
     }
 
