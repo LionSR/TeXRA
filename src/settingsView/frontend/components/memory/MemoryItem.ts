@@ -4,16 +4,19 @@
 
 // Third-party imports
 import { LitElement, html, nothing, css, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared styles
 import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
+import { markdownStyles } from '@shared/styles/markdownStyles';
 import type { MemoryViewItem } from '@shared/schemas';
 import {
   formatBytes,
   formatLineCount,
   formatUpdatedDate,
 } from '@shared/utils/string';
+import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 
 // Local imports - memory view events
 import { MemoryViewEvents } from './events';
@@ -24,6 +27,7 @@ export class MemoryItem extends LitElement {
     designTokens,
     codiconStyles,
     commonViewStyles,
+    markdownStyles,
     css`
       :host {
         display: block;
@@ -42,12 +46,8 @@ export class MemoryItem extends LitElement {
       }
 
       .memory-preview {
-        font-family: var(--vscode-editor-font-family), monospace;
         font-size: var(--font-size-sm);
         line-height: var(--line-height-normal);
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        background-color: var(--vscode-editor-inactiveSelectionBackground);
         padding: var(--spacing-medium);
         border-radius: var(--border-radius);
         margin: 0;
@@ -63,6 +63,21 @@ export class MemoryItem extends LitElement {
   ];
 
   @property({ attribute: false }) item?: MemoryViewItem;
+
+  /** Tracks whether the collapsible has been opened at least once to defer markdown rendering. */
+  @state() private contentsOpened = false;
+
+  /** Cached markdown render to avoid re-parsing on every Lit update cycle. */
+  private cachedPreviewSource: string | null = null;
+  private cachedPreviewHtml = '';
+
+  private renderMarkdown(text: string): string {
+    if (text !== this.cachedPreviewSource) {
+      this.cachedPreviewSource = text;
+      this.cachedPreviewHtml = getLightweightMd().render(text);
+    }
+    return this.cachedPreviewHtml;
+  }
 
   private handleOpen(): void {
     if (!this.item) return;
@@ -94,6 +109,12 @@ export class MemoryItem extends LitElement {
     }
   }
 
+  private handleContentsToggle(event: CustomEvent<{ open?: boolean }>): void {
+    if (event.detail?.open) {
+      this.contentsOpened = true;
+    }
+  }
+
   private renderMeta(item: MemoryViewItem): string {
     const parts: string[] = [];
     if (item.pinned) {
@@ -113,9 +134,7 @@ export class MemoryItem extends LitElement {
       return nothing;
     }
 
-    const previewText = this.item.preview?.trim()
-      ? this.item.preview
-      : 'This note is empty.';
+    const previewText = this.item.preview?.trim() ? this.item.preview : null;
 
     return html`
       <div class="list-item memory-item ${this.item.pinned ? 'pinned' : ''}">
@@ -150,8 +169,20 @@ export class MemoryItem extends LitElement {
         <div class="text-secondary memory-meta">
           ${this.renderMeta(this.item)}
         </div>
-        <vscode-collapsible class="collapsible" heading="Contents">
-          <pre class="memory-preview">${previewText}</pre>
+        <vscode-collapsible
+          class="collapsible"
+          heading="Contents"
+          @vsc-collapsible-toggle=${this.handleContentsToggle}
+        >
+          ${this.contentsOpened
+            ? html`<div class="memory-preview">
+                ${previewText
+                  ? html`<div class="markdown-content">
+                      ${unsafeHTML(this.renderMarkdown(previewText))}
+                    </div>`
+                  : html`<em class="text-secondary">This note is empty.</em>`}
+              </div>`
+            : nothing}
         </vscode-collapsible>
       </div>
     `;
