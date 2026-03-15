@@ -8,7 +8,6 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, queryAll } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
-import MarkdownIt from 'markdown-it';
 import Mark from 'mark.js';
 
 // Local imports - shared
@@ -22,27 +21,13 @@ import {
 } from '@shared/styles';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
-import { highlightCode } from '@shared/highlighting/highlightCode';
+import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 
 // Local imports - history view styles
 import { historyViewStyles } from './styles';
 
 // Local imports - history view events
 import { HistoryViewEvents } from './events';
-
-/** Lazy-initialized lightweight markdown renderer (no LaTeX/KaTeX). */
-let md: MarkdownIt | null = null;
-const getMd = (): MarkdownIt => {
-  if (!md) {
-    md = new MarkdownIt({
-      breaks: false,
-      linkify: true,
-      html: false,
-      highlight: highlightCode,
-    });
-  }
-  return md;
-};
 
 type ConfigValue = string | number | boolean | string[] | null | undefined;
 
@@ -102,7 +87,7 @@ export class HistoryItem extends LitElement {
   private renderMarkdown(text: string): string {
     if (text !== this.cachedInstructionSource) {
       this.cachedInstructionSource = text;
-      this.cachedInstructionHtml = getMd().render(text);
+      this.cachedInstructionHtml = getLightweightMd().render(text);
     }
     return this.cachedInstructionHtml;
   }
