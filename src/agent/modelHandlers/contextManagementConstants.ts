@@ -25,8 +25,16 @@ export const CHAINED_RESPONSE_SAFETY_MARGIN_PERCENT = 5;
 /** Max character length for tool result text (200KB ~ 50-66k tokens). */
 export const MAX_TOOL_RESULT_TEXT_LENGTH = 200_000;
 
-/** Max PDF pages per Anthropic API request. */
-export const ANTHROPIC_MAX_PDF_PAGES = 100;
+/** Max PDF pages per Anthropic API request: 600 for 1M-context models, 100 for 200K-context models. */
+export const ANTHROPIC_MAX_PDF_PAGES_1M = 600;
+export const ANTHROPIC_MAX_PDF_PAGES_200K = 100;
+
+/** Returns the PDF page limit based on the model's effective context window. */
+export function getAnthropicMaxPdfPages(contextWindow: number): number {
+  return contextWindow > 200_000
+    ? ANTHROPIC_MAX_PDF_PAGES_1M
+    : ANTHROPIC_MAX_PDF_PAGES_200K;
+}
 
 /** Compute reduced max tokens under context pressure (minimum 1). */
 export function computeReducedMaxTokens(
