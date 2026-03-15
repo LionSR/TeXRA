@@ -130,15 +130,12 @@ const extensionConfig = {
     'split.js': 'Split',
     '@vscode/codicons': 'commonjs @vscode/codicons',
     vscode: 'commonjs vscode', // the vscode-module is created on-the-fly and must be excluded. Add other modules that cannot be webpack'ed, 📖 -> https://webpack.js.org/configuration/externals/
-    // @openai/codex-sdk is intentionally NOT external — bundler converts ESM→CJS at build time
+    '@openai/codex-sdk': 'commonjs @openai/codex-sdk', // ESM-only; use esbuild builds which bundle it
     // modules added here also need to be added in the .vscodeignore file
   },
   resolve: {
     // support reading TypeScript and JavaScript files, 📖 -> https://github.com/TypeStrong/ts-loader
     extensions: ['.ts', '.js'],
-    // @openai/codex-sdk is ESM-only (exports map has "import" but not "require").
-    // Adding "import" lets webpack resolve it so we can bundle it into CJS output.
-    conditionNames: ['import', 'require', 'module', 'node'],
     alias: {
       '@': path.resolve(__dirname, 'src'),
       '~': path.resolve(__dirname, 'src'),
