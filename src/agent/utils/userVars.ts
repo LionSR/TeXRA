@@ -11,8 +11,11 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { FileListEntry } from '@shared/schemas';
 import { getXmlFormatFromFiles, getListOfFiles } from '@utils/prompt';
 import { getConfig } from '@utils/config';
-import { WorkspaceFS } from '@utils/files';
+import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { setVarFromFile } from '@utils/files/varsUtils';
+
+/** Relative path from an agent directory to the shared LaTeX style rules file. */
+const SHARED_LATEX_RULES_REL = '../shared/latex_style_rules.txt';
 
 /**
  * User variables for prompt rendering
@@ -71,8 +74,18 @@ export async function buildUserVars(
     await getPatternBasedFileVars(agentConfig, agentSetting, logger);
   allLoadedFiles.push(...patternFiles);
 
+  // Load shared LaTeX style rules (best-effort; empty string if missing)
+  let latexStyleRules = '';
+  try {
+    const rulesPath = path.join(agentPath, SHARED_LATEX_RULES_REL);
+    latexStyleRules = await AbsoluteFS.read(rulesPath);
+  } catch {
+    // Shared rules file not available (e.g. remote agent with no local path)
+  }
+
   // Merge all variable sources using spread operator
   const userVars: UserVars = {
+    LATEX_STYLE_RULES: latexStyleRules,
     ...getBasicVars(agentConfig, providerFlags, workspacePath),
     ...(await getFileVars(agentConfig, agentSetting, logger)),
     ...requiredVars,
