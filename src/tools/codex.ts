@@ -16,108 +16,15 @@ import * as path from 'path';
 
 // Third-party imports
 import { z } from 'zod';
-
-// ---------------------------------------------------------------------------
-// Codex SDK types — defined locally to avoid a static import of the optional
-// @openai/codex-sdk package, which is ESM-only and breaks webpack CJS builds.
-// These mirror the canonical types from @openai/codex-sdk/dist/index.d.ts.
-// ---------------------------------------------------------------------------
-
-type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
-
-// -- Thread items (discriminated union) ------------------------------------
-
-type CommandExecutionItem = {
-  id: string;
-  type: 'command_execution';
-  command: string;
-  aggregated_output: string;
-  exit_code?: number;
-  status: 'in_progress' | 'completed' | 'failed';
-};
-
-type FileUpdateChange = { path: string; kind: 'add' | 'delete' | 'update' };
-
-type FileChangeItem = {
-  id: string;
-  type: 'file_change';
-  changes: FileUpdateChange[];
-  status: 'completed' | 'failed';
-};
-
-type AgentMessageItem = {
-  id: string;
-  type: 'agent_message';
-  text: string;
-};
-
-type ReasoningItem = {
-  id: string;
-  type: 'reasoning';
-  text: string;
-};
-
-type ErrorItem = {
-  id: string;
-  type: 'error';
-  message: string;
-};
-
-// We only need to discriminate on types we handle; the rest share a common shape.
-type OtherItem = {
-  id: string;
-  type: 'web_search' | 'mcp_tool_call' | 'todo_list';
-};
-
-type ThreadItem =
-  | CommandExecutionItem
-  | FileChangeItem
-  | AgentMessageItem
-  | ReasoningItem
-  | ErrorItem
-  | OtherItem;
-
-// -- Usage -----------------------------------------------------------------
-
-type Usage = {
-  input_tokens: number;
-  cached_input_tokens: number;
-  output_tokens: number;
-};
-
-// -- Turn / RunResult ------------------------------------------------------
-
-type Turn = {
-  items: ThreadItem[];
-  finalResponse: string;
-  usage: Usage | null;
-};
-
-type RunResult = Turn;
-
-// -- Thread ----------------------------------------------------------------
-
-interface Thread {
-  run(prompt: string): Promise<RunResult>;
-  runStreamed(
-    prompt: string,
-  ): Promise<{ events: AsyncIterable<ThreadEvent> }>;
-}
-
-// -- Events (discriminated union) ------------------------------------------
-
-type ItemCompletedEvent = { type: 'item.completed'; item: ThreadItem };
-type TurnCompletedEvent = { type: 'turn.completed'; usage: Usage };
-type TurnFailedEvent = { type: 'turn.failed'; error: { message: string } };
-type ThreadEvent =
-  | { type: 'thread.started'; thread_id: string }
-  | { type: 'turn.started' }
-  | TurnCompletedEvent
-  | TurnFailedEvent
-  | { type: 'item.started'; item: ThreadItem }
-  | { type: 'item.updated'; item: ThreadItem }
-  | ItemCompletedEvent
-  | { type: 'error'; message: string };
+import type {
+  CommandExecutionItem,
+  FileChangeItem,
+  RunResult,
+  SandboxMode,
+  Thread,
+  ThreadEvent,
+  ThreadItem,
+} from '@openai/codex-sdk';
 
 // Local imports - agent
 import {
