@@ -15,7 +15,7 @@
 import { execSync } from 'child_process';
 import { createRequire } from 'module';
 import * as path from 'path';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { pathToFileURL } from 'url';
 
 type CodexConstructor = new (options?: any) => any;
@@ -101,6 +101,66 @@ export async function importCodexClass(): Promise<CodexConstructor> {
   } catch (err: unknown) {
     esmErrors.push(
       `direct: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  // Strategy C: try require() directly. Node 22+ (and some Electron builds)
+  // can require ESM modules via --experimental-require-module.
+  try {
+    const entryFile =
+      resolveEsmEntryPoint('@openai/codex-sdk') ??
+      resolvePackageFile('@openai/codex-sdk', 'dist/index.js');
+    if (entryFile) {
+      const req = createRequire(entryFile);
+      const cjsMod = req(entryFile) as Record<string, unknown>;
+      const cjsResolved = resolveCodexConstructor(cjsMod);
+      if (cjsResolved) {
+        console.log(
+          `[codex-import] Resolved via createRequire: ${entryFile}`,
+        );
+        return cjsResolved;
+      }
+      esmErrors.push(
+        `createRequire loaded ${entryFile} but Codex class not found`,
+      );
+    } else {
+      esmErrors.push('createRequire: no entry file found');
+    }
+  } catch (err: unknown) {
+    esmErrors.push(
+      `createRequire: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  // Strategy D: read the ESM source, transform imports/exports to CJS,
+  // write a temp .cjs file, and require() it. The codex-sdk bundle only
+  // imports Node builtins (fs, os, path) so the transform is safe.
+  try {
+    const entryFile =
+      resolveEsmEntryPoint('@openai/codex-sdk') ??
+      resolvePackageFile('@openai/codex-sdk', 'dist/index.js');
+    if (entryFile) {
+      const cjsMod = loadEsmAsCjs(entryFile);
+      if (cjsMod) {
+        const cjsResolved = resolveCodexConstructor(cjsMod);
+        if (cjsResolved) {
+          console.log(
+            `[codex-import] Resolved via ESM-to-CJS transform: ${entryFile}`,
+          );
+          return cjsResolved;
+        }
+        esmErrors.push(
+          `ESM-to-CJS transform loaded ${entryFile} but Codex class not found`,
+        );
+      } else {
+        esmErrors.push('ESM-to-CJS transform: entry file could not be read');
+      }
+    } else {
+      esmErrors.push('ESM-to-CJS transform: no entry file found');
+    }
+  } catch (err: unknown) {
+    esmErrors.push(
+      `ESM-to-CJS: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
@@ -216,6 +276,78 @@ function resolvePackageFile(
     dir = parent;
   }
   return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// ESM → CJS runtime transform
+// ---------------------------------------------------------------------------
+
+/**
+ * Read an ESM source file, transform its imports/exports to CJS syntax,
+ * write a temp `.cjs` file, and `require()` it. Returns the module exports
+ * or `undefined` if the file can't be read.
+ *
+ * Only safe for modules whose imports are Node builtins or resolvable via
+ * `require()` from the original file's location.
+ */
+function loadEsmAsCjs(
+  esmFilePath: string,
+): Record<string, unknown> | undefined {
+  let source: string;
+  try {
+    source = readFileSync(esmFilePath, 'utf8');
+  } catch {
+    return undefined;
+  }
+
+  // Transform: import { x as y } from "mod"  →  const { x: y } = require("mod")
+  // Transform: import { x } from "mod"        →  const { x } = require("mod")
+  // Transform: import x from "mod"            →  const x = require("mod")
+  // Transform: export { X, Y }                →  module.exports = { X, Y }
+  // Transform: export { X, Y };               →  module.exports = { X, Y };
+  let transformed = source
+    .replace(
+      /import\s*\{([^}]+)\}\s*from\s*["']([^"']+)["']\s*;?/g,
+      (_match, imports: string, mod: string) => {
+        // Convert "x as y" to "x: y" for destructuring
+        const fixed = imports.replace(/\b(\w+)\s+as\s+(\w+)\b/g, '$1: $2');
+        return `const {${fixed}} = require("${mod}");`;
+      },
+    )
+    .replace(
+      /import\s+(\w+)\s+from\s*["']([^"']+)["']\s*;?/g,
+      'const $1 = require("$2");',
+    )
+    .replace(/export\s*\{([^}]+)\}\s*;?/g, 'module.exports = {$1};');
+
+  // import.meta.url is ESM-only; replace with CJS equivalent.
+  // The temp file sits next to the original, so __filename is correct.
+  transformed = transformed.replace(
+    /import\.meta\.url/g,
+    'require("url").pathToFileURL(__filename).href',
+  );
+
+  // Write to a temp file next to the original so require() paths resolve
+  const tmpFile = path.join(
+    path.dirname(esmFilePath),
+    `_codex_cjs_${Date.now()}.cjs`,
+  );
+  try {
+    writeFileSync(tmpFile, transformed, 'utf8');
+    try {
+      const req = createRequire(tmpFile);
+      return req(tmpFile) as Record<string, unknown>;
+    } finally {
+      try {
+        unlinkSync(tmpFile);
+      } catch {
+        // Best-effort cleanup
+      }
+    }
+  } catch (err) {
+    // Re-throw so the caller can capture it in esmErrors
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------
