@@ -39,7 +39,10 @@ export async function importCodexClass(): Promise<CodexConstructor> {
   }
 
   const resolved = resolveCodexConstructor(mod);
-  if (resolved) return resolved;
+  if (resolved) {
+    console.log('[codex-import] Resolved via bare import (direct)');
+    return resolved;
+  }
 
   // When the extension host runs in CJS mode (Electron), dynamic import() of
   // an ESM-only package may lose named exports (only an empty `default` object
@@ -53,7 +56,12 @@ export async function importCodexClass(): Promise<CodexConstructor> {
       const fileUrl = pathToFileURL(entryFile).href;
       const esmMod = (await import(fileUrl)) as Record<string, unknown>;
       const esmResolved = resolveCodexConstructor(esmMod);
-      if (esmResolved) return esmResolved;
+      if (esmResolved) {
+        console.log(
+          `[codex-import] Resolved via exports-map file URL: ${entryFile}`,
+        );
+        return esmResolved;
+      }
       esmErrors.push(
         `exports-map resolved ${entryFile} but Codex class not found in module`,
       );
@@ -78,7 +86,12 @@ export async function importCodexClass(): Promise<CodexConstructor> {
       const fileUrl = pathToFileURL(directPath).href;
       const esmMod = (await import(fileUrl)) as Record<string, unknown>;
       const esmResolved = resolveCodexConstructor(esmMod);
-      if (esmResolved) return esmResolved;
+      if (esmResolved) {
+        console.log(
+          `[codex-import] Resolved via direct dist/index.js: ${directPath}`,
+        );
+        return esmResolved;
+      }
       esmErrors.push(
         `direct dist/index.js resolved ${directPath} but Codex class not found`,
       );
