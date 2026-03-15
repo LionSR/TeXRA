@@ -168,12 +168,11 @@ const SONNET_46_FULLNAME = 'claude-sonnet-4-6';
 /** Compaction must be triggered at or above this minimum input token threshold. */
 const MIN_COMPACTION_TRIGGER_TOKENS = 50_000;
 
-const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
-
 /**
  * Long-context pricing multipliers have been removed.
  * As of GA, standard pricing applies across the full 1M context window —
  * no premium for requests over 200K tokens.
+ * Context window sizes are now provided directly by llm-zoo.
  */
 
 /**
@@ -281,21 +280,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
    */
   private supportsAdaptiveThinking(): boolean {
     return this.isClaudeOpus46() || this.isClaudeSonnet46();
-  }
-
-  private hasNative1MContext(): boolean {
-    return (
-      this.config.fullName === SONNET_46_FULLNAME ||
-      this.config.fullName === OPUS_46_FULLNAME
-    );
-  }
-
-  public override getEffectiveContextWindow(): number {
-    // Opus 4.6 and Sonnet 4.6 include the full 1M context window at standard pricing (GA).
-    // No beta header or opt-in setting required.
-    return this.hasNative1MContext()
-      ? ANTHROPIC_1M_CONTEXT_WINDOW
-      : this.config.contextWindow;
   }
 
   /**
