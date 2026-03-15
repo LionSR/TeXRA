@@ -87,9 +87,8 @@ export async function openBuildDisplayIfTex(
   const uri = vscode.Uri.file(absolutePath);
 
   if (!isLatexFile(absolutePath)) {
-    const preserveFocus = options.preserveFocus ?? false;
     await vscode.commands.executeCommand('vscode.open', uri, {
-      preserveFocus,
+      preserveFocus: options.preserveFocus ?? false,
     } satisfies vscode.TextDocumentShowOptions);
     return;
   }
