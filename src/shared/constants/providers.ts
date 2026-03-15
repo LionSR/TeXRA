@@ -186,7 +186,14 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
       globalStateKey: GlobalStateKey.WEBSOCKET_OPENAI,
     },
   ],
-  anthropic: [],
+  anthropic: [
+    {
+      key: 'texra.model.useAnthropic1MBeta',
+      label: '1M Context Window Beta',
+      description:
+        'Enable the 1M-token context window for Sonnet 4.5 and Sonnet 4 (requires usage tier 4). Not needed for Opus 4.6 and Sonnet 4.6, which include 1M context natively.',
+    },
+  ],
   dashscope: [
     {
       key: GlobalStateKey.DASHSCOPE_USE_CHINA,

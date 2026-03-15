@@ -127,6 +127,12 @@
             "description": "Request reasoning summaries from GPT-5 models (requires verified account and appropriate user tier).",
             "scope": "resource"
           },
+          "texra.model.useAnthropic1MBeta": {
+            "type": "boolean",
+            "default": false,
+            "description": "Attach the `context-1m-2025-08-07` beta header for Claude Sonnet 4.5 and Sonnet 4 requests to enable the 1M-token context window. Requires usage tier 4 or custom rate limits. Not needed for Opus 4.6 and Sonnet 4.6, which include 1M context natively.",
+            "scope": "resource"
+          },
           "texra.model.useCopilot": {
             "type": "boolean",
             "default": false,

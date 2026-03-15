@@ -842,6 +842,84 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
+  it('attaches 1M beta header for Sonnet 4.5 when opt-in setting is enabled', async () => {
+    const handler = createAnthropicHandler({ supportsTokenCounting: true });
+    handler.config.fullName = 'claude-sonnet-4-5';
+
+    const warnMessages: string[] = [];
+    stubHandlerForTest(handler, {
+      warn: (message: string) => {
+        warnMessages.push(message);
+      },
+    });
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'hello', citations: null },
+        ] as ContentBlockParam[],
+      },
+    ];
+
+    const messageOptions: any[] = [];
+    const client = {
+      beta: {
+        messages: {
+          countTokens: async () => ({ input_tokens: 900000 }),
+          create: async (opts: any) => {
+            messageOptions.push(opts);
+            return {
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-sonnet-4-5',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            } as any;
+          },
+        },
+      },
+    } as any;
+
+    const originalGetConfig = configModule.getConfig;
+
+    try {
+      (configModule as any).getConfig = (
+        path: string,
+        defaultValue?: unknown,
+      ) => {
+        if (path === 'model.useAnthropic1MBeta') {
+          return true;
+        }
+        return defaultValue as unknown;
+      };
+
+      const response = await handler.createResponse({
+        client,
+        messages,
+        temperature: 0,
+      });
+      assert.equal(response.response.stop_reason, 'end_turn');
+    } finally {
+      (configModule as any).getConfig = originalGetConfig;
+    }
+
+    assert.equal(
+      warnMessages.length,
+      0,
+      'should not warn when 1M beta context window is active',
+    );
+
+    const options = messageOptions[0] ?? {};
+    const betas: string[] = options.betas ?? [];
+    assert.ok(
+      betas.includes('context-1m-2025-08-07'),
+      'should include the 1M context beta header for Sonnet 4.5',
+    );
+  });
+
   it('adds native compaction context edit for Claude Opus 4.6 tool-use runs', async () => {
     const handler = createAnthropicHandler({
       supportsTokenCounting: false,
