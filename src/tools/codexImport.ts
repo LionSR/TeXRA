@@ -284,10 +284,17 @@ function loadEsmAsCjs(
       /import\s+(\w+)\s+from\s*["']([^"']+)["']\s*;?/g,
       'const $1 = require("$2");',
     )
+    // Re-exports: export { x } from "mod" → Object.assign(module.exports, require("mod"))
+    // Must come before plain export to avoid partial match leaving dangling `from "mod"`.
+    .replace(
+      /export\s*\{[^}]+\}\s*from\s*["']([^"']+)["']\s*;?/g,
+      'Object.assign(module.exports, require("$1"));',
+    )
+    // Plain exports: export { X, Y } → Object.assign(module.exports, { X, Y })
+    // Uses Object.assign so multiple export blocks are additive, not overwriting.
     .replace(/export\s*\{([^}]+)\}\s*;?/g, (_match, exports: string) => {
-      // Convert "X as Y" to "Y: X" for CJS module.exports
       const fixed = exports.replace(/\b(\w+)\s+as\s+(\w+)\b/g, '$2: $1');
-      return `module.exports = {${fixed}};`;
+      return `Object.assign(module.exports, {${fixed}});`;
     });
 
   // import.meta.url is ESM-only; replace with CJS equivalent that points
