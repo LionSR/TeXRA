@@ -90,33 +90,29 @@ prompts:
 
       <scratchpad>
       <reflection>
+      Find the three most likely OCR errors or misinterpretations in your output. For each:
       \begin{enumerate}
-          \item Is the mathematical notation consistent with the rest of the document?
-          \item Are all symbols properly defined and used according to the document's conventions?
-          \item Does the formatting match the document's style (equation numbering, alignment, etc.)?
-          \item Are there any ambiguous symbols or expressions that need clarification?
-          \item Is the integration with surrounding content smooth and logical?
-          \item Have all mathematical environments been properly chosen and formatted?
-          \item Are there any OCR errors or misinterpretations that need correction?
+          \item What did the handwriting show vs. what you produced?
+          \item Why is this likely wrong? (Ambiguous symbol, inconsistent with document notation, unusual expression, etc.)
+          \item What is the correct interpretation?
       \end{enumerate}
+
+      Then check:
+      \begin{itemize}
+          \item Are there any symbols that differ from the document's conventions? (e.g., you used $\alpha$ but the document uses $a$ for the same quantity)
+          \item Are there any mathematical environments that don't match the document's style?
+          \item Are subscripts/superscripts correctly ordered and nested?
+      \end{itemize}
       </reflection>
       <improvements>
+      Based on the problems found above, list concrete fixes:
       \begin{enumerate}
-          \item [Notation Refinements]
+          \item [Fix 1]
               \begin{itemize}
                   \item Issue: [Description]
                   \item Solution: [Specific changes needed]
               \end{itemize}
-          \item [Structure Adjustments]
-              \begin{itemize}
-                  \item Issue: [Description]
-                  \item Solution: [Specific changes needed]
-              \end{itemize}
-          \item [Integration Enhancements]
-              \begin{itemize}
-                  \item Issue: [Description]
-                  \item Solution: [Specific changes needed]
-              \end{itemize}
+          \item[\ldots]
       \end{enumerate}
       </improvements>
       </scratchpad>
