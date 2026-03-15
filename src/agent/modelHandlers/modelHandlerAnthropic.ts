@@ -51,7 +51,7 @@ import { objectToLogString } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
-  ANTHROPIC_MAX_PDF_PAGES,
+  getAnthropicMaxPdfPages,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
   TOOL_USE_SAFETY_BUFFER,
 } from './contextManagementConstants';
@@ -155,7 +155,6 @@ const isBetaToolUseBlock = (block: BetaContentBlock): block is ToolUseBlock =>
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
  */
 
-const CONTEXT_1M_BETA: AnthropicBeta = 'context-1m-2025-08-07';
 const FILES_API_BETA: AnthropicBeta = 'files-api-2025-04-14';
 const SONNET_37_OUTPUT_BETA: AnthropicBeta = 'output-128k-2025-02-19';
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
@@ -169,16 +168,11 @@ const SONNET_46_FULLNAME = 'claude-sonnet-4-6';
 /** Compaction must be triggered at or above this minimum input token threshold. */
 const MIN_COMPACTION_TRIGGER_TOKENS = 50_000;
 
-const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
-
 /**
- * Long-context pricing: when 1M beta is active and input exceeds 200K tokens,
- * all tokens in the request are charged at premium rates.
- * See https://platform.claude.com/docs/en/about-claude/pricing#long-context-pricing
+ * 1M context window is available natively for Opus 4.6 and Sonnet 4.6
+ * at standard pricing (no beta header needed). Context window sizes
+ * are provided directly by llm-zoo. Other Claude models use 200K.
  */
-const LONG_CONTEXT_TOKEN_THRESHOLD = 200_000;
-const LONG_CONTEXT_INPUT_MULTIPLIER = 2;
-const LONG_CONTEXT_OUTPUT_MULTIPLIER = 1.5;
 
 /**
  * Model patterns that require temperature removal when thinking is enabled.
@@ -279,31 +273,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return this.config.fullName.startsWith(SONNET_46_FULLNAME);
   }
 
+  /** Returns the PDF page limit based on the model's effective context window. */
+  private getMaxPdfPages(): number {
+    return getAnthropicMaxPdfPages(this.getEffectiveContextWindow());
+  }
+
   /**
    * Whether this model supports adaptive thinking with the effort parameter.
    * Per Anthropic docs, only Opus 4.6 and Sonnet 4.6 support adaptive thinking.
    */
   private supportsAdaptiveThinking(): boolean {
     return this.isClaudeOpus46() || this.isClaudeSonnet46();
-  }
-
-  private isAnthropic1MBetaEligible(): boolean {
-    return (
-      this.config.fullName === 'claude-sonnet-4-20250514' ||
-      this.config.fullName === 'claude-sonnet-4-5' ||
-      this.config.fullName === SONNET_46_FULLNAME ||
-      this.config.fullName === OPUS_46_FULLNAME
-    );
-  }
-
-  public override getEffectiveContextWindow(): number {
-    const useAnthropic1MBeta = getConfig<boolean>(
-      'texra.model.useAnthropic1MBeta',
-      false,
-    );
-    return useAnthropic1MBeta && this.isAnthropic1MBetaEligible()
-      ? ANTHROPIC_1M_CONTEXT_WINDOW
-      : this.config.contextWindow;
   }
 
   /**
@@ -508,7 +488,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // while keeping context headers needed for accurate token counting.
     const countTokenBetas = options?.betas?.filter(
       (beta) =>
-        beta === CONTEXT_1M_BETA ||
         beta === CONTEXT_MANAGEMENT_BETA ||
         beta === COMPACTION_BETA,
     );
@@ -544,8 +523,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Track input token count for client-side context management triggering
     let measuredInputTokens: number | undefined;
     const effectiveContextWindow = this.getEffectiveContextWindow();
-    const isAnthropic1MBetaActive =
-      effectiveContextWindow > this.config.contextWindow;
 
     // Count cache slots reserved by top-level automatic caching and system prompt
     // so enforceCacheControlLimit knows how many remain for message blocks.
@@ -672,11 +649,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // Update max tokens to use the higher limit when streaming
       options.max_tokens = useStreaming ? 64000 : this.config.maxOutputTokens;
       // The thinking configuration is now handled above for all reasoning models
-    }
-
-    // Opt-in beta for 1M context window on eligible Claude models
-    if (isAnthropic1MBetaActive) {
-      this.ensureBeta(options, CONTEXT_1M_BETA);
     }
 
     // Set up context management before token counting so estimates use matching options.
@@ -1238,7 +1210,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         pdfPageCount = await this.countPdfPagesFromBuffer(buffer);
         if (
           this.getTrackedPdfPageCount() + pdfPageCount >
-          ANTHROPIC_MAX_PDF_PAGES
+          this.getMaxPdfPages()
         ) {
           pageLimitExceeded.push(attachment);
           buffer.fill(0);
@@ -1706,21 +1678,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Note: Anthropic doesn't provide tool_use_tokens in their API response
     const usageTotals = this.getUsageTokenTotals(responseUsage);
 
-    // Apply long-context premium when 1M beta is active and input exceeds 200K.
-    // All tokens in the request are charged at premium rates.
-    const totalInputTokens =
-      usageTotals.baseInputTokens +
-      usageTotals.cacheReadTokens +
-      usageTotals.cacheCreationTokens;
-    const isLongContext =
-      this.getEffectiveContextWindow() > LONG_CONTEXT_TOKEN_THRESHOLD &&
-      totalInputTokens > LONG_CONTEXT_TOKEN_THRESHOLD;
-    const inputPrice = isLongContext
-      ? this.config.inputPrice * LONG_CONTEXT_INPUT_MULTIPLIER
-      : this.config.inputPrice;
-    const outputPrice = isLongContext
-      ? this.config.outputPrice * LONG_CONTEXT_OUTPUT_MULTIPLIER
-      : this.config.outputPrice;
+    // Standard pricing applies across the full context window (no long-context premium).
+    const inputPrice = this.config.inputPrice;
+    const outputPrice = this.config.outputPrice;
 
     let basePrice = calculateTokenPrice(
       usageTotals.baseInputTokens,
@@ -2321,13 +2281,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     if (pageLimitExceeded.length > 0) {
-      const remaining = ANTHROPIC_MAX_PDF_PAGES - this.getTrackedPdfPageCount();
+      const remaining = this.getMaxPdfPages() - this.getTrackedPdfPageCount();
       const names = pageLimitExceeded
         .map((a) => a.path ?? 'attachment.pdf')
         .join(', ');
       toolResultContent.unshift({
         type: 'text',
-        text: `PDF page limit reached — could not include: ${names}. ${remaining} of ${ANTHROPIC_MAX_PDF_PAGES} PDF pages remaining in this conversation. Tell the user.`,
+        text: `PDF page limit reached — could not include: ${names}. ${remaining} of ${this.getMaxPdfPages()} PDF pages remaining in this conversation. Tell the user.`,
       });
     }
 
