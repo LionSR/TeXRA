@@ -4,9 +4,8 @@
 
 // Third-party imports
 import { LitElement, html, nothing, css, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
-import MarkdownIt from 'markdown-it';
 
 // Local imports - shared styles
 import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
@@ -17,24 +16,10 @@ import {
   formatLineCount,
   formatUpdatedDate,
 } from '@shared/utils/string';
-import { highlightCode } from '@shared/highlighting/highlightCode';
+import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 
 // Local imports - memory view events
 import { MemoryViewEvents } from './events';
-
-/** Lazy-initialized lightweight markdown renderer (no LaTeX/KaTeX). */
-let md: MarkdownIt | null = null;
-const getMd = (): MarkdownIt => {
-  if (!md) {
-    md = new MarkdownIt({
-      breaks: false,
-      linkify: true,
-      html: false,
-      highlight: highlightCode,
-    });
-  }
-  return md;
-};
 
 @customElement('memory-item')
 export class MemoryItem extends LitElement {
@@ -79,6 +64,9 @@ export class MemoryItem extends LitElement {
 
   @property({ attribute: false }) item?: MemoryViewItem;
 
+  /** Tracks whether the collapsible has been opened at least once to defer markdown rendering. */
+  @state() private contentsOpened = false;
+
   /** Cached markdown render to avoid re-parsing on every Lit update cycle. */
   private cachedPreviewSource: string | null = null;
   private cachedPreviewHtml = '';
@@ -86,7 +74,7 @@ export class MemoryItem extends LitElement {
   private renderMarkdown(text: string): string {
     if (text !== this.cachedPreviewSource) {
       this.cachedPreviewSource = text;
-      this.cachedPreviewHtml = getMd().render(text);
+      this.cachedPreviewHtml = getLightweightMd().render(text);
     }
     return this.cachedPreviewHtml;
   }
@@ -118,6 +106,12 @@ export class MemoryItem extends LitElement {
       this.dispatchEvent(
         MemoryViewEvents.pinItem({ storagePath: this.item.storagePath }),
       );
+    }
+  }
+
+  private handleContentsToggle(event: CustomEvent<{ open?: boolean }>): void {
+    if (event.detail?.open) {
+      this.contentsOpened = true;
     }
   }
 
@@ -175,14 +169,20 @@ export class MemoryItem extends LitElement {
         <div class="text-secondary memory-meta">
           ${this.renderMeta(this.item)}
         </div>
-        <vscode-collapsible class="collapsible" heading="Contents">
-          <div class="memory-preview">
-            ${previewText
-              ? html`<div class="markdown-content">
-                  ${unsafeHTML(this.renderMarkdown(previewText))}
-                </div>`
-              : html`<em class="text-secondary">This note is empty.</em>`}
-          </div>
+        <vscode-collapsible
+          class="collapsible"
+          heading="Contents"
+          @vsc-collapsible-toggle=${this.handleContentsToggle}
+        >
+          ${this.contentsOpened
+            ? html`<div class="memory-preview">
+                ${previewText
+                  ? html`<div class="markdown-content">
+                      ${unsafeHTML(this.renderMarkdown(previewText))}
+                    </div>`
+                  : html`<em class="text-secondary">This note is empty.</em>`}
+              </div>`
+            : nothing}
         </vscode-collapsible>
       </div>
     `;
