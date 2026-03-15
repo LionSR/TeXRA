@@ -13,7 +13,9 @@
  */
 
 import { execSync } from 'child_process';
+import { randomUUID } from 'crypto';
 import { createRequire } from 'module';
+import * as os from 'os';
 import * as path from 'path';
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { pathToFileURL } from 'url';
@@ -46,71 +48,38 @@ export async function importCodexClass(): Promise<CodexConstructor> {
 
   // When the extension host runs in CJS mode (Electron), dynamic import() of
   // an ESM-only package may lose named exports (only an empty `default` object
-  // appears). Try multiple strategies to load the ESM entry via file:// URL.
+  // appears). Try multiple fallback strategies.
   const esmErrors: string[] = [];
 
-  // Strategy A: resolve entry point from package.json exports/module field.
-  try {
-    const entryFile = resolveEsmEntryPoint('@openai/codex-sdk');
-    if (entryFile) {
+  // Resolve the ESM entry file once — reused by all fallback strategies.
+  const entryFile =
+    resolveEsmEntryPoint('@openai/codex-sdk') ??
+    resolvePackageFile('@openai/codex-sdk', 'dist/index.js');
+
+  if (entryFile) {
+    // Strategy A: import via file:// URL (exports-map resolved entry).
+    try {
       const fileUrl = pathToFileURL(entryFile).href;
       const esmMod = (await import(fileUrl)) as Record<string, unknown>;
       const esmResolved = resolveCodexConstructor(esmMod);
       if (esmResolved) {
         console.log(
-          `[codex-import] Resolved via exports-map file URL: ${entryFile}`,
+          `[codex-import] Resolved via file URL: ${entryFile}`,
         );
         return esmResolved;
       }
       esmErrors.push(
-        `exports-map resolved ${entryFile} but Codex class not found in module`,
+        `file URL loaded ${entryFile} but Codex class not found in module`,
       );
-    } else {
-      esmErrors.push('exports-map resolution returned no entry file');
-    }
-  } catch (err: unknown) {
-    esmErrors.push(
-      `exports-map: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-
-  // Strategy B: try the conventional dist/index.js path directly.
-  // Some Electron versions fail even with file:// if the exports map was
-  // consulted first; going straight to the file bypasses that.
-  try {
-    const directPath = resolvePackageFile(
-      '@openai/codex-sdk',
-      'dist/index.js',
-    );
-    if (directPath) {
-      const fileUrl = pathToFileURL(directPath).href;
-      const esmMod = (await import(fileUrl)) as Record<string, unknown>;
-      const esmResolved = resolveCodexConstructor(esmMod);
-      if (esmResolved) {
-        console.log(
-          `[codex-import] Resolved via direct dist/index.js: ${directPath}`,
-        );
-        return esmResolved;
-      }
+    } catch (err: unknown) {
       esmErrors.push(
-        `direct dist/index.js resolved ${directPath} but Codex class not found`,
+        `file URL: ${err instanceof Error ? err.message : String(err)}`,
       );
-    } else {
-      esmErrors.push('dist/index.js not found in any node_modules');
     }
-  } catch (err: unknown) {
-    esmErrors.push(
-      `direct: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
 
-  // Strategy C: try require() directly. Node 22+ (and some Electron builds)
-  // can require ESM modules via --experimental-require-module.
-  try {
-    const entryFile =
-      resolveEsmEntryPoint('@openai/codex-sdk') ??
-      resolvePackageFile('@openai/codex-sdk', 'dist/index.js');
-    if (entryFile) {
+    // Strategy B: try require() directly. Node 22+ (and some Electron builds)
+    // can require ESM modules via --experimental-require-module.
+    try {
       const req = createRequire(entryFile);
       const cjsMod = req(entryFile) as Record<string, unknown>;
       const cjsResolved = resolveCodexConstructor(cjsMod);
@@ -123,23 +92,16 @@ export async function importCodexClass(): Promise<CodexConstructor> {
       esmErrors.push(
         `createRequire loaded ${entryFile} but Codex class not found`,
       );
-    } else {
-      esmErrors.push('createRequire: no entry file found');
+    } catch (err: unknown) {
+      esmErrors.push(
+        `createRequire: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
-  } catch (err: unknown) {
-    esmErrors.push(
-      `createRequire: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
 
-  // Strategy D: read the ESM source, transform imports/exports to CJS,
-  // write a temp .cjs file, and require() it. The codex-sdk bundle only
-  // imports Node builtins (fs, os, path) so the transform is safe.
-  try {
-    const entryFile =
-      resolveEsmEntryPoint('@openai/codex-sdk') ??
-      resolvePackageFile('@openai/codex-sdk', 'dist/index.js');
-    if (entryFile) {
+    // Strategy C: read the ESM source, transform imports/exports to CJS,
+    // write a temp .cjs file, and require() it. The codex-sdk bundle only
+    // imports Node builtins (fs, os, path) so the transform is safe.
+    try {
       const cjsMod = loadEsmAsCjs(entryFile);
       if (cjsMod) {
         const cjsResolved = resolveCodexConstructor(cjsMod);
@@ -155,13 +117,13 @@ export async function importCodexClass(): Promise<CodexConstructor> {
       } else {
         esmErrors.push('ESM-to-CJS transform: entry file could not be read');
       }
-    } else {
-      esmErrors.push('ESM-to-CJS transform: no entry file found');
+    } catch (err: unknown) {
+      esmErrors.push(
+        `ESM-to-CJS: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
-  } catch (err: unknown) {
-    esmErrors.push(
-      `ESM-to-CJS: ${err instanceof Error ? err.message : String(err)}`,
-    );
+  } else {
+    esmErrors.push('no ESM entry file found in any node_modules');
   }
 
   // Build a diagnostic message showing what we actually got
@@ -304,7 +266,6 @@ function loadEsmAsCjs(
   // Transform: import { x } from "mod"        →  const { x } = require("mod")
   // Transform: import x from "mod"            →  const x = require("mod")
   // Transform: export { X, Y }                →  module.exports = { X, Y }
-  // Transform: export { X, Y };               →  module.exports = { X, Y };
   let transformed = source
     .replace(
       /import\s*\{([^}]+)\}\s*from\s*["']([^"']+)["']\s*;?/g,
@@ -320,33 +281,27 @@ function loadEsmAsCjs(
     )
     .replace(/export\s*\{([^}]+)\}\s*;?/g, 'module.exports = {$1};');
 
-  // import.meta.url is ESM-only; replace with CJS equivalent.
-  // The temp file sits next to the original, so __filename is correct.
+  // import.meta.url is ESM-only; replace with CJS equivalent that points
+  // back to the original file's location (not the temp file).
+  const originalFileUrl = pathToFileURL(esmFilePath).href;
   transformed = transformed.replace(
     /import\.meta\.url/g,
-    'require("url").pathToFileURL(__filename).href',
+    JSON.stringify(originalFileUrl),
   );
 
-  // Write to a temp file next to the original so require() paths resolve
-  const tmpFile = path.join(
-    path.dirname(esmFilePath),
-    `_codex_cjs_${Date.now()}.cjs`,
-  );
+  // Write to os.tmpdir() to avoid permission issues with read-only
+  // node_modules (global installs, VSIX bundles, etc.).
+  const tmpFile = path.join(os.tmpdir(), `_codex_cjs_${randomUUID()}.cjs`);
+  writeFileSync(tmpFile, transformed, 'utf8');
   try {
-    writeFileSync(tmpFile, transformed, 'utf8');
+    const req = createRequire(esmFilePath);
+    return req(tmpFile) as Record<string, unknown>;
+  } finally {
     try {
-      const req = createRequire(tmpFile);
-      return req(tmpFile) as Record<string, unknown>;
-    } finally {
-      try {
-        unlinkSync(tmpFile);
-      } catch {
-        // Best-effort cleanup
-      }
+      unlinkSync(tmpFile);
+    } catch {
+      // Best-effort cleanup
     }
-  } catch (err) {
-    // Re-throw so the caller can capture it in esmErrors
-    throw err;
   }
 }
 
