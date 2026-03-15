@@ -39,22 +39,69 @@ export async function importCodexClass(): Promise<CodexConstructor> {
   }
 
   const resolved = resolveCodexConstructor(mod);
-  if (resolved) return resolved;
+  if (resolved) {
+    console.log('[codex-import] Resolved via bare import (direct)');
+    return resolved;
+  }
 
   // When the extension host runs in CJS mode (Electron), dynamic import() of
   // an ESM-only package may lose named exports (only an empty `default` object
-  // appears). Locate the package on disk, read its ESM entry point from
-  // package.json, and re-import via file:// URL so Node loads it as true ESM.
+  // appears). Try multiple strategies to load the ESM entry via file:// URL.
+  const esmErrors: string[] = [];
+
+  // Strategy A: resolve entry point from package.json exports/module field.
   try {
     const entryFile = resolveEsmEntryPoint('@openai/codex-sdk');
     if (entryFile) {
       const fileUrl = pathToFileURL(entryFile).href;
       const esmMod = (await import(fileUrl)) as Record<string, unknown>;
       const esmResolved = resolveCodexConstructor(esmMod);
-      if (esmResolved) return esmResolved;
+      if (esmResolved) {
+        console.log(
+          `[codex-import] Resolved via exports-map file URL: ${entryFile}`,
+        );
+        return esmResolved;
+      }
+      esmErrors.push(
+        `exports-map resolved ${entryFile} but Codex class not found in module`,
+      );
+    } else {
+      esmErrors.push('exports-map resolution returned no entry file');
     }
-  } catch {
-    // Fall through to error below
+  } catch (err: unknown) {
+    esmErrors.push(
+      `exports-map: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  // Strategy B: try the conventional dist/index.js path directly.
+  // Some Electron versions fail even with file:// if the exports map was
+  // consulted first; going straight to the file bypasses that.
+  try {
+    const directPath = resolvePackageFile(
+      '@openai/codex-sdk',
+      'dist/index.js',
+    );
+    if (directPath) {
+      const fileUrl = pathToFileURL(directPath).href;
+      const esmMod = (await import(fileUrl)) as Record<string, unknown>;
+      const esmResolved = resolveCodexConstructor(esmMod);
+      if (esmResolved) {
+        console.log(
+          `[codex-import] Resolved via direct dist/index.js: ${directPath}`,
+        );
+        return esmResolved;
+      }
+      esmErrors.push(
+        `direct dist/index.js resolved ${directPath} but Codex class not found`,
+      );
+    } else {
+      esmErrors.push('dist/index.js not found in any node_modules');
+    }
+  } catch (err: unknown) {
+    esmErrors.push(
+      `direct: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
   // Build a diagnostic message showing what we actually got
@@ -66,7 +113,8 @@ export async function importCodexClass(): Promise<CodexConstructor> {
   throw new Error(
     'Failed to resolve Codex class from @openai/codex-sdk. ' +
       `Module keys: [${Object.keys(mod).join(', ')}], ` +
-      `default type: ${defType}, default keys: [${defKeys}]`,
+      `default type: ${defType}, default keys: [${defKeys}]. ` +
+      `ESM fallbacks: ${esmErrors.join('; ')}`,
   );
 }
 
@@ -142,6 +190,27 @@ function resolveEsmEntryPoint(packageName: string): string | undefined {
         // Malformed package.json — skip
       }
     }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return undefined;
+}
+
+/**
+ * Locate a specific file inside a package's directory in node_modules.
+ * Walks upward from __dirname, similar to resolveEsmEntryPoint, but
+ * returns the resolved path to the given relative file directly.
+ */
+function resolvePackageFile(
+  packageName: string,
+  relFile: string,
+): string | undefined {
+  let dir = __dirname;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const candidate = path.join(dir, 'node_modules', packageName, relFile);
+    if (existsSync(candidate)) return candidate;
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
