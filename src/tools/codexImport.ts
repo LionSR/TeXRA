@@ -275,11 +275,20 @@ function loadEsmAsCjs(
         return `const {${fixed}} = require("${mod}");`;
       },
     )
+    // Namespace imports: import * as x from "mod" → const x = require("mod")
+    .replace(
+      /import\s+\*\s+as\s+(\w+)\s+from\s*["']([^"']+)["']\s*;?/g,
+      'const $1 = require("$2");',
+    )
     .replace(
       /import\s+(\w+)\s+from\s*["']([^"']+)["']\s*;?/g,
       'const $1 = require("$2");',
     )
-    .replace(/export\s*\{([^}]+)\}\s*;?/g, 'module.exports = {$1};');
+    .replace(/export\s*\{([^}]+)\}\s*;?/g, (_match, exports: string) => {
+      // Convert "X as Y" to "Y: X" for CJS module.exports
+      const fixed = exports.replace(/\b(\w+)\s+as\s+(\w+)\b/g, '$2: $1');
+      return `module.exports = {${fixed}};`;
+    });
 
   // import.meta.url is ESM-only; replace with CJS equivalent that points
   // back to the original file's location (not the temp file).
