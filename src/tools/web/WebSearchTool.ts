@@ -39,7 +39,8 @@ interface DuckDuckGoResponse {
 
 export class WebSearchTool extends defineTool({
   name: 'web_search',
-  description: 'Search the web and return top results',
+  description:
+    'Search the web and return top results. Uses the native provider search tool when available; falls back to DuckDuckGo Instant Answers API.',
   schema: WebSearchInputSchema,
 }) {
   protected async execute(input: WebSearchInput): Promise<ToolResult> {
