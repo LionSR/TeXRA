@@ -56,27 +56,28 @@ prompts:
       % 1ST_UPDATED_LATEX_DOCUMENT HERE
       </latex_document>
     - |
-      Let's take a moment to critically reflect on the changes made:
-
-      <reflection>
-
-      1. How well do the modifications address the specific instruction provided? Are there any areas where the changes could be better aligned with the instruction?
-      2. Are the figures clear, condensed, and effective in conveying the key concepts and ideas? If not, how could they be further refined?
-      3. Do the figures maintain consistency with the overall style and aesthetics of the research paper? If not, what adjustments could be made to ensure a cohesive look and feel?
-      4. Have the figures been properly referenced throughout the main text in relevant places? Are there any missing or unnecessary references?
-      5. Compared to the reference figure(s) provided, does the generated/modified figure(s) effectively convey the same information in a more condensed and visually appealing manner? If not, what improvements can be made?
-
-      </reflection>
-
-      Please carefully consider these points and brainstorm additional targeted improvements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change.
-
       <scratchpad>
+      <reflection>
+      Find the three weakest aspects of your figures. For each:
 
-      1. [Additional improvement 1]
-      2. [Additional improvement 2]
-      3. [Additional improvement 3]
+      1. What is the problem? (Inaccurate representation, misleading layout, missing label, unclear relationship, aesthetic issue, etc.)
+      2. Point to the specific TikZ code or LaTeX text that needs fixing.
+      3. How would you fix it?
+
+      Then check for these specific failure modes:
+
+      - For every mathematical relationship the figure depicts, cite the specific equation. Does the visual topology (arrows, connections, orderings) accurately match the mathematical structure?
+      - Are there any figures you created or modified that were NOT requested in the instruction?
+      - Are all figures properly referenced in the main text?
+      - Do axis labels, legends, and annotations match the notation used in the paper?
+      </reflection>
+      <idea>
+      Based on the problems found above, list concrete fixes:
+
+      1. [Fix or additional improvement 1]
+      2. [Fix or additional improvement 2]
       ...
-
+      </idea>
       </scratchpad>
 
       Then, please output a further enhanced version of the \LaTeX document, incorporating the reflections and additional improvements discussed in the scratchpad. Remember to stay laser-focused on the specific instruction provided or the additional plan in the scratchpad and create figures that are correct, aesthetically pleasing, informative, and condensed, in the style of a professional research paper. If I ask you to revise figure 1 only, do not create a figure 2.
