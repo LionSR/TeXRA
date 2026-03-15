@@ -51,7 +51,7 @@ import { objectToLogString } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
-  ANTHROPIC_MAX_PDF_PAGES,
+  getAnthropicMaxPdfPages,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
   TOOL_USE_SAFETY_BUFFER,
 } from './contextManagementConstants';
@@ -271,6 +271,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   private isClaudeSonnet46(): boolean {
     return this.config.fullName.startsWith(SONNET_46_FULLNAME);
+  }
+
+  /** Returns the PDF page limit based on the model's effective context window. */
+  private getMaxPdfPages(): number {
+    return getAnthropicMaxPdfPages(this.getEffectiveContextWindow());
   }
 
   /**
@@ -1205,7 +1210,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         pdfPageCount = await this.countPdfPagesFromBuffer(buffer);
         if (
           this.getTrackedPdfPageCount() + pdfPageCount >
-          ANTHROPIC_MAX_PDF_PAGES
+          this.getMaxPdfPages()
         ) {
           pageLimitExceeded.push(attachment);
           buffer.fill(0);
@@ -2276,13 +2281,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     if (pageLimitExceeded.length > 0) {
-      const remaining = ANTHROPIC_MAX_PDF_PAGES - this.getTrackedPdfPageCount();
+      const remaining = this.getMaxPdfPages() - this.getTrackedPdfPageCount();
       const names = pageLimitExceeded
         .map((a) => a.path ?? 'attachment.pdf')
         .join(', ');
       toolResultContent.unshift({
         type: 'text',
-        text: `PDF page limit reached — could not include: ${names}. ${remaining} of ${ANTHROPIC_MAX_PDF_PAGES} PDF pages remaining in this conversation. Tell the user.`,
+        text: `PDF page limit reached — could not include: ${names}. ${remaining} of ${this.getMaxPdfPages()} PDF pages remaining in this conversation. Tell the user.`,
       });
     }
 
