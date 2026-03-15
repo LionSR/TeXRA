@@ -5,18 +5,36 @@
 // Third-party imports
 import { LitElement, html, nothing, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+import MarkdownIt from 'markdown-it';
 
 // Local imports - shared styles
 import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
+import { markdownStyles } from '@shared/styles/markdownStyles';
 import type { MemoryViewItem } from '@shared/schemas';
 import {
   formatBytes,
   formatLineCount,
   formatUpdatedDate,
 } from '@shared/utils/string';
+import { highlightCode } from '@shared/highlighting/highlightCode';
 
 // Local imports - memory view events
 import { MemoryViewEvents } from './events';
+
+/** Lazy-initialized lightweight markdown renderer (no LaTeX/KaTeX). */
+let md: MarkdownIt | null = null;
+const getMd = (): MarkdownIt => {
+  if (!md) {
+    md = new MarkdownIt({
+      breaks: false,
+      linkify: true,
+      html: false,
+      highlight: highlightCode,
+    });
+  }
+  return md;
+};
 
 @customElement('memory-item')
 export class MemoryItem extends LitElement {
@@ -24,6 +42,7 @@ export class MemoryItem extends LitElement {
     designTokens,
     codiconStyles,
     commonViewStyles,
+    markdownStyles,
     css`
       :host {
         display: block;
@@ -42,12 +61,8 @@ export class MemoryItem extends LitElement {
       }
 
       .memory-preview {
-        font-family: var(--vscode-editor-font-family), monospace;
         font-size: var(--font-size-sm);
         line-height: var(--line-height-normal);
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        background-color: var(--vscode-editor-inactiveSelectionBackground);
         padding: var(--spacing-medium);
         border-radius: var(--border-radius);
         margin: 0;
@@ -63,6 +78,18 @@ export class MemoryItem extends LitElement {
   ];
 
   @property({ attribute: false }) item?: MemoryViewItem;
+
+  /** Cached markdown render to avoid re-parsing on every Lit update cycle. */
+  private cachedPreviewSource: string | null = null;
+  private cachedPreviewHtml = '';
+
+  private renderMarkdown(text: string): string {
+    if (text !== this.cachedPreviewSource) {
+      this.cachedPreviewSource = text;
+      this.cachedPreviewHtml = getMd().render(text);
+    }
+    return this.cachedPreviewHtml;
+  }
 
   private handleOpen(): void {
     if (!this.item) return;
@@ -113,9 +140,7 @@ export class MemoryItem extends LitElement {
       return nothing;
     }
 
-    const previewText = this.item.preview?.trim()
-      ? this.item.preview
-      : 'This note is empty.';
+    const previewText = this.item.preview?.trim() ? this.item.preview : null;
 
     return html`
       <div class="list-item memory-item ${this.item.pinned ? 'pinned' : ''}">
@@ -151,7 +176,13 @@ export class MemoryItem extends LitElement {
           ${this.renderMeta(this.item)}
         </div>
         <vscode-collapsible class="collapsible" heading="Contents">
-          <pre class="memory-preview">${previewText}</pre>
+          <div class="memory-preview">
+            ${previewText
+              ? html`<div class="markdown-content">
+                  ${unsafeHTML(this.renderMarkdown(previewText))}
+                </div>`
+              : html`<em class="text-secondary">This note is empty.</em>`}
+          </div>
         </vscode-collapsible>
       </div>
     `;
