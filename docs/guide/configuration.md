@@ -87,13 +87,7 @@ Configure how TeXRA connects to AI model providers:
 
 ### Anthropic 1M Context Window
 
-Enable the extended 1M-token context window for Claude Opus 4.6 and Sonnet 4.6:
-
-```json
-"texra.model.useAnthropic1MBeta": true
-```
-
-This attaches the `context-1m-2025-08-07` beta header to Anthropic requests. Usage is capped at 200K tokens by the extension.
+Claude Opus 4.6 and Sonnet 4.6 include the full 1M context window at standard pricing. No opt-in setting or beta header is required — 1M context is enabled automatically. Up to 600 PDF pages per request are supported (100 for models with a 200K context window). Other Claude models use a 200K context window.
 
 ### Bibliography Settings
 
