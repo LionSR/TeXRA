@@ -87,15 +87,7 @@ Configure how TeXRA connects to AI model providers:
 
 ### Anthropic 1M Context Window
 
-Claude Opus 4.6 and Sonnet 4.6 include the full 1M context window at standard pricing. No opt-in setting or beta header is required — 1M context is enabled automatically. Up to 600 images or PDF pages per request are supported.
-
-For Claude Sonnet 4.5 and Sonnet 4, the 1M context window requires the beta header. Enable it with:
-
-```json
-"texra.model.useAnthropic1MBeta": true
-```
-
-This requires usage tier 4 or custom rate limits. Long-context pricing applies (2x input, 1.5x output for requests exceeding 200K tokens).
+Claude Opus 4.6 and Sonnet 4.6 include the full 1M context window at standard pricing. No opt-in setting or beta header is required — 1M context is enabled automatically. Up to 600 images or PDF pages per request are supported. Other Claude models use a 200K context window.
 
 ### Bibliography Settings
 

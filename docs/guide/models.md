@@ -19,7 +19,7 @@ TeXRA supports models from multiple providers. Select models from the dropdown i
 | `haiku45T`  | Fast with reasoning          | $$   | Fast   |
 | `haiku45`   | Fast responses               | $$   | Fast   |
 
-Opus 4.6 and Sonnet 4.6 include the full 1M context window at standard pricing — no opt-in or beta header required. For Sonnet 4.5 and Sonnet 4, enable `texra.model.useAnthropic1MBeta` to access 1M context (requires usage tier 4; long-context pricing applies).
+Opus 4.6 and Sonnet 4.6 include the full 1M context window at standard pricing — no opt-in or beta header required. Other Claude models use a 200K context window.
 
 ## OpenAI Models
 
