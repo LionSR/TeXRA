@@ -83,15 +83,16 @@ export async function buildUserVars(
     // Shared rules file not available (e.g. remote agent with no local path)
   }
 
-  // Merge all variable sources using spread operator
+  // Merge all variable sources using spread operator.
+  // LATEX_STYLE_RULES is placed last to prevent silent overrides from spreads.
   const userVars: UserVars = {
-    LATEX_STYLE_RULES: latexStyleRules,
     ...getBasicVars(agentConfig, providerFlags, workspacePath),
     ...(await getFileVars(agentConfig, agentSetting, logger)),
     ...requiredVars,
     ...patternVars,
     ...getOutputFilesOrder(agentConfig, agentSetting),
     ...getToolFlags(agentConfig, agentSetting, agentPrompt),
+    LATEX_STYLE_RULES: latexStyleRules,
   };
 
   // Emit aggregated file list if any files were loaded
