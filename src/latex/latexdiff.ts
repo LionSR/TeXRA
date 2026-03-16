@@ -174,8 +174,14 @@ export class LaTeXdiffService {
         path.basename(diffFileName),
       );
 
-      await this.commandExecutor.executeDiffVc(inputFile, commitHash, {
+      // latexdiff-vc --git expects a relative path from within the repo.
+      // Passing an absolute path causes it to construct broken temp paths.
+      const cwd = path.dirname(inputFile);
+      const relativeFile = path.basename(inputFile);
+
+      await this.commandExecutor.executeDiffVc(relativeFile, commitHash, {
         mathMarkup,
+        cwd,
       });
       await this.fileProcessor.processDiffFile(pathToLocation(outputPath));
 
