@@ -169,12 +169,6 @@ export class LaTeXdiffService {
         return { success: false, message };
       }
 
-      const diffFileName = inputFile.replace('.tex', `-diff${commitHash}.tex`);
-      const outputPath = path.join(
-        path.dirname(inputFile),
-        path.basename(diffFileName),
-      );
-
       // latexdiff-vc --git runs `git show <commit>:<file>`, which expects
       // a path relative to the repo root. Absolute paths break its temp
       // path construction. Resolve via git rev-parse to get the repo root.
@@ -189,12 +183,18 @@ export class LaTeXdiffService {
         mathMarkup,
         cwd,
       });
+
+      // latexdiff-vc writes output alongside the input, relative to cwd
+      const diffFilePath = filePath.replace('.tex', `-diff${commitHash}.tex`);
+      const outputPath = path.join(cwd, diffFilePath);
       await this.fileProcessor.processDiffFile(pathToLocation(outputPath));
+
+      const diffFileName = path.basename(diffFilePath);
 
       return {
         success: true,
-        diffFileName: path.basename(diffFileName),
-        message: `LaTeXdiff VC completed successfully: ${path.basename(diffFileName)}`,
+        diffFileName,
+        message: `LaTeXdiff VC completed successfully: ${diffFileName}`,
       };
     } catch (err) {
       return this.logDiffError('Error running LaTeX diff VC', err);
