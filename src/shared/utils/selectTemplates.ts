@@ -66,6 +66,14 @@ export function renderAgentOptions(
   `;
 }
 
+/** Short hints shown in the model dropdown tooltip for models that benefit from extra context. */
+const MODEL_HINTS: Record<string, string> = {
+  gpt53codex:
+    'OpenAI coding specialist — optimised for code generation and editing. Requires OpenAI API key.',
+  gpt54pro: 'OpenAI premium reasoning model. Requires OpenAI API key.',
+  gpt54: 'OpenAI flagship reasoning model. Requires OpenAI API key.',
+};
+
 function renderModelOption(
   opt: ModelOptionData,
   selectedValue: string,
@@ -76,9 +84,12 @@ function renderModelOption(
     : opt.label;
 
   const hints: string[] = [];
-  if (decorator.label) hints.push(decorator.label);
+  const modelHint = MODEL_HINTS[opt.value];
+  if (modelHint) hints.push(modelHint);
+  else if (decorator.label) hints.push(decorator.label);
   if (opt.context) hints.push(`Context: ${opt.context}`);
   if (opt.cost) hints.push(`Cost: ${opt.cost}`);
+  if (opt.requiresKey) hints.push('⚠ API key not configured');
   const tooltip = hints.join(' | ');
 
   return html`

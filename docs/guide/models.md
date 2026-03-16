@@ -31,6 +31,8 @@ Opus 4.6 and Sonnet 4.6 include the full 1M context window at standard pricing �
 | `gpt41`      | Long context (1M), vision | $$$  | Medium |
 | `gpt5-`      | Fast flagship             | $$   | Fast   |
 
+**GPT-5.3 Codex** (`gpt53codex`) is OpenAI's coding-specialist model, optimised for code generation, editing, and analysis. It excels at LaTeX-heavy tasks such as rewriting sections, generating TikZ figures, and refactoring document structure. To use it you need an [OpenAI API key](https://platform.openai.com/api-keys) — set it in TeXRA via the **TeXRA: Set API Key** command and choose **OpenAI**.
+
 GPT-5 reasoning summaries require account verification. Enable with `texra.model.gpt5ReasoningSummary`.
 
 ## Google Models
@@ -78,6 +80,7 @@ GPT-5 reasoning summaries require account verification. Enable with `texra.model
 
 - **Simple tasks**: Fast, cheap models (`gemini3f`, `gpt5-`, `haiku45`)
 - **Complex tasks**: Powerful models (`opus46`, `gpt54pro`)
+- **Code-heavy / LaTeX editing**: `gpt53codex` — optimised for code generation and structured editing
 - **Reasoning-heavy**: Thinking models (`sonnet46T`, `opus46T`, `deepseekT`)
 - **Large documents**: High-context models (`gemini*`, `gpt41`)
 
