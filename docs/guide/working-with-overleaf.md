@@ -14,6 +14,7 @@ This guide outlines a workflow to clone your Overleaf project, leverage TeXRA lo
 ## Prerequisites
 
 - Overleaf account with Git access enabled for your project (check Overleaf plans).
+- An **Overleaf Git authentication token** (starts with `olp_`). Generate one from [Account Settings → Git Integration](https://www.overleaf.com/user/settings). See [Overleaf's token documentation](https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration/git-integration-authentication-tokens) for step-by-step instructions.
 - Git installed locally ([git-scm.com](https://git-scm.com/downloads)).
 - TeXRA installed in VS Code ([Installation Guide](./installation.md)).
 
@@ -38,7 +39,7 @@ This guide outlines a workflow to clone your Overleaf project, leverage TeXRA lo
     ```bash
     git clone https://git.overleaf.com/YOUR_PROJECT_ID your-local-folder
     ```
-    (Enter Overleaf credentials if prompted).
+    When prompted for a password, enter your Overleaf Git token (`olp_…`). For the username, enter any non-empty value (e.g. `git`).
 
 ### 2. Edit Locally with TeXRA in VS Code
 
@@ -79,7 +80,7 @@ git commit -m "Refined methodology section using TeXRA polish"
 ## Important Considerations
 
 - **Merge Conflicts:** The biggest potential issue. Pulling changes from Overleaf _before_ pushing your local work is the best way to minimize complex conflicts.
-- **Authentication:** Git may occasionally re-prompt for Overleaf credentials.
+- **Authentication:** Git may occasionally re-prompt for Overleaf credentials. If your token expires, generate a new one from [Account Settings](https://www.overleaf.com/user/settings) (see [token docs](https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration/git-integration-authentication-tokens)).
 - **Large Projects:** Be mindful of potential Overleaf Git size limitations.
 
 This Git-based workflow empowers you to enhance your Overleaf projects with TeXRA\'s powerful local AI and tooling capabilities, offering a flexible and efficient development cycle.
