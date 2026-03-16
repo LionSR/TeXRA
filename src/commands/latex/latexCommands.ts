@@ -60,7 +60,7 @@ async function handleFixCompilation(): Promise<void> {
 
         const instruction =
           `Fix the LaTeX compilation errors in ${relativePath}. ` +
-          `Compile the file, identify all errors and warnings, and fix them.`;
+          `Compile the file, identify all errors, warnings, and overfull/underfull boxes, and fix them.`;
 
         await vscode.commands.executeCommand('texra.execute', {
           agent: 'latex_fixer',
