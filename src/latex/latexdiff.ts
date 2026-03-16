@@ -8,6 +8,7 @@ import * as logger from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { flexibleFS, pathToLocation, type FileLocation } from '@utils/files';
 import { getConfig } from '@utils/config';
+import { executeCommand } from '@utils/system';
 import { runLatexFormatter } from './texFormatter';
 import { generateDiffFileName } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
@@ -174,13 +175,20 @@ export class LaTeXdiffService {
         path.basename(diffFileName),
       );
 
-      // Run from the file's directory with just the filename.
-      // Absolute paths break latexdiff-vc --git temp path construction.
-      await this.commandExecutor.executeDiffVc(
-        path.basename(inputFile),
-        commitHash,
-        { mathMarkup, cwd: path.dirname(inputFile) },
-      );
+      // latexdiff-vc --git runs `git show <commit>:<file>`, which expects
+      // a path relative to the repo root. Absolute paths break its temp
+      // path construction. Resolve via git rev-parse to get the repo root.
+      const fileDir = path.dirname(inputFile);
+      const gitRoot = await this.getGitRoot(fileDir);
+      const cwd = gitRoot ?? fileDir;
+      const filePath = gitRoot
+        ? path.relative(gitRoot, inputFile)
+        : path.basename(inputFile);
+
+      await this.commandExecutor.executeDiffVc(filePath, commitHash, {
+        mathMarkup,
+        cwd,
+      });
       await this.fileProcessor.processDiffFile(pathToLocation(outputPath));
 
       return {
@@ -351,6 +359,18 @@ export class LaTeXdiffService {
       }
     }
     return true;
+  }
+
+  private async getGitRoot(cwd: string): Promise<string | null> {
+    try {
+      const result = await executeCommand(
+        ['git', 'rev-parse', '--show-toplevel'],
+        { channel: this.channel, cwd },
+      );
+      return result.success && result.stdout ? result.stdout.trim() : null;
+    } catch {
+      return null;
+    }
   }
 
   private async formatFiles(fileLocations: FileLocation[]): Promise<void> {
