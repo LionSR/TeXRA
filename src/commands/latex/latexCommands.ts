@@ -58,14 +58,9 @@ async function handleFixCompilation(): Promise<void> {
           `Launching tool-use agent to fix compilation for: ${relativePath}`,
         );
 
-        const instruction =
-          `Fix the LaTeX compilation errors in ${relativePath}. ` +
-          `Compile the file, identify all errors, warnings, and overfull/underfull boxes, and fix them.`;
-
         await vscode.commands.executeCommand('texra.execute', {
-          agent: 'latex_fixer',
-          instruction,
-          agentCategory: 'toolUse',
+          agent: 'latexFixer',
+          instruction: `Fix the LaTeX compilation errors in ${relativePath}.`,
         });
       },
     );
