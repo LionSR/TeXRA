@@ -8,6 +8,7 @@ import * as logger from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { flexibleFS, pathToLocation, type FileLocation } from '@utils/files';
 import { getConfig } from '@utils/config';
+import { executeCommand } from '@utils/system';
 import { runLatexFormatter } from './texFormatter';
 import { generateDiffFileName } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
@@ -174,10 +175,15 @@ export class LaTeXdiffService {
         path.basename(diffFileName),
       );
 
-      // latexdiff-vc --git expects a relative path from within the repo.
-      // Passing an absolute path causes it to construct broken temp paths.
-      const cwd = path.dirname(inputFile);
-      const relativeFile = path.basename(inputFile);
+      // latexdiff-vc --git expects a path relative to the repo root.
+      // Passing an absolute path causes it to construct broken temp paths
+      // (e.g. /tmp/.../latexdiff-vc-abc123//Users/.../main.tex).
+      const fileDir = path.dirname(inputFile);
+      const gitRoot = await this.getGitRoot(fileDir);
+      const cwd = gitRoot ?? fileDir;
+      const relativeFile = gitRoot
+        ? path.relative(gitRoot, inputFile)
+        : path.basename(inputFile);
 
       await this.commandExecutor.executeDiffVc(relativeFile, commitHash, {
         mathMarkup,
@@ -353,6 +359,18 @@ export class LaTeXdiffService {
       }
     }
     return true;
+  }
+
+  private async getGitRoot(cwd: string): Promise<string | null> {
+    try {
+      const result = await executeCommand(
+        ['git', 'rev-parse', '--show-toplevel'],
+        { channel: this.channel, cwd },
+      );
+      return result.success && result.stdout ? result.stdout.trim() : null;
+    } catch {
+      return null;
+    }
   }
 
   private async formatFiles(fileLocations: FileLocation[]): Promise<void> {
