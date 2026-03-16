@@ -63,7 +63,7 @@ async function handleFixCompilation(): Promise<void> {
           `Compile the file, identify all errors and warnings, and fix them.`;
 
         await vscode.commands.executeCommand('texra.execute', {
-          agent: 'chat',
+          agent: 'latex_fixer',
           instruction,
           agentCategory: 'toolUse',
         });
