@@ -69,11 +69,10 @@ import {
 import { defineTool } from '@tools/core/define';
 
 // Local imports - memory
-import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 
 // Local imports - utils
-import { WorkspaceFS, StorageFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import { generateExecutionId } from '@utils/core/executionId';
 
 // ============================================================================
@@ -101,32 +100,21 @@ interface SubagentDeliveryState {
 
 const activeSubagentDelivery = new Map<string, SubagentDeliveryState>();
 
+/** Shared description for the memories field on delegation tool schemas. */
+const MEMORIES_FIELD_DESCRIPTION =
+  'Memory file paths to attach (e.g. /memories/conventions.md). Content is injected into the agent prompt as read-only context. Use for project conventions, style guides, or accumulated knowledge the agent should follow.';
+
 /**
- * Validate that all memory paths exist and are within /memories.
- * Returns the validated display paths (unchanged).
+ * Validate that all memory paths are within /memories.
+ * Uses displayToStoragePath for prefix and traversal validation.
+ * Existence is NOT checked here — getAttachedMemories handles read failures gracefully,
+ * avoiding a TOCTOU race between validation and actual use.
  */
-async function validateMemoryPaths(memories: string[]): Promise<string[]> {
-  if (memories.length === 0) return [];
-
+function validateMemoryPaths(memories: string[]): string[] {
   for (const memPath of memories) {
-    if (
-      memPath !== MEMORY_DISPLAY_ROOT &&
-      !memPath.startsWith(`${MEMORY_DISPLAY_ROOT}/`)
-    ) {
-      throw new Error(
-        `Invalid memory path "${memPath}". Paths must start with ${MEMORY_DISPLAY_ROOT}/ (e.g. ${MEMORY_DISPLAY_ROOT}/conventions.md).`,
-      );
-    }
-
-    const storagePath = displayToStoragePath(memPath);
-    const exists = await StorageFS.exists(storagePath);
-    if (!exists) {
-      throw new Error(
-        `Memory file not found: ${memPath}. Use the memory tool to view available memories.`,
-      );
-    }
+    // displayToStoragePath validates the /memories prefix and prevents path traversal
+    displayToStoragePath(memPath);
   }
-
   return memories;
 }
 
@@ -486,9 +474,7 @@ const WorkflowAgentInputSchema = z.object({
   memories: z
     .array(z.string())
     .prefault([])
-    .describe(
-      'Memory file paths to attach (e.g. /memories/conventions.md). Content is injected into the agent prompt as read-only context. Use for project conventions, style guides, or accumulated knowledge the agent should follow.',
-    ),
+    .describe(MEMORIES_FIELD_DESCRIPTION),
 });
 
 export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
@@ -574,8 +560,8 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       throw new Error(`${missing.label} not found: ${missing.path}`);
     }
 
-    // Validate memory paths
-    const memories = await validateMemoryPaths(input.memories);
+    // Validate memory paths (format only — read errors handled gracefully downstream)
+    const memories = validateMemoryPaths(input.memories);
 
     // Construct workflow proposal
     const proposal = WorkflowAgentProposalSchema.parse({
@@ -619,9 +605,7 @@ const DelegateAgentInputSchema = z.object({
   memories: z
     .array(z.string())
     .prefault([])
-    .describe(
-      'Memory file paths to attach (e.g. /memories/conventions.md). Content is injected into the agent prompt as read-only context. Use for project conventions, style guides, or accumulated knowledge the agent should follow.',
-    ),
+    .describe(MEMORIES_FIELD_DESCRIPTION),
 });
 
 export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
@@ -664,8 +648,8 @@ Example: agent=chat, instruction="The presentation at slides/talk.tex has incorr
     // Resolve model: explicit input → parent model → first visible model
     const model = resolveVisibleModel(input.model ?? ctx.model ?? '');
 
-    // Validate memory paths
-    const memories = await validateMemoryPaths(input.memories);
+    // Validate memory paths (format only — read errors handled gracefully downstream)
+    const memories = validateMemoryPaths(input.memories);
 
     // Construct tool-use proposal (no file fields)
     const proposal = ToolUseAgentProposalSchema.parse({

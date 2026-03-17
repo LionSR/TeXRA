@@ -405,24 +405,25 @@ async function getAttachedMemories(
 ): Promise<string | null> {
   if (memoryPaths.length === 0) return null;
 
-  const parts: string[] = [];
-  for (const displayPath of memoryPaths) {
-    try {
-      const storagePath = displayToStoragePath(displayPath);
-      const raw = await StorageFS.read(storagePath);
-      // Strip frontmatter metadata — only inject the user-visible content
-      const { content } = parseFrontmatter(raw);
-      const trimmed = content.trim();
-      if (trimmed) {
-        parts.push(
-          `<memory name="${displayPath}">\n${trimmed}\n</memory>`,
-        );
+  const results = await Promise.all(
+    memoryPaths.map(async (displayPath) => {
+      try {
+        const storagePath = displayToStoragePath(displayPath);
+        const raw = await StorageFS.read(storagePath);
+        // Strip frontmatter metadata — only inject the user-visible content
+        const { content } = parseFrontmatter(raw);
+        const trimmed = content.trim();
+        if (trimmed) {
+          return `<memory name="${displayPath}">\n${trimmed}\n</memory>`;
+        }
+      } catch {
+        // Skip memories that can't be read (deleted between delegation and execution)
       }
-    } catch {
-      // Skip memories that can't be read (deleted between validation and execution)
-    }
-  }
+      return null;
+    }),
+  );
 
+  const parts = results.filter((p): p is string => p !== null);
   if (parts.length === 0) return null;
   return `<attached_memories>\n${parts.join('\n')}\n</attached_memories>`;
 }
