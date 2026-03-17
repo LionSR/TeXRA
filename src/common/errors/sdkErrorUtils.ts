@@ -387,16 +387,10 @@ function isRelayError(rawErrorBody: unknown): boolean {
   return isObject(nested) && '_relay' in nested;
 }
 
-function determineRetryable(statusCode?: number, rawErrorBody?: unknown): boolean {
-  if (isRelayError(rawErrorBody)) {
-    return true;
-  }
-  return isRetryableStatusCode(statusCode);
-}
-
 export function formatProviderHttpError(err: unknown): ProviderError {
   const rawErrorBody = detectRawErrorBody(err);
   const streamDiagnostics = detectStreamDiagnostics(err);
+  const isRelay = isRelayError(rawErrorBody);
 
   // Handle DOMException AbortError (from AbortController.abort())
   if (err instanceof DOMException && err.name === 'AbortError') {
@@ -409,56 +403,40 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     };
   }
 
+  // Try matching a known SDK error type (connection, abort, HTTP errors)
   const sdkMatch = matchSdkError(err, rawErrorBody);
   if (sdkMatch) {
-    const isRelay = isRelayError(rawErrorBody);
-    const retryable =
-      determineRetryable(sdkMatch.statusCode, rawErrorBody) ||
-      sdkMatch.retryable;
     return {
       ...sdkMatch,
-      retryable,
+      retryable: isRelay || sdkMatch.retryable,
       isRelayError: isRelay,
       rawErrorBody,
       streamDiagnostics,
     };
   }
 
-  // Fallback for unrecognized errors
-  const statusCode = detectStatusCode(err);
+  // Unrecognized error — extract what we can
+  const statusCode =
+    detectStatusCode(err) ?? inferStatusCodeFromBody(rawErrorBody);
   const statusText = detectStatusText(err, statusCode);
   const provider = detectProvider(err);
   const requestId = detectRequestId(err);
-  const isRelay = isRelayError(rawErrorBody);
-
   const fallbackMessage = statusCode
     ? safeGetReasonPhrase(statusCode)
     : undefined;
   const finalMessage =
     extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
+  const retryable = isRelay || isRetryableStatusCode(statusCode);
+  const message = statusCode
+    ? `${statusText ? `HTTP ${statusCode} ${statusText}` : `HTTP ${statusCode}`} – ${finalMessage}`
+    : finalMessage;
 
-  if (!statusCode) {
-    // Unrecognized errors without status codes are likely network errors - retry
-    return {
-      message: finalMessage,
-      provider,
-      retryable: true,
-      isRelayError: isRelay,
-      requestId,
-      rawErrorBody,
-      streamDiagnostics,
-    };
-  }
-
-  const prefix = statusText
-    ? `HTTP ${statusCode} ${statusText}`
-    : `HTTP ${statusCode}`;
   return {
-    message: `${prefix} – ${finalMessage}`,
+    message,
     statusCode,
     statusText,
     provider,
-    retryable: determineRetryable(statusCode, rawErrorBody),
+    retryable,
     isRelayError: isRelay,
     requestId,
     rawErrorBody,
