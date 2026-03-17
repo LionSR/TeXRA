@@ -122,16 +122,25 @@ const SDK_ERRORS: SdkErrorEntry[] = [
   { ctor: GoogleGenAIApiError },
 ];
 
-/** All 4xx/5xx are retryable (auto-retries skipped for 401/403 via shouldAutoRetry). */
+/** Server errors (5xx), rate limits (429), and request timeouts (408) are retryable
+ *  — these are transient. Other client errors (4xx) are deterministic. */
 function isRetryableStatusCode(statusCode?: number): boolean {
-  return statusCode !== undefined && statusCode >= 400;
+  if (statusCode === undefined) return false;
+  if (statusCode >= 500) return true;
+  return (
+    statusCode === StatusCodes.TOO_MANY_REQUESTS ||
+    statusCode === StatusCodes.REQUEST_TIMEOUT
+  );
 }
 
 /** Partial result before relay detection (isRelayError/rawErrorBody added later). */
 type SdkMatchResult = Omit<ProviderError, 'isRelayError' | 'rawErrorBody'>;
 
 /** Match known SDK error types and return structured error details. */
-function matchSdkError(err: unknown): SdkMatchResult | undefined {
+function matchSdkError(
+  err: unknown,
+  rawErrorBody: unknown,
+): SdkMatchResult | undefined {
   const entry = SDK_ERRORS.find(({ ctor }) => err instanceof ctor);
   if (!entry) {
     return undefined;
@@ -150,8 +159,18 @@ function matchSdkError(err: unknown): SdkMatchResult | undefined {
     };
   }
 
-  // HTTP errors - detect status code and build formatted message
-  const statusCode = detectStatusCode(err) ?? entry.fallbackStatusCode;
+  // HTTP errors - detect status code from error object, SDK class, or error body.
+  // If detectStatusCode returns a non-error code (< 400), it's likely misleading
+  // (e.g., SSE connection status 200 while the actual error is in the body),
+  // so prefer the body-inferred status code in that case.
+  const rawStatusCode = detectStatusCode(err);
+  const statusCode =
+    (rawStatusCode !== undefined && rawStatusCode >= 400
+      ? rawStatusCode
+      : undefined) ??
+    entry.fallbackStatusCode ??
+    inferStatusCodeFromBody(rawErrorBody) ??
+    rawStatusCode;
   const statusText = detectStatusText(err, statusCode);
   const fallbackMessage = statusCode
     ? safeGetReasonPhrase(statusCode)
@@ -334,8 +353,47 @@ function detectStreamDiagnostics(err: unknown): StreamDiagnostics | undefined {
   return undefined;
 }
 
-const ANTHROPIC_OVERLOADED_ERROR = 'overloaded_error';
-const ANTHROPIC_TIMEOUT_ERROR = 'timeout_error';
+/**
+ * Maps Anthropic error type strings to their corresponding HTTP status codes.
+ * Used to recover the status code when SDK error objects lose it
+ * (e.g., streaming SSE errors that produce generic APIError instances).
+ */
+const ANTHROPIC_ERROR_TYPE_TO_STATUS: Record<string, number> = {
+  invalid_request_error: StatusCodes.BAD_REQUEST, // 400
+  authentication_error: StatusCodes.UNAUTHORIZED, // 401
+  permission_error: StatusCodes.FORBIDDEN, // 403
+  not_found_error: StatusCodes.NOT_FOUND, // 404
+  request_too_large: StatusCodes.REQUEST_TOO_LONG, // 413
+  rate_limit_error: StatusCodes.TOO_MANY_REQUESTS, // 429
+  api_error: StatusCodes.INTERNAL_SERVER_ERROR, // 500
+  timeout_error: StatusCodes.REQUEST_TIMEOUT, // 408
+  overloaded_error: 529,
+};
+
+/**
+ * Infers an HTTP status code from the Anthropic error type in the raw error body.
+ * Handles both the envelope format `{ type: "error", error: { type: "api_error" } }`
+ * and the direct format `{ type: "api_error" }`.
+ *
+ * The nested path is checked first because Anthropic's canonical envelope uses
+ * `type: "error"` at the top level (not a real error type), with the actual
+ * error classification in `error.type`.
+ */
+function inferStatusCodeFromBody(rawErrorBody: unknown): number | undefined {
+  if (!isObject(rawErrorBody)) {
+    return undefined;
+  }
+  const body = rawErrorBody as { type?: unknown; error?: { type?: unknown } };
+  // Nested first: { type: "error", error: { type: "api_error" } }
+  const nestedType =
+    isObject(body.error) && isString(body.error.type)
+      ? body.error.type
+      : undefined;
+  // Direct fallback: { type: "api_error" }
+  const directType = isString(body.type) ? body.type : undefined;
+  const errorType = nestedType ?? directType;
+  return errorType ? ANTHROPIC_ERROR_TYPE_TO_STATUS[errorType] : undefined;
+}
 
 function isRelayError(rawErrorBody: unknown): boolean {
   if (!isObject(rawErrorBody)) {
@@ -350,31 +408,10 @@ function isRelayError(rawErrorBody: unknown): boolean {
   return isObject(nested) && '_relay' in nested;
 }
 
-function determineRetryable(
-  err: unknown,
-  statusCode?: number,
-  rawErrorBody?: unknown,
-): boolean {
-  if (isRelayError(rawErrorBody)) {
-    return true;
-  }
-
-  if (err instanceof Error) {
-    const msg = err.message;
-    // Anthropic: overloaded_error and timeout_error should be retryable
-    if (
-      msg.includes(ANTHROPIC_OVERLOADED_ERROR) ||
-      msg.includes(ANTHROPIC_TIMEOUT_ERROR)
-    ) {
-      return true;
-    }
-  }
-  return isRetryableStatusCode(statusCode);
-}
-
 export function formatProviderHttpError(err: unknown): ProviderError {
   const rawErrorBody = detectRawErrorBody(err);
   const streamDiagnostics = detectStreamDiagnostics(err);
+  const isRelay = isRelayError(rawErrorBody);
 
   // Handle DOMException AbortError (from AbortController.abort())
   if (err instanceof DOMException && err.name === 'AbortError') {
@@ -387,56 +424,48 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     };
   }
 
-  const sdkMatch = matchSdkError(err);
+  // Try matching a known SDK error type (connection, abort, HTTP errors)
+  const sdkMatch = matchSdkError(err, rawErrorBody);
   if (sdkMatch) {
-    const isRelay = isRelayError(rawErrorBody);
-    const retryable =
-      determineRetryable(err, sdkMatch.statusCode, rawErrorBody) ||
-      sdkMatch.retryable;
     return {
       ...sdkMatch,
-      retryable,
+      retryable: isRelay || sdkMatch.retryable,
       isRelayError: isRelay,
       rawErrorBody,
       streamDiagnostics,
     };
   }
 
-  // Fallback for unrecognized errors
-  const statusCode = detectStatusCode(err);
+  // Unrecognized error — extract what we can
+  const statusCode =
+    detectStatusCode(err) ?? inferStatusCodeFromBody(rawErrorBody);
   const statusText = detectStatusText(err, statusCode);
   const provider = detectProvider(err);
   const requestId = detectRequestId(err);
-  const isRelay = isRelayError(rawErrorBody);
-
   const fallbackMessage = statusCode
     ? safeGetReasonPhrase(statusCode)
     : undefined;
   const finalMessage =
     extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
+  // No status code on an unrecognized error likely means a network-level failure
+  // (DNS, proxy, TLS, etc.) — treat as retryable for safety.
+  const retryable =
+    isRelay || (statusCode ? isRetryableStatusCode(statusCode) : true);
 
-  if (!statusCode) {
-    // Unrecognized errors without status codes are likely network errors - retry
-    return {
-      message: finalMessage,
-      provider,
-      retryable: true,
-      isRelayError: isRelay,
-      requestId,
-      rawErrorBody,
-      streamDiagnostics,
-    };
+  let message = finalMessage;
+  if (statusCode) {
+    const prefix = statusText
+      ? `HTTP ${statusCode} ${statusText}`
+      : `HTTP ${statusCode}`;
+    message = `${prefix} – ${finalMessage}`;
   }
 
-  const prefix = statusText
-    ? `HTTP ${statusCode} ${statusText}`
-    : `HTTP ${statusCode}`;
   return {
-    message: `${prefix} – ${finalMessage}`,
+    message,
     statusCode,
     statusText,
     provider,
-    retryable: determineRetryable(err, statusCode, rawErrorBody),
+    retryable,
     isRelayError: isRelay,
     requestId,
     rawErrorBody,
