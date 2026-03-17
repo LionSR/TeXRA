@@ -14,8 +14,8 @@ import {
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview/commands';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
-import { postMessage, vscode } from '@shared/vscode';
-import { PersistedState, createWebviewStorage } from '@shared/state';
+import { postMessage } from '@shared/vscode';
+import { PersistedState } from '@shared/state';
 
 // Local imports - shared schemas
 import {
@@ -39,6 +39,7 @@ import { sortStreams, StreamSortSchema } from '@shared/streams/streamSort';
 import { codiconStyles } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view frontend
+import { webviewStorage } from './webviewStorage';
 import {
   createInitialState,
   EMPTY_STREAM_LOGS,
@@ -435,7 +436,7 @@ export class ProgressApp extends ProgressAppBase {
   });
 
   private prefsManager = new PersistedState(
-    createWebviewStorage(vscode),
+    webviewStorage,
     'progressViewPrefs',
     ProgressViewPrefsSchema,
   );
