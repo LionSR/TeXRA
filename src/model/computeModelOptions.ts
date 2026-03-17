@@ -57,25 +57,6 @@ export function resolveVisibleModel(model: string): string {
   return visibleModels[0];
 }
 
-/**
- * Human-friendly display names for models whose IDs are not self-explanatory.
- * Used as the `label` in model dropdowns so users can identify models at a glance.
- */
-const MODEL_DISPLAY_NAMES: Record<string, string> = {
-  gpt53codex: 'GPT-5.3 Codex',
-  gpt54pro: 'GPT-5.4 Pro',
-  gpt54: 'GPT-5.4',
-  'gpt5-': 'GPT-5 Mini',
-  gpt41: 'GPT-4.1',
-  sonnet46T: 'Sonnet 4.6 (Thinking)',
-  opus46T: 'Opus 4.6 (Thinking)',
-  gemini31p: 'Gemini 3.1 Pro',
-  gemini3f: 'Gemini 3.0 Flash',
-  deepseekT: 'DeepSeek (Thinking)',
-  kimi25T: 'Kimi K2.5 (Thinking)',
-  grok4: 'Grok 4',
-};
-
 /** Context window formatting thresholds */
 const MILLION = 1_000_000;
 const THOUSAND = 1_000;
@@ -160,13 +141,13 @@ async function buildModelOptionData(
 ): Promise<ModelOptionData> {
   const config = MODEL_CONFIGS[model];
   if (!config) {
-    return { value: model, label: MODEL_DISPLAY_NAMES[model] ?? model };
+    return { value: model, label: model };
   }
 
   const available = await isModelAvailable(model, config, ctx);
   return {
     value: model,
-    label: MODEL_DISPLAY_NAMES[model] ?? model,
+    label: model,
     provider: config.provider,
     context: formatContext(config.contextWindow),
     cost: formatCost(config.inputPrice, config.outputPrice),
@@ -186,7 +167,7 @@ export function buildBasicModelOptionsData(): ModelOptionData[] {
     if (!config) return { value: model, label: MODEL_DISPLAY_NAMES[model] ?? model };
     return {
       value: model,
-      label: MODEL_DISPLAY_NAMES[model] ?? model,
+      label: model,
       provider: config.provider,
       context: formatContext(config.contextWindow),
       cost: formatCost(config.inputPrice, config.outputPrice),
