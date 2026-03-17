@@ -32,6 +32,7 @@ import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
+import { webviewStorage } from '../webviewStorage';
 
 @customElement('plan-view')
 export class PlanView extends LitElement {
@@ -164,12 +165,23 @@ export class PlanView extends LitElement {
 
   @property({ attribute: false }) plan: Plan | null = null;
 
-  /** Open state — managed internally. Auto-opens when plan is updated. */
+  /** Open state — persisted across webview visibility changes. */
   @state() private open = true;
+
+  private static readonly STORAGE_KEY = 'planView:open';
+
+  constructor() {
+    super();
+    const stored = webviewStorage.get(PlanView.STORAGE_KEY);
+    if (typeof stored === 'boolean') {
+      this.open = stored;
+    }
+  }
 
   protected override willUpdate(changed: PropertyValues): void {
     if (changed.has('plan') && this.plan && !this.open) {
       this.open = true;
+      webviewStorage.set(PlanView.STORAGE_KEY, true);
     }
   }
 
@@ -245,6 +257,8 @@ export class PlanView extends LitElement {
   }
 
   private handleCollapsibleToggle(e: CustomEvent<{ open?: boolean }>): void {
-    this.open = e.detail?.open ?? this.open;
+    const next = e.detail?.open ?? this.open;
+    this.open = next;
+    webviewStorage.set(PlanView.STORAGE_KEY, next);
   }
 }

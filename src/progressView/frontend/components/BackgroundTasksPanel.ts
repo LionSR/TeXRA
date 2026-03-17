@@ -30,6 +30,7 @@ import {
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 import { ProgressEvents } from '../events';
+import { webviewStorage } from '../webviewStorage';
 
 // Local imports - contexts
 import {
@@ -202,8 +203,10 @@ export class BackgroundTasksPanel extends LitElement {
   @property({ attribute: false }) activeSubagents: ActiveChildInfo[] = [];
   @property({ attribute: false }) finishedSubagentCount = 0;
 
-  /** Open state — managed internally. Toggled by user or auto-opened on first active task. */
+  /** Open state — persisted across webview visibility changes. */
   @state() open = false;
+
+  private static readonly STORAGE_KEY = 'backgroundTasks:open';
 
   @consume({ context: processOutputContext, subscribe: true })
   @state()
@@ -216,12 +219,21 @@ export class BackgroundTasksPanel extends LitElement {
   /** Track previous active count to detect 0→N transitions for auto-open. */
   private prevActiveCount = 0;
 
+  constructor() {
+    super();
+    const stored = webviewStorage.get(BackgroundTasksPanel.STORAGE_KEY);
+    if (typeof stored === 'boolean') {
+      this.open = stored;
+    }
+  }
+
   protected override willUpdate(changed: PropertyValues): void {
     super.willUpdate(changed);
     const active = this.activeProcesses.length + this.activeSubagents.length;
     // Auto-open when tasks first appear (0 → N), but never force-close
     if (this.prevActiveCount === 0 && active > 0) {
       this.open = true;
+      webviewStorage.set(BackgroundTasksPanel.STORAGE_KEY, true);
     }
     this.prevActiveCount = active;
   }
@@ -385,7 +397,9 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   private handleCollapsibleToggle(e: CustomEvent<{ open?: boolean }>): void {
-    this.open = e.detail?.open ?? this.open;
+    const next = e.detail?.open ?? this.open;
+    this.open = next;
+    webviewStorage.set(BackgroundTasksPanel.STORAGE_KEY, next);
   }
 
   private navigateToStream(streamId: string): void {
