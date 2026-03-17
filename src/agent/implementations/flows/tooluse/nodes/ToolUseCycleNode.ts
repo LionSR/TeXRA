@@ -46,16 +46,12 @@ export class ToolUseCycleNode<C> extends Node<
       this.services;
 
     if (prepRes.shouldSkip) {
-      if (prepRes.workspaceState.todos.todos.length) {
+      const { tasks } = prepRes.workspaceState;
+      if (tasks.todos.length) {
         bus.emit('updateTodos', {
           streamId,
-          todos: prepRes.workspaceState.todos.todos,
-        });
-      }
-      if (prepRes.workspaceState.plan.plan) {
-        bus.emit('updatePlan', {
-          streamId,
-          plan: prepRes.workspaceState.plan.plan,
+          todos: tasks.todos,
+          summary: tasks.summary,
         });
       }
       return { outcome: 'skipped' };
@@ -86,24 +82,18 @@ export class ToolUseCycleNode<C> extends Node<
     const { onProgress, persistTodos } = this.services;
     // Serialize writes so rapid updates don't persist out of order
     let todoPersistChain = Promise.resolve();
-    prepRes.workspaceState.todos.setOnUpdate((todos) => {
+    prepRes.workspaceState.tasks.setOnUpdate(({ todos, summary }) => {
       bus.emit('updateTodos', {
         streamId,
         todos,
+        summary,
       });
       if (persistTodos) {
         todoPersistChain = todoPersistChain
           .then(() => persistTodos(todos))
           .catch(() => {});
       }
-      onProgress?.({ kind: 'todos', todos });
-    });
-    prepRes.workspaceState.plan.setOnUpdate((plan) => {
-      bus.emit('updatePlan', {
-        streamId,
-        plan,
-      });
-      onProgress?.({ kind: 'plan', plan });
+      onProgress?.({ kind: 'todos', todos, summary });
     });
 
     try {
@@ -121,8 +111,7 @@ export class ToolUseCycleNode<C> extends Node<
       }
       return { outcome: 'completed', messages: cycleShared.messages };
     } finally {
-      prepRes.workspaceState.todos.clearOnUpdate();
-      prepRes.workspaceState.plan.clearOnUpdate();
+      prepRes.workspaceState.tasks.clearOnUpdate();
       // Drain in-flight persist writes before returning so they don't
       // race with the projection's writeTodos after this node completes.
       await todoPersistChain;

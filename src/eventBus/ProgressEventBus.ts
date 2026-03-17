@@ -17,7 +17,6 @@ import type {
   StreamTabId,
   TokenUsageStats,
   ToolEditPermission,
-  UpdatePlanPayload,
   UpdateTodosPayload,
 } from '@shared/schemas';
 
@@ -87,7 +86,6 @@ export interface ProgressEventPayloads {
   showPlanApproval: PlanApprovalPermission;
   resolvePlanApproval: { approvalId: string };
   updateTodos: UpdateTodosPayload;
-  updatePlan: UpdatePlanPayload;
   updateConversationProgress: {
     streamId: StreamTabId;
     progress: ConversationProgress;

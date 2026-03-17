@@ -1,8 +1,7 @@
 // Type imports
 import type {
   FileInteractionState,
-  PlanState,
-  TodoState,
+  TaskState,
 } from '@agent/core/AgentWorkspaceState';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
@@ -15,10 +14,12 @@ export interface ToolFileInteractionContext {
   /** Agent name of the parent agent (e.g. "orchestrator", "search-agent"). */
   agentName?: string;
   tracker: FileInteractionState;
-  /** Todo state for managing task lists. Optional for backward compatibility. */
-  todoState?: TodoState;
-  /** Plan state for managing implementation plans. Optional for backward compatibility. */
-  planState?: PlanState;
+  /** Unified task state for managing todos and plans. */
+  taskState?: TaskState;
+  /** @deprecated Use taskState. Alias for backward compatibility. */
+  todoState?: TaskState;
+  /** @deprecated Use taskState. Alias for backward compatibility. */
+  planState?: TaskState;
   /** Called by tools with approval flows to trigger in-progress log after approval. */
   onExecutionReady?: () => void;
   /** Called by tools to push partial output for live streaming to the UI. */

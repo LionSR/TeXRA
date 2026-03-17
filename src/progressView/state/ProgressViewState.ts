@@ -51,6 +51,8 @@ export type StreamHints = z.infer<typeof StreamHintsSchema>;
 const StreamSessionStateSchema = z.object({
   hints: StreamHintsSchema.prefault({}),
   todos: z.array(TodoItemSchema).prefault([]),
+  todoSummary: z.string().nullable().prefault(null),
+  /** @deprecated Use todos + todoSummary instead. */
   plan: PlanSchema.nullable().prefault(null),
   contextState: ContextStateDataSchema.nullable().prefault(null),
 });
@@ -234,10 +236,20 @@ export class ProgressViewState {
     return this._sessionState.get(stream)?.todos ?? [];
   }
 
+  setTodoSummary(stream: StreamTabId, summary: string | null): void {
+    this.getOrCreateSession(stream).todoSummary = summary;
+  }
+
+  getTodoSummary(stream: StreamTabId): string | null {
+    return this._sessionState.get(stream)?.todoSummary ?? null;
+  }
+
+  /** @deprecated Use setTodos + setTodoSummary. */
   setPlan(stream: StreamTabId, plan: Plan | null): void {
     this.getOrCreateSession(stream).plan = plan;
   }
 
+  /** @deprecated Use getTodos + getTodoSummary. */
   getPlan(stream: StreamTabId): Plan | null {
     return this._sessionState.get(stream)?.plan ?? null;
   }

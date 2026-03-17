@@ -1,5 +1,5 @@
 /**
- * Task handlers: UPDATE_TODOS, UPDATE_PLAN.
+ * Task handlers: UPDATE_TODOS (unified todo + plan tracking).
  */
 
 import { create } from 'mutative';
@@ -14,9 +14,13 @@ export const taskHandlers: HandlerRegistry = {
     updateToolUseState(ctx, data.stream, (prev) =>
       create(prev, (draft) => {
         draft.todos = data.todos;
+        if (data.summary !== undefined) {
+          draft.todoSummary = data.summary;
+        }
       }),
     );
   },
+  // Keep UPDATE_PLAN handler for backward compatibility during migration
   [PROGRESS_VIEW_COMMANDS.UPDATE_PLAN]: (data, ctx) => {
     updateToolUseState(ctx, data.stream, (prev) =>
       create(prev, (draft) => {

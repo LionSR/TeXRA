@@ -1,71 +1,36 @@
 /**
- * Plan tool for creating structured implementation plans during tool-use agent sessions.
+ * Plan tool — thin wrapper that converts Plan input into unified todo format.
  *
- * Unlike todo_write (which tracks execution progress), this tool lets the agent
- * outline an implementation strategy with numbered steps, descriptions, and file
- * references — giving the user visibility into the agent's approach before and
- * during execution.
- *
- * When a new plan is created (all steps pending), the tool pauses execution and
- * waits for user approval before returning. Progress updates (steps already
- * in_progress or completed) are applied immediately without approval.
+ * @deprecated Use todo_write with summary + description + files instead.
+ * This tool is kept for backward compatibility with existing agent prompts.
  */
 
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - tools
-import { PlanState } from '@agent/core/AgentWorkspaceState';
-import {
-  planApprovalCoordinator,
-  type PlanApprovalResult,
-} from '@agent/runtime/PlanApprovalCoordinator';
+// Local imports
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
-  TODO_STATUS,
-  STATUS_DISPLAY,
   PlanSchema,
+  planToTodos,
+  STATUS_DISPLAY,
   countByStatus,
-  type Plan,
 } from '@shared/schemas';
 import { type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
+import { TodoWriteTool } from '@tools/todo/TodoTool';
 
 const logger = new AgentLogger('PlanTool');
 
-/** Counter for generating unique approval IDs */
-let approvalCounter = 0;
-
-/**
- * Schema for the plan tool input.
- * Uses PlanSchema from shared schemas as single source of truth.
- */
 const PlanToolInputSchema = z.strictObject({
-  /** The implementation plan */
   plan: PlanSchema.describe('The structured implementation plan'),
 });
 
 export type PlanToolInput = z.infer<typeof PlanToolInputSchema>;
 
 /**
- * Tool for creating structured implementation plans during agent sessions.
- *
- * Use this tool to:
- * - Outline a strategy before implementing complex changes
- * - Show users the planned approach with steps, descriptions, and files
- * - Track which plan steps are being worked on or completed
- *
- * Each step has:
- * - title: Short name for the step
- * - description: What the step involves
- * - status: pending | in_progress | completed
- * - files: Optional list of files involved
- *
- * When you create a NEW plan (all steps pending), execution pauses until the
- * user approves. If the user rejects, you will receive their feedback and
- * should revise your approach accordingly. Progress updates (updating step
- * statuses on an existing plan) are applied immediately.
+ * @deprecated Use todo_write with summary, description, and files fields instead.
  */
 export class PlanTool extends defineTool({
   name: 'plan',
@@ -98,133 +63,11 @@ Best practices:
 - Include file paths to help the user understand the scope`,
   schema: PlanToolInputSchema,
 }) {
+  private todoTool = new TodoWriteTool();
+
   protected async execute(input: PlanToolInput): Promise<ToolResult> {
-    const context = getCurrentToolFileInteractionContext();
-
-    if (!context?.planState) {
-      logger.warn(
-        'plan called without planState in context — plan will not persist or display in UI',
-      );
-      return {
-        summary: 'Created plan (no active session)',
-        output: this.formatPlan(input.plan),
-        diagnostics: {
-          warning: 'No active plan context — plan may not persist',
-        },
-      };
-    }
-
-    // Determine if this is a new plan (all steps pending) vs. a progress update
-    const isNewPlan = input.plan.steps.every(
-      (s) => s.status === TODO_STATUS.PENDING,
-    );
-
-    // Show the plan in the UI immediately
-    context.planState.updatePlan(input.plan);
-
-    if (isNewPlan) {
-      if (!context.streamId) {
-        logger.warn(
-          'New plan created without streamId — skipping approval gate',
-        );
-      } else {
-        return this.requestApproval(
-          input.plan,
-          context.streamId,
-          context.planState,
-        );
-      }
-    }
-
-    return this.buildProgressResult(input.plan);
-  }
-
-  /**
-   * Request user approval for a new plan. Pauses execution until approved/rejected.
-   */
-  private async requestApproval(
-    plan: Plan,
-    streamId: string,
-    planState: PlanState,
-  ): Promise<ToolResult> {
-    const approvalId = `plan-${Date.now().toString(36)}-${++approvalCounter}`;
-
-    logger.info(`Requesting approval for plan: ${plan.summary}`);
-
-    const result: PlanApprovalResult =
-      await planApprovalCoordinator.waitForApproval(streamId, {
-        approvalId,
-        plan,
-      });
-
-    if (result.action === 'approve') {
-      logger.info('Plan approved by user');
-      return {
-        summary: 'Plan approved — proceed with implementation',
-        output:
-          'Plan approved by the user. You may now begin implementing the plan steps. Update step statuses as you work through them.',
-      };
-    }
-
-    // Rejected or timed out — clear the plan from UI
-    planState.updatePlan(null);
-
-    if (result.action === 'timeout') {
-      logger.warn('Plan approval timed out');
-      return {
-        summary: 'Plan approval timed out',
-        output:
-          'The plan approval request timed out before the user responded. Please try again or proceed without a plan.',
-        isError: true,
-      };
-    }
-
-    const feedback = result.feedback;
-    const feedbackNote = feedback
-      ? `\nUser feedback: ${feedback}`
-      : '\nNo specific feedback was provided.';
-
-    logger.info(`Plan rejected by user${feedback ? `: ${feedback}` : ''}`);
-
-    return {
-      summary: 'Plan rejected — revise approach',
-      output: `The user rejected this plan.${feedbackNote}\nPlease revise your approach based on the feedback and create an updated plan.`,
-      isError: true,
-      ...(feedback ? { userInstruction: feedback } : {}),
-    };
-  }
-
-  /**
-   * Build result for a progress update (no approval needed).
-   */
-  private buildProgressResult(plan: Plan): ToolResult {
-    const { completed, inProgress, pending } = countByStatus(plan.steps);
-
-    const summary = `Plan updated: ${completed} completed, ${inProgress} in progress, ${pending} pending`;
-
-    return {
-      summary,
-      output: 'OK',
-    };
-  }
-
-  /**
-   * Format the plan for display in the tool output (fallback when no UI context).
-   */
-  private formatPlan(plan: Plan): string {
-    const lines: string[] = [`Plan: ${plan.summary}`, ''];
-
-    for (let i = 0; i < plan.steps.length; i++) {
-      const step = plan.steps[i];
-      if (!step) continue;
-      const { icon, label } = STATUS_DISPLAY[step.status];
-      lines.push(`${i + 1}. ${icon} [${label}] ${step.title}`);
-      lines.push(`   ${step.description}`);
-      if (step.files.length > 0) {
-        lines.push(`   Files: ${step.files.join(', ')}`);
-      }
-    }
-
-    return lines.join('\n');
+    // Convert plan to unified todo format and delegate
+    const { summary, todos } = planToTodos(input.plan);
+    return this.todoTool.call({ todos, summary });
   }
 }

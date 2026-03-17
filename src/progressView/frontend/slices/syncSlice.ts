@@ -63,6 +63,8 @@ export const syncHandlers: HandlerRegistry = {
           if (isToolUseState(prev) && hasTaskData) {
             const d = draft as ToolUseStreamState;
             if (data.todos) d.todos = data.todos;
+            if (data.todoSummary !== undefined)
+              d.todoSummary = data.todoSummary;
             if (data.plan !== undefined) d.plan = data.plan;
             if (data.queuedFollowUps) d.queuedFollowUps = data.queuedFollowUps;
           }

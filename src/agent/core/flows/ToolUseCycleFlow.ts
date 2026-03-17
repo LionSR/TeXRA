@@ -31,8 +31,7 @@ import {
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type {
   FileInteractionState,
-  PlanState,
-  TodoState,
+  TaskState,
 } from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
 import { toErrorMessage } from '@common/errors';
@@ -608,8 +607,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
       call,
       this.services,
       workspace.interactions,
-      workspace.todos,
-      workspace.plan,
+      workspace.tasks,
     );
   }
 
@@ -626,8 +624,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     parsedInput: unknown,
     options: ToolUseCycleServices<C>,
     tracker: FileInteractionState,
-    todoState: TodoState,
-    planState: PlanState,
+    taskState: TaskState,
     onExecutionReady?: () => void,
     onToolOutput?: (chunk: string) => void,
   ): Promise<ToolResult> {
@@ -639,8 +636,9 @@ class ToolUseDispatchNode<C> extends BatchNode<
       return await withToolFileInteractionContext(
         {
           tracker,
-          todoState,
-          planState,
+          taskState,
+          todoState: taskState,
+          planState: taskState,
           streamId: options.logger.streamId,
           executionId: options.executionId,
           toolCallId: call.callId,
@@ -662,8 +660,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     call: SdkToolCall,
     options: ToolUseCycleServices<C>,
     tracker: FileInteractionState,
-    todoState: TodoState,
-    planState: PlanState,
+    taskState: TaskState,
   ): Promise<ToolExecutionResult> {
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
     const tool = options.toolRegistry.get(call.name);
@@ -719,8 +716,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
       parsedInput,
       options,
       tracker,
-      todoState,
-      planState,
+      taskState,
       onExecutionReady,
       onToolOutput,
     );
@@ -916,8 +912,8 @@ export function createToolUseCycleFlow<C>(): Flow<
       return formatPostCompactionContext(
         subagents,
         processes,
-        services.workspace.todos.todos,
-        services.workspace.plan.plan,
+        services.workspace.tasks.todos,
+        services.workspace.tasks.summary,
       );
     },
     getDebugSaveOptions: (shared, services) => ({

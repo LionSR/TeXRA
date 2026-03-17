@@ -204,23 +204,14 @@ export class ProgressEventHandler {
             );
           }
         },
-        // Todo events
-        updateTodos: (ctx, { streamId, todos }) => {
+        // Task tracking events (unified todos + plan)
+        updateTodos: (ctx, { streamId, todos, summary }) => {
           ctx.state.setTodos(streamId, todos);
-          this.sendIfActive(streamId, () =>
-            ctx.webviewUpdater.updateTodos(streamId, todos),
-          );
-        },
-        // Plan events — always send when webview is available, not just
-        // when the stream is active. During initial plan creation the
-        // PlanApprovalCoordinator switches to this stream right after,
-        // but the stream may not be active yet at the time of this event.
-        // Unlike high-frequency log events, plan updates are rare and
-        // critical for the approval UX.
-        updatePlan: (ctx, { streamId, plan }) => {
-          ctx.state.setPlan(streamId, plan);
+          ctx.state.setTodoSummary(streamId, summary ?? null);
+          // Always send when webview is available (not just active stream),
+          // since plan approval may trigger a stream switch right after.
           if (this.webviewUpdater.isAvailable()) {
-            ctx.webviewUpdater.updatePlan(streamId, plan);
+            ctx.webviewUpdater.updateTodos(streamId, todos, summary ?? null);
           }
         },
         // Follow-up events
@@ -514,7 +505,7 @@ export class ProgressEventHandler {
         action: 'clear',
         activeRunId: null,
         todos: [],
-        plan: null,
+        todoSummary: null,
         queuedFollowUps: [],
         instruction: null,
       });
@@ -525,6 +516,7 @@ export class ProgressEventHandler {
 
     const { extras, activeRunId } = this.prepareStreamSyncExtras(stream);
     const todos = this.state.getTodos(stream);
+    const todoSummary = this.state.getTodoSummary(stream);
     const plan = this.state.getPlan(stream);
     const queuedFollowUps = ToolUseFollowUpQueue.getAll(stream);
 
@@ -567,6 +559,7 @@ export class ProgressEventHandler {
       action: 'render',
       ...extras,
       todos,
+      todoSummary,
       plan,
       queuedFollowUps,
       instruction,

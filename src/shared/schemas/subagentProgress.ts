@@ -10,10 +10,11 @@
 import type { Plan } from './plan';
 import type { TodoItem } from './todo';
 
-/** Todo state changed in a tool-use subagent. */
+/** Task state changed in a tool-use subagent (covers both todos and plans). */
 export interface TodoProgressUpdate {
   readonly kind: 'todos';
   readonly todos: TodoItem[];
+  readonly summary?: string | null;
 }
 
 /** Workflow round completed. */
@@ -31,7 +32,10 @@ export interface OverviewProgressUpdate {
   readonly cost?: number;
 }
 
-/** Plan state changed in a tool-use subagent. */
+/**
+ * @deprecated Use TodoProgressUpdate with summary instead.
+ * Kept for backward compatibility during migration.
+ */
 export interface PlanProgressUpdate {
   readonly kind: 'plan';
   readonly plan: Plan | null;

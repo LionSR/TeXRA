@@ -43,6 +43,19 @@ export class TodoList extends LitElement {
         border-bottom: var(--border-thin) solid var(--color-border);
       }
 
+      .todo-collapsible::part(body) {
+        max-height: var(--height-xlarge);
+        overflow-y: auto;
+      }
+
+      .todo-summary {
+        font-size: var(--font-size);
+        line-height: var(--line-height-normal);
+        color: var(--color-text-secondary);
+        margin-bottom: var(--spacing-small);
+        padding: var(--spacing-tiny) 0;
+      }
+
       .todo-list {
         display: flex;
         flex-direction: column;
@@ -58,6 +71,16 @@ export class TodoList extends LitElement {
         line-height: var(--line-height-normal);
       }
 
+      .todo-item__number {
+        flex-shrink: 0;
+        font-size: var(--font-size-sm);
+        min-width: 1.4em;
+        text-align: right;
+        color: var(--color-text-secondary);
+        line-height: var(--line-height-normal);
+        margin-top: var(--border-thin);
+      }
+
       .todo-item__icon {
         flex-shrink: 0;
         font-size: var(--font-size-icon-sm);
@@ -65,9 +88,36 @@ export class TodoList extends LitElement {
         margin-top: var(--border-thin);
       }
 
-      .todo-item__content {
+      .todo-item__body {
         flex: 1;
+        min-width: 0;
+      }
+
+      .todo-item__content {
         word-break: break-word;
+      }
+
+      .todo-item__description {
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-sm);
+        margin-top: var(--spacing-tiny);
+        word-break: break-word;
+      }
+
+      .todo-item__files {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-tiny);
+        margin-top: var(--spacing-small);
+      }
+
+      .todo-item__file {
+        font-size: var(--font-size-sm);
+        color: var(--vscode-textLink-foreground);
+        background: var(--vscode-badge-background);
+        padding: var(--border-thin) var(--spacing-medium);
+        border-radius: var(--border-radius);
+        font-family: var(--vscode-editor-font-family, monospace);
       }
 
       .todo-item--pending {
@@ -86,6 +136,10 @@ export class TodoList extends LitElement {
         color: var(--vscode-progressBar-background);
       }
 
+      .todo-item--in-progress .todo-item__content {
+        color: var(--vscode-progressBar-background);
+      }
+
       .todo-item--completed {
         opacity: var(--opacity-disabled);
       }
@@ -101,9 +155,15 @@ export class TodoList extends LitElement {
   ];
 
   @property({ attribute: false }) todos: TodoItem[] = [];
+  @property({ attribute: false }) summary: string | null = null;
 
   /** Open state — auto-expands on todo updates, auto-collapses when cleared. */
   @state() private open = true;
+
+  /** Whether any item has rich metadata (description or files). */
+  private get isRichMode(): boolean {
+    return this.todos.some((t) => t.description || (t.files && t.files.length > 0));
+  }
 
   protected override willUpdate(changed: PropertyValues): void {
     if (changed.has('todos')) {
@@ -124,31 +184,38 @@ export class TodoList extends LitElement {
       (t) => t.status === TODO_STATUS.COMPLETED,
     ).length;
     const total = this.todos.length;
+    const title = this.summary ? `Plan (${completed}/${total})` : `Todos (${completed}/${total})`;
 
     return html`
       <vscode-collapsible
         id=${ELEMENT_IDS.TODO_LIST_CONTAINER}
         class="todo-collapsible panel-collapsible"
-        title=${`Todos (${completed}/${total})`}
+        title=${title}
         ?open=${this.open}
         @vsc-collapsible-toggle=${this.handleCollapsibleToggle}
       >
+        ${this.summary
+          ? html`<div class="todo-summary">${this.summary}</div>`
+          : nothing}
         <div id=${ELEMENT_IDS.TODO_LIST} class="todo-list">
           ${repeat(
             this.todos,
             (_todo, index) => index,
-            (todo) => this.renderTodo(todo),
+            (todo, index) => this.renderTodo(todo, index),
           )}
         </div>
       </vscode-collapsible>
     `;
   }
 
-  private renderTodo(todo: TodoItem): TemplateResult {
+  private renderTodo(todo: TodoItem, index: number): TemplateResult {
     const status = todo.status ?? TODO_STATUS.PENDING;
     const isInProgress = status === TODO_STATUS.IN_PROGRESS;
     const icon = STATUS_ICONS[status] ?? STATUS_ICONS[TODO_STATUS.PENDING];
-    const content = isInProgress
+    const isRich = this.isRichMode;
+
+    // In simple mode, show activeForm when in progress
+    const displayContent = isInProgress && !isRich
       ? (todo.activeForm ?? todo.content)
       : todo.content;
 
@@ -161,6 +228,9 @@ export class TodoList extends LitElement {
           'todo-item--completed': status === TODO_STATUS.COMPLETED,
         })}
       >
+        ${isRich
+          ? html`<span class="todo-item__number">${index + 1}.</span>`
+          : nothing}
         <i
           class=${classMap({
             codicon: true,
@@ -169,7 +239,22 @@ export class TodoList extends LitElement {
             spin: isInProgress,
           })}
         ></i>
-        <span class="todo-item__content">${content}</span>
+        <div class="todo-item__body">
+          <div class="todo-item__content">${displayContent}</div>
+          ${todo.description
+            ? html`<div class="todo-item__description">${todo.description}</div>`
+            : nothing}
+          ${todo.files && todo.files.length > 0
+            ? html`
+                <div class="todo-item__files">
+                  ${todo.files.map(
+                    (file) =>
+                      html`<span class="todo-item__file">${file}</span>`,
+                  )}
+                </div>
+              `
+            : nothing}
+        </div>
       </div>
     `;
   }

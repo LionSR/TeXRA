@@ -651,8 +651,8 @@ export function createResponseCycleFlow<C>(): Flow<
       return formatPostCompactionContext(
         subagents,
         processes,
-        services.workspace.todos.todos,
-        services.workspace.plan.plan,
+        services.workspace.tasks.todos,
+        services.workspace.tasks.summary,
       );
     },
     getDebugSaveOptions: (shared, services) => ({

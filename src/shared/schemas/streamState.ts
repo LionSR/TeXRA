@@ -106,6 +106,9 @@ export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   kind: z.literal(AGENT_CATEGORY.TOOL_USE),
   // Frontend-owned fields updated by targeted progress-view messages
   todos: z.array(TodoItemSchema).prefault([]),
+  /** Optional high-level summary for the todo list (e.g., plan overview). */
+  todoSummary: z.string().nullable().prefault(null),
+  /** @deprecated Kept for backward compatibility during migration. Use todos + todoSummary instead. */
   plan: PlanSchema.nullable().prefault(null),
   queuedFollowUps: z.array(z.string()).prefault([]),
   toolEditBypass: z.boolean().optional(),

@@ -210,6 +210,7 @@ export const UpdateTodosMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_TODOS),
   stream: StreamTabIdSchema,
   todos: z.array(TodoItemSchema),
+  summary: z.string().nullable().optional(),
 });
 
 export const UpdatePlanMessageSchema = z.object({
@@ -337,6 +338,7 @@ export const SyncStreamContentMessageSchema = z.object({
     .optional(),
   contextState: ContextStateSchema.optional(),
   todos: z.array(TodoItemSchema).optional(),
+  todoSummary: z.string().nullable().optional(),
   plan: PlanSchema.nullable().optional(),
   queuedFollowUps: z.array(z.string()).optional(),
   instruction: InstructionUpdateSchema.nullable().optional(),

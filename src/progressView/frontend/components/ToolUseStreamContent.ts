@@ -106,7 +106,10 @@ export class ToolUseStreamContent extends LitElement {
 
       <request-panels .permissions=${this.filteredPermissions}></request-panels>
 
-      <todo-list .todos=${currentState.todos}></todo-list>
+      <todo-list
+        .todos=${currentState.todos}
+        .summary=${currentState.todoSummary ?? null}
+      ></todo-list>
 
       <plan-view .plan=${currentState.plan}></plan-view>
 

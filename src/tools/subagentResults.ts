@@ -449,13 +449,12 @@ export function formatPostCompactionContext(
   subagents: ActiveChildInfo[],
   processes: ActiveChildInfo[],
   todos?: TodoItem[],
-  plan?: Plan | null,
+  summary?: string | null,
 ): string | null {
   const hasChildren = subagents.length > 0 || processes.length > 0;
   const hasTodos = todos != null && todos.length > 0;
-  const hasPlan = plan != null;
 
-  if (!hasChildren && !hasTodos && !hasPlan) {
+  if (!hasChildren && !hasTodos) {
     return null;
   }
 
@@ -496,11 +495,7 @@ export function formatPostCompactionContext(
   }
 
   if (hasTodos) {
-    lines.push(...formatTodoContext(todos));
-  }
-
-  if (hasPlan) {
-    lines.push(...formatPlanContext(plan));
+    lines.push(...formatTodoContext(todos, summary));
   }
 
   lines.push('</post-compaction-context>');
@@ -509,36 +504,29 @@ export function formatPostCompactionContext(
 
 /**
  * Format todo items as XML lines for post-compaction context.
+ * Includes optional summary and rich item metadata (description, files).
  */
-function formatTodoContext(todos: TodoItem[]): string[] {
-  const lines: string[] = [`<current-todos count="${todos.length}">`];
+function formatTodoContext(
+  todos: TodoItem[],
+  summary?: string | null,
+): string[] {
+  const summaryAttr = summary ? ` summary="${escapeAttr(summary)}"` : '';
+  const lines: string[] = [
+    `<current-todos count="${todos.length}"${summaryAttr}>`,
+  ];
   for (const todo of todos) {
+    const filesAttr =
+      todo.files && todo.files.length > 0
+        ? ` files="${escapeAttr(todo.files.join(', '))}"`
+        : '';
+    const descAttr = todo.description
+      ? ` description="${escapeAttr(todo.description)}"`
+      : '';
     lines.push(
-      `  <todo status="${escapeAttr(todo.status)}" activeForm="${escapeAttr(todo.activeForm)}">${escapeText(todo.content)}</todo>`,
+      `  <todo status="${escapeAttr(todo.status)}" activeForm="${escapeAttr(todo.activeForm)}"${descAttr}${filesAttr}>${escapeText(todo.content)}</todo>`,
     );
   }
   lines.push('</current-todos>');
-  return lines;
-}
-
-/**
- * Format plan as XML lines for post-compaction context.
- */
-function formatPlanContext(plan: Plan): string[] {
-  const lines: string[] = [
-    `<current-plan summary="${escapeAttr(plan.summary)}">`,
-  ];
-  for (let i = 0; i < plan.steps.length; i++) {
-    const step = plan.steps[i]!;
-    const filesAttr =
-      step.files.length > 0
-        ? ` files="${escapeAttr(step.files.join(', '))}"`
-        : '';
-    lines.push(
-      `  <step index="${i + 1}" status="${escapeAttr(step.status)}" title="${escapeAttr(step.title)}"${filesAttr}>${escapeText(step.description)}</step>`,
-    );
-  }
-  lines.push('</current-plan>');
   return lines;
 }
 

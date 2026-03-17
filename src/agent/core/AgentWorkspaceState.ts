@@ -3,10 +3,8 @@ import { z } from 'zod';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import {
   TodoItemSchema,
-  PlanSchema,
   FileLocationSchema,
   type TodoItem,
-  type Plan,
   type FileLocation,
 } from '@shared/schemas';
 import { FlattenedEditRecordSchema } from '@tools/result';
@@ -230,33 +228,61 @@ const ServerToolContentStateSchema = z.object({
 
 type ServerToolContentState = z.output<typeof ServerToolContentStateSchema>;
 
-/** Internal schema for todo state snapshot. */
-const TodoStateSnapshotSchema = z.object({
+/** Callback shape for task state updates. */
+export interface TaskStateUpdate {
+  todos: TodoItem[];
+  summary: string | null;
+}
+
+/** Internal schema for task state snapshot (unified todo + plan). */
+const TaskStateSnapshotSchema = z.object({
   todos: z.array(TodoItemSchema).prefault([]),
+  summary: z.string().nullable().prefault(null),
 });
 
-type TodoStateSnapshot = z.output<typeof TodoStateSnapshotSchema>;
+type TaskStateSnapshot = z.output<typeof TaskStateSnapshotSchema>;
 
-export class TodoState {
+/**
+ * Unified task tracking state.
+ *
+ * Manages both lightweight todos and richer plan-style items in a single list.
+ * The optional `summary` provides a high-level overview (previously Plan.summary).
+ *
+ * Exposes `TodoState` and `PlanState` facades for backward compatibility
+ * during the migration period.
+ */
+export class TaskState {
   private _todos: TodoItem[] = [];
-  private _onUpdate?: (todos: TodoItem[]) => void;
+  private _summary: string | null = null;
+  private _onUpdate?: (update: TaskStateUpdate) => void;
 
-  static fromSnapshot(snapshot: unknown): TodoState {
-    const parsed = TodoStateSnapshotSchema.parse(snapshot);
-    const state = new TodoState();
+  static fromSnapshot(snapshot: unknown): TaskState {
+    const parsed = TaskStateSnapshotSchema.parse(snapshot);
+    const state = new TaskState();
     state._todos = [...parsed.todos];
+    state._summary = parsed.summary;
     return state;
   }
 
-  toSnapshot(): TodoStateSnapshot {
-    return { todos: [...this._todos] };
+  toSnapshot(): TaskStateSnapshot {
+    return {
+      todos: this._todos.map((t) => ({
+        ...t,
+        files: t.files ? [...t.files] : undefined,
+      })),
+      summary: this._summary,
+    };
   }
 
   get todos(): TodoItem[] {
     return this._todos;
   }
 
-  setOnUpdate(callback: (todos: TodoItem[]) => void): void {
+  get summary(): string | null {
+    return this._summary;
+  }
+
+  setOnUpdate(callback: (update: TaskStateUpdate) => void): void {
     this._onUpdate = callback;
   }
 
@@ -264,10 +290,24 @@ export class TodoState {
     this._onUpdate = undefined;
   }
 
-  updateTodos(todos: TodoItem[]): void {
-    if (this._todosEqual(this._todos, todos)) return;
+  updateTodos(todos: TodoItem[], summary?: string | null): void {
+    const newSummary = summary !== undefined ? summary : this._summary;
+    if (
+      this._todosEqual(this._todos, todos) &&
+      this._summary === newSummary
+    ) {
+      return;
+    }
     this._todos = todos;
-    this._onUpdate?.(todos);
+    this._summary = newSummary;
+    this._onUpdate?.({ todos: this._todos, summary: this._summary });
+  }
+
+  /** Clear the summary without changing todos. */
+  clearSummary(): void {
+    if (this._summary === null) return;
+    this._summary = null;
+    this._onUpdate?.({ todos: this._todos, summary: null });
   }
 
   private _todosEqual(a: TodoItem[], b: TodoItem[]): boolean {
@@ -275,96 +315,46 @@ export class TodoState {
     for (let i = 0; i < a.length; i++) {
       const ai = a[i],
         bi = b[i];
-      if (!ai || !bi) return false; // Guard against sparse arrays
+      if (!ai || !bi) return false;
       if (
         ai.content !== bi.content ||
         ai.status !== bi.status ||
-        ai.activeForm !== bi.activeForm
+        ai.activeForm !== bi.activeForm ||
+        ai.description !== bi.description ||
+        !this._arraysEqual(ai.files, bi.files)
       ) {
         return false;
       }
     }
     return true;
+  }
+
+  private _arraysEqual(
+    a: string[] | undefined,
+    b: string[] | undefined,
+  ): boolean {
+    if (a === b) return true;
+    if (!a || !b) return a === b;
+    if (a.length !== b.length) return false;
+    return a.every((v, i) => v === b[i]);
   }
 
   reset(): void {
     this._todos = [];
+    this._summary = null;
   }
 }
 
-/** Internal schema for plan state snapshot. */
-const PlanStateSnapshotSchema = z.object({
-  plan: PlanSchema.nullable().prefault(null),
-});
+/**
+ * @deprecated Use TaskState directly. Kept for backward compatibility.
+ */
+export type TodoState = TaskState;
+export const TodoState = TaskState;
 
-type PlanStateSnapshot = z.output<typeof PlanStateSnapshotSchema>;
-
-export class PlanState {
-  private _plan: Plan | null = null;
-  private _onUpdate?: (plan: Plan | null) => void;
-
-  static fromSnapshot(snapshot: unknown): PlanState {
-    const parsed = PlanStateSnapshotSchema.parse(snapshot);
-    const state = new PlanState();
-    state._plan = parsed.plan;
-    return state;
-  }
-
-  toSnapshot(): PlanStateSnapshot {
-    return {
-      plan: this._plan
-        ? {
-            ...this._plan,
-            steps: this._plan.steps.map((s) => ({ ...s, files: [...s.files] })),
-          }
-        : null,
-    };
-  }
-
-  get plan(): Plan | null {
-    return this._plan;
-  }
-
-  setOnUpdate(callback: (plan: Plan | null) => void): void {
-    this._onUpdate = callback;
-  }
-
-  clearOnUpdate(): void {
-    this._onUpdate = undefined;
-  }
-
-  updatePlan(plan: Plan | null): void {
-    if (this._planEqual(this._plan, plan)) return;
-    this._plan = plan;
-    this._onUpdate?.(plan);
-  }
-
-  private _planEqual(a: Plan | null, b: Plan | null): boolean {
-    if (a === b) return true;
-    if (!a || !b) return false;
-    if (a.summary !== b.summary) return false;
-    if (a.steps.length !== b.steps.length) return false;
-    for (let i = 0; i < a.steps.length; i++) {
-      const ai = a.steps[i],
-        bi = b.steps[i];
-      if (!ai || !bi) return false;
-      if (
-        ai.title !== bi.title ||
-        ai.description !== bi.description ||
-        ai.status !== bi.status ||
-        ai.files.length !== bi.files.length ||
-        ai.files.some((f, j) => f !== bi.files[j])
-      ) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  reset(): void {
-    this._plan = null;
-  }
-}
+/**
+ * @deprecated Use TaskState directly. Kept for backward compatibility.
+ */
+export type PlanState = TaskState;
 
 export const AgentWorkspaceStateSnapshotSchema = z.object({
   assembly: ResponseAssemblyStateSchema.prefault({
@@ -380,8 +370,7 @@ export const AgentWorkspaceStateSnapshotSchema = z.object({
     readFiles: [],
     edits: [],
   }),
-  todos: TodoStateSnapshotSchema.prefault({ todos: [] }),
-  plan: PlanStateSnapshotSchema.prefault({ plan: null }),
+  tasks: TaskStateSnapshotSchema.prefault({ todos: [], summary: null }),
 });
 
 export type AgentWorkspaceSnapshot = z.output<
@@ -394,8 +383,7 @@ export class AgentWorkspaceState {
   public readonly reasoning: ReasoningCacheState;
   public readonly interactions: FileInteractionState;
   public readonly serverToolContent: ServerToolContentState;
-  public readonly todos: TodoState;
-  public readonly plan: PlanState;
+  public readonly tasks: TaskState;
 
   private constructor(
     assembly: ResponseAssemblyState,
@@ -403,16 +391,14 @@ export class AgentWorkspaceState {
     reasoning: ReasoningCacheState,
     interactions: FileInteractionState,
     serverToolContent: ServerToolContentState,
-    todos: TodoState,
-    plan: PlanState,
+    tasks: TaskState,
   ) {
     this.assembly = assembly;
     this.media = media;
     this.reasoning = reasoning;
     this.interactions = interactions;
     this.serverToolContent = serverToolContent;
-    this.todos = todos;
-    this.plan = plan;
+    this.tasks = tasks;
   }
 
   static create(): AgentWorkspaceState {
@@ -422,8 +408,7 @@ export class AgentWorkspaceState {
       ReasoningCacheStateSchema.parse({}),
       new FileInteractionState(),
       ServerToolContentStateSchema.parse({}),
-      new TodoState(),
-      new PlanState(),
+      new TaskState(),
     );
   }
 
@@ -444,8 +429,7 @@ export class AgentWorkspaceState {
       parsed.reasoning,
       FileInteractionState.fromSnapshot(parsed.interactions),
       ServerToolContentStateSchema.parse({}),
-      TodoState.fromSnapshot(parsed.todos),
-      PlanState.fromSnapshot(parsed.plan),
+      TaskState.fromSnapshot(parsed.tasks),
     );
   }
 
@@ -464,8 +448,7 @@ export class AgentWorkspaceState {
         thinkingBlocks: [...this.reasoning.thinkingBlocks],
       },
       interactions: this.interactions.toSnapshot(),
-      todos: this.todos.toSnapshot(),
-      plan: this.plan.toSnapshot(),
+      tasks: this.tasks.toSnapshot(),
     };
   }
 
