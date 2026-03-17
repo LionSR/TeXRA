@@ -53,7 +53,7 @@ export function registerLatexCommands(context: vscode.ExtensionContext): void {
 }
 
 /** Extensions matching the editor/title `when` clause for this command. */
-const LATEX_EXTENSIONS = ['.tex', '.dtx', '.ltx'];
+const LATEX_EXTENSIONS = ['.tex'];
 
 async function handleFixCompilation(): Promise<void> {
   try {

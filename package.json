@@ -1172,7 +1172,7 @@
           "group": "navigation"
         },
         {
-          "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "when": "editorLangId == latex",
           "command": "texra.fixCompilation",
           "group": "navigation"
         },
