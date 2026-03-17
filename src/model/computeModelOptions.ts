@@ -164,7 +164,7 @@ async function buildModelOptionData(
 export function buildBasicModelOptionsData(): ModelOptionData[] {
   return getVisibleModels().map((model) => {
     const config = MODEL_CONFIGS[model];
-    if (!config) return { value: model, label: MODEL_DISPLAY_NAMES[model] ?? model };
+    if (!config) return { value: model, label: model };
     return {
       value: model,
       label: model,
