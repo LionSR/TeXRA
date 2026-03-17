@@ -159,11 +159,18 @@ function matchSdkError(
     };
   }
 
-  // HTTP errors - detect status code from error object, SDK class, or error body
+  // HTTP errors - detect status code from error object, SDK class, or error body.
+  // If detectStatusCode returns a non-error code (< 400), it's likely misleading
+  // (e.g., SSE connection status 200 while the actual error is in the body),
+  // so prefer the body-inferred status code in that case.
+  const rawStatusCode = detectStatusCode(err);
   const statusCode =
-    detectStatusCode(err) ??
+    (rawStatusCode !== undefined && rawStatusCode >= 400
+      ? rawStatusCode
+      : undefined) ??
     entry.fallbackStatusCode ??
-    inferStatusCodeFromBody(rawErrorBody);
+    inferStatusCodeFromBody(rawErrorBody) ??
+    rawStatusCode;
   const statusText = detectStatusText(err, statusCode);
   const fallbackMessage = statusCode
     ? safeGetReasonPhrase(statusCode)
@@ -440,7 +447,10 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     : undefined;
   const finalMessage =
     extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
-  const retryable = isRelay || isRetryableStatusCode(statusCode);
+  // No status code on an unrecognized error likely means a network-level failure
+  // (DNS, proxy, TLS, etc.) — treat as retryable for safety.
+  const retryable =
+    isRelay || (statusCode ? isRetryableStatusCode(statusCode) : true);
 
   let message = finalMessage;
   if (statusCode) {
