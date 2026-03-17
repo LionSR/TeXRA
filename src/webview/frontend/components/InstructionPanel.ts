@@ -12,12 +12,16 @@ import { customElement, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
+// Local imports - shared schemas and types
+import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
+
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
 import { commonViewStyles } from '@shared/styles/commonViewStyles';
 import { selectStyles } from '@shared/styles/selectStyles';
 
 // Local imports - shared utils
+import { getModelProviderDecorator } from '@shared/utils/icons';
 import {
   renderAgentOptions,
   renderModelOptions,
@@ -182,6 +186,22 @@ export class InstructionPanel extends LitElement {
         top: auto;
       }
 
+      .selection-description {
+        font-size: var(--font-size-xs);
+        color: var(--color-text-secondary, var(--vscode-descriptionForeground));
+        line-height: var(--line-height-normal, 1.4);
+        padding-top: var(--spacing-tiny);
+        min-height: 1.2em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        transition: opacity var(--transition-fast);
+      }
+
+      .selection-description:empty {
+        display: none;
+      }
+
       .recording {
         color: var(--vscode-errorForeground);
         animation: pulse 1s infinite;
@@ -205,6 +225,40 @@ export class InstructionPanel extends LitElement {
   /** Reference to instruction textarea for paste handling */
   @query('#instruction')
   private instructionTextarea?: HTMLElement;
+
+  /** Build a short description for the currently selected agent. */
+  private getSelectedAgentDescription(): string {
+    const session = this.sessionData;
+    if (!session) return '';
+    const options: AgentOptionData[] =
+      session.sessionType === SESSION_TYPES.WORKFLOW
+        ? session.workflowAgentOptions
+        : session.toolUseAgentOptions;
+    const selectedValue =
+      session.sessionType === SESSION_TYPES.WORKFLOW
+        ? session.workflowAgent
+        : session.toolUseAgent;
+    const opt = options.find((o) => o.value === selectedValue);
+    return opt?.description ?? '';
+  }
+
+  /** Build a short description for the currently selected model. */
+  private getSelectedModelDescription(): string {
+    const session = this.sessionData;
+    if (!session) return '';
+    const opt = session.modelOptions.find(
+      (o: ModelOptionData) => o.value === session.model,
+    );
+    if (!opt) return '';
+    const parts: string[] = [];
+    if (opt.provider) {
+      const decorator = getModelProviderDecorator(opt.provider);
+      parts.push(decorator.label);
+    }
+    if (opt.context) parts.push(opt.context);
+    if (opt.cost) parts.push(opt.cost);
+    return parts.join(' · ');
+  }
 
   private handleSessionTypeChange(event: Event): void {
     const target = event.target as HTMLInputElement | null;
@@ -288,6 +342,23 @@ export class InstructionPanel extends LitElement {
         text: 'Choose the AI model used by the selected agent.',
       }),
     );
+  }
+
+  private renderSelectionDescription(): TemplateResult | typeof nothing {
+    const agentDesc = this.getSelectedAgentDescription();
+    const modelDesc = this.getSelectedModelDescription();
+
+    // Combine: prefer showing both, separated by a dash
+    const parts: string[] = [];
+    if (agentDesc) parts.push(agentDesc);
+    if (modelDesc) parts.push(modelDesc);
+    const text = parts.join(' — ');
+
+    if (!text) return nothing;
+
+    return html`<div class="selection-description" title=${text}>
+      ${text}
+    </div>`;
   }
 
   override render(): TemplateResult | typeof nothing {
@@ -496,6 +567,7 @@ export class InstructionPanel extends LitElement {
             @click=${this.handleExecute}
           ></vscode-button>
         </div>
+        ${this.renderSelectionDescription()}
       </div>
     `;
   }
