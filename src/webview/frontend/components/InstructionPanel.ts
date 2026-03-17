@@ -21,7 +21,6 @@ import { commonViewStyles } from '@shared/styles/commonViewStyles';
 import { selectStyles } from '@shared/styles/selectStyles';
 
 // Local imports - shared utils
-import { getModelProviderDecorator } from '@shared/utils/icons';
 import {
   renderAgentOptions,
   renderModelOptions,
@@ -250,14 +249,7 @@ export class InstructionPanel extends LitElement {
       (o: ModelOptionData) => o.value === session.model,
     );
     if (!opt) return '';
-    const parts: string[] = [];
-    if (opt.provider) {
-      const decorator = getModelProviderDecorator(opt.provider);
-      parts.push(decorator.label);
-    }
-    if (opt.context) parts.push(opt.context);
-    if (opt.cost) parts.push(opt.cost);
-    return parts.join(' · ');
+    return opt.hint ?? '';
   }
 
   private handleSessionTypeChange(event: Event): void {

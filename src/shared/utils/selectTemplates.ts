@@ -77,8 +77,7 @@ function renderModelOption(
 
   const hints: string[] = [];
   if (decorator.label) hints.push(decorator.label);
-  if (opt.context) hints.push(`Context: ${opt.context}`);
-  if (opt.cost) hints.push(`Cost: ${opt.cost}`);
+  if (opt.hint) hints.push(opt.hint);
   if (opt.requiresKey) hints.push('⚠ API key not configured');
   const tooltip = hints.join(' | ');
 
