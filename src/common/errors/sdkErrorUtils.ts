@@ -131,7 +131,10 @@ function isRetryableStatusCode(statusCode?: number): boolean {
 type SdkMatchResult = Omit<ProviderError, 'isRelayError' | 'rawErrorBody'>;
 
 /** Match known SDK error types and return structured error details. */
-function matchSdkError(err: unknown): SdkMatchResult | undefined {
+function matchSdkError(
+  err: unknown,
+  rawErrorBody: unknown,
+): SdkMatchResult | undefined {
   const entry = SDK_ERRORS.find(({ ctor }) => err instanceof ctor);
   if (!entry) {
     return undefined;
@@ -150,8 +153,11 @@ function matchSdkError(err: unknown): SdkMatchResult | undefined {
     };
   }
 
-  // HTTP errors - detect status code and build formatted message
-  const statusCode = detectStatusCode(err) ?? entry.fallbackStatusCode;
+  // HTTP errors - detect status code from error object, SDK class, or error body
+  const statusCode =
+    detectStatusCode(err) ??
+    entry.fallbackStatusCode ??
+    inferStatusCodeFromBody(rawErrorBody);
   const statusText = detectStatusText(err, statusCode);
   const fallbackMessage = statusCode
     ? safeGetReasonPhrase(statusCode)
@@ -334,28 +340,30 @@ function detectStreamDiagnostics(err: unknown): StreamDiagnostics | undefined {
   return undefined;
 }
 
-const ANTHROPIC_OVERLOADED_ERROR = 'overloaded_error';
-const ANTHROPIC_TIMEOUT_ERROR = 'timeout_error';
+/**
+ * Maps Anthropic error type strings to their corresponding HTTP status codes.
+ * Used to recover the status code when SDK error objects lose it
+ * (e.g., streaming SSE errors that produce generic APIError instances).
+ */
+const ANTHROPIC_ERROR_TYPE_TO_STATUS: Record<string, number> = {
+  invalid_request_error: StatusCodes.BAD_REQUEST, // 400
+  authentication_error: StatusCodes.UNAUTHORIZED, // 401
+  permission_error: StatusCodes.FORBIDDEN, // 403
+  not_found_error: StatusCodes.NOT_FOUND, // 404
+  request_too_large: StatusCodes.REQUEST_TOO_LONG, // 413
+  rate_limit_error: StatusCodes.TOO_MANY_REQUESTS, // 429
+  api_error: StatusCodes.INTERNAL_SERVER_ERROR, // 500
+  timeout_error: StatusCodes.REQUEST_TIMEOUT, // 408
+  overloaded_error: 529,
+};
 
 /**
- * Anthropic error types that indicate transient server-side issues.
- * Checked against the raw error body when SDK class detection fails
- * (e.g., streaming SSE errors that produce generic APIError instances
- * without a proper HTTP status code).
+ * Infers an HTTP status code from the Anthropic error type in the raw error body.
+ * Handles both `{ type: "api_error" }` and `{ error: { type: "api_error" } }`.
  */
-const RETRYABLE_ANTHROPIC_ERROR_TYPES = new Set([
-  'api_error', // 500 Internal Server Error
-  'overloaded_error', // 529 Overloaded
-]);
-
-/**
- * Checks if the raw error body contains a known retryable Anthropic error type.
- * Handles both direct body (`{ type: "api_error" }`) and nested body
- * (`{ error: { type: "api_error" } }`) to cover different SDK extraction paths.
- */
-function isRetryableAnthropicErrorType(rawErrorBody: unknown): boolean {
+function inferStatusCodeFromBody(rawErrorBody: unknown): number | undefined {
   if (!isObject(rawErrorBody)) {
-    return false;
+    return undefined;
   }
   const body = rawErrorBody as { type?: unknown; error?: { type?: unknown } };
   const errorType =
@@ -363,7 +371,7 @@ function isRetryableAnthropicErrorType(rawErrorBody: unknown): boolean {
     (isObject(body.error) && isString(body.error.type)
       ? body.error.type
       : undefined);
-  return typeof errorType === 'string' && RETRYABLE_ANTHROPIC_ERROR_TYPES.has(errorType);
+  return errorType ? ANTHROPIC_ERROR_TYPE_TO_STATUS[errorType] : undefined;
 }
 
 function isRelayError(rawErrorBody: unknown): boolean {
@@ -379,33 +387,10 @@ function isRelayError(rawErrorBody: unknown): boolean {
   return isObject(nested) && '_relay' in nested;
 }
 
-function determineRetryable(
-  err: unknown,
-  statusCode?: number,
-  rawErrorBody?: unknown,
-): boolean {
+function determineRetryable(statusCode?: number, rawErrorBody?: unknown): boolean {
   if (isRelayError(rawErrorBody)) {
     return true;
   }
-
-  if (err instanceof Error) {
-    const msg = err.message;
-    // Anthropic: overloaded_error and timeout_error should be retryable
-    if (
-      msg.includes(ANTHROPIC_OVERLOADED_ERROR) ||
-      msg.includes(ANTHROPIC_TIMEOUT_ERROR)
-    ) {
-      return true;
-    }
-  }
-
-  // Check raw error body for retryable Anthropic error types (api_error = 500,
-  // overloaded_error = 529). This catches cases where the SDK produces a generic
-  // APIError without a proper HTTP status code (e.g., streaming SSE errors).
-  if (isRetryableAnthropicErrorType(rawErrorBody)) {
-    return true;
-  }
-
   return isRetryableStatusCode(statusCode);
 }
 
@@ -424,11 +409,11 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     };
   }
 
-  const sdkMatch = matchSdkError(err);
+  const sdkMatch = matchSdkError(err, rawErrorBody);
   if (sdkMatch) {
     const isRelay = isRelayError(rawErrorBody);
     const retryable =
-      determineRetryable(err, sdkMatch.statusCode, rawErrorBody) ||
+      determineRetryable(sdkMatch.statusCode, rawErrorBody) ||
       sdkMatch.retryable;
     return {
       ...sdkMatch,
@@ -473,7 +458,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     statusCode,
     statusText,
     provider,
-    retryable: determineRetryable(err, statusCode, rawErrorBody),
+    retryable: determineRetryable(statusCode, rawErrorBody),
     isRelayError: isRelay,
     requestId,
     rawErrorBody,
