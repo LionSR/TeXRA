@@ -30,7 +30,6 @@ import {
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 import { ProgressEvents } from '../events';
-import { webviewStorage } from '../webviewStorage';
 
 // Local imports - contexts
 import {
@@ -203,10 +202,8 @@ export class BackgroundTasksPanel extends LitElement {
   @property({ attribute: false }) activeSubagents: ActiveChildInfo[] = [];
   @property({ attribute: false }) finishedSubagentCount = 0;
 
-  /** Open state — persisted across webview visibility changes. */
+  /** Open state — auto-expands when active tasks appear, auto-collapses when all finish. */
   @state() open = false;
-
-  private static readonly STORAGE_KEY = 'backgroundTasks:open';
 
   @consume({ context: processOutputContext, subscribe: true })
   @state()
@@ -216,24 +213,17 @@ export class BackgroundTasksPanel extends LitElement {
   @state()
   private descriptions: StreamDescriptionMap = EMPTY_DESCRIPTIONS;
 
-  /** Track previous active count to detect 0→N transitions for auto-open. */
+  /** Track previous active count to detect transitions. */
   private prevActiveCount = 0;
-
-  constructor() {
-    super();
-    const stored = webviewStorage.get(BackgroundTasksPanel.STORAGE_KEY);
-    if (typeof stored === 'boolean') {
-      this.open = stored;
-    }
-  }
 
   protected override willUpdate(changed: PropertyValues): void {
     super.willUpdate(changed);
     const active = this.activeProcesses.length + this.activeSubagents.length;
-    // Auto-open when tasks first appear (0 → N), but never force-close
+    // Auto-open when tasks appear (0 → N), auto-close when all finish (N → 0)
     if (this.prevActiveCount === 0 && active > 0) {
       this.open = true;
-      webviewStorage.set(BackgroundTasksPanel.STORAGE_KEY, true);
+    } else if (this.prevActiveCount > 0 && active === 0) {
+      this.open = false;
     }
     this.prevActiveCount = active;
   }
@@ -397,9 +387,7 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   private handleCollapsibleToggle(e: CustomEvent<{ open?: boolean }>): void {
-    const next = e.detail?.open ?? this.open;
-    this.open = next;
-    webviewStorage.set(BackgroundTasksPanel.STORAGE_KEY, next);
+    this.open = e.detail?.open ?? this.open;
   }
 
   private navigateToStream(streamId: string): void {

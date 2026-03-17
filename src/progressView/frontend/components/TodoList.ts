@@ -21,7 +21,6 @@ import { TODO_STATUS, STATUS_ICONS, type TodoItem } from '@shared/schemas';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 import { ELEMENT_IDS } from '../constants';
-import { webviewStorage } from '../webviewStorage';
 
 @customElement('todo-list')
 export class TodoList extends LitElement {
@@ -103,23 +102,16 @@ export class TodoList extends LitElement {
 
   @property({ attribute: false }) todos: TodoItem[] = [];
 
-  /** Open state — persisted across webview visibility changes. */
+  /** Open state — auto-expands on todo updates, auto-collapses when cleared. */
   @state() private open = true;
 
-  private static readonly STORAGE_KEY = 'todoList:open';
-
-  constructor() {
-    super();
-    const stored = webviewStorage.get(TodoList.STORAGE_KEY);
-    if (typeof stored === 'boolean') {
-      this.open = stored;
-    }
-  }
-
   protected override willUpdate(changed: PropertyValues): void {
-    if (changed.has('todos') && this.todos.length > 0 && !this.open) {
-      this.open = true;
-      webviewStorage.set(TodoList.STORAGE_KEY, true);
+    if (changed.has('todos')) {
+      if (this.todos.length > 0) {
+        this.open = true;
+      } else {
+        this.open = false;
+      }
     }
   }
 
@@ -183,8 +175,6 @@ export class TodoList extends LitElement {
   }
 
   private handleCollapsibleToggle(e: CustomEvent<{ open?: boolean }>): void {
-    const next = e.detail?.open ?? this.open;
-    this.open = next;
-    webviewStorage.set(TodoList.STORAGE_KEY, next);
+    this.open = e.detail?.open ?? this.open;
   }
 }
