@@ -337,6 +337,35 @@ function detectStreamDiagnostics(err: unknown): StreamDiagnostics | undefined {
 const ANTHROPIC_OVERLOADED_ERROR = 'overloaded_error';
 const ANTHROPIC_TIMEOUT_ERROR = 'timeout_error';
 
+/**
+ * Anthropic error types that indicate transient server-side issues.
+ * Checked against the raw error body when SDK class detection fails
+ * (e.g., streaming SSE errors that produce generic APIError instances
+ * without a proper HTTP status code).
+ */
+const RETRYABLE_ANTHROPIC_ERROR_TYPES = new Set([
+  'api_error', // 500 Internal Server Error
+  'overloaded_error', // 529 Overloaded
+]);
+
+/**
+ * Checks if the raw error body contains a known retryable Anthropic error type.
+ * Handles both direct body (`{ type: "api_error" }`) and nested body
+ * (`{ error: { type: "api_error" } }`) to cover different SDK extraction paths.
+ */
+function isRetryableAnthropicErrorType(rawErrorBody: unknown): boolean {
+  if (!isObject(rawErrorBody)) {
+    return false;
+  }
+  const body = rawErrorBody as { type?: unknown; error?: { type?: unknown } };
+  const errorType =
+    (isString(body.type) ? body.type : undefined) ??
+    (isObject(body.error) && isString(body.error.type)
+      ? body.error.type
+      : undefined);
+  return typeof errorType === 'string' && RETRYABLE_ANTHROPIC_ERROR_TYPES.has(errorType);
+}
+
 function isRelayError(rawErrorBody: unknown): boolean {
   if (!isObject(rawErrorBody)) {
     return false;
@@ -369,6 +398,14 @@ function determineRetryable(
       return true;
     }
   }
+
+  // Check raw error body for retryable Anthropic error types (api_error = 500,
+  // overloaded_error = 529). This catches cases where the SDK produces a generic
+  // APIError without a proper HTTP status code (e.g., streaming SSE errors).
+  if (isRetryableAnthropicErrorType(rawErrorBody)) {
+    return true;
+  }
+
   return isRetryableStatusCode(statusCode);
 }
 
