@@ -216,6 +216,7 @@ async function getGitToken(
   key: string,
   title: string,
   validate?: (t: string) => boolean,
+  promptHint?: string,
 ): Promise<{ remote: string; sensitive: string[] } | null> {
   const isValid = (t: string): boolean => validate?.(t) ?? true;
 
@@ -230,34 +231,29 @@ async function getGitToken(
     await secrets.delete(key);
   }
 
-  // Prompt for new token, offering a link to the docs
-  const input = await vscode.window.showInputBox({
+  // Prompt for new token
+  const input = await promptInput(
     title,
-    prompt:
-      'Enter your Git authentication token (starts with olp_). Generate one at Overleaf → Account Settings → Git Integration.',
-    password: true,
-    ignoreFocusOut: true,
-  });
-  const trimmedInput = input?.trim() ?? '';
-  if (!trimmedInput) {
-    if (input !== undefined) {
-      vscode.window.showWarningMessage('Clone cancelled.');
-    }
-    return null;
-  }
-  if (!isValid(trimmedInput)) {
+    promptHint ?? 'Enter your Git authentication token.',
+    true,
+  );
+  if (!input) return null;
+
+  if (!isValid(input)) {
     const action = await vscode.window.showErrorMessage(
-      'Invalid token format. Overleaf tokens start with olp_.',
-      'How to get a token',
+      promptHint
+        ? `Invalid token format. ${promptHint}`
+        : 'Invalid token format.',
+      ...(promptHint ? (['How to get a token'] as const) : []),
     );
-    if (action) {
+    if (action === 'How to get a token') {
       void vscode.env.openExternal(vscode.Uri.parse(OVERLEAF_TOKEN_DOCS_URL));
     }
     return null;
   }
 
-  await secrets.store(key, trimmedInput);
-  return buildTokenResult(trimmedInput);
+  await secrets.store(key, input);
+  return buildTokenResult(input);
 }
 
 function buildTokenResult(token: string): {
@@ -325,12 +321,16 @@ async function cloneOverleafProject(
   const tokenValidator = parsed.isOverleaf
     ? (t: string) => t.startsWith('olp_')
     : undefined;
+  const tokenHint = parsed.isOverleaf
+    ? 'Overleaf tokens start with olp_. Generate one at Account Settings → Git Integration.'
+    : undefined;
 
   const creds = await getGitToken(
     context.secrets,
     tokenKey,
     tokenTitle,
     tokenValidator,
+    tokenHint,
   );
   if (!creds) return;
 
