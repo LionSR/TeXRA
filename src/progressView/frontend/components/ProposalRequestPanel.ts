@@ -12,6 +12,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
@@ -28,7 +29,6 @@ import {
 import {
   AGENT_CATEGORY,
   type AgentProposalPermission,
-  type WorkflowAgentProposalPermission,
 } from '@shared/schemas';
 import { postMessage } from '@shared/vscode';
 import { renderModelOptions } from '@shared/utils/selectTemplates';
@@ -112,13 +112,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
                 >`}
           </div>
           <div class="workflow-proposal__instruction">${data.instruction}</div>
-          ${isWorkflow
-            ? html`<div class="workflow-proposal__files">
-                ${this.renderProposalFiles(
-                  data as WorkflowAgentProposalPermission,
-                )}
-              </div>`
-            : nothing}
+          ${this.renderProposalFiles(data)}
         </div>
         <vscode-toolbar-container class="workflow-proposal__actions">
           <vscode-toolbar-button
@@ -150,18 +144,24 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   // ===========================================================================
 
   private renderProposalFiles(
-    permission: WorkflowAgentProposalPermission,
+    data: AgentProposalPermission,
   ): TemplateResult | typeof nothing {
-    return html`${repeat(
-      getProposalFileGroups(permission),
-      ({ label }) => label,
-      ({ label, files }) => this.renderProposalFileList(label, files),
-    )}`;
+    const groups = getProposalFileGroups(data);
+    if (groups.length === 0) return nothing;
+    return html`<div class="workflow-proposal__files">
+      ${repeat(
+        groups,
+        ({ label }) => label,
+        ({ label, files, clickable }) =>
+          this.renderProposalFileList(label, files, clickable),
+      )}
+    </div>`;
   }
 
   private renderProposalFileList(
     label: string,
     files: string[],
+    clickable: boolean,
   ): TemplateResult | typeof nothing {
     if (files.length === 0) return nothing;
 
@@ -176,9 +176,9 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
           (file) => file,
           (file, i) =>
             html`${i > 0 ? ', ' : ''}<span
-                class="workflow-proposal__file-name"
+                class="workflow-proposal__file-name${clickable ? '' : ' workflow-proposal__file-name--readonly'}"
                 title=${file}
-                data-file=${file}
+                data-file=${ifDefined(clickable ? file : undefined)}
                 >${getBasename(file)}</span
               >`,
         )}
