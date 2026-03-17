@@ -1,5 +1,5 @@
 // Third-party imports
-import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
+import { MODEL_CONFIGS, hint, type ModelConfig } from 'llm-zoo';
 
 // Local imports - auth
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -151,6 +151,7 @@ async function buildModelOptionData(
     provider: config.provider,
     context: formatContext(config.contextWindow),
     cost: formatCost(config.inputPrice, config.outputPrice),
+    hint: hint(config),
     requiresKey: !available,
     disabled: !available,
   };
@@ -171,6 +172,7 @@ export function buildBasicModelOptionsData(): ModelOptionData[] {
       provider: config.provider,
       context: formatContext(config.contextWindow),
       cost: formatCost(config.inputPrice, config.outputPrice),
+      hint: hint(config),
     };
   });
 }
