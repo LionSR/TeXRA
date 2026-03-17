@@ -1,6 +1,7 @@
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
@@ -15,7 +16,6 @@ import type {
   PlanApprovalPermission,
   RetryPermission,
   ToolEditPermission,
-  WorkflowAgentProposalPermission,
 } from '@shared/schemas';
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import { getBasename } from '@shared/utils/path';
@@ -274,15 +274,11 @@ export class PermissionCard extends LitElement {
   }
 
   private renderProposalBody(data: AgentProposalPermission): TemplateResult {
-    const isWorkflow = data.agentCategory === AGENT_CATEGORY.WORKFLOW;
-
     return html`
       <p><strong>Agent:</strong> ${data.agent}</p>
       <p><strong>Model:</strong> ${data.model}</p>
       <p><strong>Instruction:</strong> ${data.instruction}</p>
-      ${isWorkflow
-        ? this.renderWorkflowFiles(data as WorkflowAgentProposalPermission)
-        : nothing}
+      ${this.renderFileGroups(data)}
       ${this.renderFeedbackSection()}
     `;
   }
@@ -326,19 +322,19 @@ export class PermissionCard extends LitElement {
     `;
   }
 
-  private renderWorkflowFiles(
-    data: WorkflowAgentProposalPermission,
-  ): TemplateResult {
+  private renderFileGroups(data: AgentProposalPermission): TemplateResult {
     return html`${repeat(
       getProposalFileGroups(data),
       ({ label }) => label,
-      ({ label, files }) => this.renderFileList(label, files),
+      ({ label, files, clickable }) =>
+        this.renderFileList(label, files, clickable),
     )}`;
   }
 
   private renderFileList(
     label: string,
     files: string[],
+    clickable: boolean,
   ): TemplateResult | typeof nothing {
     if (files.length === 0) return nothing;
 
@@ -350,9 +346,9 @@ export class PermissionCard extends LitElement {
           (file) => file,
           (file, i) =>
             html`${i > 0 ? ', ' : ''}<span
-                class="file-link"
+                class="${clickable ? 'file-link' : 'file-label'}"
                 title=${file}
-                data-file=${file}
+                data-file=${ifDefined(clickable ? file : undefined)}
                 >${getBasename(file)}</span
               >`,
         )}
