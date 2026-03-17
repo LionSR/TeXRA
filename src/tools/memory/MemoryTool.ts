@@ -237,7 +237,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         summary: `Listed directory: ${inputPath}`,
         output: [
           `Contents of ${inputPath} (up to 2 levels deep):`,
-          `SIZE\tMODIFIED\tBY\tPINNED\tPATH`,
+          `SIZE\tMODIFIED\tBY\tPATH\tPINNED`,
           ...listing,
         ].join('\n'),
       };
@@ -509,7 +509,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
             // Unreadable file — skip attribution
           }
         }
-        return `${formatSize(entry.size)}\t${age}\t${by}\t${pinned}\t${display}`;
+        return `${formatSize(entry.size)}\t${age}\t${by}\t${display}${pinned ? `\t${pinned}` : ''}`;
       }),
     );
   }
