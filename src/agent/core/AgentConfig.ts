@@ -13,6 +13,8 @@ const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
   agentCategory: z.enum(AgentCategory).prefault(AgentCategory.Workflow),
   editedFiles: z.array(z.string()).prefault([]),
   toolConfig: ToolConfigSchema,
+  /** Memory display paths attached to this delegation (e.g. /memories/conventions.md). */
+  memories: z.array(z.string()).prefault([]),
 });
 
 /** Lift legacy session.agentCategory to top level for backward compatibility. */
