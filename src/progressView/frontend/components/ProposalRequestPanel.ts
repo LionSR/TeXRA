@@ -155,20 +155,22 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
     return html`${repeat(
       getProposalFileGroups(permission),
       ({ label }) => label,
-      ({ label, files }) => this.renderProposalFileList(label, files),
+      ({ label, files, clickable }) =>
+        this.renderProposalFileList(label, files, clickable),
     )}`;
   }
 
   private renderProposalFileList(
     label: string,
     files: string[],
+    clickable: boolean,
   ): TemplateResult | typeof nothing {
     if (files.length === 0) return nothing;
 
     return html`
       <div
         class="workflow-proposal__${label.toLowerCase()}-files"
-        @click=${this.handleFileClick}
+        @click=${clickable ? this.handleFileClick : undefined}
       >
         <span class="workflow-proposal__file-label">${label}:</span>
         ${repeat(
@@ -176,9 +178,9 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
           (file) => file,
           (file, i) =>
             html`${i > 0 ? ', ' : ''}<span
-                class="workflow-proposal__file-name"
+                class="workflow-proposal__file-name${clickable ? '' : ' workflow-proposal__file-name--readonly'}"
                 title=${file}
-                data-file=${file}
+                ${clickable ? html`data-file=${file}` : nothing}
                 >${getBasename(file)}</span
               >`,
         )}

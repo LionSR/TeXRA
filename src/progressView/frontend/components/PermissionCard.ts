@@ -332,27 +332,29 @@ export class PermissionCard extends LitElement {
     return html`${repeat(
       getProposalFileGroups(data),
       ({ label }) => label,
-      ({ label, files }) => this.renderFileList(label, files),
+      ({ label, files, clickable }) =>
+        this.renderFileList(label, files, clickable),
     )}`;
   }
 
   private renderFileList(
     label: string,
     files: string[],
+    clickable: boolean,
   ): TemplateResult | typeof nothing {
     if (files.length === 0) return nothing;
 
     return html`
-      <div class="file-list" @click=${this.handleFileClick}>
+      <div class="file-list" @click=${clickable ? this.handleFileClick : undefined}>
         <span class="file-list-label">${label}:</span>
         ${repeat(
           files,
           (file) => file,
           (file, i) =>
             html`${i > 0 ? ', ' : ''}<span
-                class="file-link"
+                class="${clickable ? 'file-link' : 'file-label'}"
                 title=${file}
-                data-file=${file}
+                ${clickable ? html`data-file=${file}` : nothing}
                 >${getBasename(file)}</span
               >`,
         )}

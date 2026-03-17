@@ -29,25 +29,32 @@ type FileFields = Partial<z.infer<typeof FileFieldsSchema>> & {
   memories?: string[];
 };
 
+export interface ProposalFileGroup {
+  label: string;
+  files: string[];
+  /** When false, files are virtual paths that should not be opened via workspace file commands. */
+  clickable: boolean;
+}
+
 /** Merge singular + plural file fields into labeled groups, filtering empties. */
-export function getProposalFileGroups(
-  data: FileFields,
-): Array<{ label: string; files: string[] }> {
+export function getProposalFileGroups(data: FileFields): ProposalFileGroup[] {
   const combine = (single: string | null | undefined, arr: string[] = []) =>
     [single, ...arr].filter((f): f is string => Boolean(f));
 
   return [
-    { label: 'Input', files: combine(data.inputFile, data.inputFiles) },
+    { label: 'Input', files: combine(data.inputFile, data.inputFiles), clickable: true },
     {
       label: 'Reference',
       files: combine(data.referenceFile, data.referenceFiles),
+      clickable: true,
     },
     {
       label: 'Auxiliary',
       files: combine(data.auxiliaryFile, data.auxiliaryFiles),
+      clickable: true,
     },
-    { label: 'Media', files: combine(data.mediaFile, data.mediaFiles) },
-    { label: 'Output', files: data.outputFiles ?? [] },
-    { label: 'Memories', files: data.memories ?? [] },
+    { label: 'Media', files: combine(data.mediaFile, data.mediaFiles), clickable: true },
+    { label: 'Output', files: data.outputFiles ?? [], clickable: true },
+    { label: 'Memories', files: data.memories ?? [], clickable: false },
   ].filter((g) => g.files.length > 0);
 }
