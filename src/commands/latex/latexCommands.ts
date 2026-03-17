@@ -23,6 +23,7 @@ export const latexCommands = {
   getTeXCount: 'texra.getTeXCount',
   indentTeX: 'texra.indentTeX',
   applyReplacements: 'texra.applyReplacements',
+  fixCompilation: 'texra.fixCompilation',
 };
 
 export function registerLatexCommands(context: vscode.ExtensionContext): void {
@@ -40,7 +41,36 @@ export function registerLatexCommands(context: vscode.ExtensionContext): void {
       latexCommands.applyReplacements,
       handleApplyReplacements,
     ),
+    vscode.commands.registerCommand(
+      latexCommands.fixCompilation,
+      handleFixCompilation,
+    ),
   );
+}
+
+async function handleFixCompilation(): Promise<void> {
+  try {
+    await withLaTeXGuard(
+      { channel: CHANNEL, action: 'fix compilation', saveDocument: true },
+      async ({ relativePath }) => {
+        logger.info(
+          CHANNEL,
+          `Launching tool-use agent to fix compilation for: ${relativePath}`,
+        );
+
+        await vscode.commands.executeCommand('texra.execute', {
+          agent: 'latexFixer',
+          instruction: `Fix the LaTeX compilation errors in ${relativePath}.`,
+        });
+      },
+    );
+  } catch (err) {
+    await showLoggedErrorMessage(
+      CHANNEL,
+      'Error launching LaTeX compilation fixer',
+      err,
+    );
+  }
 }
 
 async function handleApplyReplacements(): Promise<void> {
