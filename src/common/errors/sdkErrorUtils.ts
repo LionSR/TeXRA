@@ -359,18 +359,26 @@ const ANTHROPIC_ERROR_TYPE_TO_STATUS: Record<string, number> = {
 
 /**
  * Infers an HTTP status code from the Anthropic error type in the raw error body.
- * Handles both `{ type: "api_error" }` and `{ error: { type: "api_error" } }`.
+ * Handles both the envelope format `{ type: "error", error: { type: "api_error" } }`
+ * and the direct format `{ type: "api_error" }`.
+ *
+ * The nested path is checked first because Anthropic's canonical envelope uses
+ * `type: "error"` at the top level (not a real error type), with the actual
+ * error classification in `error.type`.
  */
 function inferStatusCodeFromBody(rawErrorBody: unknown): number | undefined {
   if (!isObject(rawErrorBody)) {
     return undefined;
   }
   const body = rawErrorBody as { type?: unknown; error?: { type?: unknown } };
-  const errorType =
-    (isString(body.type) ? body.type : undefined) ??
-    (isObject(body.error) && isString(body.error.type)
+  // Nested first: { type: "error", error: { type: "api_error" } }
+  const nestedType =
+    isObject(body.error) && isString(body.error.type)
       ? body.error.type
-      : undefined);
+      : undefined;
+  // Direct fallback: { type: "api_error" }
+  const directType = isString(body.type) ? body.type : undefined;
+  const errorType = nestedType ?? directType;
   return errorType ? ANTHROPIC_ERROR_TYPE_TO_STATUS[errorType] : undefined;
 }
 
