@@ -549,12 +549,11 @@ export async function executeAgent(
 
   // Fire-and-forget: generate AI session description from the user's instruction.
   // Triggered at the start so cancelled/errored sessions still get descriptions.
-  // Skipped for subagents to avoid unnecessary LLM calls in multi-agent pipelines.
-  if (!isSubagent) {
-    generateSessionDescription(ctx.executionId, streamId, config).catch(
-      () => {},
-    );
-  }
+  // Applies to all agents including subagents so their progress tabs show
+  // meaningful descriptions in multi-agent pipelines.
+  generateSessionDescription(ctx.executionId, streamId, config).catch(
+    () => {},
+  );
   const category =
     setting.agentCategory === AgentCategory.ToolUse
       ? ('toolUse' as const)
