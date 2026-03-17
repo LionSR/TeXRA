@@ -112,9 +112,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
                 >`}
           </div>
           <div class="workflow-proposal__instruction">${data.instruction}</div>
-          <div class="workflow-proposal__files">
-            ${this.renderProposalFiles(data)}
-          </div>
+          ${this.renderProposalFiles(data)}
         </div>
         <vscode-toolbar-container class="workflow-proposal__actions">
           <vscode-toolbar-button
@@ -148,12 +146,16 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   private renderProposalFiles(
     data: AgentProposalPermission,
   ): TemplateResult | typeof nothing {
-    return html`${repeat(
-      getProposalFileGroups(data),
-      ({ label }) => label,
-      ({ label, files, clickable }) =>
-        this.renderProposalFileList(label, files, clickable),
-    )}`;
+    const groups = getProposalFileGroups(data);
+    if (groups.length === 0) return nothing;
+    return html`<div class="workflow-proposal__files">
+      ${repeat(
+        groups,
+        ({ label }) => label,
+        ({ label, files, clickable }) =>
+          this.renderProposalFileList(label, files, clickable),
+      )}
+    </div>`;
   }
 
   private renderProposalFileList(
