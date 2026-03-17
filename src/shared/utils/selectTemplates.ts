@@ -68,10 +68,9 @@ export function renderAgentOptions(
 
 /** Short hints shown in the model dropdown tooltip for models that benefit from extra context. */
 const MODEL_HINTS: Record<string, string> = {
-  gpt53codex:
-    'OpenAI coding specialist — optimised for code generation and editing. Requires OpenAI API key.',
-  gpt54pro: 'OpenAI premium reasoning model. Requires OpenAI API key.',
-  gpt54: 'OpenAI flagship reasoning model. Requires OpenAI API key.',
+  gpt53codex: 'Requires OpenAI API key (Set API Key → OpenAI)',
+  gpt54pro: 'Requires OpenAI API key (Set API Key → OpenAI)',
+  gpt54: 'Requires OpenAI API key (Set API Key → OpenAI)',
 };
 
 function renderModelOption(
