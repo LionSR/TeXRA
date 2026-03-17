@@ -43,7 +43,7 @@ Your memory persists across conversations, allowing you to continue tasks and re
 Note: when editing your memory folder, always try to keep its content up-to-date, coherent and organized. You can rename or delete files that are no longer relevant. Do not create new files unless necessary.
 
 PINNED MEMORIES:
-Some memories may be marked as "pinned" (shown with ★ in the PINNED column of directory listings, and [pinned] in file headers). These are core long-term insights—techniques, strategies, pitfalls, and best practices accumulated over time. They represent the kind of knowledge a seasoned researcher would build up through years of project experience.
+Some memories may be marked as "pinned" (shown with [pinned] in directory listings and file headers). These are core long-term insights—techniques, strategies, pitfalls, and best practices accumulated over time. They represent the kind of knowledge a seasoned researcher would build up through years of project experience.
 
 - Always consult pinned memories at session start; they contain the most valuable accumulated knowledge.
 - When you discover a reusable trick, technique, strategy, pitfall, or best practice, consider using the \`pin\` command to mark it as a core memory.
