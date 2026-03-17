@@ -68,8 +68,12 @@ import {
 } from '@tools/subagentResults';
 import { defineTool } from '@tools/core/define';
 
+// Local imports - memory
+import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
+import { displayToStoragePath } from '@tools/memory/memoryUtils';
+
 // Local imports - utils
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, StorageFS } from '@utils/files';
 import { generateExecutionId } from '@utils/core/executionId';
 
 // ============================================================================
@@ -96,6 +100,35 @@ interface SubagentDeliveryState {
 }
 
 const activeSubagentDelivery = new Map<string, SubagentDeliveryState>();
+
+/**
+ * Validate that all memory paths exist and are within /memories.
+ * Returns the validated display paths (unchanged).
+ */
+async function validateMemoryPaths(memories: string[]): Promise<string[]> {
+  if (memories.length === 0) return [];
+
+  for (const memPath of memories) {
+    if (
+      memPath !== MEMORY_DISPLAY_ROOT &&
+      !memPath.startsWith(`${MEMORY_DISPLAY_ROOT}/`)
+    ) {
+      throw new Error(
+        `Invalid memory path "${memPath}". Paths must start with ${MEMORY_DISPLAY_ROOT}/ (e.g. ${MEMORY_DISPLAY_ROOT}/conventions.md).`,
+      );
+    }
+
+    const storagePath = displayToStoragePath(memPath);
+    const exists = await StorageFS.exists(storagePath);
+    if (!exists) {
+      throw new Error(
+        `Memory file not found: ${memPath}. Use the memory tool to view available memories.`,
+      );
+    }
+  }
+
+  return memories;
+}
 
 /** Get required context fields, throwing if unavailable. */
 function getRequiredContext(): ToolFileInteractionContext & {
@@ -290,6 +323,9 @@ function summarizeProposal(
   if ('inputFile' in proposal && proposal.inputFile) {
     parts.push(`File: ${proposal.inputFile}`);
   }
+  if (proposal.memories.length > 0) {
+    parts.push(`Memories: ${proposal.memories.join(', ')}`);
+  }
   const instrPreview =
     proposal.instruction.length > 120
       ? `${proposal.instruction.slice(0, 117)}...`
@@ -447,6 +483,12 @@ const WorkflowAgentInputSchema = z.object({
     .describe(
       'Set true when outputFiles has multiple entries. Enables multi-file extraction from agent response.',
     ),
+  memories: z
+    .array(z.string())
+    .prefault([])
+    .describe(
+      'Memory file paths to attach (e.g. /memories/conventions.md). Content is injected into the agent prompt as read-only context. Use for project conventions, style guides, or accumulated knowledge the agent should follow.',
+    ),
 });
 
 export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
@@ -532,6 +574,9 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       throw new Error(`${missing.label} not found: ${missing.path}`);
     }
 
+    // Validate memory paths
+    const memories = await validateMemoryPaths(input.memories);
+
     // Construct workflow proposal
     const proposal = WorkflowAgentProposalSchema.parse({
       agentCategory: AgentCategory.Workflow,
@@ -548,6 +593,7 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       mediaFiles: input.mediaFiles,
       outputFiles: input.outputFiles,
       useMultipleOutputs: input.useMultipleOutputs,
+      memories,
     } satisfies WorkflowAgentProposal);
 
     return proposeAndExecute(proposal, input.agent, ctx.streamId);
@@ -570,6 +616,12 @@ const DelegateAgentInputSchema = z.object({
   instruction: z
     .string()
     .describe('Plain prose instruction with file paths included naturally'),
+  memories: z
+    .array(z.string())
+    .prefault([])
+    .describe(
+      'Memory file paths to attach (e.g. /memories/conventions.md). Content is injected into the agent prompt as read-only context. Use for project conventions, style guides, or accumulated knowledge the agent should follow.',
+    ),
 });
 
 export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
@@ -612,12 +664,16 @@ Example: agent=chat, instruction="The presentation at slides/talk.tex has incorr
     // Resolve model: explicit input → parent model → first visible model
     const model = resolveVisibleModel(input.model ?? ctx.model ?? '');
 
+    // Validate memory paths
+    const memories = await validateMemoryPaths(input.memories);
+
     // Construct tool-use proposal (no file fields)
     const proposal = ToolUseAgentProposalSchema.parse({
       agentCategory: AgentCategory.ToolUse,
       agent: input.agent,
       model,
       instruction: input.instruction,
+      memories,
     } satisfies ToolUseAgentProposal);
 
     return proposeAndExecute(proposal, input.agent, ctx.streamId);

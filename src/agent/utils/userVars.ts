@@ -9,10 +9,13 @@ import {
 } from '@agent/core/AgentDataclass';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { FileListEntry } from '@shared/schemas';
-import { getXmlFormatFromFiles, getListOfFiles } from '@utils/prompt';
+import { parseFrontmatter } from '@tools/memory/memoryMeta';
+import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { getConfig } from '@utils/config';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
+import { getListOfFiles, getXmlFormatFromFiles } from '@utils/prompt';
 import { setVarFromFile } from '@utils/files/varsUtils';
+import { StorageFS } from '@utils/files/storageFS';
 
 /** Relative path from an agent directory to the shared LaTeX style rules file. */
 const SHARED_LATEX_RULES_REL = '../shared/latex_style_rules.txt';
@@ -83,6 +86,9 @@ export async function buildUserVars(
     // Shared rules file not available (e.g. remote agent with no local path)
   }
 
+  // Load attached memories (if any)
+  const attachedMemories = await getAttachedMemories(agentConfig.memories);
+
   // Merge all variable sources using spread operator.
   // LATEX_STYLE_RULES is placed last to prevent silent overrides from spreads.
   const userVars: UserVars = {
@@ -93,6 +99,7 @@ export async function buildUserVars(
     ...getOutputFilesOrder(agentConfig, agentSetting),
     ...getToolFlags(agentConfig, agentSetting, agentPrompt),
     LATEX_STYLE_RULES: latexStyleRules,
+    ATTACHED_MEMORIES: attachedMemories,
   };
 
   // Emit aggregated file list if any files were loaded
@@ -386,6 +393,38 @@ async function getPatternBasedFileVars(
   }
 
   return { vars: userVars, files };
+}
+
+/**
+ * Load attached memory files and format them as an XML block for prompt injection.
+ * Memory paths are display paths (e.g. /memories/conventions.md).
+ * Returns null if no memories are attached.
+ */
+async function getAttachedMemories(
+  memoryPaths: string[],
+): Promise<string | null> {
+  if (memoryPaths.length === 0) return null;
+
+  const parts: string[] = [];
+  for (const displayPath of memoryPaths) {
+    try {
+      const storagePath = displayToStoragePath(displayPath);
+      const raw = await StorageFS.read(storagePath);
+      // Strip frontmatter metadata — only inject the user-visible content
+      const { content } = parseFrontmatter(raw);
+      const trimmed = content.trim();
+      if (trimmed) {
+        parts.push(
+          `<memory name="${displayPath}">\n${trimmed}\n</memory>`,
+        );
+      }
+    } catch {
+      // Skip memories that can't be read (deleted between validation and execution)
+    }
+  }
+
+  if (parts.length === 0) return null;
+  return `<attached_memories>\n${parts.join('\n')}\n</attached_memories>`;
 }
 
 function getOutputFilesOrder(
