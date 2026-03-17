@@ -66,13 +66,6 @@ export function renderAgentOptions(
   `;
 }
 
-/** Short hints shown in the model dropdown tooltip for models that benefit from extra context. */
-const MODEL_HINTS: Record<string, string> = {
-  gpt53codex: 'Requires OpenAI API key (Set API Key → OpenAI)',
-  gpt54pro: 'Requires OpenAI API key (Set API Key → OpenAI)',
-  gpt54: 'Requires OpenAI API key (Set API Key → OpenAI)',
-};
-
 function renderModelOption(
   opt: ModelOptionData,
   selectedValue: string,
@@ -83,9 +76,7 @@ function renderModelOption(
     : opt.label;
 
   const hints: string[] = [];
-  const modelHint = MODEL_HINTS[opt.value];
-  if (modelHint) hints.push(modelHint);
-  else if (decorator.label) hints.push(decorator.label);
+  if (decorator.label) hints.push(decorator.label);
   if (opt.context) hints.push(`Context: ${opt.context}`);
   if (opt.cost) hints.push(`Cost: ${opt.cost}`);
   if (opt.requiresKey) hints.push('⚠ API key not configured');
