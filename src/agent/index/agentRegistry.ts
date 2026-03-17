@@ -323,8 +323,7 @@ export function resolveAgent(
 export function getWorkflowAgents(includeInternal = false): AgentEntry[] {
   return [...cache.values()].filter(
     (e) =>
-      e.category === AgentCategory.Workflow &&
-      (includeInternal || !e.internal),
+      e.category === AgentCategory.Workflow && (includeInternal || !e.internal),
   );
 }
 
@@ -332,8 +331,7 @@ export function getWorkflowAgents(includeInternal = false): AgentEntry[] {
 export function getToolUseAgents(includeInternal = false): AgentEntry[] {
   return [...cache.values()].filter(
     (e) =>
-      e.category === AgentCategory.ToolUse &&
-      (includeInternal || !e.internal),
+      e.category === AgentCategory.ToolUse && (includeInternal || !e.internal),
   );
 }
 
@@ -468,7 +466,7 @@ async function scanYaml(
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
 
-    const internal = (rawSettings.internal === true) || undefined;
+    const internal = rawSettings.internal === true || undefined;
 
     return {
       name,
