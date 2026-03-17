@@ -122,9 +122,15 @@ const SDK_ERRORS: SdkErrorEntry[] = [
   { ctor: GoogleGenAIApiError },
 ];
 
-/** All 4xx/5xx are retryable (auto-retries skipped for 401/403 via shouldAutoRetry). */
+/** Server errors (5xx), rate limits (429), and request timeouts (408) are retryable
+ *  — these are transient. Other client errors (4xx) are deterministic. */
 function isRetryableStatusCode(statusCode?: number): boolean {
-  return statusCode !== undefined && statusCode >= 400;
+  if (statusCode === undefined) return false;
+  if (statusCode >= 500) return true;
+  return (
+    statusCode === StatusCodes.TOO_MANY_REQUESTS ||
+    statusCode === StatusCodes.REQUEST_TIMEOUT
+  );
 }
 
 /** Partial result before relay detection (isRelayError/rawErrorBody added later). */
@@ -435,9 +441,14 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   const finalMessage =
     extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
   const retryable = isRelay || isRetryableStatusCode(statusCode);
-  const message = statusCode
-    ? `${statusText ? `HTTP ${statusCode} ${statusText}` : `HTTP ${statusCode}`} – ${finalMessage}`
-    : finalMessage;
+
+  let message = finalMessage;
+  if (statusCode) {
+    const prefix = statusText
+      ? `HTTP ${statusCode} ${statusText}`
+      : `HTTP ${statusCode}`;
+    message = `${prefix} – ${finalMessage}`;
+  }
 
   return {
     message,
