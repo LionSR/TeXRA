@@ -806,6 +806,13 @@
         "enablement": "!virtualWorkspace"
       },
       {
+        "command": "texra.fixCompilation",
+        "title": "Fix LaTeX Compilation Errors",
+        "category": "TeXRA",
+        "icon": "$(wrench)",
+        "enablement": "!virtualWorkspace"
+      },
+      {
         "command": "texra.getTeXCount",
         "title": "Count Words in Current TeX File",
         "category": "TeXRA",
@@ -1162,6 +1169,11 @@
         {
           "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
           "command": "texra.applyReplacements",
+          "group": "navigation"
+        },
+        {
+          "when": "editorLangId == latex",
+          "command": "texra.fixCompilation",
           "group": "navigation"
         },
         {
