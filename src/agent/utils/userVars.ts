@@ -9,10 +9,13 @@ import {
 } from '@agent/core/AgentDataclass';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { FileListEntry } from '@shared/schemas';
-import { getXmlFormatFromFiles, getListOfFiles } from '@utils/prompt';
+import { parseFrontmatter } from '@tools/memory/memoryMeta';
+import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { getConfig } from '@utils/config';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
+import { getListOfFiles, getXmlFormatFromFiles } from '@utils/prompt';
 import { setVarFromFile } from '@utils/files/varsUtils';
+import { StorageFS } from '@utils/files/storageFS';
 
 /** Relative path from an agent directory to the shared LaTeX style rules file. */
 const SHARED_LATEX_RULES_REL = '../shared/latex_style_rules.txt';
@@ -66,22 +69,23 @@ export async function buildUserVars(
 ): Promise<UserVars> {
   const allLoadedFiles: LoadedFileEntry[] = [];
 
-  const { vars: requiredVars, files: requiredFiles } =
-    await getRequiredFileVars(agentSetting, agentPath, logger);
+  // Parallelize independent I/O: required files, pattern files, rules, and memories
+  const [
+    { vars: requiredVars, files: requiredFiles },
+    { vars: patternVars, files: patternFiles },
+    latexStyleRules,
+    attachedMemories,
+  ] = await Promise.all([
+    getRequiredFileVars(agentSetting, agentPath, logger),
+    getPatternBasedFileVars(agentConfig, agentSetting, logger),
+    // Load shared LaTeX style rules (best-effort; empty string if missing)
+    AbsoluteFS.read(path.join(agentPath, SHARED_LATEX_RULES_REL)).catch(
+      () => '',
+    ),
+    getAttachedMemories(agentConfig.memories),
+  ]);
   allLoadedFiles.push(...requiredFiles);
-
-  const { vars: patternVars, files: patternFiles } =
-    await getPatternBasedFileVars(agentConfig, agentSetting, logger);
   allLoadedFiles.push(...patternFiles);
-
-  // Load shared LaTeX style rules (best-effort; empty string if missing)
-  let latexStyleRules = '';
-  try {
-    const rulesPath = path.join(agentPath, SHARED_LATEX_RULES_REL);
-    latexStyleRules = await AbsoluteFS.read(rulesPath);
-  } catch {
-    // Shared rules file not available (e.g. remote agent with no local path)
-  }
 
   // Merge all variable sources using spread operator.
   // LATEX_STYLE_RULES is placed last to prevent silent overrides from spreads.
@@ -93,6 +97,7 @@ export async function buildUserVars(
     ...getOutputFilesOrder(agentConfig, agentSetting),
     ...getToolFlags(agentConfig, agentSetting, agentPrompt),
     LATEX_STYLE_RULES: latexStyleRules,
+    ATTACHED_MEMORIES: attachedMemories,
   };
 
   // Emit aggregated file list if any files were loaded
@@ -386,6 +391,39 @@ async function getPatternBasedFileVars(
   }
 
   return { vars: userVars, files };
+}
+
+/**
+ * Load attached memory files and format them as an XML block for prompt injection.
+ * Memory paths are display paths (e.g. /memories/conventions.md).
+ * Returns null if no memories are attached.
+ */
+async function getAttachedMemories(
+  memoryPaths: string[],
+): Promise<string | null> {
+  if (memoryPaths.length === 0) return null;
+
+  const results = await Promise.all(
+    memoryPaths.map(async (displayPath) => {
+      try {
+        const storagePath = displayToStoragePath(displayPath);
+        const raw = await StorageFS.read(storagePath);
+        // Strip frontmatter metadata — only inject the user-visible content
+        const { content } = parseFrontmatter(raw);
+        const trimmed = content.trim();
+        if (trimmed) {
+          return `<memory name="${displayPath}">\n${trimmed}\n</memory>`;
+        }
+      } catch {
+        // Skip memories that can't be read (deleted between delegation and execution)
+      }
+      return null;
+    }),
+  );
+
+  const parts = results.filter((p): p is string => p !== null);
+  if (parts.length === 0) return null;
+  return `<attached_memories>\n${parts.join('\n')}\n</attached_memories>`;
 }
 
 function getOutputFilesOrder(
