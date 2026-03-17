@@ -31,8 +31,6 @@ Opus 4.6 and Sonnet 4.6 include the full 1M context window at standard pricing �
 | `gpt41`      | Long context (1M), vision | $$$  | Medium |
 | `gpt5-`      | Fast flagship             | $$   | Fast   |
 
-**GPT-5.3 Codex** (`gpt53codex`) requires an [OpenAI API key](https://platform.openai.com/api-keys) — set it in TeXRA via **TeXRA: Set API Key** → **OpenAI**.
-
 GPT-5 reasoning summaries require account verification. Enable with `texra.model.gpt5ReasoningSummary`.
 
 ## Google Models
