@@ -7,11 +7,7 @@ import {
   showLoggedInfoMessage,
   showLoggedMessage,
 } from '@common/errors';
-import {
-  withLaTeXGuard,
-  getActiveEditorWithGuards,
-  logGuardFailure,
-} from '@frontend/editor/activeFileGuards';
+import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
 import { runIndentTeX } from '@housekeeping';
 import { runLatexFormatter } from '@latex/texFormatter';
 import { getTeXCount, type TexcountMode } from '@latex/texcount';
@@ -52,30 +48,22 @@ export function registerLatexCommands(context: vscode.ExtensionContext): void {
   );
 }
 
-/** Extensions matching the editor/title `when` clause for this command. */
-const LATEX_EXTENSIONS = ['.tex'];
-
 async function handleFixCompilation(): Promise<void> {
   try {
-    const guard = await getActiveEditorWithGuards({
-      allowedExtensions: LATEX_EXTENSIONS,
-      resourceName: 'LaTeX',
-      saveDocument: true,
-    });
-    if (guard.status !== 'ok') {
-      logGuardFailure(CHANNEL, 'fix compilation', guard.status, 'LaTeX');
-      return;
-    }
+    await withLaTeXGuard(
+      { channel: CHANNEL, action: 'fix compilation', saveDocument: true },
+      async ({ relativePath }) => {
+        logger.info(
+          CHANNEL,
+          `Launching tool-use agent to fix compilation for: ${relativePath}`,
+        );
 
-    logger.info(
-      CHANNEL,
-      `Launching tool-use agent to fix compilation for: ${guard.relativePath}`,
+        await vscode.commands.executeCommand('texra.execute', {
+          agent: 'latexFixer',
+          instruction: `Fix the LaTeX compilation errors in ${relativePath}.`,
+        });
+      },
     );
-
-    await vscode.commands.executeCommand('texra.execute', {
-      agent: 'latexFixer',
-      instruction: `Fix the LaTeX compilation errors in ${guard.relativePath}.`,
-    });
   } catch (err) {
     await showLoggedErrorMessage(
       CHANNEL,

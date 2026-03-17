@@ -319,17 +319,21 @@ export function resolveAgent(
   };
 }
 
-/** Get all workflow agents. */
-export function getWorkflowAgents(): AgentEntry[] {
+/** Get all workflow agents (excludes internal agents by default). */
+export function getWorkflowAgents(includeInternal = false): AgentEntry[] {
   return [...cache.values()].filter(
-    (e) => e.category === AgentCategory.Workflow,
+    (e) =>
+      e.category === AgentCategory.Workflow &&
+      (includeInternal || !e.internal),
   );
 }
 
-/** Get all tool-use agents. */
-export function getToolUseAgents(): AgentEntry[] {
+/** Get all tool-use agents (excludes internal agents by default). */
+export function getToolUseAgents(includeInternal = false): AgentEntry[] {
   return [...cache.values()].filter(
-    (e) => e.category === AgentCategory.ToolUse,
+    (e) =>
+      e.category === AgentCategory.ToolUse &&
+      (includeInternal || !e.internal),
   );
 }
 
@@ -464,7 +468,7 @@ async function scanYaml(
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
 
-    const internal = rawSettings.internal === true ? true : undefined;
+    const internal = (rawSettings.internal === true) || undefined;
 
     return {
       name,
@@ -644,9 +648,7 @@ export function getVisibleAgents(
     ? WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
     : WorkspaceStateKey.ENABLED_AGENTS;
   const raw = workspaceSM?.get<string[]>(stateKey);
-  return deduplicateByName(filterVisible(entries, raw)).filter(
-    (e) => !e.internal,
-  );
+  return deduplicateByName(filterVisible(entries, raw));
 }
 
 /**

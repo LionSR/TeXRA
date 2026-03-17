@@ -79,11 +79,9 @@ export function buildAgentSelectionItems(): {
   );
 
   const workflow = getWorkflowAgents()
-    .filter((e) => !e.internal)
     .map((e) => entryToSelectionItem(e, workflowEnabled))
     .sort((a, b) => a.name.localeCompare(b.name));
   const toolUse = getToolUseAgents()
-    .filter((e) => !e.internal)
     .map((e) => entryToSelectionItem(e, toolUseEnabled))
     .sort((a, b) => a.name.localeCompare(b.name));
   return { workflow, toolUse };
