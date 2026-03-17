@@ -78,6 +78,7 @@ GPT-5 reasoning summaries require account verification. Enable with `texra.model
 
 - **Simple tasks**: Fast, cheap models (`gemini3f`, `gpt5-`, `haiku45`)
 - **Complex tasks**: Powerful models (`opus46`, `gpt54pro`)
+- **Code-heavy / LaTeX editing**: Coding models (`gpt53codex`)
 - **Reasoning-heavy**: Thinking models (`sonnet46T`, `opus46T`, `deepseekT`)
 - **Large documents**: High-context models (`gemini*`, `gpt41`)
 
