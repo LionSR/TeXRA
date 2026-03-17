@@ -72,6 +72,7 @@ export interface RunReflectionFlowResult {
 
 function deriveConfig(
   setting: AgentWorkflowSetting,
+  prompt: RunReflectionFlowInput['prompt'],
 ): {
   useScratchpad: boolean;
   shouldEnsureXmlStructure: boolean;
@@ -97,7 +98,14 @@ function deriveConfig(
     }
   }
 
-  const totalRounds = setting.rounds ?? 2;
+  const { userRequest } = prompt;
+  let requestCount: number;
+  if (Array.isArray(userRequest)) {
+    requestCount = userRequest.length;
+  } else {
+    requestCount = userRequest ? 1 : 0;
+  }
+  const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
 
   return {
     useScratchpad,
@@ -163,7 +171,7 @@ export async function runReflectionFlow<C = unknown>(
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
   const { useScratchpad, shouldEnsureXmlStructure, totalRounds, outputExt } =
-    deriveConfig(setting);
+    deriveConfig(setting, prompt);
 
   const modelName = modelHandler.config.name;
   const getOutputFileLocation =
