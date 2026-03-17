@@ -487,12 +487,11 @@ export function formatToolUseTemplate(
       );
     }
 
-    // Workflow file fields (delegate_workflow / propose_workflow)
-    const fileGroups =
-      'inputFile' in delegateInput ? getProposalFileGroups(delegateInput) : [];
+    // File groups (workflow file fields + memories for both delegation types)
+    const fileGroups = getProposalFileGroups(delegateInput);
     if (fileGroups.length > 0) {
       // prettier-ignore
-      const fileItems = html`${fileGroups.flatMap((g) => g.files.map((f) => html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="file-link clickable-link" data-file=${f}>${f}</span> <span class="file-source">(${g.label})</span></li>`))}`;
+      const fileItems = html`${fileGroups.flatMap((g) => g.files.map((f) => html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="${g.clickable ? 'file-link clickable-link' : 'file-label'}" data-file=${ifDefined(g.clickable ? f : undefined)}>${f}</span> <span class="file-source">(${g.label})</span></li>`))}`;
       // prettier-ignore
       sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
     }

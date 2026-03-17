@@ -448,6 +448,16 @@ export const requestPanelStyles: CSSResult = css`
     );
   }
 
+  .workflow-proposal__file-name--readonly {
+    color: var(--color-text-secondary);
+    cursor: default;
+  }
+
+  .workflow-proposal__file-name--readonly:hover {
+    text-decoration: none;
+    color: var(--color-text-secondary);
+  }
+
   .workflow-proposal__input-files .workflow-proposal__file-label {
     color: var(--vscode-editor-foreground);
   }

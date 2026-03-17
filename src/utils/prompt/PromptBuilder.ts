@@ -75,8 +75,18 @@ export async function getSystemPromptWithRules(
   userVars: Record<string, any>,
 ): Promise<string> {
   const basePrompt = await renderPrompt(systemPrompt, userVars);
+  const parts = [basePrompt];
+
   const rules = await loadTexraRules();
-  return rules ? `${basePrompt}\n${rules}` : basePrompt;
+  if (rules) parts.push(rules);
+
+  // Append attached memories (read-only context from orchestrator)
+  const attachedMemories = userVars.ATTACHED_MEMORIES;
+  if (typeof attachedMemories === 'string' && attachedMemories) {
+    parts.push(attachedMemories);
+  }
+
+  return parts.join('\n');
 }
 
 /**
