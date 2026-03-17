@@ -179,7 +179,8 @@ export class ModelSelectionList extends LitElement {
           ${!available
             ? html`<span
                 class="codicon codicon-key model-key-icon"
-                title="Requires ${PROVIDER_DISPLAY_NAMES[model.provider] ?? model.provider} API key — set via TeXRA: Set API Key command"
+                title="Requires ${PROVIDER_DISPLAY_NAMES[model.provider] ??
+                model.provider} API key — set via TeXRA: Set API Key command"
               ></span>`
             : nothing}
         </vscode-checkbox>

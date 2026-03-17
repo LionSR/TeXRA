@@ -551,9 +551,7 @@ export async function executeAgent(
   // Triggered at the start so cancelled/errored sessions still get descriptions.
   // Applies to all agents including subagents so their progress tabs show
   // meaningful descriptions in multi-agent pipelines.
-  generateSessionDescription(ctx.executionId, streamId, config).catch(
-    () => {},
-  );
+  generateSessionDescription(ctx.executionId, streamId, config).catch(() => {});
   const category =
     setting.agentCategory === AgentCategory.ToolUse
       ? ('toolUse' as const)

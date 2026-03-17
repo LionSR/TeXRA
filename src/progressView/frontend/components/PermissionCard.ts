@@ -278,8 +278,7 @@ export class PermissionCard extends LitElement {
       <p><strong>Agent:</strong> ${data.agent}</p>
       <p><strong>Model:</strong> ${data.model}</p>
       <p><strong>Instruction:</strong> ${data.instruction}</p>
-      ${this.renderFileGroups(data)}
-      ${this.renderFeedbackSection()}
+      ${this.renderFileGroups(data)} ${this.renderFeedbackSection()}
     `;
   }
 
