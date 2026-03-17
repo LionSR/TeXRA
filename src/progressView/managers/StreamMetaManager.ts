@@ -1,3 +1,4 @@
+import { getExecutionStore } from '@agent/storage';
 import { normalizeRunId } from '@common/constants/runIds';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
@@ -168,11 +169,64 @@ export class StreamMetaManager {
       }
     }
 
+    // Backfill: streams with an executionId but no description in StreamTabMeta
+    // may have descriptions in ExecutionMeta (written before descriptions were
+    // persisted to StreamTabMeta). Fetch them once and persist so future loads
+    // are fast.
+    await this.backfillDescriptionsFromExecutionMeta();
+
     this.loaded = true;
 
     this.logger.info(
       `Loaded: ${loadedTasks} task states, ${skippedTasks} skipped, ${this.executionIds.size} execution IDs`,
     );
+  }
+
+  /**
+   * One-time backfill for streams that have an executionId but no description
+   * in StreamTabMeta. Reads from ExecutionMeta and persists to StreamTabMeta
+   * so subsequent loads don't need this extra I/O.
+   */
+  private async backfillDescriptionsFromExecutionMeta(): Promise<void> {
+    const missing = [...this.executionIds.entries()].filter(
+      ([streamId]) => !this.descriptions.has(streamId),
+    );
+    if (missing.length === 0) return;
+
+    const results = await Promise.all(
+      missing.map(async ([streamId, executionId]) => {
+        try {
+          const meta = await getExecutionStore(executionId).readMeta();
+          return { streamId, description: meta?.description };
+        } catch {
+          return { streamId, description: undefined };
+        }
+      }),
+    );
+
+    const backfilled: StreamTabId[] = [];
+    for (const { streamId, description } of results) {
+      if (description) {
+        this.descriptions.set(streamId, description);
+        backfilled.push(streamId);
+      }
+    }
+
+    // Persist backfilled descriptions so future loads skip this I/O.
+    // save() is gated on `this.loaded`, so write directly here.
+    if (backfilled.length > 0) {
+      await Promise.all(
+        backfilled.map((streamId) => {
+          const meta = this.buildMeta(streamId);
+          return getStreamTabStore(streamId)
+            .writeMeta(meta)
+            .catch(() => {});
+        }),
+      );
+      this.logger.info(
+        `Backfilled ${backfilled.length} description(s) from ExecutionMeta`,
+      );
+    }
   }
 
   /** Await all pending disk writes. */
