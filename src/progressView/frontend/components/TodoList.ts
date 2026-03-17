@@ -102,12 +102,16 @@ export class TodoList extends LitElement {
 
   @property({ attribute: false }) todos: TodoItem[] = [];
 
-  /** Open state — managed internally. Auto-opens when todos are updated. */
+  /** Open state — auto-expands on todo updates, auto-collapses when cleared. */
   @state() private open = true;
 
   protected override willUpdate(changed: PropertyValues): void {
-    if (changed.has('todos') && this.todos.length > 0 && !this.open) {
-      this.open = true;
+    if (changed.has('todos')) {
+      if (this.todos.length > 0) {
+        this.open = true;
+      } else {
+        this.open = false;
+      }
     }
   }
 

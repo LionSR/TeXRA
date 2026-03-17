@@ -164,12 +164,16 @@ export class PlanView extends LitElement {
 
   @property({ attribute: false }) plan: Plan | null = null;
 
-  /** Open state — managed internally. Auto-opens when plan is updated. */
+  /** Open state — auto-expands on plan updates, auto-collapses when cleared. */
   @state() private open = true;
 
   protected override willUpdate(changed: PropertyValues): void {
-    if (changed.has('plan') && this.plan && !this.open) {
-      this.open = true;
+    if (changed.has('plan')) {
+      if (this.plan) {
+        this.open = true;
+      } else {
+        this.open = false;
+      }
     }
   }
 

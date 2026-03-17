@@ -24,11 +24,12 @@ import './TaskGroupList';
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
-import { PersistedState, createWebviewStorage } from '@shared/state';
+import { PersistedState } from '@shared/state';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { codiconStyles, designTokens } from '@shared/styles';
 import { copyWithFeedback } from '@shared/utils/clipboard';
-import { postMessage, vscode } from '@shared/vscode';
+import { postMessage } from '@shared/vscode';
+import { webviewStorage } from '../webviewStorage';
 
 // Local imports - progress view contexts
 import {
@@ -77,7 +78,7 @@ export class LogList extends LitElement {
 
   /** Per-stream DOM cache: one TaskGroupList per visited stream */
   private streamCache = new Map<string, CachedStream>();
-  private storage = createWebviewStorage(vscode);
+  private storage = webviewStorage;
   private activeStreamId: string | null = null;
   private shouldScrollToBottom = false;
 
