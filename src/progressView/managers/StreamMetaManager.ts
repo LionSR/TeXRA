@@ -82,10 +82,10 @@ export class StreamMetaManager {
     return this.descriptions.get(stream);
   }
 
-  /** Cache description in memory (for live sessions). Not persisted to
-   *  StreamTabMeta — ExecutionMeta is the single source of truth on disk. */
+  /** Store description in memory and persist to StreamTabMeta. */
   setDescription(stream: StreamTabId, description: string): void {
     this.descriptions.set(stream, description);
+    this.save(stream);
   }
 
   // -- Queries ----------------------------------------------------------------
@@ -163,11 +163,17 @@ export class StreamMetaManager {
       if (meta.parentStreamId) {
         this.parentStreamIds.set(streamId, meta.parentStreamId as StreamTabId);
       }
+
+      if (meta.description) {
+        this.descriptions.set(streamId, meta.description);
+      }
     }
 
-    // Hydrate descriptions from ExecutionMeta (the single source of truth).
-    // Runs in parallel for all streams that have an associated executionId.
-    await this.hydrateDescriptions();
+    // Backfill: streams with an executionId but no description in StreamTabMeta
+    // may have descriptions in ExecutionMeta (written before descriptions were
+    // persisted to StreamTabMeta). Fetch them once and persist so future loads
+    // are fast.
+    await this.backfillDescriptionsFromExecutionMeta();
 
     this.loaded = true;
 
@@ -177,14 +183,18 @@ export class StreamMetaManager {
   }
 
   /**
-   * Populate in-memory descriptions from ExecutionMeta for all known streams.
-   * ExecutionMeta.description is the single source of truth on disk.
+   * One-time backfill for streams that have an executionId but no description
+   * in StreamTabMeta. Reads from ExecutionMeta and persists to StreamTabMeta
+   * so subsequent loads don't need this extra I/O.
    */
-  private async hydrateDescriptions(): Promise<void> {
-    const entries = [...this.executionIds.entries()];
-    if (entries.length === 0) return;
+  private async backfillDescriptionsFromExecutionMeta(): Promise<void> {
+    const missing = [...this.executionIds.entries()].filter(
+      ([streamId]) => !this.descriptions.has(streamId),
+    );
+    if (missing.length === 0) return;
+
     const results = await Promise.all(
-      entries.map(async ([streamId, executionId]) => {
+      missing.map(async ([streamId, executionId]) => {
         try {
           const meta = await getExecutionStore(executionId).readMeta();
           return { streamId, description: meta?.description };
@@ -193,8 +203,29 @@ export class StreamMetaManager {
         }
       }),
     );
+
+    const backfilled: StreamTabId[] = [];
     for (const { streamId, description } of results) {
-      if (description) this.descriptions.set(streamId, description);
+      if (description) {
+        this.descriptions.set(streamId, description);
+        backfilled.push(streamId);
+      }
+    }
+
+    // Persist backfilled descriptions so future loads skip this I/O.
+    // save() is gated on `this.loaded`, so write directly here.
+    if (backfilled.length > 0) {
+      await Promise.all(
+        backfilled.map((streamId) => {
+          const meta = this.buildMeta(streamId);
+          return getStreamTabStore(streamId)
+            .writeMeta(meta)
+            .catch(() => {});
+        }),
+      );
+      this.logger.info(
+        `Backfilled ${backfilled.length} description(s) from ExecutionMeta`,
+      );
     }
   }
 
@@ -238,6 +269,9 @@ export class StreamMetaManager {
 
     const parentStreamId = this.parentStreamIds.get(stream);
     if (parentStreamId) meta.parentStreamId = parentStreamId;
+
+    const description = this.descriptions.get(stream);
+    if (description) meta.description = description;
 
     return meta;
   }
