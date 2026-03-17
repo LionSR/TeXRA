@@ -237,7 +237,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         summary: `Listed directory: ${inputPath}`,
         output: [
           `Contents of ${inputPath} (up to 2 levels deep):`,
-          `SIZE\tMODIFIED\tBY\tPATH`,
+          `SIZE\tMODIFIED\tBY\tPINNED\tPATH`,
           ...listing,
         ].join('\n'),
       };
@@ -494,21 +494,22 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
     return Promise.all(
       entries.map(async (entry) => {
-        let display = toDisplayPath(entry.path);
+        const display = toDisplayPath(entry.path);
         const age = formatRelativeTime(entry.mtime);
         let by = '-';
+        let pinned = '';
         if (!entry.isDir) {
           try {
             const { meta } = await this.readMemoryFile(entry.path);
             if (meta) {
               by = formatAttribution(meta);
-              if (meta.pinned) display += ' [pinned]';
+              if (meta.pinned) pinned = '★';
             }
           } catch {
             // Unreadable file — skip attribution
           }
         }
-        return `${formatSize(entry.size)}\t${age}\t${by}\t${display}`;
+        return `${formatSize(entry.size)}\t${age}\t${by}\t${pinned}\t${display}`;
       }),
     );
   }
