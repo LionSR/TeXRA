@@ -79,6 +79,7 @@ export interface AgentEntry {
   tools?: string[]; // tool names for tool-use agents
   defaultOutputFiles?: string[];
   visibility?: string[]; // remote only: group names that can access the agent
+  internal?: boolean; // internal agents are hidden from dropdowns but launchable by commands
 }
 
 /**
@@ -463,6 +464,8 @@ async function scanYaml(
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
 
+    const internal = rawSettings.internal === true ? true : undefined;
+
     return {
       name,
       source,
@@ -474,6 +477,7 @@ async function scanYaml(
       defaultOutputFiles: defaultOutputFiles?.length
         ? defaultOutputFiles
         : undefined,
+      internal,
     };
   } catch (err) {
     logger.warn(CHANNEL, `Failed to scan ${yamlPath}: ${err}`);
@@ -640,7 +644,9 @@ export function getVisibleAgents(
     ? WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
     : WorkspaceStateKey.ENABLED_AGENTS;
   const raw = workspaceSM?.get<string[]>(stateKey);
-  return deduplicateByName(filterVisible(entries, raw));
+  return deduplicateByName(filterVisible(entries, raw)).filter(
+    (e) => !e.internal,
+  );
 }
 
 /**
