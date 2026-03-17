@@ -202,7 +202,7 @@ export class BackgroundTasksPanel extends LitElement {
   @property({ attribute: false }) activeSubagents: ActiveChildInfo[] = [];
   @property({ attribute: false }) finishedSubagentCount = 0;
 
-  /** Open state — managed internally. Toggled by user or auto-opened on first active task. */
+  /** Open state — auto-expands when active tasks appear, auto-collapses when all finish. */
   @state() open = false;
 
   @consume({ context: processOutputContext, subscribe: true })
@@ -213,15 +213,17 @@ export class BackgroundTasksPanel extends LitElement {
   @state()
   private descriptions: StreamDescriptionMap = EMPTY_DESCRIPTIONS;
 
-  /** Track previous active count to detect 0→N transitions for auto-open. */
+  /** Track previous active count to detect transitions. */
   private prevActiveCount = 0;
 
   protected override willUpdate(changed: PropertyValues): void {
     super.willUpdate(changed);
     const active = this.activeProcesses.length + this.activeSubagents.length;
-    // Auto-open when tasks first appear (0 → N), but never force-close
+    // Auto-open when tasks appear (0 → N), auto-close when all finish (N → 0)
     if (this.prevActiveCount === 0 && active > 0) {
       this.open = true;
+    } else if (this.prevActiveCount > 0 && active === 0) {
+      this.open = false;
     }
     this.prevActiveCount = active;
   }
