@@ -19,6 +19,8 @@ const LATEX_GIT_URL_PATTERN =
 const LATEX_PROJECT_URL_PATTERN =
   /^https?:\/\/([^/]+)\/project\/([a-f0-9]{24})\/?$/i;
 const OVERLEAF_GIT_TOKEN_URL = 'https://www.overleaf.com/user/settings';
+const OVERLEAF_TOKEN_DOCS_URL =
+  'https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration/git-integration-authentication-tokens';
 
 export const gitCommands = {
   isGitRepository: 'texra.isGitRepository',
@@ -214,6 +216,7 @@ async function getGitToken(
   key: string,
   title: string,
   validate?: (t: string) => boolean,
+  promptHint?: string,
 ): Promise<{ remote: string; sensitive: string[] } | null> {
   const isValid = (t: string): boolean => validate?.(t) ?? true;
 
@@ -231,12 +234,21 @@ async function getGitToken(
   // Prompt for new token
   const input = await promptInput(
     title,
-    'Enter your Git authentication token.',
+    promptHint ?? 'Enter your Git authentication token.',
     true,
   );
   if (!input) return null;
+
   if (!isValid(input)) {
-    vscode.window.showErrorMessage('Invalid token format.');
+    const action = await vscode.window.showErrorMessage(
+      promptHint
+        ? `Invalid token format. ${promptHint}`
+        : 'Invalid token format.',
+      ...(promptHint ? (['How to get a token'] as const) : []),
+    );
+    if (action === 'How to get a token') {
+      void vscode.env.openExternal(vscode.Uri.parse(OVERLEAF_TOKEN_DOCS_URL));
+    }
     return null;
   }
 
@@ -309,12 +321,16 @@ async function cloneOverleafProject(
   const tokenValidator = parsed.isOverleaf
     ? (t: string) => t.startsWith('olp_')
     : undefined;
+  const tokenHint = parsed.isOverleaf
+    ? 'Overleaf tokens start with olp_. Generate one at Account Settings → Git Integration.'
+    : undefined;
 
   const creds = await getGitToken(
     context.secrets,
     tokenKey,
     tokenTitle,
     tokenValidator,
+    tokenHint,
   );
   if (!creds) return;
 
@@ -346,16 +362,22 @@ async function cloneOverleafProject(
       // Clear the stored bad token so the user is prompted for a new one next time
       await context.secrets.delete(tokenKey);
 
-      const action = parsed.isOverleaf ? 'Get Token' : 'Retry';
       const detail = parsed.isOverleaf
         ? 'Your git token may be invalid or expired.'
         : 'Check your credentials.';
+      const actions = parsed.isOverleaf
+        ? (['Get New Token', 'How to get a token'] as const)
+        : (['Retry'] as const);
       const selected = await vscode.window.showErrorMessage(
         `Clone failed: authentication error. ${detail}`,
-        action,
+        ...actions,
       );
-      if (selected === 'Get Token') {
+      if (selected === 'Get New Token') {
         void vscode.env.openExternal(vscode.Uri.parse(OVERLEAF_GIT_TOKEN_URL));
+      } else if (selected === 'How to get a token') {
+        void vscode.env.openExternal(
+          vscode.Uri.parse(OVERLEAF_TOKEN_DOCS_URL),
+        );
       }
     } else {
       vscode.window.showErrorMessage(
