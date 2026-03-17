@@ -64,6 +64,7 @@ export const ModelOptionDataSchema = z.object({
   provider: z.string().optional(),
   context: z.string().optional(),
   cost: z.string().optional(),
+  hint: z.string().optional(),
   requiresKey: z.boolean().optional(),
   disabled: z.boolean().optional(),
 });
