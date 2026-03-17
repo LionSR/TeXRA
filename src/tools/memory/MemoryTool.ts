@@ -509,7 +509,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
             // Unreadable file — skip attribution
           }
         }
-        return `${formatSize(entry.size)}\t${age}\t${by}\t${display}${pinned ? `\t${pinned}` : ''}`;
+        return `${formatSize(entry.size)}\t${age}\t${by}\t${display}\t${pinned}`;
       }),
     );
   }
