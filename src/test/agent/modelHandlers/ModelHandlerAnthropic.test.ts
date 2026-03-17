@@ -842,7 +842,6 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
-
   it('adds native compaction context edit for Claude Opus 4.6 tool-use runs', async () => {
     const handler = createAnthropicHandler({
       supportsTokenCounting: false,

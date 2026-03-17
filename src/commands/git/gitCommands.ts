@@ -375,9 +375,7 @@ async function cloneOverleafProject(
       if (selected === 'Get New Token') {
         void vscode.env.openExternal(vscode.Uri.parse(OVERLEAF_GIT_TOKEN_URL));
       } else if (selected === 'How to get a token') {
-        void vscode.env.openExternal(
-          vscode.Uri.parse(OVERLEAF_TOKEN_DOCS_URL),
-        );
+        void vscode.env.openExternal(vscode.Uri.parse(OVERLEAF_TOKEN_DOCS_URL));
       }
     } else {
       vscode.window.showErrorMessage(
