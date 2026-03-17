@@ -69,25 +69,23 @@ export async function buildUserVars(
 ): Promise<UserVars> {
   const allLoadedFiles: LoadedFileEntry[] = [];
 
-  const { vars: requiredVars, files: requiredFiles } =
-    await getRequiredFileVars(agentSetting, agentPath, logger);
+  // Parallelize independent I/O: required files, pattern files, rules, and memories
+  const [
+    { vars: requiredVars, files: requiredFiles },
+    { vars: patternVars, files: patternFiles },
+    latexStyleRules,
+    attachedMemories,
+  ] = await Promise.all([
+    getRequiredFileVars(agentSetting, agentPath, logger),
+    getPatternBasedFileVars(agentConfig, agentSetting, logger),
+    // Load shared LaTeX style rules (best-effort; empty string if missing)
+    AbsoluteFS.read(path.join(agentPath, SHARED_LATEX_RULES_REL)).catch(
+      () => '',
+    ),
+    getAttachedMemories(agentConfig.memories),
+  ]);
   allLoadedFiles.push(...requiredFiles);
-
-  const { vars: patternVars, files: patternFiles } =
-    await getPatternBasedFileVars(agentConfig, agentSetting, logger);
   allLoadedFiles.push(...patternFiles);
-
-  // Load shared LaTeX style rules (best-effort; empty string if missing)
-  let latexStyleRules = '';
-  try {
-    const rulesPath = path.join(agentPath, SHARED_LATEX_RULES_REL);
-    latexStyleRules = await AbsoluteFS.read(rulesPath);
-  } catch {
-    // Shared rules file not available (e.g. remote agent with no local path)
-  }
-
-  // Load attached memories (if any)
-  const attachedMemories = await getAttachedMemories(agentConfig.memories);
 
   // Merge all variable sources using spread operator.
   // LATEX_STYLE_RULES is placed last to prevent silent overrides from spreads.
