@@ -171,9 +171,7 @@ function formatItemForLog(item: ThreadItem): string {
       return `$ ${item.command} (${status})\n`;
     }
     case 'file_change': {
-      const changed = item.changes
-        .map((c) => `${c.kind} ${c.path}`)
-        .join(', ');
+      const changed = item.changes.map((c) => `${c.kind} ${c.path}`).join(', ');
       return changed ? `Files: ${changed}\n` : '';
     }
     case 'agent_message':
@@ -287,13 +285,9 @@ export class CodexTool extends defineTool({
           usage = event.usage ?? null;
           break;
         case 'turn.failed':
-          throw new ToolError(
-            event.error.message ?? 'Codex turn failed',
-          );
+          throw new ToolError(event.error.message ?? 'Codex turn failed');
         case 'error':
-          throw new ToolError(
-            event.message ?? 'Codex stream error',
-          );
+          throw new ToolError(event.message ?? 'Codex stream error');
       }
     }
 

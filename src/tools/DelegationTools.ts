@@ -121,7 +121,9 @@ const memoriesField = z
           code: z.ZodIssueCode.custom,
           path: [i],
           message:
-            e instanceof Error ? e.message : `Invalid memory path: ${memories[i]}`,
+            e instanceof Error
+              ? e.message
+              : `Invalid memory path: ${memories[i]}`,
         });
       }
     }

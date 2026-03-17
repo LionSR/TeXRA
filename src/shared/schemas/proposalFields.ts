@@ -42,7 +42,11 @@ export function getProposalFileGroups(data: FileFields): ProposalFileGroup[] {
     [single, ...arr].filter((f): f is string => Boolean(f));
 
   return [
-    { label: 'Input', files: combine(data.inputFile, data.inputFiles), clickable: true },
+    {
+      label: 'Input',
+      files: combine(data.inputFile, data.inputFiles),
+      clickable: true,
+    },
     {
       label: 'Reference',
       files: combine(data.referenceFile, data.referenceFiles),
@@ -53,7 +57,11 @@ export function getProposalFileGroups(data: FileFields): ProposalFileGroup[] {
       files: combine(data.auxiliaryFile, data.auxiliaryFiles),
       clickable: true,
     },
-    { label: 'Media', files: combine(data.mediaFile, data.mediaFiles), clickable: true },
+    {
+      label: 'Media',
+      files: combine(data.mediaFile, data.mediaFiles),
+      clickable: true,
+    },
     { label: 'Output', files: data.outputFiles ?? [], clickable: true },
     { label: 'Memories', files: data.memories ?? [], clickable: false },
   ].filter((g) => g.files.length > 0);

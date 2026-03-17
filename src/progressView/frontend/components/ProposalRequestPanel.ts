@@ -26,10 +26,7 @@ import {
 } from '@shared/styles';
 
 // Local imports - shared utils
-import {
-  AGENT_CATEGORY,
-  type AgentProposalPermission,
-} from '@shared/schemas';
+import { AGENT_CATEGORY, type AgentProposalPermission } from '@shared/schemas';
 import { postMessage } from '@shared/vscode';
 import { renderModelOptions } from '@shared/utils/selectTemplates';
 
@@ -176,7 +173,9 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
           (file) => file,
           (file, i) =>
             html`${i > 0 ? ', ' : ''}<span
-                class="workflow-proposal__file-name${clickable ? '' : ' workflow-proposal__file-name--readonly'}"
+                class="workflow-proposal__file-name${clickable
+                  ? ''
+                  : ' workflow-proposal__file-name--readonly'}"
                 title=${file}
                 data-file=${ifDefined(clickable ? file : undefined)}
                 >${getBasename(file)}</span
