@@ -100,23 +100,32 @@ interface SubagentDeliveryState {
 
 const activeSubagentDelivery = new Map<string, SubagentDeliveryState>();
 
-/** Shared description for the memories field on delegation tool schemas. */
-const MEMORIES_FIELD_DESCRIPTION =
-  'Memory file paths to attach (e.g. /memories/conventions.md). Content is injected into the agent prompt as read-only context. Use for project conventions, style guides, or accumulated knowledge the agent should follow.';
-
 /**
- * Validate that all memory paths are within /memories.
- * Uses displayToStoragePath for prefix and traversal validation.
- * Existence is NOT checked here — getAttachedMemories handles read failures gracefully,
- * avoiding a TOCTOU race between validation and actual use.
+ * Shared Zod field for the `memories` parameter on delegation tools.
+ * Validates that all paths are within /memories using displayToStoragePath
+ * (prefix + traversal checks). Existence is NOT checked — getAttachedMemories
+ * handles read failures gracefully, avoiding a TOCTOU race.
  */
-function validateMemoryPaths(memories: string[]): string[] {
-  for (const memPath of memories) {
-    // displayToStoragePath validates the /memories prefix and prevents path traversal
-    displayToStoragePath(memPath);
-  }
-  return memories;
-}
+const memoriesField = z
+  .array(z.string())
+  .prefault([])
+  .describe(
+    'Memory file paths to attach (e.g. /memories/conventions.md). Content is injected into the agent prompt as read-only context. Use for project conventions, style guides, or accumulated knowledge the agent should follow.',
+  )
+  .superRefine((memories, ctx) => {
+    for (let i = 0; i < memories.length; i++) {
+      try {
+        displayToStoragePath(memories[i]);
+      } catch (e) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [i],
+          message:
+            e instanceof Error ? e.message : `Invalid memory path: ${memories[i]}`,
+        });
+      }
+    }
+  });
 
 /** Get required context fields, throwing if unavailable. */
 function getRequiredContext(): ToolFileInteractionContext & {
@@ -471,10 +480,7 @@ const WorkflowAgentInputSchema = z.object({
     .describe(
       'Set true when outputFiles has multiple entries. Enables multi-file extraction from agent response.',
     ),
-  memories: z
-    .array(z.string())
-    .prefault([])
-    .describe(MEMORIES_FIELD_DESCRIPTION),
+  memories: memoriesField,
 });
 
 export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
@@ -560,10 +566,8 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       throw new Error(`${missing.label} not found: ${missing.path}`);
     }
 
-    // Validate memory paths (format only — read errors handled gracefully downstream)
-    const memories = validateMemoryPaths(input.memories);
-
     // Construct workflow proposal
+    // Memory paths are already validated by memoriesField's .superRefine() at schema parse time.
     const proposal = WorkflowAgentProposalSchema.parse({
       agentCategory: AgentCategory.Workflow,
       agent: input.agent,
@@ -579,7 +583,7 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       mediaFiles: input.mediaFiles,
       outputFiles: input.outputFiles,
       useMultipleOutputs: input.useMultipleOutputs,
-      memories,
+      memories: input.memories,
     } satisfies WorkflowAgentProposal);
 
     return proposeAndExecute(proposal, input.agent, ctx.streamId);
@@ -602,10 +606,7 @@ const DelegateAgentInputSchema = z.object({
   instruction: z
     .string()
     .describe('Plain prose instruction with file paths included naturally'),
-  memories: z
-    .array(z.string())
-    .prefault([])
-    .describe(MEMORIES_FIELD_DESCRIPTION),
+  memories: memoriesField,
 });
 
 export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
@@ -648,16 +649,14 @@ Example: agent=chat, instruction="The presentation at slides/talk.tex has incorr
     // Resolve model: explicit input → parent model → first visible model
     const model = resolveVisibleModel(input.model ?? ctx.model ?? '');
 
-    // Validate memory paths (format only — read errors handled gracefully downstream)
-    const memories = validateMemoryPaths(input.memories);
-
     // Construct tool-use proposal (no file fields)
+    // Memory paths are already validated by memoriesField's .superRefine() at schema parse time.
     const proposal = ToolUseAgentProposalSchema.parse({
       agentCategory: AgentCategory.ToolUse,
       agent: input.agent,
       model,
       instruction: input.instruction,
-      memories,
+      memories: input.memories,
     } satisfies ToolUseAgentProposal);
 
     return proposeAndExecute(proposal, input.agent, ctx.streamId);

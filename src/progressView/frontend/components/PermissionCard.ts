@@ -1,6 +1,7 @@
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
@@ -345,7 +346,7 @@ export class PermissionCard extends LitElement {
     if (files.length === 0) return nothing;
 
     return html`
-      <div class="file-list" @click=${clickable ? this.handleFileClick : undefined}>
+      <div class="file-list" @click=${this.handleFileClick}>
         <span class="file-list-label">${label}:</span>
         ${repeat(
           files,
@@ -354,7 +355,7 @@ export class PermissionCard extends LitElement {
             html`${i > 0 ? ', ' : ''}<span
                 class="${clickable ? 'file-link' : 'file-label'}"
                 title=${file}
-                ${clickable ? html`data-file=${file}` : nothing}
+                data-file=${ifDefined(clickable ? file : undefined)}
                 >${getBasename(file)}</span
               >`,
         )}

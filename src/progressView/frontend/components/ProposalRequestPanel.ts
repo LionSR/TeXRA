@@ -12,6 +12,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
@@ -170,7 +171,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
     return html`
       <div
         class="workflow-proposal__${label.toLowerCase()}-files"
-        @click=${clickable ? this.handleFileClick : undefined}
+        @click=${this.handleFileClick}
       >
         <span class="workflow-proposal__file-label">${label}:</span>
         ${repeat(
@@ -180,7 +181,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
             html`${i > 0 ? ', ' : ''}<span
                 class="workflow-proposal__file-name${clickable ? '' : ' workflow-proposal__file-name--readonly'}"
                 title=${file}
-                ${clickable ? html`data-file=${file}` : nothing}
+                data-file=${ifDefined(clickable ? file : undefined)}
                 >${getBasename(file)}</span
               >`,
         )}
