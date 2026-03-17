@@ -29,7 +29,6 @@ import {
 import {
   AGENT_CATEGORY,
   type AgentProposalPermission,
-  type WorkflowAgentProposalPermission,
 } from '@shared/schemas';
 import { postMessage } from '@shared/vscode';
 import { renderModelOptions } from '@shared/utils/selectTemplates';
@@ -113,13 +112,9 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
                 >`}
           </div>
           <div class="workflow-proposal__instruction">${data.instruction}</div>
-          ${isWorkflow
-            ? html`<div class="workflow-proposal__files">
-                ${this.renderProposalFiles(
-                  data as WorkflowAgentProposalPermission,
-                )}
-              </div>`
-            : nothing}
+          <div class="workflow-proposal__files">
+            ${this.renderProposalFiles(data)}
+          </div>
         </div>
         <vscode-toolbar-container class="workflow-proposal__actions">
           <vscode-toolbar-button
@@ -151,10 +146,10 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   // ===========================================================================
 
   private renderProposalFiles(
-    permission: WorkflowAgentProposalPermission,
+    data: AgentProposalPermission,
   ): TemplateResult | typeof nothing {
     return html`${repeat(
-      getProposalFileGroups(permission),
+      getProposalFileGroups(data),
       ({ label }) => label,
       ({ label, files, clickable }) =>
         this.renderProposalFileList(label, files, clickable),

@@ -16,7 +16,6 @@ import type {
   PlanApprovalPermission,
   RetryPermission,
   ToolEditPermission,
-  WorkflowAgentProposalPermission,
 } from '@shared/schemas';
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import { getBasename } from '@shared/utils/path';
@@ -275,15 +274,11 @@ export class PermissionCard extends LitElement {
   }
 
   private renderProposalBody(data: AgentProposalPermission): TemplateResult {
-    const isWorkflow = data.agentCategory === AGENT_CATEGORY.WORKFLOW;
-
     return html`
       <p><strong>Agent:</strong> ${data.agent}</p>
       <p><strong>Model:</strong> ${data.model}</p>
       <p><strong>Instruction:</strong> ${data.instruction}</p>
-      ${isWorkflow
-        ? this.renderWorkflowFiles(data as WorkflowAgentProposalPermission)
-        : nothing}
+      ${this.renderFileGroups(data)}
       ${this.renderFeedbackSection()}
     `;
   }
@@ -327,9 +322,7 @@ export class PermissionCard extends LitElement {
     `;
   }
 
-  private renderWorkflowFiles(
-    data: WorkflowAgentProposalPermission,
-  ): TemplateResult {
+  private renderFileGroups(data: AgentProposalPermission): TemplateResult {
     return html`${repeat(
       getProposalFileGroups(data),
       ({ label }) => label,
