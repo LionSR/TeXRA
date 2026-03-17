@@ -487,9 +487,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Strip betas that only apply to message creation (e.g., output length)
     // while keeping context headers needed for accurate token counting.
     const countTokenBetas = options?.betas?.filter(
-      (beta) =>
-        beta === CONTEXT_MANAGEMENT_BETA ||
-        beta === COMPACTION_BETA,
+      (beta) => beta === CONTEXT_MANAGEMENT_BETA || beta === COMPACTION_BETA,
     );
     if (countTokenBetas?.length) {
       countTokensParams.betas = countTokenBetas;
