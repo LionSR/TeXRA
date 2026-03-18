@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- **GPT-5.4 Mini & Nano** — added OpenAI's GPT-5.4 Mini (`gpt54-`) and GPT-5.4 Nano (`gpt54--`) to the default model list. These are fast, budget-friendly variants of GPT-5.4 with 400K context windows, available in the free relay tier.
+- **GPT-5.4 Mini** — added OpenAI's GPT-5.4 Mini (`gpt54-`) to the default model list. A fast, budget-friendly variant of GPT-5.4 with a 400K context window, available in the free relay tier. GPT-5.4 Nano (`gpt54--`) is also available if manually added.
 
 ## [0.36.6] - 2026-03-12
 

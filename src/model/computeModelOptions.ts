@@ -22,7 +22,6 @@ export const DEFAULT_MODELS = [
   'opus46T',
   'gpt54',
   'gpt54-',
-  'gpt54--',
   'gpt54pro',
   'gpt53codex',
   'gpt41',
