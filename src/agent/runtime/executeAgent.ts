@@ -164,6 +164,23 @@ async function resolveAgentBase(
     resolution.entry.source,
   );
 
+  // Block category mismatch: prevent launching a tool-use agent as a workflow
+  // (or vice versa). The config payload's agentCategory is optional — only
+  // enforce when explicitly provided so that callers who omit it (accepting
+  // whatever the YAML defines) are unaffected.
+  if (
+    configPayload.agentCategory &&
+    configPayload.agentCategory !== setting.agentCategory
+  ) {
+    const suggestion =
+      setting.agentCategory === AgentCategory.ToolUse
+        ? 'delegate_agent'
+        : 'delegate_workflow';
+    throw new Error(
+      `Agent '${fullConfig.agent}' is a ${setting.agentCategory} agent but was launched as ${configPayload.agentCategory}. Use ${suggestion} instead.`,
+    );
+  }
+
   await validateModelExists(fullConfig.model);
 
   const useMultipleOutputs =
