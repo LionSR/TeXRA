@@ -70,6 +70,25 @@ const MemoryToolInputSchema = z.strictObject({
   insert_text: z.string().nullish(),
   old_path: z.string().nullish(),
   new_path: z.string().nullish(),
+
+  /** Zero-based offset for paginating directory listings (command="view" on a directory). */
+  offset: z
+    .int()
+    .min(0)
+    .nullish()
+    .describe(
+      'Zero-based offset into the directory listing. Use with limit for pagination. Default: 0.',
+    ),
+
+  /** Maximum entries to return from a directory listing (command="view" on a directory). */
+  limit: z
+    .int()
+    .min(1)
+    .max(200)
+    .nullish()
+    .describe(
+      'Max entries to return from directory listing. Default: 50, max: 200.',
+    ),
 });
 
 /** Derived from MemoryToolInputSchema - single source of truth */
@@ -83,6 +102,7 @@ export class MemoryTool extends defineTool({
   description: `Manage persistent memory files under /memories (view, create, str_replace, insert, delete, rename, pin, unpin).
 
 Paths must start with /memories. Use /memories to list files, /memories/file.md for specific files. "/" alone is invalid.
+Directory listings are paginated — use offset/limit to page through results (default: offset 0, limit 50).
 
 Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies, pitfalls, best practices). Pinned memories are always loaded at session start. Use \`unpin\` to remove the pinned status. Maximum ${MAX_PINNED_MEMORIES} pinned memories allowed.`,
   schema: MemoryToolInputSchema,
@@ -103,6 +123,8 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
           this.canonicalize(requireField(input.path, 'path', input.command)),
           // Schema enforces length 2; cast since Zod infers number[]
           input.view_range as [number, number] | undefined,
+          input.offset ?? 0,
+          input.limit ?? 50,
         );
       case 'create':
         return this.create(
@@ -213,6 +235,8 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   private async view(
     inputPath: string,
     viewRange?: [number, number],
+    offset = 0,
+    limit = 50,
   ): Promise<ToolResult> {
     const resolvedPath = this.resolveMemoryPath(inputPath);
     const exists = await StorageFS.exists(resolvedPath);
@@ -233,15 +257,30 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
     const stats = await StorageFS.stat(resolvedPath);
     if (isDirectory(stats.type)) {
-      const listing = await this.buildDirectoryListing(resolvedPath);
+      const allEntries = await this.buildDirectoryListing(resolvedPath);
       recordToolFileRead(inputPath);
+
+      const total = allEntries.length;
+      const safeOffset = Math.min(offset, total);
+      const page = allEntries.slice(safeOffset, safeOffset + limit);
+      const rangeEnd = safeOffset + page.length;
+
+      const parts = [
+        `Contents of ${inputPath} (showing ${safeOffset + 1}\u2013${rangeEnd} of ${total}, up to 2 levels deep):`,
+        `SIZE\tMODIFIED\tBY\tPATH`,
+        ...page,
+      ];
+
+      if (rangeEnd < total) {
+        parts.push(
+          '',
+          `(${total - rangeEnd} more — use offset: ${rangeEnd} to see next page)`,
+        );
+      }
+
       return {
-        summary: `Listed directory: ${inputPath}`,
-        output: [
-          `Contents of ${inputPath} (up to 2 levels deep):`,
-          `SIZE\tMODIFIED\tBY\tPATH`,
-          ...listing,
-        ].join('\n'),
+        summary: `Listed directory: ${inputPath} (${safeOffset + 1}\u2013${rangeEnd} of ${total})`,
+        output: parts.join('\n'),
       };
     }
 
