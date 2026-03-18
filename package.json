@@ -1384,7 +1384,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.79.0",
     "@cantoo/pdf-lib": "^2.6.2",
-    "@google/genai": "^1.45.0",
+    "@google/genai": "^1.46.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@lit-labs/signals": "^0.2.0",
     "@lit-labs/virtualizer": "^2.1.1",
