@@ -185,22 +185,6 @@ export class InstructionPanel extends LitElement {
         top: auto;
       }
 
-      .selection-description {
-        font-size: var(--font-size-xs);
-        color: var(--color-text-secondary, var(--vscode-descriptionForeground));
-        line-height: var(--line-height-normal, 1.4);
-        padding-top: var(--spacing-tiny);
-        min-height: 1.2em;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        transition: opacity var(--transition-fast);
-      }
-
-      .selection-description:empty {
-        display: none;
-      }
-
       .recording {
         color: var(--vscode-errorForeground);
         animation: pulse 1s infinite;
@@ -225,31 +209,20 @@ export class InstructionPanel extends LitElement {
   @query('#instruction')
   private instructionTextarea?: HTMLElement;
 
-  /** Build a short description for the currently selected agent. */
-  private getSelectedAgentDescription(): string {
-    const session = this.sessionData;
-    if (!session) return '';
-    const options: AgentOptionData[] =
-      session.sessionType === SESSION_TYPES.WORKFLOW
-        ? session.workflowAgentOptions
-        : session.toolUseAgentOptions;
-    const selectedValue =
-      session.sessionType === SESSION_TYPES.WORKFLOW
-        ? session.workflowAgent
-        : session.toolUseAgent;
-    const opt = options.find((o) => o.value === selectedValue);
-    return opt?.description ?? '';
+  /** Get the tooltip for an agent dropdown based on the selected agent's description. */
+  private getAgentTooltip(
+    options: AgentOptionData[],
+    selectedValue: string,
+  ): string {
+    return options.find((o) => o.value === selectedValue)?.description ?? '';
   }
 
-  /** Build a short description for the currently selected model. */
-  private getSelectedModelDescription(): string {
-    const session = this.sessionData;
-    if (!session) return '';
-    const opt = session.modelOptions.find(
-      (o: ModelOptionData) => o.value === session.model,
-    );
-    if (!opt) return '';
-    return opt.hint ?? '';
+  /** Get the tooltip for the model dropdown based on the selected model's hint. */
+  private getModelTooltip(
+    options: ModelOptionData[],
+    selectedValue: string,
+  ): string {
+    return options.find((o) => o.value === selectedValue)?.hint ?? '';
   }
 
   private handleSessionTypeChange(event: Event): void {
@@ -334,23 +307,6 @@ export class InstructionPanel extends LitElement {
         text: 'Choose the AI model used by the selected agent.',
       }),
     );
-  }
-
-  private renderSelectionDescription(): TemplateResult | typeof nothing {
-    const agentDesc = this.getSelectedAgentDescription();
-    const modelDesc = this.getSelectedModelDescription();
-
-    // Combine: prefer showing both, separated by a dash
-    const parts: string[] = [];
-    if (agentDesc) parts.push(agentDesc);
-    if (modelDesc) parts.push(modelDesc);
-    const text = parts.join(' — ');
-
-    if (!text) return nothing;
-
-    return html`<div class="selection-description" title=${text}>
-      ${text}
-    </div>`;
   }
 
   override render(): TemplateResult | typeof nothing {
@@ -484,6 +440,10 @@ export class InstructionPanel extends LitElement {
                     })}
                     data-session-type="workflow"
                     aria-label="Workflow agent"
+                    title=${this.getAgentTooltip(
+                      session.workflowAgentOptions,
+                      session.workflowAgent,
+                    ) || nothing}
                     tabindex=${session.sessionType === SESSION_TYPES.WORKFLOW
                       ? 0
                       : -1}
@@ -511,6 +471,10 @@ export class InstructionPanel extends LitElement {
                     })}
                     data-session-type="toolUse"
                     aria-label="Tool-use agent"
+                    title=${this.getAgentTooltip(
+                      session.toolUseAgentOptions,
+                      session.toolUseAgent,
+                    ) || nothing}
                     tabindex=${session.sessionType === SESSION_TYPES.TOOL_USE
                       ? 0
                       : -1}
@@ -543,6 +507,10 @@ export class InstructionPanel extends LitElement {
                 id="model"
                 position="above"
                 aria-label="Model"
+                title=${this.getModelTooltip(
+                  session.modelOptions,
+                  session.model,
+                ) || nothing}
                 .value=${session.model}
                 @focus=${this.handleModelFocus}
                 @change=${this.handleModelChange}
@@ -559,7 +527,6 @@ export class InstructionPanel extends LitElement {
             @click=${this.handleExecute}
           ></vscode-button>
         </div>
-        ${this.renderSelectionDescription()}
       </div>
     `;
   }
