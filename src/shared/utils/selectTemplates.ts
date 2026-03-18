@@ -8,7 +8,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
 import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
 
-function buildAgentTooltip(opt: AgentOptionData): string {
+export function buildAgentTooltip(opt: AgentOptionData): string {
   const { properties } = AGENT_DECORATORS;
   const hints: string[] = [];
 

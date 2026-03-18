@@ -14,6 +14,7 @@ import { styleMap } from 'lit/directives/style-map.js';
 
 // Local imports - shared schemas and types
 import type { AgentOptionData } from '@shared/schemas';
+import { buildAgentTooltip } from '@shared/commons';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
@@ -185,7 +186,6 @@ export class InstructionPanel extends LitElement {
         top: auto;
       }
 
-
       .recording {
         color: var(--vscode-errorForeground);
         animation: pulse 1s infinite;
@@ -210,11 +210,11 @@ export class InstructionPanel extends LitElement {
   @query('#instruction')
   private instructionTextarea?: HTMLElement;
 
-  /** Build a tooltip string for the currently selected agent. */
-  private getAgentTooltip(): string {
+  /** Resolve the AgentOptionData for the currently selected agent. */
+  private getSelectedAgentOption(): AgentOptionData | undefined {
     const session = this.sessionData;
-    if (!session) return '';
-    const options: AgentOptionData[] =
+    if (!session) return undefined;
+    const options =
       session.sessionType === SESSION_TYPES.WORKFLOW
         ? session.workflowAgentOptions
         : session.toolUseAgentOptions;
@@ -222,8 +222,7 @@ export class InstructionPanel extends LitElement {
       session.sessionType === SESSION_TYPES.WORKFLOW
         ? session.workflowAgent
         : session.toolUseAgent;
-    const opt = options.find((o) => o.value === selectedValue);
-    return opt?.description ?? '';
+    return options.find((o) => o.value === selectedValue);
   }
 
   private handleSessionTypeChange(event: Event): void {
@@ -310,12 +309,15 @@ export class InstructionPanel extends LitElement {
     );
   }
 
-
   override render(): TemplateResult | typeof nothing {
     const session = this.sessionData;
     if (!session) {
       return nothing;
     }
+    const selectedAgent = this.getSelectedAgentOption();
+    const agentTooltip = selectedAgent
+      ? buildAgentTooltip(selectedAgent)
+      : '';
     return html`
       <div class="instruction-box">
         <div class="instruction-header">
@@ -442,7 +444,7 @@ export class InstructionPanel extends LitElement {
                     })}
                     data-session-type="workflow"
                     aria-label="Workflow agent"
-                    title=${this.getAgentTooltip() || nothing}
+                    title=${agentTooltip || nothing}
                     tabindex=${session.sessionType === SESSION_TYPES.WORKFLOW
                       ? 0
                       : -1}
@@ -470,7 +472,7 @@ export class InstructionPanel extends LitElement {
                     })}
                     data-session-type="toolUse"
                     aria-label="Tool-use agent"
-                    title=${this.getAgentTooltip() || nothing}
+                    title=${agentTooltip || nothing}
                     tabindex=${session.sessionType === SESSION_TYPES.TOOL_USE
                       ? 0
                       : -1}
