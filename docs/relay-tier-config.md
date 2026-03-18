@@ -51,6 +51,8 @@ GET https://remote.texra.ai/functions/v1/relay/tier-config
       "models": [
         "haiku3",
         "haiku35",
+        "gpt54-",
+        "gpt54--",
         "gpt5-",
         "gpt5--",
         "gpt41-",
@@ -81,6 +83,8 @@ GET https://remote.texra.ai/functions/v1/relay/tier-config
       "models": [
         "haiku3",
         "haiku35",
+        "gpt54-",
+        "gpt54--",
         "gpt5-",
         "gpt5--",
         "gpt41-",
@@ -161,6 +165,8 @@ Available to all authenticated users.
 
 | Model Name  | Full Name                         | Provider | Pricing (in/out per 1M) |
 | ----------- | --------------------------------- | -------- | ----------------------- |
+| `gpt54-`    | gpt-5.4-mini-2026-03-17           | OpenAI   | $0.75/$4.50             |
+| `gpt54--`   | gpt-5.4-nano-2026-03-17           | OpenAI   | $0.20/$1.25             |
 | `gpt5-`     | gpt-5-mini                        | OpenAI   | $0.25/$2.00             |
 | `gpt5--`    | gpt-5-nano                        | OpenAI   | $0.05/$0.40             |
 | `gpt41-`    | gpt-4.1-mini                      | OpenAI   | $0.40/$1.60             |
