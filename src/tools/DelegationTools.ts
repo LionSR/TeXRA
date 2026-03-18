@@ -205,6 +205,7 @@ async function executeSubagent(
 
   const promise = executeAgent(configPayload, executionId, {
     isSubagent: true,
+    enforceCategory: true,
     parentStreamId: orchestratorStreamId,
     onStreamResolved: (resolvedStreamId) => {
       childStreamId = resolvedStreamId;

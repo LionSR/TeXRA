@@ -140,6 +140,8 @@ interface ResolveAgentOptions {
   streamTabIdOverride?: StreamTabId;
   /** Fires after streamId is assigned but before setActiveStream is emitted. */
   onBeforeActivation?: (streamId: StreamTabId) => void;
+  /** When true, reject if configPayload.agentCategory doesn't match the YAML-defined category. */
+  enforceCategory?: boolean;
 }
 
 async function resolveAgentBase(
@@ -163,6 +165,24 @@ async function resolveAgentBase(
     loadedSettings,
     resolution.entry.source,
   );
+
+  // Block category mismatch: prevent launching a tool-use agent as a workflow
+  // (or vice versa). Only enforced when the caller opts in via enforceCategory,
+  // because many code paths pass pre-parsed configs where agentCategory was
+  // prefaulted to Workflow by the schema (not explicitly chosen by the caller).
+  if (
+    options?.enforceCategory &&
+    configPayload.agentCategory &&
+    configPayload.agentCategory !== setting.agentCategory
+  ) {
+    const suggestion =
+      setting.agentCategory === AgentCategory.ToolUse
+        ? 'delegate_agent'
+        : 'delegate_workflow';
+    throw new Error(
+      `Agent '${fullConfig.agent}' is a ${setting.agentCategory} agent but was launched as ${configPayload.agentCategory}. Use ${suggestion} instead.`,
+    );
+  }
 
   await validateModelExists(fullConfig.model);
 
@@ -457,6 +477,7 @@ async function resolveAndAcquireStream(
     streamTabIdOverride?: StreamTabId;
     taskType?: string;
     onBeforeActivation?: (streamId: StreamTabId) => void;
+    enforceCategory?: boolean;
   },
 ): Promise<ResolvedAgentBase> {
   if (options?.streamTabIdOverride) {
@@ -464,6 +485,7 @@ async function resolveAndAcquireStream(
     return resolveAgentBase(configPayload, executionId, {
       streamTabIdOverride: options.streamTabIdOverride,
       onBeforeActivation: options?.onBeforeActivation,
+      enforceCategory: options?.enforceCategory,
     });
   }
 
@@ -487,6 +509,7 @@ async function resolveAndAcquireStream(
   try {
     ctx = await resolveAgentBase(configPayload, executionId, {
       onBeforeActivation: options?.onBeforeActivation,
+      enforceCategory: options?.enforceCategory,
     });
   } catch (err) {
     StreamStatusService.releaseIfInitializing(preliminaryStreamId);
@@ -522,6 +545,13 @@ async function resolveAndAcquireStream(
 export interface ExecuteAgentOptions {
   /** When true, proposal tools are filtered out to prevent nesting. */
   isSubagent?: boolean;
+  /**
+   * When true, enforce that configPayload.agentCategory matches the agent's
+   * YAML-defined category. Callers that explicitly set a category (e.g.
+   * DelegationTools) should opt in; callers that pass pre-parsed configs with
+   * prefaulted defaults (e.g. runExecuteCommand) should leave this off.
+   */
+  enforceCategory?: boolean;
   /** Parent stream ID for subagent lineage tracking. Defaults to own streamId. */
   parentStreamId?: StreamTabId;
   /** Fires with the real streamId before the stream is activated (before UI sync). */
@@ -541,6 +571,7 @@ export async function executeAgent(
 ): Promise<AgentFlowResult> {
   const ctx = await resolveAndAcquireStream(configPayload, executionId, {
     onBeforeActivation: options?.onStreamResolved,
+    enforceCategory: options?.enforceCategory,
   });
   const { setting, streamId, config } = ctx;
   const agentName = config.agent;
