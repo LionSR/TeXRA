@@ -27,6 +27,8 @@ Opus 4.6 and Sonnet 4.6 include the full 1M context window at standard pricing â
 | :----------- | :------------------------ | :--- | :----- |
 | `gpt54pro`   | Premium reasoning         | $$$$ | Slow   |
 | `gpt54`      | Flagship reasoning        | $$$  | Medium |
+| `gpt54-`     | Fast flagship (400K)      | $$   | Fast   |
+| `gpt54--`    | Budget flagship (400K)    | $    | Fast   |
 | `gpt53codex` | Coding specialist         | $$$  | Medium |
 | `gpt41`      | Long context (1M), vision | $$$  | Medium |
 | `gpt5-`      | Fast flagship             | $$   | Fast   |
