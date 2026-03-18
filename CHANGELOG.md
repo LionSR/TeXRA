@@ -2,7 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.36.7] - 2026-03-17
+
+### Features
+
+- **LaTeX error fixer** — new title bar button for `.tex` files that automatically compiles, diagnoses, and fixes errors, warnings, and overfull boxes.
+- **OpenAI Codex tool** — agents can use OpenAI's Codex CLI for sandboxed code execution with streaming output.
+- **Pinnable memories** — pin up to 10 memories per workspace so they are always included at session start.
+- **Memory attachments for delegated tasks** — attach memory files to sub-tasks so agents inherit project conventions and knowledge.
+- **Short model names** — toggle in the Models tab to use unpinned identifiers (e.g., `gpt-5.4` instead of `gpt-5.4-2026-03-05`), useful for proxies that don't accept dated names.
+- **DashScope China region (Bailian)** — toggle in DashScope settings to switch between international and China endpoints.
+- **Copy user messages** — copy-to-clipboard button on hover for user messages in the Progress Board.
+- **Output diffs in multi-agent workflows** — changed files from completed sub-tasks are shown as diffs for quick review.
+- **Project context in bash** — `$PROJECT_DIR` and `$PROJECT_NAME` environment variables available in agent bash sessions.
+- **Selection descriptions** — agent and model selectors now show a brief description below the dropdowns.
+
+### Bug Fixes
+
+- Fixed latexdiff failing with files in subdirectories.
+- Fixed Codex CLI errors on first use and during long sessions.
+- Fixed history view showing empty file fields for tool-use sessions.
+- Fixed editor tabs stealing focus when agents open files.
+- Fixed retry logic misclassifying non-retryable Anthropic errors (e.g., `invalid_request_error`) as retryable.
+
+### Improvements
+
+- **Markdown in history and memories** — instructions and memory previews render as formatted markdown with syntax highlighting.
+- **Overleaf Git token setup** — prompts and error messages now link to Overleaf's token documentation.
+- **Session descriptions for all agents** — delegated agents now show auto-generated descriptions in their progress tabs.
+- **Lower Anthropic costs** — Opus 4.6 and Sonnet 4.6 use native 1M context without a long-context premium. PDF limit raised to 600 pages.
+- **Terminal respects your theme** — terminal output uses VS Code theme colors, fixing readability in light themes.
+- **Agents stay on track in long sessions** — todo list and plan are preserved when the conversation is compacted.
+- **Scrollable panels** — long plans, bash commands, and permission panels scroll instead of pushing buttons off screen. Panels auto-expand when new information arrives.
+- Removed Wolfram provider key configuration (the WolframScript tool remains).
+- Improved writing quality and consistency across agents.
+- Updated dependencies (`@google/genai` 1.46.0, `llm-zoo` 1.1.4, `openai` 6.32.0).
 
 ## [0.36.6] - 2026-03-12
 
