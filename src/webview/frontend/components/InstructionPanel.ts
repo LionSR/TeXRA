@@ -13,7 +13,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
 // Local imports - shared schemas and types
-import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
+import type { AgentOptionData } from '@shared/schemas';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
@@ -185,21 +185,6 @@ export class InstructionPanel extends LitElement {
         top: auto;
       }
 
-      .selection-description {
-        font-size: var(--font-size-xs);
-        color: var(--color-text-secondary, var(--vscode-descriptionForeground));
-        line-height: var(--line-height-normal, 1.4);
-        padding-top: var(--spacing-tiny);
-        min-height: 1.2em;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        transition: opacity var(--transition-fast);
-      }
-
-      .selection-description:empty {
-        display: none;
-      }
 
       .recording {
         color: var(--vscode-errorForeground);
@@ -225,8 +210,8 @@ export class InstructionPanel extends LitElement {
   @query('#instruction')
   private instructionTextarea?: HTMLElement;
 
-  /** Build a short description for the currently selected agent. */
-  private getSelectedAgentDescription(): string {
+  /** Build a tooltip string for the currently selected agent. */
+  private getAgentTooltip(): string {
     const session = this.sessionData;
     if (!session) return '';
     const options: AgentOptionData[] =
@@ -239,17 +224,6 @@ export class InstructionPanel extends LitElement {
         : session.toolUseAgent;
     const opt = options.find((o) => o.value === selectedValue);
     return opt?.description ?? '';
-  }
-
-  /** Build a short description for the currently selected model. */
-  private getSelectedModelDescription(): string {
-    const session = this.sessionData;
-    if (!session) return '';
-    const opt = session.modelOptions.find(
-      (o: ModelOptionData) => o.value === session.model,
-    );
-    if (!opt) return '';
-    return opt.hint ?? '';
   }
 
   private handleSessionTypeChange(event: Event): void {
@@ -336,22 +310,6 @@ export class InstructionPanel extends LitElement {
     );
   }
 
-  private renderSelectionDescription(): TemplateResult | typeof nothing {
-    const agentDesc = this.getSelectedAgentDescription();
-    const modelDesc = this.getSelectedModelDescription();
-
-    // Combine: prefer showing both, separated by a dash
-    const parts: string[] = [];
-    if (agentDesc) parts.push(agentDesc);
-    if (modelDesc) parts.push(modelDesc);
-    const text = parts.join(' — ');
-
-    if (!text) return nothing;
-
-    return html`<div class="selection-description" title=${text}>
-      ${text}
-    </div>`;
-  }
 
   override render(): TemplateResult | typeof nothing {
     const session = this.sessionData;
@@ -484,6 +442,7 @@ export class InstructionPanel extends LitElement {
                     })}
                     data-session-type="workflow"
                     aria-label="Workflow agent"
+                    title=${this.getAgentTooltip() || nothing}
                     tabindex=${session.sessionType === SESSION_TYPES.WORKFLOW
                       ? 0
                       : -1}
@@ -511,6 +470,7 @@ export class InstructionPanel extends LitElement {
                     })}
                     data-session-type="toolUse"
                     aria-label="Tool-use agent"
+                    title=${this.getAgentTooltip() || nothing}
                     tabindex=${session.sessionType === SESSION_TYPES.TOOL_USE
                       ? 0
                       : -1}
@@ -559,7 +519,6 @@ export class InstructionPanel extends LitElement {
             @click=${this.handleExecute}
           ></vscode-button>
         </div>
-        ${this.renderSelectionDescription()}
       </div>
     `;
   }
