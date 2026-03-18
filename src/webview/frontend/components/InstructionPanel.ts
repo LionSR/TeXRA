@@ -13,7 +13,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
 // Local imports - shared schemas and types
-import type { AgentOptionData } from '@shared/schemas';
+import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
@@ -215,6 +215,14 @@ export class InstructionPanel extends LitElement {
     selectedValue: string,
   ): string {
     return options.find((o) => o.value === selectedValue)?.description ?? '';
+  }
+
+  /** Get the tooltip for the model dropdown based on the selected model's hint. */
+  private getModelTooltip(
+    options: ModelOptionData[],
+    selectedValue: string,
+  ): string {
+    return options.find((o) => o.value === selectedValue)?.hint ?? '';
   }
 
   private handleSessionTypeChange(event: Event): void {
@@ -499,6 +507,10 @@ export class InstructionPanel extends LitElement {
                 id="model"
                 position="above"
                 aria-label="Model"
+                title=${this.getModelTooltip(
+                  session.modelOptions,
+                  session.model,
+                ) || nothing}
                 .value=${session.model}
                 @focus=${this.handleModelFocus}
                 @change=${this.handleModelChange}
