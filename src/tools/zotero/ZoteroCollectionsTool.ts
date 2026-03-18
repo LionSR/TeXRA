@@ -1,9 +1,10 @@
 /**
  * List Zotero collections via Better BibTeX JSON-RPC API.
  *
- * Returns the collection tree with keys so the agent can pass
- * a collection key to `zotero_add`. Does one thing: queries
- * the collection hierarchy. No paper searching, no side effects.
+ * Two modes:
+ * - **Tree mode** (default): list the full collection hierarchy via `user.groups`
+ * - **Lookup mode** (citekeys provided): show which collections contain specific
+ *   papers via `item.collections`
  *
  * Requires the Better BibTeX plugin to be installed in Zotero.
  * See: https://retorque.re/zotero-better-bibtex/exporting/json-rpc/
@@ -20,6 +21,7 @@ import {
   callBetterBibTeX,
   getZoteroPort,
   type BbtCollection,
+  type BbtCollectionChain,
   type BbtLibrary,
 } from './bbtClient';
 
@@ -27,13 +29,24 @@ const ZoteroCollectionsInputSchema = z.strictObject({
   query: z
     .string()
     .describe(
-      'Optional name to filter collections (case-insensitive partial match).',
+      'Optional name to filter collections (case-insensitive partial match). ' +
+        'Only used in tree mode (when citekeys is not provided).',
     )
     .nullish(),
   library: z
     .string()
     .describe(
-      'Optional library name to list collections from. Omit for all libraries.',
+      'Optional library name to list collections from. Omit for all libraries. ' +
+        'Only used in tree mode (when citekeys is not provided).',
+    )
+    .nullish(),
+  citekeys: z
+    .array(z.string())
+    .min(1)
+    .describe(
+      'Look up which collections contain these citation keys. ' +
+        'Returns the full collection path for each citekey. ' +
+        'When provided, query and library are ignored.',
     )
     .nullish(),
 });
@@ -130,18 +143,79 @@ function filterTree(
     .filter((n): n is CollectionNode => n !== null);
 }
 
+/**
+ * Flatten a nested parent chain into a breadcrumb path.
+ * e.g. { name: "ML", parentCollection: { name: "Research", parentCollection: false } }
+ *  → "Research / ML"
+ */
+function collectionPath(chain: BbtCollectionChain): string {
+  const parts: string[] = [];
+  let current: BbtCollectionChain | false | undefined = chain;
+  while (current && current !== false) {
+    parts.unshift(`${current.name} [${current.key}]`);
+    current = current.parentCollection;
+  }
+  return parts.join(' / ');
+}
+
 export class ZoteroCollectionsTool extends defineTool({
   name: 'zotero_collections',
   description:
-    'List Zotero collections with their keys. ' +
-    'Use this to discover collection keys before adding items with zotero_add. ' +
-    'Optionally filter by name or library. ' +
+    'List Zotero collections with their keys, or look up which collections contain specific citation keys. ' +
+    'Use this to discover collection keys before adding items with zotero_add, ' +
+    'or to find out where a paper is filed. ' +
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroCollectionsInputSchema,
 }) {
-  protected async execute({ query, library }: ZoteroCollectionsInput) {
+  protected async execute({
+    query,
+    library,
+    citekeys,
+  }: ZoteroCollectionsInput) {
     const port = getZoteroPort();
 
+    // ── Lookup mode: which collections contain these citekeys? ──
+    if (citekeys?.length) {
+      return this.executeLookup(citekeys, port);
+    }
+
+    // ── Tree mode: list the collection hierarchy ──
+    return this.executeTree(query, library, port);
+  }
+
+  private async executeLookup(citekeys: string[], port: number) {
+    const result = await callBetterBibTeX<
+      Record<string, BbtCollectionChain[]>
+    >('item.collections', [citekeys, true], port);
+
+    const lines: string[] = [];
+    let found = 0;
+
+    for (const key of citekeys) {
+      const collections = result[key];
+      if (!collections || collections.length === 0) {
+        lines.push(`[${key}] — not in any collection`);
+        continue;
+      }
+      found++;
+      const paths = collections.map((c) => collectionPath(c));
+      lines.push(`[${key}]`);
+      for (const path of paths) {
+        lines.push(`  ${path}`);
+      }
+    }
+
+    return {
+      summary: `Found collection info for ${found} of ${citekeys.length} citekey${citekeys.length === 1 ? '' : 's'}.`,
+      output: lines.join('\n'),
+    };
+  }
+
+  private async executeTree(
+    query: string | null | undefined,
+    library: string | null | undefined,
+    port: number,
+  ) {
     const libraries = await callBetterBibTeX<BbtLibrary[]>(
       'user.groups',
       [true],
@@ -151,7 +225,8 @@ export class ZoteroCollectionsTool extends defineTool({
     if (!Array.isArray(libraries) || libraries.length === 0) {
       return {
         summary: 'No libraries found in Zotero.',
-        output: 'No libraries found. Is Zotero running with items in your library?',
+        output:
+          'No libraries found. Is Zotero running with items in your library?',
       };
     }
 
