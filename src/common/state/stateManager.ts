@@ -46,6 +46,8 @@ export enum GlobalStateKey {
   STREAMING_DEEPSEEK = 'texra.streaming.deepseek',
   STREAMING_MOONSHOT = 'texra.streaming.moonshot',
   STREAMING_DASHSCOPE = 'texra.streaming.dashscope',
+  STREAMING_MINIMAX = 'texra.streaming.minimax',
+  STREAMING_GLM = 'texra.streaming.glm',
 
   // LaTeX settings
   LATEX_CONFIG_VERSION = 'texra.latexConfigVersion',
@@ -65,9 +67,13 @@ export enum GlobalStateKey {
   ENDPOINT_XAI = 'texra.endpoint.xai',
   ENDPOINT_MOONSHOT = 'texra.endpoint.moonshot',
   ENDPOINT_DASHSCOPE = 'texra.endpoint.dashscope',
+  ENDPOINT_MINIMAX = 'texra.endpoint.minimax',
+  ENDPOINT_GLM = 'texra.endpoint.glm',
 
   // Region settings
   DASHSCOPE_USE_CHINA = 'texra.dashscope.useChina',
+  MINIMAX_USE_CHINA = 'texra.minimax.useChina',
+  GLM_USE_CHINA = 'texra.glm.useChina',
 
   // Transport settings
   WEBSOCKET_OPENAI = 'texra.websocket.openai',

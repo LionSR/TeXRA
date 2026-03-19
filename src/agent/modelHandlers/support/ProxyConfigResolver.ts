@@ -4,6 +4,8 @@ import { getConfig } from '@utils/config';
 import {
   getProviderEndpoint,
   getDashScopeUseChina,
+  getMiniMaxUseChina,
+  getGLMUseChina,
 } from '@utils/config/providerConfig';
 
 // NOTE: getProviderEndpoint reads from globalSM (VS Code global state), which is
@@ -44,9 +46,9 @@ const BASE_URLS: Record<ModelProvider, string | null> = {
   [ModelProvider.DEEPSEEK]: 'https://api.deepseek.com',
   [ModelProvider.XAI]: 'https://api.x.ai/v1',
   [ModelProvider.MOONSHOT]: 'https://api.moonshot.cn/v1',
-  [ModelProvider.DASHSCOPE]: null, // Resolved dynamically via getDashScopeBaseUrl()
-  [ModelProvider.MINIMAX]: 'https://api.minimax.io/v1',
-  [ModelProvider.GLM]: 'https://open.bigmodel.cn/api/paas/v4',
+  [ModelProvider.DASHSCOPE]: null, // Resolved dynamically (China/international toggle)
+  [ModelProvider.MINIMAX]: null, // Resolved dynamically (China/international toggle)
+  [ModelProvider.GLM]: null, // Resolved dynamically (China/international toggle)
   [ModelProvider.COPILOT]: null,
   [ModelProvider.OTHERS]: null,
 };
@@ -165,6 +167,24 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
       ? 'dashscope.aliyuncs.com'
       : 'dashscope-intl.aliyuncs.com';
     return `https://${domain}/compatible-mode/v1`;
+  }
+
+  // MiniMax base URL depends on the China/international region toggle
+  // China: api.minimaxi.com (note the extra 'i'), International: api.minimax.io
+  if (config.provider === ModelProvider.MINIMAX) {
+    const domain = getMiniMaxUseChina()
+      ? 'api.minimaxi.com'
+      : 'api.minimax.io';
+    return `https://${domain}/v1`;
+  }
+
+  // GLM base URL depends on the China/international region toggle
+  // China: open.bigmodel.cn, International: api.z.ai
+  if (config.provider === ModelProvider.GLM) {
+    const domain = getGLMUseChina()
+      ? 'open.bigmodel.cn'
+      : 'api.z.ai';
+    return `https://${domain}/api/paas/v4`;
   }
 
   return BASE_URLS[config.provider];

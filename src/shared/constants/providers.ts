@@ -208,4 +208,22 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
       globalStateKey: GlobalStateKey.DASHSCOPE_USE_CHINA,
     },
   ],
+  minimax: [
+    {
+      key: GlobalStateKey.MINIMAX_USE_CHINA,
+      label: 'China Region',
+      description:
+        'Use the China region endpoint (api.minimaxi.com) instead of international (api.minimax.io). API keys are region-specific.',
+      globalStateKey: GlobalStateKey.MINIMAX_USE_CHINA,
+    },
+  ],
+  glm: [
+    {
+      key: GlobalStateKey.GLM_USE_CHINA,
+      label: 'China Region',
+      description:
+        'Use the China region endpoint (open.bigmodel.cn) instead of international (api.z.ai). Enabled by default.',
+      globalStateKey: GlobalStateKey.GLM_USE_CHINA,
+    },
+  ],
 };
