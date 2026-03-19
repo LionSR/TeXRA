@@ -731,13 +731,14 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
   }
 
   private formatMessageContent(content: unknown): string {
+    if (content == null) return '';
     if (typeof content === 'string') {
       return this.truncate(content, 500);
     }
     if (Array.isArray(content)) {
       return content.map((block) => this.formatBlock(block)).join('\n');
     }
-    return this.truncate(JSON.stringify(content), 500);
+    return this.truncate(JSON.stringify(content) ?? '', 500);
   }
 
   private formatBlock(block: unknown): string {
@@ -752,7 +753,9 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
         return `[tool_use: ${b.name}(${this.truncate(JSON.stringify(b.input ?? {}), 100)})]`;
       case 'tool_result': {
         const output =
-          typeof b.content === 'string' ? b.content : JSON.stringify(b.content);
+          typeof b.content === 'string'
+            ? b.content
+            : (JSON.stringify(b.content) ?? '');
         return `[tool_result: ${this.truncate(output, 100)}]`;
       }
       default:
