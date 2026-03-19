@@ -6,6 +6,8 @@ import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek'
 import { ModelHandlerXAI } from '@agent/modelHandlers/modelHandlerXAI';
 import { ModelHandlerKimi } from '@agent/modelHandlers/modelHandlerKimi';
 import { ModelHandlerDashScope } from '@agent/modelHandlers/modelHandlerDashScope';
+import { ModelHandlerMiniMax } from '@agent/modelHandlers/modelHandlerMiniMax';
+import { ModelHandlerGLM } from '@agent/modelHandlers/modelHandlerGLM';
 import {
   ModelHandlerOpenRouter,
   ModelHandlerAnthropicViaOpenRouter,
@@ -32,6 +34,8 @@ const PROVIDER_HANDLERS = new Map<
   [ModelProvider.XAI, ModelHandlerXAI],
   [ModelProvider.MOONSHOT, ModelHandlerKimi],
   [ModelProvider.DASHSCOPE, ModelHandlerDashScope],
+  [ModelProvider.MINIMAX, ModelHandlerMiniMax],
+  [ModelProvider.GLM, ModelHandlerGLM],
   [ModelProvider.OTHERS, ModelHandlerOpenRouter],
 ]);
 

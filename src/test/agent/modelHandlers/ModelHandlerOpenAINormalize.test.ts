@@ -116,6 +116,7 @@ function buildConfig(
     },
     openRouterOnly: false,
     ...overrides,
+    label: overrides.label ?? 'Test Model',
   };
 }
 

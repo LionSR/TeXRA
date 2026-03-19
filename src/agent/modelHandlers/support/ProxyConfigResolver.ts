@@ -45,6 +45,8 @@ const BASE_URLS: Record<ModelProvider, string | null> = {
   [ModelProvider.XAI]: 'https://api.x.ai/v1',
   [ModelProvider.MOONSHOT]: 'https://api.moonshot.cn/v1',
   [ModelProvider.DASHSCOPE]: null, // Resolved dynamically via getDashScopeBaseUrl()
+  [ModelProvider.MINIMAX]: 'https://api.minimax.io/v1',
+  [ModelProvider.GLM]: 'https://open.bigmodel.cn/api/paas/v4',
   [ModelProvider.COPILOT]: null,
   [ModelProvider.OTHERS]: null,
 };

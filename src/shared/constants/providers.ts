@@ -68,6 +68,18 @@ const PROVIDER_REGISTRY = [
     hasServerKey: true,
     keyUrl: 'https://dashscope.aliyun.com/api-console/',
   },
+  {
+    id: ModelProvider.MINIMAX,
+    displayName: 'MiniMax',
+    hasServerKey: true,
+    keyUrl: 'https://platform.minimax.io/',
+  },
+  {
+    id: ModelProvider.GLM,
+    displayName: 'GLM',
+    hasServerKey: true,
+    keyUrl: 'https://open.bigmodel.cn/',
+  },
 ] as const satisfies readonly ProviderDef[];
 
 /** Providers not in the main registry (no server-side keys, no model selection). */
