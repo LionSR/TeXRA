@@ -1,35 +1,34 @@
 // Local file imports
-import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
 /**
  * Handler for MiniMax models using OpenAI-compatible API.
  *
- * MiniMax M-series models support interleaved thinking via reasoning_content
- * in streaming responses. The base OpenAI handler already extracts
- * reasoning_content from deltas and non-streaming responses.
+ * MiniMax M-series are interleaved thinking models. Their reasoning behavior
+ * differs from the standard `reasoning_content` convention used by DeepSeek/GLM:
  *
- * usageProvider and toolCallProvider inherit from base class via config.provider.
+ * - **Streaming**: The `reasoning_content` field in deltas is EMPTY. Thinking is
+ *   embedded in `<think>...</think>` tags within `delta.content`. This is by design:
+ *   the OpenAI ChatCompletion format doesn't natively support thinking pass-back,
+ *   so MiniMax injects thinking into the content field.
+ *
+ * - **Non-streaming**: `reasoning_content` on the message IS populated correctly.
+ *   The base OpenAI handler extracts it automatically.
+ *
+ * - **Tool calls**: The full content (with `<think>` tags) is naturally preserved
+ *   in the assistant message, maintaining the reasoning chain. We do NOT use
+ *   `shouldIncludeReasoningInToolCalls()` since reasoning_content would be empty.
+ *
+ * We intentionally do NOT use BaseReasoningStreamAggregator here — it would look
+ * for `reasoning_content` in streaming deltas and find nothing.
  *
  * @see https://platform.minimax.io/docs/api-reference/text-openai-api
+ * @see https://platform.minimax.io/docs/guides/text-m2-function-call
  */
 export class ModelHandlerMiniMax extends ModelHandlerOpenAI {
-  protected override createStreamingAggregator(): BaseReasoningStreamAggregator | null {
-    return this.capabilities.supportsReasoning
-      ? new BaseReasoningStreamAggregator()
-      : null;
-  }
-
   /**
-   * MiniMax thinking models require reasoning_content in tool-use follow-up messages.
-   */
-  protected override shouldIncludeReasoningInToolCalls(): boolean {
-    return this.capabilities.supportsReasoning;
-  }
-
-  /**
-   * MiniMax requires content to be converted to strings for non-vision models.
+   * MiniMax requires content to be converted to strings.
    */
   protected override getMessageNormalizationOptions(): NormalizeOpenAIMessageContentOptions {
     return { convertContentToString: true };

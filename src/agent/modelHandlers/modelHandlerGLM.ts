@@ -4,13 +4,19 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
 /**
- * Handler for GLM (Zhipu AI) models using OpenAI-compatible API.
+ * Handler for GLM (Zhipu AI / Z.AI) models using OpenAI-compatible API.
  *
- * GLM-4.5 supports reasoning mode with reasoning_content in responses.
- * The base OpenAI handler already extracts reasoning_content from deltas.
+ * GLM models (4.5, 4.7, 5) support deep thinking via standard `reasoning_content`
+ * in both streaming deltas and non-streaming responses. Thinking is controlled by
+ * the `thinking` parameter: `{ type: "enabled" | "disabled" }`.
+ *
+ * GLM supports interleaved thinking with tool calls — the model thinks between
+ * tool invocations and after receiving results. Historical `reasoning_content`
+ * must be preserved in tool-use follow-up messages for reasoning coherence.
  *
  * usageProvider and toolCallProvider inherit from base class via config.provider.
  *
+ * @see https://docs.z.ai/guides/capabilities/thinking
  * @see https://open.bigmodel.cn/dev/api
  */
 export class ModelHandlerGLM extends ModelHandlerOpenAI {
@@ -21,7 +27,30 @@ export class ModelHandlerGLM extends ModelHandlerOpenAI {
   }
 
   /**
-   * GLM requires content to be converted to strings.
+   * GLM models require explicit `thinking` parameter to enable/disable reasoning.
+   * Thinking models (e.g. GLM-4.5) need it enabled; non-thinking variants need
+   * it disabled. Models without reasoning support return undefined (no parameter sent).
+   */
+  protected override getThinkingParameter():
+    | { type: 'enabled' | 'disabled' }
+    | undefined {
+    if (this.capabilities.supportsReasoning) {
+      return { type: 'enabled' };
+    }
+    return undefined;
+  }
+
+  /**
+   * GLM thinking models require reasoning_content in tool-use follow-up messages
+   * to maintain reasoning chain coherence across tool calls.
+   */
+  protected override shouldIncludeReasoningInToolCalls(): boolean {
+    return this.capabilities.supportsReasoning;
+  }
+
+  /**
+   * GLM requires content to be converted to strings for non-vision models.
+   * Vision models (GLM-4.5v, GLM-4.6v) use standard OpenAI image_url format.
    */
   protected override getMessageNormalizationOptions():
     | NormalizeOpenAIMessageContentOptions
