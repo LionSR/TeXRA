@@ -9,14 +9,8 @@
 import { z } from 'zod';
 
 // Local imports
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { AgentLogger } from '@logger/AgentLogger';
-import {
-  PlanSchema,
-  planToTodos,
-  STATUS_DISPLAY,
-  countByStatus,
-} from '@shared/schemas';
+import { PlanSchema, planToTodos } from '@shared/schemas';
 import { type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 import { TodoWriteTool } from '@tools/todo/TodoTool';

@@ -208,10 +208,19 @@ export class ProgressEventHandler {
         updateTodos: (ctx, { streamId, todos, summary }) => {
           ctx.state.setTodos(streamId, todos);
           ctx.state.setTodoSummary(streamId, summary ?? null);
-          // Always send when webview is available (not just active stream),
-          // since plan approval may trigger a stream switch right after.
-          if (this.webviewUpdater.isAvailable()) {
-            ctx.webviewUpdater.updateTodos(streamId, todos, summary ?? null);
+          // Plan updates (summary present) must always reach the webview
+          // because PlanApprovalCoordinator switches to this stream right
+          // after emitting. Regular todo updates use the active-stream
+          // guard to avoid unnecessary messages for non-visible streams.
+          const hasSummary = summary != null;
+          if (hasSummary) {
+            if (this.webviewUpdater.isAvailable()) {
+              ctx.webviewUpdater.updateTodos(streamId, todos, summary ?? null);
+            }
+          } else {
+            this.sendIfActive(streamId, () =>
+              ctx.webviewUpdater.updateTodos(streamId, todos, null),
+            );
           }
         },
         // Follow-up events

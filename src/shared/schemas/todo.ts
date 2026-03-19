@@ -23,9 +23,9 @@ export const TodoItemSchema = z.strictObject({
     .min(1)
     .describe('Present continuous form for display during execution'),
   /** Optional detailed description (used for plan-style items). */
-  description: z.string().optional(),
+  description: z.string().nullish(),
   /** Optional list of files involved (used for plan-style items). */
-  files: z.array(z.string()).optional(),
+  files: z.array(z.string()).nullish(),
 });
 export type TodoItem = z.infer<typeof TodoItemSchema>;
 

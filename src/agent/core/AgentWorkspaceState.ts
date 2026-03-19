@@ -3,10 +3,12 @@ import { z } from 'zod';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import {
   TodoItemSchema,
+  PlanSchema,
   FileLocationSchema,
   type TodoItem,
   type FileLocation,
 } from '@shared/schemas';
+import { planToTodos } from '@shared/schemas/plan';
 import { FlattenedEditRecordSchema } from '@tools/result';
 import { pathToLocation } from '@utils/files';
 
@@ -330,8 +332,8 @@ export class TaskState {
   }
 
   private _arraysEqual(
-    a: string[] | undefined,
-    b: string[] | undefined,
+    a: string[] | null | undefined,
+    b: string[] | null | undefined,
   ): boolean {
     if (a === b) return true;
     if (!a || !b) return a === b;
@@ -356,22 +358,74 @@ export const TodoState = TaskState;
  */
 export type PlanState = TaskState;
 
-export const AgentWorkspaceStateSnapshotSchema = z.object({
-  assembly: ResponseAssemblyStateSchema.prefault({
-    lastResponse: '',
-    accumulatedOutput: '',
-  }),
-  media: MediaAttachmentStateSnapshotSchema.prefault({ files: [] }),
-  reasoning: ReasoningCacheStateSchema.prefault({
-    thinkingBlocks: [],
-    thinkingAdded: false,
-  }),
-  interactions: FileInteractionStateSnapshotSchema.prefault({
-    readFiles: [],
-    edits: [],
-  }),
-  tasks: TaskStateSnapshotSchema.prefault({ todos: [], summary: null }),
+/**
+ * Legacy snapshot schema for pre-unification snapshots that stored
+ * `todos` and `plan` as separate top-level keys.
+ */
+const LegacyTodoSnapshotSchema = z.object({
+  todos: z.array(TodoItemSchema).prefault([]),
 });
+const LegacyPlanSnapshotSchema = z.object({
+  plan: PlanSchema.nullable().prefault(null),
+});
+
+/**
+ * Migrates legacy `todos`/`plan` snapshot fields into the unified `tasks` shape.
+ * If a legacy `plan` is present, its steps are converted to todo items and
+ * merged (plan items take precedence since they carry richer metadata).
+ */
+function migrateLegacyTaskState(raw: Record<string, unknown>): TaskStateSnapshot {
+  const legacyTodos = LegacyTodoSnapshotSchema.parse(raw.todos ?? {});
+  const legacyPlan = LegacyPlanSnapshotSchema.parse(raw.plan ?? {});
+
+  if (legacyPlan.plan) {
+    const { summary, todos } = planToTodos(legacyPlan.plan);
+    return { todos, summary };
+  }
+
+  return { todos: legacyTodos.todos, summary: null };
+}
+
+export const AgentWorkspaceStateSnapshotSchema = z
+  .object({
+    assembly: ResponseAssemblyStateSchema.prefault({
+      lastResponse: '',
+      accumulatedOutput: '',
+    }),
+    media: MediaAttachmentStateSnapshotSchema.prefault({ files: [] }),
+    reasoning: ReasoningCacheStateSchema.prefault({
+      thinkingBlocks: [],
+      thinkingAdded: false,
+    }),
+    interactions: FileInteractionStateSnapshotSchema.prefault({
+      readFiles: [],
+      edits: [],
+    }),
+    tasks: TaskStateSnapshotSchema.prefault({ todos: [], summary: null }),
+    // Legacy fields — kept for migration (passthrough only)
+    todos: z.unknown().optional(),
+    plan: z.unknown().optional(),
+  })
+  .transform((parsed) => {
+    // If the new `tasks` field has data, use it as-is (new format).
+    // If it's empty/default but legacy fields exist, migrate them.
+    const hasNewTasks = parsed.tasks.todos.length > 0 || parsed.tasks.summary !== null;
+    const hasLegacyData =
+      parsed.todos !== undefined || parsed.plan !== undefined;
+
+    const tasks =
+      !hasNewTasks && hasLegacyData
+        ? migrateLegacyTaskState(parsed as Record<string, unknown>)
+        : parsed.tasks;
+
+    return {
+      assembly: parsed.assembly,
+      media: parsed.media,
+      reasoning: parsed.reasoning,
+      interactions: parsed.interactions,
+      tasks,
+    };
+  });
 
 export type AgentWorkspaceSnapshot = z.output<
   typeof AgentWorkspaceStateSnapshotSchema
