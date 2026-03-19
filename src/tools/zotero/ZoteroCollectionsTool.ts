@@ -89,28 +89,43 @@ function buildTree(collections: BbtCollection[]): CollectionNode[] {
 }
 
 /**
- * Format a collection tree as indented text with keys.
+ * Count all nodes in a collection tree (including nested children).
  */
-function formatTree(nodes: CollectionNode[], indent: number = 0): string[] {
+function countNodes(nodes: CollectionNode[]): number {
+  let count = 0;
+  for (const node of nodes) {
+    count += 1 + countNodes(node.children);
+  }
+  return count;
+}
+
+/**
+ * Format a collection tree as indented text with keys.
+ * Uses prefix-passing to correctly indent arbitrarily deep trees.
+ */
+function formatTree(
+  nodes: CollectionNode[],
+  indent: number = 0,
+  parentPrefix: string = '',
+): string[] {
   const lines: string[] = [];
-  const prefix = '  '.repeat(indent);
+  const basePrefix = indent > 0 ? parentPrefix : '  '.repeat(indent);
 
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
     const isLast = i === nodes.length - 1;
     const connector = indent === 0 ? '' : isLast ? '└── ' : '├── ';
-    const childPrefix = indent === 0 ? '' : isLast ? '    ' : '│   ';
+    const childContinuation = indent === 0 ? '' : isLast ? '    ' : '│   ';
 
-    lines.push(`${prefix}${connector}${node.name}/ [${node.key}]`);
+    lines.push(`${basePrefix}${connector}${node.name}/ [${node.key}]`);
 
     if (node.children.length > 0) {
       const childLines = formatTree(
         node.children,
-        0, // reset indent — we handle prefix manually
+        1,
+        `${basePrefix}${childContinuation}`,
       );
-      for (const line of childLines) {
-        lines.push(`${prefix}${childPrefix}${line}`);
-      }
+      lines.push(...childLines);
     }
   }
 
@@ -247,6 +262,7 @@ export class ZoteroCollectionsTool extends defineTool({
 
     const outputParts: string[] = [];
     let totalCollections = 0;
+    let librariesWithResults = 0;
 
     for (const lib of targetLibraries) {
       const collections = lib.collections ?? [];
@@ -260,7 +276,8 @@ export class ZoteroCollectionsTool extends defineTool({
 
       if (tree.length === 0) continue;
 
-      totalCollections += collections.length;
+      totalCollections += countNodes(tree);
+      librariesWithResults++;
       outputParts.push(`Library: ${lib.name}`);
       outputParts.push(...formatTree(tree, 1));
     }
@@ -275,7 +292,7 @@ export class ZoteroCollectionsTool extends defineTool({
 
     const context = query ? ` matching "${query}"` : '';
     return {
-      summary: `Found ${totalCollections} collection${totalCollections === 1 ? '' : 's'}${context} across ${targetLibraries.length} ${targetLibraries.length === 1 ? 'library' : 'libraries'}.`,
+      summary: `Found ${totalCollections} collection${totalCollections === 1 ? '' : 's'}${context} across ${librariesWithResults} ${librariesWithResults === 1 ? 'library' : 'libraries'}.`,
       output: outputParts.join('\n'),
     };
   }
