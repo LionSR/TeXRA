@@ -133,13 +133,19 @@ export function getProviderDisplayName(
   return defaultName;
 }
 
-/** Resolve key URL for a provider, accounting for DashScope China region. */
+/** Resolve key URL for a provider, accounting for region toggles. */
 export function getProviderKeyUrl(
   provider: string,
   defaultUrl: string,
 ): string {
   if (provider === 'dashscope' && getDashScopeUseChina()) {
     return BAILIAN_KEY_URL;
+  }
+  if (provider === 'minimax' && getMiniMaxUseChina()) {
+    return 'https://platform.minimaxi.com/';
+  }
+  if (provider === 'glm' && !getGLMUseChina()) {
+    return 'https://z.ai/';
   }
   return defaultUrl;
 }
