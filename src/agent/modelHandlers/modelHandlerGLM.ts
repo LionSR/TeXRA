@@ -27,17 +27,14 @@ export class ModelHandlerGLM extends ModelHandlerOpenAI {
   }
 
   /**
-   * GLM models require explicit `thinking` parameter to enable/disable reasoning.
-   * Thinking models (e.g. GLM-4.5) need it enabled; non-thinking variants need
-   * it disabled. Models without reasoning support return undefined (no parameter sent).
+   * GLM models require explicit `thinking` parameter to control reasoning.
+   * Thinking models (e.g. GLM-4.5) need it enabled; non-thinking variants
+   * get it explicitly disabled to prevent unexpected reasoning activation.
    */
-  protected override getThinkingParameter():
-    | { type: 'enabled' | 'disabled' }
-    | undefined {
-    if (this.capabilities.supportsReasoning) {
-      return { type: 'enabled' };
-    }
-    return undefined;
+  protected override getThinkingParameter(): { type: 'enabled' | 'disabled' } {
+    return this.capabilities.supportsReasoning
+      ? { type: 'enabled' }
+      : { type: 'disabled' };
   }
 
   /**

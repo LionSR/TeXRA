@@ -28,9 +28,15 @@ import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils'
  */
 export class ModelHandlerMiniMax extends ModelHandlerOpenAI {
   /**
-   * MiniMax requires content to be converted to strings.
+   * MiniMax requires content to be converted to strings for non-vision models.
+   * Vision models use standard OpenAI image_url format.
    */
-  protected override getMessageNormalizationOptions(): NormalizeOpenAIMessageContentOptions {
+  protected override getMessageNormalizationOptions():
+    | NormalizeOpenAIMessageContentOptions
+    | undefined {
+    if (this.capabilities.supportsVision) {
+      return undefined;
+    }
     return { convertContentToString: true };
   }
 }
