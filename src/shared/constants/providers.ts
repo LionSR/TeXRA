@@ -215,7 +215,7 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
       description:
         'Use the China region endpoint (api.minimaxi.com) instead of international (api.minimax.io). API keys are region-specific — you must obtain a key from the matching region.',
       warning:
-        'International keys do not work with the China endpoint, and vice versa.',
+        'International keys do not work with the China endpoint, and vice versa. Coding Plan keys are also region-specific.',
       warningUrl: 'https://platform.minimax.io/',
       warningUrlLabel: 'Get API key',
       globalStateKey: GlobalStateKey.MINIMAX_USE_CHINA,
@@ -230,6 +230,15 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
       warningUrl: 'https://open.bigmodel.cn/',
       warningUrlLabel: 'BigModel console',
       globalStateKey: GlobalStateKey.GLM_USE_CHINA,
+    },
+    {
+      key: GlobalStateKey.GLM_CODING_PLAN,
+      label: 'Coding Plan',
+      description:
+        'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
+      warningUrl: 'https://z.ai/subscribe',
+      warningUrlLabel: 'Subscribe',
+      globalStateKey: GlobalStateKey.GLM_CODING_PLAN,
     },
   ],
 };

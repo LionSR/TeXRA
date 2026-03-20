@@ -173,6 +173,17 @@ export function getGLMUseChina(): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Coding plan settings (globalSM-backed)
+// ---------------------------------------------------------------------------
+
+/** Whether GLM is set to use Coding Plan (subscription-based API access). */
+export function getGLMCodingPlan(): boolean {
+  return (
+    globalSM?.get<boolean>(GlobalStateKey.GLM_CODING_PLAN, false) ?? false
+  );
+}
+
+// ---------------------------------------------------------------------------
 // WebSocket transport setting (globalSM-backed)
 // ---------------------------------------------------------------------------
 

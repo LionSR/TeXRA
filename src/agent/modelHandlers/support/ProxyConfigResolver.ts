@@ -6,6 +6,7 @@ import {
   getDashScopeUseChina,
   getMiniMaxUseChina,
   getGLMUseChina,
+  getGLMCodingPlan,
 } from '@utils/config/providerConfig';
 
 // NOTE: getProviderEndpoint reads from globalSM (VS Code global state), which is
@@ -171,6 +172,7 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
 
   // MiniMax base URL depends on the China/international region toggle
   // China: api.minimaxi.com (note the extra 'i'), International: api.minimax.io
+  // Note: Coding Plan uses the same endpoint but requires a separate API key
   if (config.provider === ModelProvider.MINIMAX) {
     const domain = getMiniMaxUseChina()
       ? 'api.minimaxi.com'
@@ -180,11 +182,13 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
 
   // GLM base URL depends on the China/international region toggle
   // China: open.bigmodel.cn, International: api.z.ai
+  // Coding Plan uses /api/coding/paas/v4 path instead of /api/paas/v4
   if (config.provider === ModelProvider.GLM) {
     const domain = getGLMUseChina()
       ? 'open.bigmodel.cn'
       : 'api.z.ai';
-    return `https://${domain}/api/paas/v4`;
+    const path = getGLMCodingPlan() ? '/api/coding/paas/v4' : '/api/paas/v4';
+    return `https://${domain}${path}`;
   }
 
   return BASE_URLS[config.provider];

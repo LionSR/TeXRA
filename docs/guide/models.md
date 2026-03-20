@@ -77,6 +77,7 @@ MiniMax uses interleaved thinking (chain-of-thought woven into responses). API k
 
 - **International**: Get your API key at [platform.minimax.io](https://platform.minimax.io/)
 - **China**: Get your API key at [platform.minimaxi.com](https://platform.minimaxi.com/)
+- **Coding Plan**: MiniMax offers monthly subscription plans ($10/$20/$50/mo) as an alternative to pay-as-you-go. Coding Plan keys are **not interchangeable** with standard API keys — enter your Coding Plan key via "Set API Key" as usual. [Subscribe here](https://platform.minimax.io/subscribe/coding-plan).
 
 ## GLM (Zhipu AI / Z.AI) Models
 
@@ -92,6 +93,7 @@ GLM models support thinking mode (reasoning is shown inline). The API uses a non
 
 - **International (Z.AI)**: Get your API key at [z.ai](https://z.ai/) — endpoint: api.z.ai
 - **China (BigModel)**: Get your API key at [open.bigmodel.cn](https://open.bigmodel.cn/) — endpoint: open.bigmodel.cn (default)
+- **Coding Plan**: GLM offers monthly subscription plans as an alternative to pay-as-you-go, with access to all GLM models. Coding Plan uses a separate endpoint (`/api/coding/paas/v4`). Enable the "Coding Plan" toggle in the Models tab. [Subscribe here](https://z.ai/subscribe).
 
 ## Grok / xAI Models
 

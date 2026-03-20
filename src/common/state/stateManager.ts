@@ -75,6 +75,9 @@ export enum GlobalStateKey {
   MINIMAX_USE_CHINA = 'texra.minimax.useChina',
   GLM_USE_CHINA = 'texra.glm.useChina',
 
+  // Coding plan settings
+  GLM_CODING_PLAN = 'texra.glm.codingPlan',
+
   // Transport settings
   WEBSOCKET_OPENAI = 'texra.websocket.openai',
 }
