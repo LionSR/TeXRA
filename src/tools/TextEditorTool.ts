@@ -25,9 +25,8 @@ import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { READ_FILE_MAX_LINES } from './ReadTool';
 import { ToolResult, ToolError } from './result';
-import { formatLinesWithNumbers, requireField } from './utils';
+import { formatFileView, formatLinesWithNumbers, requireField } from './utils';
 
 // Constants
 const CHANNEL = 'TextEditorTool';
@@ -258,76 +257,18 @@ export class TextEditorTool extends defineTool({
         endIndex = endLine === -1 ? totalLines : endLine;
       }
 
-      const selected = lines.slice(startIndex, endIndex);
-      const truncated = selected.length > READ_FILE_MAX_LINES;
-      const visibleLines = truncated
-        ? selected.slice(0, READ_FILE_MAX_LINES)
-        : selected;
-      const visibleCount = visibleLines.length;
-
       recordToolFileRead(filePath);
 
-      const segments: string[] = [];
-      if (visibleLines.length > 0) {
-        segments.push(
-          formatLinesWithNumbers(visibleLines, startIndex + 1).join('\n'),
-        );
-      }
-      if (truncated) {
-        segments.push(
-          `...(truncated, ${selected.length - READ_FILE_MAX_LINES} more lines)`,
-        );
-      }
-
-      const summary = this.buildViewSummary(filePath, {
-        totalLines,
-        visibleCount,
-        actualStartLine: visibleCount > 0 ? startIndex + 1 : null,
-        actualEndLine: visibleCount > 0 ? startIndex + visibleCount : null,
+      return formatFileView({
+        path: filePath,
+        lines,
+        startIndex,
+        endIndex,
         rangeProvided: viewRange != null,
       });
-
-      return {
-        summary,
-        output: segments.join('\n'),
-      };
     } catch (error) {
       rethrowWithContext(error, `Error viewing ${filePath}`);
     }
-  }
-
-  /** Build a summary string matching read_file's format. */
-  private buildViewSummary(
-    filePath: string,
-    params: {
-      totalLines: number;
-      visibleCount: number;
-      actualStartLine: number | null;
-      actualEndLine: number | null;
-      rangeProvided: boolean;
-    },
-  ): string {
-    const { totalLines, visibleCount, actualStartLine, actualEndLine, rangeProvided } = params;
-
-    if (visibleCount === 0) {
-      const reason = totalLines === 0 ? 'file is empty' : 'no lines in requested range';
-      return `Read ${filePath} (${reason})`;
-    }
-
-    const startLine = actualStartLine ?? 1;
-    const endLine = actualEndLine ?? startLine + visibleCount - 1;
-    const isFullRead =
-      !rangeProvided && startLine === 1 && endLine === totalLines;
-
-    if (isFullRead) {
-      return `Read ${filePath}`;
-    }
-
-    const rangeLabel =
-      startLine === endLine
-        ? `line ${startLine}`
-        : `lines ${startLine}-${endLine}`;
-    return `Read ${rangeLabel} of ${filePath}`;
   }
 
   private async create(filePath: string, content: string): Promise<ToolResult> {

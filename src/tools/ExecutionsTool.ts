@@ -48,9 +48,8 @@ import { StorageFS } from '@utils/files';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 import { ToolError, type ToolResult } from './result';
-import { READ_FILE_MAX_LINES } from './ReadTool';
 import { defineTool } from './core/define';
-import { formatLinesWithNumbers } from './utils';
+import { formatFileView } from './utils';
 
 // ============================================================================
 // Category-aware field filtering
@@ -881,48 +880,14 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     const requestedEnd = viewRange?.[1] ?? totalLines;
     const startIndex = Math.min(Math.max(requestedStart - 1, 0), totalLines);
     const endIndex = Math.min(requestedEnd, totalLines);
-    const selected = lines.slice(startIndex, endIndex);
-    const truncated = selected.length > READ_FILE_MAX_LINES;
-    const visibleLines = truncated
-      ? selected.slice(0, READ_FILE_MAX_LINES)
-      : selected;
-    const visibleCount = visibleLines.length;
 
-    const segments: string[] = [];
-    if (visibleLines.length > 0) {
-      segments.push(
-        formatLinesWithNumbers(visibleLines, startIndex + 1).join('\n'),
-      );
-    }
-    if (truncated) {
-      segments.push(
-        `...(truncated, ${selected.length - READ_FILE_MAX_LINES} more lines)`,
-      );
-    }
-
-    // Build summary matching read_file format
-    let summary: string;
-    if (visibleCount === 0) {
-      const reason =
-        totalLines === 0 ? 'file is empty' : 'no lines in requested range';
-      summary = `Read ${displayPath} (${reason})`;
-    } else {
-      const startLine = startIndex + 1;
-      const endLine = startIndex + visibleCount;
-      const isFullRead =
-        !viewRange && startLine === 1 && endLine === totalLines;
-      if (isFullRead) {
-        summary = `Read ${displayPath}`;
-      } else {
-        const rangeLabel =
-          startLine === endLine
-            ? `line ${startLine}`
-            : `lines ${startLine}-${endLine}`;
-        summary = `Read ${rangeLabel} of ${displayPath}`;
-      }
-    }
-
-    return { summary, output: segments.join('\n') };
+    return formatFileView({
+      path: displayPath,
+      lines,
+      startIndex,
+      endIndex,
+      rangeProvided: viewRange != null,
+    });
   }
 
   private formatSize(bytes: number): string {

@@ -6,7 +6,11 @@ import { z } from 'zod';
 
 // Local imports - tools
 import type { ToolResult } from '@tools/result';
-import { buildFileAttachment, formatLinesWithNumbers } from '@tools/utils';
+import {
+  buildFileAttachment,
+  formatFileView,
+  READ_FILE_MAX_LINES,
+} from '@tools/utils';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import {
   WorkspaceFS,
@@ -19,7 +23,8 @@ import { splitContentLines } from '@utils/text/stringUtils';
 // Local file imports
 import { defineTool } from './core/define';
 
-export const READ_FILE_MAX_LINES = 2000;
+// Re-export so existing consumers can keep importing from here.
+export { READ_FILE_MAX_LINES } from '@tools/utils';
 
 /**
  * Schema for range parameter with preprocessing to handle array format.
@@ -53,18 +58,6 @@ const ReadInputSchema = z.strictObject({
 
 export type ReadInput = z.infer<typeof ReadInputSchema>;
 
-interface BuildSummaryParams {
-  path: string;
-  totalLines: number;
-  visibleCount: number;
-  actualStartLine: number | null;
-  actualEndLine: number | null;
-  requestedEndLine: number;
-  truncated: boolean;
-  rangeProvided: boolean;
-  rangeEndExceeded: boolean;
-}
-
 export class ReadFileTool extends defineTool({
   name: 'read_file',
   description:
@@ -83,7 +76,6 @@ export class ReadFileTool extends defineTool({
     recordToolFileRead(input.path);
 
     const totalLines = lines.length;
-
     const requestedStartLine = input.range?.start ?? 1;
     const requestedEndLine = this.computeRequestedEndLine(
       input.range,
@@ -93,93 +85,29 @@ export class ReadFileTool extends defineTool({
 
     // Convert the requested 1-based range into zero-based indices and clamp them to the
     // available file length so callers can safely request windows beyond the file bounds.
-    // If startIndex >= totalLines, slice will return empty array (which is correct behavior).
     const startIndex = Math.min(requestedStartLine - 1, totalLines);
-    const endIndexExclusive = Math.min(
+    const endIndex = Math.min(
       Math.max(requestedEndLine, requestedStartLine),
       totalLines,
     );
 
-    const selectedLines = lines.slice(startIndex, endIndexExclusive);
-    const truncated = selectedLines.length > READ_FILE_MAX_LINES;
-    const visibleLines = truncated
-      ? selectedLines.slice(0, READ_FILE_MAX_LINES)
-      : selectedLines;
-    const visibleCount = visibleLines.length;
+    // Append a range-exceeded warning when the caller asked beyond EOF
+    const rangeEndExceeded =
+      input.range?.end != null && input.range.end > totalLines;
+    const suffix = rangeEndExceeded
+      ? ` (requested end ${requestedEndLine} exceeds file length ${totalLines})`
+      : '';
 
-    const segments: string[] = [];
-    if (visibleLines.length > 0) {
-      const numberedLines = formatLinesWithNumbers(
-        visibleLines,
-        startIndex + 1,
-      );
-      segments.push(numberedLines.join('\n'));
-    }
-    if (truncated) {
-      segments.push(
-        `...(truncated, ${selectedLines.length - READ_FILE_MAX_LINES} more lines)`,
-      );
-    }
-
-    const actualStartLine = visibleCount > 0 ? startIndex + 1 : null;
-    const actualEndLine = visibleCount > 0 ? startIndex + visibleCount : null;
-
-    const summary = this.buildSummary({
+    const result = formatFileView({
       path: input.path,
-      totalLines,
-      visibleCount,
-      actualStartLine,
-      actualEndLine,
-      requestedEndLine,
-      truncated,
+      lines,
+      startIndex,
+      endIndex,
       rangeProvided: Boolean(input.range),
-
-      rangeEndExceeded:
-        input.range?.end != null && input.range.end > totalLines,
+      summarySuffix: suffix,
     });
 
-    return {
-      summary,
-      output: segments.join('\n'),
-    };
-  }
-
-  private buildSummary({
-    path: filePath,
-    totalLines,
-    visibleCount,
-    actualStartLine,
-    actualEndLine,
-    requestedEndLine,
-    truncated,
-    rangeProvided,
-    rangeEndExceeded,
-  }: BuildSummaryParams): string {
-    if (visibleCount === 0) {
-      const reason =
-        totalLines === 0 ? 'file is empty' : 'no lines in requested range';
-      return `Read ${filePath} (${reason})`;
-    }
-
-    const startLine = actualStartLine ?? 1;
-    const endLine = actualEndLine ?? startLine + visibleCount - 1;
-    const isFullRead =
-      !rangeProvided && !truncated && startLine === 1 && endLine === totalLines;
-
-    if (isFullRead) {
-      return `Read ${filePath}`;
-    }
-
-    const rangeLabel =
-      startLine === endLine
-        ? `line ${startLine}`
-        : `lines ${startLine}-${endLine}`;
-    const base = `Read ${rangeLabel} of ${filePath}`;
-
-    if (rangeEndExceeded) {
-      return `${base} (requested end ${requestedEndLine} exceeds file length ${totalLines})`;
-    }
-    return base;
+    return result;
   }
 
   private computeRequestedEndLine(

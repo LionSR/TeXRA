@@ -14,13 +14,13 @@ import { splitContentLines } from '@utils/text/stringUtils';
 // Local imports - tool core
 import { defineTool } from '../core/define';
 import { ToolError, type ToolResult } from '../result';
-import { READ_FILE_MAX_LINES } from '../ReadTool';
 import {
   recordToolFileRead,
   requireFileReadForEdit,
 } from '../fileInteractions';
 import {
   countOccurrences,
+  formatFileView,
   formatLinesWithNumbers,
   requireField,
 } from '../utils';
@@ -257,80 +257,24 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const [start, end] = viewRange ?? [1, totalLines];
     const startIndex = Math.min(Math.max(start - 1, 0), totalLines);
     const endIndex = Math.min(end, totalLines);
-    const selected = lines.slice(startIndex, endIndex);
-    const truncated = selected.length > READ_FILE_MAX_LINES;
-    const visibleLines = truncated
-      ? selected.slice(0, READ_FILE_MAX_LINES)
-      : selected;
-    const visibleCount = visibleLines.length;
 
-    const segments: string[] = [];
-    if (visibleLines.length > 0) {
-      segments.push(
-        formatLinesWithNumbers(visibleLines, startIndex + 1).join('\n'),
-      );
-    }
-    if (truncated) {
-      segments.push(
-        `...(truncated, ${selected.length - READ_FILE_MAX_LINES} more lines)`,
-      );
-    }
-
-    const summary = this.buildViewSummary(inputPath, meta, {
-      totalLines,
-      visibleCount,
-      actualStartLine: visibleCount > 0 ? startIndex + 1 : null,
-      actualEndLine: visibleCount > 0 ? startIndex + visibleCount : null,
-      rangeProvided: viewRange != null,
-    });
-
-    return {
-      summary,
-      output: segments.join('\n'),
-    };
-  }
-
-  /** Build a summary string matching read_file's format, with optional memory metadata. */
-  private buildViewSummary(
-    inputPath: string,
-    meta: MemoryFileMeta | null,
-    params: {
-      totalLines: number;
-      visibleCount: number;
-      actualStartLine: number | null;
-      actualEndLine: number | null;
-      rangeProvided: boolean;
-    },
-  ): string {
-    const { totalLines, visibleCount, actualStartLine, actualEndLine, rangeProvided } = params;
-
-    // Build metadata suffix
+    // Build metadata suffix for the summary
     const metaParts: string[] = [];
     if (meta) {
       metaParts.push(`last modified by: ${formatAttribution(meta)}`);
       if (meta.pinned) metaParts.push('pinned');
     }
-    const metaSuffix = metaParts.length > 0 ? ` (${metaParts.join(', ')})` : '';
+    const summarySuffix =
+      metaParts.length > 0 ? ` (${metaParts.join(', ')})` : '';
 
-    if (visibleCount === 0) {
-      const reason = totalLines === 0 ? 'file is empty' : 'no lines in requested range';
-      return `Read ${inputPath} (${reason})${metaSuffix}`;
-    }
-
-    const startLine = actualStartLine ?? 1;
-    const endLine = actualEndLine ?? startLine + visibleCount - 1;
-    const isFullRead =
-      !rangeProvided && startLine === 1 && endLine === totalLines;
-
-    if (isFullRead) {
-      return `Read ${inputPath}${metaSuffix}`;
-    }
-
-    const rangeLabel =
-      startLine === endLine
-        ? `line ${startLine}`
-        : `lines ${startLine}-${endLine}`;
-    return `Read ${rangeLabel} of ${inputPath}${metaSuffix}`;
+    return formatFileView({
+      path: inputPath,
+      lines,
+      startIndex,
+      endIndex,
+      rangeProvided: viewRange != null,
+      summarySuffix,
+    });
   }
 
   private async create(
