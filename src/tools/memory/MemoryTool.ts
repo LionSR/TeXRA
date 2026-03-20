@@ -20,6 +20,7 @@ import {
 } from '../fileInteractions';
 import {
   countOccurrences,
+  formatFileView,
   formatLinesWithNumbers,
   requireField,
 } from '../utils';
@@ -100,7 +101,8 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       case 'view':
         return this.view(
           this.canonicalize(requireField(input.path, 'path', input.command)),
-          input.view_range ?? undefined,
+          // Schema enforces length 2; cast since Zod infers number[]
+          input.view_range as [number, number] | undefined,
         );
       case 'create':
         return this.create(
@@ -210,7 +212,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
   private async view(
     inputPath: string,
-    viewRange?: number[],
+    viewRange?: [number, number],
   ): Promise<ToolResult> {
     const resolvedPath = this.resolveMemoryPath(inputPath);
     const exists = await StorageFS.exists(resolvedPath);
@@ -252,25 +254,21 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       );
     }
 
-    const [start, end] = viewRange ?? [1, lines.length];
-    const startIndex = Math.max(start - 1, 0);
-    const endIndex = Math.min(end, lines.length);
-    const selected = lines.slice(startIndex, endIndex);
-    const numbered = formatLinesWithNumbers(selected, startIndex + 1);
-
+    // Build metadata suffix for the summary
     const metaParts: string[] = [];
     if (meta) {
       metaParts.push(`last modified by: ${formatAttribution(meta)}`);
-      if (meta.pinned) metaParts.push('[pinned]');
+      if (meta.pinned) metaParts.push('pinned');
     }
-    const header = metaParts.length
-      ? `Here's the content of ${inputPath} (${metaParts.join(', ')}) with line numbers:`
-      : `Here's the content of ${inputPath} with line numbers:`;
+    const summarySuffix =
+      metaParts.length > 0 ? ` (${metaParts.join(', ')})` : '';
 
-    return {
-      summary: `Viewed file: ${inputPath}`,
-      output: [header, ...numbered].join('\n'),
-    };
+    return formatFileView({
+      path: inputPath,
+      lines,
+      viewRange,
+      summarySuffix,
+    });
   }
 
   private async create(
@@ -342,7 +340,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
     return {
       summary: `Replaced text in: ${inputPath}`,
-      output: `The memory file has been edited.\nHere's the content of ${inputPath} with line numbers:\n${numbered.join('\n')}`,
+      output: `The file has been edited.\n${numbered.join('\n')}`,
     };
   }
 
