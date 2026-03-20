@@ -330,7 +330,8 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       return this.readFile(
         executionId,
         rest.join('/'),
-        input.view_range ?? undefined,
+        // Schema enforces length 2; cast since Zod infers number[]
+        input.view_range as [number, number] | undefined,
       );
     }
 
@@ -858,7 +859,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
   private async readFile(
     executionId: ExecutionId,
     filePath: string,
-    viewRange?: number[],
+    viewRange?: [number, number],
   ): Promise<ToolResult> {
     const displayPath = `/executions/${executionId}/files/${filePath}`;
     const fullPath = await resolveStoragePath(executionId, filePath);

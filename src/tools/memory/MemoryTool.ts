@@ -101,7 +101,8 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       case 'view':
         return this.view(
           this.canonicalize(requireField(input.path, 'path', input.command)),
-          input.view_range ?? undefined,
+          // Schema enforces length 2; cast since Zod infers number[]
+          input.view_range as [number, number] | undefined,
         );
       case 'create':
         return this.create(
@@ -211,7 +212,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
   private async view(
     inputPath: string,
-    viewRange?: number[],
+    viewRange?: [number, number],
   ): Promise<ToolResult> {
     const resolvedPath = this.resolveMemoryPath(inputPath);
     const exists = await StorageFS.exists(resolvedPath);

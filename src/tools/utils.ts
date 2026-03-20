@@ -129,7 +129,7 @@ export interface FileViewOptions {
    * When omitted or nullish, the full file is shown.
    * Values are clamped to the file bounds automatically.
    */
-  viewRange?: number[] | null;
+  viewRange?: [number, number] | null;
   /** Optional suffix appended to the summary (e.g., memory metadata). */
   summarySuffix?: string;
 }
@@ -154,11 +154,10 @@ export function formatFileView({
   const rangeProvided = viewRange != null;
   const startLine = Math.max(viewRange?.[0] ?? 1, 1);
   const endLine = Math.min(viewRange?.[1] ?? totalLines, totalLines);
-  const selected = lines.slice(startLine - 1, endLine);
-  const truncated = selected.length > READ_FILE_MAX_LINES;
-  const visibleLines = truncated
-    ? selected.slice(0, READ_FILE_MAX_LINES)
-    : selected;
+  const rangeSize = Math.max(endLine - startLine + 1, 0);
+  const truncated = rangeSize > READ_FILE_MAX_LINES;
+  const sliceEnd = startLine - 1 + Math.min(rangeSize, READ_FILE_MAX_LINES);
+  const visibleLines = lines.slice(startLine - 1, sliceEnd);
   const visibleCount = visibleLines.length;
 
   // -- output ---------------------------------------------------------------
@@ -170,7 +169,7 @@ export function formatFileView({
   }
   if (truncated) {
     segments.push(
-      `...(truncated, ${selected.length - READ_FILE_MAX_LINES} more lines)`,
+      `...(truncated, ${rangeSize - READ_FILE_MAX_LINES} more lines)`,
     );
   }
 
