@@ -48,7 +48,9 @@ import { StorageFS } from '@utils/files';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 import { ToolError, type ToolResult } from './result';
+import { READ_FILE_MAX_LINES } from './ReadTool';
 import { defineTool } from './core/define';
+import { formatLinesWithNumbers } from './utils';
 
 // ============================================================================
 // Category-aware field filtering
@@ -858,27 +860,69 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     filePath: string,
     viewRange?: number[],
   ): Promise<ToolResult> {
+    const displayPath = `/executions/${executionId}/files/${filePath}`;
     const fullPath = await resolveStoragePath(executionId, filePath);
     if (!fullPath) {
-      throw new ToolError(
-        `File not found: /executions/${executionId}/files/${filePath}`,
-      );
+      throw new ToolError(`File not found: ${displayPath}`);
     }
 
     const stats = await StorageFS.stat(fullPath);
     if (isDirectory(stats.type)) {
       throw new ToolError(
-        `Path is a directory: /executions/${executionId}/files/${filePath}. Use without trailing path to list.`,
+        `Path is a directory: ${displayPath}. Use without trailing path to list.`,
       );
     }
 
     const content = await StorageFS.read(fullPath);
-    const output = this.applyViewRange(
-      `File: /executions/${executionId}/files/${filePath}\n\n${content}`,
-      viewRange,
-    );
+    const lines = content.split('\n');
+    const totalLines = lines.length;
 
-    return { output };
+    const requestedStart = viewRange?.[0] ?? 1;
+    const requestedEnd = viewRange?.[1] ?? totalLines;
+    const startIndex = Math.min(Math.max(requestedStart - 1, 0), totalLines);
+    const endIndex = Math.min(requestedEnd, totalLines);
+    const selected = lines.slice(startIndex, endIndex);
+    const truncated = selected.length > READ_FILE_MAX_LINES;
+    const visibleLines = truncated
+      ? selected.slice(0, READ_FILE_MAX_LINES)
+      : selected;
+    const visibleCount = visibleLines.length;
+
+    const segments: string[] = [];
+    if (visibleLines.length > 0) {
+      segments.push(
+        formatLinesWithNumbers(visibleLines, startIndex + 1).join('\n'),
+      );
+    }
+    if (truncated) {
+      segments.push(
+        `...(truncated, ${selected.length - READ_FILE_MAX_LINES} more lines)`,
+      );
+    }
+
+    // Build summary matching read_file format
+    let summary: string;
+    if (visibleCount === 0) {
+      const reason =
+        totalLines === 0 ? 'file is empty' : 'no lines in requested range';
+      summary = `Read ${displayPath} (${reason})`;
+    } else {
+      const startLine = startIndex + 1;
+      const endLine = startIndex + visibleCount;
+      const isFullRead =
+        !viewRange && startLine === 1 && endLine === totalLines;
+      if (isFullRead) {
+        summary = `Read ${displayPath}`;
+      } else {
+        const rangeLabel =
+          startLine === endLine
+            ? `line ${startLine}`
+            : `lines ${startLine}-${endLine}`;
+        summary = `Read ${rangeLabel} of ${displayPath}`;
+      }
+    }
+
+    return { summary, output: segments.join('\n') };
   }
 
   private formatSize(bytes: number): string {

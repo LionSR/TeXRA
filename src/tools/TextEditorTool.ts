@@ -21,11 +21,13 @@ import {
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
+import { READ_FILE_MAX_LINES } from './ReadTool';
 import { ToolResult, ToolError } from './result';
-import { requireField } from './utils';
+import { formatLinesWithNumbers, requireField } from './utils';
 
 // Constants
 const CHANNEL = 'TextEditorTool';
@@ -204,17 +206,21 @@ export class TextEditorTool extends defineTool({
           .join('\n');
 
         return {
-          summary: `View directory ${filePath}`,
-          output: `Here's the files and directories in ${filePath}:\n${formattedContents}`,
+          summary: `Listed directory: ${filePath}`,
+          output: formattedContents,
         };
       }
 
       // Expand tabs to 4 spaces for consistent display
-      let fileContent = (await WorkspaceFS.read(filePath)).replaceAll(
+      const fileContent = (await WorkspaceFS.read(filePath)).replaceAll(
         '\t',
         '    ',
       );
-      let initLine = 1;
+      const lines = splitContentLines(fileContent);
+      const totalLines = lines.length;
+
+      let startIndex = 0;
+      let endIndex = totalLines;
 
       if (viewRange) {
         if (
@@ -227,20 +233,18 @@ export class TextEditorTool extends defineTool({
           );
         }
 
-        const fileLines = fileContent.split('\n');
-        const numLines = fileLines.length;
         const [startLine, endLine] = viewRange;
 
-        if (startLine < 1 || startLine > numLines) {
+        if (startLine < 1 || startLine > totalLines) {
           throw new ToolError(
-            `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its first element \`${startLine}\` should be within the range of lines of the file: [1, ${numLines}]`,
+            `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its first element \`${startLine}\` should be within the range of lines of the file: [1, ${totalLines}]`,
           );
         }
 
         if (endLine !== -1) {
-          if (endLine > numLines) {
+          if (endLine > totalLines) {
             throw new ToolError(
-              `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its second element \`${endLine}\` should be smaller than the number of lines in the file: \`${numLines}\``,
+              `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its second element \`${endLine}\` should be smaller than the number of lines in the file: \`${totalLines}\``,
             );
           }
           if (endLine < startLine) {
@@ -250,28 +254,80 @@ export class TextEditorTool extends defineTool({
           }
         }
 
-        initLine = startLine;
-        const sliceEnd = endLine === -1 ? undefined : endLine;
-        fileContent = fileLines.slice(startLine - 1, sliceEnd).join('\n');
+        startIndex = startLine - 1;
+        endIndex = endLine === -1 ? totalLines : endLine;
       }
+
+      const selected = lines.slice(startIndex, endIndex);
+      const truncated = selected.length > READ_FILE_MAX_LINES;
+      const visibleLines = truncated
+        ? selected.slice(0, READ_FILE_MAX_LINES)
+        : selected;
+      const visibleCount = visibleLines.length;
 
       recordToolFileRead(filePath);
 
-      let summary: string;
-      if (viewRange) {
-        const endLabel = viewRange[1] === -1 ? 'end' : String(viewRange[1]);
-        summary = `View ${filePath} (${viewRange[0]}-${endLabel})`;
-      } else {
-        summary = `View ${filePath}`;
+      const segments: string[] = [];
+      if (visibleLines.length > 0) {
+        segments.push(
+          formatLinesWithNumbers(visibleLines, startIndex + 1).join('\n'),
+        );
       }
+      if (truncated) {
+        segments.push(
+          `...(truncated, ${selected.length - READ_FILE_MAX_LINES} more lines)`,
+        );
+      }
+
+      const summary = this.buildViewSummary(filePath, {
+        totalLines,
+        visibleCount,
+        actualStartLine: visibleCount > 0 ? startIndex + 1 : null,
+        actualEndLine: visibleCount > 0 ? startIndex + visibleCount : null,
+        rangeProvided: viewRange != null,
+      });
 
       return {
         summary,
-        output: this.makeOutput(fileContent, filePath, initLine),
+        output: segments.join('\n'),
       };
     } catch (error) {
       rethrowWithContext(error, `Error viewing ${filePath}`);
     }
+  }
+
+  /** Build a summary string matching read_file's format. */
+  private buildViewSummary(
+    filePath: string,
+    params: {
+      totalLines: number;
+      visibleCount: number;
+      actualStartLine: number | null;
+      actualEndLine: number | null;
+      rangeProvided: boolean;
+    },
+  ): string {
+    const { totalLines, visibleCount, actualStartLine, actualEndLine, rangeProvided } = params;
+
+    if (visibleCount === 0) {
+      const reason = totalLines === 0 ? 'file is empty' : 'no lines in requested range';
+      return `Read ${filePath} (${reason})`;
+    }
+
+    const startLine = actualStartLine ?? 1;
+    const endLine = actualEndLine ?? startLine + visibleCount - 1;
+    const isFullRead =
+      !rangeProvided && startLine === 1 && endLine === totalLines;
+
+    if (isFullRead) {
+      return `Read ${filePath}`;
+    }
+
+    const rangeLabel =
+      startLine === endLine
+        ? `line ${startLine}`
+        : `lines ${startLine}-${endLine}`;
+    return `Read ${rangeLabel} of ${filePath}`;
   }
 
   private async create(filePath: string, content: string): Promise<ToolResult> {
@@ -619,17 +675,10 @@ export class TextEditorTool extends defineTool({
 
   private makeOutput(
     content: string,
-    fileDescriptor: string,
+    _fileDescriptor: string,
     initLine: number = 1,
   ): string {
-    const numberedLines = content
-      .split('\n')
-      .map((line, index) => {
-        const lineNum = index + initLine;
-        return `${lineNum.toString().padStart(6)}\t${line}`;
-      })
-      .join('\n');
-
-    return `Here's the result of running \`cat -n\` on ${fileDescriptor}:\n${numberedLines}\n`;
+    const lines = content.split('\n');
+    return formatLinesWithNumbers(lines, initLine).join('\n') + '\n';
   }
 }
