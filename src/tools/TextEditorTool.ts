@@ -218,8 +218,8 @@ export class TextEditorTool extends defineTool({
       const lines = splitContentLines(fileContent);
       const totalLines = lines.length;
 
-      let startIndex = 0;
-      let endIndex = totalLines;
+      let viewStartLine = 1;
+      let viewEndLine = totalLines;
 
       if (viewRange) {
         if (
@@ -253,8 +253,8 @@ export class TextEditorTool extends defineTool({
           }
         }
 
-        startIndex = startLine - 1;
-        endIndex = endLine === -1 ? totalLines : endLine;
+        viewStartLine = startLine;
+        viewEndLine = endLine === -1 ? totalLines : endLine;
       }
 
       recordToolFileRead(filePath);
@@ -262,8 +262,8 @@ export class TextEditorTool extends defineTool({
       return formatFileView({
         path: filePath,
         lines,
-        startIndex,
-        endIndex,
+        startLine: viewStartLine,
+        endLine: viewEndLine,
         rangeProvided: viewRange != null,
       });
     } catch (error) {

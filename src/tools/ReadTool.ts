@@ -81,10 +81,10 @@ export class ReadFileTool extends defineTool({
       totalLines,
     );
 
-    // Convert the requested 1-based range into zero-based indices and clamp them to the
-    // available file length so callers can safely request windows beyond the file bounds.
-    const startIndex = Math.min(requestedStartLine - 1, totalLines);
-    const endIndex = Math.min(
+    // Clamp the 1-based range to the file bounds so callers can safely
+    // request windows beyond the file length.
+    const startLine = Math.min(requestedStartLine, totalLines + 1);
+    const endLine = Math.min(
       Math.max(requestedEndLine, requestedStartLine),
       totalLines,
     );
@@ -99,8 +99,8 @@ export class ReadFileTool extends defineTool({
     const result = formatFileView({
       path: input.path,
       lines,
-      startIndex,
-      endIndex,
+      startLine,
+      endLine,
       rangeProvided: Boolean(input.range),
       summarySuffix: suffix,
     });

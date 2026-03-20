@@ -254,7 +254,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       );
     }
 
-    const { startIndex, endIndex } = resolveViewRange(viewRange, lines.length);
+    const { startLine, endLine } = resolveViewRange(viewRange, lines.length);
 
     // Build metadata suffix for the summary
     const metaParts: string[] = [];
@@ -268,8 +268,8 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     return formatFileView({
       path: inputPath,
       lines,
-      startIndex,
-      endIndex,
+      startLine,
+      endLine,
       rangeProvided: viewRange != null,
       summarySuffix,
     });

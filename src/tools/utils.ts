@@ -120,18 +120,16 @@ export function formatLinesWithNumbers(
 // ============================================================================
 
 /**
- * Convert a 1-based `[start, end]` view range into clamped 0-based indices.
- * When no range is supplied, returns the full span `[0, totalLines)`.
+ * Convert a 1-based `[start, end]` view range into clamped 1-based line numbers.
+ * When no range is supplied, returns the full span `[1, totalLines]`.
  */
 export function resolveViewRange(
   viewRange: number[] | null | undefined,
   totalLines: number,
-): { startIndex: number; endIndex: number } {
-  const requestedStart = viewRange?.[0] ?? 1;
-  const requestedEnd = viewRange?.[1] ?? totalLines;
+): { startLine: number; endLine: number } {
   return {
-    startIndex: Math.min(Math.max(requestedStart - 1, 0), totalLines),
-    endIndex: Math.min(requestedEnd, totalLines),
+    startLine: Math.max(viewRange?.[0] ?? 1, 1),
+    endLine: Math.min(viewRange?.[1] ?? totalLines, totalLines),
   };
 }
 
@@ -140,10 +138,10 @@ export interface FileViewOptions {
   path: string;
   /** All lines of the file. */
   lines: string[];
-  /** 0-based start index (inclusive). */
-  startIndex: number;
-  /** 0-based end index (exclusive). */
-  endIndex: number;
+  /** 1-based start line (inclusive). */
+  startLine: number;
+  /** 1-based end line (inclusive). */
+  endLine: number;
   /** Whether the caller supplied an explicit range. */
   rangeProvided: boolean;
   /** Optional suffix appended to the summary (e.g., memory metadata). */
@@ -163,13 +161,13 @@ export interface FileViewResult {
 export function formatFileView({
   path: filePath,
   lines,
-  startIndex,
-  endIndex,
+  startLine,
+  endLine,
   rangeProvided,
   summarySuffix = '',
 }: FileViewOptions): FileViewResult {
   const totalLines = lines.length;
-  const selected = lines.slice(startIndex, endIndex);
+  const selected = lines.slice(startLine - 1, endLine);
   const truncated = selected.length > READ_FILE_MAX_LINES;
   const visibleLines = truncated
     ? selected.slice(0, READ_FILE_MAX_LINES)
@@ -180,7 +178,7 @@ export function formatFileView({
   const segments: string[] = [];
   if (visibleLines.length > 0) {
     segments.push(
-      formatLinesWithNumbers(visibleLines, startIndex + 1).join('\n'),
+      formatLinesWithNumbers(visibleLines, startLine).join('\n'),
     );
   }
   if (truncated) {
@@ -197,18 +195,17 @@ export function formatFileView({
       totalLines === 0 ? 'file is empty' : 'no lines in requested range';
     summary = `Read ${filePath} (${reason})`;
   } else {
-    const startLine = startIndex + 1;
-    const endLine = startIndex + visibleCount;
+    const lastVisibleLine = startLine + visibleCount - 1;
     const isFullRead =
-      !rangeProvided && !truncated && startLine === 1 && endLine === totalLines;
+      !rangeProvided && !truncated && startLine === 1 && lastVisibleLine === totalLines;
 
     if (isFullRead) {
       summary = `Read ${filePath}`;
     } else {
       const rangeLabel =
-        startLine === endLine
+        startLine === lastVisibleLine
           ? `line ${startLine}`
-          : `lines ${startLine}-${endLine}`;
+          : `lines ${startLine}-${lastVisibleLine}`;
       summary = `Read ${rangeLabel} of ${filePath}`;
     }
   }

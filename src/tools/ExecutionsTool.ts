@@ -875,13 +875,13 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
 
     const content = await StorageFS.read(fullPath);
     const lines = splitContentLines(content);
-    const { startIndex, endIndex } = resolveViewRange(viewRange, lines.length);
+    const { startLine, endLine } = resolveViewRange(viewRange, lines.length);
 
     return formatFileView({
       path: displayPath,
       lines,
-      startIndex,
-      endIndex,
+      startLine,
+      endLine,
       rangeProvided: viewRange != null,
     });
   }
