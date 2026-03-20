@@ -90,6 +90,9 @@ export function countOccurrences(haystack: string, needle: string): number {
   return count;
 }
 
+/** Maximum lines returned in a single file view before truncation. */
+export const READ_FILE_MAX_LINES = 2000;
+
 /** Default width for line number padding */
 const LINE_NUMBER_WIDTH = 6;
 
@@ -110,6 +113,97 @@ export function formatLinesWithNumbers(
     const prefix = lineNumber.toString().padStart(width, ' ');
     return `${prefix}\t${line}`;
   });
+}
+
+// ============================================================================
+// Shared file-view formatting
+// ============================================================================
+
+export interface FileViewOptions {
+  /** Display path used in the summary (e.g., "src/foo.ts" or "/memories/notes.md"). */
+  path: string;
+  /** All lines of the file. */
+  lines: string[];
+  /**
+   * Optional 1-based `[start, end]` (both inclusive) line range.
+   * When omitted or nullish, the full file is shown.
+   * Values are clamped to the file bounds automatically.
+   */
+  viewRange?: [number, number] | null;
+  /** Max visible lines before truncation. Defaults to READ_FILE_MAX_LINES (2000). */
+  maxLines?: number;
+  /** Optional suffix appended to the summary (e.g., memory metadata). */
+  summarySuffix?: string;
+}
+
+export interface FileViewResult {
+  output: string;
+  summary: string;
+}
+
+/**
+ * Shared pipeline for displaying file content with line numbers, truncation,
+ * and a standardised "Read …" summary.  Used by read_file, text_editor view,
+ * memory view, and executions readFile.
+ */
+export function formatFileView({
+  path: filePath,
+  lines,
+  viewRange,
+  maxLines = READ_FILE_MAX_LINES,
+  summarySuffix = '',
+}: FileViewOptions): FileViewResult {
+  const totalLines = lines.length;
+  const rangeProvided = viewRange != null;
+  const startLine = Math.max(viewRange?.[0] ?? 1, 1);
+  const endLine = Math.min(viewRange?.[1] ?? totalLines, totalLines);
+  const rangeSize = Math.max(endLine - startLine + 1, 0);
+  const truncated = rangeSize > maxLines;
+  const sliceEnd = startLine - 1 + Math.min(rangeSize, maxLines);
+  const visibleLines = lines.slice(startLine - 1, sliceEnd);
+  const visibleCount = visibleLines.length;
+
+  // -- output ---------------------------------------------------------------
+  const segments: string[] = [];
+  if (visibleLines.length > 0) {
+    segments.push(
+      formatLinesWithNumbers(visibleLines, startLine).join('\n'),
+    );
+  }
+  if (truncated) {
+    segments.push(
+      `...(truncated, ${rangeSize - maxLines} more lines)`,
+    );
+  }
+
+  // -- summary --------------------------------------------------------------
+  let summary: string;
+
+  if (visibleCount === 0) {
+    const reason =
+      totalLines === 0 ? 'file is empty' : 'no lines in requested range';
+    summary = `Read ${filePath} (${reason})`;
+  } else {
+    const lastVisibleLine = startLine + visibleCount - 1;
+    const isFullRead =
+      !rangeProvided && !truncated && startLine === 1 && lastVisibleLine === totalLines;
+
+    if (isFullRead) {
+      summary = `Read ${filePath}`;
+    } else {
+      const rangeLabel =
+        startLine === lastVisibleLine
+          ? `line ${startLine}`
+          : `lines ${startLine}-${lastVisibleLine}`;
+      summary = `Read ${rangeLabel} of ${filePath}`;
+    }
+  }
+
+  if (summarySuffix) {
+    summary += summarySuffix;
+  }
+
+  return { output: segments.join('\n'), summary };
 }
 
 /**
