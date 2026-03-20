@@ -35,7 +35,9 @@ import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
 // Local imports - latex
+import { extractBibliographyContext } from '@latex/extractBibliography';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
+import { tikzPictureManager } from '@latex/TikzPictureManager';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
@@ -70,6 +72,7 @@ import {
   formatSubagentProgress,
   formatFollowUpInstruction,
 } from '@tools/subagentResults';
+import { resolveAndFormat } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - memory
@@ -481,6 +484,18 @@ const WorkflowAgentInputSchema = z.object({
     .describe(
       'When true, automatically extracts figures referenced by the input LaTeX file(s) (via \\includegraphics, \\begin{overpic}) and attaches them as media files. Merges with any explicitly provided mediaFile/mediaFiles.',
     ),
+  extractTikz: z
+    .boolean()
+    .prefault(false)
+    .describe(
+      'When true, extracts TikZ figures from the input LaTeX file(s), compiles them into standalone PDFs, and attaches them as media files.',
+    ),
+  extractBibliography: z
+    .boolean()
+    .prefault(false)
+    .describe(
+      'When true, discovers .bib files referenced by the input LaTeX file(s) and attaches them as auxiliary files. Merges with any explicitly provided auxiliaryFile/auxiliaryFiles.',
+    ),
   outputFiles: z
     .array(z.string())
     .prefault([])
@@ -510,9 +525,13 @@ ${formatAgentList(getVisibleAgents('workflow'))}
 Available models: ${getVisibleModels().join(', ')}
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
-Set extractFigures=true to automatically extract figures referenced by the input LaTeX file(s) (\\includegraphics, \\begin{overpic}) and attach them as media. Merges with any explicit mediaFile/mediaFiles.
+Extraction attachments — automatically discover and attach assets from input LaTeX file(s):
+- extractFigures=true: Extract \\includegraphics/\\begin{overpic} figures and attach as media files.
+- extractTikz=true: Compile TikZ figures into standalone PDFs and attach as media files.
+- extractBibliography=true: Discover referenced .bib files and attach as auxiliary files.
+All extraction options merge with explicitly provided files and are non-fatal on failure.
 
-Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
+Example: agent=correct, inputFile=paper.tex, extractFigures=true, extractBibliography=true, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
@@ -581,16 +600,21 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
       throw new Error(`${missing.label} not found: ${missing.path}`);
     }
 
-    // Extract figures from input file(s) when requested
+    // Collect effective file lists — extraction options may add entries
     const effectiveMediaFile = input.mediaFile;
     const effectiveMediaFiles = [...input.mediaFiles];
+    const effectiveAuxiliaryFile = input.auxiliaryFile;
+    const effectiveAuxiliaryFiles = [...input.auxiliaryFiles];
 
+    const allInputTexFiles = [input.inputFile, ...input.inputFiles].filter(
+      (f) => f.endsWith('.tex'),
+    );
+
+    // Extract figures from input file(s) when requested
     if (input.extractFigures) {
-      const allInputFiles = [input.inputFile, ...input.inputFiles];
       const extractedPaths = new Set<string>();
 
-      for (const inputFilePath of allInputFiles) {
-        if (!inputFilePath.endsWith('.tex')) continue;
+      for (const inputFilePath of allInputTexFiles) {
         try {
           const location = pathToLocation(inputFilePath);
           const figurePaths =
@@ -604,7 +628,6 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
             extractedPaths.add(workspaceRelative);
           }
         } catch {
-          // Figure extraction failure is non-fatal — proceed without extracted figures
           logger.debug(
             LOG_CHANNEL,
             `Figure extraction skipped for ${inputFilePath}`,
@@ -613,7 +636,6 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
       }
 
       if (extractedPaths.size > 0) {
-        // Merge extracted figures with explicit media files, avoiding duplicates
         const existingMedia = new Set(
           [effectiveMediaFile, ...effectiveMediaFiles].filter(Boolean),
         );
@@ -621,6 +643,57 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
           if (!existingMedia.has(extracted)) {
             effectiveMediaFiles.push(extracted);
           }
+        }
+      }
+    }
+
+    // Extract and compile TikZ figures when requested
+    if (input.extractTikz) {
+      for (const inputFilePath of allInputTexFiles) {
+        try {
+          const location = pathToLocation(inputFilePath);
+          const compiledPdfs = await tikzPictureManager.compile(location);
+          const existingMedia = new Set(
+            [effectiveMediaFile, ...effectiveMediaFiles].filter(Boolean),
+          );
+          for (const pdfLocation of compiledPdfs) {
+            const pdfPath = pdfLocation.absolutePath;
+            if (!existingMedia.has(pdfPath)) {
+              effectiveMediaFiles.push(pdfPath);
+              existingMedia.add(pdfPath);
+            }
+          }
+        } catch {
+          logger.debug(
+            LOG_CHANNEL,
+            `TikZ extraction skipped for ${inputFilePath}`,
+          );
+        }
+      }
+    }
+
+    // Discover .bib files referenced by input file(s) when requested
+    if (input.extractBibliography) {
+      const existingAux = new Set(
+        [effectiveAuxiliaryFile, ...effectiveAuxiliaryFiles].filter(Boolean),
+      );
+      for (const inputFilePath of allInputTexFiles) {
+        try {
+          const { path: resolvedPath } = resolveAndFormat(inputFilePath);
+          const context = await extractBibliographyContext(
+            resolvedPath.relative,
+          );
+          for (const bibFile of context.bibliographyFiles) {
+            if (!existingAux.has(bibFile)) {
+              effectiveAuxiliaryFiles.push(bibFile);
+              existingAux.add(bibFile);
+            }
+          }
+        } catch {
+          logger.debug(
+            LOG_CHANNEL,
+            `Bibliography extraction skipped for ${inputFilePath}`,
+          );
         }
       }
     }
@@ -636,8 +709,8 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
       inputFiles: input.inputFiles,
       referenceFile: input.referenceFile,
       referenceFiles: input.referenceFiles,
-      auxiliaryFile: input.auxiliaryFile,
-      auxiliaryFiles: input.auxiliaryFiles,
+      auxiliaryFile: effectiveAuxiliaryFile,
+      auxiliaryFiles: effectiveAuxiliaryFiles,
       mediaFile: effectiveMediaFile,
       mediaFiles: effectiveMediaFiles,
       outputFiles: input.outputFiles,
