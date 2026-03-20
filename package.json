@@ -1383,7 +1383,7 @@
   "homepage": "https://texra.ai",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.79.0",
-    "@cantoo/pdf-lib": "^2.6.2",
+    "@cantoo/pdf-lib": "^2.6.3",
     "@google/genai": "^1.46.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@lit-labs/signals": "^0.2.0",
