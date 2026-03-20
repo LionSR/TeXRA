@@ -72,7 +72,6 @@ import {
   formatSubagentProgress,
   formatFollowUpInstruction,
 } from '@tools/subagentResults';
-import { resolveAndFormat } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - memory
@@ -601,9 +600,7 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, extractBibliog
     }
 
     // Collect effective file lists — extraction options may add entries
-    const effectiveMediaFile = input.mediaFile;
     const effectiveMediaFiles = [...input.mediaFiles];
-    const effectiveAuxiliaryFile = input.auxiliaryFile;
     const effectiveAuxiliaryFiles = [...input.auxiliaryFiles];
 
     const allInputTexFiles = [input.inputFile, ...input.inputFiles].filter(
@@ -621,11 +618,9 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, extractBibliog
             await extractFigurePathsFromLatex(location);
           const inputDir = path.dirname(inputFilePath);
           for (const figurePath of figurePaths) {
-            // Convert from latex-dir-relative to workspace-relative
-            const workspaceRelative = path.normalize(
-              path.join(inputDir, figurePath),
+            extractedPaths.add(
+              path.normalize(path.join(inputDir, figurePath)),
             );
-            extractedPaths.add(workspaceRelative);
           }
         } catch {
           logger.debug(
@@ -635,27 +630,25 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, extractBibliog
         }
       }
 
-      if (extractedPaths.size > 0) {
-        const existingMedia = new Set(
-          [effectiveMediaFile, ...effectiveMediaFiles].filter(Boolean),
-        );
-        for (const extracted of extractedPaths) {
-          if (!existingMedia.has(extracted)) {
-            effectiveMediaFiles.push(extracted);
-          }
+      const existingMedia = new Set(
+        [input.mediaFile, ...effectiveMediaFiles].filter(Boolean),
+      );
+      for (const extracted of extractedPaths) {
+        if (!existingMedia.has(extracted)) {
+          effectiveMediaFiles.push(extracted);
         }
       }
     }
 
     // Extract and compile TikZ figures when requested
     if (input.extractTikz) {
+      const existingMedia = new Set(
+        [input.mediaFile, ...effectiveMediaFiles].filter(Boolean),
+      );
       for (const inputFilePath of allInputTexFiles) {
         try {
           const location = pathToLocation(inputFilePath);
           const compiledPdfs = await tikzPictureManager.compile(location);
-          const existingMedia = new Set(
-            [effectiveMediaFile, ...effectiveMediaFiles].filter(Boolean),
-          );
           for (const pdfLocation of compiledPdfs) {
             const pdfPath = pdfLocation.absolutePath;
             if (!existingMedia.has(pdfPath)) {
@@ -675,14 +668,11 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, extractBibliog
     // Discover .bib files referenced by input file(s) when requested
     if (input.extractBibliography) {
       const existingAux = new Set(
-        [effectiveAuxiliaryFile, ...effectiveAuxiliaryFiles].filter(Boolean),
+        [input.auxiliaryFile, ...effectiveAuxiliaryFiles].filter(Boolean),
       );
       for (const inputFilePath of allInputTexFiles) {
         try {
-          const { path: resolvedPath } = resolveAndFormat(inputFilePath);
-          const context = await extractBibliographyContext(
-            resolvedPath.relative,
-          );
+          const context = await extractBibliographyContext(inputFilePath);
           for (const bibFile of context.bibliographyFiles) {
             if (!existingAux.has(bibFile)) {
               effectiveAuxiliaryFiles.push(bibFile);
@@ -709,9 +699,9 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, extractBibliog
       inputFiles: input.inputFiles,
       referenceFile: input.referenceFile,
       referenceFiles: input.referenceFiles,
-      auxiliaryFile: effectiveAuxiliaryFile,
+      auxiliaryFile: input.auxiliaryFile,
       auxiliaryFiles: effectiveAuxiliaryFiles,
-      mediaFile: effectiveMediaFile,
+      mediaFile: input.mediaFile,
       mediaFiles: effectiveMediaFiles,
       outputFiles: input.outputFiles,
       useMultipleOutputs: input.useMultipleOutputs,
