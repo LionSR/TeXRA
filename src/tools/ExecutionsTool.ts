@@ -47,8 +47,10 @@ import {
 import { StorageFS } from '@utils/files';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
+import { splitContentLines } from '@utils/text/stringUtils';
 import { ToolError, type ToolResult } from './result';
 import { defineTool } from './core/define';
+import { formatFileView } from './utils';
 
 // ============================================================================
 // Category-aware field filtering
@@ -328,7 +330,8 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       return this.readFile(
         executionId,
         rest.join('/'),
-        input.view_range ?? undefined,
+        // Schema enforces length 2; cast since Zod infers number[]
+        input.view_range as [number, number] | undefined,
       );
     }
 
@@ -856,29 +859,30 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
   private async readFile(
     executionId: ExecutionId,
     filePath: string,
-    viewRange?: number[],
+    viewRange?: [number, number],
   ): Promise<ToolResult> {
+    const displayPath = `/executions/${executionId}/files/${filePath}`;
     const fullPath = await resolveStoragePath(executionId, filePath);
     if (!fullPath) {
-      throw new ToolError(
-        `File not found: /executions/${executionId}/files/${filePath}`,
-      );
+      throw new ToolError(`File not found: ${displayPath}`);
     }
 
     const stats = await StorageFS.stat(fullPath);
     if (isDirectory(stats.type)) {
       throw new ToolError(
-        `Path is a directory: /executions/${executionId}/files/${filePath}. Use without trailing path to list.`,
+        `Path is a directory: ${displayPath}. Use without trailing path to list.`,
       );
     }
 
     const content = await StorageFS.read(fullPath);
-    const output = this.applyViewRange(
-      `File: /executions/${executionId}/files/${filePath}\n\n${content}`,
-      viewRange,
-    );
+    const lines = splitContentLines(content);
 
-    return { output };
+    return formatFileView({
+      path: displayPath,
+      lines,
+      viewRange,
+      maxLines: Infinity,
+    });
   }
 
   private formatSize(bytes: number): string {

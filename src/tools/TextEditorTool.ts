@@ -21,11 +21,12 @@ import {
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
 import { ToolResult, ToolError } from './result';
-import { requireField } from './utils';
+import { formatFileView, formatLinesWithNumbers, requireField } from './utils';
 
 // Constants
 const CHANNEL = 'TextEditorTool';
@@ -204,17 +205,21 @@ export class TextEditorTool extends defineTool({
           .join('\n');
 
         return {
-          summary: `View directory ${filePath}`,
-          output: `Here's the files and directories in ${filePath}:\n${formattedContents}`,
+          summary: `Listed directory: ${filePath}`,
+          output: formattedContents,
         };
       }
 
       // Expand tabs to 4 spaces for consistent display
-      let fileContent = (await WorkspaceFS.read(filePath)).replaceAll(
+      const fileContent = (await WorkspaceFS.read(filePath)).replaceAll(
         '\t',
         '    ',
       );
-      let initLine = 1;
+      const lines = splitContentLines(fileContent);
+      const totalLines = lines.length;
+
+      let viewStartLine = 1;
+      let viewEndLine = totalLines;
 
       if (viewRange) {
         if (
@@ -227,48 +232,43 @@ export class TextEditorTool extends defineTool({
           );
         }
 
-        const fileLines = fileContent.split('\n');
-        const numLines = fileLines.length;
         const [startLine, endLine] = viewRange;
 
-        if (startLine < 1 || startLine > numLines) {
-          throw new ToolError(
-            `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its first element \`${startLine}\` should be within the range of lines of the file: [1, ${numLines}]`,
-          );
-        }
-
-        if (endLine !== -1) {
-          if (endLine > numLines) {
+        // Only validate bounds when the file is non-empty; empty files
+        // skip validation and formatFileView returns "file is empty".
+        if (totalLines > 0) {
+          if (startLine < 1 || startLine > totalLines) {
             throw new ToolError(
-              `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its second element \`${endLine}\` should be smaller than the number of lines in the file: \`${numLines}\``,
+              `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its first element \`${startLine}\` should be within the range of lines of the file: [1, ${totalLines}]`,
             );
           }
-          if (endLine < startLine) {
-            throw new ToolError(
-              `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its second element \`${endLine}\` should be larger or equal than its first \`${startLine}\``,
-            );
+
+          if (endLine !== -1) {
+            if (endLine > totalLines) {
+              throw new ToolError(
+                `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its second element \`${endLine}\` should be smaller than the number of lines in the file: \`${totalLines}\``,
+              );
+            }
+            if (endLine < startLine) {
+              throw new ToolError(
+                `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its second element \`${endLine}\` should be larger or equal than its first \`${startLine}\``,
+              );
+            }
           }
         }
 
-        initLine = startLine;
-        const sliceEnd = endLine === -1 ? undefined : endLine;
-        fileContent = fileLines.slice(startLine - 1, sliceEnd).join('\n');
+        viewStartLine = startLine;
+        viewEndLine = endLine === -1 ? totalLines : endLine;
       }
 
       recordToolFileRead(filePath);
 
-      let summary: string;
-      if (viewRange) {
-        const endLabel = viewRange[1] === -1 ? 'end' : String(viewRange[1]);
-        summary = `View ${filePath} (${viewRange[0]}-${endLabel})`;
-      } else {
-        summary = `View ${filePath}`;
-      }
-
-      return {
-        summary,
-        output: this.makeOutput(fileContent, filePath, initLine),
-      };
+      return formatFileView({
+        path: filePath,
+        lines,
+        viewRange: viewRange ? [viewStartLine, viewEndLine] : null,
+        maxLines: Infinity,
+      });
     } catch (error) {
       rethrowWithContext(error, `Error viewing ${filePath}`);
     }
@@ -419,11 +419,7 @@ export class TextEditorTool extends defineTool({
         appliedContent,
       );
       const successIntro = `The file ${filePath} has been edited.`;
-      const snippetOutput = this.makeOutput(
-        snippet,
-        `a snippet of ${filePath}`,
-        startLine,
-      );
+      const snippetOutput = this.makeOutput(snippet, startLine);
       const reviewMessage =
         'Review the changes and make sure they are as expected. Edit the file again if necessary.';
       const baseMsg = `${successIntro} ${snippetOutput}${reviewMessage}`;
@@ -521,11 +517,7 @@ export class TextEditorTool extends defineTool({
       );
 
       const successIntro = `The file ${filePath} has been edited.`;
-      const snippetOutput = this.makeOutput(
-        snippetText,
-        'a snippet of the edited file',
-        startLine,
-      );
+      const snippetOutput = this.makeOutput(snippetText, startLine);
       const reviewNote =
         'Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary.';
       const baseMsg = `${successIntro} ${snippetOutput}${reviewNote}`;
@@ -594,7 +586,7 @@ export class TextEditorTool extends defineTool({
         previousContent,
         appliedContent,
       );
-      const baseOutput = `Last edit to ${filePath} undone successfully. ${this.makeOutput(appliedContent, filePath)}`;
+      const baseOutput = `Last edit to ${filePath} undone successfully. ${this.makeOutput(appliedContent)}`;
       const output = userDiffNote
         ? `${baseOutput}\n${userDiffNote}`
         : baseOutput;
@@ -617,19 +609,8 @@ export class TextEditorTool extends defineTool({
     this.fileHistory.get(filePath)!.push(content);
   }
 
-  private makeOutput(
-    content: string,
-    fileDescriptor: string,
-    initLine: number = 1,
-  ): string {
-    const numberedLines = content
-      .split('\n')
-      .map((line, index) => {
-        const lineNum = index + initLine;
-        return `${lineNum.toString().padStart(6)}\t${line}`;
-      })
-      .join('\n');
-
-    return `Here's the result of running \`cat -n\` on ${fileDescriptor}:\n${numberedLines}\n`;
+  private makeOutput(content: string, initLine: number = 1): string {
+    const lines = splitContentLines(content);
+    return '\n' + formatLinesWithNumbers(lines, initLine).join('\n') + '\n';
   }
 }
