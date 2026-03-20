@@ -262,9 +262,7 @@ export class TextEditorTool extends defineTool({
       return formatFileView({
         path: filePath,
         lines,
-        startLine: viewStartLine,
-        endLine: viewEndLine,
-        rangeProvided: viewRange != null,
+        viewRange: viewRange ? [viewStartLine, viewEndLine] : null,
       });
     } catch (error) {
       rethrowWithContext(error, `Error viewing ${filePath}`);

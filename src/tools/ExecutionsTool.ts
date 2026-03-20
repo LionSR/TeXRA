@@ -50,7 +50,7 @@ import { getPathSegments } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { ToolError, type ToolResult } from './result';
 import { defineTool } from './core/define';
-import { formatFileView, resolveViewRange } from './utils';
+import { formatFileView } from './utils';
 
 // ============================================================================
 // Category-aware field filtering
@@ -875,14 +875,11 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
 
     const content = await StorageFS.read(fullPath);
     const lines = splitContentLines(content);
-    const { startLine, endLine } = resolveViewRange(viewRange, lines.length);
 
     return formatFileView({
       path: displayPath,
       lines,
-      startLine,
-      endLine,
-      rangeProvided: viewRange != null,
+      viewRange,
     });
   }
 

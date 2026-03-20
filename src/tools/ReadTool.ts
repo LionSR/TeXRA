@@ -96,16 +96,12 @@ export class ReadFileTool extends defineTool({
       ? ` (requested end ${requestedEndLine} exceeds file length ${totalLines})`
       : '';
 
-    const result = formatFileView({
+    return formatFileView({
       path: input.path,
       lines,
-      startLine,
-      endLine,
-      rangeProvided: Boolean(input.range),
+      viewRange: input.range ? [startLine, endLine] : null,
       summarySuffix: suffix,
     });
-
-    return result;
   }
 
   private computeRequestedEndLine(

@@ -119,31 +119,17 @@ export function formatLinesWithNumbers(
 // Shared file-view formatting
 // ============================================================================
 
-/**
- * Convert a 1-based `[start, end]` view range into clamped 1-based line numbers.
- * When no range is supplied, returns the full span `[1, totalLines]`.
- */
-export function resolveViewRange(
-  viewRange: number[] | null | undefined,
-  totalLines: number,
-): { startLine: number; endLine: number } {
-  return {
-    startLine: Math.max(viewRange?.[0] ?? 1, 1),
-    endLine: Math.min(viewRange?.[1] ?? totalLines, totalLines),
-  };
-}
-
 export interface FileViewOptions {
   /** Display path used in the summary (e.g., "src/foo.ts" or "/memories/notes.md"). */
   path: string;
   /** All lines of the file. */
   lines: string[];
-  /** 1-based start line (inclusive). */
-  startLine: number;
-  /** 1-based end line (inclusive). */
-  endLine: number;
-  /** Whether the caller supplied an explicit range. */
-  rangeProvided: boolean;
+  /**
+   * Optional 1-based `[start, end]` (both inclusive) line range.
+   * When omitted or nullish, the full file is shown.
+   * Values are clamped to the file bounds automatically.
+   */
+  viewRange?: number[] | null;
   /** Optional suffix appended to the summary (e.g., memory metadata). */
   summarySuffix?: string;
 }
@@ -161,12 +147,13 @@ export interface FileViewResult {
 export function formatFileView({
   path: filePath,
   lines,
-  startLine,
-  endLine,
-  rangeProvided,
+  viewRange,
   summarySuffix = '',
 }: FileViewOptions): FileViewResult {
   const totalLines = lines.length;
+  const rangeProvided = viewRange != null;
+  const startLine = Math.max(viewRange?.[0] ?? 1, 1);
+  const endLine = Math.min(viewRange?.[1] ?? totalLines, totalLines);
   const selected = lines.slice(startLine - 1, endLine);
   const truncated = selected.length > READ_FILE_MAX_LINES;
   const visibleLines = truncated
