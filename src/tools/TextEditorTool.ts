@@ -234,22 +234,26 @@ export class TextEditorTool extends defineTool({
 
         const [startLine, endLine] = viewRange;
 
-        if (startLine < 1 || startLine > totalLines) {
-          throw new ToolError(
-            `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its first element \`${startLine}\` should be within the range of lines of the file: [1, ${totalLines}]`,
-          );
-        }
-
-        if (endLine !== -1) {
-          if (endLine > totalLines) {
+        // Only validate bounds when the file is non-empty; empty files
+        // skip validation and formatFileView returns "file is empty".
+        if (totalLines > 0) {
+          if (startLine < 1 || startLine > totalLines) {
             throw new ToolError(
-              `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its second element \`${endLine}\` should be smaller than the number of lines in the file: \`${totalLines}\``,
+              `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its first element \`${startLine}\` should be within the range of lines of the file: [1, ${totalLines}]`,
             );
           }
-          if (endLine < startLine) {
-            throw new ToolError(
-              `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its second element \`${endLine}\` should be larger or equal than its first \`${startLine}\``,
-            );
+
+          if (endLine !== -1) {
+            if (endLine > totalLines) {
+              throw new ToolError(
+                `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its second element \`${endLine}\` should be smaller than the number of lines in the file: \`${totalLines}\``,
+              );
+            }
+            if (endLine < startLine) {
+              throw new ToolError(
+                `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its second element \`${endLine}\` should be larger or equal than its first \`${startLine}\``,
+              );
+            }
           }
         }
 
@@ -263,6 +267,7 @@ export class TextEditorTool extends defineTool({
         path: filePath,
         lines,
         viewRange: viewRange ? [viewStartLine, viewEndLine] : null,
+        maxLines: Infinity,
       });
     } catch (error) {
       rethrowWithContext(error, `Error viewing ${filePath}`);
@@ -606,6 +611,6 @@ export class TextEditorTool extends defineTool({
 
   private makeOutput(content: string, initLine: number = 1): string {
     const lines = splitContentLines(content);
-    return formatLinesWithNumbers(lines, initLine).join('\n') + '\n';
+    return '\n' + formatLinesWithNumbers(lines, initLine).join('\n') + '\n';
   }
 }

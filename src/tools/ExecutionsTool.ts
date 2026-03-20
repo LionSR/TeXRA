@@ -881,6 +881,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       path: displayPath,
       lines,
       viewRange,
+      maxLines: Infinity,
     });
   }
 

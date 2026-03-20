@@ -130,6 +130,8 @@ export interface FileViewOptions {
    * Values are clamped to the file bounds automatically.
    */
   viewRange?: [number, number] | null;
+  /** Max visible lines before truncation. Defaults to READ_FILE_MAX_LINES (2000). */
+  maxLines?: number;
   /** Optional suffix appended to the summary (e.g., memory metadata). */
   summarySuffix?: string;
 }
@@ -148,6 +150,7 @@ export function formatFileView({
   path: filePath,
   lines,
   viewRange,
+  maxLines = READ_FILE_MAX_LINES,
   summarySuffix = '',
 }: FileViewOptions): FileViewResult {
   const totalLines = lines.length;
@@ -155,8 +158,8 @@ export function formatFileView({
   const startLine = Math.max(viewRange?.[0] ?? 1, 1);
   const endLine = Math.min(viewRange?.[1] ?? totalLines, totalLines);
   const rangeSize = Math.max(endLine - startLine + 1, 0);
-  const truncated = rangeSize > READ_FILE_MAX_LINES;
-  const sliceEnd = startLine - 1 + Math.min(rangeSize, READ_FILE_MAX_LINES);
+  const truncated = rangeSize > maxLines;
+  const sliceEnd = startLine - 1 + Math.min(rangeSize, maxLines);
   const visibleLines = lines.slice(startLine - 1, sliceEnd);
   const visibleCount = visibleLines.length;
 
@@ -169,7 +172,7 @@ export function formatFileView({
   }
   if (truncated) {
     segments.push(
-      `...(truncated, ${rangeSize - READ_FILE_MAX_LINES} more lines)`,
+      `...(truncated, ${rangeSize - maxLines} more lines)`,
     );
   }
 
