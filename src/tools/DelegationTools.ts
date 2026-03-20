@@ -10,6 +10,7 @@
 
 // Third-party imports
 import { randomUUID } from 'crypto';
+import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports - agent
@@ -32,6 +33,9 @@ import {
 } from '@agent/toolUse/ToolFileInteractionContext';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+
+// Local imports - latex
+import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
@@ -72,7 +76,7 @@ import { defineTool } from '@tools/core/define';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 
 // Local imports - utils
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, pathToLocation } from '@utils/files';
 import { generateExecutionId } from '@utils/core/executionId';
 
 // ============================================================================
@@ -471,6 +475,12 @@ const WorkflowAgentInputSchema = z.object({
     .array(z.string())
     .prefault([])
     .describe('Additional media files'),
+  extractFigures: z
+    .boolean()
+    .prefault(false)
+    .describe(
+      'When true, automatically extracts figures referenced by the input LaTeX file(s) (via \\includegraphics, \\begin{overpic}) and attaches them as media files. Merges with any explicitly provided mediaFile/mediaFiles.',
+    ),
   outputFiles: z
     .array(z.string())
     .prefault([])
@@ -500,7 +510,9 @@ ${formatAgentList(getVisibleAgents('workflow'))}
 Available models: ${getVisibleModels().join(', ')}
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
-Example: agent=correct, inputFile=paper.tex, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
+Set extractFigures=true to automatically extract figures referenced by the input LaTeX file(s) (\\includegraphics, \\begin{overpic}) and attach them as media. Merges with any explicit mediaFile/mediaFiles.
+
+Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
@@ -569,6 +581,50 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       throw new Error(`${missing.label} not found: ${missing.path}`);
     }
 
+    // Extract figures from input file(s) when requested
+    const effectiveMediaFile = input.mediaFile;
+    const effectiveMediaFiles = [...input.mediaFiles];
+
+    if (input.extractFigures) {
+      const allInputFiles = [input.inputFile, ...input.inputFiles];
+      const extractedPaths = new Set<string>();
+
+      for (const inputFilePath of allInputFiles) {
+        if (!inputFilePath.endsWith('.tex')) continue;
+        try {
+          const location = pathToLocation(inputFilePath);
+          const figurePaths =
+            await extractFigurePathsFromLatex(location);
+          const inputDir = path.dirname(inputFilePath);
+          for (const figurePath of figurePaths) {
+            // Convert from latex-dir-relative to workspace-relative
+            const workspaceRelative = path.normalize(
+              path.join(inputDir, figurePath),
+            );
+            extractedPaths.add(workspaceRelative);
+          }
+        } catch {
+          // Figure extraction failure is non-fatal — proceed without extracted figures
+          logger.debug(
+            LOG_CHANNEL,
+            `Figure extraction skipped for ${inputFilePath}`,
+          );
+        }
+      }
+
+      if (extractedPaths.size > 0) {
+        // Merge extracted figures with explicit media files, avoiding duplicates
+        const existingMedia = new Set(
+          [effectiveMediaFile, ...effectiveMediaFiles].filter(Boolean),
+        );
+        for (const extracted of extractedPaths) {
+          if (!existingMedia.has(extracted)) {
+            effectiveMediaFiles.push(extracted);
+          }
+        }
+      }
+    }
+
     // Construct workflow proposal
     // Memory paths are already validated by memoriesField's .superRefine() at schema parse time.
     const proposal = WorkflowAgentProposalSchema.parse({
@@ -582,8 +638,8 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       referenceFiles: input.referenceFiles,
       auxiliaryFile: input.auxiliaryFile,
       auxiliaryFiles: input.auxiliaryFiles,
-      mediaFile: input.mediaFile,
-      mediaFiles: input.mediaFiles,
+      mediaFile: effectiveMediaFile,
+      mediaFiles: effectiveMediaFiles,
       outputFiles: input.outputFiles,
       useMultipleOutputs: input.useMultipleOutputs,
       memories: input.memories,
