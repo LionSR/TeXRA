@@ -408,7 +408,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const stopPromises: Promise<void>[] = [];
     for (const streamId of this.provider.state.streamLogs.keys()) {
       stopPromises.push(
-        vscode.commands.executeCommand<void>('texra.stopAgent', streamId),
+        Promise.resolve(
+          vscode.commands.executeCommand<void>('texra.stopAgent', streamId),
+        ),
       );
     }
     await Promise.allSettled(stopPromises);
