@@ -358,6 +358,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
+    // Stop the agent if it is still running so the process does not leak
+    await vscode.commands.executeCommand('texra.stopAgent', streamId);
+
     // Clear pending approvals, retry requests, queued follow-ups, and YOLO state
     cleanupApprovalsForStream(streamId);
     retryCoordinator.clearRequest(streamId);
@@ -399,6 +402,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     if (confirmation !== 'Delete All') {
       return;
+    }
+
+    // Stop all running agents so processes do not leak
+    for (const streamId of this.provider.state.streamLogs.keys()) {
+      await vscode.commands.executeCommand('texra.stopAgent', streamId);
     }
 
     // Clear approvals, retry requests, queued follow-ups, and YOLO state
