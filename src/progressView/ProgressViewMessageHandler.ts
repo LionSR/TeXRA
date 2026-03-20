@@ -404,17 +404,19 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Stop all running agents so processes do not leak
+    // Stop all running agents and clear per-stream coordinator state
+    const stopPromises: Promise<void>[] = [];
     for (const streamId of this.provider.state.streamLogs.keys()) {
-      await vscode.commands.executeCommand('texra.stopAgent', streamId);
-    }
-
-    // Clear approvals, retry requests, queued follow-ups, and YOLO state
-    cleanupAllApprovals();
-    for (const streamId of this.provider.state.streamLogs.keys()) {
+      stopPromises.push(
+        vscode.commands.executeCommand<void>('texra.stopAgent', streamId),
+      );
       retryCoordinator.clearRequest(streamId);
       ToolUseFollowUpQueue.release(streamId);
     }
+    await Promise.all(stopPromises);
+
+    // Clear approval state
+    cleanupAllApprovals();
     this.modelOutputBackups.clear();
     this.provider.webviewBridge.clearAll();
     await this.provider.state.clearAll();
