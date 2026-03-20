@@ -416,11 +416,7 @@ export class TextEditorTool extends defineTool({
         appliedContent,
       );
       const successIntro = `The file ${filePath} has been edited.`;
-      const snippetOutput = this.makeOutput(
-        snippet,
-        `a snippet of ${filePath}`,
-        startLine,
-      );
+      const snippetOutput = this.makeOutput(snippet, startLine);
       const reviewMessage =
         'Review the changes and make sure they are as expected. Edit the file again if necessary.';
       const baseMsg = `${successIntro} ${snippetOutput}${reviewMessage}`;
@@ -518,11 +514,7 @@ export class TextEditorTool extends defineTool({
       );
 
       const successIntro = `The file ${filePath} has been edited.`;
-      const snippetOutput = this.makeOutput(
-        snippetText,
-        'a snippet of the edited file',
-        startLine,
-      );
+      const snippetOutput = this.makeOutput(snippetText, startLine);
       const reviewNote =
         'Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary.';
       const baseMsg = `${successIntro} ${snippetOutput}${reviewNote}`;
@@ -591,7 +583,7 @@ export class TextEditorTool extends defineTool({
         previousContent,
         appliedContent,
       );
-      const baseOutput = `Last edit to ${filePath} undone successfully. ${this.makeOutput(appliedContent, filePath)}`;
+      const baseOutput = `Last edit to ${filePath} undone successfully. ${this.makeOutput(appliedContent)}`;
       const output = userDiffNote
         ? `${baseOutput}\n${userDiffNote}`
         : baseOutput;
@@ -614,12 +606,8 @@ export class TextEditorTool extends defineTool({
     this.fileHistory.get(filePath)!.push(content);
   }
 
-  private makeOutput(
-    content: string,
-    _fileDescriptor: string,
-    initLine: number = 1,
-  ): string {
-    const lines = content.split('\n');
+  private makeOutput(content: string, initLine: number = 1): string {
+    const lines = splitContentLines(content);
     return formatLinesWithNumbers(lines, initLine).join('\n') + '\n';
   }
 }

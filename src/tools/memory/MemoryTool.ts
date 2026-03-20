@@ -23,6 +23,7 @@ import {
   formatFileView,
   formatLinesWithNumbers,
   requireField,
+  resolveViewRange,
 } from '../utils';
 
 // Local imports - shared memory constants and utilities
@@ -253,10 +254,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       );
     }
 
-    const totalLines = lines.length;
-    const [start, end] = viewRange ?? [1, totalLines];
-    const startIndex = Math.min(Math.max(start - 1, 0), totalLines);
-    const endIndex = Math.min(end, totalLines);
+    const { startIndex, endIndex } = resolveViewRange(viewRange, lines.length);
 
     // Build metadata suffix for the summary
     const metaParts: string[] = [];

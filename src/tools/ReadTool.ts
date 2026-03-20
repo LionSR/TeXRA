@@ -23,8 +23,6 @@ import { splitContentLines } from '@utils/text/stringUtils';
 // Local file imports
 import { defineTool } from './core/define';
 
-// Re-export so existing consumers can keep importing from here.
-export { READ_FILE_MAX_LINES } from '@tools/utils';
 
 /**
  * Schema for range parameter with preprocessing to handle array format.

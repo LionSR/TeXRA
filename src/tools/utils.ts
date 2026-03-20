@@ -119,6 +119,22 @@ export function formatLinesWithNumbers(
 // Shared file-view formatting
 // ============================================================================
 
+/**
+ * Convert a 1-based `[start, end]` view range into clamped 0-based indices.
+ * When no range is supplied, returns the full span `[0, totalLines)`.
+ */
+export function resolveViewRange(
+  viewRange: number[] | null | undefined,
+  totalLines: number,
+): { startIndex: number; endIndex: number } {
+  const requestedStart = viewRange?.[0] ?? 1;
+  const requestedEnd = viewRange?.[1] ?? totalLines;
+  return {
+    startIndex: Math.min(Math.max(requestedStart - 1, 0), totalLines),
+    endIndex: Math.min(requestedEnd, totalLines),
+  };
+}
+
 export interface FileViewOptions {
   /** Display path used in the summary (e.g., "src/foo.ts" or "/memories/notes.md"). */
   path: string;
