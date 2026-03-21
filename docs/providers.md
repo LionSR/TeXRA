@@ -15,7 +15,7 @@ The following table lists the AI model providers supported by TeXRA, along with 
 | Moonshot AI (Kimi)  | Beijing, China         | [Terms](https://platform.moonshot.ai/docs/agreement/modeluse) · [Privacy](https://platform.moonshot.ai/docs/agreement/userprivacy)                                         |
 | DashScope (Alibaba) | Hangzhou, China        | [Terms](https://www.alibabacloud.com/help/en/legal/) · [Privacy](https://www.alibabacloud.com/help/en/legal/latest/alibaba-cloud-international-website-privacy-policy)     |
 | MiniMax             | Beijing, China         | [Terms](https://www.minimax.io/platform/protocol/terms-of-service) · [Privacy](https://www.minimax.io/platform/protocol/privacy-policy)                                    |
-| Zhipu AI (GLM)      | Beijing, China         | [Terms](https://docs.z.ai/legal-agreement/terms-of-use) · [Privacy](https://docs.z.ai/legal-agreement/privacy-policy)                                                     |
+| Zhipu AI (GLM)      | Beijing, China         | [Terms](https://docs.z.ai/legal-agreement/terms-of-use) · [Privacy](https://docs.z.ai/legal-agreement/privacy-policy)                                                      |
 
 ## Access Modes
 
