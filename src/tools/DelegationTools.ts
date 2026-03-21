@@ -598,10 +598,15 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
       (f) => f.toLowerCase().endsWith('.tex'),
     );
 
+    // Build a normalized set of existing media paths for dedup across extractions
+    const normalizedMediaSet = new Set(
+      [input.mediaFile, ...effectiveMediaFiles]
+        .filter((p): p is string => Boolean(p))
+        .map((p) => path.normalize(p)),
+    );
+
     // Extract figures from input file(s) when requested
     if (input.extractFigures) {
-      const extractedPaths = new Set<string>();
-
       for (const inputFilePath of allInputTexFiles) {
         try {
           const location = pathToLocation(inputFilePath);
@@ -609,9 +614,13 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
             await extractFigurePathsFromLatex(location);
           const inputDir = path.dirname(inputFilePath);
           for (const figurePath of figurePaths) {
-            extractedPaths.add(
-              path.normalize(path.join(inputDir, figurePath)),
+            const normalized = path.normalize(
+              path.join(inputDir, figurePath),
             );
+            if (!normalizedMediaSet.has(normalized)) {
+              effectiveMediaFiles.push(normalized);
+              normalizedMediaSet.add(normalized);
+            }
           }
         } catch {
           logger.debug(
@@ -620,22 +629,10 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
           );
         }
       }
-
-      const existingMedia = new Set(
-        [input.mediaFile, ...effectiveMediaFiles].filter(Boolean),
-      );
-      for (const extracted of extractedPaths) {
-        if (!existingMedia.has(extracted)) {
-          effectiveMediaFiles.push(extracted);
-        }
-      }
     }
 
     // Extract and compile TikZ figures when requested
     if (input.extractTikz) {
-      const existingMedia = new Set(
-        [input.mediaFile, ...effectiveMediaFiles].filter(Boolean),
-      );
       for (const inputFilePath of allInputTexFiles) {
         try {
           const location = pathToLocation(inputFilePath);
@@ -645,9 +642,10 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
               pdfLocation.kind !== 'external'
                 ? pdfLocation.relativePath
                 : pdfLocation.absolutePath;
-            if (!existingMedia.has(pdfPath)) {
+            const normalized = path.normalize(pdfPath);
+            if (!normalizedMediaSet.has(normalized)) {
               effectiveMediaFiles.push(pdfPath);
-              existingMedia.add(pdfPath);
+              normalizedMediaSet.add(normalized);
             }
           }
         } catch {
