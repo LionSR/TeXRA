@@ -173,10 +173,9 @@ export class ZoteroSearchTool extends defineTool({
       };
     }
 
-    // Optionally fetch collection membership for each result
     const collectionMap = include_collections
       ? await this.fetchCollections(
-          result.map((r) => r.citekey).filter(Boolean),
+          result.map((r) => r.citekey),
           port,
         )
       : null;
