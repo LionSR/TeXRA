@@ -193,8 +193,9 @@ export class ArxivSourceProcessor {
       throw new Error('No workspace folder is open');
     }
 
-    // Create project directory for the arXiv paper inside Papers/ (sanitize ID to avoid path issues)
-    const paperDirRelative = path.join('Papers', id.replaceAll('/', '_'));
+    // Create project directory for the arXiv paper inside References/ (sanitize ID to avoid path issues)
+    // Use forward slashes to match WorkspaceFS.relativePath() convention (not path.join which uses backslashes on Windows)
+    const paperDirRelative = `References/${id.replaceAll('/', '_')}`;
     const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
 
     // Check if source was already downloaded successfully.
