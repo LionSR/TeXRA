@@ -80,6 +80,7 @@ function buildGoogleConfig(
 
   return {
     name: 'test-google',
+    label: 'Test Google',
     fullName: 'test-google',
     shortName: 'test-google',
     provider: ModelProvider.GOOGLE,

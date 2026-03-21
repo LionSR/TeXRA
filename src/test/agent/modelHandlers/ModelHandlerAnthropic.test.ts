@@ -37,6 +37,7 @@ function buildAnthropicConfig(
 
   return {
     name: 'test-anthropic',
+    label: 'Test Anthropic',
     fullName: 'claude-test',
     shortName: 'claude-test',
     provider: ModelProvider.ANTHROPIC,
