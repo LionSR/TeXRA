@@ -261,15 +261,19 @@ function agentFriendlyStatus(status: string): string {
 export function formatSubagentDelivery(
   agentName: string,
   result: AgentFlowResult,
-  diffInfos?: Map<string, DiffFileInfo>,
+  options?: { diffInfos?: Map<string, DiffFileInfo>; wallTimeMs?: number },
 ): string {
   const displayStatus = agentFriendlyStatus(result.status);
   const lines = [
     `<subagent-result id="${escapeAttr(result.executionId)}" agent="${escapeAttr(agentName)}" category="${escapeAttr(result.category)}" status="${escapeAttr(displayStatus)}">`,
   ];
 
+  if (options?.wallTimeMs !== undefined) {
+    lines.push(`<wall-time>${formatDuration(options.wallTimeMs)}</wall-time>`);
+  }
+
   if (result.category === 'workflow' && result.outputs.length > 0) {
-    lines.push(...formatWorkflowOutputs(result.outputs, diffInfos));
+    lines.push(...formatWorkflowOutputs(result.outputs, options?.diffInfos));
   } else if (result.category === 'toolUse' && result.lastResponse) {
     lines.push('<response>', result.lastResponse, '</response>');
   }
@@ -285,13 +289,17 @@ export function formatSubagentError(
   executionId: string,
   agentName: string,
   err: unknown,
+  options?: { wallTimeMs?: number },
 ): string {
   const message = err instanceof Error ? err.message : String(err);
-  return [
+  const lines = [
     `<subagent-error id="${escapeAttr(executionId)}" agent="${escapeAttr(agentName)}">`,
-    `<message>${escapeText(message)}</message>`,
-    '</subagent-error>',
-  ].join('\n');
+  ];
+  if (options?.wallTimeMs !== undefined) {
+    lines.push(`<wall-time>${formatDuration(options.wallTimeMs)}</wall-time>`);
+  }
+  lines.push(`<message>${escapeText(message)}</message>`, '</subagent-error>');
+  return lines.join('\n');
 }
 
 // ============================================================================
