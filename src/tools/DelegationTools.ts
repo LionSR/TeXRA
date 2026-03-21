@@ -638,13 +638,13 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
           const location = pathToLocation(inputFilePath);
           const compiledPdfs = await tikzPictureManager.compile(location);
           for (const pdfLocation of compiledPdfs) {
-            const pdfPath =
+            const normalized = path.normalize(
               pdfLocation.kind !== 'external'
                 ? pdfLocation.relativePath
-                : pdfLocation.absolutePath;
-            const normalized = path.normalize(pdfPath);
+                : pdfLocation.absolutePath,
+            );
             if (!normalizedMediaSet.has(normalized)) {
-              effectiveMediaFiles.push(pdfPath);
+              effectiveMediaFiles.push(normalized);
               normalizedMediaSet.add(normalized);
             }
           }
