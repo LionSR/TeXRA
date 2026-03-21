@@ -12,6 +12,7 @@ import { z } from 'zod';
 
 import {
   AGENT_CATEGORY,
+  ToolConfigSchema,
   ToolUseAgentProposalSchema,
   WorkflowAgentProposalSchema,
   type AgentProposal,
@@ -39,6 +40,7 @@ const LenientWorkflowProposalSchema = WorkflowAgentProposalSchema.extend({
   mediaFiles: z.array(z.string()).prefault([]),
   outputFiles: z.array(z.string()).prefault([]),
   useMultipleOutputs: z.boolean().prefault(false),
+  toolConfig: ToolConfigSchema,
 });
 
 const proposalInputStore = new Map<string, AgentProposal>();

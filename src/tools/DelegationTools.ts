@@ -10,7 +10,6 @@
 
 // Third-party imports
 import { randomUUID } from 'crypto';
-import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports - agent
@@ -33,10 +32,6 @@ import {
 } from '@agent/toolUse/ToolFileInteractionContext';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-
-// Local imports - latex
-import { extractFigurePathsFromLatex } from '@latex/extractFigure';
-import { tikzPictureManager } from '@latex/TikzPictureManager';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
@@ -77,7 +72,7 @@ import { defineTool } from '@tools/core/define';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 
 // Local imports - utils
-import { WorkspaceFS, pathToLocation } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import { generateExecutionId } from '@utils/core/executionId';
 
 // ============================================================================
@@ -591,73 +586,10 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
       throw new Error(`${missing.label} not found: ${missing.path}`);
     }
 
-    // Collect effective file lists — extraction options may add entries
-    const effectiveMediaFiles = [...input.mediaFiles];
-
-    const allInputTexFiles = [input.inputFile, ...input.inputFiles].filter(
-      (f) => f.toLowerCase().endsWith('.tex'),
-    );
-
-    // Build a normalized set of existing media paths for dedup across extractions
-    const normalizedMediaSet = new Set(
-      [input.mediaFile, ...effectiveMediaFiles]
-        .filter((p): p is string => Boolean(p))
-        .map((p) => path.normalize(p)),
-    );
-
-    // Extract figures from input file(s) when requested
-    if (input.extractFigures) {
-      for (const inputFilePath of allInputTexFiles) {
-        try {
-          const location = pathToLocation(inputFilePath);
-          const figurePaths =
-            await extractFigurePathsFromLatex(location);
-          const inputDir = path.dirname(inputFilePath);
-          for (const figurePath of figurePaths) {
-            const normalized = path.normalize(
-              path.join(inputDir, figurePath),
-            );
-            if (!normalizedMediaSet.has(normalized)) {
-              effectiveMediaFiles.push(normalized);
-              normalizedMediaSet.add(normalized);
-            }
-          }
-        } catch {
-          logger.debug(
-            LOG_CHANNEL,
-            `Figure extraction skipped for ${inputFilePath}`,
-          );
-        }
-      }
-    }
-
-    // Extract and compile TikZ figures when requested
-    if (input.extractTikz) {
-      for (const inputFilePath of allInputTexFiles) {
-        try {
-          const location = pathToLocation(inputFilePath);
-          const compiledPdfs = await tikzPictureManager.compile(location);
-          for (const pdfLocation of compiledPdfs) {
-            const normalized = path.normalize(
-              pdfLocation.kind !== 'external'
-                ? pdfLocation.relativePath
-                : pdfLocation.absolutePath,
-            );
-            if (!normalizedMediaSet.has(normalized)) {
-              effectiveMediaFiles.push(normalized);
-              normalizedMediaSet.add(normalized);
-            }
-          }
-        } catch {
-          logger.debug(
-            LOG_CHANNEL,
-            `TikZ extraction skipped for ${inputFilePath}`,
-          );
-        }
-      }
-    }
-
     // Construct workflow proposal
+    // Extraction flags are mapped to toolConfig so they flow through to the
+    // agent execution pipeline (MediaExtractionNode → LatexMediaManager)
+    // and are preserved when the user clicks "Setup" in the proposal UI.
     // Memory paths are already validated by memoriesField's .superRefine() at schema parse time.
     const proposal = WorkflowAgentProposalSchema.parse({
       agentCategory: AgentCategory.Workflow,
@@ -671,11 +603,15 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
       auxiliaryFile: input.auxiliaryFile,
       auxiliaryFiles: input.auxiliaryFiles,
       mediaFile: input.mediaFile,
-      mediaFiles: effectiveMediaFiles,
+      mediaFiles: input.mediaFiles,
       outputFiles: input.outputFiles,
       useMultipleOutputs: input.useMultipleOutputs,
+      toolConfig: {
+        autoExtractFigure: input.extractFigures,
+        autoExtractTikzFigure: input.extractTikz,
+      },
       memories: input.memories,
-    } satisfies WorkflowAgentProposal);
+    });
 
     return proposeAndExecute(proposal, input.agent, ctx.streamId);
   }
