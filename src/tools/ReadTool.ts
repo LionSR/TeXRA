@@ -12,6 +12,7 @@ import {
   READ_FILE_MAX_LINES,
 } from '@tools/utils';
 import { recordToolFileRead } from '@tools/fileInteractions';
+import { parseEmlToText } from '@tools/emlParser';
 import {
   WorkspaceFS,
   getMimeType,
@@ -67,6 +68,16 @@ export class ReadFileTool extends defineTool({
       const result = await this.returnBinaryAttachment(input, attachmentConfig);
       recordToolFileRead(input.path);
       return result;
+    }
+
+    // EML files are text-based but use complex MIME encoding (multipart,
+    // base64 attachments, quoted-printable). Parse them into readable text.
+    if (path.extname(input.path).toLowerCase() === '.eml') {
+      const raw = await WorkspaceFS.read(input.path);
+      recordToolFileRead(input.path);
+      const parsed = await parseEmlToText(raw);
+      const lines = splitContentLines(parsed);
+      return formatFileView({ path: input.path, lines });
     }
 
     const lines = splitContentLines(await WorkspaceFS.read(input.path));
