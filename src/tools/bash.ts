@@ -137,9 +137,7 @@ export class BashTool extends defineTool({
     const errorOutput =
       [result.stderr, result.stdout].filter(Boolean).join('\n') ||
       'No error output available';
-    throw new ToolError(
-      `Command failed (${duration}): ${errorOutput}`,
-    );
+    throw new ToolError(`Command failed (${duration}): ${errorOutput}`);
   }
 
   private async executeBackground(
