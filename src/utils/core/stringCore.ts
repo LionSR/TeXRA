@@ -44,7 +44,7 @@ export function extractErrorMessage(err: unknown): string | undefined {
 /** Format duration in milliseconds to human-readable string (e.g. "3min, 42sec"). */
 export function formatDuration(durationMs: number): string {
   if (durationMs < 0) return '0s';
-  if (durationMs < 1000) return '<1s';
+  if (durationMs < 1000) return '1s';
 
   const seconds = Math.floor(durationMs / 1000) % 60;
   const minutes = Math.floor(durationMs / (1000 * 60));
