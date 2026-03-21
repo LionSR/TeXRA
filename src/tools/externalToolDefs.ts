@@ -142,7 +142,12 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
   },
   {
     id: 'zotero',
-    tools: ['zotero_collections', 'zotero_search', 'zotero_add', 'zotero_export'],
+    tools: [
+      'zotero_collections',
+      'zotero_search',
+      'zotero_add',
+      'zotero_export',
+    ],
     name: 'Zotero Integration',
     category: 'academic',
     description:
