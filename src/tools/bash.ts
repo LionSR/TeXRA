@@ -34,6 +34,7 @@ import { executeCommand, signalProcessGroup } from '@utils/system/execUtils';
 // Local imports - utils
 import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
+import { formatDuration } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -101,12 +102,14 @@ export class BashTool extends defineTool({
     timeoutMs: number,
     ctx: ReturnType<typeof getCurrentToolFileInteractionContext>,
   ): Promise<ToolResult> {
+    const startedAt = Date.now();
     const result = await executeCommand(command, {
       truncate: true,
       timeout: timeoutMs,
       onStdout: ctx?.onToolOutput,
       onStderr: ctx?.onToolOutput,
     });
+    const wallTimeMs = Date.now() - startedAt;
 
     if (result.timedOut) {
       const parts: string[] = [
@@ -122,10 +125,12 @@ export class BashTool extends defineTool({
       throw new ToolError(parts.join('\n'));
     }
 
+    const duration = formatDuration(wallTimeMs);
+
     if (result.success) {
       const preview = truncateWithEllipsis(command, 60);
       return {
-        summary: `Executed: ${preview} (exit 0)`,
+        summary: `Executed: ${preview} (exit 0, ${duration})`,
         output: result.stdout ?? '',
       };
     }
@@ -133,7 +138,9 @@ export class BashTool extends defineTool({
     const errorOutput =
       [result.stderr, result.stdout].filter(Boolean).join('\n') ||
       'No error output available';
-    throw new ToolError(`Command failed: ${errorOutput}`);
+    throw new ToolError(
+      `Command failed (${duration}): ${errorOutput}`,
+    );
   }
 
   private async executeBackground(
