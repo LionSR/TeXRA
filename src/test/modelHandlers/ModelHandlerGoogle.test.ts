@@ -20,6 +20,7 @@ import type { Content } from '@google/genai';
 describe('ModelHandlerGoogleGenAI.shouldContinue', () => {
   const handler = new ModelHandlerGoogleGenAI({
     name: 'test-google-model',
+    label: 'Test Google Model',
     fullName: 'google/test',
     shortName: 'google/test',
     provider: ModelProvider.GOOGLE,
@@ -70,6 +71,7 @@ describe('ModelHandlerGoogleGenAI.shouldContinue', () => {
 describe('ModelHandlerGoogleGenAI.extractToolUse', () => {
   const handler = new ModelHandlerGoogleGenAI({
     name: 'test-google-model',
+    label: 'Test Google Model',
     fullName: 'google/test',
     shortName: 'google/test',
     provider: ModelProvider.GOOGLE,
@@ -112,6 +114,7 @@ describe('ModelHandlerGoogleGenAI.extractToolUse', () => {
 describe('ModelHandlerGoogleGenAI.createToolUseFollowUpMessages', () => {
   const handler = new ModelHandlerGoogleGenAI({
     name: 'test-google-model',
+    label: 'Test Google Model',
     fullName: 'google/test',
     shortName: 'google/test',
     provider: ModelProvider.GOOGLE,
@@ -158,6 +161,7 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
   it('strips unsupported identifier fields before issuing chat history', async () => {
     const handler = new ModelHandlerGoogleGenAI({
       name: 'test-google-model',
+      label: 'Test Google Model',
       fullName: 'google/test',
       shortName: 'google/test',
       provider: ModelProvider.GOOGLE,
@@ -252,6 +256,7 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
   it('aggregates streamed chunks without relying on SDK response promises', async () => {
     const handler = new ModelHandlerGoogleGenAI({
       name: 'test-google-model',
+      label: 'Test Google Model',
       fullName: 'google/test',
       shortName: 'google/test',
       provider: ModelProvider.GOOGLE,
@@ -350,6 +355,7 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
   it('concatenates automaticFunctionCallingHistory across streamed chunks', async () => {
     const handler = new ModelHandlerGoogleGenAI({
       name: 'test-google-model',
+      label: 'Test Google Model',
       fullName: 'google/test',
       shortName: 'google/test',
       provider: ModelProvider.GOOGLE,
