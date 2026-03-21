@@ -274,8 +274,17 @@ export function formatSubagentDelivery(
 
   if (result.category === 'workflow' && result.outputs.length > 0) {
     lines.push(...formatWorkflowOutputs(result.outputs, options?.diffInfos));
-  } else if (result.category === 'toolUse' && result.lastResponse) {
-    lines.push('<response>', result.lastResponse, '</response>');
+  } else if (result.category === 'toolUse') {
+    if (result.lastResponse) {
+      lines.push('<response>', result.lastResponse, '</response>');
+    }
+    if (result.touchedFiles && result.touchedFiles.length > 0) {
+      lines.push(
+        '<touched-files>',
+        ...result.touchedFiles.map((f) => `<file path="${escapeAttr(f)}" />`),
+        '</touched-files>',
+      );
+    }
   }
 
   lines.push('</subagent-result>');

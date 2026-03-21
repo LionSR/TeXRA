@@ -3,12 +3,14 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS } from '@shared/schemas';
 
-import { findLastAssistantText } from './types';
+import { findLastAssistantText, assertPreparedShared } from './types';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
 import type { ToolUseRunShared, WaitExecResult } from './types';
+import { FileInteractionState } from '@agent/core/AgentWorkspaceState';
 
 interface WaitPrepResult {
   lastResponse: string | undefined;
+  touchedFiles: string[];
 }
 
 export class ToolUseWaitNode<C> extends Node<
@@ -20,12 +22,22 @@ export class ToolUseWaitNode<C> extends Node<
     const { modelHandler, onBeforeWaiting } = this.services;
 
     // Only extract last response when the callback is wired (subagent mode)
-    if (!onBeforeWaiting) return { lastResponse: undefined };
+    if (!onBeforeWaiting) return { lastResponse: undefined, touchedFiles: [] };
+
+    // Extract edited file paths from workspace state for delivery to orchestrator
+    let touchedFiles: string[] = [];
+    if (shared.stateSlices?.workspaceSnapshot?.interactions) {
+      const interactions = FileInteractionState.fromSnapshot(
+        shared.stateSlices.workspaceSnapshot.interactions,
+      );
+      touchedFiles = interactions.editedFilePaths;
+    }
 
     return {
       lastResponse: findLastAssistantText(shared.messages, (m) =>
         modelHandler.extractAssistantText(m),
       ),
+      touchedFiles,
     };
   }
 
@@ -37,7 +49,7 @@ export class ToolUseWaitNode<C> extends Node<
       return { kind: 'stop' };
     }
 
-    await onBeforeWaiting?.(prepRes.lastResponse);
+    await onBeforeWaiting?.(prepRes.lastResponse, prepRes.touchedFiles);
 
     if (!session.hasQueuedFollowUp()) {
       StreamStatusService.set(streamId, STREAM_STATUS.WAITING);

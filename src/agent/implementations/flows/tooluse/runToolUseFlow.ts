@@ -12,6 +12,7 @@ import {
 } from '@agent/node/persistedFlow';
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
+import { FileInteractionState } from '@agent/core/AgentWorkspaceState';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { executionToEndStatus } from '@common/constants/streamStatus';
@@ -49,7 +50,7 @@ export interface RunToolUseFlowInput<
   /** When true, delegation tools are filtered out to prevent nesting. */
   isSubagent?: boolean;
   /** Fires before the subagent enters WAITING, delivering the last response to the orchestrator. */
-  onBeforeWaiting?: (lastResponse: string | undefined) => void | Promise<void>;
+  onBeforeWaiting?: (lastResponse: string | undefined, touchedFiles: string[]) => void | Promise<void>;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
 }
@@ -57,6 +58,8 @@ export interface RunToolUseFlowInput<
 export interface RunToolUseFlowResult {
   status: EndGroupStatus;
   lastResponse?: string;
+  /** Workspace-relative paths of files edited by tool calls during this session. */
+  touchedFiles?: string[];
 }
 
 export interface ToolUseFlowContext {
@@ -237,5 +240,15 @@ export async function runToolUseFlow<C = unknown>(
     input.modelHandler.extractAssistantText(m),
   );
 
-  return { status, lastResponse };
+  // Extract edited file paths from workspace state for delivery to orchestrator.
+  let touchedFiles: string[] | undefined;
+  if (shared.stateSlices?.workspaceSnapshot?.interactions) {
+    const interactions = FileInteractionState.fromSnapshot(
+      shared.stateSlices.workspaceSnapshot.interactions,
+    );
+    const paths = interactions.editedFilePaths;
+    if (paths.length > 0) touchedFiles = paths;
+  }
+
+  return { status, lastResponse, touchedFiles };
 }

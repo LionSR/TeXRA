@@ -219,7 +219,7 @@ async function executeSubagent(
       }
     },
     onProgress,
-    onBeforeWaiting: async (lastResponse) => {
+    onBeforeWaiting: async (lastResponse, touchedFiles) => {
       if (deliveryState.hasDelivered || !childStreamId) return;
       const wallTimeMs = Date.now() - startedAt;
       const msg = formatSubagentDelivery(
@@ -228,6 +228,7 @@ async function executeSubagent(
           category: 'toolUse' as const,
           status: 'stopped' as const,
           lastResponse,
+          touchedFiles,
           executionId,
           streamId: childStreamId,
         },
