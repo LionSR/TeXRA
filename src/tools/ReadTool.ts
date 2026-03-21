@@ -23,7 +23,6 @@ import { splitContentLines } from '@utils/text/stringUtils';
 // Local file imports
 import { defineTool } from './core/define';
 
-
 /**
  * Schema for range parameter with preprocessing to handle array format.
  * Some models (e.g., DeepSeek) may provide range as [start, end] array
