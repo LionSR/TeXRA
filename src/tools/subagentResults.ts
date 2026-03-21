@@ -269,7 +269,7 @@ export function formatSubagentDelivery(
   ];
 
   if (options?.wallTimeMs !== undefined) {
-    lines.push(`<wall-time>${escapeText(formatDuration(options.wallTimeMs))}</wall-time>`);
+    lines.push(`<wall-time>${formatDuration(options.wallTimeMs)}</wall-time>`);
   }
 
   if (result.category === 'workflow' && result.outputs.length > 0) {
@@ -296,7 +296,7 @@ export function formatSubagentError(
     `<subagent-error id="${escapeAttr(executionId)}" agent="${escapeAttr(agentName)}">`,
   ];
   if (options?.wallTimeMs !== undefined) {
-    lines.push(`<wall-time>${escapeText(formatDuration(options.wallTimeMs))}</wall-time>`);
+    lines.push(`<wall-time>${formatDuration(options.wallTimeMs)}</wall-time>`);
   }
   lines.push(`<message>${escapeText(message)}</message>`, '</subagent-error>');
   return lines.join('\n');
@@ -411,7 +411,7 @@ export function formatBashDelivery(
   const lines = [
     `<background-result id="${executionId}" command="${escapeAttr(command)}">`,
     `<exit-code>${result.exitCode ?? 'unknown'}</exit-code>`,
-    `<wall-time>${escapeText(formatDuration(wallTimeMs))}</wall-time>`,
+    `<wall-time>${formatDuration(wallTimeMs)}</wall-time>`,
   ];
   if (stdoutPreview) {
     lines.push(`<output-preview>${escapeText(stdoutPreview)}</output-preview>`);
