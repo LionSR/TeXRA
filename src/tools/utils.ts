@@ -166,14 +166,10 @@ export function formatFileView({
   // -- output ---------------------------------------------------------------
   const segments: string[] = [];
   if (visibleLines.length > 0) {
-    segments.push(
-      formatLinesWithNumbers(visibleLines, startLine).join('\n'),
-    );
+    segments.push(formatLinesWithNumbers(visibleLines, startLine).join('\n'));
   }
   if (truncated) {
-    segments.push(
-      `...(truncated, ${rangeSize - maxLines} more lines)`,
-    );
+    segments.push(`...(truncated, ${rangeSize - maxLines} more lines)`);
   }
 
   // -- summary --------------------------------------------------------------
@@ -186,7 +182,10 @@ export function formatFileView({
   } else {
     const lastVisibleLine = startLine + visibleCount - 1;
     const isFullRead =
-      !rangeProvided && !truncated && startLine === 1 && lastVisibleLine === totalLines;
+      !rangeProvided &&
+      !truncated &&
+      startLine === 1 &&
+      lastVisibleLine === totalLines;
 
     if (isFullRead) {
       summary = `Read ${filePath}`;

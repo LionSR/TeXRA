@@ -68,10 +68,10 @@ GPT-5 reasoning summaries require account verification. Enable with `texra.model
 
 ## MiniMax Models
 
-| Model ID      | Use Case                       | Cost | Speed  |
-| :------------ | :----------------------------- | :--- | :----- |
-| `minimaxM27`  | Flagship with interleaved thinking | $$   | Medium |
-| `minimaxM25`  | Strong all-rounder             | $$   | Medium |
+| Model ID     | Use Case                           | Cost | Speed  |
+| :----------- | :--------------------------------- | :--- | :----- |
+| `minimaxM27` | Flagship with interleaved thinking | $$   | Medium |
+| `minimaxM25` | Strong all-rounder                 | $$   | Medium |
 
 MiniMax uses interleaved thinking (chain-of-thought woven into responses). API keys are region-specific — international keys (api.minimax.io) and China keys (api.minimaxi.com) are not interchangeable. Toggle the region in the Models tab.
 
@@ -81,13 +81,13 @@ MiniMax uses interleaved thinking (chain-of-thought woven into responses). API k
 
 ## GLM (Zhipu AI / Z.AI) Models
 
-| Model ID      | Use Case                         | Cost | Speed  |
-| :------------ | :------------------------------- | :--- | :----- |
-| `glm5`        | Flagship open-source model       | $$$  | Medium |
-| `glm5turbo`   | Fast inference, agent-optimized  | $$$  | Medium |
-| `glm47`       | Programming and multi-step reasoning | $$   | Medium |
-| `glm46v`      | Multimodal vision model          | $$   | Medium |
-| `glm45`       | Hybrid reasoning (MoE)           | $$   | Medium |
+| Model ID    | Use Case                             | Cost | Speed  |
+| :---------- | :----------------------------------- | :--- | :----- |
+| `glm5`      | Flagship open-source model           | $$$  | Medium |
+| `glm5turbo` | Fast inference, agent-optimized      | $$$  | Medium |
+| `glm47`     | Programming and multi-step reasoning | $$   | Medium |
+| `glm46v`    | Multimodal vision model              | $$   | Medium |
+| `glm45`     | Hybrid reasoning (MoE)               | $$   | Medium |
 
 GLM models support thinking mode (reasoning is shown inline). The API uses a non-standard base path (`/api/paas/v4`), which TeXRA handles automatically.
 
