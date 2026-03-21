@@ -8,7 +8,7 @@
  * - Ultra: All models including premium ($3+/M input)
  */
 
-import { MODEL_CONFIGS, type ModelConfig } from 'npm:llm-zoo@^1.0.2';
+import { MODEL_CONFIGS, type ModelConfig } from 'npm:llm-zoo@^1.2.0';
 
 // =============================================================================
 // Types
@@ -108,6 +108,8 @@ const ALL_PROVIDERS = [
   'xai',
   'moonshot',
   'dashscope',
+  'minimax',
+  'glm',
 ] as const;
 
 // =============================================================================
