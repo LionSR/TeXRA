@@ -109,7 +109,6 @@ export class BashTool extends defineTool({
       onStdout: ctx?.onToolOutput,
       onStderr: ctx?.onToolOutput,
     });
-    const wallTimeMs = Date.now() - startedAt;
 
     if (result.timedOut) {
       const parts: string[] = [
@@ -125,7 +124,7 @@ export class BashTool extends defineTool({
       throw new ToolError(parts.join('\n'));
     }
 
-    const duration = formatDuration(wallTimeMs);
+    const duration = formatDuration(Date.now() - startedAt);
 
     if (result.success) {
       const preview = truncateWithEllipsis(command, 60);

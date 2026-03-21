@@ -231,8 +231,7 @@ async function executeSubagent(
           executionId,
           streamId: childStreamId,
         },
-        undefined,
-        wallTimeMs,
+        { wallTimeMs },
       );
       // Best-effort persist — must never block delivery or abort the subagent.
       try {
@@ -267,12 +266,10 @@ async function executeSubagent(
       }
 
       const wallTimeMs = Date.now() - startedAt;
-      const msg = formatSubagentDelivery(
-        agentName,
-        result,
+      const msg = formatSubagentDelivery(agentName, result, {
         diffInfos,
         wallTimeMs,
-      );
+      });
       void getExecutionStore(executionId).writeReport(msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     },
@@ -280,7 +277,9 @@ async function executeSubagent(
   promise
     .catch((err: unknown) => {
       const wallTimeMs = Date.now() - startedAt;
-      const msg = formatSubagentError(executionId, agentName, err, wallTimeMs);
+      const msg = formatSubagentError(executionId, agentName, err, {
+        wallTimeMs,
+      });
       void getExecutionStore(executionId).writeReport(msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     })
