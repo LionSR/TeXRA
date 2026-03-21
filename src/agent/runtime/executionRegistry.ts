@@ -134,6 +134,13 @@ export function getActiveExecutionIds(): string[] {
   return [...registry.keys()];
 }
 
+/** Terminate all active executions. Used during extension deactivation to prevent orphaned processes. */
+export function killAllActiveExecutions(): void {
+  for (const executionId of [...registry.keys()]) {
+    killExecution(executionId);
+  }
+}
+
 /** Delegate progress update to the handle. */
 export function updateExecutionProgress(
   executionId: string,

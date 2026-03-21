@@ -138,6 +138,14 @@ export async function startRecording(
   }
 }
 
+/** Kill the active recording process if one exists (used during extension deactivation). */
+export function killActiveRecording(): void {
+  if (activeRecordingProcess) {
+    activeRecordingProcess.kill('SIGTERM');
+    resetRecordingState();
+  }
+}
+
 /** Stop the current recording and transcribe it using OpenAI. */
 export async function stopRecordingAndTranscribe(
   context: vscode.ExtensionContext,

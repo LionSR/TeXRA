@@ -7,6 +7,7 @@ const FRAME_INTERVAL_MS = 16;
 
 export class WebviewBridge {
   private pendingFlush = false;
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly changedStreams = new Set<StreamTabId>();
   private readonly cursors = new Map<StreamTabId, number>();
   private readonly unsubscribe: () => void;
@@ -24,6 +25,11 @@ export class WebviewBridge {
 
   dispose(): void {
     this.unsubscribe();
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    this.pendingFlush = false;
     this.changedStreams.clear();
     this.cursors.clear();
   }
@@ -48,7 +54,10 @@ export class WebviewBridge {
   private scheduleFlush(): void {
     if (this.pendingFlush) return;
     this.pendingFlush = true;
-    setTimeout(() => this.flush(), FRAME_INTERVAL_MS);
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null;
+      this.flush();
+    }, FRAME_INTERVAL_MS);
   }
 
   private flush(): void {

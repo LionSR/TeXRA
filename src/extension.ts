@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 // Local imports - core
 import { loadAgents } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
+import { killAllActiveExecutions } from '@agent/runtime/executionRegistry';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import { initializeServerSideKeyAccess } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -29,8 +30,9 @@ import {
   configureLatexSettings,
   refreshModelListIfNeeded,
 } from '@frontend/setup';
-import { FileLister } from '@frontend/files';
 import { agentDirectories } from '@frontend/agents';
+import { FileLister } from '@frontend/files';
+import { killActiveRecording } from '@frontend/media/audio';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { initializeNativeToolEditApproval } from '@frontend/approval/nativeToolEditApproval';
@@ -332,6 +334,13 @@ export async function activate(context: vscode.ExtensionContext) {
 
 export async function deactivate() {
   disposeStatusListener?.();
+
+  // Kill all active child processes (bash, codex, subagents) to prevent orphans.
+  killAllActiveExecutions();
+
+  // Kill any active audio recording process.
+  killActiveRecording();
+
   await UsageLogService.dispose();
   await progressViewProviderInstance?.flushState();
   clearStoreCache();
