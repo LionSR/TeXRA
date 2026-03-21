@@ -119,8 +119,15 @@ const extensionConfig = {
   loader: { '.tex': 'text' },
   plugins: [aliasPlugin, progressPlugin],
   logLevel: 'warning',
+  // Polyfill import.meta.url for ESM-only dependencies (e.g. @openai/codex-sdk)
+  // bundled into CJS. Without this, esbuild replaces import.meta with {} and
+  // calls like createRequire(import.meta.url) throw at runtime.
+  banner: {
+    js: `"use strict"; var importMetaUrl = require("url").pathToFileURL(__filename).href;`,
+  },
   define: {
     'process.env.NODE_ENV': production ? '"production"' : '"development"',
+    'import.meta.url': 'importMetaUrl',
   },
 };
 
