@@ -174,9 +174,7 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
   // China: api.minimaxi.com (note the extra 'i'), International: api.minimax.io
   // Note: Coding Plan uses the same endpoint but requires a separate API key
   if (config.provider === ModelProvider.MINIMAX) {
-    const domain = getMiniMaxUseChina()
-      ? 'api.minimaxi.com'
-      : 'api.minimax.io';
+    const domain = getMiniMaxUseChina() ? 'api.minimaxi.com' : 'api.minimax.io';
     return `https://${domain}/v1`;
   }
 
@@ -184,9 +182,7 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
   // China: open.bigmodel.cn, International: api.z.ai
   // Coding Plan uses /api/coding/paas/v4 path instead of /api/paas/v4
   if (config.provider === ModelProvider.GLM) {
-    const domain = getGLMUseChina()
-      ? 'open.bigmodel.cn'
-      : 'api.z.ai';
+    const domain = getGLMUseChina() ? 'open.bigmodel.cn' : 'api.z.ai';
     const path = getGLMCodingPlan() ? '/api/coding/paas/v4' : '/api/paas/v4';
     return `https://${domain}${path}`;
   }
