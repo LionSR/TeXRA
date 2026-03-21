@@ -18,6 +18,8 @@ const STREAMING_KEY: Record<string, GlobalStateKey> = {
   deepseek: GlobalStateKey.STREAMING_DEEPSEEK,
   moonshot: GlobalStateKey.STREAMING_MOONSHOT,
   dashscope: GlobalStateKey.STREAMING_DASHSCOPE,
+  minimax: GlobalStateKey.STREAMING_MINIMAX,
+  glm: GlobalStateKey.STREAMING_GLM,
 };
 
 /** Map from provider string to GlobalStateKey for per-provider endpoint. */
@@ -29,6 +31,8 @@ const ENDPOINT_KEY: Record<string, GlobalStateKey> = {
   xai: GlobalStateKey.ENDPOINT_XAI,
   moonshot: GlobalStateKey.ENDPOINT_MOONSHOT,
   dashscope: GlobalStateKey.ENDPOINT_DASHSCOPE,
+  minimax: GlobalStateKey.ENDPOINT_MINIMAX,
+  glm: GlobalStateKey.ENDPOINT_GLM,
 };
 
 /** Read the global streaming default. */
@@ -129,7 +133,7 @@ export function getProviderDisplayName(
   return defaultName;
 }
 
-/** Resolve key URL for a provider, accounting for DashScope China region. */
+/** Resolve key URL for a provider, accounting for region toggles. */
 export function getProviderKeyUrl(
   provider: string,
   defaultUrl: string,
@@ -137,7 +141,46 @@ export function getProviderKeyUrl(
   if (provider === 'dashscope' && getDashScopeUseChina()) {
     return BAILIAN_KEY_URL;
   }
+  if (provider === 'minimax' && getMiniMaxUseChina()) {
+    return 'https://platform.minimaxi.com/';
+  }
+  if (provider === 'glm' && !getGLMUseChina()) {
+    return 'https://z.ai/';
+  }
   return defaultUrl;
+}
+
+// ---------------------------------------------------------------------------
+// MiniMax region setting (globalSM-backed)
+// ---------------------------------------------------------------------------
+
+/** Whether MiniMax is set to use the China region (minimaxi.com). */
+export function getMiniMaxUseChina(): boolean {
+  return (
+    globalSM?.get<boolean>(GlobalStateKey.MINIMAX_USE_CHINA, false) ?? false
+  );
+}
+
+// ---------------------------------------------------------------------------
+// GLM region setting (globalSM-backed)
+// ---------------------------------------------------------------------------
+
+/** Whether GLM is set to use the China region (bigmodel.cn). Defaults to true since bigmodel.cn is the primary platform. */
+export function getGLMUseChina(): boolean {
+  return (
+    globalSM?.get<boolean>(GlobalStateKey.GLM_USE_CHINA, true) ?? true
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Coding plan settings (globalSM-backed)
+// ---------------------------------------------------------------------------
+
+/** Whether GLM is set to use Coding Plan (subscription-based API access). */
+export function getGLMCodingPlan(): boolean {
+  return (
+    globalSM?.get<boolean>(GlobalStateKey.GLM_CODING_PLAN, false) ?? false
+  );
 }
 
 // ---------------------------------------------------------------------------

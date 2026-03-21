@@ -45,6 +45,8 @@ export class SecretManager {
     'deepseek',
     'moonshot',
     'dashscope',
+    'minimax',
+    'glm',
   ] as const;
 
   public static getApiKeySecretName(provider: ApiProvider): string {
