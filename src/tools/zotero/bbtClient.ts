@@ -69,6 +69,35 @@ export interface CslDate {
 }
 
 /**
+ * Zotero collection metadata returned by `user.groups(true)`.
+ */
+export interface BbtCollection {
+  key: string;
+  name: string;
+  parentCollection?: string | false;
+}
+
+/**
+ * Library (group) entry returned by `user.groups`.
+ */
+export interface BbtLibrary {
+  id: number;
+  name: string;
+  collections?: BbtCollection[];
+}
+
+/**
+ * Collection with nested parent chain, returned by `item.collections(citekeys, true)`.
+ * When `includeParents` is true, `parentCollection` is recursively expanded
+ * into a full object instead of a key string.
+ */
+export interface BbtCollectionChain {
+  key: string;
+  name: string;
+  parentCollection?: BbtCollectionChain | false;
+}
+
+/**
  * CSL JSON item returned by Better BibTeX item.search.
  *
  * This is standard CSL JSON (from Zotero.Utilities.Item.itemToCSLJSON)
