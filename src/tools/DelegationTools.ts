@@ -35,7 +35,11 @@ import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
 // Local imports - latex
-import { extractBibliographyContext } from '@latex/extractBibliography';
+import {
+  extractBibliographyContext,
+  loadBibliographyEntries,
+  summarizeBibliographyEntries,
+} from '@latex/extractBibliography';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import { tikzPictureManager } from '@latex/TikzPictureManager';
 
@@ -493,7 +497,7 @@ const WorkflowAgentInputSchema = z.object({
     .boolean()
     .prefault(false)
     .describe(
-      'When true, discovers .bib files referenced by the input LaTeX file(s) and attaches them as auxiliary files. Merges with any explicitly provided auxiliaryFile/auxiliaryFiles.',
+      'When true, resolves cited BibTeX entries from .bib files referenced by the input LaTeX file(s) and appends them to the instruction. Only cited entries are included (capped at 50) to avoid bloating the prompt with large bibliography files.',
     ),
   outputFiles: z
     .array(z.string())
@@ -527,7 +531,7 @@ Model selection: use the largest models for challenging tasks requiring deep rea
 Extraction attachments — automatically discover and attach assets from input LaTeX file(s):
 - extractFigures=true: Extract \\includegraphics/\\begin{overpic} figures and attach as media files.
 - extractTikz=true: Compile TikZ figures into standalone PDFs and attach as media files.
-- extractBibliography=true: Discover referenced .bib files and attach as auxiliary files.
+- extractBibliography=true: Resolve cited BibTeX entries and include them in the instruction.
 All extraction options merge with explicitly provided files and are non-fatal on failure.
 
 Example: agent=correct, inputFile=paper.tex, extractFigures=true, extractBibliography=true, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
@@ -601,7 +605,6 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, extractBibliog
 
     // Collect effective file lists — extraction options may add entries
     const effectiveMediaFiles = [...input.mediaFiles];
-    const effectiveAuxiliaryFiles = [...input.auxiliaryFiles];
 
     const allInputTexFiles = [input.inputFile, ...input.inputFiles].filter(
       (f) => f.toLowerCase().endsWith('.tex'),
@@ -668,24 +671,49 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, extractBibliog
       }
     }
 
-    // Discover .bib files referenced by input file(s) when requested
+    // Extract cited bibliography entries when requested.
+    // Instead of attaching raw .bib files (which can be very large),
+    // we resolve only the cited entries and append them to the instruction.
+    let bibEntriesSuffix = '';
     if (input.extractBibliography) {
-      const existingAux = new Set(
-        [input.auxiliaryFile, ...effectiveAuxiliaryFiles].filter(Boolean),
-      );
+      const allBibFiles = new Set<string>();
+      const allCitationKeys = new Set<string>();
+
       for (const inputFilePath of allInputTexFiles) {
         try {
           const context = await extractBibliographyContext(inputFilePath);
           for (const bibFile of context.bibliographyFiles) {
-            if (!existingAux.has(bibFile)) {
-              effectiveAuxiliaryFiles.push(bibFile);
-              existingAux.add(bibFile);
-            }
+            allBibFiles.add(bibFile);
+          }
+          for (const key of context.citationKeys) {
+            allCitationKeys.add(key);
           }
         } catch {
           logger.debug(
             LOG_CHANNEL,
             `Bibliography extraction skipped for ${inputFilePath}`,
+          );
+        }
+      }
+
+      if (allBibFiles.size > 0 && allCitationKeys.size > 0) {
+        try {
+          const MAX_BIB_ENTRIES = 50;
+          const { entries } = await loadBibliographyEntries(
+            [...allBibFiles],
+            [...allCitationKeys],
+          );
+          if (entries.size > 0) {
+            const lines = summarizeBibliographyEntries(
+              entries,
+              MAX_BIB_ENTRIES,
+            );
+            bibEntriesSuffix = `\n\n<bibliography>\n${lines.join('\n')}\n</bibliography>`;
+          }
+        } catch {
+          logger.debug(
+            LOG_CHANNEL,
+            'Bibliography entry loading failed',
           );
         }
       }
@@ -697,13 +725,13 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, extractBibliog
       agentCategory: AgentCategory.Workflow,
       agent: input.agent,
       model,
-      instruction: input.instruction,
+      instruction: input.instruction + bibEntriesSuffix,
       inputFile: input.inputFile,
       inputFiles: input.inputFiles,
       referenceFile: input.referenceFile,
       referenceFiles: input.referenceFiles,
       auxiliaryFile: input.auxiliaryFile,
-      auxiliaryFiles: effectiveAuxiliaryFiles,
+      auxiliaryFiles: input.auxiliaryFiles,
       mediaFile: input.mediaFile,
       mediaFiles: effectiveMediaFiles,
       outputFiles: input.outputFiles,
