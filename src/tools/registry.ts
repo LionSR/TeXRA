@@ -33,7 +33,12 @@ import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
 import { PlanTool } from './plan';
 import { TodoWriteTool } from './todo';
 import { MemoryTool } from './memory';
-import { ZoteroAddTool, ZoteroSearchTool, ZoteroExportTool } from './zotero';
+import {
+  ZoteroAddTool,
+  ZoteroCollectionsTool,
+  ZoteroSearchTool,
+  ZoteroExportTool,
+} from './zotero';
 import { CodexTool } from './codex';
 import {
   LeanDiagnosticsTool,
@@ -85,6 +90,7 @@ function createDefaultTools() {
     crossref_doi: new CrossrefDoiTool(),
     crossref_search: new CrossrefSearchTool(),
     zotero_add: new ZoteroAddTool(),
+    zotero_collections: new ZoteroCollectionsTool(),
     zotero_search: new ZoteroSearchTool(),
     zotero_export: new ZoteroExportTool(),
     wolfram: new WolframTool(),
