@@ -15,6 +15,7 @@ import { defineTool } from '@tools/core/define';
 import {
   callBetterBibTeX,
   getZoteroPort,
+  type BbtCollectionChain,
   type BbtSearchResultItem,
 } from './bbtClient';
 
@@ -45,6 +46,13 @@ const ZoteroSearchInputSchema = z
       .string()
       .describe(
         'Optional library name to search in. Use "*" to search all libraries.',
+      )
+      .nullish(),
+    include_collections: z
+      .boolean()
+      .describe(
+        'When true, each result includes the Zotero collections (folders) it belongs to, ' +
+          'shown as breadcrumb paths. Useful for understanding how the library is organized.',
       )
       .nullish(),
   })
@@ -106,6 +114,19 @@ function formatSearchResult(item: BbtSearchResultItem): string {
   return `[${citekey}] ${title}${creatorPart}${yearPart} [${type}]`;
 }
 
+/**
+ * Flatten a nested parent chain into a breadcrumb path.
+ */
+function collectionPath(chain: BbtCollectionChain): string {
+  const parts: string[] = [];
+  let current: BbtCollectionChain | false | undefined = chain;
+  while (current && current !== false) {
+    parts.unshift(current.name);
+    current = current.parentCollection;
+  }
+  return parts.join(' / ');
+}
+
 export class ZoteroSearchTool extends defineTool({
   name: 'zotero_search',
   description:
@@ -120,6 +141,7 @@ export class ZoteroSearchTool extends defineTool({
     author,
     year,
     library,
+    include_collections,
   }: ZoteroSearchInput) {
     const port = getZoteroPort();
 
@@ -151,12 +173,41 @@ export class ZoteroSearchTool extends defineTool({
       };
     }
 
+    // Optionally fetch collection membership for each result
+    const collectionMap = include_collections
+      ? await this.fetchCollections(
+          result.map((r) => r.citekey).filter(Boolean),
+          port,
+        )
+      : null;
+
     // Format results
-    const items = result.map((item) => formatSearchResult(item));
+    const items = result.map((item) => {
+      const base = formatSearchResult(item);
+      if (!collectionMap) return base;
+
+      const chains = collectionMap[item.citekey];
+      if (!chains || chains.length === 0) return base;
+
+      const paths = chains.map((c) => collectionPath(c));
+      return `${base}\n  Filed in: ${paths.join(', ')}`;
+    });
 
     return {
       summary: `Found ${result.length} item${result.length === 1 ? '' : 's'} matching ${label}`,
       output: items.join('\n'),
     };
+  }
+
+  private async fetchCollections(
+    citekeys: string[],
+    port: number,
+  ): Promise<Record<string, BbtCollectionChain[]>> {
+    if (citekeys.length === 0) return {};
+    return callBetterBibTeX<Record<string, BbtCollectionChain[]>>(
+      'item.collections',
+      [citekeys, true],
+      port,
+    );
   }
 }
