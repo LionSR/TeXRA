@@ -129,6 +129,7 @@ describe('BashTool', () => {
 
     const config: ModelConfig = {
       name: 'test',
+      label: 'Test',
       fullName: 'test',
       shortName: 'test',
       provider: ModelProvider.OPENAI,
