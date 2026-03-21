@@ -35,11 +35,6 @@ import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
 // Local imports - latex
-import {
-  extractBibliographyContext,
-  loadBibliographyEntries,
-  summarizeBibliographyEntries,
-} from '@latex/extractBibliography';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import { tikzPictureManager } from '@latex/TikzPictureManager';
 
@@ -493,12 +488,6 @@ const WorkflowAgentInputSchema = z.object({
     .describe(
       'When true, extracts TikZ figures from the input LaTeX file(s), compiles them into standalone PDFs, and attaches them as media files.',
     ),
-  extractBibliography: z
-    .boolean()
-    .prefault(false)
-    .describe(
-      'When true, resolves cited BibTeX entries from .bib files referenced by the input LaTeX file(s) and appends them to the instruction. Only cited entries are included (capped at 50) to avoid bloating the prompt with large bibliography files.',
-    ),
   outputFiles: z
     .array(z.string())
     .prefault([])
@@ -531,10 +520,9 @@ Model selection: use the largest models for challenging tasks requiring deep rea
 Extraction attachments — automatically discover and attach assets from input LaTeX file(s):
 - extractFigures=true: Extract \\includegraphics/\\begin{overpic} figures and attach as media files.
 - extractTikz=true: Compile TikZ figures into standalone PDFs and attach as media files.
-- extractBibliography=true: Resolve cited BibTeX entries and include them in the instruction.
 All extraction options merge with explicitly provided files and are non-fatal on failure.
 
-Example: agent=correct, inputFile=paper.tex, extractFigures=true, extractBibliography=true, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
+Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
@@ -671,61 +659,13 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, extractBibliog
       }
     }
 
-    // Extract cited bibliography entries when requested.
-    // Instead of attaching raw .bib files (which can be very large),
-    // we resolve only the cited entries and append them to the instruction.
-    let bibEntriesSuffix = '';
-    if (input.extractBibliography) {
-      const allBibFiles = new Set<string>();
-      const allCitationKeys = new Set<string>();
-
-      for (const inputFilePath of allInputTexFiles) {
-        try {
-          const context = await extractBibliographyContext(inputFilePath);
-          for (const bibFile of context.bibliographyFiles) {
-            allBibFiles.add(bibFile);
-          }
-          for (const key of context.citationKeys) {
-            allCitationKeys.add(key);
-          }
-        } catch {
-          logger.debug(
-            LOG_CHANNEL,
-            `Bibliography extraction skipped for ${inputFilePath}`,
-          );
-        }
-      }
-
-      if (allBibFiles.size > 0 && allCitationKeys.size > 0) {
-        try {
-          const MAX_BIB_ENTRIES = 50;
-          const { entries } = await loadBibliographyEntries(
-            [...allBibFiles],
-            [...allCitationKeys],
-          );
-          if (entries.size > 0) {
-            const lines = summarizeBibliographyEntries(
-              entries,
-              MAX_BIB_ENTRIES,
-            );
-            bibEntriesSuffix = `\n\n<bibliography>\n${lines.join('\n')}\n</bibliography>`;
-          }
-        } catch {
-          logger.debug(
-            LOG_CHANNEL,
-            'Bibliography entry loading failed',
-          );
-        }
-      }
-    }
-
     // Construct workflow proposal
     // Memory paths are already validated by memoriesField's .superRefine() at schema parse time.
     const proposal = WorkflowAgentProposalSchema.parse({
       agentCategory: AgentCategory.Workflow,
       agent: input.agent,
       model,
-      instruction: input.instruction + bibEntriesSuffix,
+      instruction: input.instruction,
       inputFile: input.inputFile,
       inputFiles: input.inputFiles,
       referenceFile: input.referenceFile,
