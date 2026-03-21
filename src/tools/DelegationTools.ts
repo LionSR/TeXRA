@@ -604,7 +604,7 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, extractBibliog
     const effectiveAuxiliaryFiles = [...input.auxiliaryFiles];
 
     const allInputTexFiles = [input.inputFile, ...input.inputFiles].filter(
-      (f) => f.endsWith('.tex'),
+      (f) => f.toLowerCase().endsWith('.tex'),
     );
 
     // Extract figures from input file(s) when requested
@@ -650,7 +650,10 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, extractBibliog
           const location = pathToLocation(inputFilePath);
           const compiledPdfs = await tikzPictureManager.compile(location);
           for (const pdfLocation of compiledPdfs) {
-            const pdfPath = pdfLocation.absolutePath;
+            const pdfPath =
+              pdfLocation.kind !== 'external'
+                ? pdfLocation.relativePath
+                : pdfLocation.absolutePath;
             if (!existingMedia.has(pdfPath)) {
               effectiveMediaFiles.push(pdfPath);
               existingMedia.add(pdfPath);
