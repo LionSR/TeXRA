@@ -611,6 +611,24 @@
             "maximum": 100,
             "description": "Number of recent commits to show in the commit selection dropdown",
             "order": 1
+          },
+          "texra.git.markCommits": {
+            "type": "boolean",
+            "default": false,
+            "description": "Mark commits made by TeXRA with a custom author name and email",
+            "order": 2
+          },
+          "texra.git.authorName": {
+            "type": "string",
+            "default": "TeXRA",
+            "description": "Author name used for commits when 'Mark Commits' is enabled",
+            "order": 3
+          },
+          "texra.git.authorEmail": {
+            "type": "string",
+            "default": "texra@users.noreply.github.com",
+            "description": "Author email used for commits when 'Mark Commits' is enabled",
+            "order": 4
           }
         }
       },
