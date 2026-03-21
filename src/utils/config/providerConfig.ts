@@ -167,9 +167,7 @@ export function getMiniMaxUseChina(): boolean {
 
 /** Whether GLM is set to use the China region (bigmodel.cn). Defaults to true since bigmodel.cn is the primary platform. */
 export function getGLMUseChina(): boolean {
-  return (
-    globalSM?.get<boolean>(GlobalStateKey.GLM_USE_CHINA, true) ?? true
-  );
+  return globalSM?.get<boolean>(GlobalStateKey.GLM_USE_CHINA, true) ?? true;
 }
 
 // ---------------------------------------------------------------------------
@@ -178,9 +176,7 @@ export function getGLMUseChina(): boolean {
 
 /** Whether GLM is set to use Coding Plan (subscription-based API access). */
 export function getGLMCodingPlan(): boolean {
-  return (
-    globalSM?.get<boolean>(GlobalStateKey.GLM_CODING_PLAN, false) ?? false
-  );
+  return globalSM?.get<boolean>(GlobalStateKey.GLM_CODING_PLAN, false) ?? false;
 }
 
 // ---------------------------------------------------------------------------
