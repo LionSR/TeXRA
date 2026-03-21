@@ -179,6 +179,7 @@ async function executeSubagent(
   options?: { enableYoloOnChild?: boolean; approvalMeta?: ApprovalMeta },
 ): Promise<ToolResult> {
   const executionId = generateExecutionId();
+  const startedAt = Date.now();
 
   const parentExecutionId = getCurrentToolFileInteractionContext()?.executionId;
   const syntheticConfig = AgentConfigSchema.parse(configPayload);
@@ -220,13 +221,19 @@ async function executeSubagent(
     onProgress,
     onBeforeWaiting: async (lastResponse) => {
       if (deliveryState.hasDelivered || !childStreamId) return;
-      const msg = formatSubagentDelivery(agentName, {
-        category: 'toolUse' as const,
-        status: 'stopped' as const,
-        lastResponse,
-        executionId,
-        streamId: childStreamId,
-      });
+      const wallTimeMs = Date.now() - startedAt;
+      const msg = formatSubagentDelivery(
+        agentName,
+        {
+          category: 'toolUse' as const,
+          status: 'stopped' as const,
+          lastResponse,
+          executionId,
+          streamId: childStreamId,
+        },
+        undefined,
+        wallTimeMs,
+      );
       // Best-effort persist — must never block delivery or abort the subagent.
       try {
         await getExecutionStore(executionId).writeReport(msg);
@@ -259,14 +266,21 @@ async function executeSubagent(
         }
       }
 
-      const msg = formatSubagentDelivery(agentName, result, diffInfos);
+      const wallTimeMs = Date.now() - startedAt;
+      const msg = formatSubagentDelivery(
+        agentName,
+        result,
+        diffInfos,
+        wallTimeMs,
+      );
       void getExecutionStore(executionId).writeReport(msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     },
   });
   promise
     .catch((err: unknown) => {
-      const msg = formatSubagentError(executionId, agentName, err);
+      const wallTimeMs = Date.now() - startedAt;
+      const msg = formatSubagentError(executionId, agentName, err, wallTimeMs);
       void getExecutionStore(executionId).writeReport(msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     })
