@@ -19,6 +19,11 @@ export interface EmlParseResult {
   images: EmlImageAttachment[];
 }
 
+interface AttachmentPartition {
+  images: EmlImageAttachment[];
+  otherNames: string[];
+}
+
 const IMAGE_MIME_PREFIX = 'image/';
 
 /**
@@ -31,19 +36,16 @@ const IMAGE_MIME_PREFIX = 'image/';
  */
 export async function parseEml(rawEml: string): Promise<EmlParseResult> {
   const email = await PostalMime.parse(rawEml);
-  const images = extractImages(email.attachments);
-  const text = formatEmail(email, images);
-  return { text, images };
+  const partition = partitionAttachments(email.attachments);
+  const text = formatEmail(email, partition);
+  return { text, images: partition.images };
 }
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-function formatEmail(
-  email: Email,
-  extractedImages: EmlImageAttachment[],
-): string {
+function formatEmail(email: Email, { images, otherNames }: AttachmentPartition): string {
   const sections: string[] = [];
 
   // -- Headers --------------------------------------------------------------
@@ -79,20 +81,16 @@ function formatEmail(
   }
 
   // -- Image attachments (returned as binary, noted in text) ----------------
-  if (extractedImages.length > 0) {
+  if (images.length > 0) {
     sections.push(
-      `Images (attached for visual inspection):\n${extractedImages.map((img) => `  - ${img.filename}`).join('\n')}`,
+      `Images (attached for visual inspection):\n${images.map((img) => `  - ${img.filename}`).join('\n')}`,
     );
   }
 
   // -- Non-image attachments (listed by name only) --------------------------
-  const nonImageNames = email.attachments
-    .filter((a) => !a.mimeType.startsWith(IMAGE_MIME_PREFIX))
-    .map((a) => a.filename)
-    .filter(Boolean);
-  if (nonImageNames.length > 0) {
+  if (otherNames.length > 0) {
     sections.push(
-      `Other attachments:\n${nonImageNames.map((n) => `  - ${n}`).join('\n')}`,
+      `Other attachments:\n${otherNames.map((n) => `  - ${n}`).join('\n')}`,
     );
   }
 
@@ -103,12 +101,16 @@ function formatEmail(
 // Image extraction
 // ---------------------------------------------------------------------------
 
-function extractImages(attachments: Attachment[]): EmlImageAttachment[] {
+function partitionAttachments(attachments: Attachment[]): AttachmentPartition {
   const images: EmlImageAttachment[] = [];
+  const otherNames: string[] = [];
   let unnamedCounter = 0;
 
   for (const att of attachments) {
-    if (!att.mimeType.startsWith(IMAGE_MIME_PREFIX)) continue;
+    if (!att.mimeType.startsWith(IMAGE_MIME_PREFIX)) {
+      if (att.filename) otherNames.push(att.filename);
+      continue;
+    }
 
     const bytes = toUint8Array(att.content);
     if (bytes.byteLength === 0) continue;
@@ -118,14 +120,14 @@ function extractImages(attachments: Attachment[]): EmlImageAttachment[] {
     images.push({ filename, mimeType: att.mimeType, bytes });
   }
 
-  return images;
+  return { images, otherNames };
 }
 
 function toUint8Array(content: ArrayBuffer | Uint8Array | string): Uint8Array {
   if (content instanceof Uint8Array) return content;
   if (content instanceof ArrayBuffer) return new Uint8Array(content);
-  // base64-encoded string (when attachmentEncoding is 'base64')
-  return Uint8Array.from(Buffer.from(content, 'base64'));
+  // base64-encoded string — Buffer.from decodes in place, wrap as Uint8Array view
+  return new Uint8Array(Buffer.from(content, 'base64'));
 }
 
 function extensionFromMime(mimeType: string): string {

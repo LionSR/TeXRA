@@ -5,7 +5,7 @@ import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports - tools
-import type { ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@tools/result';
 import {
   buildFileAttachment,
   formatFileView,
@@ -77,6 +77,12 @@ export class ReadFileTool extends defineTool({
     let lines: string[];
 
     if (path.extname(input.path).toLowerCase() === '.eml') {
+      const stats = await WorkspaceFS.stat(input.path);
+      if (stats.size > MAX_EML_BYTES) {
+        throw new ToolError(
+          `EML file exceeds maximum size of ${MAX_EML_BYTES / (1024 * 1024)} MiB.`,
+        );
+      }
       const raw = await WorkspaceFS.read(input.path);
       const { text, images } = await parseEml(raw);
       lines = splitContentLines(text);
@@ -196,6 +202,9 @@ export class ReadFileTool extends defineTool({
     return { summary, output, files: [attachment] };
   }
 }
+
+/** Guard against very large EML files exhausting memory during parsing. */
+const MAX_EML_BYTES = 15 * 1024 * 1024; // 15 MiB — matches DEFAULT_ATTACHMENT_MAX_BYTES
 
 const IMAGE_EXTENSIONS = new Set([
   '.png',
