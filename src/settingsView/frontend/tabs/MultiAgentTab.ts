@@ -232,29 +232,23 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) customPresets: AgentModePreset[] = [];
   @state() private activePresetId: string | null = null;
 
-  private handleToggle(event: Event): void {
+  private emitToggle(eventName: string, event: Event): void {
     const target = event.target as HTMLInputElement | null;
     this.dispatchEvent(
-      createEvent('super-yolo-toggle', { enabled: Boolean(target?.checked) }),
+      createEvent(eventName, { enabled: Boolean(target?.checked) }),
     );
+  }
+
+  private handleToggle(event: Event): void {
+    this.emitToggle('super-yolo-toggle', event);
   }
 
   private handleKillToggle(event: Event): void {
-    const target = event.target as HTMLInputElement | null;
-    this.dispatchEvent(
-      createEvent('allow-orchestrator-kill-toggle', {
-        enabled: Boolean(target?.checked),
-      }),
-    );
+    this.emitToggle('allow-orchestrator-kill-toggle', event);
   }
 
   private handleDetachToggle(event: Event): void {
-    const target = event.target as HTMLInputElement | null;
-    this.dispatchEvent(
-      createEvent('detach-subagents-on-stop-toggle', {
-        enabled: Boolean(target?.checked),
-      }),
-    );
+    this.emitToggle('detach-subagents-on-stop-toggle', event);
   }
 
   private handlePresetClick(preset: AgentModePreset): void {
