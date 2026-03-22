@@ -15,7 +15,7 @@ export interface StateSlicesSnapshot {
   userChannels: UserVariableChannels;
 }
 
-/** Extract edited file paths directly from a workspace snapshot without reconstructing state classes. */
+/** Extract edited file paths from a workspace state snapshot. */
 export function extractTouchedFiles(stateSlices: StateSlicesSnapshot | null): string[] {
   const edits = stateSlices?.workspaceSnapshot?.interactions?.edits;
   if (!edits || edits.length === 0) return [];
