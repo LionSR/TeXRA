@@ -252,6 +252,8 @@ export function detachActiveChildren(parentStreamId: StreamTabId): void {
       handle.childStreamId !== parentStreamId
     ) {
       handle.detach();
+    } else if (handle instanceof ProcessExecutionHandle) {
+      handle.terminate();
     }
   }
   emitActiveSubagentsUpdate(parentStreamId, registry.values());
