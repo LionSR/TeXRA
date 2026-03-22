@@ -5,6 +5,7 @@ import { z } from 'zod';
 // Local imports - agent
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { textFollowUp, type FollowUpItem } from '@agent/toolUse/FollowUpQueue';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse';
 import { logErrorMessage } from '@common/errors';
@@ -43,19 +44,19 @@ async function resumeFromSnapshot(
   ToolUseFollowUpQueue.acquire(streamId);
   StreamStatusService.set(streamId, STREAM_STATUS.RESUMING);
 
-  let queuedFollowUps: string[] = [];
+  let queuedFollowUps: FollowUpItem[] = [];
   try {
     queuedFollowUps = ToolUseFollowUpQueue.drain(streamId);
     bus.emit('updateQueuedFollowUps', { streamId });
 
     await resumeToolUseFromSnapshot(snapshot, (session) => {
-      const allFollowUps =
+      const allFollowUps: FollowUpItem[] =
         followUp !== undefined
-          ? [followUp, ...queuedFollowUps]
+          ? [textFollowUp(followUp), ...queuedFollowUps]
           : queuedFollowUps;
 
-      if (allFollowUps.length > 0) {
-        session.appendFollowUp(allFollowUps.join('\n\n'));
+      for (const item of allFollowUps) {
+        session.appendFollowUp(item);
       }
     });
 

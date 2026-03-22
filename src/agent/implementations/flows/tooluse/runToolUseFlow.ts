@@ -12,6 +12,7 @@ import {
 } from '@agent/node/persistedFlow';
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
+import type { FollowUpItem } from '@agent/toolUse/FollowUpQueue';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { executionToEndStatus } from '@common/constants/streamStatus';
@@ -52,6 +53,14 @@ export interface RunToolUseFlowInput<
   onBeforeWaiting?: (lastResponse: string | undefined) => void | Promise<void>;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
+  /**
+   * Called when a resume_tool follow-up item is received from the queue.
+   * Allows automatic processing of subagent resume requests that were
+   * queued as follow-ups rather than triggered via tool calls.
+   */
+  onResumeToolFollowUp?: (
+    item: Extract<FollowUpItem, { kind: 'resume_tool' }>,
+  ) => void | Promise<void>;
 }
 
 export interface RunToolUseFlowResult {

@@ -30,8 +30,12 @@ import {
   getCurrentToolFileInteractionContext,
   type ToolFileInteractionContext,
 } from '@agent/toolUse/ToolFileInteractionContext';
-import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import {
+  sendFollowUp,
+  sendFollowUpItem,
+} from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { resumeToolFollowUp } from '@agent/toolUse/FollowUpQueue';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';

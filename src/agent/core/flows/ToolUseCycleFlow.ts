@@ -247,7 +247,21 @@ class ToolUsePrepNode<C> extends BaseNode<
     let queuedFollowUp: string | null = null;
     if (this.services.session?.hasQueuedFollowUp()) {
       // Drain without waiting (we know there's something)
-      queuedFollowUp = await this.services.session.waitForFollowUp(() => false);
+      const items = await this.services.session.waitForFollowUp(() => false);
+      if (items) {
+        // Process resume_tool items via callback, collect text items
+        const textParts: string[] = [];
+        for (const item of items) {
+          if (item.kind === 'resume_tool') {
+            await this.services.onResumeToolFollowUp?.(item);
+          } else {
+            textParts.push(item.content);
+          }
+        }
+        if (textParts.length > 0) {
+          queuedFollowUp = textParts.join('\n\n');
+        }
+      }
     }
 
     return { interrupted, queuedFollowUp };

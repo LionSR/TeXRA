@@ -1,6 +1,7 @@
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
+import type { FollowUpItem } from '@agent/toolUse/FollowUpQueue';
 import type { ToolDefinition } from '@model';
 import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
 import type {
@@ -22,6 +23,14 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
     lastResponse: string | undefined,
   ) => void | Promise<void>;
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
+  /**
+   * Called when a resume_tool follow-up item is received from the queue.
+   * Allows the orchestrator to handle subagent resume requests that were
+   * queued as follow-ups rather than triggered via tool calls.
+   */
+  readonly onResumeToolFollowUp?: (
+    item: Extract<FollowUpItem, { kind: 'resume_tool' }>,
+  ) => void | Promise<void>;
   /** Persist todos to the execution KV store. Injected by runToolUseFlow. */
   readonly persistTodos?: (todos: TodoItem[]) => Promise<void>;
   /** True when this agent was launched as a subagent by an orchestrator. */

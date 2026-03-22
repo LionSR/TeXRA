@@ -6,6 +6,7 @@ import type {
 } from '@agent/core/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
+import type { FollowUpItem } from '@agent/toolUse/FollowUpQueue';
 import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import type { TaskRunFileService } from '@utils/files';
@@ -38,6 +39,10 @@ export interface ToolUseCycleServices<
   readonly session?: IToolUseSession;
   /** Callback when a queued follow-up is consumed (clears UI display). */
   readonly onFollowUpConsumed?: () => void;
+  /** Called when a resume_tool follow-up item is received from the queue. */
+  readonly onResumeToolFollowUp?: (
+    item: Extract<FollowUpItem, { kind: 'resume_tool' }>,
+  ) => void | Promise<void>;
   readonly run: AgentRunStateSnapshot;
   readonly workspace: AgentWorkspaceState;
 }

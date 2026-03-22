@@ -2,6 +2,7 @@ import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS } from '@shared/schemas';
+import type { FollowUpItem } from '@agent/toolUse/FollowUpQueue';
 
 import { findLastAssistantText } from './types';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
@@ -30,8 +31,13 @@ export class ToolUseWaitNode<C> extends Node<
   }
 
   async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {
-    const { checkInterruption, session, streamId, onBeforeWaiting } =
-      this.services;
+    const {
+      checkInterruption,
+      session,
+      streamId,
+      onBeforeWaiting,
+      onResumeToolFollowUp,
+    } = this.services;
 
     if (checkInterruption()) {
       return { kind: 'stop' };
@@ -39,16 +45,34 @@ export class ToolUseWaitNode<C> extends Node<
 
     await onBeforeWaiting?.(prepRes.lastResponse);
 
-    if (!session.hasQueuedFollowUp()) {
-      StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
-    }
+    // Loop: process resume_tool items automatically, return on text items
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      if (!session.hasQueuedFollowUp()) {
+        StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
+      }
 
-    const followUp = await session.waitForFollowUp(checkInterruption);
-    if (!followUp || checkInterruption()) {
-      return { kind: 'stop' };
-    }
+      const items = await session.waitForFollowUp(checkInterruption);
+      if (!items || checkInterruption()) {
+        return { kind: 'stop' };
+      }
 
-    return { kind: 'continue', followUp };
+      // Partition items: process resume_tool items immediately, collect text
+      const textParts: string[] = [];
+      for (const item of items) {
+        if (item.kind === 'resume_tool') {
+          await onResumeToolFollowUp?.(item);
+        } else {
+          textParts.push(item.content);
+        }
+      }
+
+      if (textParts.length > 0) {
+        return { kind: 'continue', followUp: textParts.join('\n\n') };
+      }
+
+      // All items were resume_tool — continue waiting for more
+    }
   }
 
   async execFallback(
@@ -68,7 +92,7 @@ export class ToolUseWaitNode<C> extends Node<
     const { onFollowUpConsumed, streamId, logger, modelHandler } =
       this.services;
 
-    if (execRes.kind === 'stop') {
+    if (execRes.kind === 'stop' || execRes.kind === 'resume_tool_only') {
       return FlowTransition.DEFAULT;
     }
 
