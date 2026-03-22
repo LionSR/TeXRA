@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 // Local imports - core
 import { loadAgents } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
-import { killAllActiveExecutions } from '@agent/runtime/executionRegistry';
+import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import { initializeServerSideKeyAccess } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -337,7 +337,7 @@ export async function deactivate() {
   await UsageLogService.dispose();
   await progressViewProviderInstance?.flushState();
 
-  killAllActiveExecutions();
+  killBackgroundProcesses();
   killActiveRecording();
 
   clearStoreCache();

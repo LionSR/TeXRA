@@ -134,10 +134,16 @@ export function getActiveExecutionIds(): string[] {
   return [...registry.keys()];
 }
 
-/** Terminate all active executions. Used during extension deactivation to prevent orphaned processes. */
-export function killAllActiveExecutions(): void {
-  for (const executionId of [...registry.keys()]) {
-    killExecution(executionId);
+/**
+ * Kill only background OS processes (bash, codex) without touching agent stream status.
+ * Agent executions are left in RUNNING so the restart recovery logic can restore
+ * them to WAITING (resumable) if a flow record exists.
+ */
+export function killBackgroundProcesses(): void {
+  for (const [executionId, handle] of registry) {
+    if (handle instanceof ProcessExecutionHandle) {
+      killExecution(executionId);
+    }
   }
 }
 
