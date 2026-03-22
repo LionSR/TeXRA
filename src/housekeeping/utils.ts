@@ -80,13 +80,20 @@ export function findFilesFromPatterns(
   for (const pattern of patterns) {
     for (const ext of extensions) {
       const bracePattern = `${pattern}${ext}`;
+      const isGlob = ext.includes('*');
       for (const dir of searchDirs) {
         const matches = globSync(path.join(dir, bracePattern), {
           nodir: true,
         });
         if (matches.length > 0) {
-          results.add(WorkspaceFS.relativePath(matches[0]));
-          break;
+          if (isGlob) {
+            for (const match of matches) {
+              results.add(WorkspaceFS.relativePath(match));
+            }
+          } else {
+            results.add(WorkspaceFS.relativePath(matches[0]));
+            break;
+          }
         }
       }
     }
