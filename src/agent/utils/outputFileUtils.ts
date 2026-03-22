@@ -4,12 +4,12 @@ import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
 import { parseFilenameParts } from './mergeFileUtils';
 
 /**
- * Generates an output filename: `output_r{round}.{ext}`.
+ * Generates an output path under a round subfolder: `r{round}/output.{ext}`.
  *
- * Workflow agent outputs always go to task run storage, which already provides
- * context (execution ID, agent, model). The filename only needs the round number.
+ * Workflow agent outputs always go to task run storage, which provides
+ * execution context. Round subfolders group all artifacts from a single round.
  *
- * @param outputDir Directory to place the file in
+ * @param outputDir Base directory for output
  * @param outputExt Extension for the output file
  * @param round Current round number
  */
@@ -18,20 +18,19 @@ export function getOutputFileName(
   outputExt: string,
   round: number,
 ): string {
-  return path.join(outputDir, `output_r${round}.${outputExt}`);
+  return path.join(outputDir, `r${round}`, `output.${outputExt}`);
 }
 
 /**
- * Generates an output filename for an extracted document from multi-document XML output:
- * `{sourceName}_r{round}.{ext}`.
+ * Generates an output path for an extracted document from multi-document XML output:
+ * `r{round}/{sourceName}.{ext}`.
  *
- * Uses the source document name to differentiate multiple extracted files within
- * the same round. Like {@link getOutputFileName}, omits agent/model since outputs
- * live in task run storage.
+ * Extracted docs keep their original source name — the round subfolder
+ * provides round context, so no round suffix is needed in the filename.
  *
  * @param source Source document name (from XML content, e.g. "chapter1.tex")
  * @param round Current round number
- * @param outputDir Directory to place the file in
+ * @param outputDir Base directory for output
  */
 export function getExtractedDocOutputFileName(
   source: string,
@@ -40,7 +39,7 @@ export function getExtractedDocOutputFileName(
 ): string {
   const { name: sourceName, ext } = path.parse(source);
   const extension = ext.replace('.', '') || 'tex';
-  return path.join(outputDir, `${sourceName}_r${round}.${extension}`);
+  return path.join(outputDir, `r${round}`, `${sourceName}.${extension}`);
 }
 
 /**
