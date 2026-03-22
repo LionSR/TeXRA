@@ -9,22 +9,16 @@ import { parseFilenameParts } from './mergeFileUtils';
  * Workflow agent outputs always go to task run storage, which already provides
  * context (execution ID, agent, model). The filename only needs the round number.
  *
+ * @param outputDir Directory to place the file in
  * @param outputExt Extension for the output file
  * @param round Current round number
- * @param inputFile The input file path (used only for directory resolution)
- * @param options Optional output directory override
  */
 export function getOutputFileName(
+  outputDir: string,
   outputExt: string,
   round: number,
-  inputFile: string,
-  options?: {
-    outputDir?: string;
-  },
 ): string {
-  const { dir } = path.parse(inputFile);
-  const targetDir = options?.outputDir ?? dir;
-  return path.join(targetDir, `output_r${round}.${outputExt}`);
+  return path.join(outputDir, `output_r${round}.${outputExt}`);
 }
 
 /**

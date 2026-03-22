@@ -61,8 +61,6 @@ export interface RunReflectionFlowInput<
   getOutputFileLocation?: (round: number) => AgentFileLocation;
   usageMonitor?: UsageMonitor;
   onRoundCompleted?: (roundIndex: number, totalRounds: number) => void;
-  /** When true, outputs are routed to task-run storage by default. */
-  isSubagent?: boolean;
 }
 
 export interface RunReflectionFlowResult {
@@ -174,14 +172,11 @@ export async function runReflectionFlow<C = unknown>(
   const { useScratchpad, shouldEnsureXmlStructure, totalRounds, outputExt } =
     deriveConfig(setting, prompt);
 
+  const inputDir = path.dirname(config.inputFile);
   const getOutputFileLocation =
     input.getOutputFileLocation ??
     ((round: number): AgentFileLocation => {
-      const fileName = getOutputFileName(
-        outputExt,
-        round,
-        config.inputFile,
-      );
+      const fileName = getOutputFileName(inputDir, outputExt, round);
       return fileService.createLocation(fileName) as AgentFileLocation;
     });
 
