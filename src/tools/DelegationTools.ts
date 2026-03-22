@@ -43,6 +43,7 @@ import {
 } from '@model/computeModelOptions';
 import {
   AGENT_CATEGORY,
+  DEFAULT_TOOL_CONFIG,
   WorkflowAgentProposalSchema,
   ToolUseAgentProposalSchema,
   type WorkflowAgentProposal,
@@ -484,6 +485,18 @@ const WorkflowAgentInputSchema = z.object({
     .array(z.string())
     .prefault([])
     .describe('Additional media files'),
+  extractFigures: z
+    .boolean()
+    .prefault(false)
+    .describe(
+      'When true, automatically extracts figures referenced by the input LaTeX file(s) (via \\includegraphics, \\begin{overpic}) and attaches them as media files. Merges with any explicitly provided mediaFile/mediaFiles.',
+    ),
+  extractTikz: z
+    .boolean()
+    .prefault(false)
+    .describe(
+      'When true, extracts TikZ figures from the input LaTeX file(s), compiles them into standalone PDFs, and attaches them as media files.',
+    ),
   outputFiles: z
     .array(z.string())
     .prefault([])
@@ -513,7 +526,12 @@ ${formatAgentList(getVisibleAgents('workflow'))}
 Available models: ${getVisibleModels().join(', ')}
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
-Example: agent=correct, inputFile=paper.tex, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
+Extraction attachments — automatically discover and attach assets from input LaTeX file(s):
+- extractFigures=true: Extract \\includegraphics/\\begin{overpic} figures and attach as media files.
+- extractTikz=true: Compile TikZ figures into standalone PDFs and attach as media files.
+All extraction options merge with explicitly provided files and are non-fatal on failure.
+
+Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
@@ -583,6 +601,9 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
     }
 
     // Construct workflow proposal
+    // Extraction flags are mapped to toolConfig so they flow through to the
+    // agent execution pipeline (MediaExtractionNode → LatexMediaManager)
+    // and are preserved when the user clicks "Setup" in the proposal UI.
     // Memory paths are already validated by memoriesField's .superRefine() at schema parse time.
     const proposal = WorkflowAgentProposalSchema.parse({
       agentCategory: AgentCategory.Workflow,
@@ -599,6 +620,11 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       mediaFiles: input.mediaFiles,
       outputFiles: input.outputFiles,
       useMultipleOutputs: input.useMultipleOutputs,
+      toolConfig: {
+        ...DEFAULT_TOOL_CONFIG,
+        autoExtractFigure: input.extractFigures,
+        autoExtractTikzFigure: input.extractTikz,
+      },
       memories: input.memories,
     } satisfies WorkflowAgentProposal);
 
