@@ -543,6 +543,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.agentHandlers.sendCustomAgentDir(webview),
       this.sendSuperYoloEnabled(webview),
       this.agentHandlers.sendAgentModePresets(webview),
+      this.sendGitAuthorSettings(webview),
       this.latexHandlers.sendLatexSettingsStatus(webview),
     ]);
   }
