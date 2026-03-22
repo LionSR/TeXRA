@@ -4,6 +4,7 @@
  * This is a standalone data structure with no dependencies on other
  * toolUse modules, allowing it to be imported without circular dependency issues.
  */
+
 export class FollowUpQueue {
   private readonly queued: string[] = [];
   private resolver: ((value: string | null) => void) | null = null;
@@ -31,7 +32,9 @@ export class FollowUpQueue {
     return this.queued.splice(0);
   }
 
-  waitForNext(checkInterruption: () => boolean): Promise<string | null> {
+  waitForNext(
+    checkInterruption: () => boolean,
+  ): Promise<string | null> {
     if (!this.isEmpty()) {
       return Promise.resolve(this.queued.shift()!);
     }
@@ -44,22 +47,22 @@ export class FollowUpQueue {
   }
 
   /**
-   * Wait for at least one message, then drain and combine all available.
-   * Returns all queued messages joined with double newlines.
+   * Wait for at least one item, then drain all available.
+   * Returns all queued items as an array.
    */
   async waitAndDrainAll(
     checkInterruption: () => boolean,
-  ): Promise<string | null> {
+  ): Promise<string[] | null> {
     const first = await this.waitForNext(checkInterruption);
     if (first === null) {
       return null;
     }
-    // Drain any additional messages that arrived while waiting
+    // Drain any additional items that arrived while waiting
     const rest = this.drain();
     if (rest.length === 0) {
-      return first;
+      return [first];
     }
-    return [first, ...rest].join('\n\n');
+    return [first, ...rest];
   }
 
   cancelWait(): void {
@@ -76,7 +79,7 @@ export class FollowUpQueue {
   }
 
   /**
-   * Get a copy of all queued messages for display purposes.
+   * Get a copy of all queued items for display purposes.
    * This doesn't modify the queue.
    */
   getAll(): string[] {
