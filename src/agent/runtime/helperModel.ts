@@ -11,6 +11,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import type { ModelHandler } from '@agent/modelHandlers';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { GlobalStateKey, globalSM } from '@common/state';
+import { getModelUnavailableReason } from '@model/computeModelOptions';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { isNonEmptyString } from '@utils/core';
 
@@ -22,6 +23,10 @@ export interface HelperModelKit {
   client: unknown;
   modelName: string;
 }
+
+export type HelperModelResult =
+  | { kit: HelperModelKit }
+  | { kit: undefined; reason: string };
 
 /**
  * Resolve the configured helper model name from global state.
@@ -58,28 +63,19 @@ export function getHelperModelName(): string {
   return enabledModels[0];
 }
 
-/**
- * Resolve the configured helper model, create a non-streaming handler,
- * and obtain a client.
- *
- * Returns `undefined` when the configured model name is not found in
- * MODEL_CONFIGS (caller decides how to surface the error).
- * Throws if the model is valid but handler/client creation fails.
- */
-export async function createHelperModelKit(): Promise<
-  HelperModelKit | undefined
-> {
+/** Resolve the configured helper model, create a non-streaming handler, and obtain a client. */
+export async function createHelperModelKit(): Promise<HelperModelResult> {
   const modelName = getHelperModelName();
 
-  const modelConfig = MODEL_CONFIGS[modelName];
-  if (!modelConfig) {
-    return undefined;
+  const reason = await getModelUnavailableReason(modelName);
+  if (reason) {
+    return { kit: undefined, reason };
   }
 
-  const handler = createModelHandler(modelConfig);
+  const handler = createModelHandler(MODEL_CONFIGS[modelName]);
   handler.setOutputStreaming(false);
   handler.setProgressViewEnabled(false);
 
   const client = await handler.getClient();
-  return { handler, client, modelName };
+  return { kit: { handler, client, modelName } };
 }
