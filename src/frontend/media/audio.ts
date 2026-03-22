@@ -138,7 +138,7 @@ export async function startRecording(
   }
 }
 
-/** Kill the active recording process if one exists (used during extension deactivation). */
+/** Forcibly terminate the active recording process if one exists. */
 export function killActiveRecording(): void {
   if (activeRecordingProcess) {
     activeRecordingProcess.kill('SIGTERM');

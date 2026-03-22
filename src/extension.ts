@@ -334,15 +334,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
 export async function deactivate() {
   disposeStatusListener?.();
-
-  // Kill all active child processes (bash, codex, subagents) to prevent orphans.
-  killAllActiveExecutions();
-
-  // Kill any active audio recording process.
-  killActiveRecording();
-
   await UsageLogService.dispose();
   await progressViewProviderInstance?.flushState();
+
+  killAllActiveExecutions();
+  killActiveRecording();
+
   clearStoreCache();
   bus.emit('extensionDeactivating', undefined);
 

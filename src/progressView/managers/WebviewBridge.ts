@@ -6,7 +6,6 @@ import type * as vscode from 'vscode';
 const FRAME_INTERVAL_MS = 16;
 
 export class WebviewBridge {
-  private pendingFlush = false;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly changedStreams = new Set<StreamTabId>();
   private readonly cursors = new Map<StreamTabId, number>();
@@ -29,7 +28,6 @@ export class WebviewBridge {
       clearTimeout(this.flushTimer);
       this.flushTimer = null;
     }
-    this.pendingFlush = false;
     this.changedStreams.clear();
     this.cursors.clear();
   }
@@ -52,8 +50,7 @@ export class WebviewBridge {
   }
 
   private scheduleFlush(): void {
-    if (this.pendingFlush) return;
-    this.pendingFlush = true;
+    if (this.flushTimer) return;
     this.flushTimer = setTimeout(() => {
       this.flushTimer = null;
       this.flush();
@@ -61,8 +58,6 @@ export class WebviewBridge {
   }
 
   private flush(): void {
-    this.pendingFlush = false;
-
     const activeStream = this.getActiveStream();
     if (!activeStream) return;
     if (!this.changedStreams.has(activeStream)) return;
