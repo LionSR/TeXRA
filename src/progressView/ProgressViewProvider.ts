@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 
 import type { IRunStorageService } from '@agent/runtime/RunStorageService';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
+import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import {
   BaseWebviewProvider,
   getSharedLocalResourceRoots,
@@ -365,9 +366,10 @@ export class ProgressViewProvider
     return this.isActivePlacementReady() && this.webviewUpdater.isAvailable();
   }
 
-  public async cleanupTasksAfterRestart(
-    waitingStreams?: Set<StreamTabId>,
-  ): Promise<void> {
+  public async cleanupTasksAfterRestart(): Promise<void> {
+    const waitingStreams = await detectWaitingStreams(
+      this.state.meta.getExecutionIdMap(),
+    );
     await this.resetRunningStreamStatuses(waitingStreams);
     this.syncFullView({ forceRebuild: true });
   }
