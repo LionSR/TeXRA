@@ -37,6 +37,8 @@ export const ToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
   category: z.literal('toolUse'),
   status: EndGroupStatusSchema,
   lastResponse: z.string().optional(),
+  /** Workspace-relative paths of files edited by tool calls during this session. */
+  touchedFiles: z.array(z.string()).optional(),
 });
 
 export type ToolUseFlowResult = z.infer<typeof ToolUseFlowResultSchema>;
