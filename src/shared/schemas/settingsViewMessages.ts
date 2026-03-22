@@ -212,6 +212,7 @@ export const UpdateSuperYoloEnabledMessageSchema = z.object({
   enabled: z.boolean(),
   reliabilitySettings: z.array(NumberVscodeSettingSchema).prefault([]),
   allowOrchestratorKill: z.boolean().prefault(true),
+  detachSubagentsOnStop: z.boolean().prefault(false),
 });
 export type UpdateSuperYoloEnabledMessage = z.infer<
   typeof UpdateSuperYoloEnabledMessageSchema
@@ -510,6 +511,11 @@ const SetAllowOrchestratorKillMessageSchema = z.object({
   enabled: z.boolean(),
 });
 
+const SetDetachSubagentsOnStopMessageSchema = z.object({
+  command: z.literal(CMD.SET_DETACH_SUBAGENTS_ON_STOP),
+  enabled: z.boolean(),
+});
+
 // Agent mode preset inbound messages
 const GetAgentModePresetsMessageSchema = commandOnly(
   CMD.GET_AGENT_MODE_PRESETS,
@@ -660,6 +666,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     GetSuperYoloEnabledMessageSchema,
     SetSuperYoloEnabledMessageSchema,
     SetAllowOrchestratorKillMessageSchema,
+    SetDetachSubagentsOnStopMessageSchema,
     // Git author settings messages
     GetGitAuthorSettingsMessageSchema,
     SetGitMarkCommitsMessageSchema,

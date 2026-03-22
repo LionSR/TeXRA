@@ -79,14 +79,26 @@ export interface ExecutionHandle {
 export class AgentExecutionHandle implements ExecutionHandle {
   readonly startedAt = Date.now();
   private progress: { currentRound?: number; totalRounds?: number } = {};
+  private _parentStreamId: StreamTabId;
 
   constructor(
     readonly executionId: string,
-    readonly parentStreamId: StreamTabId,
+    parentStreamId: StreamTabId,
     readonly childStreamId: StreamTabId,
     readonly agentName: string,
     readonly category: 'workflow' | 'toolUse',
-  ) {}
+  ) {
+    this._parentStreamId = parentStreamId;
+  }
+
+  get parentStreamId(): StreamTabId {
+    return this._parentStreamId;
+  }
+
+  /** Promote this subagent to a top-level execution (detach from parent). */
+  detach(): void {
+    this._parentStreamId = this.childStreamId;
+  }
 
   getStatus(): ExecutionStatusInfo {
     const status =

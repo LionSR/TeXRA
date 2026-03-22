@@ -134,6 +134,19 @@ export function getActiveExecutionIds(): string[] {
   return [...registry.keys()];
 }
 
+/**
+ * Kill only background OS processes (bash, codex) without touching agent stream status.
+ * Agent executions are left in RUNNING so the restart recovery logic can restore
+ * them to WAITING (resumable) if a flow record exists.
+ */
+export function killBackgroundProcesses(): void {
+  for (const [executionId, handle] of registry) {
+    if (handle instanceof ProcessExecutionHandle) {
+      killExecution(executionId);
+    }
+  }
+}
+
 /** Delegate progress update to the handle. */
 export function updateExecutionProgress(
   executionId: string,
@@ -224,6 +237,26 @@ export function waitForAnyExecutionChange(
  */
 export function interruptActiveChildren(parentStreamId: StreamTabId): void {
   interruptActiveChildrenImpl(parentStreamId, registry.values());
+}
+
+/**
+ * Detach all active subagents from a parent, promoting them to top-level.
+ * Subagents continue running independently and deliver results via the
+ * follow-up queue. Called when stopping an orchestrator without killing children.
+ */
+export function detachActiveChildren(parentStreamId: StreamTabId): void {
+  for (const handle of registry.values()) {
+    if (handle.parentStreamId !== parentStreamId) continue;
+    if (
+      handle instanceof AgentExecutionHandle &&
+      handle.childStreamId !== parentStreamId
+    ) {
+      handle.detach();
+    } else if (handle instanceof ProcessExecutionHandle) {
+      handle.terminate();
+    }
+  }
+  emitActiveSubagentsUpdate(parentStreamId, registry.values());
 }
 
 /** Get active subagent and process children for a parent stream. */
