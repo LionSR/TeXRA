@@ -89,13 +89,7 @@ jobs:
 
                Use `gh issue edit` to update the body and `gh issue comment` to add comments.
 
-            4. **Cross-repository tracking**: Also check for tracking issues in the
-               `texra-ai/texra-issues` repository if accessible:
-               ```
-               gh issue list --repo texra-ai/texra-issues --state open --json number,title,body --limit 50
-               ```
-
-            5. **Report**: Provide a summary of what tracking issues were found and updated.
+            4. **Report**: Provide a summary of what tracking issues were found and updated.
                If no tracking issues reference this item, simply note that no updates were needed.
 
             Be precise with checkbox updates — only modify lines that directly reference the
