@@ -13,16 +13,14 @@ import { EXCLUDED_DIRS } from './constants';
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
-/** Backup file extensions to clean up after formatting */
-const BACKUP_EXTENSIONS = ['.bak', '.bak0', '.bak1'] as const;
 const INDENT_LOG_FILE = 'indent.log';
+
+/** Matches latexindent backup files: .bak, .bak0, .bak1, .bak2, etc. */
+const BACKUP_FILE_RE = /\.bak\d*$/;
 
 /** Check if a file is a backup file that should be cleaned up */
 function isBackupFile(name: string): boolean {
-  return (
-    BACKUP_EXTENSIONS.some((ext) => name.endsWith(ext)) ||
-    name === INDENT_LOG_FILE
-  );
+  return BACKUP_FILE_RE.test(name) || name === INDENT_LOG_FILE;
 }
 
 /**

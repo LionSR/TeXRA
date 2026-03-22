@@ -1,5 +1,7 @@
 import * as path from 'path';
 
+import { sync as globSync } from 'glob';
+
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { runLatexFormatter } from '@latex/texFormatter';
 import { WorkspaceFS, type FileLocation } from '@utils/files';
@@ -41,14 +43,21 @@ export async function cleanupLatexBackups(
   const workspaceAbsolute = fileLocation.absolutePath;
 
   const { dir, base } = path.parse(workspaceAbsolute);
-  const backupCandidates = [
-    path.join(dir, `${base}.bak`),
-    path.join(dir, `${base}.bak0`),
-    path.join(dir, `${base}.bak1`),
+
+  // Use glob to find all .bak* files (covers .bak, .bak0, .bak1, .bak2, etc.)
+  const backupGlobs = [
+    path.join(dir, `${base}.bak*`),
     path.join(dir, 'indent.log'),
   ];
 
-  for (const candidateAbsolute of backupCandidates) {
+  const candidates = new Set<string>();
+  for (const pattern of backupGlobs) {
+    for (const match of globSync(pattern, { nodir: true })) {
+      candidates.add(match);
+    }
+  }
+
+  for (const candidateAbsolute of candidates) {
     const relative = path.relative(workspaceRoot, candidateAbsolute);
     if (relative.startsWith('..') || path.isAbsolute(relative)) {
       continue;
