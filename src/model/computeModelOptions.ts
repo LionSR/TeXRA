@@ -11,6 +11,9 @@ import { ApiProvider, SecretManager } from '@frontend/secretManager';
 // Local imports - shared schemas
 import type { ModelOptionData } from '@shared/schemas';
 
+// Local imports - shared constants
+import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
+
 /**
  * Default models that should be present in every user's model list.
  * Update this list and increment MODEL_LIST_VERSION below when adding new models.
@@ -136,6 +139,46 @@ async function isModelAvailable(
   return false;
 }
 
+async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
+  const serverSideKeyService = getServerSideKeyService();
+  const [hasOpenRouter, hasServerAccess] = await Promise.all([
+    SecretManager.apiKeyExists('openRouter'),
+    serverSideKeyService.canUseServerSideKeys(),
+  ]);
+  return {
+    hasOpenRouter,
+    hasServerAccess,
+    useIncludedAccess: serverSideKeyService.getUseIncludedModelAccess(),
+    serverSideKeyService,
+  };
+}
+
+/** Returns a human-readable reason why a model is unavailable, or `null` if available. */
+export async function getModelUnavailableReason(
+  model: string,
+): Promise<string | null> {
+  const config = MODEL_CONFIGS[model];
+  if (!config) return `Model "${model}" is not recognized.`;
+
+  const ctx = await buildAvailabilityContext();
+  const available = await isModelAvailable(model, config, ctx);
+  if (available) return null;
+
+  // Determine the specific reason
+  if (config.openRouterOnly) {
+    return `Model "${model}" requires an OpenRouter API key. Set your OpenRouter key in the extension settings.`;
+  }
+
+  if (ctx.useIncludedAccess && ctx.hasServerAccess) {
+    // User has server access but model isn't available on their tier
+    return `Model "${model}" is not available with your current subscription tier. Upgrade your plan or switch to a different model.`;
+  }
+
+  // Personal key mode or unauthenticated — missing provider key
+  const providerName = PROVIDER_DISPLAY_NAMES[config.provider] ?? config.provider;
+  return `Model "${model}" requires your ${providerName} API key. Set it in the extension settings or enable included access.`;
+}
+
 /** Build typed model option data for a single model. */
 async function buildModelOptionData(
   model: string,
@@ -230,19 +273,7 @@ export async function computeModelOptionsData(): Promise<ModelOptionData[]> {
 
 async function computeModelOptionsDataUncached(): Promise<ModelOptionData[]> {
   const models = getVisibleModels();
-
-  const serverSideKeyService = getServerSideKeyService();
-  const [hasOpenRouter, hasServerAccess] = await Promise.all([
-    SecretManager.apiKeyExists('openRouter'),
-    serverSideKeyService.canUseServerSideKeys(),
-  ]);
-
-  const availabilityCtx: ModelAvailabilityContext = {
-    hasOpenRouter,
-    hasServerAccess,
-    useIncludedAccess: serverSideKeyService.getUseIncludedModelAccess(),
-    serverSideKeyService,
-  };
+  const availabilityCtx = await buildAvailabilityContext();
 
   return Promise.all(
     models.map((model) => buildModelOptionData(model, availabilityCtx)),
