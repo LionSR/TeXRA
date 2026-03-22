@@ -395,6 +395,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleSetSuperYoloEnabled(data),
       [SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL]: (data) =>
         this.handleSetAllowOrchestratorKill(data),
+      [SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP]: (data) =>
+        this.handleSetDetachSubagentsOnStop(data),
 
       // ── Delegated to AgentHandlers ──
 
@@ -701,11 +703,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
       true,
     );
+    const detachSubagentsOnStop = workspaceSM.get<boolean>(
+      WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+      false,
+    );
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
       enabled,
       reliabilitySettings: getReliabilitySettings(),
       allowOrchestratorKill,
+      detachSubagentsOnStop,
     });
   }
 
@@ -736,6 +743,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     await workspaceSM.update(
       WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
+      data.enabled,
+    );
+    await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
+  }
+
+  private async handleSetDetachSubagentsOnStop(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_DETACH_SUBAGENTS_ON_STOP>,
+  ): Promise<void> {
+    await workspaceSM.update(
+      WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
       data.enabled,
     );
     await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));

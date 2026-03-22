@@ -226,6 +226,7 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) superYoloEnabled = false;
   @property({ attribute: false }) toggleDisabled = true;
   @property({ attribute: false }) allowOrchestratorKill = true;
+  @property({ attribute: false }) detachSubagentsOnStop = false;
   @property({ attribute: false }) reliabilitySettings: NumberVscodeSetting[] =
     [];
   @property({ attribute: false }) customPresets: AgentModePreset[] = [];
@@ -242,6 +243,15 @@ export class MultiAgentTab extends LitElement {
     const target = event.target as HTMLInputElement | null;
     this.dispatchEvent(
       createEvent('allow-orchestrator-kill-toggle', {
+        enabled: Boolean(target?.checked),
+      }),
+    );
+  }
+
+  private handleDetachToggle(event: Event): void {
+    const target = event.target as HTMLInputElement | null;
+    this.dispatchEvent(
+      createEvent('detach-subagents-on-stop-toggle', {
         enabled: Boolean(target?.checked),
       }),
     );
@@ -382,9 +392,23 @@ export class MultiAgentTab extends LitElement {
             Allow orchestrator to kill subagents
           </vscode-checkbox>
           <p class="text-secondary setting-description">
-            When enabled, stopping an orchestrator also terminates its
-            subagents. When disabled, subagents are detached and continue
-            running independently.
+            When enabled, the orchestrator can terminate running subagents via
+            the kill action. Disable to prevent premature termination of
+            long-running tasks.
+          </p>
+        </div>
+
+        <div class="setting-block">
+          <vscode-checkbox
+            ?checked=${this.detachSubagentsOnStop}
+            @change=${this.handleDetachToggle}
+          >
+            Detach subagents when stopping orchestrator
+          </vscode-checkbox>
+          <p class="text-secondary setting-description">
+            When enabled, stopping an orchestrator lets its subagents continue
+            running independently. When disabled, subagents are terminated
+            alongside the orchestrator.
           </p>
         </div>
 

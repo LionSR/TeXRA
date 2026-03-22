@@ -22,13 +22,13 @@ export function registerAgentCommands(context: vscode.ExtensionContext): void {
       (streamId: StreamTabId) => {
         if (
           workspaceSM.get<boolean>(
-            WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
-            true,
+            WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+            false,
           )
         ) {
-          interruptActiveChildren(streamId);
-        } else {
           detachActiveChildren(streamId);
+        } else {
+          interruptActiveChildren(streamId);
         }
         getInterruptible(streamId)?.interrupt();
         StreamStatusService.set(streamId, STREAM_STATUS.STOPPED);
