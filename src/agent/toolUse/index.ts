@@ -6,7 +6,6 @@
 export {
   type FollowUpItem,
   textFollowUp,
-  resumeToolFollowUp,
   followUpDisplayText,
   followUpItemsToText,
 } from './FollowUpQueue';

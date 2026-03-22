@@ -5,50 +5,22 @@
  * toolUse modules, allowing it to be imported without circular dependency issues.
  */
 
-/**
- * A follow-up item that can be queued for a tool-use session.
- *
- * - `text`: A plain text follow-up message (user message, subagent delivery, etc.)
- * - `resume_tool`: A structured request to resume a WAITING subagent with follow-up
- *   instructions, allowing the orchestrator to queue resume requests into the
- *   follow-up queue for automatic processing.
- */
-export type FollowUpItem =
-  | { kind: 'text'; content: string }
-  | { kind: 'resume_tool'; executionId: string; instruction: string };
+/** A follow-up item that can be queued for a tool-use session. */
+export type FollowUpItem = { kind: 'text'; content: string };
 
 /** Create a text follow-up item from a plain string. */
 export function textFollowUp(content: string): FollowUpItem {
   return { kind: 'text', content };
 }
 
-/** Create a resume_tool follow-up item. */
-export function resumeToolFollowUp(
-  executionId: string,
-  instruction: string,
-): FollowUpItem {
-  return { kind: 'resume_tool', executionId, instruction };
-}
-
 /** Extract display text from a follow-up item (for UI display). */
 export function followUpDisplayText(item: FollowUpItem): string {
-  if (item.kind === 'text') return item.content;
-  return `[resume_tool: ${item.executionId}] ${item.instruction}`;
+  return item.content;
 }
 
-/**
- * Convert follow-up items to a single text string.
- * Text items pass through; resume_tool items are framed as
- * `<orchestrator-followup>` so the subagent recognizes them.
- */
+/** Convert follow-up items to a single text string. */
 export function followUpItemsToText(items: FollowUpItem[]): string {
-  return items
-    .map((item) =>
-      item.kind === 'text'
-        ? item.content
-        : `<orchestrator-followup>\n${item.instruction}\n</orchestrator-followup>`,
-    )
-    .join('\n\n');
+  return items.map((item) => item.content).join('\n\n');
 }
 
 export class FollowUpQueue {
