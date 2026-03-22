@@ -43,6 +43,7 @@ import {
 } from '@model/computeModelOptions';
 import {
   AGENT_CATEGORY,
+  DEFAULT_TOOL_CONFIG,
   WorkflowAgentProposalSchema,
   ToolUseAgentProposalSchema,
   type WorkflowAgentProposal,
@@ -607,11 +608,12 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
       outputFiles: input.outputFiles,
       useMultipleOutputs: input.useMultipleOutputs,
       toolConfig: {
+        ...DEFAULT_TOOL_CONFIG,
         autoExtractFigure: input.extractFigures,
         autoExtractTikzFigure: input.extractTikz,
       },
       memories: input.memories,
-    });
+    } satisfies WorkflowAgentProposal);
 
     return proposeAndExecute(proposal, input.agent, ctx.streamId);
   }

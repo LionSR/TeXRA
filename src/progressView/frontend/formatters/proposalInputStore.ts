@@ -60,9 +60,28 @@ function parseProposalInput(
   }
 
   if (toolName === 'delegate_workflow' || toolName === 'propose_workflow') {
+    // Map extraction shorthand flags into toolConfig (mirrors DelegationTools.execute)
+    const extractFigures =
+      'extractFigures' in spread ? Boolean(spread.extractFigures) : undefined;
+    const extractTikz =
+      'extractTikz' in spread ? Boolean(spread.extractTikz) : undefined;
+    const existingToolConfig = isPlainObject(spread.toolConfig)
+      ? spread.toolConfig
+      : {};
+    const toolConfig = {
+      ...existingToolConfig,
+      ...(extractFigures !== undefined && {
+        autoExtractFigure: extractFigures,
+      }),
+      ...(extractTikz !== undefined && {
+        autoExtractTikzFigure: extractTikz,
+      }),
+    };
+
     const result = LenientWorkflowProposalSchema.safeParse({
       agentCategory: AGENT_CATEGORY.WORKFLOW,
       ...spread,
+      toolConfig,
     });
     return result.success ? result.data : null;
   }
