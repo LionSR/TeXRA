@@ -47,11 +47,7 @@ import {
   LeanInspectTool,
   LeanLoogleTool,
 } from './lean';
-import {
-  WorkflowAgentTool,
-  DelegateAgentTool,
-  ResumeAgentTool,
-} from './DelegationTools';
+import { WorkflowAgentTool, DelegateAgentTool } from './DelegationTools';
 import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 
@@ -108,7 +104,7 @@ function createDefaultTools() {
     codex: new CodexTool(),
     delegate_workflow: new WorkflowAgentTool(),
     delegate_agent: new DelegateAgentTool(),
-    resume_agent: new ResumeAgentTool(),
+    resume_agent: new DelegateAgentTool(), // Legacy alias
     executions: new ExecutionsTool(),
     accept_run_files: new AcceptRunFilesTool(),
     // Legacy aliases — old agent configs may reference these names
