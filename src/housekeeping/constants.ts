@@ -13,12 +13,7 @@ export const EXCLUDED_DIRS = new Set([
 export const PACK_EXTENSIONS = ['.pdf', '.tex', '.txt', '.text', '.xml', '.md'];
 
 export const TEMP_EXTENSIONS = [
-  '.bak',
-  '.bak0',
-  '.bak1',
-  '.bak2',
-  '.bak3',
-  '.bak4',
+  '.bak*',
   '.pdf',
   '.aux',
   '.bbl',
