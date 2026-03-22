@@ -1,10 +1,11 @@
+import { promises as fs } from 'fs';
 import * as path from 'path';
 
 import { sync as globSync } from 'glob';
 
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { runLatexFormatter } from '@latex/texFormatter';
-import { WorkspaceFS, type FileLocation } from '@utils/files';
+import { type FileLocation } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
 
 interface Logger {
@@ -36,13 +37,11 @@ export async function cleanupLatexBackups(
   fileLocation: FileLocation | null,
   logger: Logger,
 ): Promise<void> {
-  const workspaceRoot = WorkspaceFS.getPath();
-  if (!fileLocation || !workspaceRoot || fileLocation.kind !== 'workspace') {
+  if (!fileLocation) {
     return;
   }
-  const workspaceAbsolute = fileLocation.absolutePath;
 
-  const { dir, base } = path.parse(workspaceAbsolute);
+  const { dir, base } = path.parse(fileLocation.absolutePath);
 
   // Use glob to find all .bak* files (covers .bak, .bak0, .bak1, .bak2, etc.)
   const backupGlobs = [
@@ -57,20 +56,13 @@ export async function cleanupLatexBackups(
     }
   }
 
-  for (const candidateAbsolute of candidates) {
-    const relative = path.relative(workspaceRoot, candidateAbsolute);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      continue;
-    }
-
+  for (const candidate of candidates) {
     try {
-      if (await WorkspaceFS.exists(relative)) {
-        await WorkspaceFS.delete(relative);
-        logger.debug(`Removed latexindent backup ${relative}`);
-      }
+      await fs.unlink(candidate);
+      logger.debug(`Removed latexindent backup ${candidate}`);
     } catch (error) {
       logger.debug(
-        `Failed to remove latexindent backup ${relative}: ${toErrorMessage(error)}`,
+        `Failed to remove latexindent backup ${candidate}: ${toErrorMessage(error)}`,
       );
     }
   }

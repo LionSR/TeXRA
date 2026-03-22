@@ -122,13 +122,30 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
         relativeIndentLog,
       );
     } else {
-      // Skip backup cleanup for non-workspace files since glob patterns require
-      // a workspace context. The batch indent command (indent.ts) handles cleanup
-      // for workspace files via recursive directory traversal.
-      logger.debug(
-        CHANNEL,
-        `Skipping backup cleanup for ${filePath} (outside workspace)`,
-      );
+      // Clean up backup files for non-workspace files using absolute paths
+      const backupPatterns = [
+        `${fileBaseName}.tex.bak*`,
+        `${fileBaseName}.tex.bak`,
+        `${fileBaseName}.bak*`,
+        `${fileBaseName}.bak`,
+      ].map((pattern) => path.join(fileDir, pattern).replaceAll('\\', '/'));
+
+      for (const pattern of backupPatterns) {
+        const backupFiles = globSync(pattern, { nodir: true });
+        for (const backupFile of backupFiles) {
+          try {
+            await AbsoluteFS.delete(backupFile);
+            logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
+          } catch (err) {
+            if (!isFileNotFoundError(err)) {
+              logger.warn(
+                CHANNEL,
+                `Error removing backup file ${backupFile}: ${err}`,
+              );
+            }
+          }
+        }
+      }
 
       // Clean up indent.log for non-workspace files
       const indentLogPath = path.join(fileDir, 'indent.log');

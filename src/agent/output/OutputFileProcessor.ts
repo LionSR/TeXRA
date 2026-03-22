@@ -62,6 +62,9 @@ export class OutputFileProcessor {
       if (processedPairs.length > 0) {
         const locations = processedPairs.map((p: OutputFileInfo) => p.location);
         await indentLatexFiles(locations, logger);
+        for (const loc of locations) {
+          await cleanupLatexBackups(loc, logger);
+        }
         logger.debug(
           `Indented multiple output files: ${locations.map((l) => l.absolutePath).join(',')}`,
         );
@@ -130,6 +133,7 @@ export class OutputFileProcessor {
       }
 
       await indentLatexFile(processed.location, logger);
+      await cleanupLatexBackups(processed.location, logger);
       logger.debug(
         `Indented single output file: ${processed.location.absolutePath}`,
       );
