@@ -8,7 +8,7 @@ export {
   textFollowUp,
   resumeToolFollowUp,
   followUpDisplayText,
-  processFollowUpItems,
+  followUpItemsToText,
 } from './FollowUpQueue';
 export { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
 export {
@@ -16,7 +16,6 @@ export {
   sendFollowUpItem,
   type SendFollowUpResult,
 } from './ToolUseFollowUp';
-export { handleResumeToolFollowUp } from './resumeToolHandler';
 
 // Agent registry
 export {

@@ -36,26 +36,19 @@ export function followUpDisplayText(item: FollowUpItem): string {
   return `[resume_tool: ${item.executionId}] ${item.instruction}`;
 }
 
-type ResumeToolItem = Extract<FollowUpItem, { kind: 'resume_tool' }>;
-
 /**
- * Partition follow-up items: dispatch resume_tool items via callback,
- * collect text items, and return their content joined with double newlines.
- * Returns null if no text items were present.
+ * Convert follow-up items to a single text string.
+ * Text items pass through; resume_tool items are framed as
+ * `<orchestrator-followup>` so the subagent recognizes them.
  */
-export async function processFollowUpItems(
-  items: FollowUpItem[],
-  onResumeTool?: (item: ResumeToolItem) => void | Promise<void>,
-): Promise<string | null> {
-  const textParts: string[] = [];
-  for (const item of items) {
-    if (item.kind === 'resume_tool') {
-      await onResumeTool?.(item);
-    } else {
-      textParts.push(item.content);
-    }
-  }
-  return textParts.length > 0 ? textParts.join('\n\n') : null;
+export function followUpItemsToText(items: FollowUpItem[]): string {
+  return items
+    .map((item) =>
+      item.kind === 'text'
+        ? item.content
+        : `<orchestrator-followup>\n${item.instruction}\n</orchestrator-followup>`,
+    )
+    .join('\n\n');
 }
 
 export class FollowUpQueue {

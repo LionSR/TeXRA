@@ -37,7 +37,6 @@ import {
   type AgentLoadOptions,
 } from '@agent/runtime/agentLoad';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
-import { handleResumeToolFollowUp } from '@agent/toolUse/resumeToolHandler';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { normalizeRunId } from '@common/constants/runIds';
@@ -563,17 +562,6 @@ export interface ExecuteAgentOptions {
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Fires after flow completes but BEFORE untrackExecution, so follow-ups are enqueued before waiters resolve. */
   onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
-  /**
-   * Called when a resume_tool follow-up item is received from the queue.
-   * Allows automatic processing of subagent resume requests that were
-   * queued as follow-ups rather than triggered via tool calls.
-   */
-  onResumeToolFollowUp?: (
-    item: Extract<
-      import('@agent/toolUse/FollowUpQueue').FollowUpItem,
-      { kind: 'resume_tool' }
-    >,
-  ) => void | Promise<void>;
 }
 
 export async function executeAgent(
@@ -651,8 +639,6 @@ export async function executeAgent(
             setting: ctx.setting as AgentToolUseSetting,
             isSubagent,
             onBeforeWaiting: options?.onBeforeWaiting,
-            onResumeToolFollowUp:
-              options?.onResumeToolFollowUp ?? handleResumeToolFollowUp,
             onProgress: (update) => {
               if (update.kind === 'overview') {
                 toolUseTurns++;

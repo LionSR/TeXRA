@@ -1,7 +1,7 @@
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { processFollowUpItems } from '@agent/toolUse/FollowUpQueue';
+import { followUpItemsToText } from '@agent/toolUse/FollowUpQueue';
 import { STREAM_STATUS } from '@shared/schemas';
 
 import { findLastAssistantText } from './types';
@@ -31,13 +31,8 @@ export class ToolUseWaitNode<C> extends Node<
   }
 
   async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {
-    const {
-      checkInterruption,
-      session,
-      streamId,
-      onBeforeWaiting,
-      onResumeToolFollowUp,
-    } = this.services;
+    const { checkInterruption, session, streamId, onBeforeWaiting } =
+      this.services;
 
     if (checkInterruption()) {
       return { kind: 'stop' };
@@ -45,27 +40,16 @@ export class ToolUseWaitNode<C> extends Node<
 
     await onBeforeWaiting?.(prepRes.lastResponse);
 
-    // Loop: process resume_tool items automatically, return on text items
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      if (!session.hasQueuedFollowUp()) {
-        StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
-      }
-
-      const items = await session.waitForFollowUp(checkInterruption);
-      if (!items || checkInterruption()) {
-        return { kind: 'stop' };
-      }
-
-      const followUp = await processFollowUpItems(
-        items,
-        onResumeToolFollowUp,
-      );
-      if (followUp !== null) {
-        return { kind: 'continue', followUp };
-      }
-      // All items were resume_tool — continue waiting for more
+    if (!session.hasQueuedFollowUp()) {
+      StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
     }
+
+    const items = await session.waitForFollowUp(checkInterruption);
+    if (!items || checkInterruption()) {
+      return { kind: 'stop' };
+    }
+
+    return { kind: 'continue', followUp: followUpItemsToText(items) };
   }
 
   async execFallback(
