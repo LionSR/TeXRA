@@ -163,15 +163,15 @@ export class PlanView extends LitElement {
   ];
 
   @property({ attribute: false }) plan: Plan | null = null;
-  @property({ type: String }) streamId = '';
 
-  /** Open state — auto-expands on plan updates, auto-collapses when cleared.
-   *  Collapses when switching to a different stream. */
+  /** When this key changes, the panel collapses. Used by the parent to reset
+   *  open state on context switches (e.g. switching streams). */
+  @property({ type: String }) collapseKey = '';
+
   @state() private open = true;
 
   protected override willUpdate(changed: PropertyValues): void {
-    if (changed.has('streamId') && changed.get('streamId') !== undefined) {
-      // Collapse when switching streams
+    if (changed.has('collapseKey') && changed.get('collapseKey') !== undefined) {
       this.open = false;
       return;
     }
