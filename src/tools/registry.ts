@@ -50,8 +50,9 @@ import {
 import { WorkflowAgentTool, DelegateAgentTool } from './DelegationTools';
 import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
-import { WaitForActionsTool } from './waitForActions';
-import { WaitForCommentTool } from './waitForComment';
+import { WaitForPrTool } from './waitForPr';
+
+/** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
 
 /**
@@ -106,8 +107,7 @@ function createDefaultTools() {
     delegate_agent: new DelegateAgentTool(),
     executions: new ExecutionsTool(),
     accept_run_files: new AcceptRunFilesTool(),
-    wait_for_actions: new WaitForActionsTool(),
-    wait_for_comment: new WaitForCommentTool(),
+    wait_for_pr: new WaitForPrTool(),
   } satisfies Record<string, ITool>;
 }
 

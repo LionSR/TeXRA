@@ -266,7 +266,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
 
   {
     id: 'gh-cli',
-    tools: ['wait_for_actions', 'wait_for_comment'],
+    tools: ['wait_for_pr'],
     name: 'GitHub CLI (gh)',
     category: 'computation',
     description:
