@@ -29,13 +29,15 @@ them.
 
 ## Scope
 
-- Documentation files at repository root (for example `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`)
-- Everything under `docs/`
+- Documentation files at repository root (for example `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`).
+- Everything under `docs/`.
 - Inline examples in docs that reference commands, scripts, settings, or workflow behavior
+- Exclude internal agent/system instruction files (for example `AGENTS.md`, `CLAUDE.md`); `AGENTS.md` is
+  protected and must not be edited by this workflow.
 
 ## Instructions
 
-1. Review recent changes (preferably from the last 7 days, or the latest commits if there are fewer).
+1. Review commits from the last 7 days; if there are no commits in that window, review the most recent 10 commits.
 2. Identify code changes that should be reflected in documentation.
 3. Update only documentation files that are actually out of sync.
 4. Keep edits concise, accurate, and consistent with existing writing style.
