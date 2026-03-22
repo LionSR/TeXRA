@@ -437,7 +437,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
 
     // Paginate the listing
     const total = entries.length;
-    const safeOffset = Math.min(offset, total);
+    const safeOffset = Math.min(offset, Math.max(0, total - 1));
     const page = entries.slice(safeOffset, safeOffset + limit);
     const lines = page.map(formatListingLine);
 

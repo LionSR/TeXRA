@@ -261,7 +261,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       recordToolFileRead(inputPath);
 
       const total = allEntries.length;
-      const safeOffset = Math.min(offset, total);
+      const safeOffset = total > 0 ? Math.min(offset, total - 1) : 0;
       const page = allEntries.slice(safeOffset, safeOffset + limit);
       const rangeEnd = safeOffset + page.length;
 

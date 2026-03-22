@@ -81,7 +81,12 @@ export class HistoryList extends LitElement {
       if (this.searchTerm) {
         this.page = 0;
       }
-      this.performSearch(this.searchTerm);
+      // Clear marks immediately when search is cleared, but defer
+      // applying a new search term to updated() so the DOM has
+      // re-rendered all items (pagination is disabled during search).
+      if (!this.searchTerm) {
+        this.performSearch('');
+      }
     }
 
     if (changedProperties.has('searchAction') && this.searchAction) {
@@ -102,8 +107,12 @@ export class HistoryList extends LitElement {
   }
 
   protected updated(changedProps: Map<string, unknown>): void {
-    // Re-apply search when items change (e.g., new history loaded)
-    if (changedProps.has('items') && this.searchTerm) {
+    // Apply search after DOM update so all items are rendered
+    // (pagination is disabled during search, so we need the full DOM).
+    if (
+      this.searchTerm &&
+      (changedProps.has('searchTerm') || changedProps.has('items'))
+    ) {
       const version = ++this.searchVersion;
       void this.applySearchToItems(this.searchTerm, version);
     }
