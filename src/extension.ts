@@ -45,6 +45,7 @@ import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -198,6 +199,8 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeNativeToolEditApproval(context);
   setLeanVscodeServices(leanVscodeIntegration);
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
+
+  applyGitAuthorConfig();
 
   setToolNotificationHandler((message, actionCommand) => {
     if (actionCommand) {

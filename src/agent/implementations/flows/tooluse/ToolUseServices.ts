@@ -20,6 +20,7 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly onFollowUpConsumed?: () => void;
   readonly onBeforeWaiting?: (
     lastResponse: string | undefined,
+    touchedFiles: string[],
   ) => void | Promise<void>;
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
   /** Persist todos to the execution KV store. Injected by runToolUseFlow. */
