@@ -101,11 +101,18 @@ export class TodoList extends LitElement {
   ];
 
   @property({ attribute: false }) todos: TodoItem[] = [];
+  @property({ type: String }) streamId = '';
 
-  /** Open state — auto-expands on todo updates, auto-collapses when cleared. */
+  /** Open state — auto-expands on todo updates, auto-collapses when cleared.
+   *  Collapses when switching to a different stream. */
   @state() private open = true;
 
   protected override willUpdate(changed: PropertyValues): void {
+    if (changed.has('streamId') && changed.get('streamId') !== undefined) {
+      // Collapse when switching streams
+      this.open = false;
+      return;
+    }
     if (changed.has('todos')) {
       if (this.todos.length > 0) {
         this.open = true;
