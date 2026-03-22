@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { ToolConfigSchema } from './toolConfig';
+
 export const BaseProposalFieldsSchema = z.object({
   agent: z.string(),
   model: z.string(),
@@ -22,6 +24,7 @@ const FileFieldsSchema = z.object({
 
 export const WorkflowSpecificFieldsSchema = FileFieldsSchema.extend({
   useMultipleOutputs: z.boolean(),
+  toolConfig: ToolConfigSchema,
 });
 
 /** File fields shape used by all three rendering sites (toolFormatters, RequestPanels, PermissionCard). */
