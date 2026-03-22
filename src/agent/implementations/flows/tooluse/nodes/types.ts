@@ -37,8 +37,7 @@ export interface PrepareResult extends NodeResultStateBase {
 
 export type WaitExecResult =
   | { kind: 'continue'; followUp: string }
-  | { kind: 'stop' }
-  | { kind: 'resume_tool_only' };
+  | { kind: 'stop' };
 
 export interface CyclePrepResult extends NodeResultStateBase {
   messages: ProviderMessage[];

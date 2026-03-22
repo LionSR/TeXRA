@@ -4,7 +4,6 @@ import type { StreamTabId } from '@shared/schemas';
 
 export interface IToolUseSession {
   appendFollowUp(item: FollowUpItem): void;
-  appendFollowUpText(text: string): void;
   hasQueuedFollowUp(): boolean;
   /** Wait for the next follow-up items. Returns null if interrupted. */
   waitForFollowUp(
@@ -19,10 +18,6 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
 
   appendFollowUp(item: FollowUpItem): void {
     this.followUps.enqueue(item);
-  }
-
-  appendFollowUpText(text: string): void {
-    this.followUps.enqueueText(text);
   }
 
   hasQueuedFollowUp(): boolean {

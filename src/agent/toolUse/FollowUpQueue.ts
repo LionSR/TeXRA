@@ -36,6 +36,28 @@ export function followUpDisplayText(item: FollowUpItem): string {
   return `[resume_tool: ${item.executionId}] ${item.instruction}`;
 }
 
+type ResumeToolItem = Extract<FollowUpItem, { kind: 'resume_tool' }>;
+
+/**
+ * Partition follow-up items: dispatch resume_tool items via callback,
+ * collect text items, and return their content joined with double newlines.
+ * Returns null if no text items were present.
+ */
+export async function processFollowUpItems(
+  items: FollowUpItem[],
+  onResumeTool?: (item: ResumeToolItem) => void | Promise<void>,
+): Promise<string | null> {
+  const textParts: string[] = [];
+  for (const item of items) {
+    if (item.kind === 'resume_tool') {
+      await onResumeTool?.(item);
+    } else {
+      textParts.push(item.content);
+    }
+  }
+  return textParts.length > 0 ? textParts.join('\n\n') : null;
+}
+
 export class FollowUpQueue {
   private readonly queued: FollowUpItem[] = [];
   private resolver: ((value: FollowUpItem | null) => void) | null = null;

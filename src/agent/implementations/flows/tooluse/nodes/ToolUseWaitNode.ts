@@ -1,8 +1,8 @@
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { processFollowUpItems } from '@agent/toolUse/FollowUpQueue';
 import { STREAM_STATUS } from '@shared/schemas';
-import type { FollowUpItem } from '@agent/toolUse/FollowUpQueue';
 
 import { findLastAssistantText } from './types';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
@@ -57,20 +57,13 @@ export class ToolUseWaitNode<C> extends Node<
         return { kind: 'stop' };
       }
 
-      // Partition items: process resume_tool items immediately, collect text
-      const textParts: string[] = [];
-      for (const item of items) {
-        if (item.kind === 'resume_tool') {
-          await onResumeToolFollowUp?.(item);
-        } else {
-          textParts.push(item.content);
-        }
+      const followUp = await processFollowUpItems(
+        items,
+        onResumeToolFollowUp,
+      );
+      if (followUp !== null) {
+        return { kind: 'continue', followUp };
       }
-
-      if (textParts.length > 0) {
-        return { kind: 'continue', followUp: textParts.join('\n\n') };
-      }
-
       // All items were resume_tool — continue waiting for more
     }
   }
@@ -92,7 +85,7 @@ export class ToolUseWaitNode<C> extends Node<
     const { onFollowUpConsumed, streamId, logger, modelHandler } =
       this.services;
 
-    if (execRes.kind === 'stop' || execRes.kind === 'resume_tool_only') {
+    if (execRes.kind === 'stop') {
       return FlowTransition.DEFAULT;
     }
 

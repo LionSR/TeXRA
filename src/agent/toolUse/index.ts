@@ -8,6 +8,7 @@ export {
   textFollowUp,
   resumeToolFollowUp,
   followUpDisplayText,
+  processFollowUpItems,
 } from './FollowUpQueue';
 export { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
 export {
