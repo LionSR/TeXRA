@@ -23,6 +23,11 @@ export enum WorkspaceStateKey {
   SUPER_YOLO_ENABLED = 'texra.superYoloEnabled',
   ALLOW_ORCHESTRATOR_KILL = 'texra.allowOrchestratorKill',
   CUSTOM_AGENT_PRESETS = 'texra.customAgentPresets',
+
+  // Git commit author settings
+  GIT_MARK_COMMITS = 'texra.git.markCommits',
+  GIT_AUTHOR_NAME = 'texra.git.authorName',
+  GIT_AUTHOR_EMAIL = 'texra.git.authorEmail',
 }
 
 export enum GlobalStateKey {

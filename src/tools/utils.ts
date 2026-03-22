@@ -137,6 +137,7 @@ export interface FileViewOptions {
 }
 
 export interface FileViewResult {
+  [key: string]: unknown;
   output: string;
   summary: string;
 }

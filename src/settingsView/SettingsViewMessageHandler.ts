@@ -47,6 +47,10 @@ import {
 } from '@common/state';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { selectAgentInMainView } from '@frontend/agents/remoteAgentUtils';
+import {
+  applyGitAuthorConfig,
+  readGitAuthorSettings,
+} from '@frontend/git/gitAuthorSetup';
 import { compileLatex2Pdf } from '@latex/texTools';
 import {
   DEFAULT_MODELS,
@@ -435,6 +439,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET]: (data) =>
         this.agentHandlers.handleDeleteAgentModePreset(data),
 
+      // Git author settings handlers
+      [SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS]: () =>
+        this.withActiveWebview((w) => this.sendGitAuthorSettings(w)),
+      [SETTINGS_VIEW_COMMANDS.SET_GIT_MARK_COMMITS]: (data) =>
+        this.handleSetGitMarkCommits(data),
+      [SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME]: (data) =>
+        this.handleSetGitAuthorName(data),
+      [SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_EMAIL]: (data) =>
+        this.handleSetGitAuthorEmail(data),
+
       // ── Delegated to LatexSettingsHandlers ──
 
       [SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS]: () =>
@@ -725,6 +739,58 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       data.enabled,
     );
     await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
+  }
+
+  // ============================================================
+  // Git author settings handler implementations
+  // ============================================================
+
+  private async sendGitAuthorSettings(
+    webview: vscode.Webview,
+    settings?: ReturnType<typeof readGitAuthorSettings>,
+  ): Promise<void> {
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
+      ...(settings ?? readGitAuthorSettings()),
+    });
+  }
+
+  private async updateGitAuthorSetting(
+    key: WorkspaceStateKey,
+    value: unknown,
+  ): Promise<void> {
+    await workspaceSM.update(key, value);
+    const settings = applyGitAuthorConfig();
+    await this.withActiveWebview((w) =>
+      this.sendGitAuthorSettings(w, settings),
+    );
+  }
+
+  private async handleSetGitMarkCommits(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GIT_MARK_COMMITS>,
+  ): Promise<void> {
+    await this.updateGitAuthorSetting(
+      WorkspaceStateKey.GIT_MARK_COMMITS,
+      data.enabled,
+    );
+  }
+
+  private async handleSetGitAuthorName(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GIT_AUTHOR_NAME>,
+  ): Promise<void> {
+    await this.updateGitAuthorSetting(
+      WorkspaceStateKey.GIT_AUTHOR_NAME,
+      data.name,
+    );
+  }
+
+  private async handleSetGitAuthorEmail(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GIT_AUTHOR_EMAIL>,
+  ): Promise<void> {
+    await this.updateGitAuthorSetting(
+      WorkspaceStateKey.GIT_AUTHOR_EMAIL,
+      data.email,
+    );
   }
 
   // ============================================================
