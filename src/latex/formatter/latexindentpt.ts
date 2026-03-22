@@ -98,6 +98,10 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     const fileDir = path.dirname(absolutePath);
     await cleanupBackupFiles(fileBaseName, fileDir);
     await cleanupIndentLog(path.join(fileDir, 'indent.log'));
+    // latexindent may also create indent.log at the process cwd (workspace root)
+    if (workspacePath && fileDir !== workspacePath) {
+      await cleanupIndentLog(path.join(workspacePath, 'indent.log'));
+    }
 
     if (success) {
       logger.info(CHANNEL, `Indented ${absolutePath}`);
