@@ -156,11 +156,11 @@ function stripHtml(html: string): string {
     .replaceAll(/<\/(?:p|div|tr|li|h[1-6])>/gi, '\n')
     .replaceAll(/<[^>]+>/g, '')
     .replaceAll(/&nbsp;/gi, ' ')
-    .replaceAll(/&amp;/gi, '&')
     .replaceAll(/&lt;/gi, '<')
     .replaceAll(/&gt;/gi, '>')
     .replaceAll(/&quot;/gi, '"')
     .replaceAll(/&#039;/gi, "'")
+    .replaceAll(/&amp;/gi, '&')
     .replaceAll(/\n{3,}/g, '\n\n')
     .trim();
 }

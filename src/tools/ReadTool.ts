@@ -75,10 +75,34 @@ export class ReadFileTool extends defineTool({
     // and extract image attachments so vision-capable models can inspect them.
     if (path.extname(input.path).toLowerCase() === '.eml') {
       const raw = await WorkspaceFS.read(input.path);
-      recordToolFileRead(input.path);
       const { text, images } = await parseEml(raw);
+      recordToolFileRead(input.path);
+
       const lines = splitContentLines(text);
-      const result = formatFileView({ path: input.path, lines });
+      const totalLines = lines.length;
+      const requestedStartLine = input.range?.start ?? 1;
+      const requestedEndLine = this.computeRequestedEndLine(
+        input.range,
+        requestedStartLine,
+        totalLines,
+      );
+      const startLine = Math.min(requestedStartLine, totalLines + 1);
+      const endLine = Math.min(
+        Math.max(requestedEndLine, requestedStartLine),
+        totalLines,
+      );
+      const rangeEndExceeded =
+        input.range?.end != null && input.range.end > totalLines;
+      const suffix = rangeEndExceeded
+        ? ` (requested end ${requestedEndLine} exceeds file length ${totalLines})`
+        : '';
+
+      const result = formatFileView({
+        path: input.path,
+        lines,
+        viewRange: input.range ? [startLine, endLine] : null,
+        summarySuffix: suffix,
+      });
 
       if (images.length > 0) {
         result.files = images.map((img) => ({
