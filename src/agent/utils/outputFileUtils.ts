@@ -4,11 +4,10 @@ import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
 import { parseFilenameParts } from './mergeFileUtils';
 
 /**
- * Generates a simple output filename with round information.
+ * Generates an output filename: `output_r{round}.{ext}`.
  *
  * Workflow agent outputs always go to task run storage, which already provides
- * context (execution ID, agent, model). The filename only needs to encode the
- * round number and extension.
+ * context (execution ID, agent, model). The filename only needs the round number.
  *
  * @param outputExt Extension for the output file
  * @param round Current round number
@@ -24,13 +23,13 @@ export function getOutputFileName(
   },
 ): string {
   const { dir } = path.parse(inputFile);
-  const outputBaseName = `r${round}.${outputExt}`;
   const targetDir = options?.outputDir ?? dir;
-  return path.join(targetDir, outputBaseName);
+  return path.join(targetDir, `output_r${round}.${outputExt}`);
 }
 
 /**
- * Generates an output filename for an extracted document from multi-document XML output.
+ * Generates an output filename for an extracted document from multi-document XML output:
+ * `{sourceName}_r{round}.{ext}`.
  *
  * Uses the source document name to differentiate multiple extracted files within
  * the same round. Like {@link getOutputFileName}, omits agent/model since outputs
