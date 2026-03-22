@@ -12,7 +12,7 @@ import {
   READ_FILE_MAX_LINES,
 } from '@tools/utils';
 import { recordToolFileRead } from '@tools/fileInteractions';
-import { parseEmlToText } from '@tools/emlParser';
+import { parseEml } from '@tools/emlParser';
 import {
   WorkspaceFS,
   getMimeType,
@@ -71,13 +71,25 @@ export class ReadFileTool extends defineTool({
     }
 
     // EML files are text-based but use complex MIME encoding (multipart,
-    // base64 attachments, quoted-printable). Parse them into readable text.
+    // base64 attachments, quoted-printable). Parse them into readable text
+    // and extract image attachments so vision-capable models can inspect them.
     if (path.extname(input.path).toLowerCase() === '.eml') {
       const raw = await WorkspaceFS.read(input.path);
       recordToolFileRead(input.path);
-      const parsed = await parseEmlToText(raw);
-      const lines = splitContentLines(parsed);
-      return formatFileView({ path: input.path, lines });
+      const { text, images } = await parseEml(raw);
+      const lines = splitContentLines(text);
+      const result = formatFileView({ path: input.path, lines });
+
+      if (images.length > 0) {
+        result.files = images.map((img) => ({
+          path: img.filename,
+          mimeType: img.mimeType,
+          bytes: img.bytes,
+          description: `Image attachment from email: ${img.filename}`,
+        }));
+      }
+
+      return result;
     }
 
     const lines = splitContentLines(await WorkspaceFS.read(input.path));

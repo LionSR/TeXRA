@@ -1,24 +1,49 @@
 // Third-party imports
 import PostalMime from 'postal-mime';
-import type { Address, Email } from 'postal-mime';
+import type { Address, Attachment, Email } from 'postal-mime';
+
+/** An image extracted from the email (inline or attached). */
+export interface EmlImageAttachment {
+  /** Original filename, or a generated one like "image-1.png" */
+  filename: string;
+  /** MIME type (e.g. "image/png") */
+  mimeType: string;
+  /** Raw image bytes */
+  bytes: Uint8Array;
+}
+
+export interface EmlParseResult {
+  /** Human-readable plain-text representation of the email */
+  text: string;
+  /** Image attachments extracted from the email */
+  images: EmlImageAttachment[];
+}
+
+const IMAGE_MIME_PREFIX = 'image/';
 
 /**
- * Parse an EML file's raw text content into a human-readable plain-text representation.
+ * Parse an EML file's raw text content into a human-readable plain-text
+ * representation, and extract any image attachments.
  *
  * Extracts key headers (From, To, CC, Subject, Date) and the text body.
  * When no plain-text part exists, falls back to a simplified version of the HTML body.
- * Attachment filenames are listed at the end.
+ * Non-image attachment filenames are listed at the end of the text.
  */
-export async function parseEmlToText(rawEml: string): Promise<string> {
+export async function parseEml(rawEml: string): Promise<EmlParseResult> {
   const email = await PostalMime.parse(rawEml);
-  return formatEmail(email);
+  const images = extractImages(email.attachments);
+  const text = formatEmail(email, images);
+  return { text, images };
 }
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-function formatEmail(email: Email): string {
+function formatEmail(
+  email: Email,
+  extractedImages: EmlImageAttachment[],
+): string {
   const sections: string[] = [];
 
   // -- Headers --------------------------------------------------------------
@@ -53,17 +78,63 @@ function formatEmail(email: Email): string {
     sections.push(body.trim());
   }
 
-  // -- Attachments ----------------------------------------------------------
-  const attachmentNames = email.attachments
+  // -- Image attachments (returned as binary, noted in text) ----------------
+  if (extractedImages.length > 0) {
+    sections.push(
+      `Images (attached for visual inspection):\n${extractedImages.map((img) => `  - ${img.filename}`).join('\n')}`,
+    );
+  }
+
+  // -- Non-image attachments (listed by name only) --------------------------
+  const nonImageNames = email.attachments
+    .filter((a) => !a.mimeType.startsWith(IMAGE_MIME_PREFIX))
     .map((a) => a.filename)
     .filter(Boolean);
-  if (attachmentNames.length > 0) {
+  if (nonImageNames.length > 0) {
     sections.push(
-      `Attachments:\n${attachmentNames.map((n) => `  - ${n}`).join('\n')}`,
+      `Other attachments:\n${nonImageNames.map((n) => `  - ${n}`).join('\n')}`,
     );
   }
 
   return sections.join('\n\n');
+}
+
+// ---------------------------------------------------------------------------
+// Image extraction
+// ---------------------------------------------------------------------------
+
+function extractImages(attachments: Attachment[]): EmlImageAttachment[] {
+  const images: EmlImageAttachment[] = [];
+  let unnamedCounter = 0;
+
+  for (const att of attachments) {
+    if (!att.mimeType.startsWith(IMAGE_MIME_PREFIX)) continue;
+
+    const bytes = toUint8Array(att.content);
+    if (bytes.byteLength === 0) continue;
+
+    const filename =
+      att.filename || `image-${++unnamedCounter}.${extensionFromMime(att.mimeType)}`;
+    images.push({ filename, mimeType: att.mimeType, bytes });
+  }
+
+  return images;
+}
+
+function toUint8Array(content: ArrayBuffer | Uint8Array | string): Uint8Array {
+  if (content instanceof Uint8Array) return content;
+  if (content instanceof ArrayBuffer) return new Uint8Array(content);
+  // base64-encoded string (when attachmentEncoding is 'base64')
+  return Uint8Array.from(Buffer.from(content, 'base64'));
+}
+
+function extensionFromMime(mimeType: string): string {
+  const sub = mimeType.split('/')[1] ?? 'bin';
+  // Normalize common MIME subtypes to file extensions
+  if (sub === 'jpeg') return 'jpg';
+  if (sub === 'svg+xml') return 'svg';
+  if (sub === 'tiff') return 'tif';
+  return sub;
 }
 
 function formatAddress(addr: Address): string {
