@@ -381,6 +381,15 @@ async function runFlowWithLifecycle(
   try {
     const result = await runner();
     await options?.onCompleted?.(result);
+
+    // Graceful error results (e.g., quota errors) are delivered via
+    // onCompleted above so subagents get the error message. After delivery,
+    // re-throw so the catch block handles logging, notifications, and
+    // resume-caller semantics consistently.
+    if (result.status === 'error' && result.errorMessage) {
+      throw new Error(result.errorMessage);
+    }
+
     await writeTerminalStatus(ctx.executionId, result.status).catch(() => {});
 
     untrackExecution(ctx.executionId);
@@ -390,12 +399,6 @@ async function runFlowWithLifecycle(
       const status =
         result.status === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED;
       StreamStatusService.set(streamId, status);
-    }
-
-    if (result.status === 'error' && result.errorMessage && !options?.isSubagent) {
-      bus.emit('requestShowError', {
-        message: `Error executing agent ${agentName}: ${result.errorMessage}`,
-      });
     }
 
     logger.debug(`Task completed with status: ${result.status}`);
