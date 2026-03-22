@@ -120,7 +120,7 @@ function formatSearchResult(item: BbtSearchResultItem): string {
 function collectionPath(chain: BbtCollectionChain): string {
   const parts: string[] = [];
   let current: BbtCollectionChain | false | undefined = chain;
-  while (current && current !== false) {
+  while (current) {
     parts.unshift(current.name);
     current = current.parentCollection;
   }
