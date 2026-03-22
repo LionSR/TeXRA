@@ -3,10 +3,9 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS } from '@shared/schemas';
 
-import { findLastAssistantText, assertPreparedShared } from './types';
+import { findLastAssistantText, extractTouchedFiles } from './types';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
 import type { ToolUseRunShared, WaitExecResult } from './types';
-import { FileInteractionState } from '@agent/core/AgentWorkspaceState';
 
 interface WaitPrepResult {
   lastResponse: string | undefined;
@@ -21,23 +20,14 @@ export class ToolUseWaitNode<C> extends Node<
   async prep(shared: ToolUseRunShared): Promise<WaitPrepResult> {
     const { modelHandler, onBeforeWaiting } = this.services;
 
-    // Only extract last response when the callback is wired (subagent mode)
+    // Only extract when the callback is wired (subagent mode)
     if (!onBeforeWaiting) return { lastResponse: undefined, touchedFiles: [] };
 
-    // Extract edited file paths from workspace state for delivery to orchestrator
-    let touchedFiles: string[] = [];
-    if (shared.stateSlices?.workspaceSnapshot?.interactions) {
-      const interactions = FileInteractionState.fromSnapshot(
-        shared.stateSlices.workspaceSnapshot.interactions,
-      );
-      touchedFiles = interactions.editedFilePaths;
-    }
-
     return {
+      touchedFiles: extractTouchedFiles(shared.stateSlices),
       lastResponse: findLastAssistantText(shared.messages, (m) =>
         modelHandler.extractAssistantText(m),
       ),
-      touchedFiles,
     };
   }
 
