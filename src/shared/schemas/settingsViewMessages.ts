@@ -61,6 +61,7 @@ export const SETTINGS_TAB_ORDER = [
   'AGENTS',
   'MULTI_AGENT',
   'TOOLS',
+  'GIT',
   'LATEX',
 ] as const;
 
@@ -281,6 +282,21 @@ export const UpdateToolDashboardMessageSchema = z.object({
 });
 export type UpdateToolDashboardMessage = z.infer<
   typeof UpdateToolDashboardMessageSchema
+>;
+
+// ============================================================
+// Git author settings data schema
+// ============================================================
+
+/** Outbound: backend → frontend git author settings */
+export const UpdateGitAuthorSettingsMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS),
+  markCommits: z.boolean(),
+  authorName: z.string(),
+  authorEmail: z.string(),
+});
+export type UpdateGitAuthorSettingsMessage = z.infer<
+  typeof UpdateGitAuthorSettingsMessageSchema
 >;
 
 // ============================================================
@@ -530,6 +546,26 @@ const InstallToolExtensionMessageSchema = z.object({
 
 const RecheckToolStatusMessageSchema = commandOnly(CMD.RECHECK_TOOL_STATUS);
 
+// Git author settings inbound messages
+const GetGitAuthorSettingsMessageSchema = commandOnly(
+  CMD.GET_GIT_AUTHOR_SETTINGS,
+);
+
+const SetGitMarkCommitsMessageSchema = z.object({
+  command: z.literal(CMD.SET_GIT_MARK_COMMITS),
+  enabled: z.boolean(),
+});
+
+const SetGitAuthorNameMessageSchema = z.object({
+  command: z.literal(CMD.SET_GIT_AUTHOR_NAME),
+  name: z.string(),
+});
+
+const SetGitAuthorEmailMessageSchema = z.object({
+  command: z.literal(CMD.SET_GIT_AUTHOR_EMAIL),
+  email: z.string(),
+});
+
 // LaTeX settings inbound messages
 const GetLatexSettingsStatusMessageSchema = commandOnly(
   CMD.GET_LATEX_SETTINGS_STATUS,
@@ -624,6 +660,11 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     GetSuperYoloEnabledMessageSchema,
     SetSuperYoloEnabledMessageSchema,
     SetAllowOrchestratorKillMessageSchema,
+    // Git author settings messages
+    GetGitAuthorSettingsMessageSchema,
+    SetGitMarkCommitsMessageSchema,
+    SetGitAuthorNameMessageSchema,
+    SetGitAuthorEmailMessageSchema,
     // Agent mode preset messages
     GetAgentModePresetsMessageSchema,
     ApplyAgentModePresetMessageSchema,

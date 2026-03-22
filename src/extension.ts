@@ -43,9 +43,9 @@ import { setExtensionChecker } from '@tools/externalToolDefs';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
 import { StorageFS } from '@utils/files';
-import { getConfig, watchConfig } from '@utils/config';
+import { getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
-import { setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
+import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -55,25 +55,6 @@ let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
 let disposeStatusListener: (() => void) | undefined;
 let progressViewProviderInstance: ProgressViewProvider | undefined;
-
-function applyGitAuthorConfig(): void {
-  const enabled = getConfig<boolean>('texra.git.markCommits', false);
-  if (!enabled) {
-    setGitAuthorEnv({});
-    return;
-  }
-  const name = getConfig<string>('texra.git.authorName', 'TeXRA');
-  const email = getConfig<string>(
-    'texra.git.authorEmail',
-    'texra@users.noreply.github.com',
-  );
-  setGitAuthorEnv({
-    GIT_AUTHOR_NAME: name,
-    GIT_AUTHOR_EMAIL: email,
-    GIT_COMMITTER_NAME: name,
-    GIT_COMMITTER_EMAIL: email,
-  });
-}
 
 async function refreshApiKeyStatus() {
   if (!apiKeyStatusBarItem) {
@@ -220,7 +201,6 @@ export async function activate(context: vscode.ExtensionContext) {
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
 
   applyGitAuthorConfig();
-  watchConfig(context, 'texra.git', applyGitAuthorConfig);
 
   setToolNotificationHandler((message, actionCommand) => {
     if (actionCommand) {
