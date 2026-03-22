@@ -85,7 +85,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       channel: CHANNEL,
       showError: showWarning,
     });
-    const success = result?.success ?? false;
+    const success = result !== false && result?.success;
 
     if (success) {
       // Wait a moment for the file system to stabilize after a successful write
