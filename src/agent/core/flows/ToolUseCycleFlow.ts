@@ -28,7 +28,6 @@ import {
   extractToolAttachments,
   type ExtractedToolAttachments,
 } from '@agent/modelHandlers/utils/toolAttachmentUtils';
-import { followUpItemsToText } from '@agent/toolUse/FollowUpQueue';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type {
   FileInteractionState,
@@ -250,7 +249,7 @@ class ToolUsePrepNode<C> extends BaseNode<
       // Drain without waiting (we know there's something)
       const items = await this.services.session.waitForFollowUp(() => false);
       if (items) {
-        queuedFollowUp = followUpItemsToText(items);
+        queuedFollowUp = items.join('\n\n');
       }
     }
 

@@ -14,7 +14,6 @@ import { getToolUseFlowContext } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { AgentLogger } from '@logger/AgentLogger';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
-import { textFollowUp, type FollowUpItem } from './FollowUpQueue';
 import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
 
 /**
@@ -29,9 +28,9 @@ export type SendFollowUpResult =
 const logger = new AgentLogger('ToolUseFollowUp');
 
 /**
- * Send a follow-up item to a tool-use session.
+ * Send a follow-up message to a tool-use session.
  *
- * Routes the item based on session state:
+ * Routes based on session state:
  * 1. Active agent: direct append → returns { status: 'sent' }
  * 2. Resuming/Waiting session: queue for later → returns { status: 'queued' }
  * 3. Error during send → returns { status: 'error' }
@@ -42,15 +41,15 @@ const logger = new AgentLogger('ToolUseFollowUp');
  *
  * @returns Result indicating what happened - callers handle UI notifications
  */
-export async function sendFollowUpItem(
+export async function sendFollowUp(
   streamId: StreamTabId,
-  item: FollowUpItem,
+  text: string,
 ): Promise<SendFollowUpResult> {
   // Try active flow context first
   const flowContext = getToolUseFlowContext(streamId);
   if (flowContext) {
     try {
-      flowContext.session.appendFollowUp(item);
+      flowContext.session.appendFollowUp(text);
       return { status: 'sent' };
     } catch (error) {
       logger.error('Failed to send follow-up to active session.', {
@@ -62,14 +61,14 @@ export async function sendFollowUpItem(
 
   // Queue if session is resuming
   if (ToolUseFollowUpQueue.isResuming(streamId)) {
-    ToolUseFollowUpQueue.enqueueItem(streamId, item);
+    ToolUseFollowUpQueue.enqueue(streamId, text);
     return { status: 'queued', reason: 'resuming' };
   }
 
   // Queue if session is waiting (paused, can be resumed)
   const status = StreamStatusService.get(streamId);
   if (status === STREAM_STATUS.WAITING) {
-    ToolUseFollowUpQueue.enqueueItem(streamId, item);
+    ToolUseFollowUpQueue.enqueue(streamId, text);
     return { status: 'queued', reason: 'waiting' };
   }
 
@@ -78,15 +77,4 @@ export async function sendFollowUpItem(
     `No active session for follow-up on stream ${streamId}. Status: ${status ?? 'undefined'}`,
   );
   return { status: 'no_session', streamStatus: status };
-}
-
-/**
- * Send a plain text follow-up message to a tool-use session.
- * Convenience wrapper around {@link sendFollowUpItem}.
- */
-export async function sendFollowUp(
-  streamId: StreamTabId,
-  text: string,
-): Promise<SendFollowUpResult> {
-  return sendFollowUpItem(streamId, textFollowUp(text));
 }

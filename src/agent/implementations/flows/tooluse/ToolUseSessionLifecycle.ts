@@ -1,14 +1,13 @@
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import type { FollowUpItem } from '@agent/toolUse/FollowUpQueue';
 import type { StreamTabId } from '@shared/schemas';
 
 export interface IToolUseSession {
-  appendFollowUp(item: FollowUpItem): void;
+  appendFollowUp(text: string): void;
   hasQueuedFollowUp(): boolean;
   /** Wait for the next follow-up items. Returns null if interrupted. */
   waitForFollowUp(
     checkInterruption: () => boolean,
-  ): Promise<FollowUpItem[] | null>;
+  ): Promise<string[] | null>;
 }
 
 export class ToolUseSessionLifecycle implements IToolUseSession {
@@ -16,8 +15,8 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
 
   constructor(private readonly streamTabId: StreamTabId) {}
 
-  appendFollowUp(item: FollowUpItem): void {
-    this.followUps.enqueue(item);
+  appendFollowUp(text: string): void {
+    this.followUps.enqueue(text);
   }
 
   hasQueuedFollowUp(): boolean {
@@ -26,7 +25,7 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
 
   async waitForFollowUp(
     checkInterruption: () => boolean,
-  ): Promise<FollowUpItem[] | null> {
+  ): Promise<string[] | null> {
     return this.followUps.waitAndDrainAll(checkInterruption);
   }
 

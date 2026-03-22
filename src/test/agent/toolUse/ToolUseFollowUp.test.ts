@@ -5,7 +5,6 @@ import { strict as assert } from 'assert';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { createRunState } from '@agent/core/AgentState';
-import type { FollowUpItem } from '@agent/toolUse/FollowUpQueue';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 // Type imports
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
@@ -45,11 +44,11 @@ describe('ToolUseFollowUp', () => {
   });
 
   it('sends follow-ups to active flow contexts', async () => {
-    const calls: FollowUpItem[] = [];
+    const calls: string[] = [];
     (AgentRegistry as any).getToolUseFlowContext = () => ({
       session: {
-        appendFollowUp: (item: FollowUpItem) => {
-          calls.push(item);
+        appendFollowUp: (text: string) => {
+          calls.push(text);
         },
       },
     });
@@ -57,8 +56,7 @@ describe('ToolUseFollowUp', () => {
     const result = await sendFollowUp(streamId, 'hello');
 
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].kind, 'text');
-    assert.equal((calls[0] as Extract<FollowUpItem, { kind: 'text' }>).content, 'hello');
+    assert.equal(calls[0], 'hello');
     assert.deepEqual(result, { status: 'sent' });
   });
 

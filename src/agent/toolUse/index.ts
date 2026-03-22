@@ -2,17 +2,11 @@
  * Tool-use agent utilities barrel export.
  */
 
-// Follow-up queue and item types
-export {
-  type FollowUpItem,
-  textFollowUp,
-  followUpDisplayText,
-  followUpItemsToText,
-} from './FollowUpQueue';
+// Follow-up queue
+export { FollowUpQueue } from './FollowUpQueue';
 export { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
 export {
   sendFollowUp,
-  sendFollowUpItem,
   type SendFollowUpResult,
 } from './ToolUseFollowUp';
 

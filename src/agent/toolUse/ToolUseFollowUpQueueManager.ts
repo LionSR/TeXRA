@@ -8,12 +8,7 @@
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { AgentLogger } from '@logger/AgentLogger';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
-import {
-  FollowUpQueue,
-  textFollowUp,
-  followUpDisplayText,
-  type FollowUpItem,
-} from './FollowUpQueue';
+import { FollowUpQueue } from './FollowUpQueue';
 
 const logger = new AgentLogger('ToolUseFollowUpQueue');
 
@@ -59,13 +54,13 @@ export class ToolUseFollowUpQueue {
   }
 
   /**
-   * Enqueue a follow-up item for a stream.
+   * Enqueue a follow-up for a stream.
    *
    * Auto-creates the queue if it doesn't exist yet (needed for WAITING streams
    * from prior sessions). Silently discards if the queue was explicitly released
    * (orchestrator disposed — late-arriving subagent results).
    */
-  static enqueueItem(streamId: StreamTabId, item: FollowUpItem): void {
+  static enqueue(streamId: StreamTabId, followUp: string): void {
     if (this.released.has(streamId)) {
       logger.debug(
         `Queue for stream ${streamId} was released, discarding follow-up.`,
@@ -73,24 +68,11 @@ export class ToolUseFollowUpQueue {
       return;
     }
     const queue = this.acquire(streamId);
-    queue.enqueue(item);
-    logger.debug(
-      `Queued ${item.kind} follow-up for stream ${streamId}.`,
-    );
+    queue.enqueue(followUp);
+    logger.debug(`Queued follow-up for stream ${streamId}.`);
   }
 
-  /**
-   * Enqueue a plain text follow-up message for a stream.
-   *
-   * Auto-creates the queue if it doesn't exist yet (needed for WAITING streams
-   * from prior sessions). Silently discards if the queue was explicitly released
-   * (orchestrator disposed — late-arriving subagent results).
-   */
-  static enqueue(streamId: StreamTabId, followUp: string): void {
-    this.enqueueItem(streamId, textFollowUp(followUp));
-  }
-
-  static drain(streamId: StreamTabId): FollowUpItem[] {
+  static drain(streamId: StreamTabId): string[] {
     const queue = this.queues.get(streamId);
     if (!queue) return [];
     const drained = queue.drain();
@@ -102,10 +84,9 @@ export class ToolUseFollowUpQueue {
 
   /**
    * Get all queued follow-up messages for a stream without consuming them.
-   * Used for UI display purposes. Returns display-friendly strings.
+   * Used for UI display purposes.
    */
   static getAll(streamId: StreamTabId): string[] {
-    const items = this.queues.get(streamId)?.getAll() ?? [];
-    return items.map(followUpDisplayText);
+    return this.queues.get(streamId)?.getAll() ?? [];
   }
 }

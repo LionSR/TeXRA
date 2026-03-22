@@ -1,7 +1,6 @@
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { followUpItemsToText } from '@agent/toolUse/FollowUpQueue';
 import { STREAM_STATUS } from '@shared/schemas';
 
 import { findLastAssistantText } from './types';
@@ -49,7 +48,7 @@ export class ToolUseWaitNode<C> extends Node<
       return { kind: 'stop' };
     }
 
-    return { kind: 'continue', followUp: followUpItemsToText(items) };
+    return { kind: 'continue', followUp: items.join('\n\n') };
   }
 
   async execFallback(
