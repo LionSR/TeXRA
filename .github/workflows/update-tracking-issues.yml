@@ -1,0 +1,102 @@
+name: Update Tracking Issues
+
+on:
+  issues:
+    types: [closed]
+  pull_request:
+    types: [closed]
+
+jobs:
+  update-tracking:
+    # Run when an issue is closed or a PR is merged (not just closed)
+    if: |
+      (github.event_name == 'issues' && github.event.issue.state_reason == 'completed') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          model: 'claude-opus-4-6'
+
+          # Allow Claude to query and update issues/PRs via the gh CLI
+          allowed_tools: |
+            Bash(gh issue:*)
+            Bash(gh pr:*)
+            Bash(gh api:*)
+            Bash(gh search:*)
+
+          prompt: |
+            A GitHub event just occurred in this repository. Analyze it and update any
+            related tracking issues.
+
+            ## Event Details
+
+            - **Event type**: ${{ github.event_name }}
+            - **Repository**: ${{ github.repository }}
+
+            ${{ github.event_name == 'issues' && format('- **Issue number**: #{0}', github.event.issue.number) || '' }}
+            ${{ github.event_name == 'issues' && format('- **Issue title**: {0}', github.event.issue.title) || '' }}
+            ${{ github.event_name == 'issues' && format('- **Issue labels**: {0}', join(github.event.issue.labels.*.name, ', ')) || '' }}
+            ${{ github.event_name == 'issues' && format('- **Closed by**: {0}', github.event.issue.user.login) || '' }}
+
+            ${{ github.event_name == 'pull_request' && format('- **PR number**: #{0}', github.event.pull_request.number) || '' }}
+            ${{ github.event_name == 'pull_request' && format('- **PR title**: {0}', github.event.pull_request.title) || '' }}
+            ${{ github.event_name == 'pull_request' && format('- **PR labels**: {0}', join(github.event.pull_request.labels.*.name, ', ')) || '' }}
+            ${{ github.event_name == 'pull_request' && format('- **Merged by**: {0}', github.event.pull_request.merged_by.login) || '' }}
+            ${{ github.event_name == 'pull_request' && format('- **Base branch**: {0}', github.event.pull_request.base.ref) || '' }}
+
+            ## Instructions
+
+            1. **Find tracking issues**: Search for open issues in this repository that have
+               a "tracking" label, or contain task lists (checkboxes like `- [ ]` or `- [x]`)
+               that reference the resolved issue/merged PR. Also look for issues with titles
+               starting with "Tracking:", "Epic:", or "Meta:".
+
+               Use these commands to search:
+               ```
+               gh issue list --label "tracking" --state open --json number,title,body
+               gh issue list --search "is:open is:issue" --json number,title,body --limit 50
+               ```
+
+            2. **Check for references**: For each tracking issue found, check if its body
+               contains references to the closed issue or merged PR. References could be:
+               - Direct issue/PR number mentions: `#123`
+               - Task list items: `- [ ] #123` or `- [ ] Some task (#123)`
+               - URL references to the issue/PR
+               - Keyword matches with the issue/PR title
+
+            3. **Update tracking issues**: For each tracking issue that references the
+               resolved item:
+               - Check off completed task list items (`- [ ]` → `- [x]`) related to
+                 the resolved issue/merged PR
+               - Add a comment summarizing what was resolved/merged, e.g.:
+                 "✅ #{number} ({title}) has been {resolved/merged}. Updated checklist."
+               - If ALL task list items in a tracking issue are now checked, add a comment
+                 suggesting the tracking issue may be ready to close
+
+               Use `gh issue edit` to update the body and `gh issue comment` to add comments.
+
+            4. **Cross-repository tracking**: Also check for tracking issues in the
+               `texra-ai/texra-issues` repository if accessible:
+               ```
+               gh issue list --repo texra-ai/texra-issues --state open --json number,title,body --limit 50
+               ```
+
+            5. **Report**: Provide a summary of what tracking issues were found and updated.
+               If no tracking issues reference this item, simply note that no updates were needed.
+
+            Be precise with checkbox updates — only modify lines that directly reference the
+            resolved issue or merged PR. Do not alter unrelated checklist items.
