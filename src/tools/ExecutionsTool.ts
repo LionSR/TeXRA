@@ -50,7 +50,11 @@ import { getPathSegments } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { ToolError, type ToolResult } from './result';
 import { defineTool } from './core/define';
-import { formatFileView } from './utils';
+import {
+  formatFileView,
+  paginateToolListing,
+  formatPaginationHint,
+} from './utils';
 
 // ============================================================================
 // Category-aware field filtering
@@ -435,10 +439,11 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       return { output: 'No execution history found.' };
     }
 
-    // Paginate the listing
-    const total = entries.length;
-    const safeOffset = Math.min(offset, Math.max(0, total - 1));
-    const page = entries.slice(safeOffset, safeOffset + limit);
+    const { page, start, end, total } = paginateToolListing(
+      entries,
+      offset,
+      limit,
+    );
     const lines = page.map(formatListingLine);
 
     // Count active background processes for the header
@@ -446,25 +451,15 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     const bgCount = activeIds.filter(
       (id) => getHandle(id)?.category === 'process',
     ).length;
-
-    const rangeEnd = safeOffset + page.length;
     const bgSuffix =
       bgCount > 0
         ? `, ${bgCount} background process${bgCount > 1 ? 'es' : ''} running`
         : '';
-    const header = `Executions (showing ${safeOffset + 1}\u2013${rangeEnd} of ${total}${bgSuffix}, most recent first):`;
 
-    const parts = [header, '', ...lines];
-
-    // Add pagination hint when there are more entries
-    if (rangeEnd < total) {
-      parts.push(
-        '',
-        `(${total - rangeEnd} more — use offset: ${rangeEnd} to see next page)`,
-      );
-    }
-
-    return { output: parts.join('\n') };
+    const header = `Executions (showing ${start}\u2013${end} of ${total}${bgSuffix}, most recent first):`;
+    return {
+      output: `${header}\n\n${lines.join('\n')}${formatPaginationHint(end, total)}`,
+    };
   }
 
   private async showSummary(executionId: ExecutionId): Promise<ToolResult> {

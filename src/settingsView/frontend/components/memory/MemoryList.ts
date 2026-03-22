@@ -13,13 +13,10 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 // Local imports - memory view components (side-effect: register)
 import './MemoryItem';
 
-// Local imports - shared components (side-effect: register)
-import '../shared/Pagination';
-
 // Local imports - shared schemas
 import type { MemoryViewItem } from '@shared/schemas';
 
-// Local imports - pagination utility
+// Local imports - pagination
 import {
   paginate,
   DEFAULT_PAGE_SIZE,
@@ -53,13 +50,7 @@ export class MemoryList extends LitElement {
   ): void {
     // Reset to first page when items change (e.g. refresh, delete, pin/unpin)
     if (changedProperties.has('items')) {
-      const totalPages = Math.max(
-        1,
-        Math.ceil(this.items.length / DEFAULT_PAGE_SIZE),
-      );
-      if (this.page >= totalPages) {
-        this.page = Math.max(0, totalPages - 1);
-      }
+      this.page = 0;
     }
   }
 
@@ -79,11 +70,7 @@ export class MemoryList extends LitElement {
       </div>`;
     }
 
-    const { paged, totalPages: _ } = paginate(
-      this.items,
-      this.page,
-      DEFAULT_PAGE_SIZE,
-    );
+    const { paged } = paginate(this.items, this.page, DEFAULT_PAGE_SIZE);
 
     return html`
       <list-pagination

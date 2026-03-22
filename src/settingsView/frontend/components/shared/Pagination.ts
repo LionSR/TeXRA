@@ -11,8 +11,9 @@
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-// Local imports - shared styles
+// Local imports - shared styles and utilities
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { createEvent } from '@shared/utils/events';
 
 /** Detail payload for the `page-change` custom event. */
 export interface PageChangeDetail {
@@ -136,13 +137,7 @@ export class Pagination extends LitElement {
   }
 
   private emitPageChange(page: number): void {
-    this.dispatchEvent(
-      new CustomEvent<PageChangeDetail>('page-change', {
-        detail: { page },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(createEvent<PageChangeDetail>('page-change', { page }));
   }
 
   private goFirst(): void {

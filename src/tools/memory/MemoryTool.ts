@@ -22,6 +22,8 @@ import {
   countOccurrences,
   formatFileView,
   formatLinesWithNumbers,
+  formatPaginationHint,
+  paginateToolListing,
   requireField,
 } from '../utils';
 
@@ -260,27 +262,16 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       const allEntries = await this.buildDirectoryListing(resolvedPath);
       recordToolFileRead(inputPath);
 
-      const total = allEntries.length;
-      const safeOffset = total > 0 ? Math.min(offset, total - 1) : 0;
-      const page = allEntries.slice(safeOffset, safeOffset + limit);
-      const rangeEnd = safeOffset + page.length;
+      const { page, start, end, total } = paginateToolListing(
+        allEntries,
+        offset,
+        limit,
+      );
 
-      const parts = [
-        `Contents of ${inputPath} (showing ${safeOffset + 1}\u2013${rangeEnd} of ${total}, up to 2 levels deep):`,
-        `SIZE\tMODIFIED\tBY\tPATH`,
-        ...page,
-      ];
-
-      if (rangeEnd < total) {
-        parts.push(
-          '',
-          `(${total - rangeEnd} more — use offset: ${rangeEnd} to see next page)`,
-        );
-      }
-
+      const header = `Contents of ${inputPath} (showing ${start}\u2013${end} of ${total}, up to 2 levels deep):`;
       return {
-        summary: `Listed directory: ${inputPath} (${safeOffset + 1}\u2013${rangeEnd} of ${total})`,
-        output: parts.join('\n'),
+        summary: `Listed directory: ${inputPath} (${start}\u2013${end} of ${total})`,
+        output: `${header}\nSIZE\tMODIFIED\tBY\tPATH\n${page.join('\n')}${formatPaginationHint(end, total)}`,
       };
     }
 
