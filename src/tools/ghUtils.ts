@@ -70,5 +70,20 @@ export async function getCurrentBranch(): Promise<string> {
   return result.stdout.trim();
 }
 
+/** Get the HEAD commit SHA for a ref (or current HEAD if not specified). */
+export async function getHeadSha(ref?: string | null): Promise<string> {
+  const target = ref ?? 'HEAD';
+  const result = await executeCommand(
+    ['git', 'rev-parse', target],
+    { timeout: 5000, truncate: true },
+  );
+  if (!result.success || !result.stdout?.trim()) {
+    throw new ToolError(
+      `Could not resolve commit SHA for "${target}". Provide \`ref\` explicitly.`,
+    );
+  }
+  return result.stdout.trim();
+}
+
 /** Re-export delay as the canonical sleep primitive. */
 export { delay };

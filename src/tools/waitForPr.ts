@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
-import { ensureGhCli, getCurrentBranch, getCurrentRepo, gh, delay } from '@tools/ghUtils';
+import { ensureGhCli, getHeadSha, getCurrentRepo, gh, delay } from '@tools/ghUtils';
 import type { ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
@@ -111,9 +111,11 @@ export class WaitForPrTool extends defineTool({
   private async waitForActions(input: WaitForPrInput): Promise<ToolResult> {
     const repo = input.repo ?? (await getCurrentRepo());
 
-    let branch: string;
+    // Resolve head commit SHA so we only watch runs for the latest push,
+    // not stale runs from previous commits on the same branch.
+    let headSha: string;
     if (input.pr_number) {
-      branch = (
+      headSha = (
         await gh([
           'pr',
           'view',
@@ -121,13 +123,13 @@ export class WaitForPrTool extends defineTool({
           '-R',
           repo,
           '--json',
-          'headRefName',
+          'headRefOid',
           '-q',
-          '.headRefName',
+          '.headRefOid',
         ])
       ).trim();
     } else {
-      branch = input.ref ?? (await getCurrentBranch());
+      headSha = await getHeadSha(input.ref);
     }
 
     let lastStatus = '';
@@ -135,7 +137,7 @@ export class WaitForPrTool extends defineTool({
     return this.poll(
       input.timeout_minutes ?? 30,
       async () => {
-        const runs = await this.fetchRuns(repo, branch, input.workflow);
+        const runs = await this.fetchRuns(repo, headSha, input.workflow);
 
         if (runs.length === 0) {
           lastStatus = 'No runs found yet';
@@ -188,7 +190,7 @@ export class WaitForPrTool extends defineTool({
 
   private async fetchRuns(
     repo: string,
-    branch: string,
+    commitSha: string,
     workflow?: string | null,
   ): Promise<RunInfo[]> {
     const args = [
@@ -196,8 +198,8 @@ export class WaitForPrTool extends defineTool({
       'list',
       '-R',
       repo,
-      '--branch',
-      branch,
+      '--commit',
+      commitSha,
       '--limit',
       '20',
     ];
@@ -268,6 +270,8 @@ export class WaitForPrTool extends defineTool({
   ): Promise<Comment[]> {
     const out = await gh([
       'api',
+      '--method',
+      'GET',
       `repos/${repo}/issues/${prNumber}/comments`,
       '-f',
       `since=${since}`,
