@@ -45,12 +45,12 @@ export class ToolUseWaitNode<C> extends Node<
       StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
     }
 
-    const followUp = await session.waitForFollowUp(checkInterruption);
-    if (!followUp || checkInterruption()) {
+    const items = await session.waitForFollowUp(checkInterruption);
+    if (!items || checkInterruption()) {
       return { kind: 'stop' };
     }
 
-    return { kind: 'continue', followUp };
+    return { kind: 'continue', followUp: items.join('\n\n') };
   }
 
   async execFallback(

@@ -247,7 +247,10 @@ class ToolUsePrepNode<C> extends BaseNode<
     let queuedFollowUp: string | null = null;
     if (this.services.session?.hasQueuedFollowUp()) {
       // Drain without waiting (we know there's something)
-      queuedFollowUp = await this.services.session.waitForFollowUp(() => false);
+      const items = await this.services.session.waitForFollowUp(() => false);
+      if (items) {
+        queuedFollowUp = items.join('\n\n');
+      }
     }
 
     return { interrupted, queuedFollowUp };
