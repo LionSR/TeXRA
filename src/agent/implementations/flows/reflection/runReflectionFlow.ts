@@ -173,17 +173,13 @@ export async function runReflectionFlow<C = unknown>(
   const { useScratchpad, shouldEnsureXmlStructure, totalRounds, outputExt } =
     deriveConfig(setting, prompt);
 
-  const modelName = modelHandler.config.name;
   const getOutputFileLocation =
     input.getOutputFileLocation ??
     ((round: number): AgentFileLocation => {
       const fileName = getOutputFileName(
-        config.inputFile,
-        config.agent,
-        modelName,
         outputExt,
         round,
-        config.editedFile || undefined,
+        config.inputFile,
       );
       if (useScratchpad) {
         return fileService.createRawOutputLocation(

@@ -1,44 +1,53 @@
 import * as path from 'path';
 
-import { getAgentFirstNameChunk } from '@housekeeping/utils';
 import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
-import { parseFilenameParts, extractLastRoundMatch } from './mergeFileUtils';
+import { parseFilenameParts } from './mergeFileUtils';
 
 /**
- * Generates an output filename incorporating model and round information.
+ * Generates a simple output filename with round information.
  *
- * @param inputFile The input file path
- * @param agent Agent name (may include source: prefix which will be stripped)
- * @param model Model name
+ * Workflow agent outputs always go to task run storage, which already provides
+ * context (execution ID, agent, model). The filename only needs to encode the
+ * round number and extension.
+ *
  * @param outputExt Extension for the output file
- * @param currRound Current round number
- * @param editedFile Optional previously edited file for round detection
+ * @param round Current round number
+ * @param inputFile The input file path (used only for directory resolution)
+ * @param options Optional output directory override
  */
 export function getOutputFileName(
-  inputFile: string,
-  agent: string,
-  model: string,
   outputExt: string,
-  currRound: number,
-  editedFile?: string,
+  round: number,
+  inputFile: string,
   options?: {
     outputDir?: string;
   },
 ): string {
-  const { dir, name: fileName } = path.parse(inputFile);
-  // Extract agent first name chunk (handles source: prefix and write- agents)
-  const agentFirstNameChunk = getAgentFirstNameChunk(agent);
-
-  let newRound = currRound;
-  if (editedFile) {
-    const lastMatch = extractLastRoundMatch(editedFile);
-    const editedRound = lastMatch ? parseInt(lastMatch[1]) : 0;
-    newRound += editedRound + 1;
-  }
-
-  const outputBaseName = `${fileName}_${agentFirstNameChunk}_r${newRound}_${model}.${outputExt}`;
+  const { dir } = path.parse(inputFile);
+  const outputBaseName = `r${round}.${outputExt}`;
   const targetDir = options?.outputDir ?? dir;
   return path.join(targetDir, outputBaseName);
+}
+
+/**
+ * Generates an output filename for an extracted document from multi-document XML output.
+ *
+ * Uses the source document name to differentiate multiple extracted files within
+ * the same round. Like {@link getOutputFileName}, omits agent/model since outputs
+ * live in task run storage.
+ *
+ * @param source Source document name (from XML content, e.g. "chapter1.tex")
+ * @param round Current round number
+ * @param outputDir Directory to place the file in
+ */
+export function getExtractedDocOutputFileName(
+  source: string,
+  round: number,
+  outputDir: string,
+): string {
+  const { name: sourceName, ext } = path.parse(source);
+  const extension = ext.replace('.', '') || 'tex';
+  return path.join(outputDir, `${sourceName}_r${round}.${extension}`);
 }
 
 /**
