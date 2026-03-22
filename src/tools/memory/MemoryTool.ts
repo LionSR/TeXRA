@@ -87,7 +87,7 @@ const MemoryToolInputSchema = z.strictObject({
     .max(200)
     .nullish()
     .describe(
-      'Max entries to return from directory listing. Default: 50, max: 200.',
+      'Max entries to return from directory listing. Default: 100, max: 200.',
     ),
 });
 
@@ -102,7 +102,7 @@ export class MemoryTool extends defineTool({
   description: `Manage persistent memory files under /memories (view, create, str_replace, insert, delete, rename, pin, unpin).
 
 Paths must start with /memories. Use /memories to list files, /memories/file.md for specific files. "/" alone is invalid.
-Directory listings are paginated — use offset/limit to page through results (default: offset 0, limit 50).
+Directory listings are paginated — use offset/limit to page through results (default: offset 0, limit 100).
 
 Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies, pitfalls, best practices). Pinned memories are always loaded at session start. Use \`unpin\` to remove the pinned status. Maximum ${MAX_PINNED_MEMORIES} pinned memories allowed.`,
   schema: MemoryToolInputSchema,
@@ -124,7 +124,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
           // Schema enforces length 2; cast since Zod infers number[]
           input.view_range as [number, number] | undefined,
           input.offset ?? 0,
-          input.limit ?? 50,
+          input.limit ?? 100,
         );
       case 'create':
         return this.create(
@@ -236,7 +236,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     inputPath: string,
     viewRange?: [number, number],
     offset = 0,
-    limit = 50,
+    limit = 100,
   ): Promise<ToolResult> {
     const resolvedPath = this.resolveMemoryPath(inputPath);
     const exists = await StorageFS.exists(resolvedPath);

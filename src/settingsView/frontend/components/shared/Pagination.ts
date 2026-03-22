@@ -20,7 +20,7 @@ export interface PageChangeDetail {
 }
 
 /** Default number of items per page. */
-export const DEFAULT_PAGE_SIZE = 50;
+export const DEFAULT_PAGE_SIZE = 100;
 
 /**
  * Compute the page slice for a given items array.

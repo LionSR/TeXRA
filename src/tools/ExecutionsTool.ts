@@ -147,7 +147,7 @@ const ExecutionsToolInputSchema = z.strictObject({
     .max(200)
     .nullish()
     .describe(
-      'Max entries to return from /executions listing. Default: 50, max: 200.',
+      'Max entries to return from /executions listing. Default: 100, max: 200.',
     ),
 });
 
@@ -276,7 +276,7 @@ Paths:
 - /executions/{id}/files/{path} - Read specific generated file (workflows only)
 
 Use "current" as {id} to access the active execution.
-Use offset/limit to paginate the /executions listing (default: offset 0, limit 50).
+Use offset/limit to paginate the /executions listing (default: offset 0, limit 100).
 Use view_range: [start, end] to paginate conversation, output, and file content.
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
 Use action: "kill" on /executions/{id} to terminate a running execution.`,
@@ -296,7 +296,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     if (!id) {
       if (input.action === 'wait')
         await this.waitForAnyChange(input.timeout ?? 300);
-      return this.listExecutions(input.offset ?? 0, input.limit ?? 50);
+      return this.listExecutions(input.offset ?? 0, input.limit ?? 100);
     }
 
     const executionId = this.resolveExecutionId(id);
