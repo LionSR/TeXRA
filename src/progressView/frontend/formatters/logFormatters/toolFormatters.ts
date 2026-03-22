@@ -23,7 +23,6 @@ import type { ReadInput } from '@tools/ReadTool';
 import type { WriteInput } from '@tools/WriteTool';
 import type {
   DelegateAgentInput,
-  ResumeAgentInput,
   WorkflowAgentInput,
 } from '@tools/DelegationTools';
 import type { AcceptRunFilesInput } from '@tools/AcceptRunFilesTool';
@@ -452,20 +451,16 @@ export function formatToolUseTemplate(
       sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
     }
   }
-  // Handle resume_agent separately — it has execution_id, not agent/model
-  else if (toolName === 'resume_agent' && isPlainObject(input)) {
-    const resumeInput = input as ResumeAgentInput;
-    // prettier-ignore
-    sections.push(buildToolUseSection('Execution:', html`<code class="execution-id">${resumeInput.execution_id}</code>`));
-    if (resumeInput.instruction) {
-      sections.push(
-        buildToolUseSection('Instruction:', wrapInPre(resumeInput.instruction)),
-      );
-    }
-  }
   // Handle delegation tools with structured display
   else if (DELEGATION_TOOLS.has(toolName) && isPlainObject(input)) {
     const delegateInput = input as DelegateAgentInput | WorkflowAgentInput;
+
+    // Resume mode: show execution ID
+    const execId = 'execution_id' in delegateInput ? (delegateInput as DelegateAgentInput).execution_id : undefined;
+    if (execId) {
+      // prettier-ignore
+      sections.push(buildToolUseSection('Resume:', html`<code class="execution-id">${execId}</code>`));
+    }
 
     // Agent and model on one line
     const agent = delegateInput.agent;
