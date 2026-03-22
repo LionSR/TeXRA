@@ -56,16 +56,13 @@ export async function generateSessionDescription(
     const agentEntry = getAgent(config.agent, true);
     const agentDescription = agentEntry?.description;
 
-    const kit = await createHelperModelKit();
-    if (!kit) {
-      logger.warn(
-        CHANNEL,
-        'Helper model not available for session description',
-      );
+    const helperResult = await createHelperModelKit();
+    if (!helperResult.kit) {
+      logger.warn(CHANNEL, helperResult.reason);
       return;
     }
 
-    const { handler, client } = kit;
+    const { handler, client } = helperResult.kit;
     const userPrompt = buildUserPrompt(
       config.agent,
       agentDescription,
