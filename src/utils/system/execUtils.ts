@@ -27,6 +27,7 @@ import { toErrorMessage } from '@common/errors';
 // Internal imports
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
+import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'execUtils';
@@ -104,7 +105,7 @@ export async function executeCommand(
       throw new Error('No workspace path found');
     }
 
-    const env = { ...process.env, ...options.env };
+    const env = { ...process.env, ...getGitAuthorEnv(), ...options.env };
     env.PATH = extendEnvPath(env.PATH);
 
     // Export project context so AI agents can orient themselves immediately.
