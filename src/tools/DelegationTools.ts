@@ -248,6 +248,22 @@ async function executeSubagent(
       if (deliveryState.hasDelivered) return;
       deliveryState.hasDelivered = true;
 
+      const wallTimeMs = Date.now() - startedAt;
+
+      // Graceful error results (e.g., quota errors) should use the error
+      // format so the orchestrator sees the error message.
+      if (result.status === 'error' && result.errorMessage) {
+        const msg = formatSubagentError(
+          executionId,
+          agentName,
+          result.errorMessage,
+          { wallTimeMs },
+        );
+        void getExecutionStore(executionId).writeReport(msg);
+        ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+        return;
+      }
+
       // For workflow results, compute diffs and write them as files to the
       // execution's run directory. The delivery references diff file paths
       // so the orchestrator can read them on demand via /executions/{id}/files/.
@@ -265,7 +281,6 @@ async function executeSubagent(
         }
       }
 
-      const wallTimeMs = Date.now() - startedAt;
       const msg = formatSubagentDelivery(agentName, result, {
         diffInfos,
         wallTimeMs,
