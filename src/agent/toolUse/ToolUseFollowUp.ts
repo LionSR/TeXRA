@@ -30,13 +30,13 @@ const logger = new AgentLogger('ToolUseFollowUp');
 /**
  * Send a follow-up message to a tool-use session.
  *
- * Routes the message based on session state:
+ * Routes based on session state:
  * 1. Active agent: direct append → returns { status: 'sent' }
  * 2. Resuming/Waiting session: queue for later → returns { status: 'queued' }
  * 3. Error during send → returns { status: 'error' }
  * 4. No session found → returns { status: 'no_session' }
  *
- * Note: Messages queued for WAITING sessions are picked up when user resumes.
+ * Note: Items queued for WAITING sessions are picked up when user resumes.
  * PersistedFlow handles state persistence.
  *
  * @returns Result indicating what happened - callers handle UI notifications

@@ -12,6 +12,7 @@ import { z } from 'zod';
 
 import {
   AGENT_CATEGORY,
+  ToolConfigSchema,
   ToolUseAgentProposalSchema,
   WorkflowAgentProposalSchema,
   type AgentProposal,
@@ -39,8 +40,10 @@ const LenientWorkflowProposalSchema = WorkflowAgentProposalSchema.extend({
   mediaFiles: z.array(z.string()).prefault([]),
   outputFiles: z.array(z.string()).prefault([]),
   useMultipleOutputs: z.boolean().prefault(false),
+  toolConfig: ToolConfigSchema,
 });
 
+const MAX_STORE_SIZE = 500;
 const proposalInputStore = new Map<string, AgentProposal>();
 
 function parseProposalInput(
@@ -58,9 +61,28 @@ function parseProposalInput(
   }
 
   if (toolName === 'delegate_workflow' || toolName === 'propose_workflow') {
+    // Map extraction shorthand flags into toolConfig (mirrors DelegationTools.execute)
+    const extractFigures =
+      'extractFigures' in spread ? Boolean(spread.extractFigures) : undefined;
+    const extractTikz =
+      'extractTikz' in spread ? Boolean(spread.extractTikz) : undefined;
+    const existingToolConfig = isPlainObject(spread.toolConfig)
+      ? spread.toolConfig
+      : {};
+    const toolConfig = {
+      ...existingToolConfig,
+      ...(extractFigures !== undefined && {
+        autoExtractFigure: extractFigures,
+      }),
+      ...(extractTikz !== undefined && {
+        autoExtractTikzFigure: extractTikz,
+      }),
+    };
+
     const result = LenientWorkflowProposalSchema.safeParse({
       agentCategory: AGENT_CATEGORY.WORKFLOW,
       ...spread,
+      toolConfig,
     });
     return result.success ? result.data : null;
   }
@@ -81,6 +103,11 @@ export function registerProposalInput(
   const serialized = JSON.stringify(proposal);
   const id = `proposal:${serialized.length}:${hashString(serialized)}`;
   if (!proposalInputStore.has(id)) {
+    if (proposalInputStore.size >= MAX_STORE_SIZE) {
+      // Evict oldest entry (first key in insertion order).
+      const oldest = proposalInputStore.keys().next().value;
+      if (oldest !== undefined) proposalInputStore.delete(oldest);
+    }
     proposalInputStore.set(id, proposal);
   }
   return id;

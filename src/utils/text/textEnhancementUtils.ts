@@ -112,13 +112,11 @@ export async function polishTextWithAI(
     const fileContextString = fileContext ? formatFileContext(fileContext) : '';
     const prompt = await renderPolishPrompt(fileContextString, text);
 
-    const kit = await createHelperModelKit();
-    if (!kit) {
-      throw new Error(
-        'Helper model not available. Update the model in Settings > Models.',
-      );
+    const helperResult = await createHelperModelKit();
+    if (!helperResult.kit) {
+      throw new Error(helperResult.reason);
     }
-    const { handler, client } = kit;
+    const { handler, client } = helperResult.kit;
     const messages = await handler.initializeMessages('', prompt);
     const result = await handler.createResponse({
       client,

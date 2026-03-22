@@ -43,12 +43,17 @@ import {
   UpdateSuperYoloEnabledMessageSchema,
   UpdateAgentModePresetsMessageSchema,
   UpdateToolDashboardMessageSchema,
+  UpdateGitAuthorSettingsMessageSchema,
   UpdateLatexSettingsStatusMessageSchema,
   type AgentSelectionItem,
   type NumberVscodeSetting,
   type ToolDashboardItem,
   DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/schemas/settingsViewMessages';
+import {
+  DEFAULT_GIT_AUTHOR_NAME,
+  DEFAULT_GIT_AUTHOR_EMAIL,
+} from '@shared/constants/git';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 // Local imports - settings view
@@ -64,6 +69,7 @@ import './tabs/ModelsTab';
 import './tabs/AgentsTab';
 import './tabs/MultiAgentTab';
 import './tabs/ToolsTab';
+import './tabs/GitTab';
 import './tabs/LaTeXTab';
 import type { HistoryTab } from './tabs/HistoryTab';
 
@@ -173,10 +179,17 @@ export class SettingsApp extends SettingsAppBase {
   private readonly superYoloToggleDisabled = signal(true);
   private readonly reliabilitySettings = signal<NumberVscodeSetting[]>([]);
   private readonly allowOrchestratorKill = signal(true);
+  private readonly detachSubagentsOnStop = signal(false);
 
   // Tool dashboard state
   private readonly toolDashboardItems = signal<ToolDashboardItem[]>([]);
   private readonly toolDashboardLoaded = signal(false);
+
+  // Git author settings state
+  private readonly gitMarkCommits = signal(false);
+  private readonly gitAuthorName = signal(DEFAULT_GIT_AUTHOR_NAME);
+  private readonly gitAuthorEmail = signal(DEFAULT_GIT_AUTHOR_EMAIL);
+  private readonly gitSettingsLoaded = signal(false);
 
   // LaTeX settings state
   private readonly latexSettingsStatus = signal({
@@ -200,6 +213,7 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED,
     SETTINGS_VIEW_COMMANDS.GET_AGENT_MODE_PRESETS,
     SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA,
+    SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS,
     SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS,
   ] as const;
 
@@ -315,6 +329,7 @@ export class SettingsApp extends SettingsAppBase {
         this.superYoloToggleDisabled.set(false);
         this.reliabilitySettings.set(data.reliabilitySettings);
         this.allowOrchestratorKill.set(data.allowOrchestratorKill);
+        this.detachSubagentsOnStop.set(data.detachSubagentsOnStop);
         return;
       }
 
@@ -333,6 +348,19 @@ export class SettingsApp extends SettingsAppBase {
         if (!data) return;
         this.toolDashboardItems.set(data.items);
         this.toolDashboardLoaded.set(true);
+        return;
+      }
+
+      case SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS: {
+        const data = this.parseMessage(
+          raw,
+          UpdateGitAuthorSettingsMessageSchema,
+        );
+        if (!data) return;
+        this.gitMarkCommits.set(data.markCommits);
+        this.gitAuthorName.set(data.authorName);
+        this.gitAuthorEmail.set(data.authorEmail);
+        this.gitSettingsLoaded.set(true);
         return;
       }
 
@@ -522,6 +550,10 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL,
   );
 
+  private handleDetachSubagentsOnStopToggle = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP,
+  );
+
   private handleApplyAgentModePreset = forwardDetail(
     SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
   );
@@ -545,6 +577,19 @@ export class SettingsApp extends SettingsAppBase {
 
   private handleToolRecheck = forwardCommand(
     SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
+  );
+
+  // Git settings event handlers
+  private handleGitMarkCommitsToggle = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_GIT_MARK_COMMITS,
+  );
+
+  private handleGitAuthorNameChange = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME,
+  );
+
+  private handleGitAuthorEmailChange = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_EMAIL,
   );
 
   // LaTeX settings event handlers
@@ -648,6 +693,10 @@ export class SettingsApp extends SettingsAppBase {
             Tools</vscode-tab-header
           >
           <vscode-tab-header slot="header"
+            ><span class="codicon codicon-git-commit"></span>
+            Git</vscode-tab-header
+          >
+          <vscode-tab-header slot="header"
             ><span class="codicon codicon-file-code"></span>
             LaTeX</vscode-tab-header
           >
@@ -731,9 +780,12 @@ export class SettingsApp extends SettingsAppBase {
               .reliabilitySettings=${this.reliabilitySettings.get()}
               .customPresets=${this.customPresets.get()}
               .allowOrchestratorKill=${this.allowOrchestratorKill.get()}
+              .detachSubagentsOnStop=${this.detachSubagentsOnStop.get()}
               @super-yolo-toggle=${this.handleSuperYoloToggle}
               @allow-orchestrator-kill-toggle=${this
                 .handleAllowOrchestratorKillToggle}
+              @detach-subagents-on-stop-toggle=${this
+                .handleDetachSubagentsOnStopToggle}
               @reliability-setting-change=${this.handleSetProviderVscodeSetting}
               @apply-agent-mode-preset=${this.handleApplyAgentModePreset}
               @delete-agent-mode-preset=${this.handleDeleteAgentModePreset}
@@ -748,6 +800,18 @@ export class SettingsApp extends SettingsAppBase {
               @tool-install-extension=${this.handleToolInstallExtension}
               @tool-recheck=${this.handleToolRecheck}
             ></tools-tab>
+          </vscode-tab-panel>
+
+          <vscode-tab-panel>
+            <git-tab
+              .markCommits=${this.gitMarkCommits.get()}
+              .authorName=${this.gitAuthorName.get()}
+              .authorEmail=${this.gitAuthorEmail.get()}
+              .toggleDisabled=${!this.gitSettingsLoaded.get()}
+              @git-mark-commits-toggle=${this.handleGitMarkCommitsToggle}
+              @git-author-name-change=${this.handleGitAuthorNameChange}
+              @git-author-email-change=${this.handleGitAuthorEmailChange}
+            ></git-tab>
           </vscode-tab-panel>
 
           <vscode-tab-panel>

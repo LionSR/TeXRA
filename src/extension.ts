@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 // Local imports - core
 import { loadAgents } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
+import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import { initializeServerSideKeyAccess } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -29,8 +30,9 @@ import {
   configureLatexSettings,
   refreshModelListIfNeeded,
 } from '@frontend/setup';
-import { FileLister } from '@frontend/files';
 import { agentDirectories } from '@frontend/agents';
+import { FileLister } from '@frontend/files';
+import { killActiveRecording } from '@frontend/media/audio';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { initializeNativeToolEditApproval } from '@frontend/approval/nativeToolEditApproval';
@@ -45,6 +47,7 @@ import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -199,6 +202,8 @@ export async function activate(context: vscode.ExtensionContext) {
   setLeanVscodeServices(leanVscodeIntegration);
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
 
+  applyGitAuthorConfig();
+
   setToolNotificationHandler((message, actionCommand) => {
     if (actionCommand) {
       void vscode.window
@@ -331,6 +336,10 @@ export async function deactivate() {
   disposeStatusListener?.();
   await UsageLogService.dispose();
   await progressViewProviderInstance?.flushState();
+
+  killBackgroundProcesses();
+  killActiveRecording();
+
   clearStoreCache();
   bus.emit('extensionDeactivating', undefined);
 

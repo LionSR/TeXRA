@@ -67,6 +67,7 @@ export const SETTINGS_VIEW_CMD = {
   GET_SUPER_YOLO_ENABLED: 'getSuperYoloEnabled',
   SET_SUPER_YOLO_ENABLED: 'setSuperYoloEnabled',
   SET_ALLOW_ORCHESTRATOR_KILL: 'setAllowOrchestratorKill',
+  SET_DETACH_SUBAGENTS_ON_STOP: 'setDetachSubagentsOnStop',
   APPLY_AGENT_MODE_PRESET: 'applyAgentModePreset',
   SAVE_AGENT_MODE_PRESET: 'saveAgentModePreset',
   DELETE_AGENT_MODE_PRESET: 'deleteAgentModePreset',
@@ -76,6 +77,11 @@ export const SETTINGS_VIEW_CMD = {
   OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',
   INSTALL_TOOL_EXTENSION: 'installToolExtension',
   RECHECK_TOOL_STATUS: 'recheckToolStatus',
+  // Git settings commands
+  GET_GIT_AUTHOR_SETTINGS: 'getGitAuthorSettings',
+  SET_GIT_MARK_COMMITS: 'setGitMarkCommits',
+  SET_GIT_AUTHOR_NAME: 'setGitAuthorName',
+  SET_GIT_AUTHOR_EMAIL: 'setGitAuthorEmail',
   // LaTeX settings commands
   GET_LATEX_SETTINGS_STATUS: 'getLatexSettingsStatus',
   APPLY_LATEX_SETTINGS: 'applyLatexSettings',
@@ -100,5 +106,6 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_SUPER_YOLO_ENABLED: 'updateSuperYoloEnabled',
   UPDATE_AGENT_MODE_PRESETS: 'updateAgentModePresets',
   UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
+  UPDATE_GIT_AUTHOR_SETTINGS: 'updateGitAuthorSettings',
   UPDATE_LATEX_SETTINGS_STATUS: 'updateLatexSettingsStatus',
 } as const;

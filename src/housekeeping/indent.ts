@@ -13,18 +13,6 @@ import { EXCLUDED_DIRS } from './constants';
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
-/** Backup file extensions to clean up after formatting */
-const BACKUP_EXTENSIONS = ['.bak', '.bak0', '.bak1'] as const;
-const INDENT_LOG_FILE = 'indent.log';
-
-/** Check if a file is a backup file that should be cleaned up */
-function isBackupFile(name: string): boolean {
-  return (
-    BACKUP_EXTENSIONS.some((ext) => name.endsWith(ext)) ||
-    name === INDENT_LOG_FILE
-  );
-}
-
 /**
  * Formats LaTeX files in a specific directory and its subdirectories
  * @param directory The directory to process (relative to workspace). If not provided, uses the root.
@@ -86,7 +74,7 @@ export async function indentLatexFilesInDirectory(
   }
 
   try {
-    // Pass 1: Format .tex files
+    // Format .tex files (runLatexFormatter handles backup cleanup internally)
     await walkDirectory(directory, async (fullPath, name) => {
       if (!hasExtension(name, '.tex')) {
         return;
@@ -106,14 +94,6 @@ export async function indentLatexFilesInDirectory(
         }
       } catch (err) {
         logger.error(CHANNEL, `Error formatting file ${fullPath}: ${err}`);
-      }
-    });
-
-    // Pass 2: Clean up backup files created during formatting
-    await walkDirectory(directory, async (fullPath, name) => {
-      if (isBackupFile(name)) {
-        logger.debug(CHANNEL, `Found cleanup file: ${fullPath}`);
-        await WorkspaceFS.delete(fullPath);
       }
     });
 

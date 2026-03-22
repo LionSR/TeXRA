@@ -1,9 +1,7 @@
 /**
  * Tools for delegating agent executions from tool-use agents.
- * Three separate tools for clean separation of concerns:
  * - delegate_workflow: For workflow agents (structured file I/O, fixed-round full-document rewrite)
- * - delegate_agent: For tool-use agents (interactive, versatile — edits, creation, research)
- * - resume_agent: Resume a WAITING tool-use subagent with follow-up instructions
+ * - delegate_agent: For tool-use agents (new delegation or resume via execution_id)
  *
  * All subagents execute asynchronously — result delivered via follow-up queue.
  */
@@ -43,6 +41,7 @@ import {
 } from '@model/computeModelOptions';
 import {
   AGENT_CATEGORY,
+  DEFAULT_TOOL_CONFIG,
   WorkflowAgentProposalSchema,
   ToolUseAgentProposalSchema,
   type WorkflowAgentProposal,
@@ -90,7 +89,7 @@ logger.initialize(LOG_CHANNEL);
  * Per-execution delivery gate for subagent result routing.
  *
  * `hasDelivered` prevents duplicate delivery of the same result via both
- * `onBeforeWaiting` and `onCompleted`. When `resume_agent` confirms a
+ * `onBeforeWaiting` and `onCompleted`. When `delegate_agent (resume)` confirms a
  * follow-up was accepted, it resets `hasDelivered` so the next cycle's
  * `onBeforeWaiting` delivers the new result back to the orchestrator.
  */
@@ -190,9 +189,9 @@ async function executeSubagent(
     parentExecutionId,
   );
 
-  // Track delivery state in the module-level map so resume_agent can reset it.
+  // Track delivery state in the module-level map so delegate_agent (resume) can reset it.
   // The flag prevents duplicate delivery of the same result via both
-  // onBeforeWaiting and onCompleted. When resume_agent resets the flag,
+  // onBeforeWaiting and onCompleted. When delegate_agent (resume) resets the flag,
   // the next onBeforeWaiting will deliver the resumed cycle's result.
   const deliveryState: SubagentDeliveryState = { hasDelivered: false };
   activeSubagentDelivery.set(executionId, deliveryState);
@@ -219,7 +218,7 @@ async function executeSubagent(
       }
     },
     onProgress,
-    onBeforeWaiting: async (lastResponse) => {
+    onBeforeWaiting: async (lastResponse, touchedFiles) => {
       if (deliveryState.hasDelivered || !childStreamId) return;
       const wallTimeMs = Date.now() - startedAt;
       const msg = formatSubagentDelivery(
@@ -228,6 +227,7 @@ async function executeSubagent(
           category: 'toolUse' as const,
           status: 'stopped' as const,
           lastResponse,
+          touchedFiles,
           executionId,
           streamId: childStreamId,
         },
@@ -306,7 +306,7 @@ async function executeSubagent(
       `To check intermediate progress: executions tool with path=/executions/${executionId} and action=wait (waits for next status change).`,
       ...(isToolUse
         ? [
-            `To send follow-up instructions after delivery: use resume_agent with this execution ID.`,
+            `To send follow-up instructions after delivery: use delegate_agent with execution_id set to this ID.`,
           ]
         : []),
     ].join('\n'),
@@ -484,6 +484,18 @@ const WorkflowAgentInputSchema = z.object({
     .array(z.string())
     .prefault([])
     .describe('Additional media files'),
+  extractFigures: z
+    .boolean()
+    .prefault(false)
+    .describe(
+      'When true, automatically extracts figures referenced by the input LaTeX file(s) (via \\includegraphics, \\begin{overpic}) and attaches them as media files. Merges with any explicitly provided mediaFile/mediaFiles.',
+    ),
+  extractTikz: z
+    .boolean()
+    .prefault(false)
+    .describe(
+      'When true, extracts TikZ figures from the input LaTeX file(s), compiles them into standalone PDFs, and attaches them as media files.',
+    ),
   outputFiles: z
     .array(z.string())
     .prefault([])
@@ -513,7 +525,12 @@ ${formatAgentList(getVisibleAgents('workflow'))}
 Available models: ${getVisibleModels().join(', ')}
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
-Example: agent=correct, inputFile=paper.tex, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
+Extraction attachments — automatically discover and attach assets from input LaTeX file(s):
+- extractFigures=true: Extract \\includegraphics/\\begin{overpic} figures and attach as media files.
+- extractTikz=true: Compile TikZ figures into standalone PDFs and attach as media files.
+All extraction options merge with explicitly provided files and are non-fatal on failure.
+
+Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
@@ -583,6 +600,9 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
     }
 
     // Construct workflow proposal
+    // Extraction flags are mapped to toolConfig so they flow through to the
+    // agent execution pipeline (MediaExtractionNode → LatexMediaManager)
+    // and are preserved when the user clicks "Setup" in the proposal UI.
     // Memory paths are already validated by memoriesField's .superRefine() at schema parse time.
     const proposal = WorkflowAgentProposalSchema.parse({
       agentCategory: AgentCategory.Workflow,
@@ -599,6 +619,11 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       mediaFiles: input.mediaFiles,
       outputFiles: input.outputFiles,
       useMultipleOutputs: input.useMultipleOutputs,
+      toolConfig: {
+        ...DEFAULT_TOOL_CONFIG,
+        autoExtractFigure: input.extractFigures,
+        autoExtractTikzFigure: input.extractTikz,
+      },
       memories: input.memories,
     } satisfies WorkflowAgentProposal);
 
@@ -612,7 +637,12 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
 
 /** Schema for delegate_agent tool (tool-use agents). */
 const DelegateAgentInputSchema = z.object({
-  agent: z.string().describe('Name of the tool-use agent to delegate to'),
+  agent: z
+    .string()
+    .optional()
+    .describe(
+      'Name of the tool-use agent to delegate to. Required for new delegations, ignored when resuming via execution_id.',
+    ),
   model: z
     .string()
     .optional()
@@ -621,8 +651,16 @@ const DelegateAgentInputSchema = z.object({
     ),
   instruction: z
     .string()
-    .describe('Plain prose instruction with file paths included naturally'),
+    .describe(
+      'Plain prose instruction for the agent. For new delegations, include file paths naturally. For resumes, reference previous work freely — the subagent retains its full history.',
+    ),
   memories: memoriesField,
+  execution_id: z
+    .string()
+    .optional()
+    .describe(
+      'If set, resumes a WAITING tool-use subagent instead of starting a new one. Use the execution ID from the original delegation result or /executions.',
+    ),
 });
 
 export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
@@ -631,7 +669,11 @@ export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
 export class DelegateAgentTool extends defineTool({
   name: 'delegate_agent',
   description:
-    () => `Delegate a task to a tool-use agent. The agent has its own tools (file reading, editing, search, bash) and works interactively. Tool-use agents are versatile—they can create entire documents (e.g., presentations, posters), make targeted edits, perform research, explore codebases, or run multi-step investigations. Choose the agent whose specialization matches the task.
+    () => `Delegate a task to a tool-use agent, or resume a WAITING subagent with follow-up instructions.
+
+**New delegation** (no execution_id): Launches a new tool-use agent with its own tools (file reading, editing, search, bash). Tool-use agents are versatile—they can create entire documents, make targeted edits, perform research, or run multi-step investigations.
+
+**Resume** (with execution_id): Sends follow-up instructions to a WAITING subagent. The subagent keeps its full history. Result arrives asynchronously like the original delegation.
 
 Available agents:
 ${formatAgentList(getVisibleAgents('toolUse'))}
@@ -639,10 +681,23 @@ ${formatAgentList(getVisibleAgents('toolUse'))}
 Available models: ${getVisibleModels().join(', ')}
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
-Example: agent=chat, instruction="The presentation at slides/talk.tex has incorrect citations on slides 3 and 7. Please read the file, fix the \\cite commands to reference the correct BibTeX keys from refs.bib, and ensure the bibliography slide is consistent."`,
+Example (new): agent=chat, instruction="Fix the \\cite commands on slides 3 and 7 in slides/talk.tex using refs.bib."
+Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliography slide formatting."`,
   schema: DelegateAgentInputSchema,
 }) {
   protected async execute(input: DelegateAgentInput): Promise<ToolResult> {
+    // Resume path: execution_id is set
+    if (input.execution_id) {
+      return this.resumeAgent(input.execution_id, input.instruction);
+    }
+
+    // Delegate path: agent is required
+    if (!input.agent) {
+      throw new Error(
+        `'agent' is required when starting a new delegation. Provide an agent name, or set 'execution_id' to resume an existing subagent.`,
+      );
+    }
+
     // Validate agent exists and is a tool-use agent
     const agentEntry = getAgent(input.agent);
     if (!agentEntry) {
@@ -677,62 +732,32 @@ Example: agent=chat, instruction="The presentation at slides/talk.tex has incorr
 
     return proposeAndExecute(proposal, input.agent, ctx.streamId);
   }
-}
 
-// ============================================================================
-// resume_agent tool - send follow-up instructions to a WAITING subagent
-// ============================================================================
-
-/** Schema for resume_agent tool. */
-const ResumeAgentInputSchema = z.object({
-  execution_id: z
-    .string()
-    .describe(
-      'Execution ID of the tool-use subagent to resume (from the original delegate_agent result or /executions)',
-    ),
-  instruction: z
-    .string()
-    .describe(
-      'Follow-up instruction for the subagent. Must be self-contained — the subagent retains its full conversation history, so you can reference its previous work.',
-    ),
-});
-
-export type ResumeAgentInput = z.infer<typeof ResumeAgentInputSchema>;
-
-/** Tool for resuming a WAITING tool-use subagent with follow-up instructions. */
-export class ResumeAgentTool extends defineTool({
-  name: 'resume_agent',
-  description:
-    'Send follow-up instructions to a WAITING tool-use subagent. The subagent keeps its full history, so reference previous work freely. Result arrives asynchronously like the original delegation.',
-  schema: ResumeAgentInputSchema,
-}) {
-  protected async execute(input: ResumeAgentInput): Promise<ToolResult> {
-    const handle = getHandle(input.execution_id);
+  /** Resume a WAITING tool-use subagent with follow-up instructions. */
+  private async resumeAgent(
+    executionId: string,
+    instruction: string,
+  ): Promise<ToolResult> {
+    const handle = getHandle(executionId);
     if (!(handle instanceof AgentExecutionHandle)) {
       throw new Error(
-        `Execution '${input.execution_id}' not found or not an agent execution. Use the executions tool to check status.`,
+        `Execution '${executionId}' not found or not an agent execution. Use the executions tool to check status.`,
       );
     }
 
     if (handle.category !== 'toolUse') {
       throw new Error(
-        `Execution '${input.execution_id}' is a workflow agent. Only tool-use subagents can be resumed.`,
+        `Execution '${executionId}' is a workflow agent. Only tool-use subagents can be resumed.`,
       );
     }
 
-    const deliveryState = activeSubagentDelivery.get(input.execution_id);
+    const deliveryState = activeSubagentDelivery.get(executionId);
     if (!deliveryState) {
       throw new Error(
-        `Execution '${input.execution_id}' is no longer tracked for delivery. It may have already completed.`,
+        `Execution '${executionId}' is no longer tracked for delivery. It may have already completed.`,
       );
     }
 
-    // Only allow resume after the subagent has delivered its result and is
-    // in WAITING state.  Resuming mid-cycle would race: the current cycle's
-    // onBeforeWaiting could consume the gate reset and swallow the resumed
-    // cycle's result.  Resetting the gate *before* sendFollowUp also
-    // prevents concurrent resume calls from both passing the check — the
-    // second caller sees hasDelivered === false and is rejected.
     if (!deliveryState.hasDelivered) {
       throw new Error(
         `'${handle.agentName}' is still processing. Wait for its result before sending a follow-up.`,
@@ -740,13 +765,11 @@ export class ResumeAgentTool extends defineTool({
     }
     deliveryState.hasDelivered = false;
 
-    const framedInstruction = formatFollowUpInstruction(input.instruction);
+    const framedInstruction = formatFollowUpInstruction(instruction);
     let result: Awaited<ReturnType<typeof sendFollowUp>>;
     try {
       result = await sendFollowUp(handle.childStreamId, framedInstruction);
     } catch (err) {
-      // Restore the gate so the subagent's current result can still be
-      // delivered if a transient error prevented sending.
       deliveryState.hasDelivered = true;
       throw err;
     }
@@ -754,26 +777,19 @@ export class ResumeAgentTool extends defineTool({
     switch (result.status) {
       case 'sent':
       case 'queued':
-        // Both are success paths.  'sent' is the normal case — the subagent
-        // is blocked in WaitNode with an active flow context, so
-        // appendFollowUp delivers directly.  'queued' is a fallback when
-        // the context has been cleaned up but the stream status is still
-        // WAITING.  Gate was already reset above.
         return {
           summary: `Follow-up sent to '${handle.agentName}'`,
           output: [
             `Follow-up instruction sent to '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
-            `Execution ID: ${input.execution_id}`,
+            `Execution ID: ${executionId}`,
           ].join('\n'),
         };
       case 'error':
-        // Restore the gate — the follow-up was not accepted.
         deliveryState.hasDelivered = true;
         throw new Error(
           `Failed to send follow-up to '${handle.agentName}': ${result.message}`,
         );
       case 'no_session':
-        // Restore the gate — the follow-up was not accepted.
         deliveryState.hasDelivered = true;
         throw new Error(
           `No active session for '${handle.agentName}' (stream status: ${result.streamStatus ?? 'unknown'}). The subagent may have stopped or its session expired.`,
@@ -781,3 +797,4 @@ export class ResumeAgentTool extends defineTool({
     }
   }
 }
+

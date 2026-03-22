@@ -1,6 +1,9 @@
 /**
  * HistoryList component - renders list of history items with search functionality.
  * Receives search state via reactive properties and handles navigation.
+ *
+ * Pagination is active when there is no search term; during search, all items
+ * are shown so that match navigation works across the full list.
  */
 
 // Third-party imports
@@ -16,6 +19,13 @@ import { repeat } from 'lit/directives/repeat.js';
 // Local imports - shared
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
+
+// Local imports - shared components & pagination utility
+import {
+  paginate,
+  DEFAULT_PAGE_SIZE,
+  type PageChangeDetail,
+} from '../shared/Pagination';
 
 // Local imports - history view
 import { HistoryViewEvents } from './events';
@@ -41,6 +51,9 @@ export class HistoryList extends LitElement {
 
   @state() private searchVersion = 0;
 
+  /** Current zero-based page index (used when not searching). */
+  @state() private page = 0;
+
   @queryAll('history-item')
   private historyItemElements!: Array<
     HTMLElement & {
@@ -48,6 +61,11 @@ export class HistoryList extends LitElement {
       getMarks: () => HTMLElement[];
     }
   >;
+
+  /** Whether pagination is active (no active search). */
+  private get paginated(): boolean {
+    return !this.searchTerm;
+  }
 
   protected willUpdate(changedProperties: PropertyValues<this>): void {
     if (
@@ -59,18 +77,42 @@ export class HistoryList extends LitElement {
     }
 
     if (changedProperties.has('searchTerm')) {
-      this.performSearch(this.searchTerm);
+      // Reset page when entering or leaving search mode
+      if (this.searchTerm) {
+        this.page = 0;
+      }
+      // Clear marks immediately when search is cleared, but defer
+      // applying a new search term to updated() so the DOM has
+      // re-rendered all items (pagination is disabled during search).
+      if (!this.searchTerm) {
+        this.performSearch('');
+      }
     }
 
     if (changedProperties.has('searchAction') && this.searchAction) {
       this.performNavigate(this.searchAction);
       this.dispatchEvent(HistoryViewEvents.searchNavigateComplete());
     }
+
+    // Clamp page when items change (e.g. delete)
+    if (changedProperties.has('items') && this.paginated) {
+      const totalPages = Math.max(
+        1,
+        Math.ceil(this.items.length / DEFAULT_PAGE_SIZE),
+      );
+      if (this.page >= totalPages) {
+        this.page = Math.max(0, totalPages - 1);
+      }
+    }
   }
 
   protected updated(changedProps: Map<string, unknown>): void {
-    // Re-apply search when items change (e.g., new history loaded)
-    if (changedProps.has('items') && this.searchTerm) {
+    // Apply search after DOM update so all items are rendered
+    // (pagination is disabled during search, so we need the full DOM).
+    if (
+      this.searchTerm &&
+      (changedProps.has('searchTerm') || changedProps.has('items'))
+    ) {
       const version = ++this.searchVersion;
       void this.applySearchToItems(this.searchTerm, version);
     }
@@ -193,6 +235,10 @@ export class HistoryList extends LitElement {
     this.dispatchEvent(HistoryViewEvents.clearHistory());
   }
 
+  private handlePageChange(event: CustomEvent<PageChangeDetail>): void {
+    this.page = event.detail.page;
+  }
+
   override render(): TemplateResult {
     if (!this.items.length) {
       return html`<div class="empty-state">
@@ -208,6 +254,11 @@ export class HistoryList extends LitElement {
     const hasMatches = (this.state?.totalMatches ?? 0) > 0;
     const forceOpen = Boolean(this.searchTerm && hasMatches);
 
+    // When searching, show all items; otherwise paginate
+    const displayItems = this.paginated
+      ? paginate(this.items, this.page, DEFAULT_PAGE_SIZE).paged
+      : this.items;
+
     return html`
       <div class="clear-container">
         <vscode-toolbar-button
@@ -218,9 +269,17 @@ export class HistoryList extends LitElement {
           @click=${this.handleClear}
         ></vscode-toolbar-button>
       </div>
+      ${this.paginated
+        ? html`<list-pagination
+            .page=${this.page}
+            .totalItems=${this.items.length}
+            .pageSize=${DEFAULT_PAGE_SIZE}
+            @page-change=${this.handlePageChange}
+          ></list-pagination>`
+        : ''}
       <div class="history-container">
         ${repeat(
-          this.items,
+          displayItems,
           (item) => item.id,
           (item) => html`
             <history-item
@@ -233,6 +292,14 @@ export class HistoryList extends LitElement {
           `,
         )}
       </div>
+      ${this.paginated
+        ? html`<list-pagination
+            .page=${this.page}
+            .totalItems=${this.items.length}
+            .pageSize=${DEFAULT_PAGE_SIZE}
+            @page-change=${this.handlePageChange}
+          ></list-pagination>`
+        : ''}
     `;
   }
 }

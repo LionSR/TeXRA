@@ -6,7 +6,7 @@
 
 import { hashString } from './hashUtils';
 
-// Local module state
+const MAX_STORE_SIZE = 1000;
 const copyContentStore = new Map<string, string>();
 
 /**
@@ -17,7 +17,12 @@ export function registerCopyContent(
   contentId?: string,
 ): string {
   const id = contentId ?? `auto:${content.length}:${hashString(content)}`;
-  if (copyContentStore.get(id) !== content) {
+  const existing = copyContentStore.get(id);
+  if (existing !== content) {
+    if (existing === undefined && copyContentStore.size >= MAX_STORE_SIZE) {
+      const oldest = copyContentStore.keys().next().value;
+      if (oldest !== undefined) copyContentStore.delete(oldest);
+    }
     copyContentStore.set(id, content);
   }
   return id;

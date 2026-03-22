@@ -573,11 +573,11 @@ class GenerateNode extends Node<AgentCreatorShared> {
 
   async exec(prepRes: GeneratePrepResult): Promise<string> {
     const { config, blueprint } = prepRes;
-    const kit = await createHelperModelKit();
-    if (!kit) {
-      throw new Error('Helper model not available for agent creation');
+    const helperResult = await createHelperModelKit();
+    if (!helperResult.kit) {
+      throw new Error(helperResult.reason);
     }
-    const { handler, client } = kit;
+    const { handler, client } = helperResult.kit;
 
     const prompts = config[blueprint.category];
     const schemaRef = getSchemaReference(blueprint.category);
