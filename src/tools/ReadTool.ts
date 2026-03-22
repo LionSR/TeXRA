@@ -73,50 +73,18 @@ export class ReadFileTool extends defineTool({
     // EML files are text-based but use complex MIME encoding (multipart,
     // base64 attachments, quoted-printable). Parse them into readable text
     // and extract image attachments so vision-capable models can inspect them.
+    let emlImages: Awaited<ReturnType<typeof parseEml>>['images'] = [];
+    let lines: string[];
+
     if (path.extname(input.path).toLowerCase() === '.eml') {
       const raw = await WorkspaceFS.read(input.path);
       const { text, images } = await parseEml(raw);
-      recordToolFileRead(input.path);
-
-      const lines = splitContentLines(text);
-      const totalLines = lines.length;
-      const requestedStartLine = input.range?.start ?? 1;
-      const requestedEndLine = this.computeRequestedEndLine(
-        input.range,
-        requestedStartLine,
-        totalLines,
-      );
-      const startLine = Math.min(requestedStartLine, totalLines + 1);
-      const endLine = Math.min(
-        Math.max(requestedEndLine, requestedStartLine),
-        totalLines,
-      );
-      const rangeEndExceeded =
-        input.range?.end != null && input.range.end > totalLines;
-      const suffix = rangeEndExceeded
-        ? ` (requested end ${requestedEndLine} exceeds file length ${totalLines})`
-        : '';
-
-      const result = formatFileView({
-        path: input.path,
-        lines,
-        viewRange: input.range ? [startLine, endLine] : null,
-        summarySuffix: suffix,
-      });
-
-      if (images.length > 0) {
-        result.files = images.map((img) => ({
-          path: img.filename,
-          mimeType: img.mimeType,
-          bytes: img.bytes,
-          description: `Image attachment from email: ${img.filename}`,
-        }));
-      }
-
-      return result;
+      lines = splitContentLines(text);
+      emlImages = images;
+    } else {
+      lines = splitContentLines(await WorkspaceFS.read(input.path));
     }
 
-    const lines = splitContentLines(await WorkspaceFS.read(input.path));
     recordToolFileRead(input.path);
 
     const totalLines = lines.length;
@@ -142,12 +110,23 @@ export class ReadFileTool extends defineTool({
       ? ` (requested end ${requestedEndLine} exceeds file length ${totalLines})`
       : '';
 
-    return formatFileView({
+    const result = formatFileView({
       path: input.path,
       lines,
       viewRange: input.range ? [startLine, endLine] : null,
       summarySuffix: suffix,
     });
+
+    if (emlImages.length > 0) {
+      result.files = emlImages.map((img) => ({
+        path: img.filename,
+        mimeType: img.mimeType,
+        bytes: img.bytes,
+        description: `Image attachment from email: ${img.filename}`,
+      }));
+    }
+
+    return result;
   }
 
   private computeRequestedEndLine(
