@@ -31,6 +31,43 @@ async function cleanupIndentLog(
   }
 }
 
+/** Delete all files matching backup glob patterns in a directory. */
+async function cleanupBackupFiles(
+  fileBaseName: string,
+  fileDir: string,
+  deleteFn: (path: string) => Promise<void>,
+  globOptions?: Parameters<typeof globSync>[1],
+): Promise<void> {
+  const backupPatterns = [
+    `${fileBaseName}.tex.bak*`,
+    `${fileBaseName}.bak*`,
+  ].map((pattern) => path.join(fileDir, pattern).replaceAll('\\', '/'));
+
+  for (const pattern of backupPatterns) {
+    logger.debug(CHANNEL, `Searching for pattern: ${pattern}`);
+    const backupFiles = globSync(pattern, { nodir: true, ...globOptions });
+
+    logger.debug(
+      CHANNEL,
+      `Found backup files for pattern ${pattern}: ${JSON.stringify(backupFiles)}`,
+    );
+
+    for (const backupFile of backupFiles) {
+      try {
+        await deleteFn(backupFile);
+        logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
+      } catch (err) {
+        if (!isFileNotFoundError(err)) {
+          logger.warn(
+            CHANNEL,
+            `Error removing backup file ${backupFile}: ${err}`,
+          );
+        }
+      }
+    }
+  }
+}
+
 export async function runLatexIndent(filePath: string): Promise<boolean> {
   try {
     const showWarning = getConfig<boolean>(
@@ -73,83 +110,29 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     logger.debug(CHANNEL, `File directory: ${fileDir}`);
     logger.debug(CHANNEL, `Workspace path: ${workspacePath}`);
 
-    // Get all backup files matching the patterns, relative to workspace
+    // Clean up backup files and indent.log
     if (isWorkspaceFile && workspacePath) {
-      const backupPatterns = [
-        `${fileBaseName}.tex.bak*`,
-        `${fileBaseName}.tex.bak`,
-        `${fileBaseName}.bak*`,
-        `${fileBaseName}.bak`,
-      ].map((pattern) => path.join(fileDir, pattern).replaceAll('\\', '/'));
-
-      logger.debug(
-        CHANNEL,
-        `Backup patterns: ${JSON.stringify(backupPatterns)}`,
+      await cleanupBackupFiles(
+        fileBaseName,
+        fileDir,
+        WorkspaceFS.delete.bind(WorkspaceFS),
+        { cwd: workspacePath, absolute: false },
       );
-
-      for (const pattern of backupPatterns) {
-        logger.debug(CHANNEL, `Searching for pattern: ${pattern}`);
-        const backupFiles = globSync(pattern, {
-          cwd: workspacePath,
-          nodir: true,
-          absolute: false,
-        });
-
-        logger.debug(
-          CHANNEL,
-          `Found backup files for pattern ${pattern}: ${JSON.stringify(backupFiles)}`,
-        );
-
-        for (const backupFile of backupFiles) {
-          try {
-            await WorkspaceFS.delete(backupFile);
-            logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
-          } catch (err) {
-            if (!isFileNotFoundError(err)) {
-              logger.warn(
-                CHANNEL,
-                `Error removing backup file ${backupFile}: ${err}`,
-              );
-            }
-          }
-        }
-      }
-      // Clean up indent.log in the file's directory
       const relativeDir = path.relative(workspacePath, fileDir);
-      const relativeIndentLog = path.join(relativeDir, 'indent.log');
       await cleanupIndentLog(
         WorkspaceFS.delete.bind(WorkspaceFS),
-        relativeIndentLog,
+        path.join(relativeDir, 'indent.log'),
       );
     } else {
-      // Clean up backup files for non-workspace files using absolute paths
-      const backupPatterns = [
-        `${fileBaseName}.tex.bak*`,
-        `${fileBaseName}.tex.bak`,
-        `${fileBaseName}.bak*`,
-        `${fileBaseName}.bak`,
-      ].map((pattern) => path.join(fileDir, pattern).replaceAll('\\', '/'));
-
-      for (const pattern of backupPatterns) {
-        const backupFiles = globSync(pattern, { nodir: true });
-        for (const backupFile of backupFiles) {
-          try {
-            await AbsoluteFS.delete(backupFile);
-            logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
-          } catch (err) {
-            if (!isFileNotFoundError(err)) {
-              logger.warn(
-                CHANNEL,
-                `Error removing backup file ${backupFile}: ${err}`,
-              );
-            }
-          }
-        }
-      }
-
-      // Clean up indent.log for non-workspace files
-      const indentLogPath = path.join(fileDir, 'indent.log');
-      await cleanupIndentLog(AbsoluteFS.delete.bind(AbsoluteFS), indentLogPath);
+      await cleanupBackupFiles(
+        fileBaseName,
+        fileDir,
+        AbsoluteFS.delete.bind(AbsoluteFS),
+      );
+      await cleanupIndentLog(
+        AbsoluteFS.delete.bind(AbsoluteFS),
+        path.join(fileDir, 'indent.log'),
+      );
     }
 
     logger.info(CHANNEL, `Indented ${filePath}`);

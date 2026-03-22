@@ -32,6 +32,17 @@ export async function indentLatexFiles(
   await Promise.all(fileLocations.map((loc) => indentLatexFile(loc, logger)));
 }
 
+async function tryUnlink(filePath: string, logger: Logger): Promise<void> {
+  try {
+    await fs.unlink(filePath);
+    logger.debug(`Removed latexindent backup ${filePath}`);
+  } catch (error) {
+    logger.debug(
+      `Failed to remove latexindent backup ${filePath}: ${toErrorMessage(error)}`,
+    );
+  }
+}
+
 /** Clean up latexindent backup files after formatting. */
 export async function cleanupLatexBackups(
   fileLocation: FileLocation | null,
@@ -43,27 +54,16 @@ export async function cleanupLatexBackups(
 
   const { dir, base } = path.parse(fileLocation.absolutePath);
 
-  // Use glob to find all .bak* files (covers .bak, .bak0, .bak1, .bak2, etc.)
-  const backupGlobs = [
+  // Glob for all .bak* files (covers .bak, .bak0, .bak1, .bak2, etc.)
+  const backupFiles = globSync(
     path.join(dir, `${base}.bak*`),
-    path.join(dir, 'indent.log'),
-  ];
+    { nodir: true },
+  );
 
-  const candidates = new Set<string>();
-  for (const pattern of backupGlobs) {
-    for (const match of globSync(pattern, { nodir: true })) {
-      candidates.add(match);
-    }
+  for (const backupFile of backupFiles) {
+    await tryUnlink(backupFile, logger);
   }
 
-  for (const candidate of candidates) {
-    try {
-      await fs.unlink(candidate);
-      logger.debug(`Removed latexindent backup ${candidate}`);
-    } catch (error) {
-      logger.debug(
-        `Failed to remove latexindent backup ${candidate}: ${toErrorMessage(error)}`,
-      );
-    }
-  }
+  // Clean up indent.log directly (known filename, no glob needed)
+  await tryUnlink(path.join(dir, 'indent.log'), logger);
 }
