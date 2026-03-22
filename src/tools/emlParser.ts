@@ -154,6 +154,10 @@ function formatAddress(addr: Address): string {
  */
 function stripHtml(html: string): string {
   return html
+    // Remove non-visible blocks before stripping tags so their text content
+    // (CSS rules, JS code) doesn't leak into the plain-text output.
+    .replaceAll(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replaceAll(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     .replaceAll(/<br\s*\/?>/gi, '\n')
     .replaceAll(/<\/(?:p|div|tr|li|h[1-6])>/gi, '\n')
     .replaceAll(/<[^>]+>/g, '')
