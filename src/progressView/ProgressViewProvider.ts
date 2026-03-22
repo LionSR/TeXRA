@@ -390,7 +390,7 @@ export class ProgressViewProvider
   }
 
   private async resetRunningStreamStatuses(
-    waitingStreams?: Set<StreamTabId>,
+    waitingStreams: Set<StreamTabId>,
   ): Promise<void> {
     const affectedStreams =
       this.eventHandler.resetRunningTasksToError(waitingStreams);

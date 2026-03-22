@@ -90,7 +90,7 @@ export class StreamMetaManager {
 
   // -- Queries ----------------------------------------------------------------
 
-  /** Read-only view of stream→executionId mapping (for detectWaitingStreams). */
+  /** Read-only view of stream→executionId mapping. */
   getExecutionIdMap(): ReadonlyMap<StreamTabId, ExecutionId> {
     return this.executionIds;
   }
