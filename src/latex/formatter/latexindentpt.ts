@@ -95,22 +95,18 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       channel: CHANNEL,
       showError: showWarning,
     });
-    if (!result || !result.success) {
-      return false;
+    const success = result?.success ?? false;
+
+    if (success) {
+      // Wait a moment for the file system to stabilize after a successful write
+      await delay(100);
     }
 
-    // Wait a moment for the file system to stabilize
-    await delay(100);
-
-    // Setup cleanup patterns relative to workspace
+    // Always clean up backup files — latexindent creates .bak before modifying,
+    // so a crash or failure can still leave orphaned backups.
     const fileBaseName = path.basename(filePath, '.tex');
     const fileDir = path.dirname(filePath);
 
-    logger.debug(CHANNEL, `File base name: ${fileBaseName}`);
-    logger.debug(CHANNEL, `File directory: ${fileDir}`);
-    logger.debug(CHANNEL, `Workspace path: ${workspacePath}`);
-
-    // Clean up backup files and indent.log
     if (isWorkspaceFile && workspacePath) {
       await cleanupBackupFiles(
         fileBaseName,
@@ -135,8 +131,10 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       );
     }
 
-    logger.info(CHANNEL, `Indented ${filePath}`);
-    return true;
+    if (success) {
+      logger.info(CHANNEL, `Indented ${filePath}`);
+    }
+    return success;
   } catch (err) {
     logger.error(CHANNEL, `Error running LaTeX indent: ${toErrorMessage(err)}`);
     return false;

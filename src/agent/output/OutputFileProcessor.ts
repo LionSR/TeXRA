@@ -17,11 +17,7 @@ import {
   extractTextFromTag,
 } from '@utils/text/xmlUtils';
 
-import {
-  cleanupLatexBackups,
-  indentLatexFile,
-  indentLatexFiles,
-} from './LatexOutputUtils';
+import { indentLatexFile, indentLatexFiles } from './LatexOutputUtils';
 import type { XmlOutputManager } from './XmlOutputManager';
 
 const SCRATCHPAD_TAG_PATTERN = /<scratchpad\s*>/i;
@@ -62,9 +58,6 @@ export class OutputFileProcessor {
       if (processedPairs.length > 0) {
         const locations = processedPairs.map((p: OutputFileInfo) => p.location);
         await indentLatexFiles(locations, logger);
-        await Promise.all(
-          locations.map((loc) => cleanupLatexBackups(loc, logger)),
-        );
         logger.debug(
           `Indented multiple output files: ${locations.map((l) => l.absolutePath).join(',')}`,
         );
@@ -94,7 +87,6 @@ export class OutputFileProcessor {
     rawLocation: FileLocation,
   ): Promise<void> {
     this.ctx.setRoundOutputs(round, []);
-    await cleanupLatexBackups(rawLocation, this.ctx.logger);
     await this.captureXmlSummary(round, rawLocation, []);
   }
 
@@ -133,7 +125,6 @@ export class OutputFileProcessor {
       }
 
       await indentLatexFile(processed.location, logger);
-      await cleanupLatexBackups(processed.location, logger);
       logger.debug(
         `Indented single output file: ${processed.location.absolutePath}`,
       );
