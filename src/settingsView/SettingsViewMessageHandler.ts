@@ -747,44 +747,50 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private async sendGitAuthorSettings(
     webview: vscode.Webview,
+    settings?: ReturnType<typeof readGitAuthorSettings>,
   ): Promise<void> {
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
-      ...readGitAuthorSettings(),
+      ...(settings ?? readGitAuthorSettings()),
     });
+  }
+
+  private async updateGitAuthorSetting(
+    key: WorkspaceStateKey,
+    value: unknown,
+  ): Promise<void> {
+    await workspaceSM.update(key, value);
+    const settings = applyGitAuthorConfig();
+    await this.withActiveWebview((w) =>
+      this.sendGitAuthorSettings(w, settings),
+    );
   }
 
   private async handleSetGitMarkCommits(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GIT_MARK_COMMITS>,
   ): Promise<void> {
-    await workspaceSM.update(
+    await this.updateGitAuthorSetting(
       WorkspaceStateKey.GIT_MARK_COMMITS,
       data.enabled,
     );
-    applyGitAuthorConfig();
-    await this.withActiveWebview((w) => this.sendGitAuthorSettings(w));
   }
 
   private async handleSetGitAuthorName(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GIT_AUTHOR_NAME>,
   ): Promise<void> {
-    await workspaceSM.update(
+    await this.updateGitAuthorSetting(
       WorkspaceStateKey.GIT_AUTHOR_NAME,
       data.name,
     );
-    applyGitAuthorConfig();
-    await this.withActiveWebview((w) => this.sendGitAuthorSettings(w));
   }
 
   private async handleSetGitAuthorEmail(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GIT_AUTHOR_EMAIL>,
   ): Promise<void> {
-    await workspaceSM.update(
+    await this.updateGitAuthorSetting(
       WorkspaceStateKey.GIT_AUTHOR_EMAIL,
       data.email,
     );
-    applyGitAuthorConfig();
-    await this.withActiveWebview((w) => this.sendGitAuthorSettings(w));
   }
 
   // ============================================================
