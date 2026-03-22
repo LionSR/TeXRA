@@ -22,6 +22,7 @@ export enum WorkspaceStateKey {
   PARENT_STREAM_IDS = 'texra.parentStreamIds',
   SUPER_YOLO_ENABLED = 'texra.superYoloEnabled',
   ALLOW_ORCHESTRATOR_KILL = 'texra.allowOrchestratorKill',
+  DETACH_SUBAGENTS_ON_STOP = 'texra.detachSubagentsOnStop',
   CUSTOM_AGENT_PRESETS = 'texra.customAgentPresets',
 
   // Git commit author settings

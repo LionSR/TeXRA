@@ -27,8 +27,10 @@ export class FileLister {
   public static initialize(context: vscode.ExtensionContext): void {
     this.getInstance();
     watchConfig(context, 'texra.files', () => this.getInstance().refresh());
-    vscode.workspace.onDidChangeWorkspaceFolders(() =>
-      this.getInstance().refresh(),
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeWorkspaceFolders(() =>
+        this.getInstance().refresh(),
+      ),
     );
   }
 
