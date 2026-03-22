@@ -15,12 +15,9 @@ import { runToolWithCheck } from '@utils/system';
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
-async function cleanupIndentLog(
-  deleteFn: (path: string) => Promise<void>,
-  logPath: string,
-): Promise<void> {
+async function cleanupIndentLog(logPath: string): Promise<void> {
   try {
-    await deleteFn(logPath);
+    await AbsoluteFS.delete(logPath);
     logger.debug(CHANNEL, `Removed ${logPath}`);
   } catch (err) {
     if (isFileNotFoundError(err)) {
@@ -35,8 +32,6 @@ async function cleanupIndentLog(
 async function cleanupBackupFiles(
   fileBaseName: string,
   fileDir: string,
-  deleteFn: (path: string) => Promise<void>,
-  globOptions?: Parameters<typeof globSync>[1],
 ): Promise<void> {
   const backupPatterns = [
     `${fileBaseName}.tex.bak*`,
@@ -44,17 +39,10 @@ async function cleanupBackupFiles(
   ].map((pattern) => path.join(fileDir, pattern).replaceAll('\\', '/'));
 
   for (const pattern of backupPatterns) {
-    logger.debug(CHANNEL, `Searching for pattern: ${pattern}`);
-    const backupFiles = globSync(pattern, { nodir: true, ...globOptions });
-
-    logger.debug(
-      CHANNEL,
-      `Found backup files for pattern ${pattern}: ${JSON.stringify(backupFiles)}`,
-    );
-
+    const backupFiles = globSync(pattern, { nodir: true });
     for (const backupFile of backupFiles) {
       try {
-        await deleteFn(backupFile);
+        await AbsoluteFS.delete(backupFile);
         logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
       } catch (err) {
         if (!isFileNotFoundError(err)) {
@@ -75,11 +63,13 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       true,
     );
 
+    // Resolve workspace-relative paths to absolute so cleanup works correctly.
+    // Some callers (latexCommands, housekeeping/indent) pass relative paths.
     const workspacePath = WorkspaceFS.getPath();
-    const isWorkspaceFile =
-      workspacePath &&
-      (filePath === workspacePath ||
-        filePath.startsWith(workspacePath + path.sep));
+    const absolutePath =
+      path.isAbsolute(filePath) || !workspacePath
+        ? filePath
+        : path.join(workspacePath, filePath);
 
     const latexindentConfig = getConfig<string>(
       'texra.latex.latexindentConfig',
@@ -89,7 +79,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     if (latexindentConfig) {
       args.push(`-l=${latexindentConfig}`);
     }
-    args.push(filePath);
+    args.push(absolutePath);
 
     const result = await runToolWithCheck('latexindent', args, {
       channel: CHANNEL,
@@ -104,35 +94,13 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
 
     // Always clean up backup files — latexindent creates .bak before modifying,
     // so a crash or failure can still leave orphaned backups.
-    const fileBaseName = path.basename(filePath, '.tex');
-    const fileDir = path.dirname(filePath);
-
-    if (isWorkspaceFile && workspacePath) {
-      await cleanupBackupFiles(
-        fileBaseName,
-        fileDir,
-        WorkspaceFS.delete.bind(WorkspaceFS),
-        { cwd: workspacePath, absolute: false },
-      );
-      const relativeDir = path.relative(workspacePath, fileDir);
-      await cleanupIndentLog(
-        WorkspaceFS.delete.bind(WorkspaceFS),
-        path.join(relativeDir, 'indent.log'),
-      );
-    } else {
-      await cleanupBackupFiles(
-        fileBaseName,
-        fileDir,
-        AbsoluteFS.delete.bind(AbsoluteFS),
-      );
-      await cleanupIndentLog(
-        AbsoluteFS.delete.bind(AbsoluteFS),
-        path.join(fileDir, 'indent.log'),
-      );
-    }
+    const fileBaseName = path.basename(absolutePath, '.tex');
+    const fileDir = path.dirname(absolutePath);
+    await cleanupBackupFiles(fileBaseName, fileDir);
+    await cleanupIndentLog(path.join(fileDir, 'indent.log'));
 
     if (success) {
-      logger.info(CHANNEL, `Indented ${filePath}`);
+      logger.info(CHANNEL, `Indented ${absolutePath}`);
     }
     return success;
   } catch (err) {
