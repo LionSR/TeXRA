@@ -50,6 +50,10 @@ import {
   type ToolDashboardItem,
   DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/schemas/settingsViewMessages';
+import {
+  DEFAULT_GIT_AUTHOR_NAME,
+  DEFAULT_GIT_AUTHOR_EMAIL,
+} from '@shared/constants/git';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 // Local imports - settings view
@@ -182,8 +186,8 @@ export class SettingsApp extends SettingsAppBase {
 
   // Git author settings state
   private readonly gitMarkCommits = signal(false);
-  private readonly gitAuthorName = signal('TeXRA');
-  private readonly gitAuthorEmail = signal('texra@users.noreply.github.com');
+  private readonly gitAuthorName = signal(DEFAULT_GIT_AUTHOR_NAME);
+  private readonly gitAuthorEmail = signal(DEFAULT_GIT_AUTHOR_EMAIL);
   private readonly gitSettingsLoaded = signal(false);
 
   // LaTeX settings state

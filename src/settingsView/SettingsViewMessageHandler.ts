@@ -47,7 +47,10 @@ import {
 } from '@common/state';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { selectAgentInMainView } from '@frontend/agents/remoteAgentUtils';
-import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
+import {
+  applyGitAuthorConfig,
+  readGitAuthorSettings,
+} from '@frontend/git/gitAuthorSetup';
 import { compileLatex2Pdf } from '@latex/texTools';
 import {
   DEFAULT_MODELS,
@@ -745,20 +748,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async sendGitAuthorSettings(
     webview: vscode.Webview,
   ): Promise<void> {
-    const markCommits = workspaceSM.get<boolean>(
-      WorkspaceStateKey.GIT_MARK_COMMITS,
-      false,
-    );
-    const authorName =
-      workspaceSM.get<string>(WorkspaceStateKey.GIT_AUTHOR_NAME) || 'TeXRA';
-    const authorEmail =
-      workspaceSM.get<string>(WorkspaceStateKey.GIT_AUTHOR_EMAIL) ||
-      'texra@users.noreply.github.com';
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
-      markCommits,
-      authorName,
-      authorEmail,
+      ...readGitAuthorSettings(),
     });
   }
 

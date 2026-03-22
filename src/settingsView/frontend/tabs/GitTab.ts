@@ -4,7 +4,7 @@
  */
 
 // Third-party imports
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
@@ -12,6 +12,12 @@ import { codiconStyles, designTokens, commonViewStyles } from '@shared/styles';
 
 // Local imports - shared utils
 import { createEvent } from '@shared/utils/events';
+
+// Local imports - shared constants
+import {
+  DEFAULT_GIT_AUTHOR_NAME,
+  DEFAULT_GIT_AUTHOR_EMAIL,
+} from '@shared/constants/git';
 
 @customElement('git-tab')
 export class GitTab extends LitElement {
@@ -61,8 +67,8 @@ export class GitTab extends LitElement {
   ];
 
   @property({ attribute: false }) markCommits = false;
-  @property({ attribute: false }) authorName = 'TeXRA';
-  @property({ attribute: false }) authorEmail = 'texra@users.noreply.github.com';
+  @property({ attribute: false }) authorName = DEFAULT_GIT_AUTHOR_NAME;
+  @property({ attribute: false }) authorEmail = DEFAULT_GIT_AUTHOR_EMAIL;
   @property({ attribute: false }) toggleDisabled = true;
 
   private handleMarkCommitsToggle(event: Event): void {
@@ -114,7 +120,7 @@ export class GitTab extends LitElement {
                   <label>Name</label>
                   <vscode-textfield
                     .value=${this.authorName}
-                    placeholder="TeXRA"
+                    placeholder=${DEFAULT_GIT_AUTHOR_NAME}
                     @change=${this.handleAuthorNameChange}
                   ></vscode-textfield>
                 </div>
@@ -122,7 +128,7 @@ export class GitTab extends LitElement {
                   <label>Email</label>
                   <vscode-textfield
                     .value=${this.authorEmail}
-                    placeholder="texra@users.noreply.github.com"
+                    placeholder=${DEFAULT_GIT_AUTHOR_EMAIL}
                     @change=${this.handleAuthorEmailChange}
                   ></vscode-textfield>
                 </div>
@@ -133,7 +139,7 @@ export class GitTab extends LitElement {
                 </p>
               </div>
             `
-          : ''}
+          : nothing}
       </div>
     `;
   }
