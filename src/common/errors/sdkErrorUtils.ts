@@ -453,11 +453,10 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
   // No status code on an unrecognized error likely means a network-level failure
   // (DNS, proxy, TLS, etc.) — treat as retryable for safety.
-  // Quota/billing errors are also retryable (user can fix billing and retry).
   const retryable =
     isRelay ||
-    (statusCode ? isRetryableStatusCode(statusCode) : true) ||
-    isQuotaErrorMessage(finalMessage);
+    isQuotaErrorMessage(finalMessage) ||
+    (statusCode ? isRetryableStatusCode(statusCode) : true);
 
   let message = finalMessage;
   if (statusCode) {

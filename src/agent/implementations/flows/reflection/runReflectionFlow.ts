@@ -311,9 +311,6 @@ export async function runReflectionFlow<C = unknown>(
 
     if (shared?.lastError) {
       status = END_GROUP_STATUS.ERROR;
-      // Don't throw — return error status so the agent stops gracefully.
-      // runFlowWithLifecycle handles logging and user notification for
-      // error results without crashing the agent.
     } else {
       status = executionToEndStatus(flowStatus) as EndGroupStatus;
     }
