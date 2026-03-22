@@ -264,6 +264,24 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     },
   },
 
+  {
+    id: 'gh-cli',
+    tools: ['wait_for_actions', 'wait_for_comment'],
+    name: 'GitHub CLI (gh)',
+    category: 'computation',
+    description:
+      'Wait for GitHub Actions to complete and monitor PR comments from AI agents (@claude, @codex, @copilot).',
+    installGuide:
+      'Install the GitHub CLI:\n\n' +
+      '  Mac:     brew install gh\n' +
+      '  Ubuntu:  sudo apt install gh\n' +
+      '  Windows: winget install GitHub.cli\n\n' +
+      'Then authenticate: gh auth login',
+    installUrl: 'https://cli.github.com/',
+    configNotes: 'Requires `gh` on PATH and authenticated via `gh auth login`.',
+    check: () => checkToolInstalled('gh', false),
+  },
+
   // System dependencies (latexindent, image processing) have moved to the
   // LaTeX settings tab — see LaTeXTab.ts and SettingsViewMessageHandler.ts.
 ];
