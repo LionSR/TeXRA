@@ -382,9 +382,9 @@ export class MultiAgentTab extends LitElement {
             Allow orchestrator to kill subagents
           </vscode-checkbox>
           <p class="text-secondary setting-description">
-            When enabled, the orchestrator can terminate running subagents via
-            the kill action. Disable to prevent premature termination of
-            long-running tasks.
+            When enabled, stopping an orchestrator also terminates its
+            subagents. When disabled, subagents are detached and continue
+            running independently.
           </p>
         </div>
 
