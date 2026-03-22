@@ -55,7 +55,8 @@ describe('ToolUseFollowUp', () => {
 
     const result = await sendFollowUp(streamId, 'hello');
 
-    assert.deepEqual(calls, ['hello']);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0], 'hello');
     assert.deepEqual(result, { status: 'sent' });
   });
 
