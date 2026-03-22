@@ -181,12 +181,11 @@ export async function runReflectionFlow<C = unknown>(
         round,
         config.inputFile,
       );
-      if (useScratchpad) {
-        return fileService.createRawOutputLocation(
-          fileName,
-        ) as AgentFileLocation;
-      }
-      return fileService.createLocation(fileName) as AgentFileLocation;
+      // Always route to run storage — raw/intermediate output should never
+      // land in the user's workspace.
+      return fileService.createRawOutputLocation(
+        fileName,
+      ) as AgentFileLocation;
     });
 
   const interruptible: IInterruptible = {
