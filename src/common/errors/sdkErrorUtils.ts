@@ -427,9 +427,13 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // Try matching a known SDK error type (connection, abort, HTTP errors)
   const sdkMatch = matchSdkError(err, rawErrorBody);
   if (sdkMatch) {
+    // Quota/billing errors should always be retryable so the retry prompt
+    // is shown and the user can fix billing and retry (or dismiss gracefully).
+    const retryable =
+      isRelay || sdkMatch.retryable || isQuotaErrorMessage(sdkMatch.message);
     return {
       ...sdkMatch,
-      retryable: isRelay || sdkMatch.retryable,
+      retryable,
       isRelayError: isRelay,
       rawErrorBody,
       streamDiagnostics,
@@ -449,8 +453,11 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
   // No status code on an unrecognized error likely means a network-level failure
   // (DNS, proxy, TLS, etc.) — treat as retryable for safety.
+  // Quota/billing errors are also retryable (user can fix billing and retry).
   const retryable =
-    isRelay || (statusCode ? isRetryableStatusCode(statusCode) : true);
+    isRelay ||
+    (statusCode ? isRetryableStatusCode(statusCode) : true) ||
+    isQuotaErrorMessage(finalMessage);
 
   let message = finalMessage;
   if (statusCode) {
@@ -475,6 +482,28 @@ export function formatProviderHttpError(err: unknown): ProviderError {
 
 export function getSdkErrorMessage(err: unknown): string {
   return formatProviderHttpError(err).message;
+}
+
+/**
+ * Quota/billing error patterns. These are transient from the user's perspective
+ * (fixable by updating billing) and should show a retry prompt rather than
+ * immediately failing the agent.
+ */
+const QUOTA_ERROR_PATTERNS = [
+  'exceeded your current quota', // OpenAI
+  'insufficient_quota', // OpenAI error code
+  'billing hard limit', // OpenAI
+  'exceeded your monthly', // OpenAI
+  'account is not active', // OpenAI
+  'rate limit reached', // OpenAI / generic
+  'credit balance is too low', // Anthropic
+  'monthly spend limit', // Various providers
+] as const;
+
+/** Checks if an error message indicates a quota/billing issue. */
+function isQuotaErrorMessage(message: string): boolean {
+  const lower = message.toLowerCase();
+  return QUOTA_ERROR_PATTERNS.some((pattern) => lower.includes(pattern));
 }
 
 const CONTEXT_WINDOW_PATTERNS = [

@@ -60,6 +60,8 @@ export interface RunToolUseFlowResult {
   lastResponse?: string;
   /** Workspace-relative paths of files edited by tool calls during this session. */
   touchedFiles?: string[];
+  /** Error message when status is 'error'. Used for graceful error reporting. */
+  errorMessage?: string;
 }
 
 export interface ToolUseFlowContext {
@@ -208,9 +210,9 @@ export async function runToolUseFlow<C = unknown>(
 
     if (shared.lastError) {
       status = END_GROUP_STATUS.ERROR;
-      // Re-throw so runFlowWithLifecycle logs the error and shows
-      // the user notification. State was already projected per-step.
-      throw new Error(shared.lastError.message);
+      // Don't throw — return error status so the agent stops gracefully.
+      // runFlowWithLifecycle handles logging and user notification for
+      // error results without crashing the agent.
     } else {
       const execStatus = input.checkInterruption()
         ? EXECUTION_STATUS.INTERRUPTED
@@ -246,5 +248,6 @@ export async function runToolUseFlow<C = unknown>(
     status,
     lastResponse,
     touchedFiles: touchedFiles.length > 0 ? touchedFiles : undefined,
+    errorMessage: shared.lastError?.message,
   };
 }

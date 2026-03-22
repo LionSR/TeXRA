@@ -391,6 +391,20 @@ async function runFlowWithLifecycle(
         result.status === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED;
       StreamStatusService.set(streamId, status);
     }
+
+    // When the flow returned an error status gracefully (without throwing),
+    // log the error and notify the user. This handles quota errors, provider
+    // failures, and other issues that were already shown via retry prompt.
+    if (result.status === 'error' && result.errorMessage) {
+      const errorMsg = `Error executing agent ${agentName}: ${result.errorMessage}`;
+      await ctx.logger.logError(errorMsg, new Error(result.errorMessage), {
+        operation: `execute ${agentName}`,
+      });
+      if (!options?.isSubagent) {
+        bus.emit('requestShowError', { message: errorMsg });
+      }
+    }
+
     logger.debug(`Task completed with status: ${result.status}`);
     return result;
   } catch (err) {
@@ -660,6 +674,7 @@ export async function executeAgent(
             status: result.status,
             lastResponse: result.lastResponse,
             touchedFiles: result.touchedFiles,
+            errorMessage: result.errorMessage,
             executionId: ctx.executionId,
             streamId,
           };
@@ -684,6 +699,7 @@ export async function executeAgent(
           category: 'workflow' as const,
           status: result.status,
           outputs: toOutputSummaries(result.roundOutputs),
+          errorMessage: result.errorMessage,
           executionId: ctx.executionId,
           streamId,
         };
@@ -743,6 +759,7 @@ export async function executeMergeAgent(
         category: 'workflow' as const,
         status: result.status,
         outputs: toOutputSummaries(result.roundOutputs),
+        errorMessage: result.errorMessage,
         executionId: ctx.executionId,
         streamId,
       };
@@ -793,6 +810,7 @@ export async function resumeToolUseFromSnapshot(
         status: result.status,
         lastResponse: result.lastResponse,
         touchedFiles: result.touchedFiles,
+        errorMessage: result.errorMessage,
         executionId: ctx.executionId,
         streamId,
       };

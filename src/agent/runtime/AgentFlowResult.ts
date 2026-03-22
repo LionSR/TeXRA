@@ -29,6 +29,8 @@ export const WorkflowFlowResultSchema = AgentFlowMetaSchema.extend({
   category: z.literal('workflow'),
   status: EndGroupStatusSchema,
   outputs: z.array(OutputFileSummarySchema),
+  /** Error message when status is 'error'. Allows graceful error propagation without throwing. */
+  errorMessage: z.string().optional(),
 });
 
 export type WorkflowFlowResult = z.infer<typeof WorkflowFlowResultSchema>;
@@ -39,6 +41,8 @@ export const ToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
   lastResponse: z.string().optional(),
   /** Workspace-relative paths of files edited by tool calls during this session. */
   touchedFiles: z.array(z.string()).optional(),
+  /** Error message when status is 'error'. Allows graceful error propagation without throwing. */
+  errorMessage: z.string().optional(),
 });
 
 export type ToolUseFlowResult = z.infer<typeof ToolUseFlowResultSchema>;

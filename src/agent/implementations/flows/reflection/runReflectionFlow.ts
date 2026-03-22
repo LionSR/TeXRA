@@ -68,6 +68,8 @@ export interface RunReflectionFlowInput<
 export interface RunReflectionFlowResult {
   roundOutputs: RoundOutput[];
   status: EndGroupStatus;
+  /** Error message when status is 'error'. Used for graceful error reporting. */
+  errorMessage?: string;
 }
 
 function deriveConfig(
@@ -309,9 +311,9 @@ export async function runReflectionFlow<C = unknown>(
 
     if (shared?.lastError) {
       status = END_GROUP_STATUS.ERROR;
-      // Re-throw so runFlowWithLifecycle logs the error and shows
-      // the user notification. State was already projected per-step.
-      throw new Error(shared.lastError.message);
+      // Don't throw — return error status so the agent stops gracefully.
+      // runFlowWithLifecycle handles logging and user notification for
+      // error results without crashing the agent.
     } else {
       status = executionToEndStatus(flowStatus) as EndGroupStatus;
     }
@@ -336,5 +338,6 @@ export async function runReflectionFlow<C = unknown>(
   return {
     roundOutputs: shared?.roundOutputs ?? [],
     status,
+    errorMessage: shared?.lastError?.message,
   };
 }
