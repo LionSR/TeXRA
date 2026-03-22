@@ -17,11 +17,7 @@ import {
   extractTextFromTag,
 } from '@utils/text/xmlUtils';
 
-import {
-  cleanupLatexBackups,
-  indentLatexFile,
-  indentLatexFiles,
-} from './LatexOutputUtils';
+import { indentLatexFile, indentLatexFiles } from './LatexOutputUtils';
 import type { XmlOutputManager } from './XmlOutputManager';
 
 const SCRATCHPAD_TAG_PATTERN = /<scratchpad\s*>/i;
@@ -91,7 +87,6 @@ export class OutputFileProcessor {
     rawLocation: FileLocation,
   ): Promise<void> {
     this.ctx.setRoundOutputs(round, []);
-    await cleanupLatexBackups(rawLocation, this.ctx.logger);
     await this.captureXmlSummary(round, rawLocation, []);
   }
 

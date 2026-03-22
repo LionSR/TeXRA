@@ -15,18 +15,43 @@ import { runToolWithCheck } from '@utils/system';
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
-async function cleanupIndentLog(
-  deleteFn: (path: string) => Promise<void>,
-  logPath: string,
-): Promise<void> {
+async function cleanupIndentLog(logPath: string): Promise<void> {
   try {
-    await deleteFn(logPath);
+    await AbsoluteFS.delete(logPath);
     logger.debug(CHANNEL, `Removed ${logPath}`);
   } catch (err) {
     if (isFileNotFoundError(err)) {
       logger.debug(CHANNEL, `No indent.log to remove at ${logPath}`);
     } else {
       logger.warn(CHANNEL, `Error removing indent.log: ${err}`);
+    }
+  }
+}
+
+/** Delete all files matching backup glob patterns in a directory. */
+async function cleanupBackupFiles(
+  fileBaseName: string,
+  fileDir: string,
+): Promise<void> {
+  const backupPatterns = [
+    `${fileBaseName}.tex.bak*`,
+    `${fileBaseName}.bak*`,
+  ].map((pattern) => path.join(fileDir, pattern).replaceAll('\\', '/'));
+
+  for (const pattern of backupPatterns) {
+    const backupFiles = globSync(pattern, { nodir: true });
+    for (const backupFile of backupFiles) {
+      try {
+        await AbsoluteFS.delete(backupFile);
+        logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
+      } catch (err) {
+        if (!isFileNotFoundError(err)) {
+          logger.warn(
+            CHANNEL,
+            `Error removing backup file ${backupFile}: ${err}`,
+          );
+        }
+      }
     }
   }
 }
@@ -38,11 +63,13 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       true,
     );
 
+    // Resolve workspace-relative paths to absolute so cleanup works correctly.
+    // Some callers (latexCommands, housekeeping/indent) pass relative paths.
     const workspacePath = WorkspaceFS.getPath();
-    const isWorkspaceFile =
-      workspacePath &&
-      (filePath === workspacePath ||
-        filePath.startsWith(workspacePath + path.sep));
+    const absolutePath =
+      path.isAbsolute(filePath) || !workspacePath
+        ? filePath
+        : path.join(workspacePath, filePath);
 
     const latexindentConfig = getConfig<string>(
       'texra.latex.latexindentConfig',
@@ -52,91 +79,34 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     if (latexindentConfig) {
       args.push(`-l=${latexindentConfig}`);
     }
-    args.push(filePath);
+    args.push(absolutePath);
 
     const result = await runToolWithCheck('latexindent', args, {
       channel: CHANNEL,
       showError: showWarning,
     });
-    if (!result || !result.success) {
-      return false;
+    const success = result !== false && result?.success;
+
+    if (success) {
+      // Wait a moment for the file system to stabilize after a successful write
+      await delay(100);
     }
 
-    // Wait a moment for the file system to stabilize
-    await delay(100);
-
-    // Setup cleanup patterns relative to workspace
-    const fileBaseName = path.basename(filePath, '.tex');
-    const fileDir = path.dirname(filePath);
-
-    logger.debug(CHANNEL, `File base name: ${fileBaseName}`);
-    logger.debug(CHANNEL, `File directory: ${fileDir}`);
-    logger.debug(CHANNEL, `Workspace path: ${workspacePath}`);
-
-    // Get all backup files matching the patterns, relative to workspace
-    if (isWorkspaceFile && workspacePath) {
-      const backupPatterns = [
-        `${fileBaseName}.tex.bak*`,
-        `${fileBaseName}.tex.bak`,
-        `${fileBaseName}.bak*`,
-        `${fileBaseName}.bak`,
-      ].map((pattern) => path.join(fileDir, pattern).replaceAll('\\', '/'));
-
-      logger.debug(
-        CHANNEL,
-        `Backup patterns: ${JSON.stringify(backupPatterns)}`,
-      );
-
-      for (const pattern of backupPatterns) {
-        logger.debug(CHANNEL, `Searching for pattern: ${pattern}`);
-        const backupFiles = globSync(pattern, {
-          cwd: workspacePath,
-          nodir: true,
-          absolute: false,
-        });
-
-        logger.debug(
-          CHANNEL,
-          `Found backup files for pattern ${pattern}: ${JSON.stringify(backupFiles)}`,
-        );
-
-        for (const backupFile of backupFiles) {
-          try {
-            await WorkspaceFS.delete(backupFile);
-            logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
-          } catch (err) {
-            if (!isFileNotFoundError(err)) {
-              logger.warn(
-                CHANNEL,
-                `Error removing backup file ${backupFile}: ${err}`,
-              );
-            }
-          }
-        }
-      }
-      // Clean up indent.log in the file's directory
-      const relativeDir = path.relative(workspacePath, fileDir);
-      const relativeIndentLog = path.join(relativeDir, 'indent.log');
-      await cleanupIndentLog(
-        WorkspaceFS.delete.bind(WorkspaceFS),
-        relativeIndentLog,
-      );
-    } else {
-      // Skip backup cleanup for non-workspace files since glob patterns require
-      // a workspace context. The batch indent command (indent.ts) handles cleanup
-      // for workspace files via recursive directory traversal.
-      logger.debug(
-        CHANNEL,
-        `Skipping backup cleanup for ${filePath} (outside workspace)`,
-      );
-
-      // Clean up indent.log for non-workspace files
-      const indentLogPath = path.join(fileDir, 'indent.log');
-      await cleanupIndentLog(AbsoluteFS.delete.bind(AbsoluteFS), indentLogPath);
+    // Always clean up backup files — latexindent creates .bak before modifying,
+    // so a crash or failure can still leave orphaned backups.
+    const fileBaseName = path.basename(absolutePath, '.tex');
+    const fileDir = path.dirname(absolutePath);
+    await cleanupBackupFiles(fileBaseName, fileDir);
+    await cleanupIndentLog(path.join(fileDir, 'indent.log'));
+    // latexindent may also create indent.log at the process cwd (workspace root)
+    if (workspacePath && fileDir !== workspacePath) {
+      await cleanupIndentLog(path.join(workspacePath, 'indent.log'));
     }
 
-    logger.info(CHANNEL, `Indented ${filePath}`);
-    return true;
+    if (success) {
+      logger.info(CHANNEL, `Indented ${absolutePath}`);
+    }
+    return success;
   } catch (err) {
     logger.error(CHANNEL, `Error running LaTeX indent: ${toErrorMessage(err)}`);
     return false;
