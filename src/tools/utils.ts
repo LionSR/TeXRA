@@ -305,6 +305,33 @@ export async function wrapApiCall<T>(
   }
 }
 
+// ============================================================================
+// Offset-based pagination for tool listings
+// ============================================================================
+
+/**
+ * Slice an array by offset/limit and build display header + "next page" hint.
+ *
+ * All entries are loaded first then sliced client-side — this bounds the
+ * text returned to the model, not the I/O cost of building the listing.
+ */
+export function paginateToolListing<T>(
+  entries: readonly T[],
+  offset: number,
+  limit: number,
+): { page: readonly T[]; start: number; end: number; total: number } {
+  const total = entries.length;
+  const safeOffset = total > 0 ? Math.min(offset, total - 1) : 0;
+  const page = entries.slice(safeOffset, safeOffset + limit);
+  return { page, start: safeOffset + 1, end: safeOffset + page.length, total };
+}
+
+/** Format a "N more — use offset: X" hint, or empty string if no more pages. */
+export function formatPaginationHint(end: number, total: number): string {
+  if (end >= total) return '';
+  return `\n(${total - end} more \u2014 use offset: ${end} to see next page)`;
+}
+
 export interface BuildFileAttachmentOptions {
   /** Path to a workspace file (relative or absolute) */
   filePath: string;
