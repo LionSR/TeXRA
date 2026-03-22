@@ -33,6 +33,7 @@ import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
 import {
   findLastAssistantText,
+  extractTouchedFiles,
   migrateSharedState,
   type ToolUseRunShared,
 } from './nodes/types';
@@ -49,7 +50,7 @@ export interface RunToolUseFlowInput<
   /** When true, delegation tools are filtered out to prevent nesting. */
   isSubagent?: boolean;
   /** Fires before the subagent enters WAITING, delivering the last response to the orchestrator. */
-  onBeforeWaiting?: (lastResponse: string | undefined) => void | Promise<void>;
+  onBeforeWaiting?: (lastResponse: string | undefined, touchedFiles: string[]) => void | Promise<void>;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
 }
@@ -57,6 +58,8 @@ export interface RunToolUseFlowInput<
 export interface RunToolUseFlowResult {
   status: EndGroupStatus;
   lastResponse?: string;
+  /** Workspace-relative paths of files edited by tool calls during this session. */
+  touchedFiles?: string[];
 }
 
 export interface ToolUseFlowContext {
@@ -237,5 +240,11 @@ export async function runToolUseFlow<C = unknown>(
     input.modelHandler.extractAssistantText(m),
   );
 
-  return { status, lastResponse };
+  const touchedFiles = extractTouchedFiles(shared.stateSlices);
+
+  return {
+    status,
+    lastResponse,
+    touchedFiles: touchedFiles.length > 0 ? touchedFiles : undefined,
+  };
 }
