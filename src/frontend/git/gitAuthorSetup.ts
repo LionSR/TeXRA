@@ -1,0 +1,50 @@
+/**
+ * Reads git author settings from workspace state and pushes them
+ * to the shared gitAuthorEnv module so that executeCommand injects
+ * them into all spawned processes.
+ *
+ * Called at extension activation and after any git-author setting change.
+ */
+import { WorkspaceStateKey, workspaceSM } from '@common/state';
+import {
+  DEFAULT_GIT_AUTHOR_NAME,
+  DEFAULT_GIT_AUTHOR_EMAIL,
+} from '@shared/constants/git';
+import { setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
+
+/** Read the current git author settings from workspace state with defaults. */
+export function readGitAuthorSettings(): {
+  markCommits: boolean;
+  authorName: string;
+  authorEmail: string;
+} {
+  return {
+    markCommits: workspaceSM.get<boolean>(
+      WorkspaceStateKey.GIT_MARK_COMMITS,
+      false,
+    ),
+    authorName:
+      workspaceSM.get<string>(WorkspaceStateKey.GIT_AUTHOR_NAME) ||
+      DEFAULT_GIT_AUTHOR_NAME,
+    authorEmail:
+      workspaceSM.get<string>(WorkspaceStateKey.GIT_AUTHOR_EMAIL) ||
+      DEFAULT_GIT_AUTHOR_EMAIL,
+  };
+}
+
+/** Apply settings and return them so callers can forward without re-reading. */
+export function applyGitAuthorConfig(): ReturnType<typeof readGitAuthorSettings> {
+  const settings = readGitAuthorSettings();
+  const { markCommits, authorName, authorEmail } = settings;
+  if (!markCommits) {
+    setGitAuthorEnv({});
+    return settings;
+  }
+  setGitAuthorEnv({
+    GIT_AUTHOR_NAME: authorName,
+    GIT_AUTHOR_EMAIL: authorEmail,
+    GIT_COMMITTER_NAME: authorName,
+    GIT_COMMITTER_EMAIL: authorEmail,
+  });
+  return settings;
+}
