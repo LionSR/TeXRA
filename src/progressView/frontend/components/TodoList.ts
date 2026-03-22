@@ -102,10 +102,17 @@ export class TodoList extends LitElement {
 
   @property({ attribute: false }) todos: TodoItem[] = [];
 
-  /** Open state — auto-expands on todo updates, auto-collapses when cleared. */
+  /** When this key changes, the panel collapses. Used by the parent to reset
+   *  open state on context switches (e.g. switching streams). */
+  @property({ type: String }) collapseKey = '';
+
   @state() private open = true;
 
   protected override willUpdate(changed: PropertyValues): void {
+    if (changed.has('collapseKey') && changed.get('collapseKey') !== undefined) {
+      this.open = false;
+      return;
+    }
     if (changed.has('todos')) {
       if (this.todos.length > 0) {
         this.open = true;
