@@ -239,6 +239,24 @@ export function interruptActiveChildren(parentStreamId: StreamTabId): void {
   interruptActiveChildrenImpl(parentStreamId, registry.values());
 }
 
+/**
+ * Detach all active subagents from a parent, promoting them to top-level.
+ * Subagents continue running independently and deliver results via the
+ * follow-up queue. Called when stopping an orchestrator without killing children.
+ */
+export function detachActiveChildren(parentStreamId: StreamTabId): void {
+  for (const handle of registry.values()) {
+    if (handle.parentStreamId !== parentStreamId) continue;
+    if (
+      handle instanceof AgentExecutionHandle &&
+      handle.childStreamId !== parentStreamId
+    ) {
+      handle.detach();
+    }
+  }
+  emitActiveSubagentsUpdate(parentStreamId, registry.values());
+}
+
 /** Get active subagent and process children for a parent stream. */
 export function getActiveChildren(parentStreamId: StreamTabId): {
   subagents: ActiveChildInfo[];
