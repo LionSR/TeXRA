@@ -7,6 +7,8 @@ import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 
+import { sync as globSync } from 'glob';
+
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
@@ -46,7 +48,15 @@ async function cleanupLatexAuxFiles(filePath: string): Promise<void> {
   const ext = path.extname(filePath);
   const basePathNoExt = filePath.slice(0, -ext.length);
   for (const tempExt of TEMP_EXTENSIONS) {
-    await silentUnlink(basePathNoExt + tempExt);
+    if (tempExt.includes('*')) {
+      // Glob pattern (e.g. '.bak*') — expand and delete all matches
+      const matches = globSync(`${basePathNoExt}${tempExt}`, { nodir: true });
+      for (const match of matches) {
+        await silentUnlink(match);
+      }
+    } else {
+      await silentUnlink(basePathNoExt + tempExt);
+    }
   }
 }
 
