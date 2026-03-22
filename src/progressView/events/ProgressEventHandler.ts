@@ -695,9 +695,9 @@ export class ProgressEventHandler {
     return StreamStatusService.getAll();
   }
 
-  resetRunningTasksToError(waitingStreams?: Set<StreamTabId>): StreamTabId[] {
+  resetRunningTasksToError(waitingStreams: Set<StreamTabId>): StreamTabId[] {
     const affectedStreams: StreamTabId[] = [];
-    const waitingSet = waitingStreams ?? new Set<StreamTabId>();
+    const waitingSet = waitingStreams;
 
     for (const [streamId, status] of StreamStatusService.entries()) {
       if (status !== STREAM_STATUS.RUNNING) continue;

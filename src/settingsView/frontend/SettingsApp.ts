@@ -179,6 +179,7 @@ export class SettingsApp extends SettingsAppBase {
   private readonly superYoloToggleDisabled = signal(true);
   private readonly reliabilitySettings = signal<NumberVscodeSetting[]>([]);
   private readonly allowOrchestratorKill = signal(true);
+  private readonly detachSubagentsOnStop = signal(false);
 
   // Tool dashboard state
   private readonly toolDashboardItems = signal<ToolDashboardItem[]>([]);
@@ -328,6 +329,7 @@ export class SettingsApp extends SettingsAppBase {
         this.superYoloToggleDisabled.set(false);
         this.reliabilitySettings.set(data.reliabilitySettings);
         this.allowOrchestratorKill.set(data.allowOrchestratorKill);
+        this.detachSubagentsOnStop.set(data.detachSubagentsOnStop);
         return;
       }
 
@@ -546,6 +548,10 @@ export class SettingsApp extends SettingsAppBase {
 
   private handleAllowOrchestratorKillToggle = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL,
+  );
+
+  private handleDetachSubagentsOnStopToggle = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP,
   );
 
   private handleApplyAgentModePreset = forwardDetail(
@@ -774,9 +780,12 @@ export class SettingsApp extends SettingsAppBase {
               .reliabilitySettings=${this.reliabilitySettings.get()}
               .customPresets=${this.customPresets.get()}
               .allowOrchestratorKill=${this.allowOrchestratorKill.get()}
+              .detachSubagentsOnStop=${this.detachSubagentsOnStop.get()}
               @super-yolo-toggle=${this.handleSuperYoloToggle}
               @allow-orchestrator-kill-toggle=${this
                 .handleAllowOrchestratorKillToggle}
+              @detach-subagents-on-stop-toggle=${this
+                .handleDetachSubagentsOnStopToggle}
               @reliability-setting-change=${this.handleSetProviderVscodeSetting}
               @apply-agent-mode-preset=${this.handleApplyAgentModePreset}
               @delete-agent-mode-preset=${this.handleDeleteAgentModePreset}
