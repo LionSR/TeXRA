@@ -54,7 +54,7 @@ export class ToolUseFollowUpQueue {
   }
 
   /**
-   * Enqueue a follow-up message for a stream.
+   * Enqueue a follow-up for a stream.
    *
    * Auto-creates the queue if it doesn't exist yet (needed for WAITING streams
    * from prior sessions). Silently discards if the queue was explicitly released
