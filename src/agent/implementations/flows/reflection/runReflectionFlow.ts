@@ -138,8 +138,9 @@ export async function runReflectionFlow<C = unknown>(
   let shared: ReflectionFlowShared | undefined;
   let services: ReflectionServices<C> | undefined;
 
+  // Workflow outputs always go to run storage, never to the user's workspace.
   const fileService = new TaskRunFileService(executionId, {
-    forceRunStorage: input.isSubagent,
+    forceRunStorage: true,
   });
 
   const baseFiles: WorkspaceFileLocation[] = (
@@ -181,11 +182,7 @@ export async function runReflectionFlow<C = unknown>(
         round,
         config.inputFile,
       );
-      // Always route to run storage — raw/intermediate output should never
-      // land in the user's workspace.
-      return fileService.createRawOutputLocation(
-        fileName,
-      ) as AgentFileLocation;
+      return fileService.createLocation(fileName) as AgentFileLocation;
     });
 
   const interruptible: IInterruptible = {
