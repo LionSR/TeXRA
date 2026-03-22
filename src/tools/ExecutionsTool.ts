@@ -50,7 +50,11 @@ import { getPathSegments } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { ToolError, type ToolResult } from './result';
 import { defineTool } from './core/define';
-import { formatFileView } from './utils';
+import {
+  formatFileView,
+  paginateToolListing,
+  formatPaginationHint,
+} from './utils';
 
 // ============================================================================
 // Category-aware field filtering
@@ -129,6 +133,25 @@ const ExecutionsToolInputSchema = z.strictObject({
     .nullish()
     .describe(
       'Max seconds to wait for a status change (action="wait" only). Default: 300, max: 1800.',
+    ),
+
+  /** Zero-based offset for paginating the /executions listing (action="view" only). */
+  offset: z
+    .int()
+    .min(0)
+    .nullish()
+    .describe(
+      'Zero-based offset into the executions list. Use with limit for pagination on /executions. Default: 0.',
+    ),
+
+  /** Maximum number of entries to return from the /executions listing (action="view" only). */
+  limit: z
+    .int()
+    .min(1)
+    .max(200)
+    .nullish()
+    .describe(
+      'Max entries to return from /executions listing. Default: 100, max: 200.',
     ),
 });
 
@@ -245,7 +268,7 @@ export class ExecutionsTool extends defineTool({
   description: `View execution history and manage running executions.
 
 Paths:
-- /executions - List all executions (with status and elapsed time)
+- /executions - List executions (paginated; use offset/limit for pages)
 - /executions/{id} - Execution summary (agent, model, timestamp, status, progress, children, todos)
 - /executions/{id}/config - Agent configuration JSON
 - /executions/{id}/conversation - Full message history (subagents)
@@ -257,6 +280,7 @@ Paths:
 - /executions/{id}/files/{path} - Read specific generated file (workflows only)
 
 Use "current" as {id} to access the active execution.
+Use offset/limit to paginate the /executions listing (default: offset 0, limit 100).
 Use view_range: [start, end] to paginate conversation, output, and file content.
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
 Use action: "kill" on /executions/{id} to terminate a running execution.`,
@@ -276,7 +300,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     if (!id) {
       if (input.action === 'wait')
         await this.waitForAnyChange(input.timeout ?? 300);
-      return this.listExecutions();
+      return this.listExecutions(input.offset ?? 0, input.limit ?? 100);
     }
 
     const executionId = this.resolveExecutionId(id);
@@ -405,27 +429,36 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     clearTimeout(timer);
   }
 
-  private async listExecutions(): Promise<ToolResult> {
+  private async listExecutions(
+    offset: number,
+    limit: number,
+  ): Promise<ToolResult> {
     const entries = await listExecutions();
 
     if (entries.length === 0) {
       return { output: 'No execution history found.' };
     }
 
-    const lines = entries.map(formatListingLine);
+    const { page, start, end, total } = paginateToolListing(
+      entries,
+      offset,
+      limit,
+    );
+    const lines = page.map(formatListingLine);
 
     // Count active background processes for the header
     const activeIds = getActiveExecutionIds();
     const bgCount = activeIds.filter(
       (id) => getHandle(id)?.category === 'process',
     ).length;
-    const header =
+    const bgSuffix =
       bgCount > 0
-        ? `Executions (${entries.length} total, ${bgCount} background process${bgCount > 1 ? 'es' : ''} running):`
-        : `Executions (${entries.length}, most recent first):`;
+        ? `, ${bgCount} background process${bgCount > 1 ? 'es' : ''} running`
+        : '';
 
+    const header = `Executions (showing ${start}\u2013${end} of ${total}${bgSuffix}, most recent first):`;
     return {
-      output: `${header}\n\n${lines.join('\n')}`,
+      output: `${header}\n\n${lines.join('\n')}${formatPaginationHint(end, total)}`,
     };
   }
 
