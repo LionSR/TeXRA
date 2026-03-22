@@ -54,8 +54,8 @@ async function resumeFromSnapshot(
           ? [followUp, ...queuedFollowUps]
           : queuedFollowUps;
 
-      if (allFollowUps.length > 0) {
-        session.appendFollowUp(allFollowUps.join('\n\n'));
+      for (const text of allFollowUps) {
+        session.appendFollowUp(text);
       }
     });
 

@@ -4,8 +4,10 @@ import type { StreamTabId } from '@shared/schemas';
 export interface IToolUseSession {
   appendFollowUp(text: string): void;
   hasQueuedFollowUp(): boolean;
-  /** Wait for the next follow-up message. Returns null if interrupted. */
-  waitForFollowUp(checkInterruption: () => boolean): Promise<string | null>;
+  /** Wait for the next follow-up items. Returns null if interrupted. */
+  waitForFollowUp(
+    checkInterruption: () => boolean,
+  ): Promise<string[] | null>;
 }
 
 export class ToolUseSessionLifecycle implements IToolUseSession {
@@ -23,7 +25,7 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
 
   async waitForFollowUp(
     checkInterruption: () => boolean,
-  ): Promise<string | null> {
+  ): Promise<string[] | null> {
     return this.followUps.waitAndDrainAll(checkInterruption);
   }
 
