@@ -43,6 +43,7 @@ const LenientWorkflowProposalSchema = WorkflowAgentProposalSchema.extend({
   toolConfig: ToolConfigSchema,
 });
 
+const MAX_STORE_SIZE = 500;
 const proposalInputStore = new Map<string, AgentProposal>();
 
 function parseProposalInput(
@@ -102,6 +103,11 @@ export function registerProposalInput(
   const serialized = JSON.stringify(proposal);
   const id = `proposal:${serialized.length}:${hashString(serialized)}`;
   if (!proposalInputStore.has(id)) {
+    if (proposalInputStore.size >= MAX_STORE_SIZE) {
+      // Evict oldest entry (first key in insertion order).
+      const oldest = proposalInputStore.keys().next().value;
+      if (oldest !== undefined) proposalInputStore.delete(oldest);
+    }
     proposalInputStore.set(id, proposal);
   }
   return id;

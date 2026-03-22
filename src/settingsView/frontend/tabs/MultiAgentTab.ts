@@ -226,25 +226,29 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) superYoloEnabled = false;
   @property({ attribute: false }) toggleDisabled = true;
   @property({ attribute: false }) allowOrchestratorKill = true;
+  @property({ attribute: false }) detachSubagentsOnStop = false;
   @property({ attribute: false }) reliabilitySettings: NumberVscodeSetting[] =
     [];
   @property({ attribute: false }) customPresets: AgentModePreset[] = [];
   @state() private activePresetId: string | null = null;
 
-  private handleToggle(event: Event): void {
+  private emitToggle(eventName: string, event: Event): void {
     const target = event.target as HTMLInputElement | null;
     this.dispatchEvent(
-      createEvent('super-yolo-toggle', { enabled: Boolean(target?.checked) }),
+      createEvent(eventName, { enabled: Boolean(target?.checked) }),
     );
   }
 
+  private handleToggle(event: Event): void {
+    this.emitToggle('super-yolo-toggle', event);
+  }
+
   private handleKillToggle(event: Event): void {
-    const target = event.target as HTMLInputElement | null;
-    this.dispatchEvent(
-      createEvent('allow-orchestrator-kill-toggle', {
-        enabled: Boolean(target?.checked),
-      }),
-    );
+    this.emitToggle('allow-orchestrator-kill-toggle', event);
+  }
+
+  private handleDetachToggle(event: Event): void {
+    this.emitToggle('detach-subagents-on-stop-toggle', event);
   }
 
   private handlePresetClick(preset: AgentModePreset): void {
@@ -385,6 +389,20 @@ export class MultiAgentTab extends LitElement {
             When enabled, the orchestrator can terminate running subagents via
             the kill action. Disable to prevent premature termination of
             long-running tasks.
+          </p>
+        </div>
+
+        <div class="setting-block">
+          <vscode-checkbox
+            ?checked=${this.detachSubagentsOnStop}
+            @change=${this.handleDetachToggle}
+          >
+            Detach subagents when stopping orchestrator
+          </vscode-checkbox>
+          <p class="text-secondary setting-description">
+            When enabled, stopping an orchestrator lets its subagents continue
+            running independently. When disabled, subagents are terminated
+            alongside the orchestrator.
           </p>
         </div>
 

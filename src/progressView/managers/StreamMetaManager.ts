@@ -90,6 +90,11 @@ export class StreamMetaManager {
 
   // -- Queries ----------------------------------------------------------------
 
+  /** Read-only view of stream→executionId mapping. */
+  getExecutionIdMap(): ReadonlyMap<StreamTabId, ExecutionId> {
+    return this.executionIds;
+  }
+
   /** Return stream IDs with active tool-use sessions. */
   getActiveToolUseStreams(): Set<StreamTabId> {
     const result = new Set<StreamTabId>();
