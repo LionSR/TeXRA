@@ -109,6 +109,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
                 >`}
           </div>
           <div class="workflow-proposal__instruction">${data.instruction}</div>
+          ${this.renderExtractFlags(data)}
           ${this.renderProposalFiles(data)}
         </div>
         <vscode-toolbar-container class="workflow-proposal__actions">
@@ -151,6 +152,24 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
         ({ label }) => label,
         ({ label, files, clickable }) =>
           this.renderProposalFileList(label, files, clickable),
+      )}
+    </div>`;
+  }
+
+  private renderExtractFlags(
+    data: AgentProposalPermission,
+  ): TemplateResult | typeof nothing {
+    if (data.agentCategory !== AGENT_CATEGORY.WORKFLOW) return nothing;
+    const flags: string[] = [];
+    if (data.toolConfig.autoExtractFigure) flags.push('Extract Figures');
+    if (data.toolConfig.autoExtractTikzFigure) flags.push('Extract TikZ');
+    if (flags.length === 0) return nothing;
+    return html`<div class="workflow-proposal__extract-flags">
+      ${flags.map(
+        (flag) =>
+          html`<span class="workflow-proposal__extract-flag"
+            ><i class="codicon codicon-file-media"></i> ${flag}</span
+          >`,
       )}
     </div>`;
   }
