@@ -14,7 +14,23 @@ const InputSchema = z.strictObject({
     .number()
     .int()
     .positive()
-    .describe('PR or issue number to monitor.')
+    .describe('PR or issue number to monitor (for ci/ci_pass/comment modes).')
+    .nullish(),
+  issues: z
+    .array(
+      z.strictObject({
+        issue_number: z.number().int().positive(),
+        wait_for: z.enum(['ci', 'ci_pass', 'comment']),
+        workflow: z.string().nullish(),
+        from: z.string().nullish(),
+        repo: z.string().nullish(),
+        ref: z.string().nullish(),
+      }),
+    )
+    .describe(
+      'For wait_any: array of targets to monitor concurrently. ' +
+        'Returns as soon as ANY target completes.',
+    )
     .nullish(),
   ref: z
     .string()
@@ -23,11 +39,13 @@ const InputSchema = z.strictObject({
     )
     .nullish(),
   wait_for: z
-    .enum(['ci', 'ci_pass', 'comment'])
+    .enum(['ci', 'ci_pass', 'comment', 'wait_any'])
     .describe(
       '"ci" — wait for all GitHub Actions runs to finish (pass or fail). ' +
         '"ci_pass" — wait for all to pass (fail fast on any failure). ' +
-        '"comment" — wait for a new comment on the PR or issue.',
+        '"comment" — wait for a new comment on the PR or issue. ' +
+        '"wait_any" — monitor multiple issues/PRs concurrently; returns when ANY completes. ' +
+        'Requires the `issues` array parameter.',
     ),
   workflow: z
     .string()
@@ -44,7 +62,7 @@ const InputSchema = z.strictObject({
   timeout_minutes: z.number().positive().max(60).prefault(30),
 });
 
-export type WaitForPrInput = z.infer<typeof InputSchema>;
+export type WaitForGitHubInput = z.infer<typeof InputSchema>;
 
 interface RunInfo {
   status: string;
@@ -61,23 +79,27 @@ interface Comment {
   html_url: string;
 }
 
-export class WaitForPrTool extends defineTool({
-  name: 'wait_for_pr',
+export class WaitForGitHubTool extends defineTool({
+  name: 'wait_for_github',
   description:
-    'Wait for activity on a GitHub PR or issue. Three modes:\n' +
+    'Wait for activity on GitHub PRs or issues. Four modes:\n' +
     '- "ci": wait for all GitHub Actions runs to complete (for PRs or branches)\n' +
     '- "ci_pass": same, but fail fast if any run fails\n' +
     '- "comment": wait for a new comment on a PR or issue (use `from` to filter by author)\n' +
+    '- "wait_any": monitor multiple issues/PRs concurrently, return when ANY completes\n' +
     'For @claude: use ci/ci_pass with workflow="claude.yml" (Claude works via GitHub Actions).\n' +
     'For @codex: use comment mode with from="codex[bot]".\n' +
     'For @copilot: use comment mode with from="github-copilot[bot]".\n' +
-    'Works for both PRs and issues — pass the number as issue_number.\n' +
+    'Use wait_any + issues array to fan out to multiple agents and get the first response.\n' +
     'Polls every 30s. Requires `gh` CLI.',
   schema: InputSchema,
 }) {
-  protected async execute(input: WaitForPrInput): Promise<ToolResult> {
+  protected async execute(input: WaitForGitHubInput): Promise<ToolResult> {
     await ensureGhCli();
 
+    if (input.wait_for === 'wait_any') {
+      return this.waitForAny(input);
+    }
     if (input.wait_for === 'comment') {
       return this.waitForComment(input);
     }
@@ -110,7 +132,7 @@ export class WaitForPrTool extends defineTool({
   // CI mode
   // ---------------------------------------------------------------------------
 
-  private async waitForActions(input: WaitForPrInput): Promise<ToolResult> {
+  private async waitForActions(input: WaitForGitHubInput): Promise<ToolResult> {
     const repo = input.repo ?? (await getCurrentRepo());
 
     // Resolve head commit SHA so we only watch runs for the latest push,
@@ -215,7 +237,7 @@ export class WaitForPrTool extends defineTool({
   // Comment mode
   // ---------------------------------------------------------------------------
 
-  private async waitForComment(input: WaitForPrInput): Promise<ToolResult> {
+  private async waitForComment(input: WaitForGitHubInput): Promise<ToolResult> {
     const repo = input.repo ?? (await getCurrentRepo());
     const issueNumber = input.issue_number;
     if (!issueNumber) {
@@ -287,5 +309,139 @@ export class WaitForPrTool extends defineTool({
       comments = comments.filter((c) => c.user.login === from);
     }
     return comments;
+  }
+
+  // ---------------------------------------------------------------------------
+  // wait_any mode — race multiple targets
+  // ---------------------------------------------------------------------------
+
+  private async waitForAny(input: WaitForGitHubInput): Promise<ToolResult> {
+    const issues = input.issues;
+    if (!issues || issues.length === 0) {
+      return {
+        output: 'The `issues` array is required for wait_any mode.',
+        summary: 'Missing issues array',
+        isError: true,
+      };
+    }
+
+    const defaultRepo = await getCurrentRepo();
+    const since = new Date().toISOString();
+
+    // Build checker functions for each target
+    const targets = await Promise.all(
+      issues.map(async (target) => {
+        const repo = target.repo ?? input.repo ?? defaultRepo;
+        const label = `${repo}#${target.issue_number}`;
+
+        if (target.wait_for === 'comment') {
+          return {
+            label,
+            check: async (): Promise<ToolResult | null> => {
+              const fresh = await this.fetchCommentsSince(
+                repo,
+                target.issue_number,
+                since,
+                target.from,
+              );
+              if (fresh.length > 0) {
+                const lines = fresh.map(
+                  (c) =>
+                    `--- ${c.user.login} (${c.created_at}) ---\n${c.body}\n${c.html_url}`,
+                );
+                const authors = [
+                  ...new Set(fresh.map((c) => c.user.login)),
+                ].join(', ');
+                return {
+                  output: `[${label}] ${fresh.length} new comment(s):\n\n${lines.join('\n\n')}`,
+                  summary: `${authors} responded on ${label} (first of ${issues.length} targets)`,
+                };
+              }
+              return null;
+            },
+          };
+        }
+
+        // ci / ci_pass
+        let headSha: string;
+        try {
+          headSha = (
+            await gh([
+              'pr',
+              'view',
+              String(target.issue_number),
+              '-R',
+              repo,
+              '--json',
+              'headRefOid',
+              '-q',
+              '.headRefOid',
+            ])
+          ).trim();
+        } catch {
+          headSha = await getHeadSha(target.ref);
+        }
+
+        return {
+          label,
+          check: async (): Promise<ToolResult | null> => {
+            const runs = await this.fetchRuns(repo, headSha, target.workflow);
+            if (runs.length === 0) return null;
+
+            const running = runs.filter((r) => r.status !== 'completed');
+            const failed = runs.filter(
+              (r) =>
+                r.status === 'completed' &&
+                r.conclusion !== 'success' &&
+                r.conclusion !== 'skipped',
+            );
+
+            if (running.length === 0) {
+              const lines = runs.map(
+                (r) =>
+                  `- ${r.workflowName}: ${r.conclusion ?? r.status} (${r.url})`,
+              );
+              const allPassed = failed.length === 0;
+              return {
+                output: `[${label}] ${runs.length} run(s) completed:\n${lines.join('\n')}`,
+                summary: allPassed
+                  ? `${label} passed (first of ${issues.length} targets)`
+                  : `${label} failed (first of ${issues.length} targets)`,
+                isError: !allPassed,
+              };
+            }
+
+            if (target.wait_for === 'ci_pass' && failed.length > 0) {
+              return {
+                output: `[${label}] Failed early: ${failed.map((r) => `${r.workflowName} (${r.conclusion})`).join(', ')}`,
+                summary: `${label} failed (first of ${issues.length} targets)`,
+                isError: true,
+              };
+            }
+
+            return null;
+          },
+        };
+      }),
+    );
+
+    // Poll all targets each cycle, return the first one that completes
+    const targetLabels = targets.map((t) => t.label).join(', ');
+
+    return this.poll(
+      input.timeout_minutes ?? 30,
+      async () => {
+        for (const target of targets) {
+          const result = await target.check();
+          if (result) return result;
+        }
+        return null;
+      },
+      () => ({
+        output: `Timed out waiting for any of: ${targetLabels}`,
+        summary: `Timed out waiting for ${targets.length} targets`,
+        isError: true,
+      }),
+    );
   }
 }
