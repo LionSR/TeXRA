@@ -416,6 +416,21 @@ export const requestPanelStyles: CSSResult = css`
     border-bottom: var(--border-thin) solid var(--vscode-editorWidget-border);
   }
 
+  .workflow-proposal__extract-flags {
+    display: flex;
+    gap: var(--spacing-small);
+    flex-wrap: wrap;
+    margin-top: var(--spacing-small);
+  }
+
+  .workflow-proposal__extract-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-tiny);
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
   .workflow-proposal__files {
     display: flex;
     flex-direction: column;
