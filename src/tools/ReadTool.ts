@@ -5,13 +5,14 @@ import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports - tools
-import type { ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@tools/result';
 import {
   buildFileAttachment,
   formatFileView,
   READ_FILE_MAX_LINES,
 } from '@tools/utils';
 import { recordToolFileRead } from '@tools/fileInteractions';
+import { parseEml } from '@tools/emlParser';
 import {
   WorkspaceFS,
   getMimeType,
@@ -69,7 +70,27 @@ export class ReadFileTool extends defineTool({
       return result;
     }
 
-    const lines = splitContentLines(await WorkspaceFS.read(input.path));
+    // EML files are text-based but use complex MIME encoding (multipart,
+    // base64 attachments, quoted-printable). Parse them into readable text
+    // and extract image attachments so vision-capable models can inspect them.
+    let emlImages: Awaited<ReturnType<typeof parseEml>>['images'] = [];
+    let lines: string[];
+
+    if (path.extname(input.path).toLowerCase() === '.eml') {
+      const stats = await WorkspaceFS.stat(input.path);
+      if (stats.size > MAX_EML_BYTES) {
+        throw new ToolError(
+          `EML file exceeds maximum size of ${MAX_EML_BYTES / (1024 * 1024)} MiB.`,
+        );
+      }
+      const raw = await WorkspaceFS.read(input.path);
+      const { text, images } = await parseEml(raw);
+      lines = splitContentLines(text);
+      emlImages = images;
+    } else {
+      lines = splitContentLines(await WorkspaceFS.read(input.path));
+    }
+
     recordToolFileRead(input.path);
 
     const totalLines = lines.length;
@@ -95,12 +116,23 @@ export class ReadFileTool extends defineTool({
       ? ` (requested end ${requestedEndLine} exceeds file length ${totalLines})`
       : '';
 
-    return formatFileView({
+    const result = formatFileView({
       path: input.path,
       lines,
       viewRange: input.range ? [startLine, endLine] : null,
       summarySuffix: suffix,
     });
+
+    if (emlImages.length > 0) {
+      result.files = emlImages.map((img) => ({
+        path: img.filename,
+        mimeType: img.mimeType,
+        bytes: img.bytes,
+        description: `Image attachment from email: ${img.filename}`,
+      }));
+    }
+
+    return result;
   }
 
   private computeRequestedEndLine(
@@ -170,6 +202,9 @@ export class ReadFileTool extends defineTool({
     return { summary, output, files: [attachment] };
   }
 }
+
+/** Guard against very large EML files exhausting memory during parsing. */
+const MAX_EML_BYTES = 15 * 1024 * 1024; // 15 MiB — matches DEFAULT_ATTACHMENT_MAX_BYTES
 
 const IMAGE_EXTENSIONS = new Set([
   '.png',
