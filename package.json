@@ -1347,7 +1347,7 @@
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.1",
-    "vite": "^8.0.1",
+    "vite": "^8.0.2",
     "vscode-languageserver-protocol": "^3.17.5",
     "webpack": "^5.105.4",
     "webpack-cli": "^7.0.2",
