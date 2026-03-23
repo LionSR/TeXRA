@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.36.8] - 2026-03-23
+
+### Features
+
+- **MiniMax and GLM model providers** — added MiniMax and Zhipu AI (GLM) as model providers, with region toggles for China and international endpoints.
+- **Zotero collections browser** — agents can now browse your Zotero collection folders to discover and organize references before adding papers.
+- **Email file support** — attach or read `.eml` email files directly; TeXRA extracts headers, body text, and image attachments into readable content.
+- **Git author attribution** — new option in the Git settings tab to mark commits made by TeXRA with a custom author name and email, so agent-authored changes are easy to identify.
+- **LaTeX asset extraction in workflows** — workflow agents can automatically extract referenced figures and TikZ diagrams when delegating tasks, with toggles in the delegation UI.
+- **Paginated listings** — history, memory, and tool execution lists now paginate instead of loading everything at once, keeping the interface responsive with large collections.
+
+### Bug Fixes
+
+- Fixed git settings checkbox staying disabled after reopening the settings panel.
+- Fixed rare crash during agent conversations.
+- Fixed agents occasionally launching in the wrong execution mode.
+- Fixed background agents continuing to run after closing their stream tabs.
+
+### Improvements
+
+- **Helper model validation** — TeXRA now checks credentials before starting a task, showing clear messages like "API key missing" instead of failing mid-run.
+- **File tracking in multi-agent workflows** — the orchestrator now reports which files each sub-task edited, so you can review changes at a glance.
+- **arXiv paper organization** — downloaded arXiv papers are saved into a `References/` subdirectory instead of the workspace root.
+- **Cleaner stream switching** — plan and todo sections collapse when switching between stream tabs to reduce clutter.
+- **Execution timing** — terminal and sub-task results now show how long they took to run.
+- **Better resource cleanup** — closing the extension properly stops background processes to prevent memory leaks.
+- Updated dependencies.
+
 ## [0.36.7] - 2026-03-17
 
 ### Features
