@@ -56,20 +56,6 @@ export async function getCurrentRepo(): Promise<string> {
   return repo;
 }
 
-/** Get the current git branch name. */
-export async function getCurrentBranch(): Promise<string> {
-  const result = await executeCommand(
-    ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
-    { timeout: 5000, truncate: true },
-  );
-  if (!result.success || !result.stdout?.trim()) {
-    throw new ToolError(
-      'Could not determine current branch. Provide `ref` explicitly.',
-    );
-  }
-  return result.stdout.trim();
-}
-
 /** Get the HEAD commit SHA for a ref (or current HEAD if not specified). */
 export async function getHeadSha(ref?: string | null): Promise<string> {
   const target = ref ?? 'HEAD';

@@ -268,6 +268,9 @@ export class WaitForPrTool extends defineTool({
     since: string,
     from?: string | null,
   ): Promise<Comment[]> {
+    // GitHub's `since` param filters by updated_at, not created_at.
+    // We pass it to reduce payload size, then filter by created_at
+    // client-side to avoid false positives from edited old comments.
     const out = await gh([
       'api',
       '--method',
@@ -277,6 +280,7 @@ export class WaitForPrTool extends defineTool({
       `since=${since}`,
     ]);
     let comments: Comment[] = JSON.parse(out || '[]');
+    comments = comments.filter((c) => c.created_at >= since);
     if (from) {
       comments = comments.filter((c) => c.user.login === from);
     }
