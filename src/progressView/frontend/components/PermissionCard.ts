@@ -16,6 +16,7 @@ import type {
   PlanApprovalPermission,
   RetryPermission,
   ToolEditPermission,
+  WorkflowAgentProposalPermission,
 } from '@shared/schemas';
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import { getBasename } from '@shared/utils/path';
@@ -278,8 +279,30 @@ export class PermissionCard extends LitElement {
       <p><strong>Agent:</strong> ${data.agent}</p>
       <p><strong>Model:</strong> ${data.model}</p>
       <p><strong>Instruction:</strong> ${data.instruction}</p>
+      ${data.agentCategory === AGENT_CATEGORY.WORKFLOW
+        ? this.renderExtractFlags(data)
+        : nothing}
       ${this.renderFileGroups(data)} ${this.renderFeedbackSection()}
     `;
+  }
+
+  private renderExtractFlags(
+    data: WorkflowAgentProposalPermission,
+  ): TemplateResult | typeof nothing {
+    const flags: string[] = [];
+    if (data.toolConfig.autoExtractFigure) flags.push('Extract Figures');
+    if (data.toolConfig.autoExtractTikzFigure) flags.push('Extract TikZ');
+    if (flags.length === 0) return nothing;
+    return html`<p class="extract-flags">
+      ${repeat(
+        flags,
+        (flag) => flag,
+        (flag) =>
+          html`<span class="extract-flag"
+            ><i class="codicon codicon-file-media"></i> ${flag}</span
+          >`,
+      )}
+    </p>`;
   }
 
   private renderPlanApprovalBody(data: PlanApprovalPermission): TemplateResult {
