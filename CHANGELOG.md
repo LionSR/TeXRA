@@ -16,18 +16,18 @@ All notable changes to this project will be documented in this file.
 ### Bug Fixes
 
 - Fixed git settings checkbox staying disabled after reopening the settings panel.
-- Fixed crash when a conversation message had undefined content.
-- Fixed agents launching with the wrong execution mode (e.g., tool-use agent running as a workflow).
-- Fixed background agents and API calls continuing to run after closing their stream tabs.
+- Fixed rare crash during agent conversations.
+- Fixed agents occasionally launching in the wrong execution mode.
+- Fixed background agents continuing to run after closing their stream tabs.
 
 ### Improvements
 
-- **Helper model validation** — TeXRA now checks helper model credentials before starting a task, showing clear messages like "API key missing" instead of failing mid-run.
-- **Subagent file tracking** — orchestrator agents now see which files tool-use subagents edited, improving coordination in multi-agent workflows.
+- **Helper model validation** — TeXRA now checks credentials before starting a task, showing clear messages like "API key missing" instead of failing mid-run.
+- **File tracking in multi-agent workflows** — the orchestrator now reports which files each sub-task edited, so you can review changes at a glance.
 - **arXiv paper organization** — downloaded arXiv papers are saved into a `References/` subdirectory instead of the workspace root.
 - **Cleaner stream switching** — plan and todo sections collapse when switching between stream tabs to reduce clutter.
-- **Execution timing** — bash tool and subagent results now show how long they took to run.
-- **Better resource cleanup** — closing the extension properly stops background processes and limits internal cache sizes to prevent memory leaks.
+- **Execution timing** — terminal and sub-task results now show how long they took to run.
+- **Better resource cleanup** — closing the extension properly stops background processes to prevent memory leaks.
 - Updated dependencies.
 
 ## [0.36.7] - 2026-03-17
