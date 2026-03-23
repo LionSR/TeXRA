@@ -482,6 +482,17 @@ export function formatToolUseTemplate(
       );
     }
 
+    // Extract figure flags (workflow delegation only)
+    const extractFlags: string[] = [];
+    if ('extractFigures' in delegateInput && delegateInput.extractFigures)
+      extractFlags.push('Extract Figures');
+    if ('extractTikz' in delegateInput && delegateInput.extractTikz)
+      extractFlags.push('Extract TikZ');
+    if (extractFlags.length > 0) {
+      // prettier-ignore
+      sections.push(buildToolUseSection('Extraction:', html`${extractFlags.map((f) => html`<span class="extract-flag"><i class="codicon codicon-file-media"></i> ${f}</span>`)}`));
+    }
+
     // File groups (workflow file fields + memories for both delegation types)
     const fileGroups = getProposalFileGroups(delegateInput);
     if (fileGroups.length > 0) {
