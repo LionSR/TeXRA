@@ -127,7 +127,7 @@ const ExecutionsToolInputSchema = z.strictObject({
 
   /** Execution IDs to wait on (action="wait" with /executions only). */
   ids: z
-    .array(z.string())
+    .array(ExecutionIdSchema)
     .min(1)
     .max(50)
     .nullish()
@@ -312,7 +312,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     // /executions - list all executions
     if (!id) {
       if (input.action === 'wait')
-        await this.waitForAnyChange(input.timeout ?? 300, input.ids ?? undefined);
+        await this.waitForAnyChange(input.timeout ?? 300, input.ids);
       return this.listExecutions(input.offset ?? 0, input.limit ?? 100);
     }
 
@@ -405,20 +405,12 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     return result.data;
   }
 
-  /**
-   * Wait for active executions to change status, with timeout.
-   * If `ids` is provided, only wait on those specific executions;
-   * otherwise wait on all active executions.
-   */
+  /** Wait for executions to change status, with timeout. */
   private async waitForAnyChange(
     timeout: number,
-    ids?: string[],
+    ids?: readonly string[] | null,
   ): Promise<void> {
-    // When specific IDs are provided, validate and use them;
-    // otherwise fall back to all active executions.
-    const candidateIds = ids
-      ? ids.map((id) => this.resolveExecutionId(id))
-      : getActiveExecutionIds();
+    const candidateIds = ids?.length ? [...ids] : getActiveExecutionIds();
     if (candidateIds.length === 0) return;
 
     // Exclude executions that are already effectively done
