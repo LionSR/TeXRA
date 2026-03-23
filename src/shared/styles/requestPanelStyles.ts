@@ -427,12 +427,8 @@ export const requestPanelStyles: CSSResult = css`
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-tiny);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
-    padding: var(--spacing-tiny) var(--border-radius-large);
-    border-radius: var(--border-radius);
-    background: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
+    text-transform: none;
+    letter-spacing: normal;
   }
 
   .workflow-proposal__files {

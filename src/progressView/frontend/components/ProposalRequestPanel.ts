@@ -26,7 +26,11 @@ import {
 } from '@shared/styles';
 
 // Local imports - shared utils
-import { AGENT_CATEGORY, type AgentProposalPermission } from '@shared/schemas';
+import {
+  AGENT_CATEGORY,
+  type AgentProposalPermission,
+  type WorkflowAgentProposalPermission,
+} from '@shared/schemas';
 import { postMessage } from '@shared/vscode';
 import { renderModelOptions } from '@shared/utils/selectTemplates';
 
@@ -109,7 +113,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
                 >`}
           </div>
           <div class="workflow-proposal__instruction">${data.instruction}</div>
-          ${this.renderExtractFlags(data)}
+          ${isWorkflow ? this.renderExtractFlags(data) : nothing}
           ${this.renderProposalFiles(data)}
         </div>
         <vscode-toolbar-container class="workflow-proposal__actions">
@@ -157,17 +161,19 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   }
 
   private renderExtractFlags(
-    data: AgentProposalPermission,
+    data: WorkflowAgentProposalPermission,
   ): TemplateResult | typeof nothing {
-    if (data.agentCategory !== AGENT_CATEGORY.WORKFLOW) return nothing;
     const flags: string[] = [];
     if (data.toolConfig.autoExtractFigure) flags.push('Extract Figures');
     if (data.toolConfig.autoExtractTikzFigure) flags.push('Extract TikZ');
     if (flags.length === 0) return nothing;
     return html`<div class="workflow-proposal__extract-flags">
-      ${flags.map(
+      ${repeat(
+        flags,
+        (flag) => flag,
         (flag) =>
-          html`<span class="workflow-proposal__extract-flag"
+          html`<span
+            class="workflow-proposal__category-badge workflow-proposal__category-badge--workflow workflow-proposal__extract-flag"
             ><i class="codicon codicon-file-media"></i> ${flag}</span
           >`,
       )}
