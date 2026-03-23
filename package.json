@@ -1392,7 +1392,7 @@
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@openai/codex-sdk": "^0.116.0",
     "@openrouter/sdk": "^0.9.11",
-    "@supabase/supabase-js": "^2.99.3",
+    "@supabase/supabase-js": "^2.100.0",
     "@vscode-elements/elements": "^2.5.1",
     "@vscode/codicons": "^0.0.45",
     "@xterm/addon-fit": "^0.11.0",
