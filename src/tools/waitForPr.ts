@@ -10,11 +10,11 @@ const POLL_INTERVAL_MS = 30_000;
 
 const InputSchema = z.strictObject({
   repo: z.string().describe('owner/repo. Omit to use current repo.').nullish(),
-  pr_number: z
+  issue_number: z
     .number()
     .int()
     .positive()
-    .describe('PR number to monitor.')
+    .describe('PR or issue number to monitor.')
     .nullish(),
   ref: z
     .string()
@@ -27,7 +27,7 @@ const InputSchema = z.strictObject({
     .describe(
       '"ci" — wait for all GitHub Actions runs to finish (pass or fail). ' +
         '"ci_pass" — wait for all to pass (fail fast on any failure). ' +
-        '"comment" — wait for a new comment on the PR/issue.',
+        '"comment" — wait for a new comment on the PR or issue.',
     ),
   workflow: z
     .string()
@@ -64,12 +64,14 @@ interface Comment {
 export class WaitForPrTool extends defineTool({
   name: 'wait_for_pr',
   description:
-    'Wait for activity on a GitHub PR. Three modes:\n' +
-    '- "ci": wait for all GitHub Actions runs to complete on the PR branch\n' +
+    'Wait for activity on a GitHub PR or issue. Three modes:\n' +
+    '- "ci": wait for all GitHub Actions runs to complete (for PRs or branches)\n' +
     '- "ci_pass": same, but fail fast if any run fails\n' +
-    '- "comment": wait for a new comment (use `from` to filter by author, e.g. "codex[bot]")\n' +
-    'For @claude: use ci/ci_pass mode (Claude works via GitHub Actions).\n' +
+    '- "comment": wait for a new comment on a PR or issue (use `from` to filter by author)\n' +
+    'For @claude: use ci/ci_pass with workflow="claude.yml" (Claude works via GitHub Actions).\n' +
     'For @codex: use comment mode with from="codex[bot]".\n' +
+    'For @copilot: use comment mode with from="github-copilot[bot]".\n' +
+    'Works for both PRs and issues — pass the number as issue_number.\n' +
     'Polls every 30s. Requires `gh` CLI.',
   schema: InputSchema,
 }) {
@@ -114,12 +116,12 @@ export class WaitForPrTool extends defineTool({
     // Resolve head commit SHA so we only watch runs for the latest push,
     // not stale runs from previous commits on the same branch.
     let headSha: string;
-    if (input.pr_number) {
+    if (input.issue_number) {
       headSha = (
         await gh([
           'pr',
           'view',
-          String(input.pr_number),
+          String(input.issue_number),
           '-R',
           repo,
           '--json',
@@ -215,11 +217,11 @@ export class WaitForPrTool extends defineTool({
 
   private async waitForComment(input: WaitForPrInput): Promise<ToolResult> {
     const repo = input.repo ?? (await getCurrentRepo());
-    const prNumber = input.pr_number;
-    if (!prNumber) {
+    const issueNumber = input.issue_number;
+    if (!issueNumber) {
       return {
-        output: 'pr_number is required for comment mode.',
-        summary: 'Missing pr_number',
+        output: 'issue_number is required for comment mode.',
+        summary: 'Missing issue_number',
         isError: true,
       };
     }
@@ -233,7 +235,7 @@ export class WaitForPrTool extends defineTool({
       async () => {
         const fresh = await this.fetchCommentsSince(
           repo,
-          prNumber,
+          issueNumber,
           since,
           input.from,
         );
@@ -247,16 +249,16 @@ export class WaitForPrTool extends defineTool({
             ', ',
           );
           return {
-            output: `${fresh.length} new comment(s) on ${repo}#${prNumber}:\n\n${lines.join('\n\n')}`,
-            summary: `New comment(s) from ${authors} on #${prNumber}`,
+            output: `${fresh.length} new comment(s) on ${repo}#${issueNumber}:\n\n${lines.join('\n\n')}`,
+            summary: `New comment(s) from ${authors} on #${issueNumber}`,
           };
         }
 
         return null;
       },
       () => ({
-        output: `Timed out waiting for comment${fromLabel} on ${repo}#${prNumber}.`,
-        summary: `Timed out waiting for comment on #${prNumber}`,
+        output: `Timed out waiting for comment${fromLabel} on ${repo}#${issueNumber}.`,
+        summary: `Timed out waiting for comment on #${issueNumber}`,
         isError: true,
       }),
     );
@@ -264,7 +266,7 @@ export class WaitForPrTool extends defineTool({
 
   private async fetchCommentsSince(
     repo: string,
-    prNumber: number,
+    issueNumber: number,
     since: string,
     from?: string | null,
   ): Promise<Comment[]> {
@@ -275,7 +277,7 @@ export class WaitForPrTool extends defineTool({
       'api',
       '--method',
       'GET',
-      `repos/${repo}/issues/${prNumber}/comments`,
+      `repos/${repo}/issues/${issueNumber}/comments`,
       '-f',
       `since=${since}`,
     ]);
