@@ -125,7 +125,7 @@ export class WaitForGitHubTool extends defineTool({
     since: string,
   ): Promise<{ label: string; check: () => Promise<ToolResult | null> }> {
     const repo = target.repo ?? defaultRepo;
-    const label = `${repo}#${target.issue_number}`;
+    const label = `${repo}#${target.issue_number}(${target.wait_for})`;
 
     if (target.wait_for === 'comment') {
       return {
@@ -141,7 +141,11 @@ export class WaitForGitHubTool extends defineTool({
 
     // ci / ci_pass — resolve HEAD SHA once
     let headSha: string;
-    try {
+    if (target.ref) {
+      // Explicit branch — resolve its HEAD directly
+      headSha = await getHeadSha(target.ref);
+    } else {
+      // Look up the PR's head commit from GitHub
       headSha = (
         await gh([
           'pr',
@@ -155,8 +159,6 @@ export class WaitForGitHubTool extends defineTool({
           '.headRefOid',
         ])
       ).trim();
-    } catch {
-      headSha = await getHeadSha(target.ref);
     }
 
     const waitFor = target.wait_for as 'ci' | 'ci_pass';
