@@ -135,9 +135,6 @@ export class ModelHandlerOpenAI<
   /** Flag to force compaction on the next API call, set by requestCompaction(). */
   private compactionRequested = false;
 
-  /** Whether the conversation has been compacted at least once. */
-  private isCompacted = false;
-
   // ── Compaction interface overrides ────────────────────────────────────
 
   /** Client-side compaction is available for tool-use sessions. */
@@ -215,10 +212,14 @@ export class ModelHandlerOpenAI<
         const assistantMsg = msg as ChatCompletionAssistantMessageParam;
         if (assistantMsg.tool_calls?.length) {
           const toolSummary = assistantMsg.tool_calls
-            .map(
-              (tc: ChatCompletionMessageToolCall) =>
-                `[Tool call: ${tc.function.name}(${tc.function.arguments.substring(0, 200)}${tc.function.arguments.length > 200 ? '...' : ''})]`,
-            )
+            .map((tc: ChatCompletionMessageToolCall) => {
+              const fn = (tc as unknown as Record<string, unknown>).function as
+                | { name?: string; arguments?: string }
+                | undefined;
+              const name = fn?.name ?? 'unknown';
+              const args = fn?.arguments ?? '';
+              return `[Tool call: ${name}(${args.substring(0, 200)}${args.length > 200 ? '...' : ''})]`;
+            })
             .join('\n');
           content = content ? `${content}\n${toolSummary}` : toolSummary;
         }
@@ -265,10 +266,7 @@ export class ModelHandlerOpenAI<
     const systemMessages: ChatCompletionMessageParam[] = [];
     const conversationMessages: ChatCompletionMessageParam[] = [];
     for (const msg of messages) {
-      if (
-        msg.role === 'system' ||
-        (msg.role === 'developer' as string)
-      ) {
+      if (msg.role === 'system' || (msg.role as string) === 'developer') {
         // Only treat leading system/developer messages as system prompt
         if (conversationMessages.length === 0) {
           systemMessages.push(msg);
@@ -287,10 +285,11 @@ export class ModelHandlerOpenAI<
       0,
       conversationMessages.length - CLIENT_COMPACTION_RECENT_MESSAGES,
     );
-    // Walk backwards: if recentStart lands on a tool result, include its
-    // preceding assistant+tool_call message; if it lands on a tool message,
-    // keep going back to include the full tool-call group.
-    while (recentStart > 0) {
+    // Walk backwards to include complete tool-call/result pairs.
+    // Limit expansion to avoid consuming the entire conversation in tool-heavy sessions.
+    const maxExpansion = CLIENT_COMPACTION_RECENT_MESSAGES * 2;
+    let expanded = 0;
+    while (recentStart > 0 && expanded < maxExpansion) {
       const msg = conversationMessages[recentStart];
       if (
         msg.role === 'tool' ||
@@ -298,6 +297,7 @@ export class ModelHandlerOpenAI<
           (msg as ChatCompletionAssistantMessageParam).tool_calls?.length)
       ) {
         recentStart--;
+        expanded++;
       } else {
         break;
       }
@@ -330,22 +330,31 @@ export class ModelHandlerOpenAI<
     }
 
     try {
-      const summaryResponse = await client.chat.completions.create(
-        {
-          model: this.config.fullName,
-          messages: [
-            { role: 'system', content: COMPACTION_SYSTEM_PROMPT },
-            {
-              role: 'user',
-              content: `Summarize the following conversation:\n\n${serialized}`,
-            },
-          ],
-          max_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-          temperature: 0,
-          stream: false,
-        },
+      const summaryParams: Record<string, unknown> = {
+        model: this.config.fullName,
+        messages: [
+          { role: 'system', content: COMPACTION_SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: `Summarize the following conversation:\n\n${serialized}`,
+          },
+        ],
+        max_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+        temperature: 0,
+        stream: false,
+      };
+      // Explicitly disable thinking for the summary call — reasoning
+      // models (DeepSeek, Kimi K2.5, GLM) don't need to think for summarization
+      // and it wastes tokens / may cause issues with some providers.
+      if (this.getThinkingParameter()) {
+        summaryParams.thinking = { type: 'disabled' };
+      }
+      const summaryResponse = (await client.chat.completions.create(
+        summaryParams as unknown as Parameters<
+          typeof client.chat.completions.create
+        >[0],
         { signal },
-      );
+      )) as ChatCompletion;
 
       const summaryText =
         summaryResponse.choices[0]?.message?.content?.trim();
@@ -402,8 +411,6 @@ export class ModelHandlerOpenAI<
           details: `Client-side compaction: ${messagesToSummarize.length} messages summarized, ${recentMessages.length} recent messages preserved`,
         },
       );
-
-      this.isCompacted = true;
 
       return { compactedMessages, didCompact: true };
     } catch (err) {
@@ -682,7 +689,6 @@ export class ModelHandlerOpenAI<
 
     if (this.shouldCompact()) {
       const isManual = this.compactionRequested;
-      this.compactionRequested = false;
 
       const threshold = this.getCompactionThresholdPercent();
       if (isManual) {
@@ -700,6 +706,9 @@ export class ModelHandlerOpenAI<
       if (didCompact) {
         messagesToUse = compactedMessages;
         updatedMessages = compactedMessages;
+        // Clear manual request flag only after successful compaction
+        // so the request is preserved for retry if compaction fails.
+        this.compactionRequested = false;
       }
     }
 
