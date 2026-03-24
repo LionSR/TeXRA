@@ -149,6 +149,13 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
     openDocsCommand: 'texra.openDoc,installation',
   },
 
+  // GitHub CLI
+  gh: {
+    command: 'gh --version',
+    errorMessage:
+      'GitHub CLI (gh) is not installed. Install from https://cli.github.com/',
+  },
+
   // Document conversion tools
   pandoc: {
     errorMessage:

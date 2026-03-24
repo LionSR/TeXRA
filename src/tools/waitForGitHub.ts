@@ -154,10 +154,10 @@ export class WaitForGitHubTool extends defineTool({
       headSha = await getHeadSha(target.ref);
     }
 
+    const waitFor = target.wait_for as 'ci' | 'ci_pass';
     return {
       label,
-      check: () =>
-        this.checkActions(repo, headSha, target.workflow, target.wait_for),
+      check: () => this.checkActions(repo, headSha, target.workflow, waitFor),
     };
   }
 
@@ -350,7 +350,9 @@ export class WaitForGitHubTool extends defineTool({
       `since=${since}`,
     ]);
     let comments: Comment[] = JSON.parse(out || '[]');
-    comments = comments.filter((c) => c.created_at >= since);
+    comments = comments.filter(
+      (c) => new Date(c.created_at).getTime() >= new Date(since).getTime(),
+    );
     if (from) {
       comments = comments.filter((c) => c.user.login === from);
     }
