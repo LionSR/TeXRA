@@ -36,6 +36,12 @@ export function getAnthropicMaxPdfPages(contextWindow: number): number {
     : ANTHROPIC_MAX_PDF_PAGES_200K;
 }
 
+/** Max tokens for the compaction summary response (client-side compaction for OpenAI-compatible models). */
+export const CLIENT_COMPACTION_SUMMARY_MAX_TOKENS = 2000;
+
+/** Number of recent messages to preserve during client-side compaction (keeps immediate context). */
+export const CLIENT_COMPACTION_RECENT_MESSAGES = 4;
+
 /** Compute reduced max tokens under context pressure (minimum 1). */
 export function computeReducedMaxTokens(
   availableTokens: number,
