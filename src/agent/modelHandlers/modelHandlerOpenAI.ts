@@ -280,18 +280,31 @@ export class ModelHandlerOpenAI<
       }
     }
 
-    // Keep recent messages for immediate context
-    const recentCount = Math.min(
-      CLIENT_COMPACTION_RECENT_MESSAGES,
-      conversationMessages.length,
-    );
-    const messagesToSummarize = conversationMessages.slice(
+    // Keep recent messages for immediate context.
+    // Expand the window backwards to include complete tool-call/result pairs —
+    // if we split in the middle, the model loses tool_call_id associations.
+    let recentStart = Math.max(
       0,
-      conversationMessages.length - recentCount,
+      conversationMessages.length - CLIENT_COMPACTION_RECENT_MESSAGES,
     );
-    const recentMessages = conversationMessages.slice(
-      conversationMessages.length - recentCount,
-    );
+    // Walk backwards: if recentStart lands on a tool result, include its
+    // preceding assistant+tool_call message; if it lands on a tool message,
+    // keep going back to include the full tool-call group.
+    while (recentStart > 0) {
+      const msg = conversationMessages[recentStart];
+      if (
+        msg.role === 'tool' ||
+        (msg.role === 'assistant' &&
+          (msg as ChatCompletionAssistantMessageParam).tool_calls?.length)
+      ) {
+        recentStart--;
+      } else {
+        break;
+      }
+    }
+
+    const messagesToSummarize = conversationMessages.slice(0, recentStart);
+    const recentMessages = conversationMessages.slice(recentStart);
 
     // Nothing to summarize if conversation is too short
     if (messagesToSummarize.length <= 2) {
@@ -301,7 +314,20 @@ export class ModelHandlerOpenAI<
       return { compactedMessages: messages, didCompact: false };
     }
 
-    const serialized = this.serializeMessagesForSummary(messagesToSummarize);
+    let serialized = this.serializeMessagesForSummary(messagesToSummarize);
+
+    // Truncate serialized text to fit within the model's context window.
+    // Reserve space for the system prompt (~300 tokens) and summary output.
+    // Rough heuristic: 1 token ≈ 4 characters.
+    const maxSummaryInputChars =
+      (this.config.contextWindow - CLIENT_COMPACTION_SUMMARY_MAX_TOKENS - 300) *
+      4;
+    if (serialized.length > maxSummaryInputChars) {
+      this.logger.debug(
+        `Truncating serialized conversation from ${serialized.length} to ${maxSummaryInputChars} chars for summary call`,
+      );
+      serialized = serialized.substring(0, maxSummaryInputChars) + '\n\n[...truncated]';
+    }
 
     try {
       const summaryResponse = await client.chat.completions.create(
@@ -338,16 +364,24 @@ export class ModelHandlerOpenAI<
         ...recentMessages,
       ];
 
-      // Estimate token reduction from compaction summary usage
-      const summaryInputTokens =
-        summaryResponse.usage?.prompt_tokens ?? 0;
+      // Estimate token reduction.
+      // The summary output tokens are bounded by CLIENT_COMPACTION_SUMMARY_MAX_TOKENS.
+      // We estimate the compacted conversation as:
+      //   system prompt tokens (kept) + summary tokens + recent messages tokens (kept)
+      // Approximate recent messages' share proportionally from the original.
       const summaryOutputTokens =
         summaryResponse.usage?.completion_tokens ?? 0;
-      // Rough estimate: compacted messages ≈ system prompt tokens + summary tokens + recent message tokens
+      const totalConvMessages = conversationMessages.length;
+      const recentTokenEstimate =
+        totalConvMessages > 0
+          ? Math.floor(
+              tokensBefore * (recentMessages.length / totalConvMessages),
+            )
+          : 0;
       // The actual count will be measured on the next API call via prompt_tokens
       const estimatedTokensAfter = Math.max(
         1,
-        tokensBefore - summaryInputTokens + summaryOutputTokens,
+        summaryOutputTokens + recentTokenEstimate,
       );
       const utilizationAfter = (estimatedTokensAfter / contextWindow) * 100;
       const reduction = tokensBefore - estimatedTokensAfter;
