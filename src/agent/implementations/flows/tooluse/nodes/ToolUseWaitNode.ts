@@ -74,6 +74,12 @@ export class ToolUseWaitNode<C> extends Node<
       return FlowTransition.DEFAULT;
     }
 
+    // User sent a follow-up — clear any prior error/cancellation state
+    // so the next cycle starts fresh and runToolUseFlow won't treat
+    // a previously-recovered error as a terminal failure.
+    shared.lastError = undefined;
+    shared.userCancelledRetry = undefined;
+
     onFollowUpConsumed?.();
     StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
     logger.userMessage(execRes.followUp);
