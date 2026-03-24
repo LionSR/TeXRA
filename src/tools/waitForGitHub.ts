@@ -79,6 +79,7 @@ interface Comment {
   body: string;
   user: { login: string };
   created_at: string;
+  updated_at: string;
   html_url: string;
 }
 
@@ -129,8 +130,12 @@ export class WaitForGitHubTool extends defineTool({
     if (target.wait_for === 'comment') {
       return {
         label,
-        check: () =>
-          this.checkComment(repo, target.issue_number, since, target.from),
+        check: this.buildCommentChecker(
+          repo,
+          target.issue_number,
+          since,
+          target.from,
+        ),
       };
     }
 
@@ -242,23 +247,54 @@ export class WaitForGitHubTool extends defineTool({
   // Individual check functions
   // ---------------------------------------------------------------------------
 
-  private async checkComment(
+  /**
+   * Build a stateful comment checker that settles before returning.
+   *
+   * "Settle" means: after detecting new/updated comments, wait one extra poll
+   * cycle to see if the author posts more comments or edits the existing ones.
+   * Only return once the comment state is stable (no changes between two
+   * consecutive polls). This handles bots that post an initial comment and then
+   * edit it, or post multiple comments in sequence.
+   */
+  private buildCommentChecker(
     repo: string,
     issueNumber: number,
     since: string,
     from?: string | null,
-  ): Promise<ToolResult | null> {
-    const fresh = await this.fetchCommentsSince(repo, issueNumber, since, from);
-    if (fresh.length === 0) return null;
+  ): () => Promise<ToolResult | null> {
+    // Fingerprint: "id:updated_at" for each comment — changes on edit or new comment
+    let lastFingerprint = '';
 
-    const lines = fresh.map(
-      (c) =>
-        `--- ${c.user.login} (${c.created_at}) ---\n${c.body}\n${c.html_url}`,
-    );
-    const authors = [...new Set(fresh.map((c) => c.user.login))].join(', ');
-    return {
-      output: `${fresh.length} new comment(s) on ${repo}#${issueNumber}:\n\n${lines.join('\n\n')}`,
-      summary: `New comment(s) from ${authors} on #${issueNumber}`,
+    return async (): Promise<ToolResult | null> => {
+      const fresh = await this.fetchCommentsSince(
+        repo,
+        issueNumber,
+        since,
+        from,
+      );
+      if (fresh.length === 0) return null;
+
+      const fingerprint = fresh
+        .map((c) => `${c.id}:${c.updated_at}`)
+        .sort()
+        .join('|');
+
+      if (fingerprint !== lastFingerprint) {
+        // Activity detected but not yet settled — record and wait another cycle
+        lastFingerprint = fingerprint;
+        return null;
+      }
+
+      // Settled: same state two polls in a row
+      const lines = fresh.map(
+        (c) =>
+          `--- ${c.user.login} (${c.created_at}) ---\n${c.body}\n${c.html_url}`,
+      );
+      const authors = [...new Set(fresh.map((c) => c.user.login))].join(', ');
+      return {
+        output: `${fresh.length} new comment(s) on ${repo}#${issueNumber}:\n\n${lines.join('\n\n')}`,
+        summary: `New comment(s) from ${authors} on #${issueNumber}`,
+      };
     };
   }
 
@@ -338,9 +374,12 @@ export class WaitForGitHubTool extends defineTool({
     since: string,
     from?: string | null,
   ): Promise<Comment[]> {
-    // GitHub's `since` param filters by updated_at, not created_at.
-    // We pass it to reduce payload size, then filter by created_at
-    // client-side to avoid false positives from edited old comments.
+    // GitHub's `since` param filters by updated_at >= since, so it returns
+    // both newly created comments AND old comments that were edited.
+    // We keep both: new comments (created_at >= since) are genuinely new,
+    // and edited comments (updated_at >= since, created_at < since) capture
+    // bots that post an initial comment then keep editing it.
+    const sinceMs = new Date(since).getTime();
     const out = await gh([
       'api',
       '--method',
@@ -350,8 +389,11 @@ export class WaitForGitHubTool extends defineTool({
       `since=${since}`,
     ]);
     let comments: Comment[] = JSON.parse(out || '[]');
+    // Keep comments that are new OR were edited after our start time
     comments = comments.filter(
-      (c) => new Date(c.created_at).getTime() >= new Date(since).getTime(),
+      (c) =>
+        new Date(c.created_at).getTime() >= sinceMs ||
+        new Date(c.updated_at).getTime() >= sinceMs,
     );
     if (from) {
       comments = comments.filter((c) => c.user.login === from);
