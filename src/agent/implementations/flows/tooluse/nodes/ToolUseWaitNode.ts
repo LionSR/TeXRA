@@ -45,7 +45,13 @@ export class ToolUseWaitNode<C> extends Node<
 
     // Skip subagent delivery after a failed/cancelled cycle — the
     // orchestrator must not see a failure as a successful completion.
-    if (!prepRes.afterError) {
+    // In subagent mode, stop immediately: no orchestrator will send a
+    // follow-up since it was never notified, so waiting would hang.
+    if (prepRes.afterError) {
+      if (this.services.isSubagent) {
+        return { kind: 'stop' };
+      }
+    } else {
       await onBeforeWaiting?.(prepRes.lastResponse, prepRes.touchedFiles);
     }
 
