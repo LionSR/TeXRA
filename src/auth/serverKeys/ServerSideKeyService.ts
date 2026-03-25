@@ -34,6 +34,8 @@ const RELAY_PATH_SUFFIXES: Partial<Record<ServerSideProvider, string>> = {
   deepseek: '/v1',
   moonshot: '/v1',
   dashscope: '/compatible-mode/v1',
+  minimax: '/v1',
+  glm: '/api/paas/v4',
 };
 
 /** Global state key for the "use included model access" preference. */
