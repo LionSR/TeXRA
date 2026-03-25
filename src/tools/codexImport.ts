@@ -123,14 +123,13 @@ function findCodexBinaryPathUncached(): string | undefined {
 
   // Strategy 1: resolve from local project's node_modules
   // Highest priority — matches the SDK version in package.json.
-  try {
-    const localReq = createRequire(path.join(__dirname, 'package.json'));
-    const pkgJson = localReq.resolve(`${info.pkg}/package.json`);
-    const vendorRoot = path.join(path.dirname(pkgJson), 'vendor');
-    const binary = path.join(vendorRoot, info.triple, 'codex', binaryName);
-    if (existsSync(binary)) return binary;
-  } catch {
-    // Not available locally
+  {
+    const result = resolveCodexBinary(
+      path.join(__dirname, '..'),
+      info,
+      binaryName,
+    );
+    if (result) return result;
   }
 
   // Strategy 2: resolve from global npm prefix
@@ -142,23 +141,13 @@ function findCodexBinaryPathUncached(): string | undefined {
     }).trim();
 
     const roots = [
-      path.join(prefix, 'lib', 'node_modules'),
-      path.join(prefix, 'node_modules'),
+      path.join(prefix, 'lib', 'node_modules', '@openai', 'codex'),
+      path.join(prefix, 'node_modules', '@openai', 'codex'),
     ];
 
-    for (const root of roots) {
-      const codexPkgDir = path.join(root, '@openai', 'codex');
-      if (!existsSync(codexPkgDir)) continue;
-
-      try {
-        const req = createRequire(path.join(codexPkgDir, 'package.json'));
-        const platformPkgJson = req.resolve(`${info.pkg}/package.json`);
-        const vendorRoot = path.join(path.dirname(platformPkgJson), 'vendor');
-        const binary = path.join(vendorRoot, info.triple, 'codex', binaryName);
-        if (existsSync(binary)) return binary;
-      } catch {
-        // Platform package not resolvable from this root
-      }
+    for (const codexPkgDir of roots) {
+      const result = resolveCodexBinary(codexPkgDir, info, binaryName);
+      if (result) return result;
     }
   } catch {
     // npm prefix -g failed
@@ -200,6 +189,39 @@ function findCodexBinaryPathUncached(): string | undefined {
 }
 
 /**
+ * Resolve the native Codex binary from a directory that contains (or nests)
+ * the platform-specific package.  Returns the binary path if found, or
+ * `undefined`.
+ *
+ * Works for both a direct `@openai/codex` package dir and any ancestor
+ * that Node module resolution can traverse from.
+ */
+function resolveCodexBinary(
+  baseDir: string,
+  platformInfo: (typeof PLATFORM_INFO)[string],
+  binaryName: string,
+): string | undefined {
+  if (!existsSync(baseDir)) return undefined;
+  try {
+    const req = createRequire(path.join(baseDir, 'package.json'));
+    const platformPkgJson = req.resolve(
+      `${platformInfo.pkg}/package.json`,
+    );
+    const binary = path.join(
+      path.dirname(platformPkgJson),
+      'vendor',
+      platformInfo.triple,
+      'codex',
+      binaryName,
+    );
+    if (existsSync(binary)) return binary;
+  } catch {
+    // Platform package not resolvable
+  }
+  return undefined;
+}
+
+/**
  * WSL-only: attempt to locate the Codex binary from a Windows-side npm
  * installation.  Windows executables are runnable under WSL via binfmt_misc
  * interop, so we can return a `.exe` path directly.
@@ -219,32 +241,14 @@ function findCodexInWindowsSide(): string | undefined {
     if (rawPrefix) {
       const wslPrefix = windowsToWslPath(rawPrefix);
       if (wslPrefix) {
-        // Windows npm stores globals in <prefix>/node_modules
-        const root = path.join(wslPrefix, 'node_modules');
-        const codexPkgDir = path.join(root, '@openai', 'codex');
-        if (existsSync(codexPkgDir)) {
-          try {
-            const req = createRequire(
-              path.join(codexPkgDir, 'package.json'),
-            );
-            const platformPkgJson = req.resolve(
-              `${winInfo.pkg}/package.json`,
-            );
-            const vendorRoot = path.join(
-              path.dirname(platformPkgJson),
-              'vendor',
-            );
-            const binary = path.join(
-              vendorRoot,
-              winInfo.triple,
-              'codex',
-              'codex.exe',
-            );
-            if (existsSync(binary)) return binary;
-          } catch {
-            // Platform package not resolvable from this root
-          }
-        }
+        const codexPkgDir = path.join(
+          wslPrefix,
+          'node_modules',
+          '@openai',
+          'codex',
+        );
+        const result = resolveCodexBinary(codexPkgDir, winInfo, 'codex.exe');
+        if (result) return result;
       }
     }
   } catch {
