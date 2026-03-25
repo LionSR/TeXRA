@@ -61,11 +61,19 @@ function parseProposalInput(
   }
 
   if (toolName === 'delegate_workflow' || toolName === 'propose_workflow') {
-    // Map extraction shorthand flags into toolConfig (mirrors DelegationTools.execute)
+    // Map extraction shorthand flags into toolConfig.
+    // Note: at runtime, DelegationTools.execute also inherits flags from the
+    // parent agent's toolConfig when omitted. That inheritance can't be
+    // replicated here (no access to parent context), so the store reflects
+    // only what the LLM explicitly requested.
     const extractFigures =
-      'extractFigures' in spread ? Boolean(spread.extractFigures) : undefined;
+      'extractFigures' in spread && spread.extractFigures != null
+        ? Boolean(spread.extractFigures)
+        : undefined;
     const extractTikz =
-      'extractTikz' in spread ? Boolean(spread.extractTikz) : undefined;
+      'extractTikz' in spread && spread.extractTikz != null
+        ? Boolean(spread.extractTikz)
+        : undefined;
     const existingToolConfig = isPlainObject(spread.toolConfig)
       ? spread.toolConfig
       : {};
