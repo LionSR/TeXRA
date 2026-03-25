@@ -48,9 +48,8 @@ From `node_modules/@anthropic-ai/sdk/lib/tools/BetaToolRunner.js` (lines 65-133)
 | SDK Behavior                        | Our Adaptation                                        | Reason                                                                      |
 | ----------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------- |
 | Compaction runs **after** API call  | Run **after** API call (match SDK)                    | Better UX: user sees response immediately, compaction happens between turns |
-| Appends summary prompt as user msg  | **Swap system prompt** to summarization instructions  | Cleaner: summarization instructions are system-level, not a user turn       |
+| Appends summary prompt as user msg  | **Swap system prompt** to `COMPACTION_SYSTEM_PROMPT`  | Cleaner: summarization instructions are system-level, not a user turn       |
 | Sends messages as-is                | **Send messages as-is** (match SDK)                   | Model sees actual structured messages — richer than serialized text         |
-| No system prompt in compaction call | **Swap** system prompt to `COMPACTION_SYSTEM_PROMPT`  | Dedicated summarization instructions replace the agent's system prompt      |
 | Same `max_tokens` as main request   | Fixed **8192** for compaction                         | Summaries rarely need >4K tokens; avoid wasting budget                      |
 | Hard throw on non-text response     | **Graceful fallback** to original messages            | More robust in production                                                   |
 | No logging                          | Full **context management logging**                   | TeXRA's progress view needs visibility                                      |
@@ -141,31 +140,32 @@ private async compactConversation(
   const tokensBefore = this.compactionState.lastUsageTokens;
   const contextWindow = this.config.contextWindow;
 
-  // 1. Deep-copy and clean last assistant message (remove pending tool_use blocks)
+  // 1. Clean last assistant message if it has pending tool_use blocks.
   //    Without this, the API returns 400 ("tool_use requires tool_result").
-  const cleanedMessages: MessageParam[] = structuredClone(messages);
-  const lastMsg = cleanedMessages.at(-1);
+  //    Only clone when mutation is needed to avoid deep-copying the entire array.
+  let cleanedMessages = messages;
+  const lastMsg = messages.at(-1);
   if (lastMsg?.role === 'assistant' && Array.isArray(lastMsg.content)) {
     const nonToolBlocks = (lastMsg.content as BetaContentBlockParam[]).filter(
       (b) => b.type !== 'tool_use',
     );
     if (nonToolBlocks.length === 0) {
-      cleanedMessages.pop();
-    } else {
-      (cleanedMessages[cleanedMessages.length - 1] as MessageParam).content = nonToolBlocks;
+      cleanedMessages = messages.slice(0, -1);
+    } else if (nonToolBlocks.length < lastMsg.content.length) {
+      cleanedMessages = [...messages.slice(0, -1), { ...lastMsg, content: nonToolBlocks }];
     }
   }
 
-  // 2. Call API with swapped system prompt — messages sent as-is, no serialization
-  //    The compaction system prompt replaces the agent's original system prompt,
-  //    instructing the model to summarize the conversation it sees in the messages.
+  // 2. Call API with swapped system prompt — no serialization needed.
+  //    The original agent system prompt is not passed; its domain context
+  //    is already embedded in the conversation messages themselves.
   const compactionModel = this.getCompactionModel();
   try {
     const response = await client.beta.messages.create(
       {
         model: compactionModel,
-        system: COMPACTION_SYSTEM_PROMPT, // Swapped from original agent system prompt
-        messages: cleanedMessages,        // Conversation messages as-is
+        system: COMPACTION_SYSTEM_PROMPT,
+        messages: cleanedMessages,
         max_tokens: 8192,
       },
       { signal },
@@ -181,15 +181,20 @@ private async compactConversation(
     }
 
     const summary = summaryBlock.text;
+    const summaryOutputTokens = response.usage?.output_tokens ?? 0;
+    const estimatedTokensAfter = Math.max(1, summaryOutputTokens);
+    const utilizationAfter = (estimatedTokensAfter / contextWindow) * 100;
 
     // 4. Log compaction event
     this.logger.logContextManagement(
-      `Compacted: ${tokensBefore.toLocaleString()} → summary`,
+      `Compacted: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens`,
       {
         action: 'compaction',
         tokensBefore,
+        tokensAfter: estimatedTokensAfter,
         contextWindow,
         utilizationBefore: (tokensBefore / contextWindow) * 100,
+        utilizationAfter: Number(utilizationAfter.toFixed(1)),
         details: `Client-side compaction (model: ${compactionModel})`,
       },
     );
@@ -207,7 +212,7 @@ private async compactConversation(
 }
 ```
 
-**Note:** The `systemPrompt` parameter from the original agent is intentionally NOT passed to the compaction call. The compactor gets its own dedicated system prompt (`COMPACTION_SYSTEM_PROMPT`) that instructs it to summarize. The original system prompt context (LaTeX/research domain) is implicitly captured in the conversation messages themselves.
+**Context window safety:** The compaction call sends all messages to the compactor model. Since compaction triggers at 75% of the primary model's context window, and the compactor model (e.g., Sonnet) has the same 200K context, the messages fit comfortably — 150K input + 8K max_tokens + system prompt is well within 200K. If a future compactor model has a smaller context window, the API will return an error and the graceful fallback keeps original messages. For models with smaller context windows, consider adding a pre-check: skip compaction if `tokensBefore + 8192 > compactorContextWindow`.
 
 ### 3.5 Compaction Model Selection
 
