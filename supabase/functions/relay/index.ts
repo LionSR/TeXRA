@@ -53,7 +53,7 @@
  *
  * Example: /relay/openai/v1/chat/completions
  *
- * Supported providers: openai, anthropic, google, xai, deepseek, moonshot, dashscope
+ * Supported providers: openai, anthropic, google, xai, deepseek, moonshot, dashscope, minimax, glm
  *
  * IMPORTANT: Deploy with --no-verify-jwt flag since we validate JWTs manually
  * (SDKs send JWT in provider-specific headers, not the standard Authorization header).
@@ -104,7 +104,9 @@ type ProviderKey =
   | 'xai'
   | 'deepseek'
   | 'moonshot'
-  | 'dashscope';
+  | 'dashscope'
+  | 'minimax'
+  | 'glm';
 
 // =============================================================================
 // Provider Configuration
@@ -144,6 +146,16 @@ const PROVIDER_CONFIGS: Record<ProviderKey, ProviderConfig> = {
   dashscope: {
     baseUrl: 'https://dashscope-intl.aliyuncs.com',
     envKey: 'DASHSCOPE_API_KEY',
+    authType: 'bearer',
+  },
+  minimax: {
+    baseUrl: 'https://api.minimax.io',
+    envKey: 'MINIMAX_API_KEY',
+    authType: 'bearer',
+  },
+  glm: {
+    baseUrl: 'https://api.z.ai',
+    envKey: 'GLM_API_KEY',
     authType: 'bearer',
   },
 };
