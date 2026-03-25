@@ -1,12 +1,11 @@
 /**
- * WSL (Windows Subsystem for Linux) detection utilities.
+ * WSL (Windows Subsystem for Linux) detection.
  *
  * This module is intentionally free of VS Code dependencies so it can be
  * imported from VS Code-free zones like `src/tools/`.
  */
 
 import { readFileSync } from 'fs';
-import { execFileSync } from 'child_process';
 
 /** Cached WSL detection result (null = not yet checked). */
 let wslDetected: boolean | null = null;
@@ -29,21 +28,4 @@ export function isWSL(): boolean {
     wslDetected = false;
   }
   return wslDetected;
-}
-
-/**
- * Convert a Windows path to its WSL mount equivalent using `wslpath`.
- * Returns `undefined` if the conversion fails (e.g. `wslpath` not available
- * or WSL interop disabled).
- */
-export function windowsToWslPath(windowsPath: string): string | undefined {
-  try {
-    const result = execFileSync('wslpath', ['-u', windowsPath], {
-      encoding: 'utf8',
-      timeout: 5000,
-    }).trim();
-    return result || undefined;
-  } catch {
-    return undefined;
-  }
 }
