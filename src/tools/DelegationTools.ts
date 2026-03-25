@@ -486,15 +486,15 @@ const WorkflowAgentInputSchema = z.object({
     .describe('Additional media files'),
   extractFigures: z
     .boolean()
-    .prefault(false)
+    .optional()
     .describe(
-      'When true, automatically extracts figures referenced by the input LaTeX file(s) (via \\includegraphics, \\begin{overpic}) and attaches them as media files. Merges with any explicitly provided mediaFile/mediaFiles.',
+      'When true, automatically extracts figures referenced by the input LaTeX file(s) (via \\includegraphics, \\begin{overpic}) and attaches them as media files. Merges with any explicitly provided mediaFile/mediaFiles. Inherits from parent agent settings when omitted.',
     ),
   extractTikz: z
     .boolean()
-    .prefault(false)
+    .optional()
     .describe(
-      'When true, extracts TikZ figures from the input LaTeX file(s), compiles them into standalone PDFs, and attaches them as media files.',
+      'When true, extracts TikZ figures from the input LaTeX file(s), compiles them into standalone PDFs, and attaches them as media files. Inherits from parent agent settings when omitted.',
     ),
   outputFiles: z
     .array(z.string())
@@ -603,7 +603,10 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
     // Extraction flags are mapped to toolConfig so they flow through to the
     // agent execution pipeline (MediaExtractionNode → LatexMediaManager)
     // and are preserved when the user clicks "Setup" in the proposal UI.
+    // When the LLM omits extractFigures/extractTikz, inherit from the parent
+    // agent's toolConfig so user-configured extraction settings carry through.
     // Memory paths are already validated by memoriesField's .superRefine() at schema parse time.
+    const parentToolConfig = ctx.toolConfig;
     const proposal = WorkflowAgentProposalSchema.parse({
       agentCategory: AgentCategory.Workflow,
       agent: input.agent,
@@ -621,8 +624,10 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
       useMultipleOutputs: input.useMultipleOutputs,
       toolConfig: {
         ...DEFAULT_TOOL_CONFIG,
-        autoExtractFigure: input.extractFigures,
-        autoExtractTikzFigure: input.extractTikz,
+        autoExtractFigure:
+          input.extractFigures ?? parentToolConfig?.autoExtractFigure ?? false,
+        autoExtractTikzFigure:
+          input.extractTikz ?? parentToolConfig?.autoExtractTikzFigure ?? false,
       },
       memories: input.memories,
     } satisfies WorkflowAgentProposal);

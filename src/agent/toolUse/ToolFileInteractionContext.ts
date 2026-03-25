@@ -5,6 +5,7 @@ import type {
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { ToolConfig } from '@shared/schemas/toolConfig';
 
 export interface ToolFileInteractionContext {
   streamId?: StreamTabId;
@@ -14,6 +15,8 @@ export interface ToolFileInteractionContext {
   model?: string;
   /** Agent name of the parent agent (e.g. "orchestrator", "search-agent"). */
   agentName?: string;
+  /** Parent agent's tool configuration (extraction flags, etc.). Used by delegation tools to inherit settings. */
+  toolConfig?: ToolConfig;
   tracker: FileInteractionState;
   /** Todo state for managing task lists. Optional for backward compatibility. */
   todoState?: TodoState;
