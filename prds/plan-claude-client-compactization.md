@@ -505,7 +505,7 @@ Add the method as described in Section 3.4. Key behaviors:
 
 - **System prompt swap**: Use `COMPACTION_SYSTEM_PROMPT` as the system prompt (not the agent's original)
 - **Messages as-is**: Send conversation messages directly — no serialization, no windowing
-- `structuredClone` messages before mutation
+- Shallow-copy only when last message needs `tool_use` cleanup (no deep clone)
 - Clean `tool_use` blocks from last assistant message (API requirement)
 - Non-streaming API call to compaction model
 - Graceful fallback on failure
