@@ -113,6 +113,11 @@ function getToolTimeoutMs(
     return undefined;
   }
 
+  // Background tools return immediately — timeout timer is misleading
+  if (isPlainObject(input) && input.run_in_background === true) {
+    return undefined;
+  }
+
   if (isPlainObject(input) && typeof input.timeout === 'number') {
     return TIMEOUT_IN_SECONDS.has(toolName)
       ? input.timeout * 1000
