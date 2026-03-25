@@ -20,6 +20,7 @@ import type { RegisteredToolName } from '@tools/registry';
 import { getZoteroPort } from '@tools/zotero/bbtClient';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
+import { isWSL } from '@utils/system/wslDetect';
 
 const LEAN4_EXT_ID = 'leanprover.lean4';
 
@@ -219,6 +220,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       '  npm install -g @openai/codex\n' +
       '  brew install codex          (macOS)\n\n' +
       'On Windows, use WSL or the Codex app.\n' +
+      'In WSL, install inside the WSL environment (not on the Windows side).\n' +
       'See: https://developers.openai.com/codex/cli\n\n' +
       'Authentication (choose one):\n' +
       '  • codex login        — sign in with ChatGPT account (recommended)\n' +
@@ -257,7 +259,11 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       // Step 2: Can we find the native binary?
       const codexPath = findCodexBinaryPath();
       if (!codexPath) {
-        return 'Codex SDK loaded but native binary not found. Install with: npm install -g @openai/codex';
+        return (
+          'Codex SDK loaded but native binary not found. ' +
+          'Install with: npm install -g @openai/codex' +
+          (isWSL() ? ' (run this inside WSL, not on the Windows side)' : '')
+        );
       }
 
       return `Codex CLI ready. Binary: ${codexPath}`;
