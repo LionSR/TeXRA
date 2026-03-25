@@ -10,8 +10,6 @@ import { execa } from 'execa';
 import { WorkspaceFS } from '@utils/files';
 import { isWSL } from './wslDetect';
 
-export { isWSL };
-
 /** Timeout for git commands in milliseconds. */
 const GIT_TIMEOUT_MS = 3000;
 
