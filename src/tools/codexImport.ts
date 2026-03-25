@@ -201,7 +201,6 @@ function resolveCodexBinary(
   platformInfo: (typeof PLATFORM_INFO)[string],
   binaryName: string,
 ): string | undefined {
-  if (!existsSync(baseDir)) return undefined;
   try {
     const req = createRequire(path.join(baseDir, 'package.json'));
     const platformPkgJson = req.resolve(

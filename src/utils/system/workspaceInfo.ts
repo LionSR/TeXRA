@@ -10,7 +10,6 @@ import { execa } from 'execa';
 import { WorkspaceFS } from '@utils/files';
 import { isWSL } from './wslDetect';
 
-// Re-export so existing consumers continue to work.
 export { isWSL };
 
 /** Timeout for git commands in milliseconds. */
