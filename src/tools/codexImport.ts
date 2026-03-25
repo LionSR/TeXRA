@@ -18,6 +18,8 @@ import { createRequire } from 'module';
 import * as path from 'path';
 import { existsSync } from 'fs';
 
+import { isWSL, windowsToWslPath } from '@utils/system/wslDetect';
+
 type CodexConstructor = new (options?: any) => any;
 
 // ---------------------------------------------------------------------------
@@ -184,6 +186,87 @@ function findCodexBinaryPathUncached(): string | undefined {
     }
   } catch {
     // codex not on PATH
+  }
+
+  // Strategy 4 (WSL only): try Windows-side installation.
+  // Windows .exe files are executable under WSL via interop, so a
+  // Codex binary installed on the Windows side works transparently.
+  if (isWSL()) {
+    const winResult = findCodexInWindowsSide();
+    if (winResult) return winResult;
+  }
+
+  return undefined;
+}
+
+/**
+ * WSL-only: attempt to locate the Codex binary from a Windows-side npm
+ * installation.  Windows executables are runnable under WSL via binfmt_misc
+ * interop, so we can return a `.exe` path directly.
+ */
+function findCodexInWindowsSide(): string | undefined {
+  const winInfo = PLATFORM_INFO[`win32-${process.arch}`];
+  if (!winInfo) return undefined;
+
+  // Strategy 4a: resolve from the Windows npm global prefix via cmd.exe
+  try {
+    const rawPrefix = execSync('cmd.exe /c npm prefix -g', {
+      encoding: 'utf8',
+      timeout: 10_000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+
+    if (rawPrefix) {
+      const wslPrefix = windowsToWslPath(rawPrefix);
+      if (wslPrefix) {
+        // Windows npm stores globals in <prefix>/node_modules
+        const root = path.join(wslPrefix, 'node_modules');
+        const codexPkgDir = path.join(root, '@openai', 'codex');
+        if (existsSync(codexPkgDir)) {
+          try {
+            const req = createRequire(
+              path.join(codexPkgDir, 'package.json'),
+            );
+            const platformPkgJson = req.resolve(
+              `${winInfo.pkg}/package.json`,
+            );
+            const vendorRoot = path.join(
+              path.dirname(platformPkgJson),
+              'vendor',
+            );
+            const binary = path.join(
+              vendorRoot,
+              winInfo.triple,
+              'codex',
+              'codex.exe',
+            );
+            if (existsSync(binary)) return binary;
+          } catch {
+            // Platform package not resolvable from this root
+          }
+        }
+      }
+    }
+  } catch {
+    // cmd.exe or npm not available (WSL interop may be disabled)
+  }
+
+  // Strategy 4b: codex.exe on PATH (Windows PATH exposed via WSL interop)
+  try {
+    const pathHits = execSync('which codex.exe', {
+      encoding: 'utf8',
+      timeout: 5000,
+    })
+      .trim()
+      .split(/\r?\n/);
+
+    for (const hit of pathHits) {
+      const p = hit.trim();
+      if (!p) continue;
+      if (existsSync(p)) return p;
+    }
+  } catch {
+    // codex.exe not on PATH
   }
 
   return undefined;
