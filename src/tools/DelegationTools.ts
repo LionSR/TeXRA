@@ -486,13 +486,13 @@ const WorkflowAgentInputSchema = z.object({
     .describe('Additional media files'),
   extractFigures: z
     .boolean()
-    .optional()
+    .nullish()
     .describe(
       'When true, automatically extracts figures referenced by the input LaTeX file(s) (via \\includegraphics, \\begin{overpic}) and attaches them as media files. Merges with any explicitly provided mediaFile/mediaFiles.',
     ),
   extractTikz: z
     .boolean()
-    .optional()
+    .nullish()
     .describe(
       'When true, extracts TikZ figures from the input LaTeX file(s), compiles them into standalone PDFs, and attaches them as media files.',
     ),
