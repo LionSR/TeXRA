@@ -15,7 +15,7 @@ export interface ToolFileInteractionContext {
   model?: string;
   /** Agent name of the parent agent (e.g. "orchestrator", "search-agent"). */
   agentName?: string;
-  /** Parent agent's tool configuration (extraction flags, etc.). Used by delegation tools to inherit settings. */
+  /** Tool configuration inherited from the parent agent, if any. */
   toolConfig?: ToolConfig;
   tracker: FileInteractionState;
   /** Todo state for managing task lists. Optional for backward compatibility. */

@@ -488,13 +488,13 @@ const WorkflowAgentInputSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      'When true, automatically extracts figures referenced by the input LaTeX file(s) (via \\includegraphics, \\begin{overpic}) and attaches them as media files. Merges with any explicitly provided mediaFile/mediaFiles. Inherits from parent agent settings when omitted.',
+      'When true, automatically extracts figures referenced by the input LaTeX file(s) (via \\includegraphics, \\begin{overpic}) and attaches them as media files. Merges with any explicitly provided mediaFile/mediaFiles.',
     ),
   extractTikz: z
     .boolean()
     .optional()
     .describe(
-      'When true, extracts TikZ figures from the input LaTeX file(s), compiles them into standalone PDFs, and attaches them as media files. Inherits from parent agent settings when omitted.',
+      'When true, extracts TikZ figures from the input LaTeX file(s), compiles them into standalone PDFs, and attaches them as media files.',
     ),
   outputFiles: z
     .array(z.string())
@@ -599,14 +599,9 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
       throw new Error(`${missing.label} not found: ${missing.path}`);
     }
 
-    // Construct workflow proposal
-    // Extraction flags are mapped to toolConfig so they flow through to the
-    // agent execution pipeline (MediaExtractionNode → LatexMediaManager)
-    // and are preserved when the user clicks "Setup" in the proposal UI.
-    // When the LLM omits extractFigures/extractTikz, inherit from the parent
-    // agent's toolConfig so user-configured extraction settings carry through.
-    // Memory paths are already validated by memoriesField's .superRefine() at schema parse time.
-    const parentToolConfig = ctx.toolConfig;
+    // Extraction flags map to toolConfig, flowing through the proposal UI and
+    // into MediaExtractionNode → LatexMediaManager at runtime.
+    // When omitted, flags inherit from the parent agent's toolConfig.
     const proposal = WorkflowAgentProposalSchema.parse({
       agentCategory: AgentCategory.Workflow,
       agent: input.agent,
@@ -625,9 +620,9 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
       toolConfig: {
         ...DEFAULT_TOOL_CONFIG,
         autoExtractFigure:
-          input.extractFigures ?? parentToolConfig?.autoExtractFigure ?? false,
+          input.extractFigures ?? ctx.toolConfig?.autoExtractFigure ?? false,
         autoExtractTikzFigure:
-          input.extractTikz ?? parentToolConfig?.autoExtractTikzFigure ?? false,
+          input.extractTikz ?? ctx.toolConfig?.autoExtractTikzFigure ?? false,
       },
       memories: input.memories,
     } satisfies WorkflowAgentProposal);
