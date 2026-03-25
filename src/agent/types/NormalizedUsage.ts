@@ -22,6 +22,8 @@ export const UsageProviderSchema = z.enum([
   'dashscope',
   'xai',
   'moonshot',
+  'minimax',
+  'glm',
   'unknown',
 ]);
 
