@@ -467,6 +467,8 @@ Exports shared across all providers:
 - `COMPACTION_MODEL_MAP` — Constant map from primary model → cheaper compaction model (PRD Section 4.3)
 - `getCompactionModel()` — Lookup function with same-model fallback
 
+**Also:** Remove the local `COMPACTION_SYSTEM_PROMPT` from `modelHandlerOpenAI.ts` (line 93) and replace it with an import from the shared file. One constant, one source of truth.
+
 ### Step 2: Remove server-side context editing
 
 **Files:**
