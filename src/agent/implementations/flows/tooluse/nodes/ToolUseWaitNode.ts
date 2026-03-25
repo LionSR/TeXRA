@@ -10,6 +10,8 @@ import type { ToolUseRunShared, WaitExecResult } from './types';
 interface WaitPrepResult {
   lastResponse: string | undefined;
   touchedFiles: string[];
+  /** True when entering after a failed/cancelled cycle. */
+  afterError: boolean;
 }
 
 export class ToolUseWaitNode<C> extends Node<
@@ -19,15 +21,17 @@ export class ToolUseWaitNode<C> extends Node<
 > {
   async prep(shared: ToolUseRunShared): Promise<WaitPrepResult> {
     const { modelHandler, onBeforeWaiting } = this.services;
+    const afterError = !!(shared.lastError || shared.userCancelledRetry);
 
     // Only extract when the callback is wired (subagent mode)
-    if (!onBeforeWaiting) return { lastResponse: undefined, touchedFiles: [] };
+    if (!onBeforeWaiting) return { lastResponse: undefined, touchedFiles: [], afterError };
 
     return {
       touchedFiles: extractTouchedFiles(shared.stateSlices),
       lastResponse: findLastAssistantText(shared.messages, (m) =>
         modelHandler.extractAssistantText(m),
       ),
+      afterError,
     };
   }
 
@@ -39,7 +43,11 @@ export class ToolUseWaitNode<C> extends Node<
       return { kind: 'stop' };
     }
 
-    await onBeforeWaiting?.(prepRes.lastResponse, prepRes.touchedFiles);
+    // Skip subagent delivery after a failed/cancelled cycle — the
+    // orchestrator must not see a failure as a successful completion.
+    if (!prepRes.afterError) {
+      await onBeforeWaiting?.(prepRes.lastResponse, prepRes.touchedFiles);
+    }
 
     if (!session.hasQueuedFollowUp()) {
       StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
