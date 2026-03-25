@@ -8,6 +8,7 @@ import { execa } from 'execa';
 
 // Local imports
 import { WorkspaceFS } from '@utils/files';
+import { isWSL } from './wslDetect';
 
 /** Timeout for git commands in milliseconds. */
 const GIT_TIMEOUT_MS = 3000;
@@ -50,29 +51,6 @@ function detectShell(): string | undefined {
   const shell = process.env.SHELL;
   if (!shell) return undefined;
   return path.basename(shell); // "bash", "zsh", "fish", etc.
-}
-
-/** Cached WSL detection result (null = not yet checked). */
-let wslDetected: boolean | null = null;
-
-/**
- * Detect whether we are running inside Windows Subsystem for Linux (WSL).
- * Checks /proc/version for the "microsoft" or "WSL" marker strings that
- * Microsoft's WSL kernel injects.  Result is cached after the first call.
- */
-export function isWSL(): boolean {
-  if (wslDetected !== null) return wslDetected;
-  if (process.platform !== 'linux') {
-    wslDetected = false;
-    return false;
-  }
-  try {
-    const version = fs.readFileSync('/proc/version', 'utf-8');
-    wslDetected = /microsoft|wsl/i.test(version);
-  } catch {
-    wslDetected = false;
-  }
-  return wslDetected;
 }
 
 /**
