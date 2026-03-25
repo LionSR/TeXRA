@@ -14,7 +14,7 @@ This plan implements **Phase 3** (Integration with Handlers) of the PRD for the 
 
 ## 1. Summary
 
-Add client-side compaction to `ModelHandlerAnthropic`, following the pattern proven in the Anthropic SDK's `BetaToolRunner._checkAndCompact()`. This approach works with **all Anthropic models** (not just Opus 4.6), uses a **cheaper model** for summarization, and requires **no SDK type additions**.
+Add client-side compaction to `ModelHandlerAnthropic`, inspired by the Anthropic SDK's `BetaToolRunner._checkAndCompact()` but using a **system-prompt-swap** strategy instead of serialization. The compaction call swaps the system prompt to summarization instructions and sends conversation messages as-is — no serialization, no "last K messages" windowing. This approach works with **all Anthropic models** (not just Opus 4.6), uses a **cheaper model** for summarization, and requires **no SDK type additions**.
 
 This is the same approach proposed in the main PRD (`docs/prd-context-compactization.md`) Section 4.2 for all non-OpenAI-Responses providers. Implementing it for Anthropic first validates the pattern before rolling out to Google, DeepSeek, Kimi, and OpenAI Chat.
 
@@ -45,13 +45,15 @@ From `node_modules/@anthropic-ai/sdk/lib/tools/BetaToolRunner.js` (lines 65-133)
 
 ### What to change
 
-| SDK Behavior                        | Our Adaptation                             | Reason                                                                      |
-| ----------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
-| Compaction runs **after** API call  | Run **after** API call (match SDK)         | Better UX: user sees response immediately, compaction happens between turns |
-| No system prompt in compaction call | **Include** system prompt                  | TeXRA's system prompts contain important LaTeX/research context             |
-| Same `max_tokens` as main request   | Fixed **8192** for compaction              | Summaries rarely need >4K tokens; avoid wasting budget                      |
-| Hard throw on non-text response     | **Graceful fallback** to original messages | More robust in production                                                   |
-| No logging                          | Full **context management logging**        | TeXRA's progress view needs visibility                                      |
+| SDK Behavior                        | Our Adaptation                                        | Reason                                                                      |
+| ----------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------- |
+| Compaction runs **after** API call  | Run **after** API call (match SDK)                    | Better UX: user sees response immediately, compaction happens between turns |
+| Appends summary prompt as user msg  | **Swap system prompt** to summarization instructions  | Cleaner: summarization instructions are system-level, not a user turn       |
+| Sends messages as-is                | **Send messages as-is** (match SDK)                   | Model sees actual structured messages — richer than serialized text         |
+| No system prompt in compaction call | **Swap** system prompt to `COMPACTION_SYSTEM_PROMPT`  | Dedicated summarization instructions replace the agent's system prompt      |
+| Same `max_tokens` as main request   | Fixed **8192** for compaction                         | Summaries rarely need >4K tokens; avoid wasting budget                      |
+| Hard throw on non-text response     | **Graceful fallback** to original messages            | More robust in production                                                   |
+| No logging                          | Full **context management logging**                   | TeXRA's progress view needs visibility                                      |
 
 ---
 
@@ -119,19 +121,28 @@ private shouldCompact(): boolean {
 }
 ```
 
-### 3.4 Compaction Execution
+### 3.4 Compaction Execution — System Prompt Swap Strategy
+
+The key insight: **send the conversation messages as-is** to the compactor model, but **swap the system prompt** to summarization instructions. No serialization, no "last K messages" windowing. The model reads the actual structured messages (with proper roles, tool calls, tool results) and produces a summary naturally.
+
+**Why this is better than serialization + windowing:**
+
+- The model sees native message structure — roles, tool_call IDs, tool results — far richer than flattened text
+- No information loss from serialization heuristics
+- No arbitrary "recent window" boundary — the model decides what matters
+- Simpler code: no `serializeMessagesForSummary()`, no boundary detection, no truncation logic
 
 ```typescript
 private async compactConversation(
   client: Anthropic,
   messages: MessageParam[],
-  systemPrompt?: string,
   signal?: AbortSignal,
 ): Promise<{ compacted: boolean; newMessages: MessageParam[]; summary?: string }> {
   const tokensBefore = this.compactionState.lastUsageTokens;
   const contextWindow = this.config.contextWindow;
 
   // 1. Deep-copy and clean last assistant message (remove pending tool_use blocks)
+  //    Without this, the API returns 400 ("tool_use requires tool_result").
   const cleanedMessages: MessageParam[] = structuredClone(messages);
   const lastMsg = cleanedMessages.at(-1);
   if (lastMsg?.role === 'assistant' && Array.isArray(lastMsg.content)) {
@@ -145,30 +156,22 @@ private async compactConversation(
     }
   }
 
-  // 2. Append summary prompt as user message
-  // Note: This may create consecutive user messages (e.g., when last message is
-  // tool_result). This is intentional and matches the Anthropic SDK's
-  // BetaToolRunner._checkAndCompact() pattern (lines 108-118), which the API accepts.
-  // The compaction result replaces all messages anyway, so alternation is restored.
-  cleanedMessages.push({
-    role: 'user',
-    content: [{ type: 'text', text: COMPACTION_SUMMARY_PROMPT }],
-  });
-
-  // 3. Call API (non-streaming) with compaction model
+  // 2. Call API with swapped system prompt — messages sent as-is, no serialization
+  //    The compaction system prompt replaces the agent's original system prompt,
+  //    instructing the model to summarize the conversation it sees in the messages.
   const compactionModel = this.getCompactionModel();
   try {
     const response = await client.beta.messages.create(
       {
         model: compactionModel,
-        messages: cleanedMessages,
+        system: COMPACTION_SYSTEM_PROMPT, // Swapped from original agent system prompt
+        messages: cleanedMessages,        // Conversation messages as-is
         max_tokens: 8192,
-        ...(systemPrompt && { system: systemPrompt }),
       },
       { signal },
     );
 
-    // 4. Extract summary text
+    // 3. Extract summary text
     const summaryBlock = response.content.find(
       (b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text',
     );
@@ -179,7 +182,7 @@ private async compactConversation(
 
     const summary = summaryBlock.text;
 
-    // 5. Log compaction event
+    // 4. Log compaction event
     this.logger.logContextManagement(
       `Compacted: ${tokensBefore.toLocaleString()} → summary`,
       {
@@ -191,7 +194,7 @@ private async compactConversation(
       },
     );
 
-    // 6. Replace ALL messages with single user message containing summary
+    // 5. Replace ALL messages with single user message containing summary
     const newMessages: MessageParam[] = [
       { role: 'user', content: [{ type: 'text', text: summary }] },
     ];
@@ -203,6 +206,8 @@ private async compactConversation(
   }
 }
 ```
+
+**Note:** The `systemPrompt` parameter from the original agent is intentionally NOT passed to the compaction call. The compactor gets its own dedicated system prompt (`COMPACTION_SYSTEM_PROMPT`) that instructs it to summarize. The original system prompt context (LaTeX/research domain) is implicitly captured in the conversation messages themselves.
 
 ### 3.5 Compaction Model Selection
 
@@ -246,43 +251,60 @@ private getCompactionModel(): string {
 
 **No thinking mode for summarizer** (per PRD Section 4.3): The Anthropic SDK's compaction call doesn't pass thinking parameters — summarization is straightforward and doesn't need extended thinking.
 
-### 3.6 Summary Prompt
+### 3.6 Compaction System Prompt
 
-Define locally in `src/agent/modelHandlers/compactionPrompt.ts` (shared across providers):
+Define locally in `src/agent/modelHandlers/compactionPrompt.ts` (shared across providers).
+
+This is used as the **system prompt** for the compaction call (replacing the agent's original system prompt). The model reads the actual conversation messages and follows these instructions to produce a summary.
 
 ```typescript
-export const COMPACTION_SUMMARY_PROMPT = `You have been working on the task described above but have not yet completed it.
-Write a continuation summary that will allow you (or another instance of yourself)
-to resume work efficiently in a future context window where the conversation
-history will be replaced with this summary. Your summary should be structured,
-concise, and actionable. Include:
+export const COMPACTION_SYSTEM_PROMPT = `You are a conversation summarizer. The messages below represent a conversation
+between a user and an AI assistant. The conversation may be incomplete — the task
+may not yet be finished.
+
+Write a continuation summary that will allow an AI assistant to resume work
+efficiently in a future context window where the conversation history will be
+replaced with this summary. Your summary should be structured, concise, and
+actionable. Include:
+
 1. Task Overview
-The user's core request and success criteria
-Any clarifications or constraints they specified
+   The user's core request and success criteria
+   Any clarifications or constraints they specified
+
 2. Current State
-What has been completed so far
-Files created, modified, or analyzed (with paths if relevant)
-Key outputs or artifacts produced
+   What has been completed so far
+   Files created, modified, or analyzed (with paths if relevant)
+   Key outputs or artifacts produced
+
 3. Important Discoveries
-Technical constraints or requirements uncovered
-Decisions made and their rationale
-Errors encountered and how they were resolved
-What approaches were tried that didn't work (and why)
+   Technical constraints or requirements uncovered
+   Decisions made and their rationale
+   Errors encountered and how they were resolved
+   What approaches were tried that didn't work (and why)
+
 4. Next Steps
-Specific actions needed to complete the task
-Any blockers or open questions to resolve
-Priority order if multiple steps remain
+   Specific actions needed to complete the task
+   Any blockers or open questions to resolve
+   Priority order if multiple steps remain
+
 5. Context to Preserve
-User preferences or style requirements
-Domain-specific details that aren't obvious
-Any promises made to the user
-Be concise but complete—err on the side of including information that would
+   User preferences or style requirements
+   Domain-specific details that aren't obvious
+   Any promises made to the user
+
+Be concise but complete — err on the side of including information that would
 prevent duplicate work or repeated mistakes. Write in a way that enables
 immediate resumption of the task.
+
 Wrap your summary in <summary></summary> tags.`;
 ```
 
-Based on the Anthropic SDK's `DEFAULT_SUMMARY_PROMPT` (`lib/tools/CompactionControl.js`). Defined locally to avoid importing from an unstable internal SDK path.
+**Key difference from SDK:** The SDK appends the prompt as a user message at the end of the conversation. We use it as the system prompt instead. This is cleaner because:
+- Summarization instructions are system-level directives, not a user turn
+- Avoids potential consecutive-user-message issues
+- The model sees the unmodified conversation messages — no appended instruction mixed in with the conversation
+
+Based on the Anthropic SDK's `DEFAULT_SUMMARY_PROMPT` (`lib/tools/CompactionControl.js`), adapted for use as a system prompt. Defined locally to avoid importing from an unstable internal SDK path.
 
 ### 3.7 Integration with `createResponse()`
 
@@ -306,7 +328,7 @@ async createResponse(
     this.logger.logProgress(
       `Compacting conversation (${this.compactionState.lastUsageTokens.toLocaleString()} tokens exceed threshold)`,
     );
-    const result = await this.compactConversation(client, messages, systemPrompt, signal);
+    const result = await this.compactConversation(client, messages, signal);
     if (result.compacted) {
       updatedMessages = result.newMessages;
     }
@@ -436,7 +458,7 @@ The `context_management` parameter and beta header are removed entirely. Context
 
 Exports shared across all providers:
 
-- `COMPACTION_SUMMARY_PROMPT` — The 5-section structured prompt (from Anthropic SDK)
+- `COMPACTION_SYSTEM_PROMPT` — The 5-section structured system prompt for compaction calls (adapted from Anthropic SDK)
 - `COMPACTION_MODEL_MAP` — Constant map from primary model → cheaper compaction model (PRD Section 4.3)
 - `getCompactionModel()` — Lookup function with same-model fallback
 
@@ -474,8 +496,10 @@ Add:
 
 Add the method as described in Section 3.4. Key behaviors:
 
+- **System prompt swap**: Use `COMPACTION_SYSTEM_PROMPT` as the system prompt (not the agent's original)
+- **Messages as-is**: Send conversation messages directly — no serialization, no windowing
 - `structuredClone` messages before mutation
-- Clean `tool_use` blocks from last assistant message
+- Clean `tool_use` blocks from last assistant message (API requirement)
 - Non-streaming API call to compaction model
 - Graceful fallback on failure
 - Structured logging via `logger.logContextManagement()`
