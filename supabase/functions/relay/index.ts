@@ -59,9 +59,9 @@
  * (SDKs send JWT in provider-specific headers, not the standard Authorization header).
  */
 
-import { Hono } from 'jsr:@hono/hono@4.11.1';
-import { cors } from 'jsr:@hono/hono@4.11.1/cors';
-import { createClient } from 'jsr:@supabase/supabase-js@2.89.0';
+import { Hono } from 'jsr:@hono/hono@4.12.9';
+import { cors } from 'jsr:@hono/hono@4.12.9/cors';
+import { createClient } from 'jsr:@supabase/supabase-js@2.100.1';
 import {
   TIER_CONFIG,
   TIER_SPENDING_LIMITS,
