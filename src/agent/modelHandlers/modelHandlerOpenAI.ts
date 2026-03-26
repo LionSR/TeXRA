@@ -230,12 +230,19 @@ export class ModelHandlerOpenAI<
     // System-prompt-swap: replace the agent's system prompt with summarization
     // instructions and send conversation messages as-is. The model reads the
     // actual structured messages (roles, tool calls, tool results) natively.
+    // Apply provider-specific normalization (e.g., DeepSeek's convertContentToString,
+    // mergeConsecutiveRoles) so the compaction call doesn't get rejected.
+    const normOptions = this.getMessageNormalizationOptions();
+    const normalizedConversation = normOptions
+      ? this.prepareNormalizedMessages(conversationMessages, normOptions)
+      : conversationMessages;
+
     try {
       const summaryParams: Record<string, unknown> = {
         model: this.config.fullName,
         messages: [
           { role: 'system', content: COMPACTION_SYSTEM_PROMPT },
-          ...conversationMessages,
+          ...normalizedConversation,
         ],
         max_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
         temperature: 0,
@@ -586,9 +593,6 @@ export class ModelHandlerOpenAI<
       if (didCompact) {
         messagesToUse = compactedMessages;
         updatedMessages = compactedMessages;
-        // Clear manual request flag only after successful compaction
-        // so the request is preserved for retry if compaction fails.
-        this.compactionRequested = false;
       }
     }
 
@@ -670,6 +674,12 @@ export class ModelHandlerOpenAI<
     // Phase 5: TRACK - Record prompt_tokens for compaction threshold checks
     if (response.usage?.prompt_tokens) {
       this.lastKnownInputTokens = response.usage.prompt_tokens;
+    }
+
+    // Clear manual compaction flag only after the main API call succeeds.
+    // If Phase 4 throws, the flag is preserved so the request can be retried.
+    if (updatedMessages) {
+      this.compactionRequested = false;
     }
 
     return { response, updatedMessages };
