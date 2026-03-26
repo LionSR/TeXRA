@@ -5,9 +5,7 @@ export interface IToolUseSession {
   appendFollowUp(text: string): void;
   hasQueuedFollowUp(): boolean;
   /** Wait for the next follow-up items. Returns null if interrupted. */
-  waitForFollowUp(
-    checkInterruption: () => boolean,
-  ): Promise<string[] | null>;
+  waitForFollowUp(checkInterruption: () => boolean): Promise<string[] | null>;
 }
 
 export class ToolUseSessionLifecycle implements IToolUseSession {

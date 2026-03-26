@@ -45,7 +45,10 @@ export async function parseEml(rawEml: string): Promise<EmlParseResult> {
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-function formatEmail(email: Email, { images, otherNames }: AttachmentPartition): string {
+function formatEmail(
+  email: Email,
+  { images, otherNames }: AttachmentPartition,
+): string {
   const sections: string[] = [];
 
   // -- Headers --------------------------------------------------------------
@@ -116,7 +119,8 @@ function partitionAttachments(attachments: Attachment[]): AttachmentPartition {
     if (bytes.byteLength === 0) continue;
 
     const filename =
-      att.filename || `image-${++unnamedCounter}.${extensionFromMime(att.mimeType)}`;
+      att.filename ||
+      `image-${++unnamedCounter}.${extensionFromMime(att.mimeType)}`;
     images.push({ filename, mimeType: att.mimeType, bytes });
   }
 
@@ -153,20 +157,22 @@ function formatAddress(addr: Address): string {
  * part exists in the email.
  */
 function stripHtml(html: string): string {
-  return html
-    // Remove non-visible blocks before stripping tags so their text content
-    // (CSS rules, JS code) doesn't leak into the plain-text output.
-    .replaceAll(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replaceAll(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replaceAll(/<br\s*\/?>/gi, '\n')
-    .replaceAll(/<\/(?:p|div|tr|li|h[1-6])>/gi, '\n')
-    .replaceAll(/<[^>]+>/g, '')
-    .replaceAll(/&nbsp;/gi, ' ')
-    .replaceAll(/&lt;/gi, '<')
-    .replaceAll(/&gt;/gi, '>')
-    .replaceAll(/&quot;/gi, '"')
-    .replaceAll(/&#039;/gi, "'")
-    .replaceAll(/&amp;/gi, '&')
-    .replaceAll(/\n{3,}/g, '\n\n')
-    .trim();
+  return (
+    html
+      // Remove non-visible blocks before stripping tags so their text content
+      // (CSS rules, JS code) doesn't leak into the plain-text output.
+      .replaceAll(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replaceAll(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replaceAll(/<br\s*\/?>/gi, '\n')
+      .replaceAll(/<\/(?:p|div|tr|li|h[1-6])>/gi, '\n')
+      .replaceAll(/<[^>]+>/g, '')
+      .replaceAll(/&nbsp;/gi, ' ')
+      .replaceAll(/&lt;/gi, '<')
+      .replaceAll(/&gt;/gi, '>')
+      .replaceAll(/&quot;/gi, '"')
+      .replaceAll(/&#039;/gi, "'")
+      .replaceAll(/&amp;/gi, '&')
+      .replaceAll(/\n{3,}/g, '\n\n')
+      .trim()
+  );
 }

@@ -32,9 +32,7 @@ export class FollowUpQueue {
     return this.queued.splice(0);
   }
 
-  waitForNext(
-    checkInterruption: () => boolean,
-  ): Promise<string | null> {
+  waitForNext(checkInterruption: () => boolean): Promise<string | null> {
     if (!this.isEmpty()) {
       return Promise.resolve(this.queued.shift()!);
     }
