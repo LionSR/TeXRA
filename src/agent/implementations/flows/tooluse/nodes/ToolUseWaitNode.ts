@@ -10,6 +10,8 @@ import type { ToolUseRunShared, WaitExecResult } from './types';
 interface WaitPrepResult {
   lastResponse: string | undefined;
   touchedFiles: string[];
+  /** True when entering after a failed/cancelled cycle. */
+  afterError: boolean;
 }
 
 export class ToolUseWaitNode<C> extends Node<
@@ -19,15 +21,17 @@ export class ToolUseWaitNode<C> extends Node<
 > {
   async prep(shared: ToolUseRunShared): Promise<WaitPrepResult> {
     const { modelHandler, onBeforeWaiting } = this.services;
+    const afterError = !!(shared.lastError || shared.userCancelledRetry);
 
     // Only extract when the callback is wired (subagent mode)
-    if (!onBeforeWaiting) return { lastResponse: undefined, touchedFiles: [] };
+    if (!onBeforeWaiting) return { lastResponse: undefined, touchedFiles: [], afterError };
 
     return {
       touchedFiles: extractTouchedFiles(shared.stateSlices),
       lastResponse: findLastAssistantText(shared.messages, (m) =>
         modelHandler.extractAssistantText(m),
       ),
+      afterError,
     };
   }
 
@@ -39,7 +43,17 @@ export class ToolUseWaitNode<C> extends Node<
       return { kind: 'stop' };
     }
 
-    await onBeforeWaiting?.(prepRes.lastResponse, prepRes.touchedFiles);
+    // Skip subagent delivery after a failed/cancelled cycle — the
+    // orchestrator must not see a failure as a successful completion.
+    // In subagent mode, stop immediately: no orchestrator will send a
+    // follow-up since it was never notified, so waiting would hang.
+    if (prepRes.afterError) {
+      if (this.services.isSubagent) {
+        return { kind: 'stop' };
+      }
+    } else {
+      await onBeforeWaiting?.(prepRes.lastResponse, prepRes.touchedFiles);
+    }
 
     if (!session.hasQueuedFollowUp()) {
       StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
@@ -73,6 +87,12 @@ export class ToolUseWaitNode<C> extends Node<
     if (execRes.kind === 'stop') {
       return FlowTransition.DEFAULT;
     }
+
+    // User sent a follow-up — clear any prior error/cancellation state
+    // so the next cycle starts fresh and runToolUseFlow won't treat
+    // a previously-recovered error as a terminal failure.
+    shared.lastError = undefined;
+    shared.userCancelledRetry = undefined;
 
     onFollowUpConsumed?.();
     StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
