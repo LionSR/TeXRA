@@ -1,4 +1,4 @@
-name: Update Tracking Issues
+name: Issue Tracker
 
 on:
   issues:
@@ -9,7 +9,7 @@ on:
     types: [submitted]
 
 concurrency:
-  group: update-tracking-issues-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: issue-tracker-${{ github.event.pull_request.number || github.event.issue.number }}
   cancel-in-progress: false
 
 jobs:
