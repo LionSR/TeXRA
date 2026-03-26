@@ -576,6 +576,9 @@ export class ModelHandlerOpenAI<
 
     if (this.shouldCompact()) {
       const isManual = this.compactionRequested;
+      // Clear manual flag immediately when attempted — matches Anthropic and
+      // OpenAI Responses handlers. Prevents infinite retry on graceful failure.
+      this.compactionRequested = false;
 
       const threshold = this.getCompactionThresholdPercent();
       if (isManual) {
@@ -674,12 +677,6 @@ export class ModelHandlerOpenAI<
     // Phase 5: TRACK - Record prompt_tokens for compaction threshold checks
     if (response.usage?.prompt_tokens) {
       this.lastKnownInputTokens = response.usage.prompt_tokens;
-    }
-
-    // Clear manual compaction flag only after the main API call succeeds.
-    // If Phase 4 throws, the flag is preserved so the request can be retried.
-    if (updatedMessages) {
-      this.compactionRequested = false;
     }
 
     return { response, updatedMessages };
