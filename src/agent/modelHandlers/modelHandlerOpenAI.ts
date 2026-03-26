@@ -106,7 +106,8 @@ export interface StreamingAggregator {
   finalize(fallback?: ChatCompletion): ChatCompletion;
 }
 
-export function extractReasoningDelta(chunk: ChatCompletionChunk): string {
+/** Extracts `reasoning_content` from a streaming chunk delta. */
+function extractReasoningDelta(chunk: ChatCompletionChunk): string {
   const delta = chunk.choices[0]?.delta as
     | { reasoning_content?: ReasoningContent }
     | undefined;
@@ -330,6 +331,14 @@ export class ModelHandlerOpenAI<
   }
 
   /**
+   * Extracts reasoning text from a streaming chunk delta.
+   * Override in subclasses to handle provider-specific reasoning fields.
+   */
+  protected extractReasoningDelta(chunk: ChatCompletionChunk): string {
+    return extractReasoningDelta(chunk);
+  }
+
+  /**
    * Returns the thinking parameter for models that support the thinking API.
    * Used by Kimi K2.5 and DeepSeek models which use `thinking: {type: "enabled"|"disabled"}`.
    *
@@ -448,7 +457,7 @@ export class ModelHandlerOpenAI<
 
     const onChunk = (chunk: ChatCompletionChunk): void => {
       streamingAggregator?.consumeChunk(chunk);
-      const reasoningDelta = extractReasoningDelta(chunk);
+      const reasoningDelta = this.extractReasoningDelta(chunk);
       if (reasoningDelta) {
         thinking.append(reasoningDelta);
         streamingAggregator?.appendReasoning(reasoningDelta);
