@@ -847,7 +847,8 @@ class ToolUseDispatchNode<C> extends BatchNode<
       calls.length > 1 &&
       (services.modelHandler.isGoogle ||
         services.modelHandler.isDeepSeek ||
-        services.modelHandler.isKimi) &&
+        services.modelHandler.isKimi ||
+        services.modelHandler.isMiniMax) &&
       !!services.modelHandler.createBatchedToolUseFollowUpMessages;
 
     if (shouldBatch) {
