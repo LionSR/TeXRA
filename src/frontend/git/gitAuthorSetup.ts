@@ -33,7 +33,9 @@ export function readGitAuthorSettings(): {
 }
 
 /** Apply settings and return them so callers can forward without re-reading. */
-export function applyGitAuthorConfig(): ReturnType<typeof readGitAuthorSettings> {
+export function applyGitAuthorConfig(): ReturnType<
+  typeof readGitAuthorSettings
+> {
   const settings = readGitAuthorSettings();
   const { markCommits, authorName, authorEmail } = settings;
   if (!markCommits) {

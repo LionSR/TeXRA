@@ -319,8 +319,10 @@ export class BackgroundTasksPanel extends LitElement {
               codicon: true,
               [icon]: true,
               'task-icon': true,
-              'task-icon--process': kind === 'process' && !isAgentProcess(child),
-              'task-icon--subagent': kind === 'subagent' || isAgentProcess(child),
+              'task-icon--process':
+                kind === 'process' && !isAgentProcess(child),
+              'task-icon--subagent':
+                kind === 'subagent' || isAgentProcess(child),
             })}
           ></i>
           <span
@@ -403,7 +405,10 @@ function isAgentProcess(child: ActiveChildInfo): boolean {
 }
 
 /** Pick the appropriate codicon for a background task item. */
-function getTaskIcon(child: ActiveChildInfo, kind: 'process' | 'subagent'): string {
+function getTaskIcon(
+  child: ActiveChildInfo,
+  kind: 'process' | 'subagent',
+): string {
   if (kind === 'subagent') return 'codicon-server-process';
   if (isAgentProcess(child)) return 'codicon-robot';
   return 'codicon-terminal';
