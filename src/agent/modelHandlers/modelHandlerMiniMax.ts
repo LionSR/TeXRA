@@ -1,6 +1,5 @@
 // Local file imports
 import type { ToolDefinition } from '@model';
-import { isNonEmptyString } from '@utils/core';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
@@ -11,24 +10,16 @@ import type {
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
 
-/**
- * MiniMax reasoning_details item. With `reasoning_split: true`, MiniMax returns
- * reasoning as an array of these objects rather than a `reasoning_content` string.
- */
-type ReasoningDetailItem = { type: string; text?: string | null };
-
-/**
- * Extracts text from a MiniMax `reasoning_details` value.
- * Handles both the array-of-objects format and a plain string fallback.
- */
+/** Extracts text from a MiniMax `reasoning_details` value (array or string). */
 function extractTextFromReasoningDetails(
   details: unknown,
 ): string | undefined {
   if (typeof details === 'string') return details || undefined;
   if (!Array.isArray(details)) return undefined;
-  const text = (details as ReasoningDetailItem[])
-    .map((item) => item?.text ?? '')
-    .join('');
+  const text = (details as Array<{ text?: string | null }>).reduce(
+    (acc, item) => acc + (item?.text ?? ''),
+    '',
+  );
   return text || undefined;
 }
 
@@ -84,30 +75,20 @@ export class ModelHandlerMiniMax extends ModelHandlerOpenAI {
   }
 
   /**
-   * MiniMax with `reasoning_split: true` returns reasoning in `reasoning_details`
-   * (array of objects), not `reasoning_content`.
+   * MiniMax returns reasoning in `reasoning_details` (array), not `reasoning_content`.
    */
   protected override extractReasoningDelta(
     chunk: ChatCompletionChunk,
   ): string {
     const delta = chunk.choices[0]?.delta as
-      | { reasoning_details?: unknown; reasoning_content?: string }
+      | { reasoning_details?: unknown }
       | undefined;
-    if (!delta) return '';
-
-    // MiniMax-specific: reasoning_details array
-    if ('reasoning_details' in delta && delta.reasoning_details) {
+    if (delta && 'reasoning_details' in delta && delta.reasoning_details) {
       return extractTextFromReasoningDetails(delta.reasoning_details) ?? '';
     }
-
-    // Fallback to standard reasoning_content
     return super.extractReasoningDelta(chunk);
   }
 
-  /**
-   * MiniMax non-streaming responses also use `reasoning_details` instead of
-   * `reasoning_content`.
-   */
   protected override extractReasoningFromMessage(
     message: Record<string, unknown> | undefined,
   ): string | null {
@@ -116,10 +97,7 @@ export class ModelHandlerMiniMax extends ModelHandlerOpenAI {
       const extracted = extractTextFromReasoningDetails(details);
       if (extracted) return extracted;
     }
-
-    // Fallback to standard reasoning_content
-    const reasoning = message?.reasoning_content;
-    return isNonEmptyString(reasoning) ? reasoning : null;
+    return super.extractReasoningFromMessage(message);
   }
 
   /**

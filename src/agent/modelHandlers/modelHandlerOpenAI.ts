@@ -92,12 +92,8 @@ export interface StreamingAggregator {
   finalize(fallback?: ChatCompletion): ChatCompletion;
 }
 
-/**
- * Default extraction of reasoning deltas from streaming chunks.
- * Looks for `reasoning_content` in the delta (DeepSeek/GLM/Kimi convention).
- * Exported for backward compatibility; prefer the instance method override.
- */
-export function extractReasoningDelta(chunk: ChatCompletionChunk): string {
+/** Extracts `reasoning_content` from a streaming chunk delta. */
+function extractReasoningDelta(chunk: ChatCompletionChunk): string {
   const delta = chunk.choices[0]?.delta as
     | { reasoning_content?: ReasoningContent }
     | undefined;
