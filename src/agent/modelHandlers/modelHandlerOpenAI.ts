@@ -221,9 +221,7 @@ export class ModelHandlerOpenAI<
 
     // Nothing to summarize if conversation is too short
     if (conversationMessages.length <= 2) {
-      this.logger.debug(
-        'Conversation too short for compaction, skipping',
-      );
+      this.logger.debug('Conversation too short for compaction, skipping');
       return { compactedMessages: messages, didCompact: false };
     }
 
@@ -260,8 +258,7 @@ export class ModelHandlerOpenAI<
         { signal },
       )) as ChatCompletion;
 
-      const summaryText =
-        summaryResponse.choices[0]?.message?.content?.trim();
+      const summaryText = summaryResponse.choices[0]?.message?.content?.trim();
       if (!summaryText) {
         this.logger.warn('Compaction returned empty summary, skipping');
         return { compactedMessages: messages, didCompact: false };
@@ -276,15 +273,12 @@ export class ModelHandlerOpenAI<
         },
       ];
 
-      const summaryOutputTokens =
-        summaryResponse.usage?.completion_tokens ?? 0;
+      const summaryOutputTokens = summaryResponse.usage?.completion_tokens ?? 0;
       const estimatedTokensAfter = Math.max(1, summaryOutputTokens);
       const utilizationAfter = (estimatedTokensAfter / contextWindow) * 100;
       const reduction = tokensBefore - estimatedTokensAfter;
       const reductionPercent =
-        tokensBefore > 0
-          ? ((reduction / tokensBefore) * 100).toFixed(1)
-          : '0';
+        tokensBefore > 0 ? ((reduction / tokensBefore) * 100).toFixed(1) : '0';
 
       this.logger.logContextManagement(
         `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
@@ -591,8 +585,11 @@ export class ModelHandlerOpenAI<
         );
       }
 
-      const { compactedMessages, didCompact } =
-        await this.compactConversation(client, rawMessages, signal);
+      const { compactedMessages, didCompact } = await this.compactConversation(
+        client,
+        rawMessages,
+        signal,
+      );
       if (didCompact) {
         messagesToUse = compactedMessages;
         updatedMessages = compactedMessages;
