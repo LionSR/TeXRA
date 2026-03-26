@@ -59,7 +59,6 @@ import {
 } from './utils/toolAttachmentUtils';
 import { ModelHandler } from './ModelHandler';
 import {
-  CLIENT_COMPACTION_RECENT_MESSAGES,
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
   TOOL_USE_SAFETY_BUFFER,
@@ -170,7 +169,7 @@ export class ModelHandlerOpenAI<
     if (!this.isToolUseMode()) return false;
 
     if (this.compactionRequested) {
-      return this.lastKnownInputTokens > 0;
+      return true;
     }
 
     const thresholdPercent = this.getCompactionThresholdPercent();
@@ -183,66 +182,9 @@ export class ModelHandlerOpenAI<
   }
 
   /**
-   * Serialize messages to text for the compaction summary prompt.
-   * Converts ChatCompletionMessageParam[] into a readable text format.
-   */
-  private serializeMessagesForSummary(
-    messages: ChatCompletionMessageParam[],
-  ): string {
-    return messages
-      .map((msg) => {
-        const role = msg.role.toUpperCase();
-        let content: string;
-        if (typeof msg.content === 'string') {
-          content = msg.content;
-        } else if (Array.isArray(msg.content)) {
-          content = (msg.content as ChatCompletionContentPart[])
-            .map((part: ChatCompletionContentPart) => {
-              if ('text' in part) return part.text;
-              if (part.type === 'image_url') return '[image]';
-              if (part.type === 'input_audio') return '[audio]';
-              return `[${part.type}]`;
-            })
-            .join('\n');
-        } else {
-          content = '';
-        }
-
-        // Include tool calls if present
-        const assistantMsg = msg as ChatCompletionAssistantMessageParam;
-        if (assistantMsg.tool_calls?.length) {
-          const toolSummary = assistantMsg.tool_calls
-            .map((tc: ChatCompletionMessageToolCall) => {
-              const fn = (tc as unknown as Record<string, unknown>).function as
-                | { name?: string; arguments?: string }
-                | undefined;
-              const name = fn?.name ?? 'unknown';
-              const args = fn?.arguments ?? '';
-              return `[Tool call: ${name}(${args.substring(0, 200)}${args.length > 200 ? '...' : ''})]`;
-            })
-            .join('\n');
-          content = content ? `${content}\n${toolSummary}` : toolSummary;
-        }
-
-        // Include tool result for tool messages
-        const toolMsg = msg as ChatCompletionToolMessageParam;
-        if (toolMsg.role === 'tool' && toolMsg.tool_call_id) {
-          const toolContent =
-            typeof toolMsg.content === 'string'
-              ? toolMsg.content.substring(0, 500)
-              : '[structured content]';
-          content = `[Tool result for ${toolMsg.tool_call_id}]: ${toolContent}${typeof toolMsg.content === 'string' && toolMsg.content.length > 500 ? '...' : ''}`;
-        }
-
-        return `[${role}]: ${content}`;
-      })
-      .join('\n\n');
-  }
-
-  /**
-   * Compact the conversation using client-side summarization.
-   * Sends a separate chat completion to generate a summary, then replaces
-   * messages with system prompt + summary + recent messages.
+   * Compact the conversation using client-side summarization via system-prompt-swap.
+   * Sends conversation messages as-is to the model with a summarization system prompt,
+   * then replaces all messages with the summary.
    *
    * @returns The compacted messages array, or original messages if compaction fails
    */
@@ -262,12 +204,11 @@ export class ModelHandlerOpenAI<
       `Compacting conversation with ${tokensBefore} input tokens (${utilizationBefore.toFixed(1)}% of ${contextWindow} context window)`,
     );
 
-    // Separate system messages from conversation messages
+    // Separate system/developer messages from conversation messages
     const systemMessages: ChatCompletionMessageParam[] = [];
     const conversationMessages: ChatCompletionMessageParam[] = [];
     for (const msg of messages) {
       if (msg.role === 'system' || (msg.role as string) === 'developer') {
-        // Only treat leading system/developer messages as system prompt
         if (conversationMessages.length === 0) {
           systemMessages.push(msg);
         } else {
@@ -278,75 +219,31 @@ export class ModelHandlerOpenAI<
       }
     }
 
-    // Keep recent messages for immediate context.
-    // Expand the window backwards to include complete tool-call/result pairs —
-    // if we split in the middle, the model loses tool_call_id associations.
-    let recentStart = Math.max(
-      0,
-      conversationMessages.length - CLIENT_COMPACTION_RECENT_MESSAGES,
-    );
-    // Walk backwards to include complete tool-call/result pairs.
-    // Limit expansion to avoid consuming the entire conversation in tool-heavy sessions.
-    const maxExpansion = CLIENT_COMPACTION_RECENT_MESSAGES * 2;
-    let expanded = 0;
-    while (recentStart > 0 && expanded < maxExpansion) {
-      const msg = conversationMessages[recentStart];
-      if (
-        msg.role === 'tool' ||
-        (msg.role === 'assistant' &&
-          (msg as ChatCompletionAssistantMessageParam).tool_calls?.length)
-      ) {
-        recentStart--;
-        expanded++;
-      } else {
-        break;
-      }
-    }
-
-    const messagesToSummarize = conversationMessages.slice(0, recentStart);
-    const recentMessages = conversationMessages.slice(recentStart);
-
     // Nothing to summarize if conversation is too short
-    if (messagesToSummarize.length <= 2) {
+    if (conversationMessages.length <= 2) {
       this.logger.debug(
         'Conversation too short for compaction, skipping',
       );
       return { compactedMessages: messages, didCompact: false };
     }
 
-    let serialized = this.serializeMessagesForSummary(messagesToSummarize);
-
-    // Truncate serialized text to fit within the model's context window.
-    // Reserve space for the system prompt (~300 tokens) and summary output.
-    // Rough heuristic: 1 token ≈ 4 characters.
-    const maxSummaryInputChars =
-      (this.config.contextWindow - CLIENT_COMPACTION_SUMMARY_MAX_TOKENS - 300) *
-      4;
-    if (serialized.length > maxSummaryInputChars) {
-      this.logger.debug(
-        `Truncating serialized conversation from ${serialized.length} to ${maxSummaryInputChars} chars for summary call`,
-      );
-      serialized = serialized.substring(0, maxSummaryInputChars) + '\n\n[...truncated]';
-    }
-
+    // System-prompt-swap: replace the agent's system prompt with summarization
+    // instructions and send conversation messages as-is. The model reads the
+    // actual structured messages (roles, tool calls, tool results) natively.
     try {
       const summaryParams: Record<string, unknown> = {
         model: this.config.fullName,
         messages: [
           { role: 'system', content: COMPACTION_SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: `Summarize the following conversation:\n\n${serialized}`,
-          },
+          ...conversationMessages,
         ],
         max_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
         temperature: 0,
         stream: false,
       };
-      // Explicitly disable thinking for the summary call — reasoning
-      // models (DeepSeek, Kimi K2.5, GLM) don't need to think for summarization
-      // and it wastes tokens / may cause issues with some providers.
-      if (this.getThinkingParameter()) {
+      // Disable thinking for the summary call — reasoning models
+      // (DeepSeek, Kimi K2.5, GLM) don't need to think for summarization.
+      if (this.getThinkingParameter() || this.capabilities.supportsReasoning) {
         summaryParams.thinking = { type: 'disabled' };
       }
       const summaryResponse = (await client.chat.completions.create(
@@ -363,35 +260,18 @@ export class ModelHandlerOpenAI<
         return { compactedMessages: messages, didCompact: false };
       }
 
-      // Build compacted message array
+      // Replace ALL messages with system prompt + summary
       const compactedMessages: ChatCompletionMessageParam[] = [
         ...systemMessages,
         {
           role: 'user',
           content: `[Previous conversation summary]\n\n${summaryText}`,
         },
-        ...recentMessages,
       ];
 
-      // Estimate token reduction.
-      // The summary output tokens are bounded by CLIENT_COMPACTION_SUMMARY_MAX_TOKENS.
-      // We estimate the compacted conversation as:
-      //   system prompt tokens (kept) + summary tokens + recent messages tokens (kept)
-      // Approximate recent messages' share proportionally from the original.
       const summaryOutputTokens =
         summaryResponse.usage?.completion_tokens ?? 0;
-      const totalConvMessages = conversationMessages.length;
-      const recentTokenEstimate =
-        totalConvMessages > 0
-          ? Math.floor(
-              tokensBefore * (recentMessages.length / totalConvMessages),
-            )
-          : 0;
-      // The actual count will be measured on the next API call via prompt_tokens
-      const estimatedTokensAfter = Math.max(
-        1,
-        summaryOutputTokens + recentTokenEstimate,
-      );
+      const estimatedTokensAfter = Math.max(1, summaryOutputTokens);
       const utilizationAfter = (estimatedTokensAfter / contextWindow) * 100;
       const reduction = tokensBefore - estimatedTokensAfter;
       const reductionPercent =
@@ -408,7 +288,7 @@ export class ModelHandlerOpenAI<
           contextWindow,
           utilizationBefore: Number(utilizationBefore.toFixed(1)),
           utilizationAfter: Number(utilizationAfter.toFixed(1)),
-          details: `Client-side compaction: ${messagesToSummarize.length} messages summarized, ${recentMessages.length} recent messages preserved`,
+          details: `Client-side compaction: ${conversationMessages.length} messages summarized`,
         },
       );
 
