@@ -45,14 +45,14 @@ From `node_modules/@anthropic-ai/sdk/lib/tools/BetaToolRunner.js` (lines 65-133)
 
 ### What to change
 
-| SDK Behavior                        | Our Adaptation                                        | Reason                                                                      |
-| ----------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------- |
-| Compaction runs **after** API call  | Run **after** API call (match SDK)                    | Better UX: user sees response immediately, compaction happens between turns |
-| Appends summary prompt as user msg  | **Swap system prompt** to `COMPACTION_SYSTEM_PROMPT`  | Cleaner: summarization instructions are system-level, not a user turn       |
-| Sends messages as-is                | **Send messages as-is** (match SDK)                   | Model sees actual structured messages — richer than serialized text         |
-| Same `max_tokens` as main request   | Fixed **8192** for compaction                         | Summaries rarely need >4K tokens; avoid wasting budget                      |
-| Hard throw on non-text response     | **Graceful fallback** to original messages            | More robust in production                                                   |
-| No logging                          | Full **context management logging**                   | TeXRA's progress view needs visibility                                      |
+| SDK Behavior                       | Our Adaptation                                       | Reason                                                                      |
+| ---------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------- |
+| Compaction runs **after** API call | Run **after** API call (match SDK)                   | Better UX: user sees response immediately, compaction happens between turns |
+| Appends summary prompt as user msg | **Swap system prompt** to `COMPACTION_SYSTEM_PROMPT` | Cleaner: summarization instructions are system-level, not a user turn       |
+| Sends messages as-is               | **Send messages as-is** (match SDK)                  | Model sees actual structured messages — richer than serialized text         |
+| Same `max_tokens` as main request  | Fixed **8192** for compaction                        | Summaries rarely need >4K tokens; avoid wasting budget                      |
+| Hard throw on non-text response    | **Graceful fallback** to original messages           | More robust in production                                                   |
+| No logging                         | Full **context management logging**                  | TeXRA's progress view needs visibility                                      |
 
 ---
 
@@ -305,6 +305,7 @@ Wrap your summary in <summary></summary> tags.`;
 ```
 
 **Key difference from SDK:** The SDK appends the prompt as a user message at the end of the conversation. We use it as the system prompt instead. This is cleaner because:
+
 - Summarization instructions are system-level directives, not a user turn
 - Avoids potential consecutive-user-message issues
 - The model sees the unmodified conversation messages — no appended instruction mixed in with the conversation
