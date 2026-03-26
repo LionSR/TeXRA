@@ -25,10 +25,6 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
  * @see https://platform.minimax.io/docs/guides/text-m2-function-call
  */
 export class ModelHandlerMiniMax extends ModelHandlerOpenAI {
-  /**
-   * MiniMax thinking models require reasoning_content in tool-use follow-up
-   * messages to maintain the interleaved reasoning chain across tool calls.
-   */
   protected override shouldIncludeReasoningInToolCalls(): boolean {
     return this.capabilities.supportsReasoning;
   }
