@@ -58,7 +58,11 @@ import {
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { ModelHandler } from './ModelHandler';
-import { TOOL_USE_SAFETY_BUFFER } from './contextManagementConstants';
+import {
+  CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+  TOOL_USE_SAFETY_BUFFER,
+} from './contextManagementConstants';
 import type {
   CreateResponseOptions,
   CreateResponseResult,
@@ -84,6 +88,16 @@ function extractReasoningText(content: ReasoningContent | undefined): string {
 }
 
 const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
+
+const COMPACTION_SYSTEM_PROMPT = `You are a conversation summarizer. Create a concise but complete summary of the conversation below. Preserve:
+- The original user request and goals
+- All key decisions made
+- File paths and code changes discussed or made
+- Tool call results and their outcomes
+- Current state of the task (what is done, what is pending)
+- Any errors encountered and how they were resolved
+
+Format the summary as a structured narrative that allows the conversation to continue seamlessly. Do NOT add any preamble or explanation — output only the summary.`;
 
 export interface StreamingAggregator {
   appendContent(delta: string): void;
@@ -113,6 +127,187 @@ export class ModelHandlerOpenAI<
   OpenAI,
   ChatCompletion
 > {
+  // ── Client-side compaction state ──────────────────────────────────────
+  /** Tracks prompt_tokens from the last API response for compaction threshold checks. */
+  private lastKnownInputTokens = 0;
+
+  /** Flag to force compaction on the next API call, set by requestCompaction(). */
+  private compactionRequested = false;
+
+  // ── Compaction interface overrides ────────────────────────────────────
+
+  /** Client-side compaction is available for tool-use sessions. */
+  override get supportsManualCompaction(): boolean {
+    return this.isToolUseMode();
+  }
+
+  override requestCompaction(): void {
+    this.compactionRequested = true;
+  }
+
+  // ── Compaction internals ──────────────────────────────────────────────
+
+  /**
+   * Get the configured compaction threshold percentage.
+   * Returns 0 if compaction is disabled.
+   */
+  private getCompactionThresholdPercent(): number {
+    return getConfig<number>(
+      'texra.model.compactionThresholdPercent',
+      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+    );
+  }
+
+  /**
+   * Check if the conversation should be compacted based on token usage.
+   * Compaction is only triggered when:
+   * - In tool-use mode (only mode with multi-turn message accumulation)
+   * - Manual request via requestCompaction(), OR
+   * - Last known input tokens exceed the configured threshold
+   */
+  private shouldCompact(): boolean {
+    if (!this.isToolUseMode()) return false;
+
+    if (this.compactionRequested) {
+      return true;
+    }
+
+    const thresholdPercent = this.getCompactionThresholdPercent();
+    if (thresholdPercent <= 0) return false;
+
+    const threshold = Math.floor(
+      (thresholdPercent / 100) * this.config.contextWindow,
+    );
+    return this.lastKnownInputTokens > threshold;
+  }
+
+  /**
+   * Compact the conversation using client-side summarization via system-prompt-swap.
+   * Sends conversation messages as-is to the model with a summarization system prompt,
+   * then replaces all messages with the summary.
+   *
+   * @returns The compacted messages array, or original messages if compaction fails
+   */
+  private async compactConversation(
+    client: OpenAI,
+    messages: ChatCompletionMessageParam[],
+    signal?: AbortSignal,
+  ): Promise<{
+    compactedMessages: ChatCompletionMessageParam[];
+    didCompact: boolean;
+  }> {
+    const tokensBefore = this.lastKnownInputTokens;
+    const contextWindow = this.config.contextWindow;
+    const utilizationBefore = (tokensBefore / contextWindow) * 100;
+
+    this.logger.debug(
+      `Compacting conversation with ${tokensBefore} input tokens (${utilizationBefore.toFixed(1)}% of ${contextWindow} context window)`,
+    );
+
+    // Separate system/developer messages from conversation messages
+    const systemMessages: ChatCompletionMessageParam[] = [];
+    const conversationMessages: ChatCompletionMessageParam[] = [];
+    for (const msg of messages) {
+      if (msg.role === 'system' || (msg.role as string) === 'developer') {
+        if (conversationMessages.length === 0) {
+          systemMessages.push(msg);
+        } else {
+          conversationMessages.push(msg);
+        }
+      } else {
+        conversationMessages.push(msg);
+      }
+    }
+
+    // Nothing to summarize if conversation is too short
+    if (conversationMessages.length <= 2) {
+      this.logger.debug(
+        'Conversation too short for compaction, skipping',
+      );
+      return { compactedMessages: messages, didCompact: false };
+    }
+
+    // System-prompt-swap: replace the agent's system prompt with summarization
+    // instructions and send conversation messages as-is. The model reads the
+    // actual structured messages (roles, tool calls, tool results) natively.
+    // Apply provider-specific normalization (e.g., DeepSeek's convertContentToString,
+    // mergeConsecutiveRoles) so the compaction call doesn't get rejected.
+    const normOptions = this.getMessageNormalizationOptions();
+    const normalizedConversation = normOptions
+      ? this.prepareNormalizedMessages(conversationMessages, normOptions)
+      : conversationMessages;
+
+    try {
+      const summaryParams: Record<string, unknown> = {
+        model: this.config.fullName,
+        messages: [
+          { role: 'system', content: COMPACTION_SYSTEM_PROMPT },
+          ...normalizedConversation,
+        ],
+        max_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+        temperature: 0,
+        stream: false,
+      };
+      // Disable thinking for the summary call — reasoning models
+      // (DeepSeek, Kimi K2.5, GLM) don't need to think for summarization.
+      if (this.getThinkingParameter() || this.capabilities.supportsReasoning) {
+        summaryParams.thinking = { type: 'disabled' };
+      }
+      const summaryResponse = (await client.chat.completions.create(
+        summaryParams as unknown as Parameters<
+          typeof client.chat.completions.create
+        >[0],
+        { signal },
+      )) as ChatCompletion;
+
+      const summaryText =
+        summaryResponse.choices[0]?.message?.content?.trim();
+      if (!summaryText) {
+        this.logger.warn('Compaction returned empty summary, skipping');
+        return { compactedMessages: messages, didCompact: false };
+      }
+
+      // Replace ALL messages with system prompt + summary
+      const compactedMessages: ChatCompletionMessageParam[] = [
+        ...systemMessages,
+        {
+          role: 'user',
+          content: `[Previous conversation summary]\n\n${summaryText}`,
+        },
+      ];
+
+      const summaryOutputTokens =
+        summaryResponse.usage?.completion_tokens ?? 0;
+      const estimatedTokensAfter = Math.max(1, summaryOutputTokens);
+      const utilizationAfter = (estimatedTokensAfter / contextWindow) * 100;
+      const reduction = tokensBefore - estimatedTokensAfter;
+      const reductionPercent =
+        tokensBefore > 0
+          ? ((reduction / tokensBefore) * 100).toFixed(1)
+          : '0';
+
+      this.logger.logContextManagement(
+        `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
+        {
+          action: 'compaction',
+          tokensBefore,
+          tokensAfter: estimatedTokensAfter,
+          contextWindow,
+          utilizationBefore: Number(utilizationBefore.toFixed(1)),
+          utilizationAfter: Number(utilizationAfter.toFixed(1)),
+          details: `Client-side compaction: ${conversationMessages.length} messages summarized`,
+        },
+      );
+
+      return { compactedMessages, didCompact: true };
+    } catch (err) {
+      this.logger.warn(
+        `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,
+      );
+      return { compactedMessages: messages, didCompact: false };
+    }
+  }
+
   /**
    * Creates a new OpenAI client using the stored credentials.
    * Handles API key retrieval, base URL resolution, and logging.
@@ -375,11 +570,40 @@ export class ModelHandlerOpenAI<
       tools,
     } = options;
 
+    // Phase 0: COMPACT - Check if conversation should be compacted
+    let updatedMessages: ChatCompletionMessageParam[] | undefined;
+    let messagesToUse = rawMessages;
+
+    if (this.shouldCompact()) {
+      const isManual = this.compactionRequested;
+      // Clear manual flag immediately when attempted — matches Anthropic and
+      // OpenAI Responses handlers. Prevents infinite retry on graceful failure.
+      this.compactionRequested = false;
+
+      const threshold = this.getCompactionThresholdPercent();
+      if (isManual) {
+        this.logger.debug(
+          `Compacting conversation (manually requested, ${this.lastKnownInputTokens} input tokens)`,
+        );
+      } else {
+        this.logger.debug(
+          `Compacting conversation (${this.lastKnownInputTokens} tokens exceed ${threshold}% threshold of ${Math.floor((threshold / 100) * this.config.contextWindow)} tokens)`,
+        );
+      }
+
+      const { compactedMessages, didCompact } =
+        await this.compactConversation(client, rawMessages, signal);
+      if (didCompact) {
+        messagesToUse = compactedMessages;
+        updatedMessages = compactedMessages;
+      }
+    }
+
     // Apply message normalization if subclass specifies options
     const normOptions = this.getMessageNormalizationOptions();
     const messages = normOptions
-      ? this.prepareNormalizedMessages(rawMessages, normOptions)
-      : rawMessages;
+      ? this.prepareNormalizedMessages(messagesToUse, normOptions)
+      : messagesToUse;
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const useStreaming = this.getStreamingConfig();
@@ -449,7 +673,13 @@ export class ModelHandlerOpenAI<
     const response = useStreaming
       ? await this.executeStreamingChat(client, baseParams, signal)
       : await this.executeNonStreamingChat(client, baseParams, signal);
-    return { response };
+
+    // Phase 5: TRACK - Record prompt_tokens for compaction threshold checks
+    if (response.usage?.prompt_tokens) {
+      this.lastKnownInputTokens = response.usage.prompt_tokens;
+    }
+
+    return { response, updatedMessages };
   }
 
   /**
