@@ -6,6 +6,10 @@ on:
   pull_request:
     types: [closed]
 
+concurrency:
+  group: update-tracking-issues
+  cancel-in-progress: false
+
 jobs:
   update-tracking:
     # Run when an issue is closed or a PR is merged (not just closed)
@@ -29,14 +33,9 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          model: 'claude-opus-4-6'
-
-          # Allow Claude to query and update issues/PRs via the gh CLI
-          allowed_tools: |
-            Bash(gh issue:*)
-            Bash(gh pr:*)
-            Bash(gh api:*)
-            Bash(gh search:*)
+          claude_args: |
+            --model claude-opus-4-6
+            --allowedTools "Bash(gh issue:*)" "Bash(gh pr:*)" "Bash(gh search:*)"
 
           prompt: |
             A GitHub event just occurred in this repository. Analyze it and update any
