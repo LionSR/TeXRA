@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.36.9] - 2026-03-26
+
+### Features
+
+- **Context compactization for OpenAI-compatible models** — DeepSeek, Kimi, GLM, and MiniMax models now support automatic context compactization, preventing long tool-use sessions from hitting context window limits. The model summarizes older messages when token usage exceeds 75% of the context window.
+- **Workflow delegation tool for orchestrators** — the lean orchestrator can now delegate whole-document transformations (correct, polish, merge, draw) to workflow agents via the new `delegate_workflow` tool.
+- **Wait for specific background executions** — the `executions` tool's wait action now accepts an optional `ids` parameter to monitor specific background tasks instead of waiting for any active execution.
+- **MiniMax reasoning split** — MiniMax thinking models now return structured reasoning content instead of embedded `<think>` tags, improving display and downstream processing.
+
+### Bug Fixes
+
+- Fixed Codex CLI not being detected for WSL users.
+- Fixed MiniMax and GLM showing as "unknown" providers in relay usage tracking.
+- Fixed tool-use agent errors ending the conversation instead of allowing follow-up messages to retry.
+- Fixed workflow delegation losing extract-figure flags when the LLM omitted them, now inheriting from the parent agent.
+
+### Improvements
+
+- **Extract figure badges in delegation UI** — workflow proposals now show labeled badges for auto-extract figure and TikZ flags in the approval panel and log entries.
+- **Better Codex tool display** — Codex processes show a robot icon in the background tasks panel and display structured prompt details in the progress view.
+- Updated VS Code engine requirement to 1.105.0.
+- Updated dependencies (Supabase, Hono, MCP SDK, fast-xml-parser, KaTeX, OpenAI, Vite, and others).
+
 ## [0.36.8] - 2026-03-23
 
 ### Features
