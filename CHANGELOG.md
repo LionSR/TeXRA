@@ -7,7 +7,6 @@ All notable changes to this project will be documented in this file.
 ### Features
 
 - **Context compactization for OpenAI-compatible models** — DeepSeek, Kimi, GLM, and MiniMax models now support automatic context compactization, preventing long tool-use sessions from hitting context window limits. The model summarizes older messages when token usage exceeds 75% of the context window.
-- **Workflow delegation tool for orchestrators** — the lean orchestrator can now delegate whole-document transformations (correct, polish, merge, draw) to workflow agents via the new `delegate_workflow` tool.
 - **Wait for specific background executions** — the `executions` tool's wait action now accepts an optional `ids` parameter to monitor specific background tasks instead of waiting for any active execution.
 - **MiniMax reasoning split** — MiniMax thinking models now return structured reasoning content instead of embedded `<think>` tags, improving display and downstream processing.
 
