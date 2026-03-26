@@ -175,7 +175,8 @@ export async function getModelUnavailableReason(
   }
 
   // Personal key mode or unauthenticated — missing provider key
-  const providerName = PROVIDER_DISPLAY_NAMES[config.provider] ?? config.provider;
+  const providerName =
+    PROVIDER_DISPLAY_NAMES[config.provider] ?? config.provider;
   return `Model "${model}" requires your ${providerName} API key. Set it in the extension settings or enable included access.`;
 }
 

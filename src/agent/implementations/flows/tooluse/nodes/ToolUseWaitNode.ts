@@ -24,7 +24,8 @@ export class ToolUseWaitNode<C> extends Node<
     const afterError = !!(shared.lastError || shared.userCancelledRetry);
 
     // Only extract when the callback is wired (subagent mode)
-    if (!onBeforeWaiting) return { lastResponse: undefined, touchedFiles: [], afterError };
+    if (!onBeforeWaiting)
+      return { lastResponse: undefined, touchedFiles: [], afterError };
 
     return {
       touchedFiles: extractTouchedFiles(shared.stateSlices),

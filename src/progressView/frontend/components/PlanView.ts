@@ -171,7 +171,10 @@ export class PlanView extends LitElement {
   @state() private open = true;
 
   protected override willUpdate(changed: PropertyValues): void {
-    if (changed.has('collapseKey') && changed.get('collapseKey') !== undefined) {
+    if (
+      changed.has('collapseKey') &&
+      changed.get('collapseKey') !== undefined
+    ) {
       this.open = false;
       return;
     }
