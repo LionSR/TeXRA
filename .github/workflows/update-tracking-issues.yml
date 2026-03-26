@@ -93,3 +93,125 @@ jobs:
 
             Be precise with checkbox updates — only modify lines that directly reference the
             resolved issue or merged PR. Do not alter unrelated checklist items.
+
+  pr-followups:
+    # Only run on merged PRs
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model claude-opus-4-6
+            --allowedTools "Bash(gh issue:*)" "Bash(gh pr:*)" "Bash(gh search:*)" "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)"
+
+          prompt: |
+            A pull request was just merged. Analyze it for leftover work, follow-ups, and
+            roadmap implications, then create issues and update tracking issues as needed.
+
+            ## Merged PR Details
+
+            - **PR number**: #${{ github.event.pull_request.number }}
+            - **PR title**: ${{ github.event.pull_request.title }}
+            - **PR labels**: ${{ join(github.event.pull_request.labels.*.name, ', ') }}
+            - **Merged by**: ${{ github.event.pull_request.merged_by.login }}
+            - **Author**: ${{ github.event.pull_request.user.login }}
+            - **Base branch**: ${{ github.event.pull_request.base.ref }}
+            - **Head branch**: ${{ github.event.pull_request.head.ref }}
+
+            ## Step 1: Gather Context
+
+            Collect ALL available information about this PR:
+
+            1. **PR body and comments**: Use `gh pr view ${{ github.event.pull_request.number }} --json body,comments`
+            2. **Review comments**: Use `gh pr view ${{ github.event.pull_request.number }} --json reviews,reviewDecision`
+            3. **Code diff**: Use `git diff ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}`
+            4. **Linked issues**: Use `gh pr view ${{ github.event.pull_request.number }} --json closingIssuesReferences`
+               - For each linked issue, read its body and comments for unresolved discussion
+            5. **Code markers**: Search the diff for TODO, FIXME, HACK, XXX, WORKAROUND comments
+               that were added (not removed) in this PR
+
+            ## Step 2: Identify Follow-Ups
+
+            Analyze the gathered context for actionable follow-ups:
+
+            - **Explicit TODOs**: Items flagged in PR comments, review comments, or code as
+              needing follow-up work
+            - **Deferred work**: Scope that was explicitly cut or deferred ("out of scope",
+              "follow-up", "separate PR", "later", "Phase 2")
+            - **Code quality**: New TODO/FIXME/HACK comments added in the diff
+            - **Unresolved discussions**: Review threads marked as unresolved or containing
+              open questions that weren't addressed before merge
+            - **Roadmap implications**: Changes that affect or enable planned work in
+              tracking/epic issues
+
+            **Do NOT create issues for:**
+            - Completed work (already done in this PR)
+            - Pre-existing TODOs not introduced by this PR
+            - Nitpick-level review comments (style, naming preferences)
+            - Speculative future work not mentioned in the PR
+
+            ## Step 3: Create Follow-Up Issues
+
+            For each follow-up identified, create a GitHub issue using:
+
+            ```
+            gh issue create --title "<title>" --body "<body>" --label "follow-up"
+            ```
+
+            **Issue format:**
+            - **Title**: Short, actionable description (imperative mood, e.g. "Add error
+              handling for X", "Refactor Y to support Z")
+            - **Body** must include:
+              ```
+              ## Context
+              Follow-up from #<PR-number> (<PR title>).
+
+              <Brief explanation of why this work is needed>
+
+              ## Details
+              <Specific description of what needs to be done>
+
+              ## References
+              - PR: #<PR-number>
+              - <Any related issues, discussions, or review comments>
+              ```
+            - Add appropriate labels alongside "follow-up" (e.g. "bug", "enhancement",
+              "tech-debt", "documentation")
+
+            ## Step 4: Update Tracking Issues
+
+            After creating follow-up issues:
+
+            1. Find open tracking issues (label "tracking", or titles starting with
+               "Tracking:", "Epic:", "Meta:"):
+               ```
+               gh issue list --label "tracking" --state open --json number,title,body
+               ```
+            2. For each tracking issue whose scope relates to the created follow-ups,
+               add the new issue references to the checklist:
+               - Append `- [ ] #<new-issue-number> - <title>` to the relevant section
+               - Add a comment: "📋 Added follow-up issues from #<PR-number>: #<issue1>, #<issue2>, ..."
+
+            ## Step 5: Report
+
+            Provide a summary:
+            - How many follow-ups were identified and created
+            - Which tracking issues were updated
+            - If no follow-ups were found, state that the PR was clean with no leftovers
+
+            **Be conservative** — only create issues for genuine, actionable follow-ups.
+            When in doubt, skip it. False positives create noise.
