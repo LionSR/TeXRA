@@ -125,6 +125,18 @@ const ExecutionsToolInputSchema = z.strictObject({
       'Line range [start, end] for paginating large outputs (action="view" only).',
     ),
 
+  /** Execution IDs to wait on (action="wait" with /executions only). */
+  ids: z
+    .array(ExecutionIdSchema)
+    .min(1)
+    .max(50)
+    .nullish()
+    .describe(
+      'List of execution IDs to wait on (action="wait" with /executions only). ' +
+        'Waits for any of the listed executions to change status. ' +
+        'If omitted, waits for any active execution.',
+    ),
+
   /** Max seconds to wait (action="wait" only). Default: 300. */
   timeout: z
     .number()
@@ -283,6 +295,7 @@ Use "current" as {id} to access the active execution.
 Use offset/limit to paginate the /executions listing (default: offset 0, limit 100).
 Use view_range: [start, end] to paginate conversation, output, and file content.
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
+Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed executions to change.
 Use action: "kill" on /executions/{id} to terminate a running execution.`,
   schema: ExecutionsToolInputSchema,
 }) {
@@ -299,7 +312,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     // /executions - list all executions
     if (!id) {
       if (input.action === 'wait')
-        await this.waitForAnyChange(input.timeout ?? 300);
+        await this.waitForAnyChange(input.timeout ?? 300, input.ids);
       return this.listExecutions(input.offset ?? 0, input.limit ?? 100);
     }
 
@@ -392,14 +405,17 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     return result.data;
   }
 
-  /** Wait for any active execution to change status, with timeout. */
-  private async waitForAnyChange(timeout: number): Promise<void> {
-    const activeIds = getActiveExecutionIds();
-    if (activeIds.length === 0) return;
+  /** Wait for executions to change status, with timeout. */
+  private async waitForAnyChange(
+    timeout: number,
+    ids?: readonly string[] | null,
+  ): Promise<void> {
+    const candidateIds = ids?.length ? [...new Set(ids)] : getActiveExecutionIds();
+    if (candidateIds.length === 0) return;
 
     // Exclude executions that are already effectively done
     // (completed, inactive, or tool-use subagent WAITING with result delivered).
-    const pendingIds = activeIds.filter((id) => !shouldSkipWait(id));
+    const pendingIds = candidateIds.filter((id) => !shouldSkipWait(id));
     if (pendingIds.length === 0) return;
 
     const ac = new AbortController();
