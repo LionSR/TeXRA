@@ -14,9 +14,7 @@ import type {
 } from 'openai/resources/chat/completions';
 
 /** Extracts text from a MiniMax `reasoning_details` value (array or string). */
-function extractTextFromReasoningDetails(
-  details: unknown,
-): string | undefined {
+function extractTextFromReasoningDetails(details: unknown): string | undefined {
   if (typeof details === 'string') return details || undefined;
   if (!Array.isArray(details)) return undefined;
   const text = (details as Array<{ text?: string | null }>).reduce(
@@ -80,9 +78,7 @@ export class ModelHandlerMiniMax extends ModelHandlerOpenAI {
   /**
    * MiniMax returns reasoning in `reasoning_details` (array), not `reasoning_content`.
    */
-  protected override extractReasoningDelta(
-    chunk: ChatCompletionChunk,
-  ): string {
+  protected override extractReasoningDelta(chunk: ChatCompletionChunk): string {
     const delta = chunk.choices[0]?.delta as
       | { reasoning_details?: unknown }
       | undefined;
